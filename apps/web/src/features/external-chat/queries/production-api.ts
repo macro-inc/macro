@@ -7,6 +7,7 @@ import type { ExternalChatPersonRef } from '@service-storage/generated/schemas/e
 import type { ExternalChatReplyContent } from '@service-storage/generated/schemas/externalChatReplyContent';
 import type { ExternalChatRichContent } from '@service-storage/generated/schemas/externalChatRichContent';
 import type { ExternalChatSendProgress } from '@service-storage/generated/schemas/externalChatSendProgress';
+import { slackLinkedClient } from '@service-storage/slack-linked';
 import type { WhatsAppErrorCode } from '@service-storage/whatsapp-errors';
 import { whatsappLinkedClient } from '@service-storage/whatsapp-linked';
 import { err, ok } from 'neverthrow';
@@ -339,5 +340,18 @@ export const externalChatApi: ExternalChatApi = {
   },
   markRead: (id, messageId) => throwOnErr(() => client.markRead(id, messageId)),
   stopSync: (id) => throwOnErr(() => client.stopSync(id)),
-  importHistory: () => throwOnErr(() => whatsappLinkedClient.importHistory()),
+  importHistory: (id, provider) =>
+    match(provider)
+      .with('whatsapp', () =>
+        throwOnErr(() => whatsappLinkedClient.importHistory())
+      )
+      .with('slack', () =>
+        throwOnErr(() => slackLinkedClient.importHistory(id))
+      )
+      .exhaustive((unknown) =>
+        // The chat's provider comes from DSS: fail the import, don't guess.
+        Promise.reject(
+          new Error(`No history import for provider ${String(unknown)}`)
+        )
+      ),
 };

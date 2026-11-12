@@ -46,6 +46,7 @@ mod macos_notification_permission;
 #[cfg(feature = "cef")]
 pub mod screen_capture;
 mod share_target;
+mod slack_desktop;
 mod staged_upload;
 mod whatsapp_passkey;
 #[cfg(desktop)]
@@ -215,7 +216,9 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>, configure_window: Configure
         .expect("Domains must be valid urls")
         .with_app_link_hosts(APP_LINK_HOSTS)
         .with_embedded_documents(EMBEDDED_DOCUMENTS)
-        .expect("Embedded documents must be valid urls");
+        .expect("Embedded documents must be valid urls")
+        // The Slack sign-in window browses any site and enforces its own policy.
+        .with_unmanaged_webviews(&[slack_desktop::WINDOW_LABEL]);
     let mut builder = builder;
 
     #[cfg(any(target_os = "ios", target_os = "macos"))]
@@ -388,6 +391,8 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>, configure_window: Configure
         .manage(IsIpad(is_ipad_device))
         .invoke_handler(tauri::generate_handler![
             whatsapp_passkey::whatsapp_passkey_authenticate,
+            slack_desktop::slack_desktop_sign_in,
+            slack_desktop::slack_desktop_captcha,
             desktop_update::get_native_update_status,
             desktop_update::restart_native_update,
             diagnostics::read_desktop_diagnostics,

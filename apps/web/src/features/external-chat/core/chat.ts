@@ -175,16 +175,14 @@ export function composerNote(
   /** Who owns the chat, for "Only Ana can reply in this chat". */
   ownerName = 'its owner'
 ): string {
-  const { label } = chatProvider(chat.provider);
+  const { label, disconnected } = chatProvider(chat.provider);
   if (chat.canSend)
     return chat.phone
       ? `Sending as ${chat.phone}`
       : `Sending from your ${label}`;
   return match(chat.sendReason)
-    .with(
-      P.union('no_account', 'disconnected'),
-      () => `Connect your ${label} to reply`
-    )
+    .with('no_account', () => `Connect your ${label} to reply`)
+    .with('disconnected', () => disconnected.note)
     .with('not_added', () =>
       chat.kind === 'direct'
         ? `Only ${ownerName} can reply in this chat`

@@ -56,9 +56,12 @@ it('names Back after the open chat’s provider once its detail loads', () => {
   fixture.provider = provider;
   render(() => <ExternalChatRouteView />);
   expect(screen.getByRole('button', { name: 'Back' })).toBeTruthy();
-  setProvider('whatsapp');
-  screen.getByRole('button', { name: 'Back to WhatsApp' }).click();
-  expect(fixture.navigate).toHaveBeenCalledOnce();
+  setProvider('slack');
+  screen.getByRole('button', { name: 'Back to Slack' }).click();
+  expect(fixture.navigate).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({ params: {} }),
+    { state: { provider: 'slack' } }
+  );
 });
 
 it('shows External while a provider’s flag is on and leaves when none is', () => {

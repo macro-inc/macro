@@ -16,6 +16,7 @@ import { useExternalChatListsSync } from '@queries/external-chats/sync';
 import { queryReadyGate } from '@queries/gate';
 import { traceLoad } from '@queries/whatsapp-linked/operation';
 import type { ExternalChatProvider } from '@service-storage/generated/schemas/externalChatProvider';
+import { useSearchParams } from '@solidjs/router';
 import { createSignal, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { providerIdentity } from '../external-chat/providers/identity';
@@ -24,7 +25,7 @@ import { createOpenSections } from '../whatsapp-linked/primitives/open-sections'
 import { InMacroChats, UnreadCount } from './components/in-macro-section';
 import { selectedProvider } from './core/selection';
 import { useEnabledProviders } from './provider-flags';
-import { PROVIDER_PAGES } from './provider-pages';
+import { handedOffProvider, PROVIDER_PAGES } from './provider-pages';
 
 /**
  * External: accounts on outside messaging apps that bring conversations into
@@ -38,9 +39,13 @@ export function ExternalView() {
   const enabled = useEnabledProviders();
   const providers = () => enabled().providers;
   // The route names the provider to show (a sidebar click, Back from a
-  // chat, an account notification); the latest navigation wins.
+  // chat, an account notification); the latest navigation wins. A desktop
+  // deep link names it by its param instead, read once as the page drops it.
   const routed = useRouteState(externalRoute);
-  const selected = () => selectedProvider(routed()?.provider, providers());
+  const [search] = useSearchParams();
+  const handedOff = handedOffProvider(search);
+  const selected = () =>
+    selectedProvider(routed()?.provider ?? handedOff, providers());
 
   useExternalChatListsSync();
   const userId = useUserId();

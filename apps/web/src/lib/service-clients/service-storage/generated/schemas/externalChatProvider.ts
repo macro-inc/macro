@@ -14,4 +14,5 @@ export type ExternalChatProvider =
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const ExternalChatProvider = {
   whatsapp: 'whatsapp',
+  slack: 'slack',
 } as const;

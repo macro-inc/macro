@@ -1,4 +1,5 @@
 import { analytics } from '@app/lib/analytics';
+import type { ExternalChatProvider } from '@service-storage/generated/schemas/externalChatProvider';
 
 /**
  * This constant reflects whether the app is running locally: under the Vite
@@ -1132,6 +1133,28 @@ export const enableWhatsappLinked = defineFlag({
   key: 'enable-whatsapp-linked',
   env: 'ENABLE_WHATSAPP_LINKED',
 });
+
+/**
+ * Slack linked sessions: the Slack page in External (sign-in, Slack Connect
+ * conversations, adding them to Macro). The only rollout gate; the backend
+ * always serves `/slack-linked`. Follows PostHog everywhere, like WhatsApp, because
+ * the Slack session service isn't deployed to dev yet; override locally with
+ * VITE_ENABLE_SLACK_LINKED=true.
+ */
+export const enableSlackLinked = defineFlag({
+  key: 'enable-slack-linked',
+  env: 'ENABLE_SLACK_LINKED',
+});
+
+/**
+ * Each external chat provider's rollout gate: its External page, its chats
+ * and its sidebar entry. Here so core (the mentions menu) can read it;
+ * `features/external-view/provider-flags.ts` builds on it.
+ */
+export const externalChatProviderFlags = {
+  whatsapp: enableWhatsappLinked,
+  slack: enableSlackLinked,
+} as const satisfies Record<ExternalChatProvider, RemoteFlag>;
 
 /**
  * Passwords v1: the `/passwords` route and its rail and dock entries (which

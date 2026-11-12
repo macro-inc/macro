@@ -6,6 +6,7 @@ import type {
   SendFailure,
   SendProgress,
 } from '@app/features/external-chat/core/chat';
+import type { ExternalChatProvider } from '@service-storage/generated/schemas/externalChatProvider';
 import {
   infiniteQueryOptions,
   type QueryKey,
@@ -43,10 +44,14 @@ export type ExternalChatApi = {
   markRead: (chatId: string, messageId: string) => Promise<unknown>;
   stopSync: (chatId: string) => Promise<unknown>;
   /**
-   * Asks the owner's phone for the earlier messages of their chats waiting
-   * for it (WhatsApp imports per account, not per chat).
+   * Imports a chat's earlier messages. WhatsApp asks the owner's phone for
+   * every chat waiting for it (it imports per account, not per chat); Slack
+   * imports another page of this chat.
    */
-  importHistory: () => Promise<unknown>;
+  importHistory: (
+    chatId: string,
+    provider: ExternalChatProvider
+  ) => Promise<unknown>;
 };
 
 // DSS pushes `external_chat_changed` through the connection gateway (`./sync`);

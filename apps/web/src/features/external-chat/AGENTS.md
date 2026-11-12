@@ -3,13 +3,13 @@
 ## Scope
 
 Owns the shareable external chat (entity type `external_chat`): a chat from
-an outside messaging provider (WhatsApp today) added to Macro, opened inside
+an outside messaging provider (WhatsApp, Slack) added to Macro, opened inside
 External at `/external/chat/:chatId`. It has independent message storage and
 queries (DSS `/external-chats`). It renders with the channel components
 (`ChannelMessage`, `ChannelInput` with Macro-only features off) but never uses
 channel queries, services, membership or context. Pairing, account management,
 the provider's chat list and adding a chat belong to the provider feature
-(`features/whatsapp-linked`); the External shell and its per-provider lists
+(`features/whatsapp-linked`, `features/slack-linked`); the External shell and its per-provider lists
 belong to `features/external-view`. Architecture:
 `docs/architecture/external-chats.md`.
 
@@ -19,11 +19,17 @@ belong to `features/external-view`. Architecture:
   each carrying its `provider`), sending identity, edit eligibility and the
   `MessageData` mapping.
 - `providers/index.ts`: the registry. `chatProvider(provider)` returns
-  `{ label, icon, badgeClass, formatting, composerFeatures }`; generic code
-  reads a provider only through it. `providers/identity.ts` holds the label
+  `{ label, icon, badgeClass, formatting, disconnected, historyImport,
+  composerFeatures }`; generic code reads a provider only through it.
+  `disconnected` is the composer's line and button once the viewer's account
+  is no longer connected (Slack: "Sign in to Slack"); the button opens that
+  provider's page in External (`externalRoute` state `{ provider }`).
+  `historyImport` names the backfill states in which the owner's import bar
+  shows (WhatsApp `waiting_for_phone`, per account; Slack `partial`, another
+  page of this chat). `providers/identity.ts` holds the label
   and logos alone for surfaces that must not load formatting code (EntityIcon,
-  notifications, External's sidebar). `providers/whatsapp/` holds the
-  Markdown ↔ WhatsApp formatting converters. A new provider adds a folder and
+  notifications, External's sidebar). `providers/whatsapp/` and
+  `providers/slack/` hold the Markdown ↔ WhatsApp / Slack mrkdwn converters. A new provider adds a folder and
   one entry in each map.
 - `context/`: source and action contracts; no production imports.
 - `primitives/conversation.ts`: optimistic sends, idempotency keys, quiet

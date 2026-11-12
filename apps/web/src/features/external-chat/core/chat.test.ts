@@ -15,6 +15,20 @@ describe('personal sending identity', () => {
     ).toBe("Your WhatsApp can't post in this chat");
     expect(composerNote(chat)).toBe('Sending as +14155550142');
   });
+  it("asks for a new Slack sign-in once the owner's session ended", () => {
+    expect(
+      composerNote({
+        ...chat,
+        provider: 'slack',
+        phone: undefined,
+        canSend: false,
+        sendReason: 'disconnected',
+      })
+    ).toBe('Your Slack session ended. Sign in again to reply');
+    expect(composerNote({ ...chat, provider: 'slack', phone: undefined })).toBe(
+      'Sending from your Slack'
+    );
+  });
   it('offers changes only on own messages inside the server window', () => {
     const own = messages[1];
     const now = Date.parse(own.sentAt) + 5000;

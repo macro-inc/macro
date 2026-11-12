@@ -25,6 +25,7 @@ import { getDisplayName, tryMacroId } from '@core/user';
 import type { IUser } from '@core/user/types';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ShareFatIcon from '@phosphor/share-fat.svg';
+import type { ExternalChatProvider } from '@service-storage/generated/schemas/externalChatProvider';
 import { Button, ConfirmDialog } from '@ui';
 import {
   createEffect,
@@ -119,7 +120,8 @@ export function ExternalChatView(props: {
   share: JSX.Element;
   /** Opens the host's share dialog from the details panel. */
   onShare: () => void;
-  onConnect: () => void;
+  /** Opens the provider's page in External to connect or sign in again. */
+  onConnect: (provider: ExternalChatProvider) => void;
 }) {
   const source = useExternalChat();
   const provider = () =>
@@ -323,14 +325,19 @@ export function ExternalChatView(props: {
       source.chat.data?.accessLevel === 'owner'
     );
   /** The owner can start the import here; it is the one place it always is. */
-  const canImport = () =>
-    source.chat.data?.accessLevel === 'owner' &&
-    source.chat.data.backfill?.state === 'waiting_for_phone';
+  const canImport = () => {
+    const chat = source.chat.data;
+    if (chat?.accessLevel !== 'owner' || !chat.backfill) return false;
+    return chatProvider(chat.provider).historyImport.states.includes(
+      chat.backfill.state
+    );
+  };
   const [startingImport, setStartingImport] = createSignal(false);
   const startImport = async () => {
     setStartingImport(true);
     try {
-      await source.importHistory();
+      const chat = source.chat.data;
+      if (chat) await source.importHistory(chat.provider);
     } catch {
       toast.failure("Couldn't start importing earlier messages. Try again.");
     } finally {
@@ -631,9 +638,7 @@ export function ExternalChatView(props: {
       {/* Always reachable, however far back the timeline is scrolled. */}
       <Show when={canImport()}>
         <div class="flex min-w-0 items-center gap-3 border-b border-edge-muted px-4 py-2 text-xs text-ink-muted">
-          <span class="min-w-0 flex-1">
-            Open WhatsApp on your phone to import earlier messages.
-          </span>
+          <span class="min-w-0 flex-1">{provider()?.historyImport.prompt}</span>
           <Button
             type="button"
             variant="secondary"
@@ -837,9 +842,14 @@ export function ExternalChatView(props: {
                               <Button
                                 variant="secondary"
                                 size="sm"
-                                onClick={props.onConnect}
+                                onClick={() =>
+                                  props.onConnect(group().provider)
+                                }
                               >
-                                Connect {provider()?.label}
+                                {group().sendReason === 'disconnected'
+                                  ? chatProvider(group().provider).disconnected
+                                      .action
+                                  : `Connect ${chatProvider(group().provider).label}`}
                               </Button>
                             </Show>
                           </div>

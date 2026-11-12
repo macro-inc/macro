@@ -4,6 +4,8 @@ import type { ExternalChatProvider } from '@service-storage/generated/schemas/ex
 import { useSearchParams } from '@solidjs/router';
 import type { Component, JSX } from 'solid-js';
 import { z } from 'zod';
+import { SlackLinked } from '../slack-linked/slack-linked';
+import type { SlackHandoff } from '../slack-linked/views/slack-page';
 import { WhatsAppLinked } from '../whatsapp-linked/whatsapp-linked';
 
 export type ProviderPageProps = {
@@ -52,10 +54,56 @@ function WhatsAppPage(props: ProviderPageProps) {
   );
 }
 
+/** `?slackLogin=<attempt id>` resumes a sign-in; `browser` opens Slack's own. */
+function slackHandoff(value: unknown): SlackHandoff | undefined {
+  if (value === 'browser') return { kind: 'browser' };
+  const loginId = z.uuid().safeParse(value).data;
+  return loginId ? { kind: 'login', loginId } : undefined;
+}
+
+function SlackPage(props: ProviderPageProps) {
+  // Read once: the handoff is consumed, then dropped from the URL.
+  const [search, setSearch] = useSearchParams();
+  const handoff = slackHandoff(search.slackLogin);
+  if (search.slackLogin !== undefined)
+    setSearch({ slackLogin: undefined }, { replace: true });
+  return (
+    <>
+      <ProviderHeading label="Slack" />
+      <ViewShell.Content
+        class="overflow-y-auto pb-4 touch:pb-(--mobile-content-inset-bottom)"
+        style={{ '--mobile-content-inset-top': '0px' }}
+      >
+        {props.inMacro}
+        <SlackLinked handoff={handoff} />
+      </ViewShell.Content>
+    </>
+  );
+}
+
 /** Each provider's account page in External's main pane. */
 export const PROVIDER_PAGES: Record<
   ExternalChatProvider,
   Component<ProviderPageProps>
 > = {
   whatsapp: WhatsAppPage,
+  slack: SlackPage,
 };
+
+/**
+ * The search param that hands a provider's page a step begun elsewhere (a
+ * desktop deep link, a pairing on another device). External opens on that
+ * provider's page when it carries one.
+ */
+const HANDOFF_PARAMS: Record<ExternalChatProvider, string> = {
+  whatsapp: 'whatsappPairing',
+  slack: 'slackLogin',
+};
+
+export function handedOffProvider(
+  search: Partial<Record<string, string | string[]>>
+): ExternalChatProvider | undefined {
+  return (Object.keys(HANDOFF_PARAMS) as ExternalChatProvider[]).find(
+    (provider) => search[HANDOFF_PARAMS[provider]] !== undefined
+  );
+}
