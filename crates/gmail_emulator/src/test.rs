@@ -2,6 +2,7 @@
 //! against the emulator.
 
 mod auth;
+mod calendar;
 mod control;
 mod faults;
 mod history;

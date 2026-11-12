@@ -36,16 +36,24 @@ fn only_the_authorization_url_is_addressed_for_a_browser() {
     );
     let in_network: Vec<&String> = env
         .iter()
+        .filter(|(name, _)| name.starts_with("OVERRIDE_"))
         .filter(|(name, _)| *name != "OVERRIDE_GOOGLE_OAUTH_AUTHORIZATION_URL")
         .map(|(_, value)| value)
         .collect();
-    assert_eq!(in_network.len(), 6);
+    assert_eq!(in_network.len(), 7);
     assert!(
         in_network
             .iter()
             .all(|url| url.starts_with("http://gmail-emulator:8080/")),
         "{in_network:?}"
     );
+
+    // The emulator pushes calendar changes to the calendar service itself.
+    assert_eq!(
+        env["CALENDAR_WATCH_WEBHOOK_URL"],
+        "http://calendar-service:8080/notifications"
+    );
+    assert!(!env["CALENDAR_WATCH_TOKEN"].is_empty());
 
     // FusionAuth's browser redirect and the Gmail link's agree.
     assert_eq!(

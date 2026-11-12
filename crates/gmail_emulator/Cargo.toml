@@ -3,13 +3,14 @@ edition = "2024"
 name = "gmail_emulator"
 publish = false
 version = "0.1.0"
-description = "Test support: a stateful fake of the Google APIs Macro's email code calls (Gmail REST, People, OAuth token, signed Pub/Sub push), in process or as a standalone binary."
+description = "Test support: a stateful fake of the Google APIs Macro's email, calendar and sign-in code call (Gmail REST, Calendar REST with push channels, People, OAuth, signed Pub/Sub push), in process or as a standalone binary."
 
 [dependencies]
 askama = { workspace = true }
 axum = { workspace = true }
 base64 = { workspace = true }
 chrono = { workspace = true }
+chrono-tz = { workspace = true }
 clap = { workspace = true }
 jsonwebtoken = { workspace = true }
 macro_entrypoint = { path = "../macro_entrypoint" }
@@ -18,6 +19,7 @@ mail-builder = { workspace = true }
 mailparse = { workspace = true }
 nom = { workspace = true }
 reqwest = { workspace = true }
+rrule = { workspace = true }
 rsa = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -33,6 +35,7 @@ url = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+calendar_events = { path = "../calendar_events", features = ["google"] }
 email_api_client = { path = "../email_api_client", features = ["outbound-gmail"] }
 fusionauth = { path = "../fusionauth" }
 gmail_client = { path = "../gmail_client" }

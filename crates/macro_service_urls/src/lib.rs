@@ -680,6 +680,16 @@ service_url! {
 }
 
 service_url! {
+    /// Google Calendar REST API base. Google's host in every environment;
+    /// override it to run against `crates/gmail_emulator`.
+    pub struct GoogleCalendarApiUrl {
+        local: "https://www.googleapis.com/calendar/v3",
+        dev: "https://www.googleapis.com/calendar/v3",
+        prod: "https://www.googleapis.com/calendar/v3",
+    }
+}
+
+service_url! {
     /// Google People API base. Google's host in every environment; override
     /// it to run against `crates/gmail_emulator`.
     pub struct GooglePeopleApiUrl {

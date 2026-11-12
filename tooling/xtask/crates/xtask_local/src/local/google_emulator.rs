@@ -5,7 +5,8 @@
 //! that does not exist. Such a stack runs the emulator instead. FusionAuth's
 //! `google` and `google_gmail` identity providers and the services' Google
 //! service URLs point at it, so a person signs in by picking a seeded user
-//! on the emulator's page and their mailbox is the emulator's.
+//! on the emulator's page and their mailbox and calendars are the
+//! emulator's.
 //!
 //! A stack whose env carries a real Google client (Doppler, `--env-file`)
 //! talks to Google as before and does not start the emulator.
@@ -28,6 +29,11 @@ const SEED_FILE: &str = "crates/gmail_emulator/seed.example.yaml";
 /// placeholders `BootStubEnv` gives the services; the emulator accepts any.
 const CLIENT_ID: &str = "local-google-client";
 const CLIENT_SECRET: &str = "local-google-client-secret";
+/// The calendar service's push webhook on the services network.
+const CALENDAR_WEBHOOK: &str = "http://calendar-service:8080/notifications";
+/// What the calendar service gives its channels and expects back on every
+/// notification. Only the emulator ever sends it.
+const CALENDAR_WATCH_TOKEN: &str = "local-calendar-watch-token";
 
 /// Whether this stack runs the emulator in place of Google: it runs its own
 /// FusionAuth, and its resolved env names no real Google client.
@@ -68,6 +74,10 @@ pub fn env(instance: &Instance) -> BTreeMap<String, String> {
         ("OVERRIDE_GMAIL_API_URL", in_network("/gmail/v1")),
         ("OVERRIDE_GOOGLE_PEOPLE_API_URL", in_network("/people/v1")),
         (
+            "OVERRIDE_GOOGLE_CALENDAR_API_URL",
+            in_network("/calendar/v3"),
+        ),
+        (
             "OVERRIDE_GOOGLE_OAUTH_CERTS_URL",
             in_network("/oauth2/v3/certs"),
         ),
@@ -81,6 +91,11 @@ pub fn env(instance: &Instance) -> BTreeMap<String, String> {
             "OVERRIDE_GOOGLE_OAUTH_AUTHORIZATION_URL",
             authorization_endpoint(instance),
         ),
+        // Calendar channels name their own webhook: the emulator posts each
+        // notification to the address `events.watch` was given, with this
+        // token, as Google does to a public one.
+        ("CALENDAR_WATCH_WEBHOOK_URL", CALENDAR_WEBHOOK.to_string()),
+        ("CALENDAR_WATCH_TOKEN", CALENDAR_WATCH_TOKEN.to_string()),
     ]
     .into_iter()
     .map(|(name, value)| (name.to_string(), value))
