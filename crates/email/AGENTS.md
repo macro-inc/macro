@@ -17,7 +17,9 @@ tools — hexagonal, heavily feature-gated.
   removal, contact listing, and scheduled-draft pages; ownership/delegation
   checks are shared through `mailbox/catalog.rs`.
 - `src/domain/signature_settings.rs` (feature `mailbox`): signature preparation
-  and settings patches.
+  and settings patches. `signature_settings/gmail_images.rs` selects public or
+  mailbox image reads, caches message parts for one import, and preserves retryable
+  image failures behind an image-reader port.
 - `src/domain/attachment_cleanup/sfs_deletion.rs` (feature `ports`): stored-file
   deletion order, the already-missing-file rule, and delivery disposition.
 - `src/domain/mailbox/contacts/sfs_upload.rs` (feature `mailbox`): URL-backed
@@ -286,6 +288,10 @@ tools — hexagonal, heavily feature-gated.
   Throttling and token refusals give their claim back to `attempts`.
 - Outlook sync claims (catalog, folder streams, messages, contacts) skip a
   link with `needs_reauth`; clearing the flag resumes them.
+- Process deleted-user bindings in the domain by link id, custodian before
+  owner, then actor id, retaining one binding per link and actor; the repository
+  returns each binding's kind so custody cleanup runs before an owner disconnect
+  can suppress it without processing a self-custodian twice.
 - Import counts for the health snapshot stay in memory (`ImportTally`) and are
   flushed once a minute to `email_mailbox_import_minutes`; never write per
   imported message for telemetry.

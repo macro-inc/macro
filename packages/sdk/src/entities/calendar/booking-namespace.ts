@@ -69,6 +69,8 @@ export class BookingNamespace {
    *
    * `query` matches link title, slug and description; omit it for every link
    * (at most 100).
+   *
+   * @readonly
    */
   async links(
     options: BookingScope & { query?: string } = {},
@@ -110,6 +112,9 @@ export class BookingNamespace {
    * Replaying an identical draft at the same slug returns the saved link; a
    * different draft at that slug conflicts (409). Share the link's
    * {@link BookingLink.webUrl} as an `<m-booking-link-mention>` chip.
+   *
+   * @write
+   * @idempotent
    */
   async createLink(
     draft: BookingLinkDraft,
@@ -128,6 +133,8 @@ export class BookingNamespace {
    * Read every booking setting of the user (or a team): booking-page name and
    * introduction, reusable schedules, default hours and every link. Reading
    * never creates settings.
+   *
+   * @readonly
    */
   async settings(options: BookingScope = {}): Promise<BookingSettings> {
     const { profile } = unwrap(
@@ -149,6 +156,8 @@ export class BookingNamespace {
    * hosting, so name the affected links before changing them. Deleting a link
    * cancels none of its bookings. Saving at a stale revision is refused (409):
    * read again and reconcile instead of overwriting.
+   *
+   * @destructive
    */
   async saveSettings(
     profile: BookingProfile,
@@ -169,6 +178,8 @@ export class BookingNamespace {
    * guests, answers, attendance and reschedule history. An oversized result
    * fails rather than truncating: narrow the range. Use {@link insights} for
    * statistics.
+   *
+   * @readonly
    */
   async bookings(
     options: BookingScope & { from: string; to: string },
@@ -189,6 +200,8 @@ export class BookingNamespace {
    * Failed and processing requests are excluded. Completed means confirmed
    * and ended without a recorded no-show, not verified attendance; minutes
    * are scheduled duration, not call length. No guest contact details.
+   *
+   * @readonly
    */
   async insights(query: BookingInsightsQuery): Promise<BookingInsights> {
     return unwrap(
