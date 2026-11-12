@@ -162,7 +162,10 @@ async function mount(page: Page, state: SlackServer, query = '') {
     try {
       return await route.fulfill({ response: await route.fetch() });
     } catch (error) {
-      if (error instanceof Error && error.message.includes('Test ended'))
+      if (
+        error instanceof Error &&
+        /Test ended|Fetch response has been disposed/.test(error.message)
+      )
         return;
       throw error;
     }

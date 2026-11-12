@@ -603,8 +603,12 @@ async function mount(page: Page, state: LinkedServer, query = '') {
     try {
       return await route.fulfill({ response: await route.fetch() });
     } catch (error) {
-      // Late asset reads may finish after Playwright has torn down the test.
-      if (error instanceof Error && error.message.includes('Test ended'))
+      // Late asset reads may finish after Playwright has torn down the test
+      // or disposed the fetched response.
+      if (
+        error instanceof Error &&
+        /Test ended|Fetch response has been disposed/.test(error.message)
+      )
         return;
       throw error;
     }
