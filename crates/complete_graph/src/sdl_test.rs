@@ -1020,3 +1020,88 @@ fn saved_view_contract_is_composed_under_authenticated_user_and_mutations() {
         "membership tokens are internal"
     );
 }
+
+#[test]
+fn channel_reads_hang_off_the_authenticated_user() {
+    use apollo_compiler::schema::ExtendedType;
+    let sdl = crate::build_schema().sdl();
+    for expected in [
+        "union GraphqlChannelTimelineEntry = GraphqlChannelMessage | GraphqlChannelTimelineActivity",
+        "replies: [GraphqlChannelMessage!]!",
+        "removedIds: [ID!]!",
+    ] {
+        assert_sdl_line(&sdl, expected);
+    }
+    let schema = apollo_compiler::Schema::parse_and_validate(sdl.as_str(), "schema.graphql")
+        .expect("generated SDL is valid");
+    let ExtendedType::Object(user) = &schema.types["GraphqlUser"] else {
+        panic!("expected authenticated user");
+    };
+    for (name, output, arguments) in [
+        (
+            "channelTimeline",
+            "GraphqlChannelTimelinePage!",
+            &[("input", "ChannelTimelineInput!")][..],
+        ),
+        (
+            "channelThread",
+            "GraphqlChannelThreadPage!",
+            &[("input", "ChannelThreadInput!")][..],
+        ),
+        (
+            "channelChanges",
+            "GraphqlChannelChanges!",
+            &[("input", "ChannelChangesInput!")][..],
+        ),
+        (
+            "channelMessage",
+            "GraphqlChannelMessage",
+            &[("channelId", "ID!"), ("messageId", "ID!")][..],
+        ),
+    ] {
+        let field = &user.fields[name];
+        assert_eq!(field.ty.to_string(), output, "{name} output");
+        assert_eq!(
+            field
+                .arguments
+                .iter()
+                .map(|argument| (argument.name.to_string(), argument.ty.to_string()))
+                .collect::<Vec<_>>(),
+            arguments
+                .iter()
+                .map(|(name, ty)| (name.to_string(), ty.to_string()))
+                .collect::<Vec<_>>(),
+            "{name} arguments"
+        );
+    }
+    for name in ["GraphqlChannelMessage", "GraphqlChannelTimelineActivity"] {
+        let ExtendedType::Object(object) = &schema.types[name] else {
+            panic!("expected object");
+        };
+        assert_eq!(object.fields["id"].ty.to_string(), "ID!");
+        assert_eq!(object.fields["channelId"].ty.to_string(), "ID!");
+        assert_eq!(object.fields["sortKey"].ty.to_string(), "String!");
+    }
+    for name in [
+        "GraphqlChannelThread",
+        "GraphqlChannelTimelinePage",
+        "GraphqlChannelThreadPage",
+        "GraphqlChannelChanges",
+    ] {
+        let ExtendedType::Object(object) = &schema.types[name] else {
+            panic!("expected object");
+        };
+        assert!(!object.fields.contains_key("id"));
+    }
+    let ExtendedType::Object(root) = &schema.types["SoupQueryRoot"] else {
+        panic!("expected root");
+    };
+    for field in [
+        "channelTimeline",
+        "channelThread",
+        "channelChanges",
+        "channelMessage",
+    ] {
+        assert!(!root.fields.contains_key(field));
+    }
+}

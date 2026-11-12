@@ -2,6 +2,7 @@
 use async_graphql::{Context, ID, Object};
 use macro_user_id::user_id::MacroUserIdStr;
 use messages::domain::ports::MessageTimelineEntry;
+use tracing::Instrument;
 
 use crate::{ChannelGraphqlContext, inputs::*, message_error, objects::*};
 
@@ -36,24 +37,33 @@ impl GraphqlChannelQuery {
         tracing::Span::current().record("channel_id", tracing::field::display(channel_id));
         tracing::Span::current().record("page_size", i64::from(query.limit.unwrap_or(50)));
         let reads = ctx.data::<ChannelGraphqlContext>()?;
-        let access = reads.authorize(self.user_id.clone(), channel_id).await?;
-        let seq = reads.channel_seq(access.clone()).await?;
+        let access = reads
+            .authorize(self.user_id.clone(), channel_id)
+            .instrument(tracing::info_span!("channel.timeline.authorize"))
+            .await?;
+        let seq = reads
+            .channel_seq(access.clone())
+            .instrument(tracing::info_span!("channel.timeline.sequence"))
+            .await?;
         let page = reads
             .messages
             .timeline_entries(access, query)
+            .instrument(tracing::info_span!("channel.timeline.read"))
             .await
             .map_err(message_error)?;
         tracing::Span::current().record("entry_count", page.entries.len() as i64);
-        Ok(GraphqlChannelTimelinePage {
-            entries: page
-                .entries
-                .into_iter()
-                .map(|entry| GraphqlChannelTimelineEntry::from_entry(entry, channel_id))
-                .collect(),
-            older_cursor: page.next_cursor.as_ref().map(encode_cursor),
-            newer_cursor: page.previous_cursor.as_ref().map(encode_cursor),
-            seq,
-        })
+        Ok(
+            tracing::info_span!("channel.timeline.map").in_scope(|| GraphqlChannelTimelinePage {
+                entries: page
+                    .entries
+                    .into_iter()
+                    .map(|entry| GraphqlChannelTimelineEntry::from_entry(entry, channel_id))
+                    .collect(),
+                older_cursor: page.next_cursor.as_ref().map(encode_cursor),
+                newer_cursor: page.previous_cursor.as_ref().map(encode_cursor),
+                seq,
+            }),
+        )
     }
 
     /// A bounded window of live replies using the REST thread's display order.
