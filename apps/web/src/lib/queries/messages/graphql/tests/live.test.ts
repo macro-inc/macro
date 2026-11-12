@@ -5,7 +5,7 @@
 import type { CacheHost } from '@graphql-cache/host/types';
 import type { MessageEvent } from '@service-storage/generated/schemas/messageEvent';
 import type { Message } from '@service-storage/messages';
-import { QueryClient } from '@tanstack/solid-query';
+import { InfiniteQueryObserver, QueryClient } from '@tanstack/solid-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -226,6 +226,72 @@ describe('a pushed change on a channel that follows its sequence', () => {
     });
     await vi.advanceTimersByTimeAsync(1_500);
     expect(testQueryClient.getQueryState(LATEST_KEY)?.isInvalidated).toBe(true);
+  });
+
+  it('keeps asking until the number is back, however often a write cancels the read', async () => {
+    await openAt(7);
+    vi.useFakeTimers();
+    mocks.fetchLatestChannelPage.mockReturnValue(new Promise(() => {}));
+    reconcileFailedChannelWrite(CHANNEL);
+    for (let write = 0; write < 2; write += 1) {
+      await testQueryClient.cancelQueries({ queryKey: LATEST_KEY });
+      testQueryClient.setQueryData<MessageTimelineData>(
+        LATEST_KEY,
+        (data) => data && { ...data }
+      );
+      expect(testQueryClient.getQueryState(LATEST_KEY)?.isInvalidated).toBe(
+        false
+      );
+      await vi.advanceTimersByTimeAsync(1_500);
+      expect(testQueryClient.getQueryState(LATEST_KEY)?.isInvalidated).toBe(
+        true
+      );
+    }
+  });
+
+  it('does not ask in a loop for a read the server failed', async () => {
+    await openAt(7);
+    vi.useFakeTimers();
+    mocks.fetchLatestChannelPage.mockReset();
+    mocks.fetchLatestChannelPage.mockRejectedValue(new TypeError('offline'));
+    const unsubscribe = new InfiniteQueryObserver(testQueryClient, {
+      ...messageTimelineQueryOptions(CHANNEL, null),
+      retry: false,
+    }).subscribe(() => {});
+    reconcileFailedChannelWrite(CHANNEL);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(mocks.fetchLatestChannelPage).toHaveBeenCalledTimes(1);
+    unsubscribe();
+  });
+
+  it("starts a read again that the sender's own change arrived during", async () => {
+    await openAt(7);
+    const unsubscribe = new InfiniteQueryObserver(testQueryClient, {
+      ...messageTimelineQueryOptions(CHANNEL, null),
+      retry: false,
+    }).subscribe(() => {});
+    mocks.fetchLatestChannelPage.mockReset();
+    // The first read predates the write; the one started over holds it.
+    mocks.fetchLatestChannelPage.mockReturnValueOnce(new Promise(() => {}));
+    mocks.fetchLatestChannelPage.mockResolvedValue({
+      seq: 9,
+      userId: 'user',
+      page: page([
+        messageEntry('m3', 3),
+        messageEntry('m2', 2),
+        messageEntry('m1', 1),
+      ]),
+    });
+    reconcileFailedChannelWrite(CHANNEL);
+    await vi.waitFor(() =>
+      expect(mocks.fetchLatestChannelPage).toHaveBeenCalledTimes(1)
+    );
+    registerNonce(MessageNonceKeys.MESSAGE, 'm3');
+    handleMessageEvent(event(9, posted(root('m3', 3)), 'm3'));
+    await vi.waitFor(() => expect(channelSyncSeq(CHANNEL.id)).toBe(9));
+    expect(mocks.fetchLatestChannelPage).toHaveBeenCalledTimes(2);
+    expect(loadedIds()).toEqual([['m3', 'm2', 'm1']]);
+    unsubscribe();
   });
 
   it('does not put a late response under a number that has moved', async () => {

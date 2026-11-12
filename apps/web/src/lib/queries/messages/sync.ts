@@ -13,6 +13,7 @@ import {
   admitChannelEvent,
   catchUpTrackedChannel,
   channelEventApplied,
+  isChannelSequenced,
 } from './graphql/channel-sync';
 import { MessageNonceKeys, messageKeys } from './keys';
 import { normalizeMessageSender } from './message-sender';
@@ -249,6 +250,11 @@ export function handleMessageEvent(
   } else if (!isOwnEcho) {
     // The sender's own change is already in the timeline from its response.
     applyMessage(change.message, change.type);
+  } else if (isChannelSequenced(parent)) {
+    // The timeline is being read again without a number. That read may
+    // predate this write, and its number would then keep the write's
+    // response out, so it starts over now that the write is committed.
+    fireAndForget(restartPendingChannelTimeline(parent), 'messages-sync');
   }
   if (isOwnEcho) return;
   if (isRootPost && parent.type !== 'channel') {

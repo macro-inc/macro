@@ -251,6 +251,18 @@ export function reconcileFailedChannelWrite(parent: MessageParent) {
 
 const WRITE_STARTS = new WeakMap<object, number | undefined>();
 
+/**
+ * Whether the channel's timeline was read through the device cache, with or
+ * without a number at the moment.
+ */
+export function isChannelSequenced(parent: MessageParent): boolean {
+  return (
+    parent.type === 'channel' &&
+    STATES.has(parent.id) &&
+    channelCacheHost() !== undefined
+  );
+}
+
 /** A write is starting: remember the number the timeline is at. */
 export function channelWriteStarted(parent: MessageParent, write: object) {
   WRITE_STARTS.set(write, timelineSeq(parent));
@@ -577,14 +589,18 @@ function recoverLostRead(parent: MessageParent) {
   const data = queryClient.getQueryData<MessageTimelineData>(key);
   if (!data || data.pageParams[0] != null) return;
   if (data.pages[0]?.channel_seq !== undefined || !channelCacheHost()) return;
-  const fetchStatus = queryClient.getQueryState(key)?.fetchStatus;
-  // A paused read resumes by itself when the connection returns.
-  if (fetchStatus === 'paused') return;
-  if (fetchStatus === 'fetching' || hasPendingWrite(parent.id)) {
+  const query = queryClient.getQueryState(key);
+  // A read in flight or waiting for the connection may still be cancelled by
+  // the next write, so look again until the number is back.
+  if (query?.fetchStatus !== 'idle' || hasPendingWrite(parent.id)) {
     scheduleRecover(parent);
     return;
   }
+  // A read the server failed is not asked for in a loop: a reconnect or the
+  // next open reads the channel again.
+  if (query.status === 'error') return;
   invalidatePages(parent);
+  scheduleRecover(parent);
 }
 
 function scheduleRecover(parent: MessageParent) {

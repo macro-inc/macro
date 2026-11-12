@@ -95,8 +95,12 @@ live events that keep them current.
 - A failed message or reaction write on a tracked channel reads the
   timeline again (`reconcileFailedChannelWrite`): the server may have
   committed it and its echo may already have moved the number past it.
-  The next optimistic write cancels that read, so a check a second later
-  asks for it again once no write is pending.
+  The next optimistic write cancels that read, so a check every second
+  asks for it again once no write is pending, until the number is back (a
+  read the server failed is left to a reconnect or the next open). The
+  sender's own pushed change arriving meanwhile starts that read over: a
+  read from before the write would commit a number that keeps the write's
+  response out.
 - A write's response is applied only while the timeline's number is the one
   the write started at (`channelWriteResponseApplies`). After it has moved,
   the response may predate rows the timeline holds, and an older row under
