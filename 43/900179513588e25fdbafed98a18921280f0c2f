@@ -1,0 +1,32 @@
+services/mcp-chatgpt-worker/openai-plugin/mcp.json
+  s_3d62a29a435862::t_38d5d76a0ce271 1-5,7-9
+  s_f5e1b65d3a8570::t_3cd51874ea1459 6
+services/mcp-chatgpt-worker/openai-plugin/plugin.json
+  s_3d62a29a435862::t_38d5d76a0ce271 1-105
+services/mcp-chatgpt-worker/AGENTS.md
+  s_3d62a29a435862::t_56d076c92b9920 46-54
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "43900179513588e25fdbafed98a18921280f0c2f",
+  "prompts": {},
+  "sessions": {
+    "s_3d62a29a435862": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8a7afb95-242c-4b89-9801-849d6d6f2ccd",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_f5e1b65d3a8570": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "dddf75b8-08ef-4d27-9924-56770922c5aa",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
