@@ -1300,7 +1300,8 @@ server exposes `DescribeCodeTools`, `ReadCodeDocs` and `ExecuteCode`. The in-pro
 all three schemas on its first model call, without `SearchTools` or `LoadTools`.
 For Macro's in-process agent, every conversation turn of a user's session runs
 code mode whenever those three tools are listed (otherwise the turn falls back
-to the direct tools and logs a warning). Code mode has a smaller direct toolset:
+to the direct tools and logs a warning; for owners with the
+`ai-session-code-mode-only` flag the turn fails instead). Code mode has a smaller direct toolset:
 SDK-supported searches, reads, listing, and data operations run through the SDK
 (`macro.search`, `macro.workspace`), including AI document and task edits
 (`document.edit(instructions)`; `EditDocument` is hidden in code mode) and
@@ -1432,7 +1433,8 @@ again. Production builds do not print these console entries. Never log or return
 the execution's token.
 
 For local verification, run the harness with a configured Deno runner; without
-one, turns fall back to the direct tools. Supported
+one, turns fall back to the direct tools, or fail for owners with the
+`ai-session-code-mode-only` flag. Supported
 operations should move to code while unsupported creation, skill discovery,
 editing and interactive tools remain direct. Ask for a document lookup without
 mentioning tools; inspect its source and result, reload, and verify persistence.
@@ -1915,8 +1917,11 @@ While a turn runs tool calls, the server words them as one live status line
 pushes it to every viewer (`agent_session_activity`). It replaces the
 **Calling N tools** label of the run the turn is in: one with a call in flight,
 or the newest run while the agent thinks between calls. The count stays beside it,
-and the caret still opens the raw calls. It also replaces the open activity line of an agent reply in a
-channel, and shows under a working session's row in the Agents list. It is
+and the caret still opens the raw calls. An `ExecuteCode` program the turn is
+in takes it the same way: on its SDK-operation peek, or in place of **Working
+in your workspace…** before any operation is observed. It also replaces the
+open activity line of an agent reply in a channel, and shows under a working
+session's row in the Agents list. It is
 throttled per turn (every 4s for the first 10 lines, then every 15s, at most
 120), never stored, and cleared when the turn ends; a surface opened mid-turn
 shows its usual label until the next line arrives. Sessions owned by no person

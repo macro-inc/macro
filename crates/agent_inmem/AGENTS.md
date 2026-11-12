@@ -78,6 +78,14 @@ retains notification ACP inputs and their replies; the transcript fold separatel
 omits system input from its message projection. PresentReview, GetReview and
 DecideReview are eager internal tools in both standard and code modes.
 
+A user's conversation turns run code mode when the turn's MCP catalog lists
+every `mcp__macro_internal__` code tool, and otherwise fall back to the direct
+tools (`tool_mode` in `src/rig_engine.rs`). The owner's
+`ai-session-code-mode-only` PostHog flag (`domain/tool_mode.rs`) removes the
+fallback: a conversation turn without the code tools fails. Summaries advertise
+no tools in either mode and never read the flag. Unset, false or unreadable
+flags keep the fallback.
+
 - Owner memory is composed by the memory domain on each read; daily generation is hosted by cognition, not agent turns.
 
 ## Checks
