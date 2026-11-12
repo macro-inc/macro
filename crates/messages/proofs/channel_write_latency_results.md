@@ -1,12 +1,12 @@
 # Repository write latency
 
-Measured on an isolated local PostgreSQL 18.4 server with synchronous commit and fsync enabled. Old and new repository methods ran back to back on the same database. `SQLX_OFFLINE` was unset. This worktree’s compilation, query-plan jobs and other validation work were idle during each timed run. Setup, warmup and cleanup are outside measured batches.
+Measured on a dedicated local PostgreSQL 18.4 server with synchronous commit and fsync enabled. Database files were on tmpfs; the host was shared with other worktrees, so these are not isolated-host or production-capacity measurements. Old and new repository methods ran back to back on the same database. `SQLX_OFFLINE` was unset. This worktree’s compilation, query-plan jobs and other validation work were idle during each timed run. Setup, warmup and cleanup are outside measured batches.
 
 The baseline retains the SQL, hydration and transaction boundaries from `354da677b5`. Each runtime/profile/layout/operation/variant has three runs of 2,000 measured writes, preceded by 128 warmups. The rows below are medians of the three reported percentiles/throughputs, not percentiles pooled across runs. [Every run](channel_write_latency_runs.csv) retains p50/p95/p99, wall time and throughput so variation is visible.
 
 `multi_thread_16` uses an explicit 16-worker Tokio runtime and creates its pool there. `current_thread` retains the SQLx test runtime; it is reported separately rather than mixed with server-style execution. Both use identical SQL and workloads.
 
-The latency gate is not met: 16 concurrent writers in one channel have higher p95 and lower throughput under the 16-worker runtime, despite faster writes without channel contention. The counter/log statement remains the final statement before commit.
+Sixteen concurrent writers in one channel have higher p95 and lower throughput under the 16-worker runtime at saturation. These contention measurements should be read alongside the [fixed-arrival and delayed-commit results](channel_arrival_latency_results.md), including their large-tail samples. The counter/log statement remains the final statement before commit.
 
 ## multi_thread_16, debug
 
