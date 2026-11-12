@@ -348,7 +348,9 @@ export async function safeFetch<
         return ok(data as T);
       }
     } catch (error) {
-      if (error instanceof TypeError && error.message === 'Failed to fetch') {
+      // Fetch rejects every network failure with a TypeError, whose message
+      // differs by browser ("Failed to fetch", "Load failed") and transport.
+      if (error instanceof TypeError) {
         lastError = fetchErr([
           { code: 'NETWORK_ERROR', message: 'Network error occurred' },
         ]);

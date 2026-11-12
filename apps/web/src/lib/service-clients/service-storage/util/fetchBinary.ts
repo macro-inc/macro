@@ -48,7 +48,7 @@ export async function fetchBinary<T extends ArrayBuffer | Blob>(
       : response.blob());
     return ok(data as T);
   } catch (error) {
-    if (error instanceof TypeError && error.message === 'Failed to fetch') {
+    if (error instanceof TypeError) {
       return err([
         { code: 'NETWORK_ERROR', message: 'Network error occurred' },
       ]);
