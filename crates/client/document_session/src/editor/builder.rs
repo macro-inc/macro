@@ -290,7 +290,9 @@ impl Plugin for RichCommands {
             return Ok(if handled { Handled::Yes } else { Handled::No });
         }
         if let Command::InsertClipboardNodes { nodes, selection } = command {
-            tx.insert_nodes_at(*selection, nodes)?;
+            lexical_rich_nodes::clipboard::insert_nodes_and_update_selection(
+                tx, nodes, *selection,
+            )?;
             return Ok(Handled::Yes);
         }
         if let Command::Key {

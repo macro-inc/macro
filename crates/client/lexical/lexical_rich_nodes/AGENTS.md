@@ -18,6 +18,7 @@ feature exports owned HTML; browser DOM import and layout stay in views.
 - Keep descendant filtering and nearest-root insertion canonical in utils; do not shadow their re-exports.
 - Use mutation-safe child cursors; collect snapshot DFS results before editing.
 - `clipboard` consumes host MIME strings and HTML nodes; enable `html` for selection HTML export.
+- Use clipboard::insert_nodes_and_update_selection after a handler accepts insertion; it synchronizes the supplied selection slot from the resulting caret without redispatching callbacks.
 - Record LI.value once between checked attributes and theme classes for browser export; keep headless linkedom attributes unchanged.
 
 - Depends on model, regex, URL, ordered maps, language tables and tracing facades; no I/O or runtime.

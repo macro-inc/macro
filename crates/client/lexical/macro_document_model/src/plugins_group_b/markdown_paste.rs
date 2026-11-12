@@ -103,6 +103,6 @@ fn quote_insertion(
             converted.push(*key);
         }
     }
-    tx.insert_nodes_at(selection, &converted)?;
+    lexical_rich_nodes::clipboard::insert_nodes_and_update_selection(tx, &converted, selection)?;
     Ok(Handled::Yes)
 }

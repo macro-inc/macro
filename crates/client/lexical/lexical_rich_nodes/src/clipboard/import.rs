@@ -30,6 +30,15 @@ pub fn insert_generated_nodes(
     {
         return Ok(());
     }
+    insert_nodes_and_update_selection(tx, nodes, selection)
+}
+/// Insert clipboard nodes and synchronize typing format/style without dispatching handlers.
+/// Call after a clipboard handler has already decided to perform the insertion.
+pub fn insert_nodes_and_update_selection(
+    tx: &mut Transaction<'_>,
+    nodes: &[NodeKey],
+    selection: SelectionSlot,
+) -> Result<(), Error> {
     tx.insert_nodes_at(selection, nodes)?;
     let Ok(range) = tx.range_at(selection) else {
         return Ok(());

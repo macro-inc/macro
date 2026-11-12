@@ -1,5 +1,110 @@
 use super::*;
 #[test]
+fn empty_detached_clipboard_sync_does_not_replace_active_or_previous_typing_state()
+-> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("generic registry");
+    let ((active, target_key), _) = editor.update(|tx| {
+        let p = tx.create(Paragraph {})?;
+        let active = tx.create_text("active")?;
+        let target = tx.create(Paragraph {})?;
+        let pasted = tx.create_text("pasted")?;
+        tx.text(pasted)?
+            .set_format(TextFormat::ITALIC)?
+            .set_style("color: blue;")?;
+        tx.append(target, &[pasted.key()])?;
+        tx.append(p, &[active.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key(), target.key()])?;
+        tx.select_end(active)?;
+        tx.set_selection_format(TextFormat::UNDERLINE)?;
+        tx.set_selection_style("color: green;")?;
+        Ok((active, pasted))
+    })?;
+    editor.update(|tx| {
+        let mut range = RangeSelection::collapsed(Point::text(target_key, Utf16Offset(6)));
+        range.set_format(TextFormat::BOLD);
+        range.set_style("color: red;");
+        let detached = tx.detach_selection(Selection::Range(range));
+        insert_generated_nodes(tx, &[], detached)?;
+        let target = tx.range_at(detached)?;
+        assert_eq!(target.anchor, Point::text(target_key, Utf16Offset(6)));
+        assert_eq!(target.format, TextFormat::ITALIC);
+        assert_eq!(target.style.as_ref(), "color: blue;");
+        let active_range = tx.range_selection()?;
+        assert_eq!(active_range.anchor, Point::text(active, Utf16Offset(6)));
+        assert_eq!(active_range.format, TextFormat::UNDERLINE);
+        assert_eq!(active_range.style.as_ref(), "color: green;");
+        let previous = tx
+            .previous_selection()
+            .and_then(Selection::as_range)
+            .expect("previous range");
+        assert_eq!(previous.anchor, Point::text(active, Utf16Offset(6)));
+        assert_eq!(previous.format, TextFormat::UNDERLINE);
+        assert_eq!(previous.style.as_ref(), "color: green;");
+        Ok(())
+    })?;
+    Ok(())
+}
+
+#[test]
+fn handled_clipboard_callback_keeps_insertion_and_typing_state_under_its_control()
+-> Result<(), Error> {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+    struct HandledClipboard(Arc<AtomicUsize>);
+    impl Plugin for HandledClipboard {
+        fn name(&self) -> &'static str {
+            "handled-clipboard"
+        }
+        fn commands(&self) -> &[CommandRegistration] {
+            &[CommandRegistration {
+                command: CommandKind::InsertClipboardNodes,
+                priority: CommandPriority::Critical,
+                placement: Placement::After,
+            }]
+        }
+        fn handle(&self, _tx: &mut Transaction<'_>, command: &Command) -> Result<Handled, Error> {
+            let Command::InsertClipboardNodes { nodes, selection } = command else {
+                return Ok(Handled::No);
+            };
+            assert_eq!(nodes.len(), 1);
+            assert_eq!(*selection, SelectionSlot::Active);
+            self.0.fetch_add(1, Ordering::SeqCst);
+            Ok(Handled::Yes)
+        }
+    }
+    let calls = Arc::new(AtomicUsize::new(0));
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .plugin(HandledClipboard(calls.clone()))
+        .build()
+        .expect("generic handler registry");
+    editor.update(|tx| {
+        let p = tx.create(Paragraph {})?;
+        let before = tx.create_text("before")?;
+        tx.append(p, &[before.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        tx.select_end(before)?;
+        tx.set_selection_format(TextFormat::BOLD)?;
+        tx.set_selection_style("color: red;")?;
+        let rejected = tx.create_text("not inserted")?;
+        insert_generated_nodes(tx, &[rejected.key()], SelectionSlot::Active)?;
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        assert_eq!(tx.text_content(NodeKey::ROOT), "before");
+        assert_eq!(
+            tx.range_selection()?.anchor,
+            Point::text(before, Utf16Offset(6))
+        );
+        assert_eq!(tx.range_selection()?.format, TextFormat::BOLD);
+        assert_eq!(tx.range_selection()?.style.as_ref(), "color: red;");
+        Ok(())
+    })?;
+    Ok(())
+}
+
+#[test]
 fn json_copy_slices_text_and_hoists_annotations_without_mutating_state() -> Result<(), Error> {
     let mut editor = Editor::builder(EditorMode::Headless)
         .node::<crate::mark::MarkNode>()

@@ -66,6 +66,7 @@ The transformer layer uses the shared lexical_markdown engine; route adapters ar
 - Escape code, highlight and strikethrough on ArrowRight at the source caret boundaries; reuse a leading adjacent space or insert one plain space while preserving other typing formats and style.
 - Stage NodeId/PeerId plugin entropy, mappings and owner state transactionally; reconcile mutations through after_commit, and count only attached owners as duplicate IDs when a subtree is recreated.
 - Keep clipboard identity invalidation before insertion and restore draft wrappers within the same update.
+- Complete quote clipboard insertion through the shared non-dispatching insertion/typing-state helper; retain its existing handler priority and handled result.
 - Count draft marks from each commit’s mutations and attachment-changing subtrees; rebuild only for full reconciles and leave unrelated marks untouched during typing.
 - Keep node IDs and document IDs verbatim; validated ID crates do not rewrite wire values.
 - Keep browser DOM import, decoration, component caches and runtime plugins in views.
