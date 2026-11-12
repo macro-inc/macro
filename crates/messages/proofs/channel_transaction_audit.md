@@ -138,7 +138,7 @@ dedicated local PostgreSQL 18.4 database (two passed, zero failed):
   `statement_timeout = 75ms`, verifies the preserved SQLSTATE, absent message,
   unchanged visible counter and gap-free next successful sequence.
 - `channel_counter_wait_without_timeouts_resumes_after_holder_rolls_back`
-  (`crates/messages/src/outbound/pg_message_repo/test/sequences.rs:525`): with
+  (`crates/messages/src/outbound/pg_message_repo/test/sequences.rs:528`): with
   both timeout settings disabled, the writer remains pending for 150ms and
   resumes with the expected sequence once the holder rolls back.
 
