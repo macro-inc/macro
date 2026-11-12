@@ -19,6 +19,13 @@ const STATUS_READ_TIMEOUT_MS = 15000;
  */
 export const FOLDER_UPLOAD_STALLED_AFTER_MS = 16 * 60 * 1000;
 
+/**
+ * The queue hands an extraction to the extractor at most five times, 15
+ * minutes each, so a folder not finished this long after it was sent never
+ * will.
+ */
+export const FOLDER_UPLOAD_GIVE_UP_AFTER_MS = 90 * 60 * 1000;
+
 export type FolderUploadOutcome =
   | { status: 'completed'; projectId: string }
   | {
@@ -143,13 +150,17 @@ async function readStep(
  * the status the uploader polls. Polling also reports how many files the
  * server has stored. Every wait races the pushed result, so a slow or hung
  * status request never holds it up. An upload that stops changing for longer
- * than the extractor can run ends as `unknown` rather than as a failure,
- * because the folder may still appear.
+ * than the extractor can run, or is still unfinished after every retry since
+ * `sentAt`, ends as `unknown` rather than as a failure, because the folder may
+ * still appear.
  */
 export async function waitForFolderUpload(
   requestId: string,
   onProgress: (fraction: number | null) => void,
-  sources: FolderUploadSources = SERVER_SOURCES
+  {
+    sentAt,
+    sources = SERVER_SOURCES,
+  }: { sentAt: number; sources?: FolderUploadSources }
 ): Promise<FolderUploadOutcome> {
   let resolvePushed: (step: Step) => void = () => {};
   const pushed = new Promise<Step>((resolve) => {
@@ -201,7 +212,11 @@ export async function waitForFolderUpload(
         if (outcome) return outcome;
       }
 
-      if (Date.now() - lastChangeAt > FOLDER_UPLOAD_STALLED_AFTER_MS) {
+      const now = Date.now();
+      if (
+        now - lastChangeAt > FOLDER_UPLOAD_STALLED_AFTER_MS ||
+        now - sentAt > FOLDER_UPLOAD_GIVE_UP_AFTER_MS
+      ) {
         return { status: 'unknown' };
       }
 
