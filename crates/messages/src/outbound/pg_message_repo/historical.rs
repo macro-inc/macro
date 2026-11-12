@@ -65,7 +65,7 @@ impl PgMessageRepository {
             "slack_import_job": patch.job_id,
             "body_version": patch.importer_version,
         });
-        Ok(sqlx::query!(
+        let changed = sqlx::query!(
             r#"UPDATE comms_messages SET content = $5
                WHERE id = $1
                  AND parent_entity_type = 'channel' AND parent_entity_id = $2::text
@@ -84,7 +84,16 @@ impl PgMessageRepository {
         .await
         .map_err(database_error)?
         .rows_affected()
-            == 1)
+            == 1;
+        if changed {
+            Self::append_channel_change_in(
+                tx,
+                patch.channel_id,
+                crate::domain::changes::ChannelChangeKind::Message(patch.message_id),
+            )
+            .await?;
+        }
+        Ok(changed)
     }
 
     /// Persist historical channel messages in a caller-owned transaction without
@@ -103,7 +112,17 @@ impl PgMessageRepository {
         let mut batch_tx = tx.begin().await.map_err(database_error)?;
         let result = insert_batch(&mut batch_tx, batch).await;
         match result {
-            Ok(()) => batch_tx.commit().await.map_err(database_error),
+            Ok(()) => {
+                if !batch.messages.is_empty() {
+                    Self::append_channel_change_in(
+                        &mut batch_tx,
+                        batch.channel_id,
+                        crate::domain::changes::ChannelChangeKind::Reset,
+                    )
+                    .await?;
+                }
+                batch_tx.commit().await.map_err(database_error)
+            }
             Err(error) => {
                 batch_tx.rollback().await.map_err(database_error)?;
                 Err(error)

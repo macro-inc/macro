@@ -179,6 +179,7 @@ impl<R: AnnotationRepository, A: EntityAccessService, P: MessageEventPublisher>
         let deleted = self.repo.delete(access, input).await?;
         if let Some(state) = deleted.thread {
             let event = MessageEvent {
+                seq: None,
                 parent,
                 actor: user.as_ref().to_owned(),
                 nonce: None,

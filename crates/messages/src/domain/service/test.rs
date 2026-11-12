@@ -9,6 +9,7 @@ mod call_roots;
 mod event_posts;
 mod guest_chat;
 mod initiative;
+mod sequences;
 
 #[derive(Clone)]
 struct Repo {
@@ -20,6 +21,7 @@ struct Repo {
     creates: Arc<Mutex<Vec<CreateMessage>>>,
     edits: Arc<Mutex<Vec<EditMessage>>>,
     reaction_changed: bool,
+    mutation_seq: Option<i64>,
     file_type: Option<String>,
     concurrent_create: bool,
     client_message_id: Option<Uuid>,
@@ -28,6 +30,13 @@ struct Repo {
 }
 
 impl Repo {
+    fn committed_seq(&self, parent: &MessageParent) -> Option<i64> {
+        match parent {
+            MessageParent::Channel(_) => self.mutation_seq,
+            _ => None,
+        }
+    }
+
     /// A committed teardown tombstones the root and every reply in one
     /// statement, so reads that follow it see the whole discussion gone.
     fn torn_down(&self, root: Uuid) -> bool {
@@ -154,7 +163,7 @@ impl MessageRepository for Repo {
             previous_cursor: None,
         })
     }
-    async fn create(&self, command: CreateMessage) -> Result<Message, MessageError> {
+    async fn create(&self, command: CreateMessage) -> Result<(Message, Option<i64>), MessageError> {
         if command.input.id == Some(self.message.id)
             || (self.client_message_id.is_some() && command.input.id == self.client_message_id)
         {
@@ -171,46 +180,58 @@ impl MessageRepository for Repo {
         message.triggered_by = command.triggered_by.clone();
         message.thread_id = command.input.thread_id;
         self.creates.lock().unwrap().push(command);
-        Ok(message)
+        let seq = self.committed_seq(&message.parent);
+        Ok((message, seq))
     }
     async fn edit(
         &self,
         _: &MessageParent,
         _: Uuid,
         command: EditMessage,
-    ) -> Result<Message, MessageError> {
+    ) -> Result<(Message, Option<i64>), MessageError> {
         let mut message = self.message.clone();
         message.content = command.content.clone();
         message.mentions = command.mentions.clone();
         self.edits.lock().unwrap().push(command);
-        Ok(message)
+        let seq = self.committed_seq(&message.parent);
+        Ok((message, seq))
     }
-    async fn delete(&self, parent: &MessageParent, id: Uuid) -> Result<Message, MessageError> {
+    async fn delete(
+        &self,
+        parent: &MessageParent,
+        id: Uuid,
+    ) -> Result<(Message, Option<i64>), MessageError> {
         self.deletes.lock().unwrap().push(id);
         let mut message = self.get(parent, id).await?.ok_or(MessageError::NotFound)?;
         message.deleted_at = Some(Utc::now());
         message.content.clear();
-        Ok(message)
+        let seq = self.committed_seq(&message.parent);
+        Ok((message, seq))
     }
     async fn react(
         &self,
-        _: &MessageParent,
+        parent: &MessageParent,
         _: Uuid,
         _: &str,
         _: &str,
         _: bool,
     ) -> Result<ReactionResult, MessageError> {
         Ok(ReactionResult {
+            seq: if self.reaction_changed {
+                self.committed_seq(parent)
+            } else {
+                None
+            },
             message: self.message.clone(),
             changed: self.reaction_changed,
         })
     }
     async fn patch_thread(
         &self,
-        _: &MessageParent,
+        parent: &MessageParent,
         _: Uuid,
         patch: ThreadPatch,
-    ) -> Result<ThreadState, MessageError> {
+    ) -> Result<(ThreadState, Option<i64>), MessageError> {
         let mut state = self.state.clone();
         if let Some(resolved) = patch.resolved {
             state.resolved = resolved;
@@ -218,13 +239,13 @@ impl MessageRepository for Repo {
         if patch.detach_anchor {
             state.anchor = None;
         }
-        Ok(state)
+        Ok((state, self.committed_seq(parent)))
     }
     async fn delete_thread(
         &self,
-        _: &MessageParent,
+        parent: &MessageParent,
         root: Uuid,
-    ) -> Result<ThreadState, MessageError> {
+    ) -> Result<(ThreadState, Option<i64>), MessageError> {
         self.thread_deletes.lock().unwrap().push(root);
         let mut state = self.state.clone();
         state.deleted_at = Some(Utc::now());
@@ -233,7 +254,7 @@ impl MessageRepository for Repo {
         if !matches!(state.anchor, Some(ThreadAnchor::Markdown { .. })) {
             state.anchor = None;
         }
-        Ok(state)
+        Ok((state, self.committed_seq(parent)))
     }
     async fn resolve_legacy(
         &self,
@@ -298,6 +319,7 @@ fn fixture() -> Repo {
         creates: Arc::default(),
         edits: Arc::default(),
         reaction_changed: true,
+        mutation_seq: None,
         file_type: Some("md".into()),
         concurrent_create: false,
         client_message_id: None,
@@ -1391,7 +1413,7 @@ impl MessageRepository for StrictRepo {
     ) -> Result<MessagePage, MessageError> {
         self.inner.timeline(parent, query).await
     }
-    async fn create(&self, command: CreateMessage) -> Result<Message, MessageError> {
+    async fn create(&self, command: CreateMessage) -> Result<(Message, Option<i64>), MessageError> {
         self.inner.create(command).await
     }
     async fn edit(
@@ -1399,10 +1421,14 @@ impl MessageRepository for StrictRepo {
         parent: &MessageParent,
         id: Uuid,
         command: EditMessage,
-    ) -> Result<Message, MessageError> {
+    ) -> Result<(Message, Option<i64>), MessageError> {
         self.inner.edit(parent, id, command).await
     }
-    async fn delete(&self, parent: &MessageParent, id: Uuid) -> Result<Message, MessageError> {
+    async fn delete(
+        &self,
+        parent: &MessageParent,
+        id: Uuid,
+    ) -> Result<(Message, Option<i64>), MessageError> {
         self.inner.delete(parent, id).await
     }
     async fn react(
@@ -1420,14 +1446,14 @@ impl MessageRepository for StrictRepo {
         parent: &MessageParent,
         root: Uuid,
         patch: ThreadPatch,
-    ) -> Result<ThreadState, MessageError> {
+    ) -> Result<(ThreadState, Option<i64>), MessageError> {
         self.inner.patch_thread(parent, root, patch).await
     }
     async fn delete_thread(
         &self,
         parent: &MessageParent,
         root: Uuid,
-    ) -> Result<ThreadState, MessageError> {
+    ) -> Result<(ThreadState, Option<i64>), MessageError> {
         self.inner.delete_thread(parent, root).await
     }
     async fn resolve_legacy(

@@ -264,6 +264,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             self.active_thread(&parent, root_id).await?;
         }
         self.publish(MessageEvent {
+            seq: None,
             parent,
             actor: actor.as_ref().to_owned(),
             nonce,
@@ -399,7 +400,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         let notification_policy = input.notification_policy;
         let nonce = input.nonce.clone();
         let mentions = self.resolve_mentions(&parent, &input.mentions).await?;
-        let message = self
+        let (message, seq) = self
             .repo
             .create(CreateMessage {
                 canonical_root_id,
@@ -431,6 +432,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             })
             .await?;
         self.publish(MessageEvent {
+            seq,
             parent,
             actor: actor.as_ref().to_owned(),
             nonce,
@@ -486,7 +488,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                 },
             })
             .await;
-        let message = match created {
+        let (message, seq) = match created {
             // The other request created it and delivers it.
             Err(MessageError::Conflict) => {
                 return self
@@ -499,6 +501,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         };
 
         self.publish(MessageEvent {
+            seq,
             parent,
             actor: actor.as_ref().to_owned(),
             nonce: None,
@@ -594,8 +597,9 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         let notification_policy = input.notification_policy;
         let nonce = input.nonce.clone();
         let mentions = self.resolve_mentions(&parent, &input.mentions).await?;
-        let message = self.repo.edit(&parent, id, input).await?;
+        let (message, seq) = self.repo.edit(&parent, id, input).await?;
         self.publish(MessageEvent {
+            seq,
             parent,
             actor: actor.as_ref().to_owned(),
             nonce,
@@ -641,11 +645,12 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         if current.sender_id != actor && !can_moderate(access.entity_permission()) && !channel_bot {
             return Err(MessageError::Forbidden);
         }
-        let message = self.repo.delete(&parent, id).await?;
+        let (message, seq) = self.repo.delete(&parent, id).await?;
         self.publish_message(
             actor,
             nonce,
             &message,
+            seq,
             MessageChange::MessageDeleted {
                 message: message.clone(),
             },
@@ -672,7 +677,11 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         if emoji.is_empty() || emoji.chars().count() > 32 || emoji.chars().any(char::is_control) {
             return Err(MessageError::Invalid("invalid reaction"));
         }
-        let ReactionResult { message, changed } = self
+        let ReactionResult {
+            message,
+            changed,
+            seq,
+        } = self
             .repo
             .react(&parent, id, actor.as_ref(), &emoji, add)
             .await?;
@@ -685,6 +694,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             actor,
             nonce,
             &message,
+            seq,
             MessageChange::ReactionChanged {
                 message: message.clone(),
                 emoji,
@@ -731,8 +741,9 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             }
         }
         let nonce = patch.nonce.clone();
-        let state = self.repo.patch_thread(&parent, root_id, patch).await?;
+        let (state, seq) = self.repo.patch_thread(&parent, root_id, patch).await?;
         self.publish(MessageEvent {
+            seq,
             parent,
             actor: actor.as_ref().to_owned(),
             nonce,
@@ -779,8 +790,9 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         if thread.user_id != actor.as_ref() && !can_moderate(access.entity_permission()) {
             return Err(MessageError::Forbidden);
         }
-        let state = self.repo.delete_thread(parent, root_id).await?;
+        let (state, seq) = self.repo.delete_thread(parent, root_id).await?;
         self.publish(MessageEvent {
+            seq,
             parent: parent.clone(),
             actor: actor.as_ref().to_owned(),
             nonce,
@@ -1023,9 +1035,11 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         actor: ChannelSender<'static>,
         nonce: Option<String>,
         message: &Message,
+        seq: Option<i64>,
         change: MessageChange,
     ) {
         self.publish(MessageEvent {
+            seq,
             parent: message.parent.clone(),
             actor: actor.as_ref().to_owned(),
             nonce,

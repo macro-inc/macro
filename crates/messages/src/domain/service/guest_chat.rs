@@ -178,7 +178,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> GuestChatApi for GuestChatS
                 },
             })
             .await;
-        let message = match result {
+        let (message, seq) = match result {
             Err(MessageError::Conflict) => {
                 return self
                     .messages
@@ -192,6 +192,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> GuestChatApi for GuestChatS
         };
         self.messages
             .publish(MessageEvent {
+                seq,
                 parent,
                 actor: actor.as_ref().to_owned(),
                 nonce: None,

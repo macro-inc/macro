@@ -91,6 +91,7 @@ fn event() -> MessageEvent {
         reactions: vec![],
     };
     MessageEvent {
+        seq: None,
         parent,
         actor,
         nonce: None,

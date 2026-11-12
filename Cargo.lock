@@ -13110,6 +13110,7 @@ dependencies = [
  "async-trait",
  "axum",
  "bot_id",
+ "channel_change_db_utils",
  "channel_sender",
  "chrono",
  "connection_gateway_client",
