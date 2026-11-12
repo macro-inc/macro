@@ -686,6 +686,7 @@ use utoipa::OpenApi;
         crm::inbound::pipelines::permissions,
         crm::inbound::pipelines::update_permissions,
         crm::inbound::pipelines::trash,
+        crm::inbound::pipeline_workflows::list_details,
         crm::inbound::pipeline_workflows::find_entries,
         crm::inbound::pipeline_workflows::record_entries,
         crm::inbound::pipeline_workflows::search_entries,
