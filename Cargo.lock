@@ -3977,6 +3977,7 @@ dependencies = [
  "macro_queues",
  "macro_service_urls",
  "macro_tower_layers",
+ "messages",
  "models_email",
  "opentelemetry",
  "opentelemetry_sdk",

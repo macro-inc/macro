@@ -11,7 +11,7 @@ gateway `/calendar` prefix.
 - `src/main.rs`: composition root — config, db/redis, event broker, workers, router.
 - `src/api.rs` + `src/api/context.rs`: HTTP surface and shared `ApiContext`.
 - `src/calendar_backfill.rs` + `src/backfill_queue.rs`: SQS backfill consumer.
-- `src/calendar_outbox.rs`: sync scheduler and outbox drain loop.
+- `src/calendar_outbox.rs`: sync scheduler, outbox drain, and hourly calendar/channel change-log retention loop; channel retention also runs when calendar sync is disabled.
 
 ## Scope
 

@@ -133,6 +133,9 @@ async fn main() -> anyhow::Result<()> {
         calendar_events::domain::changes::CalendarChangeLogRetention::new(
             PgCalendarRepository::new(db.clone()),
         ),
+        messages::domain::changes::ChannelChangeLogRetention::new(
+            messages::outbound::pg_message_repo::PgMessageRepository::new(db.clone()),
+        ),
         config.calendar_sync_enabled,
         worker_cancellation_token.clone(),
     ));
