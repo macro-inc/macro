@@ -1025,6 +1025,12 @@ bottom action drawer, without `Open in new split` and with each Status and
 Priority choice as its own row. Use disposable projects: these actions change
 hosted data.
 
+Project rows in shared lists (Home's Projects filter, Search) use the shared
+row menu: `Open in new split`, `Copy Link`, `Copy ID`, and `Share`, plus
+`Rename` and `Delete` on projects you own. These rows carry no access level,
+so an editor who doesn't own the project gets neither; several owned projects
+offer only `Delete`. The dialogs are the Projects list's own.
+
 `New project` and the global Create menu's `Project` action (C, then P) open
 the same native composer host and layout as task creation,
 with a project name, a Markdown description (`Add description...`), and the
