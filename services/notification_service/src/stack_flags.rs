@@ -44,6 +44,7 @@ impl StackFlags {
             posthog_host.unwrap_or(DEFAULT_POSTHOG_HOST),
             key.to_owned(),
             FLAG_TIMEOUT,
+            environment,
         )?))
     }
 }
