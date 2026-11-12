@@ -1,5 +1,5 @@
 import { CreateContextProvider } from '@app/features/command/context/create-context';
-import { SplitRouter } from '@app/lib/split-router';
+import { SplitRouter, useSplitRouter } from '@app/lib/split-router';
 import { AppProviders } from '@components/app/AppProviders';
 import { dismissBootShell } from '@components/app/boot-shell';
 import { AppChrome, PageContent } from '@components/app/Layout';
@@ -7,6 +7,10 @@ import {
   SplitLayout,
   SplitLayoutProvider,
 } from '@components/app/split-layout/SplitLayout';
+import {
+  DesktopTabsController,
+  NO_SPLITS_TAB_HOST,
+} from '@components/app/tab-layout/DesktopTabsController';
 import { useIsAuthenticated } from '@core/auth';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { releaseNotificationCover } from '@macro/tauri/push-api';
@@ -84,12 +88,19 @@ export function withFormRespondShell(Page: () => JSX.Element) {
   };
 }
 
-/** A call: full screen, without app chrome. */
+/**
+ * A call: full screen, without app chrome. The desktop title bar stays, so its
+ * tabs stay too; switching to one leaves the call running in the background.
+ */
 export function withMeetingShell(Page: () => JSX.Element) {
   return function MeetingShell(): JSX.Element {
     useDismissBootShell();
     return (
       <PageContent>
+        <DesktopTabsController
+          router={useSplitRouter()}
+          manager={NO_SPLITS_TAB_HOST}
+        />
         <ImperativeDialogHost />
         <Page />
       </PageContent>

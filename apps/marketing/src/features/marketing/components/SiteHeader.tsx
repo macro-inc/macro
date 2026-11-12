@@ -2,8 +2,16 @@ import { createSignal, type JSX, onCleanup, onMount, Show } from 'solid-js';
 import { DocumentationNavigation } from '../../documentation/components/DocumentationNavigation';
 import '../../documentation/components/documentation-navigation.css';
 import { DEMO_BOOKING_URL, routePhoneToMobileSignup } from '../core/navigation';
+import { preloadTutorialPreview } from '../primitives/preloadTutorialPreview';
 import { DemoBookingDialog } from './DemoBookingDialog';
 import './site-navigation.css';
+
+/** Pointing at or focusing a page link fetches that page's hero frame early. */
+function preloadLinkedPage(event: Event) {
+  if (!(event.target instanceof Element)) return;
+  const link = event.target.closest('a');
+  if (link) preloadTutorialPreview(new URL(link.href).pathname);
+}
 
 /** A single navigation for the public website and its documentation. */
 export function SiteHeader(props: {
@@ -155,6 +163,9 @@ export function SiteHeader(props: {
           aria-hidden={!open()}
           inert={!open()}
           aria-label="Main navigation"
+          onPointerOver={preloadLinkedPage}
+          onFocusIn={preloadLinkedPage}
+          onTouchStart={preloadLinkedPage}
           onClick={(event) => {
             if (
               event.target instanceof Element &&
