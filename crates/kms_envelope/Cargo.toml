@@ -1,0 +1,23 @@
+[package]
+edition = "2024"
+name = "kms_envelope"
+publish = false
+version = "0.1.0"
+description = "Envelope encryption: KMS-wrapped per-scope data keys and AES-256-GCM sealing under them."
+
+[features]
+# The in-memory KMS stand-in, for tests of crates that seal with it.
+fake = []
+
+[dependencies]
+aes-gcm = { workspace = true }
+aws-sdk-kms = { workspace = true }
+rand = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+zeroize = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

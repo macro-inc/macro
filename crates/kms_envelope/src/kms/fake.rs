@@ -7,22 +7,22 @@ use aes_gcm::aead::{Aead, Payload};
 use aes_gcm::{Aes256Gcm, KeyInit, Nonce};
 use zeroize::Zeroizing;
 
-use super::{GeneratedDataKey, WhatsAppKms, WhatsAppKmsError};
+use super::{GeneratedDataKey, EnvelopeKms, KmsError};
 
 const NONCE_LENGTH: usize = 12;
 
 /// Wraps data keys under a random in-memory key with the encryption context
 /// as associated data, so like KMS it refuses to unwrap under any other
-/// context or key id. Counts calls, so tests can check how often a store
+/// context or key id. Counts calls, so tests can check how often a caller
 /// talks to KMS.
-pub struct FakeWhatsAppKms {
+pub struct FakeKms {
     kms_key_id: String,
     wrapping_key: Aes256Gcm,
     generate_calls: AtomicUsize,
     decrypt_calls: AtomicUsize,
 }
 
-impl FakeWhatsAppKms {
+impl FakeKms {
     /// A fake whose wrapped keys name `kms_key_id`.
     pub fn new(kms_key_id: &str) -> Self {
         let wrapping_key: [u8; 32] = rand::random();
@@ -57,11 +57,11 @@ impl FakeWhatsAppKms {
     }
 }
 
-impl WhatsAppKms for FakeWhatsAppKms {
+impl EnvelopeKms for FakeKms {
     async fn generate_data_key(
         &self,
         encryption_context: HashMap<String, String>,
-    ) -> Result<GeneratedDataKey, WhatsAppKmsError> {
+    ) -> Result<GeneratedDataKey, KmsError> {
         self.generate_calls.fetch_add(1, Ordering::SeqCst);
         let plaintext: [u8; 32] = rand::random();
         let nonce: [u8; NONCE_LENGTH] = rand::random();
@@ -74,7 +74,7 @@ impl WhatsAppKms for FakeWhatsAppKms {
                     aad: &Self::associated_data(encryption_context),
                 },
             )
-            .map_err(|_| WhatsAppKmsError::refused())?;
+            .map_err(|_| KmsError::refused())?;
         Ok(GeneratedDataKey {
             plaintext: Zeroizing::new(plaintext.to_vec()),
             ciphertext: [nonce.as_slice(), &wrapped].concat(),
@@ -87,14 +87,14 @@ impl WhatsAppKms for FakeWhatsAppKms {
         kms_key_id: &str,
         ciphertext: &[u8],
         encryption_context: HashMap<String, String>,
-    ) -> Result<Zeroizing<Vec<u8>>, WhatsAppKmsError> {
+    ) -> Result<Zeroizing<Vec<u8>>, KmsError> {
         self.decrypt_calls.fetch_add(1, Ordering::SeqCst);
         if kms_key_id != self.kms_key_id {
-            return Err(WhatsAppKmsError::refused());
+            return Err(KmsError::refused());
         }
         let (nonce, wrapped) = ciphertext
             .split_first_chunk::<NONCE_LENGTH>()
-            .ok_or(WhatsAppKmsError::refused())?;
+            .ok_or(KmsError::refused())?;
         let plaintext = self
             .wrapping_key
             .decrypt(
@@ -104,7 +104,7 @@ impl WhatsAppKms for FakeWhatsAppKms {
                     aad: &Self::associated_data(encryption_context),
                 },
             )
-            .map_err(|_| WhatsAppKmsError::refused())?;
+            .map_err(|_| KmsError::refused())?;
         Ok(Zeroizing::new(plaintext))
     }
 }

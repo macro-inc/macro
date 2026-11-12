@@ -8,7 +8,7 @@ Postgres device store) run against `whatsapp_fake_server`. The DSS side runs
 through `WhatsAppService` and `ExternalChatService` with WhatsApp as its provider, and
 both share one `#[sqlx::test]`
 database. Nothing talks to WhatsApp or AWS (the KMS is
-`whatsapp_store_pg`'s `FakeWhatsAppKms`).
+`whatsapp_store_pg`'s `FakeKms`).
 
 ## How it works
 

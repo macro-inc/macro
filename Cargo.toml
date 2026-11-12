@@ -166,6 +166,7 @@ members = [
   "crates/whatsapp_fake_server",
   "crates/external_chat",
   "crates/whatsapp_linked",
+  "crates/kms_envelope",
   "crates/whatsapp_store_pg",
   "crates/whatsmeow",
   "crates/whatsmeow_proto",

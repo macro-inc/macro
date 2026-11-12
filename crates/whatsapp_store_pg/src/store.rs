@@ -19,7 +19,8 @@ use zeroize::Zeroizing;
 
 use crate::cipher::{ENCRYPTION_VERSION, StoreName, ValueCipher, WhatsAppDataKey};
 use crate::error::WhatsAppStoreError;
-use crate::kms::{WhatsAppKms, encryption_context};
+use crate::kms::encryption_context;
+use kms_envelope::kms::EnvelopeKms;
 
 /// Every whatsmeow store of one linked account, in Postgres.
 ///
@@ -69,7 +70,7 @@ impl PgWhatsAppStore {
         pool: PgPool,
         account_id: Uuid,
         lease_epoch: i64,
-        kms: &impl WhatsAppKms,
+        kms: &impl EnvelopeKms,
     ) -> Result<Self, WhatsAppStoreError> {
         let account = sqlx::query!(
             r#"
@@ -187,15 +188,13 @@ impl PgWhatsAppStore {
     /// Encrypts a blob the caller keeps elsewhere (e.g. a media download
     /// locator) under the account's data key, bound to the account and
     /// `purpose`: it only unseals with [`PgWhatsAppStore::unseal`] for the same
-    /// account and purpose. The output is `SEALED_FORMAT | nonce | ciphertext`.
+    /// account and purpose. The output is `0x01 | nonce | ciphertext`.
     ///
     /// # Errors
     /// [`WhatsAppStoreError::Encrypt`] if encryption fails.
     pub fn seal(&self, purpose: &str, plaintext: &[u8]) -> Result<Vec<u8>, WhatsAppStoreError> {
-        let sealed = self
-            .cipher
-            .seal(StoreName::Sealed, &[purpose.as_bytes()], plaintext)?;
-        Ok([&[SEALED_FORMAT], sealed.nonce.as_slice(), &sealed.value].concat())
+        self.cipher
+            .seal_blob(StoreName::Sealed, &[purpose.as_bytes()], plaintext)
     }
 
     /// Decrypts a blob from [`PgWhatsAppStore::seal`].
@@ -208,18 +207,8 @@ impl PgWhatsAppStore {
         purpose: &str,
         sealed: &[u8],
     ) -> Result<Zeroizing<Vec<u8>>, WhatsAppStoreError> {
-        let Some((&SEALED_FORMAT, rest)) = sealed.split_first() else {
-            return Err(WhatsAppStoreError::Decrypt);
-        };
-        let (nonce, value) = rest
-            .split_at_checked(SEALED_NONCE_LENGTH)
-            .ok_or(WhatsAppStoreError::Decrypt)?;
-        Ok(Zeroizing::new(self.cipher.open(
-            StoreName::Sealed,
-            &[purpose.as_bytes()],
-            nonce,
-            value,
-        )?))
+        self.cipher
+            .open_blob(StoreName::Sealed, &[purpose.as_bytes()], sealed)
     }
 
     /// Begins a write transaction, failing with
@@ -523,7 +512,7 @@ struct WrappedDataKey {
 impl WrappedDataKey {
     async fn unwrap(
         self,
-        kms: &impl WhatsAppKms,
+        kms: &impl EnvelopeKms,
         context: HashMap<String, String>,
     ) -> Result<WhatsAppDataKey, WhatsAppStoreError> {
         // Checked before the KMS call: a version this build cannot read is our
@@ -536,7 +525,7 @@ impl WrappedDataKey {
         let plaintext = kms
             .decrypt(&self.kms_key_id, &self.data_key_ciphertext, context)
             .await?;
-        WhatsAppDataKey::from_plaintext(&plaintext)
+        Ok(WhatsAppDataKey::from_plaintext(&plaintext)?)
     }
 }
 
@@ -586,7 +575,3 @@ fn composite_key(parts: &[&str]) -> Result<String, WhatsAppStoreError> {
 
 const KEY_SEPARATOR: &str = "|";
 
-/// The first byte of a [`PgWhatsAppStore::seal`] output, so another format can
-/// be added later.
-const SEALED_FORMAT: u8 = 1;
-const SEALED_NONCE_LENGTH: usize = 12;

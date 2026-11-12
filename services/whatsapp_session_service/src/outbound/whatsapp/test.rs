@@ -18,7 +18,7 @@ use whatsapp_linked::domain::events::{
 };
 use whatsapp_linked::domain::session::SessionService;
 use whatsapp_linked::outbound::pg::PgWhatsAppRepository;
-use whatsapp_store_pg::kms::FakeWhatsAppKms;
+use kms_envelope::kms::FakeKms;
 
 use super::WhatsmeowConnector;
 use crate::domain::account::{AccountConfig, AccountSessions};
@@ -125,7 +125,7 @@ async fn a_phone_scanning_the_qr_links_the_account_through_the_encrypted_store(p
         Tee {
             inner: WhatsmeowConnector::new(
                 pool.clone(),
-                FakeWhatsAppKms::new("arn:aws:kms:us-east-1:123456789012:key/test"),
+                FakeKms::new("arn:aws:kms:us-east-1:123456789012:key/test"),
                 test_signal(),
                 whatsapp.dialer(),
                 Some(whatsapp.media_base_url()),
@@ -259,7 +259,7 @@ async fn attachments_travel_both_ways_with_a_sealed_locator(pool: PgPool) {
         .scope;
     let connector = WhatsmeowConnector::new(
         pool.clone(),
-        FakeWhatsAppKms::new("arn:aws:kms:us-east-1:123456789012:key/test"),
+        FakeKms::new("arn:aws:kms:us-east-1:123456789012:key/test"),
         test_signal(),
         whatsapp.dialer(),
         Some(whatsapp.media_base_url()),
@@ -489,14 +489,14 @@ async fn a_fresh_device_replaces_one_whose_data_key_kms_lost(pool: PgPool) {
     };
     let (sink, _received) = mpsc::unbounded_channel();
     let sink: Arc<dyn InboundSink> = Arc::new(RecordingSink(sink));
-    let (session, _events) = connector(FakeWhatsAppKms::new("arn:aws:kms:test:key/lost"))
+    let (session, _events) = connector(FakeKms::new("arn:aws:kms:test:key/lost"))
         .open(scope, false, Arc::clone(&sink))
         .await
         .unwrap();
     session.disconnect().await;
 
     // KMS lost the key that wrapped the device's data key.
-    let replaced = connector(FakeWhatsAppKms::new("arn:aws:kms:test:key/lost"));
+    let replaced = connector(FakeKms::new("arn:aws:kms:test:key/lost"));
     let error = replaced
         .open(scope, false, Arc::clone(&sink))
         .await

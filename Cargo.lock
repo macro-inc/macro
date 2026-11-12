@@ -11769,6 +11769,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "kms_envelope"
+version = "0.1.0"
+dependencies = [
+ "aes-gcm 0.10.3",
+ "aws-sdk-kms",
+ "rand 0.9.4",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "uuid",
+ "workspace-hack",
+ "zeroize",
+]
+
+[[package]]
 name = "lambda_client"
 version = "0.1.0"
 dependencies = [
@@ -22477,6 +22492,7 @@ dependencies = [
  "entity_access",
  "entity_access_db_utils",
  "external_chat",
+ "kms_envelope",
  "macro_db_migrator",
  "macro_user_id",
  "sqlx",
@@ -22569,6 +22585,7 @@ dependencies = [
  "doppler-config",
  "external_chat",
  "futures",
+ "kms_envelope",
  "macro_aws_config",
  "macro_config",
  "macro_db_migrator",
@@ -22600,12 +22617,11 @@ dependencies = [
 name = "whatsapp_store_pg"
 version = "0.1.0"
 dependencies = [
- "aes-gcm 0.10.3",
  "async-trait",
- "aws-sdk-kms",
  "chrono",
  "futures",
  "hex",
+ "kms_envelope",
  "macro_db_migrator",
  "postcard",
  "prost 0.14.3",

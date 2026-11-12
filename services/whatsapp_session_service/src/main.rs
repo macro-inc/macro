@@ -12,7 +12,7 @@ use tokio_util::sync::CancellationToken;
 use whatsapp_session_service::config::{Config, SessionKmsKey};
 use whatsapp_session_service::inbound::health;
 use whatsapp_session_service::replica::{self, ReplicaDeps, Timings};
-use whatsapp_store_pg::kms::AwsWhatsAppKms;
+use kms_envelope::kms::AwsKms;
 use whatsmeow::{Dialer, WebSocketDialer};
 
 /// Test-only: point every client at a fake WhatsApp server.
@@ -49,7 +49,7 @@ async fn run() -> Result<(), rootcause::Report> {
             Some(url) => Arc::new(WebSocketDialer { url }),
             None => Arc::new(WebSocketDialer::default()),
         };
-    let kms = AwsWhatsAppKms::new(
+    let kms = AwsKms::new(
         aws_sdk_kms::Client::new(&macro_aws_config::get_macro_aws_config().await),
         SessionKmsKey::for_environment(environment).to_owned(),
     );

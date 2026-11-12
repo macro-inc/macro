@@ -13,7 +13,7 @@ use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 use whatsapp_linked::domain::session::SessionService;
 use whatsapp_linked::outbound::pg::PgWhatsAppRepository;
-use whatsapp_store_pg::kms::WhatsAppKms;
+use kms_envelope::kms::EnvelopeKms;
 use whatsmeow::{Dialer, Signal};
 
 use crate::domain::account::{
@@ -135,7 +135,7 @@ impl Replica {
 
 /// Connects the replica and starts supervising; drains when `shutdown` is
 /// cancelled.
-pub async fn start<Kms: WhatsAppKms + 'static>(
+pub async fn start<Kms: EnvelopeKms + 'static>(
     deps: ReplicaDeps<Kms>,
     shutdown: CancellationToken,
 ) -> Result<Replica, ReplicaError> {
