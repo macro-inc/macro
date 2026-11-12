@@ -47,15 +47,29 @@ test('links in text and URL cells open, and the cells still edit', async ({
   ]);
   await expect(grid.getByRole('textbox')).toHaveCount(0);
 
+  await website.press('Enter');
+  expect(await opened(page)).toHaveLength(3);
+  await expect(grid.getByRole('textbox')).toHaveCount(0);
+
+  await website.click({ button: 'right' });
+  await expect(page.getByRole('menu')).toHaveCount(0);
+
   const cell = grid.getByRole('button', { name: /^Website: example\.com/ });
   await cell.focus();
   await cell.press('Enter');
-  await expect(grid.getByRole('textbox')).toHaveValue('example.com');
+  const editor = grid.getByRole('textbox');
+  await expect(editor).toHaveValue('example.com');
+  await editor.fill('TBD');
+  await editor.press('Tab');
+  await expect(page.getByLabel('Stored records')).toContainText('TBD');
+  await expect(grid.getByText('TBD', { exact: true })).toBeVisible();
+  await expect(grid.getByRole('link', { name: 'TBD' })).toHaveCount(0);
   await page.keyboard.press('Escape');
 
   await page.getByRole('button', { name: 'Read only', exact: true }).click();
-  await website.click();
-  expect(await opened(page)).toHaveLength(3);
+  await grid.getByRole('link', { name: 'https://example.com/spec' }).click();
+  expect(await opened(page)).toHaveLength(4);
+  await expect(grid.getByRole('textbox')).toHaveCount(0);
 });
 
 test.describe('touch links', () => {

@@ -9,8 +9,8 @@ import type {
 } from '../../database/context/table-source';
 import type { DatabaseViewColumn } from '../../database/core/database-view';
 import { optimisticRows } from '../../database/core/table';
-import { DatabaseLinkValue, DatabaseTextValue } from '../database-mentions';
 import { DatabaseRecordsView } from '../../database/views/database-records-view';
+import { DatabaseLinkValue, DatabaseTextValue } from '../database-mentions';
 
 // A host owns the records and writes. No database entity, saved view, or app provider.
 function RecordsFixture() {

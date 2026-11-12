@@ -46,7 +46,7 @@ import {
 import { cardTitleColumn, laneId, laneLabel } from '../core/views';
 import { BoardLaneHeader } from './board-lane-header';
 import type { DatabaseTableProps } from './database-table';
-import { isLinkClick } from './grid-cell';
+import { isOnLink } from './grid-cell';
 import { NewBoardGroup } from './new-board-group';
 import { PropertyIcon } from './property-icon';
 import { SelectPill } from './select-pill';
@@ -681,7 +681,7 @@ function BoardCard(props: {
                 type="button"
                 class="min-w-0 break-words text-left text-sm font-medium leading-6 text-ink hover:underline"
                 onClick={(event) => {
-                  if (!isLinkClick(event)) props.onOpen(props.row.rowId);
+                  if (!isOnLink(event)) props.onOpen(props.row.rowId);
                 }}
                 aria-label={`Open ${title()}`}
               >

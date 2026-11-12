@@ -496,8 +496,8 @@ function navigateOnTab(
   }
 }
 
-/** Whether a click landed on a link inside the element that handles it. */
-export function isLinkClick(event: MouseEvent & { currentTarget: Element }) {
+/** Whether an event came from a link inside the element that handles it. */
+export function isOnLink(event: Event & { currentTarget: Element }) {
   const link =
     event.target instanceof Element ? event.target.closest('a[href]') : null;
   return !!link && event.currentTarget.contains(link);
@@ -727,18 +727,21 @@ function TextCell(props: {
         undefined
       }
       onContextMenu={(event) => {
-        if (!props.onOpen || !props.editable) return;
+        // A link keeps the browser's own menu, with Copy link.
+        if (isOnLink(event) || !props.onOpen || !props.editable) return;
         event.preventDefault();
         event.stopPropagation();
         props.onBeginEdit(undefined, event);
       }}
       onClick={(event) => {
         // A link in the value opens itself; the rest of the cell still edits.
-        if (isLinkClick(event)) return;
+        if (isOnLink(event)) return;
         if (props.onOpen) props.onOpen();
         else if (props.editable) props.onBeginEdit(undefined, event);
       }}
       onKeyDown={(event) => {
+        // Enter on a focused link opens it, as a click does.
+        if (event.key === 'Enter' && isOnLink(event)) return;
         if (
           props.onOpen &&
           event.key === 'Enter' &&

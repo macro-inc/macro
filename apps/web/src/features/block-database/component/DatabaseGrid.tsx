@@ -47,10 +47,10 @@ import type { ViewChange } from '../../database/core/view-state';
 import { DatabaseRecords } from '../../database/views/database-records';
 import type { DatabaseRecordsActions } from '../../database/views/database-records-view';
 import {
+  DatabaseLinkValue,
   DatabaseMentionPicker,
   DatabaseMentionValue,
   DatabaseTextEditor,
-  DatabaseLinkValue,
   DatabaseTextValue,
 } from '../database-mentions';
 import { createDatabaseDocumentNavigation } from '../navigation-adapter';

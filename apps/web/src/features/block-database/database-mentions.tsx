@@ -7,9 +7,9 @@ import {
   createMenuOperations,
   type MenuOperations,
 } from '@core/component/LexicalMarkdown/shared/inlineMenu';
+import { theme } from '@core/component/LexicalMarkdown/theme';
 import type { MentionItem } from '@core/component/LexicalMarkdown/utils/mentionsUtils';
 import { toast } from '@core/component/Toast/Toast';
-import { theme } from '@core/component/LexicalMarkdown/theme';
 import { UserIcon } from '@core/component/UserIcon';
 import { normalizeLinkUrl } from '@macro-inc/lexical-core/utils/auto-link';
 import { encodeCellMention } from '@macro-inc/spreadsheet/cell-mentions';
@@ -144,7 +144,7 @@ export function DatabaseTextValue(props: { value: string }) {
   );
 }
 
-/** Keeps a press on a link inside a cell from starting the grid's own pointer handling. */
+/** Keeps a press on a link inside a cell from reaching the grid's bubbling handlers (row menus, card drags). */
 function stopLinkPointerDown(event: PointerEvent) {
   if (
     event.target instanceof Element &&
@@ -153,9 +153,24 @@ function stopLinkPointerDown(event: PointerEvent) {
     event.stopPropagation();
 }
 
+/**
+ * A web address or email address, as a link. A bare word such as `TBD` would
+ * otherwise become `https://tbd`, a link that goes nowhere.
+ */
+function linkHref(value: string): string | null {
+  const href = normalizeLinkUrl(value);
+  if (!href) return null;
+  // normalizeLinkUrl returns only addresses the URL parser accepted.
+  const url = new URL(href);
+  if (url.protocol === 'mailto:') return href;
+  return url.hostname.includes('.') || url.hostname === 'localhost'
+    ? href
+    : null;
+}
+
 /** A URL cell's value as the link it names, opened as links open in documents. */
 export function DatabaseLinkValue(props: { url: string }) {
-  const href = () => normalizeLinkUrl(props.url);
+  const href = () => linkHref(props.url);
   return (
     <Show when={href()} fallback={props.url}>
       {(href) => (
