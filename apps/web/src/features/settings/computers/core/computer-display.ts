@@ -1,7 +1,6 @@
 import { formatLocale, t } from '@app/lib/i18n';
 import { ThrownResultError } from '@core/util/result';
 import type {
-  ComputerSize,
   ComputerStatus,
   Quote,
   SetupStep,
@@ -10,12 +9,13 @@ import type {
 import { match } from 'ts-pattern';
 import { formatBillingAmount } from '../../core/format-billing-amount';
 
-export function sizeLabel(size: ComputerSize): string {
+/** A size's label; `ComputerStatus.size` is a plain string on the wire. */
+export function sizeLabel(size: string): string {
   return match(size)
     .with('standard', () => t('computers.standard'))
     .with('large', () => t('computers.large'))
     .with('xl', () => t('computers.xl'))
-    .exhaustive((unknown) => String(unknown));
+    .otherwise((unknown) => unknown);
 }
 
 /** "4 vCPU · 8 GB · 100 GB", for a size shown beside its name. */
