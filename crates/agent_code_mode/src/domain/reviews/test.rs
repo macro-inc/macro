@@ -1262,7 +1262,7 @@ async fn a_view_the_renderer_would_not_draw_is_turned_back_with_what_to_fix() {
     };
     assert_eq!(
         message,
-        "The view was not presented: it does not match the PresentView schema. view.widgets[0].type should be one of `md`, `timeline`, `list`, `channelMessage`, `events`, `cards`, `tags`, `container`. Fix it and present the whole view again."
+        "The view was not presented: it does not match the PresentView schema. view.widgets[0].type should be one of `md`, `timeline`, `list`, `channelMessage`, `events`, `cards`, `tags`, `botCredential`, `container`. Fix it and present the whole view again."
     );
     assert!(f.actions.views.lock().unwrap().is_empty());
 }

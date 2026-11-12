@@ -103,6 +103,6 @@ fn a_view_that_does_not_decode_fails_the_call_without_echoing_it() {
     .expect_err("an unknown widget type");
     assert_eq!(
         error.to_string(),
-        "view.widgets[1].type should be one of `md`, `timeline`, `list`, `channelMessage`, `events`, `cards`, `tags`, `container`"
+        "view.widgets[1].type should be one of `md`, `timeline`, `list`, `channelMessage`, `events`, `cards`, `tags`, `botCredential`, `container`"
     );
 }
