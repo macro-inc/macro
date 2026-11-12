@@ -1,5 +1,6 @@
 use crate::api::search::simple::filter::{FilterVariantToSearchArgs, ScopedCalendarEventFilters};
 
+use crate::api::search::caller::caller_label;
 use crate::api::search::crm_company;
 use crate::api::search::simple::{simple_channel, simple_chat};
 use crate::api::{
@@ -12,7 +13,7 @@ use axum::{
 };
 use crm::domain::auth::CrmTeamReceipt;
 use entity_access::domain::models::MemberTeamRole;
-use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
+use macro_authorization::{MacroAuthorizationExtractor, MacroUserAuthentication, UserOrInternal};
 use macro_user_id::user_id::MacroUserId;
 use model::{response::ErrorResponse, user::UserContext};
 use models_search::unified::SearchEntityFilters;
@@ -25,6 +26,7 @@ use opensearch_client::search::documents::{
 };
 use opensearch_client::search::model::SearchHit;
 use opensearch_client::search::unified::UnifiedSearchArgs;
+use tracing::Instrument as _;
 
 /// Whether calendar events may appear in this search.
 ///
@@ -191,19 +193,66 @@ fn to_property_filter_args(filters: &[item_filters::PropertyFilter]) -> Vec<Prop
         .collect()
 }
 
-/// Creates a unified search request and performs the search
-/// by calling individual simple search endpoints for each entity type
-#[tracing::instrument(
-    skip(ctx, user_context, query_params),
-    fields(
-        user_id = %user_context.user_id,
+const DEFAULT_PAGE_SIZE: u32 = 10;
+
+/// The span of one unified search. It carries what a slow search is filtered
+/// by: who called, the mode, and sizes. The request itself stays off it, since
+/// the query and the filter values are whatever the user typed or picked.
+fn unified_search_span(
+    user: &MacroUserAuthentication,
+    query_params: &SearchPaginationParams,
+    req: &UnifiedSearchRequest,
+) -> tracing::Span {
+    tracing::info_span!(
+        "perform_unified_search",
+        user_id = %user.user_context.user_id,
+        search.caller = caller_label(user),
+        search.caller_agent = user.agent_id.is_some(),
+        search.search_on = %req.search_on,
         search.match_type = %req.match_type,
+        search.page_size = query_params.page_size.unwrap_or(DEFAULT_PAGE_SIZE),
+        search.entity_types = tracing::field::Empty,
         search.terms = tracing::field::Empty,
         search.dropped_terms = tracing::field::Empty,
-    ),
-    err
-)]
+    )
+}
+
+/// The entity types a search covers as one span value, in the order given.
+fn entity_types_label(types: &[(&'static str, bool)]) -> String {
+    types
+        .iter()
+        .filter(|(_, included)| *included)
+        .map(|(name, _)| *name)
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+/// Creates a unified search request and performs the search
+/// by calling individual simple search endpoints for each entity type
 pub(in crate::api::search) async fn perform_unified_search(
+    ctx: &SearchHandlerState,
+    user: &MacroUserAuthentication,
+    crm_access: Option<&CrmTeamReceipt<MemberTeamRole>>,
+    query_params: SearchPaginationParams,
+    req: UnifiedSearchRequest,
+) -> Result<
+    (
+        Vec<opensearch_client::search::model::SearchHit>,
+        Option<String>,
+    ),
+    SearchError,
+> {
+    let span = unified_search_span(user, &query_params, &req);
+    async {
+        search_unified_sources(ctx, &user.user_context, crm_access, query_params, req)
+            .await
+            .inspect_err(|error| tracing::error!(error = %error))
+    }
+    .instrument(span)
+    .await
+}
+
+async fn search_unified_sources(
     ctx: &SearchHandlerState,
     user_context: &UserContext,
     crm_access: Option<&CrmTeamReceipt<MemberTeamRole>>,
@@ -241,7 +290,7 @@ pub(in crate::api::search) async fn perform_unified_search(
         return Err(SearchError::InvalidCursor);
     }
 
-    let page_size = query_params.page_size.unwrap_or(10);
+    let page_size = query_params.page_size.unwrap_or(DEFAULT_PAGE_SIZE);
     if !(0..=100).contains(&page_size) {
         return Err(SearchError::InvalidPageSize);
     }
@@ -329,6 +378,23 @@ pub(in crate::api::search) async fn perform_unified_search(
     let should_include_calendar_events = calendar_events_searchable(
         search_filters.should_include_calendar_events,
         ctx.calendar_search_enabled,
+    );
+    tracing::Span::current().record(
+        "search.entity_types",
+        entity_types_label(&[
+            (
+                "agent_sessions",
+                search_filters.should_include_agent_sessions,
+            ),
+            ("calendar_events", should_include_calendar_events),
+            ("call_records", should_include_call_records),
+            ("channels", should_include_channels),
+            ("chats", should_include_chats),
+            ("crm_companies", should_include_crm),
+            ("documents", should_include_documents),
+            ("emails", should_include_emails),
+            ("projects", should_include_projects),
+        ]),
     );
     let email_terms = search_terms.clone();
 
@@ -800,18 +866,17 @@ pub async fn handler(
     extract::Query(query_params): extract::Query<SearchPaginationParams>,
     extract::Json(req): extract::Json<UnifiedSearchRequest>,
 ) -> Result<Json<SimpleSearchResponse>, SearchError> {
-    let user_context = &authorization.authorization.user.user_context;
+    let user = &authorization.authorization.user;
 
     tracing::info!(
-        user_id = user_context.user_id,
-        query = ?req.query,
+        user_id = user.user_context.user_id,
         search_on = ?req.search_on,
         "simple_unified_search"
     );
 
     // CRM opt-in is wired through the unified `/search` endpoint only.
     let (results, _next_cursor) =
-        perform_unified_search(&ctx, user_context, None, query_params, req).await?;
+        perform_unified_search(&ctx, user, None, query_params, req).await?;
 
     let results = results.into_iter().map(|a| a.into()).collect();
 
