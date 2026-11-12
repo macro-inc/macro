@@ -417,6 +417,17 @@ impl ComputerRepo for FakeRepo {
             .cloned())
     }
 
+    async fn awake_computers(&self) -> Result<Vec<(HarnessId, ComputerId)>, FakeError> {
+        Ok(self
+            .computers
+            .lock()
+            .unwrap()
+            .values()
+            .filter(|computer| computer.state.is_awake())
+            .filter_map(|computer| Some((computer.harness_id?, computer.id)))
+            .collect())
+    }
+
     async fn set_harness(
         &self,
         computer_id: ComputerId,

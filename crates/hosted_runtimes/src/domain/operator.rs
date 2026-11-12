@@ -559,6 +559,12 @@ where
             .map_err(internal)
     }
 
+    /// Every awake computer that has a harness, as `(harness, computer)`:
+    /// the ones whose Claude sign-in state the control plane refreshes.
+    pub async fn awake_computers(&self) -> Result<Vec<(HarnessId, ComputerId)>, ComputerError> {
+        self.repo.awake_computers().await.map_err(internal)
+    }
+
     /// The computer `harness_id` runs on, if any.
     async fn computer_of(
         &self,

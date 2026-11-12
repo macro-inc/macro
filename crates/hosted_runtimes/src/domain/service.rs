@@ -69,9 +69,6 @@ pub enum ComputerError {
     /// The request could not be read (an invalid principal or identifier).
     #[error("{0}")]
     BadRequest(String),
-    /// The caller's team role does not allow this.
-    #[error("only the computer's buyer or the team owner can do this")]
-    Forbidden,
     /// Confirmation does not match the computer name.
     #[error("type the computer's name to release it")]
     ConfirmationMismatch,
@@ -93,15 +90,6 @@ pub(crate) fn internal<Err: std::error::Error + Send + Sync + 'static>(
     error: Err,
 ) -> ComputerError {
     ComputerError::Internal(rootcause::Report::new(error).into_dynamic())
-}
-
-/// The caller's role, as far as managing a computer's setup goes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TeamMemberRole {
-    /// The team's owner.
-    Owner,
-    /// Any other member, including admins.
-    Other,
 }
 
 /// Clock seam so tests control time.
@@ -379,25 +367,16 @@ impl<
     }
 
     /// Record that the team finished the guided setup after buying the
-    /// computer. Idempotent: the first time is kept. Allowed to whoever may
-    /// manage the computer's Claude Code sign-in, its buyer or the team owner.
+    /// computer. Idempotent: the first time is kept. Callers authorize the
+    /// team's owner or an admin, who manage its Claude Code sign-in too.
     #[tracing::instrument(skip(self), err)]
     pub async fn complete_setup(
         &self,
         team_id: Uuid,
         computer_id: ComputerId,
-        caller: MacroUserIdStr<'static>,
-        caller_role: TeamMemberRole,
     ) -> Result<ComputerStatus, ComputerError> {
         self.require_attached().await?;
-        let computer = self.team_computer(team_id, computer_id).await?;
-        let allowed = match caller_role {
-            TeamMemberRole::Owner => true,
-            TeamMemberRole::Other => computer.created_by == caller,
-        };
-        if !allowed {
-            return Err(ComputerError::Forbidden);
-        }
+        self.team_computer(team_id, computer_id).await?;
 
         let computer = self
             .repo

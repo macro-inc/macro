@@ -180,15 +180,7 @@ async fn restore_remains_available_with_flag_off() {
 #[tokio::test]
 async fn setup_complete_remains_available_with_flag_off() {
     let (service, id) = existing_computer_with_flag_off().await;
-    service
-        .complete_setup(
-            TEAM,
-            id,
-            MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
-            crate::domain::service::TeamMemberRole::Other,
-        )
-        .await
-        .unwrap();
+    service.complete_setup(TEAM, id).await.unwrap();
     assert!(
         service.repo.computers.lock().unwrap()[&id]
             .setup_completed_at

@@ -563,11 +563,12 @@ async fn claude_sign_in_follows_the_computer_teams_admins_not_its_buyer() {
 
     let admin = app.clone().oneshot(sign_in("other")).await.unwrap();
     assert_eq!(admin.status(), StatusCode::OK);
+    let reached = transport.requests.lock().unwrap().len();
+    assert!(reached > 0);
     let buyer = app.oneshot(sign_in("owner")).await.unwrap();
     assert_eq!(buyer.status(), StatusCode::FORBIDDEN);
-    // Only the admin's sign-in reached harnessd: its start, then the status
-    // read recorded after it.
-    assert_eq!(transport.requests.lock().unwrap().len(), 2);
+    // The buyer's request never reached the computer.
+    assert_eq!(transport.requests.lock().unwrap().len(), reached);
     tasks.close();
     tasks.wait().await;
 }

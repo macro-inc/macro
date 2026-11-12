@@ -849,7 +849,7 @@ computer is purchasing, setting up, waiting for capacity, starting or
 stopping.
 
 The row's one action is **Finish setup** while guided setup is incomplete
-(only for the buyer and the team owner), else **Sign in with Claude** when the
+(only for the team's owner and admins), else **Sign in with Claude** when the
 computer is on its own Claude account but signed out, else none. **⋯** holds,
 in order: **Don't ask before acting** (the computer's permission bypass, for
 the team's owner and admins; a computer belongs to its team, so it has no Share
@@ -878,8 +878,8 @@ To buy one as a team admin:
    computer**. Computers are for paying teams: on a trialing subscription the
    row instead reads "Computers are available on paid plans. Your team is on a
    trial." with **Go to Billing**, and the Agents entries are hidden. The API
-   answers 403 with `code: "team_on_trial"` to offers, quote, purchase, undo
-   and restore.
+   answers 403 with `code: "team_on_trial"` to offers, purchase, undo and
+   restore.
 2. **Get a computer** opens guided setup: one modal (a sheet on phones) with a
    step header, **Computer · Agent · Claude · Ready**, that stays open from Buy
    to Try it. The Computer step has the size radios (**Standard**, **Large**,

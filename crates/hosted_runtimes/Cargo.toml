@@ -21,7 +21,7 @@ inbound = [
   "pairing_id/schema",
   "ports",
 ]
-outbound = ["dep:incus_client", "dep:macro_env", "dep:sqlx", "ports", "tokio/fs", "tokio/process", "tokio/time"]
+outbound = ["dep:harnesses", "dep:incus_client", "dep:macro_env", "dep:sqlx", "ports", "tokio/fs", "tokio/process", "tokio/time"]
 ports = []
 
 [dependencies]
@@ -33,6 +33,7 @@ computer_id = { workspace = true }
 entity_access = { path = "../entity_access", optional = true, default-features = false }
 feature_flags = { path = "../feature_flags" }
 harness_id = { path = "../harness_id" }
+harnesses = { path = "../harnesses", optional = true, default-features = false, features = ["outbound"] }
 incus_client = { path = "../incus_client", optional = true }
 macro_authorization = { path = "../macro_authorization", optional = true, default-features = false }
 macro_env = { path = "../macro_env", optional = true }

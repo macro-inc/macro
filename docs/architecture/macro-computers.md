@@ -74,7 +74,7 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   attachment-source failures return `ComputerError::Internal`. `FleetAttachment`
   is `Attached` or `Detached` with no default; `FleetUnavailable` displays
   "computers are not available" and maps to HTTP 503 with `{message}`.
-  Gate purchase, purchase_for_team (including comps), quote, offers, list, set_power, retry, cancel, undo_cancel and release_now
+  Gate purchase, purchase_for_team (including comps), offers, set_power, retry, cancel, undo_cancel and release_now
   before reads, billing or writes; preserve existing rollout denial
   first. Missing rows on a detached fleet return 503.
   Do not gate catalog(), size_spec(), observe_subscription, confirm_reservations,
@@ -253,9 +253,10 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   (`ComputerRepo::agent_counts`), for the release warning.
 - **Guided setup**: `POST /team/computers/{computer_id}/setup-complete` →
   `ComputerStatus`, `ComputerService::complete_setup`, records
-  `setupCompletedAt` once (idempotent). Allowed to the computer's buyer and the
-  team owner, the server rule behind the web's `canManageClaude`; others get 403.
-- **Status**: `ComputerService::status(team_id, computer_id)` / `list(team_id)` →
+  `setupCompletedAt` once (idempotent). Allowed to the team's owner and admins
+  (`AdminTeamRole`), as Claude sign-in is (owner access to the computer's
+  harness, the web's `canManageClaude`); others get 403.
+- **Status**: `ComputerService::list(team_id)` →
   `ComputerStatus` with `setup: Option<SetupProgress>` (Creating → Booting →
   Connecting → Ready, positions 1–4) until macrod first connects. A purchase
   being confirmed reports status `purchasing`, step Creating (1 of 4).

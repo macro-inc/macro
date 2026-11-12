@@ -22,7 +22,10 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::domain::{
-    account_logins::{AccountLoginChange, AgentProvider, HarnessAccountLogin},
+    account_logins::{
+        AccountLoginChange, AccountLoginNotice, AccountNoticeStage, AgentProvider,
+        ComputerAccountLogin, HarnessAccountLogin,
+    },
     models::{
         ClaudeMode, Harness, HarnessAccess, HarnessAgent, HarnessOwner, HarnessResident,
         HarnessSession, PairingClaimFacts, PairingDetails, PairingStatus,
@@ -362,6 +365,74 @@ impl HarnessRepo for PgHarnessRepo {
         self.active_account_login_inner(harness_id, provider)
             .await
             .map_err(Into::into)
+    }
+
+    async fn computer_account_logins(
+        &self,
+        provider: AgentProvider,
+    ) -> Result<Vec<ComputerAccountLogin>, Self::Err> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT
+                login.id AS login_id,
+                h.id AS harness_id,
+                h.name,
+                h.computer_id AS "computer_id!",
+                login.signed_in_by,
+                login.signed_in_at,
+                login.expires_at,
+                login.notice_stage AS "notice_stage: AccountNoticeStage",
+                login.notice_expires_at
+            FROM harness_account_logins login
+            JOIN harnesses h ON h.id = login.harness_id
+            WHERE h.deleted_at IS NULL
+              AND h.computer_id IS NOT NULL
+              AND login.provider = $1
+              AND login.signed_out_at IS NULL
+            "#,
+            provider as AgentProvider,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .context("failed to read computer account logins")?;
+
+        Ok(rows
+            .into_iter()
+            .map(|row| ComputerAccountLogin {
+                login_id: row.login_id,
+                harness_id: HarnessId::new_from_uuid(row.harness_id),
+                harness_name: row.name,
+                computer_id: ComputerId::new_from_uuid(row.computer_id),
+                signed_in_by: row.signed_in_by,
+                signed_in_at: row.signed_in_at,
+                expires_at: row.expires_at,
+                last_notice: row.notice_stage.map(|stage| AccountLoginNotice {
+                    stage,
+                    expires_at: row.notice_expires_at,
+                }),
+            })
+            .collect())
+    }
+
+    async fn record_login_notice(
+        &self,
+        login_id: Uuid,
+        notice: AccountLoginNotice,
+    ) -> Result<(), Self::Err> {
+        sqlx::query!(
+            r#"
+            UPDATE harness_account_logins
+            SET notice_stage = $2, notice_expires_at = $3
+            WHERE id = $1
+            "#,
+            login_id,
+            notice.stage as AccountNoticeStage,
+            notice.expires_at,
+        )
+        .execute(&self.pool)
+        .await
+        .context("failed to record the login notice")?;
+        Ok(())
     }
 
     async fn pairing_claim_facts(
