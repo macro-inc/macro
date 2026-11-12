@@ -119,6 +119,46 @@ pub fn resolve(
             "PREVIEW_SSH_HOST_KEY".into(),
             std::fs::read_to_string(key_path).context("reading preview host key")?,
         );
+        // Keep Passwords signing identity private and stable across local restarts.
+        let passwords_key_path = instance
+            .ensure_artifact_dir()?
+            .join("passwords-jwt.private.pem");
+        if !passwords_key_path.exists() {
+            let status = Command::new("openssl")
+                .args([
+                    "genpkey",
+                    "-algorithm",
+                    "RSA",
+                    "-pkeyopt",
+                    "rsa_keygen_bits:2048",
+                    "-out",
+                ])
+                .arg(&passwords_key_path)
+                .stderr(std::process::Stdio::null())
+                .status()
+                .context("generating local Passwords signing key")?;
+            if !status.success() {
+                bail!("openssl failed generating local Passwords signing key");
+            }
+        }
+        let passwords_public_key_path = instance
+            .ensure_artifact_dir()?
+            .join("passwords-jwt.public.pem");
+        let status = Command::new("openssl")
+            .args(["pkey", "-in"])
+            .arg(&passwords_key_path)
+            .args(["-pubout", "-out"])
+            .arg(&passwords_public_key_path)
+            .status()
+            .context("deriving local Passwords verification key")?;
+        if !status.success() {
+            bail!("openssl failed deriving local Passwords verification key");
+        }
+        env.insert(
+            "PASSWORDS_JWT_SIGNING_KEY".into(),
+            std::fs::read_to_string(passwords_key_path)
+                .context("reading local Passwords signing key")?,
+        );
         // Local telemetry export: point services at the local OTLP collector
         // (docker-network alias `otel-collector`) only when the run asked for
         // tracing AND one answers on the OTLP HTTP port (so services don't

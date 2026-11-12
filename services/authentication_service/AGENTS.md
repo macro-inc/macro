@@ -163,9 +163,9 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
 ## Agent accounts
 
 - An agent can do everything a person can, including inviting other agents. Do
-  not gate actions on `isAgent`; it only changes signup and labeling. The one
-  exception: only an agent can be an account manager, and an agent can't be
-  managed (`crates/account_manager`).
+  not gate general actions on `isAgent`; it changes signup and labeling.
+  Passwords v1 separately requires human accounts. Only an agent can be an
+  account manager, and an agent cannot be managed (`crates/account_manager`).
 - Routes that mint credentials, link a sign-in, merge accounts, or delete the
   account use `AccountHolderOrInternal`, so an account manager's credential can't
   outlast its own revocation or lock the account's owner out.
@@ -291,3 +291,13 @@ Computer billing accepts either all six
 Validate syntax and reject partial groups at startup and in the Doppler check.
 Keep configured and recorded prices when no fleet is attached; cleanup and
 subscription reconciliation still use them. Prices have no fallback. See [required computer config](../../docs/development/running-locally.md#macro-computers).
+
+## Team vault cleanup
+
+- Supply the Passwords metadata port to the existing owned-entity cleanup adapter:
+  authoritative empty teams skip vault RPC; retained data requires acknowledged DSS
+  namespace purge before `clear_team` lists or purges ordinary entities. Recheck
+  emptiness under the existing team lease and retain its guard in `ClearedTeam`
+  through team deletion; drop it before DSS RPC if data appeared.
+- Keep account deletion and membership compensation independent of vault items;
+  team items retain their immutable creator after a person leaves.

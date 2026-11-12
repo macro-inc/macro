@@ -226,7 +226,7 @@ pub struct Job {
     path: PathBuf,
     record: Mutex<JobRecord>,
     lock: Mutex<Option<File>>,
-    /// `None` unless the user opted in to local telemetry.
+    /// `None` when local telemetry is off (opted out, or no token yet).
     telemetry: Mutex<Option<RunTelemetry>>,
 }
 
@@ -247,8 +247,12 @@ impl Job {
         record.pid = Some(std::process::id());
         // A detached run started when its foreground wrote the record.
         let started_at = UNIX_EPOCH + Duration::from_secs(record.started_at);
-        let telemetry =
-            RunTelemetry::begin(instance, kind.into(), started_at, record.log.is_some());
+        let telemetry = RunTelemetry::begin(
+            Some(instance),
+            kind.into(),
+            started_at,
+            record.log.is_some(),
+        );
         let job = Arc::new(Self {
             path: job_path(instance),
             record: Mutex::new(record),

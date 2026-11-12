@@ -340,6 +340,16 @@ impl ConfigForm {
         self.save()
     }
 
+    /// Remove keys older releases wrote that macrod no longer reads: `[identity]`
+    /// and `scope` in `[credentials]` (now set on the web), and the webhook
+    /// `[server]` table. Setup runs where no one can edit the file by hand, so
+    /// it drops them instead of failing on them.
+    pub fn drop_retired_settings(&mut self) {
+        self.doc.remove("identity");
+        self.doc.remove("server");
+        self.remove("credentials", "scope");
+    }
+
     /// Validate the complete document and write it out.
     pub fn save(&self) -> rootcause::Result<()> {
         let rendered = self.doc.to_string();

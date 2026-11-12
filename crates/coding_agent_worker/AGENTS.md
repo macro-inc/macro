@@ -16,7 +16,8 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   locked by `<config>.lock` while running. Name, ownership, and permission
   bypass live only on the web (Settings → Machines); a file that still
   has `[identity]` or a `scope` in `[credentials]` fails to load with an error
-  naming that page. The event stream reads the owner from `GET /harnesses/me`
+  naming that page; desktop setup (`macrod service --agent/--workspace`)
+  drops those and the retired `[server]` table instead (`drop_retired_settings`). The event stream reads the owner from `GET /harnesses/me`
   on each connect. `[macro]` is a dev override that defaults to production.
 - `src/daemon.rs` + `src/runtime.rs`: the serving core — persistent harness
   service connection, ACP process bridge, start/stop/restart on re-pair.

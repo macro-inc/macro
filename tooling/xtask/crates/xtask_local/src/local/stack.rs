@@ -24,6 +24,7 @@ use super::instance::{Instance, Port};
 use super::local_env::Tunnels;
 use super::stage::Stage;
 use super::supervisor::{self, JobKind, JobStatus};
+use super::telemetry::{RunKind, RunTelemetry};
 use super::{BringUp, Mode, Start, arch, env_layer, frontend, mailpit, proxy};
 
 #[derive(Args, Clone, Default)]
@@ -224,13 +225,27 @@ pub(super) fn clear_state(instance: &Instance) -> Result<()> {
 /// `cargo x stack up` — wipe the instance, bring the whole stack up and return,
 /// leaving only Docker containers running.
 pub fn up(mode: Mode, args: &UpArgs) -> Result<Instance> {
+    let started_at = std::time::SystemTime::now();
     let stage = Stage::from_env_cli(args.run.verbose);
-    let mut instance = super::allocator::allocate(
+    let instance = super::allocator::allocate(
         &stage,
         mode,
         args.run.instance.instance.as_deref(),
         args.run.instance.port_base,
     )?;
+    let (stage, telemetry) =
+        RunTelemetry::attach(stage, Some(&instance), RunKind::StackUp, started_at);
+    let result = up_allocated(&stage, mode, args, instance);
+    RunTelemetry::close(telemetry, &result);
+    result
+}
+
+fn up_allocated(
+    stage: &Stage,
+    mode: Mode,
+    args: &UpArgs,
+    mut instance: Instance,
+) -> Result<Instance> {
     stage.section(&format!(
         "macro {} stack (headless) — instance {}",
         mode.label(),
@@ -256,10 +271,10 @@ pub fn up(mode: Mode, args: &UpArgs) -> Result<Instance> {
         // not pay for building the computer image.
         computers: args.run.computers.fleet(Fleet::Off),
     };
-    let stack_up = super::bring_up(&stage, mode, &mut instance, &args.run, &plan)?;
+    let stack_up = super::bring_up(stage, mode, &mut instance, &args.run, &plan)?;
     if !args.infra_only {
         stage.print_timings("bring-up");
-        super::print_stack_summary(&stage, mode, &instance, &stack_up, &plan)?;
+        super::print_stack_summary(stage, mode, &instance, &stack_up, &plan)?;
         stage.note(&format!(
             "  headless: `just stack status`, `just stack update`, `just stack down`{}",
             instance_suffix(&instance)
@@ -285,8 +300,15 @@ pub fn up(mode: Mode, args: &UpArgs) -> Result<Instance> {
 pub fn update(args: &UpdateArgs) -> Result<()> {
     let instance = Instance::resolve(args.instance.instance.as_deref(), args.instance.port_base)?;
     if read_state(&instance).is_some() {
-        let stage = Stage::from_env_cli(args.verbose);
-        return update_running(&stage, args).map(|_| ());
+        let (stage, telemetry) = RunTelemetry::attach(
+            Stage::from_env_cli(args.verbose),
+            Some(&instance),
+            RunKind::StackUpdate,
+            std::time::SystemTime::now(),
+        );
+        let result = update_running(&stage, args).map(|_| ());
+        RunTelemetry::close(telemetry, &result);
+        return result;
     }
     if !args.wipe_if_unrecorded && super::instance_has_volumes(&instance)? {
         bail!(
