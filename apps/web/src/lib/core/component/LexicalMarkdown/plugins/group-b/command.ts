@@ -1,5 +1,8 @@
 import { EditorInputMsg } from '@macro-inc/collaboration/session/abi.generated';
-import type { EditorView } from '@macro-inc/lexical-wasm-view';
+import type {
+  EditorView,
+  InputCommitObservation,
+} from '@macro-inc/lexical-wasm-view';
 import type { InputSettlement } from '@macro-inc/lexical-wasm-view/view/port';
 import { readSelection } from '@macro-inc/lexical-wasm-view/view/selection';
 import {
@@ -118,15 +121,22 @@ export function dispatchApplicationCommandSettled(
   return view.port.inputSettled(input, event);
 }
 
-/**
- * Check current session access before evaluating a queued application payload.
- * `at` admits the command at a captured selection instead of the live one.
- */
+/** Optional admission controls for one queued SessionEdit application input. */
+export interface SessionEditAdmission {
+  /** Admit at a captured selection instead of the live one; read at admission. */
+  readonly at?: () => ViewSelection;
+  /** Final freshness check at actual admission; false cancels without input. */
+  readonly admit?: () => boolean;
+  /** Real main-commit evidence for this input's entry. */
+  readonly mainCommit?: InputCommitObservation;
+}
+
+/** Check current session access before evaluating a queued application payload. */
 export function dispatchApplicationCommandSettledIfSessionEdit(
   view: EditorView,
   name: string,
   payload: () => JsonValue,
-  at?: () => ViewSelection
+  admission?: SessionEditAdmission
 ): Promise<InputSettlement> {
   if (!(view.port instanceof SessionPort))
     throw new Error(
@@ -135,10 +145,16 @@ export function dispatchApplicationCommandSettledIfSessionEdit(
   const generation = view.mirror.keyGeneration;
   if (!view.isMounted || generation === null)
     throw new Error('Native view generation is unavailable');
-  return view.port.inputSettledIfSessionEdit(() => {
+  const factory = () => {
     if (!view.isMounted || view.mirror.keyGeneration !== generation)
       throw new Error('Native view generation changed before admission');
-    const input = applicationInput(view, name, payload(), undefined, at?.());
+    const input = applicationInput(
+      view,
+      name,
+      payload(),
+      undefined,
+      admission?.at?.()
+    );
     if (
       !view.isMounted ||
       view.mirror.keyGeneration !== generation ||
@@ -147,5 +163,11 @@ export function dispatchApplicationCommandSettledIfSessionEdit(
     )
       throw new Error('Native view generation changed during admission');
     return input.value;
+  };
+  if (!admission?.admit && !admission?.mainCommit)
+    return view.port.inputSettledIfSessionEdit(factory);
+  return view.port.inputSettledIfSessionEdit(factory, {
+    admit: admission.admit ?? (() => true),
+    ...(admission.mainCommit ? { mainCommit: admission.mainCommit } : {}),
   });
 }

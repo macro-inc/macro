@@ -1,24 +1,33 @@
 import { staticFileIdEndpoint } from '@core/constant/servers';
-import type { EditorView } from '@macro-inc/lexical-wasm-view';
+import { Access } from '@macro-inc/collaboration/session/abi.generated';
+import {
+  createInputCommitObservation,
+  type EditorView,
+} from '@macro-inc/lexical-wasm-view';
+import type { InputCommitEvidence } from '@macro-inc/lexical-wasm-view/view/input-commit-observation';
+import { SessionPort } from '@macro-inc/lexical-wasm-view/view/session-port';
 import type { ViewSelection } from '@macro-inc/lexical-wasm-view/view/types';
+import { Telemetry } from '@macro-inc/observability';
 import { type Accessor, onCleanup } from 'solid-js';
 import { dispatchApplicationCommandSettledIfSessionEdit } from '../../plugins/group-b/command';
 import type { GifMenuHost } from './gif';
 
-/** Source `$insertGifNode` caps the displayed width at 400px. */
-const MAX_GIF_WIDTH = 400;
-
+/** The caret captured when the picker opened, with its typing attributes. */
 interface NativeGifTarget {
   readonly view: EditorView;
   readonly generation: number;
   readonly selection: ViewSelection;
+  readonly format: number;
+  readonly style: string;
 }
 
 interface NativeGifInsertion {
   readonly view: EditorView;
   readonly generation: number;
   readonly root: HTMLElement;
-  readonly selection: ViewSelection | undefined;
+  readonly canEdit: Accessor<boolean>;
+  /** Source restores a saved selection; without one the live selection stays. */
+  readonly target: NativeGifTarget | undefined;
 }
 
 interface PickerRegistration {
@@ -26,19 +35,40 @@ interface PickerRegistration {
   readonly onOpen: () => void;
 }
 
-/** A captured range or node selection whose nodes the mirror no longer has. */
+/** A captured selection whose nodes the mirror no longer has. */
 function isDetached(view: EditorView, selection: ViewSelection) {
   if (selection.kind === 'range')
     return !view.node(selection.anchor.key) || !view.node(selection.focus.key);
   if (selection.kind === 'node')
     return selection.keys.some((key) => !view.node(key));
+  if (selection.kind === 'table')
+    return !view.node(selection.table) || !view.node(selection.anchorCell);
   return false;
+}
+
+/** Images in the current mirror that reference this static file. */
+function references(view: EditorView, staticFileId: string) {
+  let count = 0;
+  for (const node of view.mirror.values())
+    if (node.type === 'image' && node.props().id === staticFileId) count++;
+  return count;
+}
+
+/** Selections Source restores with `$setSelection(saved)`. */
+function restorable(selection: ViewSelection) {
+  return (
+    selection.kind === 'range' ||
+    selection.kind === 'node' ||
+    selection.kind === 'table'
+  );
 }
 
 /**
  * Native GIF picker host: one view, bound only after its initial projection.
  * Captures the caret on open, cancels on document changes, and inserts the
- * Source GIF image through ordinary SessionEdit admission at that caret.
+ * Source GIF image with `group-b.gif-insert` (Source list policy, and Source's
+ * select-end only when no selection exists) at that caret, rechecking
+ * freshness at the input's actual admission.
  */
 export function createNativeGifContext(): {
   host: GifMenuHost<NativeGifTarget | null, NativeGifInsertion>;
@@ -57,8 +87,22 @@ export function createNativeGifContext(): {
     view.mirror.keyGeneration === generation
       ? view
       : undefined;
+  /** Source `editor.isEditable()` plus the session's actual Edit access. */
   const editable = (mounted: EditorView) =>
-    mounted.root.contentEditable === 'true';
+    mounted.root.contentEditable === 'true' &&
+    mounted.port instanceof SessionPort &&
+    mounted.port.effectiveAccess() === Access.Edit;
+  const fresh = (insertion: NativeGifInsertion) => {
+    const mounted = currentView();
+    return (
+      mounted === insertion.view &&
+      generation === insertion.generation &&
+      mounted.root === insertion.root &&
+      insertion.canEdit() &&
+      editable(mounted) &&
+      !(insertion.target && isDetached(mounted, insertion.target.selection))
+    );
+  };
 
   const host: GifMenuHost<NativeGifTarget | null, NativeGifInsertion> = {
     root: () => currentView()?.root ?? null,
@@ -72,22 +116,32 @@ export function createNativeGifContext(): {
     captureTarget() {
       const mounted = currentView();
       if (!mounted || generation === null) return null;
-      return {
+      const { selection, format, style } = mounted.selection();
+      return Object.freeze({
         view: mounted,
         generation,
-        selection: mounted.selection().selection,
-      };
+        selection,
+        format,
+        style,
+      });
     },
     prepareInsertion(target, canEdit) {
       const mounted = currentView();
       if (!canEdit() || !mounted || !editable(mounted) || generation === null)
         return;
-      // Source restores a cloned selection, or selects the end when none.
-      const selection =
-        target && target.view === mounted && target.generation === generation
-          ? target.selection
-          : undefined;
-      return { view: mounted, generation, root: mounted.root, selection };
+      // A caret captured by a retired view or generation never retargets.
+      if (
+        target &&
+        (target.view !== mounted || target.generation !== generation)
+      )
+        return;
+      return Object.freeze({
+        view: mounted,
+        generation,
+        root: mounted.root,
+        canEdit,
+        target: target && restorable(target.selection) ? target : undefined,
+      });
     },
     subscribeChanges(insertion, onDirty) {
       return insertion.view.onCommit((commit) => {
@@ -99,66 +153,66 @@ export function createNativeGifContext(): {
           onDirty();
       });
     },
-    isCurrent(insertion) {
-      const mounted = currentView();
-      return (
-        mounted === insertion.view &&
-        generation === insertion.generation &&
-        mounted.root === insertion.root &&
-        editable(mounted)
-      );
-    },
+    isCurrent: fresh,
     async commit(insertion, gif, staticFileId, onInserted) {
-      const mounted = currentView();
-      if (!mounted || !host.isCurrent(insertion)) return false;
-      const at = insertion.selection;
-      // A cleared draft must not receive the old request's image.
-      if (at && isDetached(mounted, at)) return false;
-      const width = Math.min(gif.width, MAX_GIF_WIDTH);
-      let referenced = false;
-      // Ownership follows the actual committed node, before later observers run.
-      const stop = mounted.onCommit((commit) => {
-        if (referenced) return;
-        for (const mutation of commit.mutations.values()) {
-          const node = mutation.after;
-          if (
-            mutation.kind === 'created' &&
-            node?.type === 'image' &&
-            node.props().id === staticFileId
-          ) {
-            referenced = true;
-            onInserted();
-            return;
-          }
-        }
+      // A cleared draft or retired view must not receive the old request's image.
+      if (!fresh(insertion)) return false;
+      const mounted = insertion.view;
+      const target = insertion.target;
+      let before = 0;
+      let evidence: InputCommitEvidence | undefined;
+      const mainCommit = createInputCommitObservation((copied) => {
+        evidence = copied;
       });
+      let failure: { error: unknown } | undefined;
       try {
         await dispatchApplicationCommandSettledIfSessionEdit(
           mounted,
-          'group-b.media',
+          'group-b.gif-insert',
           () => ({
-            action: 'insert',
-            kind: 'image',
-            media: {
-              srcType: 'sfs',
-              id: staticFileId,
-              url: staticFileIdEndpoint(staticFileId),
-              width: gif.width,
-              height: gif.height,
-              constrainedWidth: width,
-              constrainedHeight: Math.round((width / gif.width) * gif.height),
-            },
-            alt: gif.title,
+            static_file_id: staticFileId,
+            url: staticFileIdEndpoint(staticFileId),
+            title: gif.title,
+            width: gif.width,
+            height: gif.height,
+            ...(target?.selection.kind === 'range'
+              ? { range_style: { format: target.format, style: target.style } }
+              : {}),
           }),
-          at && at.kind !== 'none' && at.kind !== 'keep' ? () => at : undefined
+          {
+            ...(target ? { at: () => target.selection } : {}),
+            admit: () => {
+              if (!fresh(insertion)) return false;
+              before = references(mounted, staticFileId);
+              return true;
+            },
+            mainCommit,
+          }
         );
       } catch (error) {
-        // A referenced upload is kept even when admission reports a failure.
-        if (!referenced) throw error;
-      } finally {
-        stop();
+        failure = { error };
       }
-      return referenced;
+      // Ownership: this input's entry was published and the document gained a
+      // reference to the file, read after every commit observer ran or threw.
+      const published = evidence?.status === 'published';
+      const referenced =
+        published &&
+        mounted.isMounted &&
+        references(mounted, staticFileId) > before;
+      // Source reports insertion whenever its command ran, even a NodeSelection
+      // that attaches nothing; keeping that upload is the safe direction.
+      const sourceInserted =
+        evidence?.status === 'published' && evidence.mainHandled;
+      if (referenced || sourceInserted) {
+        try {
+          onInserted();
+        } catch (error) {
+          Telemetry.error(error, { source: 'native-gif-on-inserted' });
+        }
+        return true;
+      }
+      if (failure) throw failure.error;
+      return false;
     },
     registerPicker(canEdit, onOpen) {
       const entry = { canEdit, onOpen };
