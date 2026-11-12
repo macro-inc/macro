@@ -884,7 +884,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Mount the mobile search input before focusing it inside the dock tap; keep navigation in that handler so focus does not trigger a second navigation or lose iOS keyboard activation.
 - Preserve focused chrome editors during deferred split insertion/removal/content-change autofocus; explicit return-focus commands may still focus the pane. On desktop, content changes claim focus only for Cmd+K navigation or create-menu arrivals, and only if the destination has not already focused a child. Back/forward and ordinary clicks do not autofocus content, except that a click, Enter or Cmd+K that opens a conversation focuses its composer (see [composer focus and Esc](../../docs/agent-guide/channels.md#composer-focus-and-esc)).
 - Reconcile global focus when focused DOM subtrees are removed; iOS can omit blur events, otherwise floating creation actions stay hidden after search or editor teardown.
-- Mount the floating mobile AI composer only on the Agents view; other views keep their New action or their own reply/comment composer.
+- Mount the floating mobile AI composer only on the Agents view; other views keep their New action or their own reply/comment composer. It mounts a task after the frame that follows the navigation, behind a blank of the collapsed composer's height (`--mobile-chrome-button-size`): Agents becomes the foreground view inside the tap, and the composer's first mount would otherwise hold that tap for longer than the view takes.
 - Keep desktop New actions on `ViewCreateButton`: full width below the inner
   sidebar title and compact in list controls; retain each view's creation
   workflow and mobile controls. Use `ListHeader` for the single-row Email, Drive,
