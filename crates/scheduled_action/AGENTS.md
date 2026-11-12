@@ -60,8 +60,9 @@ each run.
   session, found from the request's code-mode invocation (`RequestSessions`),
   is kept on its `scheduled_action_draft` row (`DraftHandBacks`), so the
   session and the drafter may run on different replicas. The drafter reads
-  the session's turn status until it ends, or for `CHECKED_GRACE` after the
-  first passing check (all bounded by `DRAFT_TIMEOUT`), turns the last
+  the row every `POLL` and the session's turn every few polls (it reads the
+  whole log); the first passing check ends the draft, else the turn ending
+  does (all bounded by `DRAFT_TIMEOUT`). It turns the last
   passing check (else the last check) into the draft, then stops and deletes
   the session and the row, also when the request is dropped mid-draft;
   `RoutineDrafts::sweep` (every minute in the harness) cleans up drafts
@@ -70,7 +71,10 @@ each run.
   created, the session's tool calls and turns, status reads and outcome
   (`timeout` included), never the words; `routine.check` records
   whether a check passed and kept a draft's answer. `DraftContext` still
-  accepts and ignores the `workspace` older web clients send.
+  accepts and ignores the `workspace` older web clients send. `bench/`
+  times drafting on a local stack against the live model, phase by phase,
+  and checks the drafts (see its README); rerun it when changing the brief
+  or the wait.
 - `src/domain/suggestions.rs` + `src/inbound/suggestion_router.rs`: routine
   suggestions, the Draft pattern. `POST /scheduled-actions/suggestions/generate`
   (onboarding calls it once the inbox connects) starts the person's one
