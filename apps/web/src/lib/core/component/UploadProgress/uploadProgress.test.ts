@@ -24,19 +24,45 @@ describe('uploadProgress', () => {
   it('spins while preparing, then reports bytes sent', () => {
     const upload = track('Report', 200);
     expect(uploadProgress()).toEqual({
-      label: 'Uploading Report',
+      label: 'Preparing Report',
       fraction: null,
     });
 
     upload.sending(50);
-    expect(uploadProgress()?.fraction).toBe(0.25);
+    expect(uploadProgress()).toEqual({
+      label: 'Uploading Report',
+      fraction: 0.25,
+    });
+  });
+
+  it('reports how much of a folder has been read while preparing', () => {
+    const upload = track('Archive', 0);
+    upload.preparing(0.4);
+    expect(uploadProgress()).toEqual({
+      label: 'Preparing Archive',
+      fraction: 0.4,
+    });
   });
 
   it('spins while the server processes the sent file', () => {
     const upload = track('Report', 200);
     upload.sending(200);
     upload.processing();
-    expect(uploadProgress()?.fraction).toBeNull();
+    expect(uploadProgress()).toEqual({
+      label: 'Processing Report',
+      fraction: null,
+    });
+  });
+
+  it('follows the server once it reports how much it has processed', () => {
+    const upload = track('Archive', 200);
+    upload.sending(200);
+    upload.processing(null);
+    upload.processing(0.75);
+    expect(uploadProgress()).toEqual({
+      label: 'Processing Archive',
+      fraction: 0.75,
+    });
   });
 
   it('spins when the transport cannot measure bytes', () => {
