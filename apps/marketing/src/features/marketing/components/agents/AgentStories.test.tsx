@@ -86,7 +86,9 @@ it('keeps the completed reduced-motion scene in one pane', () => {
   reduced = true;
   vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(1000);
   const view = render(() => <NorthwindStory scene="actions" />);
-  expect(view.getByRole('button', { name: 'sign-in verification' })).toBeTruthy();
+  expect(
+    view.getByRole('button', { name: 'sign-in verification' })
+  ).toBeTruthy();
   expect(view.queryByRole('region', { name: 'Opened item' })).toBeNull();
 });
 
@@ -237,12 +239,16 @@ it('updates the plan and task ownership without falsely completing the access ch
   expect(
     view.getByRole('button', { name: 'Training for 40 people' })
   ).toBeTruthy();
-  expect(view.queryByRole('button', { name: 'sign-in verification' })).toBeNull();
+  expect(
+    view.queryByRole('button', { name: 'sign-in verification' })
+  ).toBeNull();
   expect(w.data.tasks.find((t) => t.id === 'northwind-training')?.owner).toBe(
     'julia'
   );
   vi.advanceTimersByTime(1300);
-  expect(view.getByRole('button', { name: 'sign-in verification' })).toBeTruthy();
+  expect(
+    view.getByRole('button', { name: 'sign-in verification' })
+  ).toBeTruthy();
   expect(w.data.tasks.find((t) => t.id === 'northwind-sso')).toMatchObject({
     owner: 'teo',
     status: 'Not Started',
@@ -366,5 +372,7 @@ it('keeps the created task linked to the same rollout plan and source discussion
     pane.queryByRole('button', { name: 'Website launch plan' })
   ).toBeNull();
   fireEvent.click(pane.getByRole('button', { name: 'From customers' }));
-  expect(view.getByText(/Northwind now needs 40 seats and sign-in/)).toBeTruthy();
+  expect(
+    view.getByText(/Northwind now needs 40 seats and sign-in/)
+  ).toBeTruthy();
 });
