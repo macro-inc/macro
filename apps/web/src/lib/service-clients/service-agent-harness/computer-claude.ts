@@ -2,7 +2,6 @@ import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchWithToken } from '@core/util/fetchWithToken';
 import { type ErrorResponseHandler, statusError } from '@core/util/safeFetch';
 import {
-  getCancelClaudeSignInUrl,
   getClaudeSignOutUrl,
   getCompleteClaudeSignInUrl,
   getGetClaudeModeUrl,
@@ -68,11 +67,6 @@ export const computerClaudeClient = {
         errorResponseHandler: claudeSignInError,
         signal,
       }
-    ),
-  cancelSignIn: (harnessId: string) =>
-    fetchWithToken<Record<string, never>>(
-      harnessUrl(getCancelClaudeSignInUrl, harnessId),
-      { method: 'POST', keepalive: true }
     ),
   signOut: (harnessId: string) =>
     fetchWithToken<ClaudeModeResponse>(

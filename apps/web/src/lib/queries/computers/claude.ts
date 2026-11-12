@@ -71,23 +71,6 @@ export function useClaudeCompleteMutation() {
   }));
 }
 
-export function useClaudeCancelMutation() {
-  return useMutation(() => ({
-    gcTime: 0,
-    mutationFn: (harnessId: string) =>
-      Telemetry.span('computer.claude.cancel', async (span) => {
-        span.setAttr('harness.id', harnessId);
-        return await throwOnErr(() =>
-          computerClaudeClient.cancelSignIn(harnessId)
-        );
-      }),
-    onSuccess: (_result, harnessId) => {
-      queryClient.invalidateQueries({ queryKey: modeKey(harnessId) });
-      return invalidateHarnesses();
-    },
-  }));
-}
-
 export function useClaudeSignOutMutation() {
   return useMutation(() => ({
     gcTime: 0,
