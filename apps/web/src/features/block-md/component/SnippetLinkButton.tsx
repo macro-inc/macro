@@ -4,7 +4,10 @@ import { Toolbar } from '@ui';
 import { Dynamic } from 'solid-js/web';
 
 /** The body popup's Copy link to snippet control; the caller owns copying. */
-export function SnippetLinkButton(props: { copied: boolean; onCopy: () => void }) {
+export function SnippetLinkButton(props: {
+  copied: boolean;
+  onCopy: () => void;
+}) {
   return (
     <Toolbar.Button
       aria-label="Copy link to snippet"

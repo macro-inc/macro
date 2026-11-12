@@ -7,8 +7,8 @@ import type {
   ViewNode,
 } from '@macro-inc/lexical-wasm-view/view/types';
 import { Telemetry } from '@macro-inc/observability';
-import { match } from 'ts-pattern';
 import { type Accessor, createSignal } from 'solid-js';
+import { match } from 'ts-pattern';
 import type {
   NativeCommentAnchor,
   NativeSelectionBookmark,

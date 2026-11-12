@@ -18,8 +18,8 @@ import { NOOP_SPAN } from '@macro-inc/observability';
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 import { dispatchApplicationCommand } from '../../plugins/group-b/command';
 import { createMenuOperations } from '../../shared/inlineMenu';
-import { registerNativeInlineSearch } from './native-inline-search';
 import { createNativeActionMenuHost } from './native-actions';
+import { registerNativeInlineSearch } from './native-inline-search';
 import { createNativeTagsMenuHost } from './native-tags-menu';
 import { createNativeUserMentionMenuHost } from './native-user-mention-menu';
 
