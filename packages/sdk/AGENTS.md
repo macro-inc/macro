@@ -214,6 +214,9 @@ the existing gateway prefixes.
   keep its phased serialization types and stored JSON shape aligned.
 - Workspace advanced filters use the server's serialized AST names, not Rust
   enum variant names. Validate new filter examples against the real local API.
+- Code-mode programs are untyped JavaScript, so a mistyped option key is
+  dropped silently. The documents create methods call `rejectUnknownOptions`
+  (`src/utils/options.ts`) to throw instead; a new create-style method does too.
 - Async iterators are lazy; `limit` is page size. Preserve filters on every page
   and do not fetch another page after the caller breaks the loop.
 - Handles must serialize identity or loaded detail, never authenticated clients.
