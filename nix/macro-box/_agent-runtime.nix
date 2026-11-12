@@ -54,7 +54,7 @@ let
     '';
     outputHashMode = "recursive";
     outputHashAlgo = "sha256";
-    outputHash = "sha256-wXB5DBv+g0wIhQkeK3ceT/cPrOb8a8YSAJy6Ze1hJqM=";
+    outputHash = "sha256-UhTsSMwKGg9TctEUjvdT1to5H37TL4Q/riYkFYiVOkY=";
   };
 in
 pkgs.stdenvNoCC.mkDerivation {
@@ -90,7 +90,4 @@ pkgs.stdenvNoCC.mkDerivation {
     cp ${lockSource}/bun.lock $out/bun.lock
     runHook postInstall
   '';
-  # The lockfile this node_modules was installed from; the launcher installs
-  # afresh when the agent's repository carries another.
-  passthru.lockfile = "${lockSource}/bun.lock";
 }
