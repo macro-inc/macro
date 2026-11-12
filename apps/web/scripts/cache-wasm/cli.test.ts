@@ -42,16 +42,6 @@ function cli(args: string[]) {
   return result;
 }
 
-function packageDist(dist: string, precompressed: string) {
-  return cli([
-    'package-dist',
-    '--dist',
-    dist,
-    '--precompressed',
-    precompressed,
-  ]);
-}
-
 describe('cache WASM sidecar', () => {
   it('packages the sidecar compressed while the build ran', () => {
     const raw = Buffer.from('cache wasm '.repeat(2_000));
@@ -59,7 +49,13 @@ describe('cache WASM sidecar', () => {
     const precompressed = join(root, 'target', 'cache_wasm_bg.wasm.br');
 
     cli(['precompress', '--wasm', wasm, '--out', precompressed]);
-    const result = packageDist(dist, precompressed);
+    const result = cli([
+      'package-dist',
+      '--dist',
+      dist,
+      '--precompressed',
+      precompressed,
+    ]);
 
     expect(result.stderr).toContain('using the sidecar compressed during the build');
     expect(readFileSync(`${distWasm}.br`)).toEqual(readFileSync(precompressed));
@@ -70,6 +66,7 @@ describe('cache WASM sidecar', () => {
     ['of other bytes', 'other'],
     ['that is not Brotli', 'corrupt'],
     ['that is missing', 'missing'],
+    ['that cannot be read', 'unreadable'],
   ])('compresses dist itself given a sidecar %s', (_, kind) => {
     const raw = Buffer.from('cache wasm '.repeat(2_000));
     const { root, wasm, dist, distWasm } = build(raw);
@@ -82,8 +79,17 @@ describe('cache WASM sidecar', () => {
       mkdirSync(join(root, 'target'));
       writeFileSync(precompressed, 'not brotli');
     }
+    if (kind === 'unreadable') {
+      mkdirSync(precompressed, { recursive: true });
+    }
 
-    const result = packageDist(dist, precompressed);
+    const result = cli([
+      'package-dist',
+      '--dist',
+      dist,
+      '--precompressed',
+      precompressed,
+    ]);
 
     expect(result.stderr).not.toContain('using the sidecar');
     expect(brotliDecompressSync(readFileSync(`${distWasm}.br`))).toEqual(raw);

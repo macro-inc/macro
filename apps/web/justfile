@@ -179,6 +179,7 @@ bundle mode:
     trap 'kill "$precompress" 2>/dev/null || true' EXIT
     MODE="$1" NODE_ENV=production NODE_OPTIONS="{{node_heap}}" bun run --bun build
     wait "$precompress" || echo "precompressing the cache WASM failed; package-dist compresses it instead" >&2
+    trap - EXIT
     bun scripts/cache-wasm/cli.ts package-dist --dist dist --precompressed "$sidecar"
 
 # Tauri build hook (run automatically via beforeBuildCommand) — not meant to be run directly
