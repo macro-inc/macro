@@ -386,3 +386,26 @@ it('evicts idle history by time and drops obsolete responses instead of repopula
   expect(cache.inspect().entries).toBe(0);
   expect(client.getQueryCache().getAll()).toHaveLength(0);
 });
+
+it('arms one idle expiry timer for many reads and still expires each name on time', async () => {
+  const timers = vi.spyOn(globalThis, 'setTimeout');
+  for (let index = 0; index < 50; index++)
+    cache.read(`macro|idle${index}@example.com`);
+  const expiryTimers = timers.mock.calls.filter(
+    ([, delay]) => delay === LIMITS.idleMs
+  );
+  expect(expiryTimers).toHaveLength(1);
+  expect(cache.inspect().idle).toBe(50);
+
+  await vi.advanceTimersByTimeAsync(LIMITS.idleMs / 2);
+  cache.read('macro|idle0@example.com');
+  cache.read('macro|late@example.com');
+  expect(cache.inspect().idle).toBe(51);
+
+  await vi.advanceTimersByTimeAsync(LIMITS.idleMs / 2);
+  expect(cache.inspect().idle).toBe(2);
+
+  await vi.advanceTimersByTimeAsync(LIMITS.idleMs / 2);
+  expect(cache.inspect().idle).toBe(0);
+  expect(vi.getTimerCount()).toBe(0);
+});
