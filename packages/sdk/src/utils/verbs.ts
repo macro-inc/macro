@@ -260,7 +260,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     created: `
       getOrCreateDm getOrCreatePrivate createAgent createAnchor createBot createBotToken
       createChannelLabel meetingCreate createChannel createCrmCompany createCrmContact
-      createCrmTeamContact createCrmPipeline createDatabase createDatabaseWebhook createDocument
+      createCrmTeamContact createCrmPipelineWithFields createDatabase createDatabaseWebhook createDocument
       createCanvasHandler createMarkdownHandler createSkillHandler createSnippetHandler
       createTaskHandler externalChatAdd createForm createHarnessPairing createInitiative
       entityMessageCreate createProjectHandler createUserApiKey createWebhook

@@ -304,6 +304,9 @@ export const staticFilesBacklog =
   [] as const satisfies readonly (keyof StaticFilesSdk)[];
 
 export const storageExcluded = [
+  // Superseded in the SDK by createCrmPipelineWithFields, which also takes
+  // stages and fields.
+  'createCrmPipeline',
   // Chat sidebar section editing and discovery remain app-only navigation.
   'createChannelSection',
   'deleteChannelSection',

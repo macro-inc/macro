@@ -751,6 +751,8 @@ export * from './createPairingRequest';
 export * from './createPairingRequestHost';
 export * from './createPipeline';
 export * from './createPipelineRecordType';
+export * from './createPipelineRequest';
+export * from './createPipelineRequestRecordType';
 export * from './createProjectRequest';
 export * from './createProjectRequestProjectParentId';
 export * from './createProjectResponse';
