@@ -138,10 +138,12 @@ export function createNativeMediaContext(
               target &&
               props?.srcType === 'dss' &&
               typeof captured.id === 'string' &&
-              typeof captured.url === 'string' &&
+              (captured.url == null || typeof captured.url === 'string') &&
               props.id === captured.id &&
               props.url === captured.url
             )
+              // Source sets the resolved url over a stored null or omitted
+              // one too; the guard carries the captured url as stored.
               dispatchApplicationCommandIfSessionEdit(
                 target.view,
                 'group-b.media-upgrade-url',
@@ -149,7 +151,9 @@ export function createNativeMediaContext(
                   key: target.node.key,
                   kind,
                   source_id: captured.id,
-                  expected_url: captured.url,
+                  ...(captured.url === undefined
+                    ? {}
+                    : { expected_url: captured.url }),
                   url,
                 }
               );

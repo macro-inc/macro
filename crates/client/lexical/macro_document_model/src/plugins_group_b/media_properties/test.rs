@@ -356,12 +356,78 @@ fn dss_upgrade_requires_the_captured_identity_fields() {
             serde_json::json!({"action":"url","key":1,"url":"blob:result"}),
         ),
     ] {
-        for (key, value) in [("source_id", "source"), ("expected_url", "blob:old")] {
-            let mut missing_one = command.clone();
-            missing_one[key] = value.into();
-            assert!(decode_command(name, &missing_one.to_string(), 1, None).is_err());
+        // The source id is required; an omitted expected url is the captured
+        // url of a node stored without one.
+        let mut without_source = command.clone();
+        without_source["expected_url"] = "blob:old".into();
+        assert!(decode_command(name, &without_source.to_string(), 1, None).is_err());
+        let mut without_url = command.clone();
+        without_url["source_id"] = "source".into();
+        assert!(decode_command(name, &without_url.to_string(), 1, None).is_ok());
+    }
+}
+
+#[test]
+fn dss_upgrade_replaces_a_stored_null_or_missing_url_only_when_captured_as_stored()
+-> Result<(), Error> {
+    // Source $upgradeDSSMediaUrl sets the resolved url over any stored url; the
+    // native guard compares the captured url with the stored one, keeping
+    // null, omitted and text apart.
+    let stored = [
+        ("null", Maybe::Null),
+        ("missing", Maybe::Missing),
+        ("text", Maybe::Value("blob:old".to_owned())),
+    ];
+    for (stored_name, stored_url) in &stored {
+        for (captured_name, captured_url) in &stored {
+            let mut editor = surface::preset_builder_with_mode(
+                EditorType::MarkdownSync,
+                EditorMode::ViewAttached,
+            )
+            .build()
+            .expect("surface");
+            let (video, _) = editor.update(|tx| {
+                let video = create_video_node(
+                    tx,
+                    CreateMedia {
+                        src_type: "dss".into(),
+                        id: Some("video-id".into()),
+                        ..Default::default()
+                    },
+                    None,
+                )?;
+                tx.append(NodeKey::ROOT, &[video.key()])?;
+                tx.get_mut::<VideoNode>(video.key())?.media.url = stored_url.clone();
+                Ok(video)
+            })?;
+            let key = video.key();
+            let mut payload = serde_json::json!({
+                "key": key.index(), "kind": "video", "source_id": "video-id", "url": "blob:fresh"
+            });
+            match captured_url {
+                Maybe::Missing => {}
+                Maybe::Null => payload["expected_url"] = serde_json::Value::Null,
+                Maybe::Value(url) => payload["expected_url"] = url.as_str().into(),
+            }
+            let command = decode_command(
+                "group-b.media-upgrade-url",
+                &payload.to_string(),
+                key.generation(),
+                None,
+            )?
+            .expect("upgrade");
+            let (handled, _) = editor.dispatch(&command)?;
+            let video = editor.state().get::<VideoNode>(key).expect("video");
+            if stored_name == captured_name {
+                assert_eq!(handled, Handled::Yes, "{stored_name} captured as stored");
+                assert_eq!(video.media.url, Maybe::Value("blob:fresh".into()));
+            } else {
+                assert_eq!(handled, Handled::No, "{stored_name} captured as {captured_name}");
+                assert_eq!(&video.media.url, stored_url);
+            }
         }
     }
+    Ok(())
 }
 
 #[test]

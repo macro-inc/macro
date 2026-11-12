@@ -52,12 +52,15 @@ fn rerender_by_default() -> bool {
 #[derive(Clone, Debug, serde::Deserialize)]
 pub(super) struct DssUrlIdentity {
     source_id: String,
-    expected_url: String,
+    /// The url captured as stored: Source sets the resolved url over a stored
+    /// null or omitted url too, so the guard keeps those apart from text.
+    #[serde(default)]
+    expected_url: Maybe<String>,
 }
 
 impl DssUrlIdentity {
     pub(super) fn matches(&self, media: &MediaData) -> bool {
-        matches_media_source(media, "dss", &self.source_id, &self.expected_url)
+        matches_media_identity(media, "dss", &self.source_id) && media.url == self.expected_url
     }
 }
 
@@ -67,9 +70,12 @@ pub(super) fn matches_media_source(
     source_id: &str,
     expected_url: &str,
 ) -> bool {
-    media.src_type.as_deref() == Some(source_type)
-        && media.id.as_deref() == Some(source_id)
+    matches_media_identity(media, source_type, source_id)
         && media.url.as_deref() == Some(expected_url)
+}
+
+fn matches_media_identity(media: &MediaData, source_type: &str, source_id: &str) -> bool {
+    media.src_type.as_deref() == Some(source_type) && media.id.as_deref() == Some(source_id)
 }
 
 #[derive(Clone, Debug, serde::Deserialize)]
