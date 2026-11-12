@@ -1746,7 +1746,7 @@ video previews that open the same lightbox as channel media; file chips that
 open the file). A prompt may be files only, including the
 first message in a new conversation. Uploading attachments survive switching the
 agent or opening repository settings; sending clears the attachment previews.
-Expanded queued prompts
+Open queued prompts
 list their attached file names under the text; editing a queued prompt keeps them.
 
 On a local stack, the in-memory agent reads uploaded image attachments from local
@@ -2266,9 +2266,11 @@ must stay hidden; subsequent live messages must still appear.
   smaller of 32% of the viewport and 16rem. Enter saves the edit and closes the
   row (Shift+Enter is a newline); Escape throws the typing away, shows the saved
   text again, and closes the row; both return focus to the composer. Focus leaving
-  the editor any other way (a click elsewhere, or Enter on a touch keyboard, where
-  Enter is a newline) saves too. Opening and closing an untouched row never sends
-  an edit. Each row shows a `Queued` label (with `by {user}` when someone else
+  the editor any other way (a click elsewhere) saves too; on a touch keyboard
+  Enter is a newline and the edit saves when focus leaves. Escape with a mention
+  or emoji menu open closes that menu only. Opening and closing an untouched row
+  never sends an edit, and emptying a row brings its saved text back rather than
+  saving nothing. Each row shows a `Queued` label (with `by {user}` when someone else
   queued it — several users can stack prompts in one session's queue), an
   always-visible remove (`X`) button, and, while a turn is in flight, a `Steer`
   button. Steering moves that message to the front of the queue and cancels the

@@ -98,9 +98,15 @@ test('Up edits the next-to-send message; Enter saves, Escape restores, focus ret
   await expect(queue(page)).not.toContainText('DISCARDED');
   await expect(log(page).locator('li')).toHaveCount(1);
 
-  // Opening and closing an untouched row is not an edit.
+  // Opening and closing an untouched row is not an edit, even for the link
+  // row, whose markdown the editor writes out with different markup.
   await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('ArrowUp');
+  await expect(editor).toContainText('the field guide');
   await page.keyboard.press('Escape');
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('Enter');
   await page.keyboard.press('ArrowUp');
   await composer(page).click();
   await expect(log(page).locator('li')).toHaveCount(1);
@@ -112,6 +118,9 @@ test('tapping a queued message edits it in place and saves on leaving', async ({
 }) => {
   test.skip(!isMobile, 'The touch variant of the composer');
   await page.goto('/queued.html?count=3');
+  await expect(queue(page).getByRole('button', { name: FIRST })).toBeVisible({
+    timeout: 30_000,
+  });
   await queue(page).getByRole('button', { name: FIRST }).click();
   const editor = queue(page).locator('[contenteditable="true"]:visible');
   await expect(editor).toBeFocused();

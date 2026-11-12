@@ -12,6 +12,7 @@ const editor = vi.hoisted(() => ({
   setMarkdown: vi.fn((markdown: string) => {
     editor.markdown = markdown;
   }),
+  inlineMenuOpen: false,
 }));
 const touch = vi.hoisted(() => ({ value: false }));
 vi.mock('@core/mobile/isTouchDevice', () => ({
@@ -47,6 +48,7 @@ vi.mock(
           focus: editor.focus,
           getMarkdown: () => editor.markdown,
           setMarkdown: editor.setMarkdown,
+          isInlineMenuOpen: () => editor.inlineMenuOpen,
         },
       };
       return builder;
@@ -88,6 +90,7 @@ vi.mock('@components/app/split-layout/split-router/mention-links', () => ({
 }));
 vi.mock('@ui', () => ({
   Surface: (props: { children?: JSX.Element }) => props.children,
+  Tooltip: (props: { children?: JSX.Element }) => props.children,
   Button: (props: {
     'aria-label'?: string;
     disabled?: boolean;
@@ -114,6 +117,7 @@ beforeEach(() => {
   editor.markdown = 'Queued request';
   editor.focus.mockClear();
   editor.setMarkdown.mockClear();
+  editor.inlineMenuOpen = false;
   touch.value = false;
 });
 afterEach(() => {
@@ -372,6 +376,12 @@ describe('queued prompt access', () => {
     const textbox = screen.getByRole('textbox');
     expect(textbox.textContent).toBe('Queued request');
     expect(textbox.getAttribute('aria-readonly')).toBe('true');
+    // The read-only editor cannot take focus; the row still holds it so
+    // Escape closes.
+    expect(document.activeElement?.contains(textbox)).toBe(true);
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
+    expect(screen.queryByRole('textbox')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Queued request' }));
     const remove = screen.getByRole('button', {
       name: 'Remove queued message',
     }) as HTMLButtonElement;
@@ -386,7 +396,7 @@ describe('queued prompt access', () => {
     expect(onRemove).not.toHaveBeenCalled();
   });
 
-  it('does not save an emptied row', () => {
+  it('brings the saved text back instead of saving an emptied row', () => {
     const onEdit = vi.fn();
     render(() => (
       <QueuedPrompts
@@ -401,6 +411,55 @@ describe('queued prompt access', () => {
     editor.markdown = '   ';
     editor.change?.(editor.markdown);
     editor.enter?.();
+    expect(onEdit).not.toHaveBeenCalled();
+    expect(editor.setMarkdown).toHaveBeenCalledExactlyOnceWith(
+      'Queued request'
+    );
+    expect(screen.getByRole('button', { name: 'Queued request' })).toBeTruthy();
+  });
+
+  it('leaves Escape to an open mention menu', () => {
+    const onEdit = vi.fn();
+    render(() => (
+      <QueuedPrompts
+        items={[
+          { actionId: 'queued-1', kind: 'prompt', prompt: 'Queued request' },
+        ]}
+        onEdit={onEdit}
+        onRemove={vi.fn()}
+      />
+    ));
+    fireEvent.click(screen.getByRole('button', { name: 'Queued request' }));
+    editor.markdown = 'Queued request @bo';
+    editor.change?.(editor.markdown);
+    editor.inlineMenuOpen = true;
+    expect(editor.escape?.()).toBe(false);
+    expect(editor.setMarkdown).not.toHaveBeenCalled();
+    expect(screen.getByRole('textbox').textContent).toBe('Queued request');
+    editor.inlineMenuOpen = false;
+    expect(editor.escape?.()).toBe(true);
+    expect(editor.setMarkdown).toHaveBeenCalledExactlyOnceWith(
+      'Queued request'
+    );
+  });
+
+  it('does not send an edit for text that only re-serialized', () => {
+    const onEdit = vi.fn();
+    render(() => (
+      <QueuedPrompts
+        items={[{ actionId: 'queued-1', kind: 'prompt', prompt: 'See [a](b)' }]}
+        onEdit={onEdit}
+        onRemove={vi.fn()}
+      />
+    ));
+    // The editor writes the same link out with extra markup.
+    editor.markdown = 'See [a](b "")';
+    fireEvent.click(screen.getByRole('button', { name: 'See [a](b)' }));
+    editor.enter?.();
+    fireEvent.click(screen.getByRole('button', { name: 'See [a](b)' }));
+    editor.escape?.();
+    fireEvent.click(screen.getByRole('button', { name: 'See [a](b)' }));
+    fireEvent.focusOut(screen.getByRole('textbox'));
     expect(onEdit).not.toHaveBeenCalled();
   });
 

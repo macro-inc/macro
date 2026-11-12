@@ -28,7 +28,7 @@ import { singleLineMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import XIcon from '@icon/system/regular/x.svg?component-solid';
 import { stripAgentContext } from '@macro-inc/lexical-core/utils/parsers';
-import { Button, Surface } from '@ui';
+import { Button, Surface, Tooltip } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -225,34 +225,40 @@ function QueuedRow(props: QueuedRowProps) {
       >
         {/* One slot, one text: the preview and the editor take turns in it. */}
         <div class="min-w-0 flex-1">
-          <button
-            ref={preview}
-            type="button"
-            class="flex w-full min-w-0 items-center rounded-xs py-1 text-left text-sm text-ink outline-none focus-visible:ring-1 focus-visible:ring-accent"
-            aria-expanded={props.expanded}
-            aria-controls={editorId}
-            title={isPrompt() ? 'Edit queued message' : 'Open queued action'}
-            hidden={props.expanded}
-            onClick={open}
+          <Tooltip
+            label={isPrompt() ? 'Edit queued message' : 'Open queued action'}
+            as="div"
+            class="min-w-0"
+            disabled={props.expanded}
           >
-            <Show
-              when={previewMarkdown()}
-              fallback={<span class="truncate">{previewLabel()}</span>}
+            <button
+              ref={preview}
+              type="button"
+              class="flex w-full min-w-0 items-center rounded-xs py-1 text-left text-sm text-ink outline-none focus-visible:ring-1 focus-visible:ring-accent"
+              aria-expanded={props.expanded}
+              aria-controls={editorId}
+              hidden={props.expanded}
+              onClick={open}
             >
-              {(markdown) => (
-                // Inert so chips and links never take the click that opens
-                // the row.
-                <div class="min-w-0 flex-1 truncate">
-                  <StaticMarkdown
-                    markdown={markdown()}
-                    theme={singleLineMarkdownTheme}
-                    singleLine
-                    inert
-                  />
-                </div>
-              )}
-            </Show>
-          </button>
+              <Show
+                when={previewMarkdown()}
+                fallback={<span class="truncate">{previewLabel()}</span>}
+              >
+                {(markdown) => (
+                  // Inert so chips and links never take the click that opens
+                  // the row.
+                  <div class="min-w-0 flex-1 truncate">
+                    <StaticMarkdown
+                      markdown={markdown()}
+                      theme={singleLineMarkdownTheme}
+                      singleLine
+                      inert
+                    />
+                  </div>
+                )}
+              </Show>
+            </button>
+          </Tooltip>
           <div
             id={editorId}
             class="max-h-[min(32vh,16rem)] overflow-y-auto overscroll-contain py-1"
@@ -351,9 +357,13 @@ function PromptBody(
     if (props.disabled) return;
     const text = editor.controls.getMarkdown();
     // An emptied row is not an edit to send — the server refuses empty
-    // prompts and "delete the text" has the remove affordance for it.
-    if (text === baseline || text === synced || text.trim().length === 0)
+    // prompts and "delete the text" has the remove affordance for it — so
+    // the saved text comes back.
+    if (text.trim().length === 0) {
+      restore();
       return;
+    }
+    if (text === baseline || text === synced) return;
     synced = text;
     baseline = text;
     // Keep the private prefix on the wire when saving the visible text.
@@ -365,7 +375,7 @@ function PromptBody(
   const restore = () => {
     if (editor.controls.getMarkdown() !== synced)
       editor.controls.setMarkdown(synced);
-    baseline = undefined;
+    baseline = editor.controls.getMarkdown();
     props.onDraftChange(synced);
   };
 
@@ -388,6 +398,8 @@ function PromptBody(
       return true;
     })
     .onEscape(() => {
+      // A mention or emoji menu takes the first Escape for itself.
+      if (editor.controls.isInlineMenuOpen()) return false;
       restore();
       props.onClose();
       return true;
@@ -405,10 +417,15 @@ function PromptBody(
       },
     });
 
+  // A viewer's read-only editor refuses focus; the body takes it instead so
+  // Escape still closes the row.
+  let body: HTMLDivElement | undefined;
   onMount(() => {
     props.registerFocus(() => {
       baseline = editor.controls.getMarkdown();
       editor.controls.focus();
+      const root = editor.lexical.getRootElement();
+      if (!root?.contains(document.activeElement)) body?.focus();
     });
   });
 
@@ -425,11 +442,16 @@ function PromptBody(
     editor.controls.setMarkdown(server);
     props.onDraftChange(server);
     synced = server;
-    baseline = undefined;
+    baseline = editor.controls.getMarkdown();
   });
 
   return (
-    <div class="text-sm text-ink" onFocusOut={save}>
+    <div
+      ref={body}
+      tabindex="-1"
+      class="text-sm text-ink outline-none"
+      onFocusOut={save}
+    >
       <MarkdownShell
         config={editor}
         initialValue={stripAgentContext(props.item.prompt ?? '')}
