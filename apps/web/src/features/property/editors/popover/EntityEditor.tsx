@@ -124,12 +124,15 @@ function EntityEditorSelector(
   const agents = useAgentAssignees(() => isAssignees);
   const team = useTeamMembers(() => isCompanyOwner || isAssignees);
   const { items: people } = useQuickAccessEntities(() => 'USER');
+  const selectedIdsAtOpen = props.draft
+    .selectedRefs()
+    .map((ref) => ref.entity_id);
   const users = createMemo(() => {
     if (!isAssignees) return team.users();
     return scopedUserOptions(
       [...agents(), ...team.users()],
       people().map((item) => item.data),
-      props.draft.selectedRefs().map((ref) => ref.entity_id)
+      selectedIdsAtOpen
     );
   });
   const showRosterStatus = () => {

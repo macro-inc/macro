@@ -1,7 +1,13 @@
 use std::collections::BTreeMap;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::time::Duration;
 
+use tokio_tungstenite::Connector;
+
+use crate::attached_exec::{
+    AttachedExec, ExecCommand, ExecSockets, Socket, attach, exec_secrets, operation_websocket_url,
+};
 use crate::generated::{self, types};
 use crate::model::{
     CreateInstance, HostResources, ImageAliasInfo, ImageInfo, ImageReference, IncusEndpoint,
@@ -26,6 +32,10 @@ const OPERATION_CANCELLED: i64 = 401;
 pub struct IncusClient {
     api: generated::Client,
     timeouts: IncusTimeouts,
+    /// Where exec websockets connect: the API URL, except in tests.
+    websocket_base: String,
+    /// The API's mTLS identity and pinned server, for exec websockets.
+    websocket_tls: Option<Arc<rustls::ClientConfig>>,
 }
 
 /// A state change requested through `PUT /1.0/instances/{name}/state`.
@@ -57,6 +67,7 @@ impl IncusClient {
             &endpoint.server_cert_pem,
         )?;
 
+        let websocket_tls = Arc::new(tls.clone());
         let http = reqwest::Client::builder()
             .tls_backend_preconfigured(tls)
             .connect_timeout(endpoint.timeouts.connect)
@@ -64,11 +75,10 @@ impl IncusClient {
             .build()
             .map_err(|error| IncusError::InvalidCredentials(format!("HTTP client: {error}")))?;
 
-        Ok(Self::with_http_client(
-            &endpoint.url,
-            http,
-            endpoint.timeouts,
-        ))
+        Ok(Self {
+            websocket_tls: Some(websocket_tls),
+            ..Self::with_http_client(&endpoint.url, http, endpoint.timeouts)
+        })
     }
 
     pub(crate) fn with_http_client(
@@ -79,6 +89,16 @@ impl IncusClient {
         Self {
             api: generated::Client::new_with_client(url, http),
             timeouts,
+            websocket_base: url.to_owned(),
+            websocket_tls: None,
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn with_websocket_base(self, websocket_base: String) -> Self {
+        Self {
+            websocket_base,
+            ..self
         }
     }
 
@@ -552,16 +572,76 @@ impl IncusClient {
             .await?
             .into_inner();
         let operation = self.run_operation(started).await?;
-        let exit_code = operation
-            .metadata
-            .as_ref()
-            .and_then(|metadata| metadata.get("return"))
-            .and_then(serde_json::Value::as_i64)
-            .ok_or_else(|| missing("exec return code"))?;
+        let exit_code = exec_return_code(&operation)?;
         if exit_code != 0 {
             return Err(IncusError::ExecFailed { exit_code });
         }
         Ok(())
+    }
+
+    /// Start `command` without a TTY with its stdin, stdout and stderr
+    /// attached. Resolves once the program started; its exit code comes from
+    /// [`AttachedExec::exit`], which waits at most as long as
+    /// [`Self::run_operation`].
+    #[tracing::instrument(name = "incus.exec_attached", skip(self, command), err)]
+    pub async fn exec_attached(
+        &self,
+        name: &InstanceName,
+        command: ExecCommand,
+    ) -> Result<AttachedExec, IncusError> {
+        let body = types::InstanceExecPost {
+            command: Some(command.command),
+            environment: Some(command.environment),
+            user: Some(command.user),
+            group: Some(command.group),
+            cwd: Some(command.cwd),
+            interactive: Some(false),
+            wait_for_websocket: Some(true),
+            record_output: Some(false),
+            ..Default::default()
+        };
+        let started = self
+            .api
+            .instance_exec_post(name.as_str(), None, &body)
+            .await?
+            .into_inner();
+
+        let operation_id = started
+            .metadata
+            .id
+            .clone()
+            .ok_or_else(|| missing("operation id"))?;
+        let secrets = exec_secrets(&started.metadata)?;
+
+        // Incus starts the program once every socket is connected.
+        let sockets = ExecSockets {
+            control: self.connect(&operation_id, &secrets.control).await?,
+            stdin: self.connect(&operation_id, &secrets.stdin).await?,
+            stdout: self.connect(&operation_id, &secrets.stdout).await?,
+            stderr: self.connect(&operation_id, &secrets.stderr).await?,
+        };
+
+        let client = self.clone();
+        let operation = async move {
+            let finished = client.run_operation(started).await?;
+            exec_return_code(&finished)
+        };
+        Ok(attach(sockets, operation))
+    }
+
+    /// Open one exec websocket with the API's TLS identity. The URL carries
+    /// the secret, so it is never logged.
+    async fn connect(&self, operation_id: &str, secret: &str) -> Result<Socket, IncusError> {
+        let url = operation_websocket_url(&self.websocket_base, operation_id, secret)?;
+        let connector = self.websocket_tls.clone().map(Connector::Rustls);
+        let connecting =
+            tokio_tungstenite::connect_async_tls_with_config(url, None, false, connector);
+
+        let (socket, _) = tokio::time::timeout(self.timeouts.connect, connecting)
+            .await
+            .map_err(|_| IncusError::WebSocket("connect timed out".to_owned()))?
+            .map_err(|error| IncusError::WebSocket(error.to_string()))?;
+        Ok(socket)
     }
 
     async fn change_state(
@@ -607,6 +687,16 @@ pub(crate) fn finished_operation(
         Some(_) => Ok(None),
         None => Err(missing("operation status_code")),
     }
+}
+
+/// An exec operation's `metadata.return`.
+fn exec_return_code(operation: &types::Operation) -> Result<i64, IncusError> {
+    operation
+        .metadata
+        .as_ref()
+        .and_then(|metadata| metadata.get("return"))
+        .and_then(serde_json::Value::as_i64)
+        .ok_or_else(|| missing("exec return code"))
 }
 
 fn instance_info(instance: types::Instance) -> Result<InstanceInfo, IncusError> {
