@@ -19,6 +19,8 @@ Document sync: [DSS sync router](architecture/sync-router.md).
 
 Email: [frontend architecture](architecture/email.md) and
 [backend composition and boundaries](architecture/email-backend.md).
+Macro computers: [architecture](architecture/macro-computers.md) and the
+[setup trace runbook](runbooks/computer-setup-traces.md).
 
 Contacts: [disk-backed directory implementation plan](design/disk-backed-contacts.md),
 [approved name-focused search design](design/contact-name-search-proposal.md) (implementation in progress).

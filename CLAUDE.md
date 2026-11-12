@@ -27,6 +27,7 @@ patterns in older code.
 | `crates/` | Reusable backend libraries, domain services, and adapters. |
 | `crates/macro_db_client/migrations/` | MacroDB PostgreSQL migrations. |
 | `infra/` | Deployment definitions and local infrastructure. |
+| `agent-teammates/` | Agents that work in Macro as their own users: the `muppet` library and a `starter-agent` template. Outside the root workspace and its checks. |
 | `tooling/` | Development tools, scripts, and imported `just` recipes. |
 | `docs/` | Development guides, architecture, designs, runbooks, and the browser agent guide; see [the index](docs/README.md). |
 

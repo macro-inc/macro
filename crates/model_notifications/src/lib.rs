@@ -10,8 +10,9 @@ mod metadata;
 mod unsubscribe;
 pub use device::DeviceType;
 pub use metadata::{
-    AgentSessionMentionedMetadata, AgentSessionNotificationRef, AgentSessionOriginParent,
-    AgentSessionSettledMetadata, AgentSessionWaitingForInputMetadata, AiResponseMetadata,
+    AgentProvider, AgentSessionMentionedMetadata, AgentSessionNotificationRef,
+    AgentSessionOriginParent, AgentSessionSettledMetadata, AgentSessionWaitingForInputMetadata,
+    AgentSignInExpiryMetadata, AgentSignInExpiryStage, AiResponseMetadata,
     CalendarEventJoinRequestMetadata, CalendarEventReminderMetadata, CallStartedMetadata,
     ChannelAccessRequestedMetadata, ChannelInviteMetadata, ChannelMentionMetadata,
     ChannelMessageReactionMetadata, ChannelMessageSendMetadata, ChannelReplyMetadata, ChannelType,
@@ -285,6 +286,10 @@ define_notif_event!(
         ChannelAccessRequested(ChannelAccessRequestedMetadata),
         /// One of the user's routines finished a run, successfully or not.
         RoutineRunFinished(RoutineRunFinishedMetadata),
+
+        /// An agent's sign-in on one of the team's Macro computers is about
+        /// to expire, expired, or was rejected.
+        AgentSignInExpiry(AgentSignInExpiryMetadata),
         /// A runtime's owner removed the user's access to it, and agents of
         /// theirs living there stopped.
         RuntimeAccessRemoved(RuntimeAccessRemovedMetadata),
@@ -359,6 +364,7 @@ impl NotificationTitle for NotifEvent {
             }
             NotifEvent::AgentSessionSettled(m) => m.format_title(sender_id),
             NotifEvent::RoutineRunFinished(m) => m.format_title(sender_id),
+            NotifEvent::AgentSignInExpiry(m) => m.format_title(sender_id),
             NotifEvent::RuntimeAccessRemoved(m) => m.format_title(sender_id),
             NotifEvent::AgentSessionWaitingForInput(m) => m.format_title(sender_id),
             NotifEvent::AgentSessionMentioned(m) => m.format_title(sender_id),
@@ -430,6 +436,7 @@ impl NotificationTitle for NotifEvent {
             NotifEvent::GithubPrReview(github_pr_review) => github_pr_review.format_body(sender_id),
             NotifEvent::AgentSessionSettled(m) => m.format_body(sender_id),
             NotifEvent::RoutineRunFinished(m) => m.format_body(sender_id),
+            NotifEvent::AgentSignInExpiry(m) => m.format_body(sender_id),
             NotifEvent::RuntimeAccessRemoved(m) => m.format_body(sender_id),
             NotifEvent::AgentSessionWaitingForInput(m) => m.format_body(sender_id),
             NotifEvent::AgentSessionMentioned(m) => m.format_body(sender_id),

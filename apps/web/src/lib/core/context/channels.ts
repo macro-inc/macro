@@ -6,6 +6,7 @@ import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
 import { ChannelTypeEnum } from '@service-storage/client';
 import type { ApiActivity as ChannelsActivity } from '@service-storage/generated/schemas/apiActivity';
 import { type Accessor, createMemo } from 'solid-js';
+import { unwrap } from 'solid-js/store';
 import { createAssertedContextProvider } from './createContext';
 import { useIsAuthenticated, useUserId } from './user';
 
@@ -25,21 +26,20 @@ export const [ChannelsContextProvider, useChannelsContext] =
     const channelsQuery = useListChannelsQuery(enabled);
     const activityQuery = useChannelsActivityQuery(enabled);
 
+    // Raw rows: walking them through the store creates a signal per field.
     const channels = () =>
-      enabled() && queryReadyGate(channelsQuery) ? channelsQuery.data : [];
+      enabled() && queryReadyGate(channelsQuery)
+        ? unwrap(channelsQuery.data)
+        : [];
     const activity = () =>
       enabled() && queryReadyGate(activityQuery) ? activityQuery.data : [];
 
-    const channelsById = createMemo(() => {
-      if (!enabled() || !queryReadyGate(channelsQuery)) return {};
-      return channelsQuery.data.reduce<Record<string, ApiChannelWithLatest>>(
-        (acc, ch) => {
-          acc[ch.id] = ch;
-          return acc;
-        },
-        {}
-      );
-    });
+    const channelsById = createMemo(() =>
+      channels().reduce<Record<string, ApiChannelWithLatest>>((acc, ch) => {
+        acc[ch.id] = ch;
+        return acc;
+      }, {})
+    );
 
     const activityByChannelId = createMemo(() => {
       if (!enabled() || !queryReadyGate(activityQuery)) return {};

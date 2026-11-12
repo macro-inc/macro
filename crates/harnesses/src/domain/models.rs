@@ -2,7 +2,10 @@
 
 use bot_id::BotId;
 use chrono::{DateTime, Utc};
+use computer_id::ComputerId;
 use harness_id::HarnessId;
+use macro_user_id::user_id::MacroUserIdStr;
+use pairing_id::PairingId;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -97,6 +100,83 @@ pub struct Harness {
     pub connected: bool,
     /// When the daemon last attached a runtime connection.
     pub last_connected_at: Option<DateTime<Utc>>,
+    /// The Macro computer (hosted VM) this harness runs on; absent for a
+    /// machine the user paired themselves.
+    #[serde(default)]
+    pub computer_id: Option<ComputerId>,
+    /// How Claude Code on this machine is paid for, derived from whether
+    /// it has an active Claude login. Only meaningful for Macro computers.
+    #[serde(default)]
+    pub claude_mode: ClaudeMode,
+}
+
+/// How Claude Code on a Macro computer is paid for: its own Claude account
+/// when it has an active Claude login, otherwise Macro credits.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum ClaudeMode {
+    /// Macro credits, through Macro's Anthropic gateway.
+    #[default]
+    MacroCredits,
+    /// A Claude account signed in on the computer.
+    OwnAccount,
+}
+
+impl ClaudeMode {
+    /// Storage representation.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::MacroCredits => "macro_credits",
+            Self::OwnAccount => "own_account",
+        }
+    }
+}
+
+impl std::str::FromStr for ClaudeMode {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "macro_credits" => Ok(Self::MacroCredits),
+            "own_account" => Ok(Self::OwnAccount),
+            other => Err(format!("unknown claude mode: {other}")),
+        }
+    }
+}
+
+/// What a caller wants to do with a harness.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HarnessPermission {
+    /// Read the runtime and watch its screen.
+    View,
+    /// Run agents or control the runtime screen.
+    Use,
+    /// Change runtime settings or revoke it.
+    Manage,
+}
+
+/// A pre-approved pairing for a Macro computer, minted by the control plane.
+#[derive(Debug, Clone)]
+pub struct CreateHostedPairing {
+    /// Team the computer belongs to: its owner and admins own the harness
+    /// and its members use it.
+    pub team_id: Uuid,
+    /// Harness display name.
+    pub name: String,
+    /// The team admin who bought the computer.
+    pub created_by: MacroUserIdStr<'static>,
+    /// The computer the harness runs on.
+    pub computer_id: ComputerId,
+}
+
+/// The claim material a Macro computer's macrod enrolls with.
+#[derive(Debug, Clone)]
+pub struct HostedPairing {
+    /// Pairing id the device secret claims.
+    pub pairing_id: PairingId,
+    /// Claim credential; returned only here and never stored raw.
+    pub device_secret: DeviceSecret,
 }
 
 /// Sent by a daemon reading its own harness while it holds a runtime connection,
@@ -123,7 +203,7 @@ pub struct CreatePairingRequest {
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct CreatedPairing {
     /// Pairing id used to poll for the claim.
-    pub pairing_id: Uuid,
+    pub pairing_id: PairingId,
     /// Human-readable code the user confirms in the web app, `XXXX-XXXX`.
     pub code: String,
     /// Claim credential the daemon must present. Shown only here.
@@ -192,7 +272,7 @@ pub enum ClaimOutcome {
     /// The user has not approved the pairing yet; poll again.
     Pending,
     /// The pairing was approved; the credential is released exactly once.
-    Claimed(ClaimedPairing),
+    Claimed(Box<ClaimedPairing>),
 }
 
 /// The credential released to the daemon when a pairing is claimed.
@@ -265,4 +345,32 @@ pub struct PairingClaimFacts {
     pub expires_at: DateTime<Utc>,
     /// The harness created at approval, when approved or claimed.
     pub harness_id: Option<HarnessId>,
+}
+
+/// Plaintext enrollment credential; deliberately requires explicit exposure.
+#[derive(Clone)]
+pub struct DeviceSecret(zeroize::Zeroizing<String>);
+
+impl DeviceSecret {
+    /// Take ownership of a newly minted credential.
+    pub fn new(secret: String) -> Self {
+        Self(zeroize::Zeroizing::new(secret))
+    }
+
+    /// Borrow the plaintext for enrollment or hashing.
+    pub fn expose(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
+impl std::fmt::Debug for DeviceSecret {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("**redacted**")
+    }
+}
+
+impl std::fmt::Display for DeviceSecret {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("**redacted**")
+    }
 }

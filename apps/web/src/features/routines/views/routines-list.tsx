@@ -1,3 +1,4 @@
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { Accessor } from 'solid-js';
 import {
@@ -21,7 +22,12 @@ export function RoutinesListView(props: {
   /** Suggestions: a row above the list and the Discover tab. */
   discover?: RoutinesDiscover;
 }) {
-  const rows = createRoutineRows(props.source, props.userId);
+  // A phone lists top-level routines only; what they created is on their pages.
+  const rows = createRoutineRows(
+    props.source,
+    props.userId,
+    () => !isTouchDevice()
+  );
   return (
     <RoutinesList
       showTitle={props.showTitle}

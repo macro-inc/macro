@@ -2,15 +2,16 @@ import { isBotPrincipalId } from '@core/constant/macroAgent';
 import type { IUser } from '@core/user';
 import { idToDisplayName, idToEmail } from '@core/user/util';
 
-/** Keep selected users available without adding other non-team people. */
+/** Keep initially selected users available to remove and re-add without
+ * broadening the roster to other non-team people. */
 export function scopedUserOptions(
   users: IUser[],
   otherUsers: IUser[],
-  selectedIds: readonly string[]
+  selectedAtOpenIds: readonly string[]
 ): IUser[] {
   const options = [...users];
 
-  for (const id of selectedIds) {
+  for (const id of selectedAtOpenIds) {
     const contact = otherUsers.find((user) => user.id === id);
     const member = users.find((user) => user.id === id);
     const user = contact ??
