@@ -30,6 +30,8 @@ import {
 import { useChannelRailItemState } from './hooks/useChannelRailState';
 import { ChannelLabelMenuItems } from './next/ChannelLabelRows';
 
+import { JoinChannelButton } from './next/JoinChannelButton';
+
 /**
  * Drag a channel between labels. Registered once per Channels-section row: a
  * row is the drag source, and also a drop target that means "into this row's
@@ -100,10 +102,14 @@ export function ChannelOption(props: {
   labelId?: string;
   /** Make an eligible named channel draggable between sections. */
   draggable?: boolean;
+  /** Team context for cross-team discovery results. */
+  teamName?: string;
 }) {
   const rail = useChannelsRail();
   const rowId = () => props.rowId ?? rowKeyForChannel(props.channel.id);
   const item = useChannelRailItemState(() => props.channel.id, rowId);
+  const unjoined = () =>
+    rail.sectionsEnabled() && props.channel.isParticipant === false;
   const timestamp = () =>
     props.channel.latestRootMessage?.createdAt ?? props.channel.updatedAt;
   // Whether a row participates in drag and drop is fixed per mount.
@@ -187,11 +193,36 @@ export function ChannelOption(props: {
           <ViewSidebar.Icon>
             <ChannelAvatar channel={props.channel} />
           </ViewSidebar.Icon>
-          <span class="min-w-0 flex-1 truncate">{props.channel.name}</span>
+          <span
+            class={cn(
+              'min-w-0 flex-1 truncate',
+              unjoined() && 'text-ink-extra-muted'
+            )}
+          >
+            {props.channel.name}
+          </span>
+          <Show when={props.teamName}>
+            {(name) => (
+              <Tooltip
+                label={name()}
+                class="max-w-24 truncate text-xs text-ink-extra-muted"
+              >
+                {name()}
+              </Tooltip>
+            )}
+          </Show>
+          <Show when={unjoined()}>
+            <JoinChannelButton channelId={props.channel.id} hoverOnly />
+          </Show>
           <span class="flex shrink-0 items-center gap-2">
             {/* The hover timestamp leads so call and unread indicators stay put. */}
             <Show
-              when={!item().incomingCallId && !item().callStatus && timestamp()}
+              when={
+                !unjoined() &&
+                !item().incomingCallId &&
+                !item().callStatus &&
+                timestamp()
+              }
             >
               {(value) => (
                 <span class="relative hidden shrink-0 group-hover/channel-option:block touch:hidden">
@@ -225,7 +256,7 @@ export function ChannelOption(props: {
             >
               <ChannelLiveCallBadge channelId={props.channel.id} />
             </Show>
-            <Show when={item().unread}>
+            <Show when={!unjoined() && item().unread}>
               <span
                 aria-label="Unread"
                 class="size-2 shrink-0 rounded-full bg-accent"

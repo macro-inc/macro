@@ -13,6 +13,7 @@ import { createActivityTracker } from '@channel/activity-tracker';
 import { CallChatEmptyState } from '@channel/Call/chat/components/CallChatEmptyState';
 import { useStartChannelCall } from '@channel/Call/use-start-channel-call';
 import { DebugSuspense } from '@channel/DebugSuspense';
+import { groupChatName, isNamedForPeople } from '@channel/group-chat-name';
 import {
   ChannelInput,
   type ChannelInputProps,
@@ -496,12 +497,15 @@ export function Channel(props: ChannelProps) {
   const channelType = useChannelType(props.channelId);
   const { popoverSplit } = useSplitLayout();
 
-  // Placeholder name: channels render as "#name"; a 1:1 DM named "First Last"
-  // shortens to the first name, and group DMs like "A, B" keep their full name.
+  // Placeholder name: channels render as "#name", a group chat named for its
+  // people by the shortened list, and a 1:1 DM "First Last" by the first name.
   const inputPlaceholderName = () => {
     const name = channelName();
     if (!name) return undefined;
     if (channel()?.agent_dm) return name;
+    if (channelType() === ChannelTypeEnum.Private && isNamedForPeople(name)) {
+      return groupChatName(name);
+    }
     if (channelType() !== ChannelTypeEnum.DirectMessage) return `#${name}`;
     const parts = name.split(' ');
     return parts.length === 2 && !parts[0]?.endsWith(',') ? parts[0] : name;

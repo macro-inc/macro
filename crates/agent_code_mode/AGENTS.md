@@ -57,8 +57,9 @@ stacks. Process isolation belongs to
 - `src/domain/ui_commands.rs`: a running execution's `macro.ui.open`.
   `POST /agent-sessions/{id}/ui-commands` admits the same way connected apps
   do, then sends only for a turn a person prompted from an app tab
-  (`TurnPrompter.client`); system turns, routines, triggers and channel
-  mentions answer `no_client`. The path must match `navigable_routes.json`,
+  (`TurnPrompter.client`); system turns, routines, triggers, channel
+  mentions and prompts typed on mobile (the web app sends no tab there)
+  answer `no_client`. The path must match `navigable_routes.json`,
   generated from the web route table by
   `apps/web/src/features/agent-navigation/core/navigable-routes.test.tsx`
   (`UPDATE_AGENT_ROUTE_TABLE=1` rewrites it; never edit it by hand). The
@@ -73,7 +74,8 @@ stacks. Process isolation belongs to
   gateway receipt.
 - `src/domain/documentation.rs`: the build-time SDK catalog (per entity a
   `@routing` description, an `@agent` guide and an index; a reference per
-  symbol). Jev ranks entities on their descriptions, in parallel calls of 32
+  symbol). Jev ranks entities on their descriptions against the latest and
+  previous user message (`cognition::domain::RoutingRequest`), in parallel calls of 32
   (`cognition::domain::decide_in_batches`; a late or failed call loses only
   its own entities), for the per-turn prompt (≥ 0.5, top four, 48 KiB) or a
   `DescribeCodeTools` `task` (every relevant entity, 32 KiB); `ReadCodeDocs`

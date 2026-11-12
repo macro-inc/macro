@@ -72,6 +72,7 @@ impl ReqwestUnfurlFetcher {
         let client = reqwest::Client::builder()
             .redirect(reqwest::redirect::Policy::none())
             .dns_resolver(Arc::new(PrivateIpFilteringResolver))
+            .no_proxy()
             .timeout(REQUEST_TIMEOUT)
             .connect_timeout(CONNECT_TIMEOUT)
             .user_agent(USER_AGENT)

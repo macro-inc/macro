@@ -20,7 +20,7 @@
 .homepage-testimonial-name { color: var(--color-ink); font-weight: 500; }
 .homepage-blog { padding: 24px 0 20px; border-top: 1px solid var(--color-edge-muted); }
 .homepage-blog > header { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 16px; }
-.homepage-blog h2, .homepage-blog > header > a { font-family: 'Inter Variable', var(--font-sans); font-size: 13px; font-weight: 400; line-height: 20px; letter-spacing: normal; color: var(--color-ink-muted); }
+.homepage-blog h2, .homepage-blog > header > a { font-family: 'Inter Variable', var(--font-sans); font-size: 13px; font-weight: 370; line-height: 20px; letter-spacing: normal; color: var(--color-ink-muted); }
 .homepage-blog h2 { margin: 0; }
 .homepage-blog > header > a { display: inline-flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .homepage-blog > header svg { width: 16px; height: 16px; }
@@ -32,7 +32,7 @@
 .homepage-blog-track a { display: flex; align-items: center; gap: 12px; min-height: 48px; text-decoration: none; color: inherit; }
 .homepage-blog-icon { --a0: var(--color-ink-muted); display: grid; flex: 0 0 22px; place-items: center; width: 22px; height: 22px; color: var(--color-ink-muted); }
 .homepage-blog-icon svg { width: 22px; height: 22px; }
-.homepage-blog h3 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: 'Inter Variable', var(--font-sans); font-size: 16px; font-weight: 400; line-height: 24px; letter-spacing: -.015em; margin: 0; }
+.homepage-blog h3 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: 'Inter Variable', var(--font-sans); font-size: 16px; font-weight: 370; line-height: 24px; letter-spacing: -.015em; margin: 0; }
 .homepage-blog-track a:hover h3 { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 4px; }
 .homepage-blog-controls { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
 .homepage-blog-controls button { display: grid; place-items: center; width: 32px; height: 32px; border: 1px solid var(--color-edge-muted); border-radius: 50%; background: transparent; color: var(--color-ink-muted); }
