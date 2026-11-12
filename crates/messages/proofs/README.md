@@ -194,3 +194,69 @@ The post-append interval omits the time already spent holding the lock inside
 append execution; the queue-inclusive estimate includes time before the lock
 was acquired. Keep these instrumented diagnostics separate from the
 uninstrumented repository latency comparison.
+
+## Fixed-arrival mixed writes
+
+The ignored `repository_open_loop_write_latency` test runs on the explicit
+sixteen-worker runtime with sixteen database connections. Run it in release
+mode after compilation and other database work have stopped:
+
+```sh
+nix develop --command bash -c 'unset SQLX_OFFLINE; cargo test -p messages --all-features --release repository_open_loop_write_latency -- --ignored --nocapture'
+```
+
+Each of three repetitions compares `before` and `after` at total offered rates
+of 50, 200, 1,000 and 3,000 writes per second, first in one channel and then
+across sixteen channels. Every case contains 2,000 measured writes with an even
+mix of create, edit, react and delete. Operations rotate through channels
+independently, so a channel is not assigned only one operation. Each case uses
+fresh targets and an unmeasured warmup on the same isolated test database.
+
+The arrival timer runs independently of completions and the sixteen-worker
+limit. It retains every original arrival time, emits late arrivals without
+skipping them, and lets them queue for a worker. `arrival_*` measures from that
+scheduled arrival through completion, including scheduler lateness and queue
+wait, to avoid coordinated omission. `service_*` starts after worker admission.
+`achieved_ops_s` includes draining all scheduled writes; it is distinct from the
+offered arrival rate. No requests or latency samples are discarded.
+
+## Synthetic pre-commit delay
+
+The ignored `repository_commit_delay_write_latency` test holds each transaction
+for a requested two or five milliseconds after its last SQL statement and
+before `COMMIT`, equally for `before` and `after`:
+
+```sh
+nix develop --command bash -c 'unset SQLX_OFFLINE; cargo test -p messages --all-features --release repository_commit_delay_write_latency -- --ignored --nocapture'
+```
+
+This uses benchmark-only copies of the pinned old and current write methods
+in `src/outbound/pg_message_repo/test/benchmark/delayed.rs`. Their SQL and
+hydration paths are unchanged. Only these copies insert the async timer;
+production methods and the ordinary benchmark baseline have no delay hook.
+Verify the copies before running the synthetic cases:
+
+```sh
+python3 crates/messages/proofs/check_delayed_writers.py
+```
+
+This audit compares method arguments, return types and complete Rust body tokens,
+ignoring comments and whitespace while preserving string literals byte for byte.
+It permits only the measured timer immediately before `COMMIT` and the extra
+returned duration. It also verifies the old baseline against `354da677b5`, with
+its required empty sequence metadata and pinned hydration lookup.
+
+For `after`, this artificial interval holds the channel counter lock. It is a
+controlled stress case, not a measurement of the database's actual commit time.
+
+Each of three repetitions uses sixteen workers and connections in one channel,
+with 2,000 measured mixed writes per case. Closed-loop cases report the write
+rate and latency ceiling. Open-loop cases offer 20, 50, 100 and 200 total writes
+per second and retain the same scheduled-arrival latency accounting described
+above. Each case has an unmeasured warmup and fresh message targets.
+
+The output includes `requested_hold_ms` and the actual timer interval's p50,
+p95 and p99. Timer resolution and scheduling can make the observed hold longer
+than requested; use the reported actual interval when interpreting the result.
+Query tracing is disabled. These synthetic results remain separate from both
+the ordinary latency comparison and the traced commit-phase diagnostic.

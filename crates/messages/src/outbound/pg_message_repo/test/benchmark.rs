@@ -7,6 +7,9 @@
 //! boundaries. Main measurements disable query logging; the separate ignored
 //! commit-phase diagnostic explicitly enables it and is not a baseline result.
 
+mod delayed;
+mod open_loop;
+
 use super::*;
 use sqlx::ConnectOptions;
 use std::{
