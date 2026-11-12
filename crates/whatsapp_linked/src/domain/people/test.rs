@@ -178,3 +178,38 @@ fn people_and_members_show_the_owners_picture_stored_under_any_of_their_jids() {
     assert_eq!(members.picture(ANA_LID), Some(ana_picture));
     assert_eq!(members.picture(BEN_LID), None);
 }
+
+#[test]
+fn a_direct_chats_peer_has_the_chats_picture_under_any_jid_and_its_owner_never_does() {
+    let chat_picture = Uuid::from_u128(902);
+    let owner = "macro|owner@example.com";
+    let names = ChatNames::new(
+        HashMap::new(),
+        HashMap::from([(phone("5550001"), chat_picture)]),
+        vec![
+            // The peer wrote by LID only.
+            SeenPerson {
+                person_id: Uuid::from_u128(1),
+                user_id: None,
+                whatsapp_name: Some("Ana".to_owned()),
+                jids: vec![ANA_LID.to_owned()],
+            },
+            SeenPerson {
+                person_id: Uuid::from_u128(2),
+                user_id: Some(owner.to_owned()),
+                whatsapp_name: Some("Me".to_owned()),
+                jids: vec![phone("5550009")],
+            },
+        ],
+    )
+    .in_direct_chat(DirectPeer {
+        remote_id: phone("5550001"),
+        owner: owner.to_owned(),
+    });
+
+    let people = names.people(None);
+
+    assert_eq!(people.person(&stored(1)).picture_file_id, Some(chat_picture));
+    assert_eq!(people.get(ANA_LID).picture_file_id, Some(chat_picture));
+    assert_eq!(people.person(&stored(2)).picture_file_id, None);
+}

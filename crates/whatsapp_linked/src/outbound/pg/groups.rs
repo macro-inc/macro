@@ -1,7 +1,7 @@
 //! Group metadata observed by accounts, and membership reconciliation.
 
 use super::*;
-use crate::domain::people::{ChatNames, ChatRoster, SeenPerson};
+use crate::domain::people::{ChatNames, ChatRoster, DirectPeer, SeenPerson};
 use crate::domain::ports::{GroupRepository, StoredChat, VisibleAdoption};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
@@ -406,11 +406,16 @@ impl PgWhatsAppRepository {
         .into_iter()
         .map(|row| (row.chat_jid, row.name))
         .collect();
+        // A direct chat's picture is stored under its remote id alone.
+        let direct = chat.kind == ExternalChatKind::Direct;
+        if direct {
+            named.push(chat.remote_id.clone());
+        }
         let pictures = sqlx::query!(
             r#"SELECT p.jid, p.static_file_id AS "static_file_id!" FROM whatsapp_profile_picture p
             JOIN whatsapp_linked_account o ON o.id = p.account_id
             JOIN external_chat g ON g.user_id = o.user_id
-            WHERE g.id = $1 AND p.state = 'ready' AND p.static_file_id IS NOT NULL AND p.jid = ANY($2)"#,
+            WHERE g.id = $1 AND p.static_file_id IS NOT NULL AND p.jid = ANY($2)"#,
             chat.id,
             &named
         )
@@ -420,7 +425,15 @@ impl PgWhatsAppRepository {
         .into_iter()
         .map(|row| (row.jid, row.static_file_id))
         .collect();
-        Ok(ChatNames::new(contacts, pictures, seen))
+        let names = ChatNames::new(contacts, pictures, seen);
+        Ok(if direct {
+            names.in_direct_chat(DirectPeer {
+                remote_id: chat.remote_id.clone(),
+                owner: chat.user_id.clone(),
+            })
+        } else {
+            names
+        })
     }
 }
 
@@ -594,19 +607,12 @@ impl GroupRepository for PgWhatsAppRepository {
 
     async fn pictures(&self, chats: &[ChatRef]) -> ExternalChatResult<Vec<Option<Uuid>>> {
         let ids: Vec<Uuid> = chats.iter().map(|chat| chat.id).collect();
-        // A direct chat's person may be stored under their other JID.
         let rows = sqlx::query!(
-            r#"SELECT g.id AS "id!", picture.static_file_id AS "static_file_id?"
+            r#"SELECT g.id AS "id!", p.static_file_id AS "static_file_id!"
             FROM external_chat g
             JOIN whatsapp_linked_account o ON o.user_id = g.user_id
-            JOIN LATERAL (SELECT p.static_file_id FROM whatsapp_profile_picture p
-              WHERE p.account_id = o.id AND p.state = 'ready' AND p.static_file_id IS NOT NULL
-                AND (p.jid = g.remote_id OR p.jid IN (
-                  SELECT other.jid FROM whatsapp_identity_alias remote
-                  JOIN whatsapp_identity_alias other ON other.chat_id = remote.chat_id AND other.person_id = remote.person_id
-                  WHERE remote.chat_id = g.id AND remote.jid = g.remote_id))
-              ORDER BY p.jid = g.remote_id DESC LIMIT 1) picture ON true
-            WHERE g.id = ANY($1) AND g.provider = 'whatsapp'"#,
+            JOIN whatsapp_profile_picture p ON p.account_id = o.id AND p.jid = g.remote_id
+            WHERE g.id = ANY($1) AND g.provider = 'whatsapp' AND p.static_file_id IS NOT NULL"#,
             &ids
         )
         .fetch_all(&self.pool)
@@ -617,7 +623,7 @@ impl GroupRepository for PgWhatsAppRepository {
             .map(|chat| {
                 rows.iter()
                     .find(|row| row.id == chat.id)
-                    .and_then(|row| row.static_file_id)
+                    .map(|row| row.static_file_id)
             })
             .collect())
     }
