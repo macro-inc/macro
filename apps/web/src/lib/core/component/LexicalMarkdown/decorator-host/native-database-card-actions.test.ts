@@ -35,31 +35,36 @@ const CARD = {
   previewBox: ['100%', '400px'],
 };
 
-function stored() {
+type NativeCardHost = ReturnType<
+  typeof createNativeDocumentCardContext
+>['host'];
+
+const PARAGRAPH = { type: 'paragraph', version: 1, children: [] };
+
+function stored(lead: object = PARAGRAPH) {
   return JSON.stringify({
     root: {
       type: 'root',
       version: 1,
       // Native keeps a paragraph after a trailing card; store one so both
       // engines start from the same blocks.
-      children: [
-        { type: 'paragraph', version: 1, children: [] },
-        CARD,
-        { type: 'paragraph', version: 1, children: [] },
-      ],
+      children: [lead, CARD, PARAGRAPH],
     },
   });
 }
 
 /** The document Source stores after running a card action body. */
-function source(action: (card: DocumentCardNode) => void) {
+function source(
+  action: (card: DocumentCardNode) => void,
+  lead: object = PARAGRAPH
+) {
   const editor = createEditor({
     nodes: [DocumentCardNode, DocumentMentionNode],
     onError(error) {
       throw error;
     },
   });
-  editor.setEditorState(editor.parseEditorState(stored()));
+  editor.setEditorState(editor.parseEditorState(stored(lead)));
   editor.update(
     () => {
       const card = $getRoot().getChildren().find($isDocumentCardNode);
@@ -92,17 +97,24 @@ function imported(state: string) {
   }
 }
 
-/** Session node ids are minted per session, so they never match across two. */
+/**
+ * Session node ids (`$.id`) are minted per session, so they never match across
+ * two. Every other node state slot stays in the comparison.
+ */
 function withoutIds(state: string): unknown {
-  return JSON.parse(state, (key, value) => (key === '$' ? undefined : value));
+  return JSON.parse(state, (key, value: unknown) => {
+    if (key !== '$' || typeof value !== 'object' || value === null)
+      return value;
+    return Object.fromEntries(
+      Object.entries(value).filter(([slot]) => slot !== 'id')
+    );
+  });
 }
 
 /** The document native stores after running a card action through its host. */
 function native(
-  action: (
-    host: ReturnType<typeof createNativeDocumentCardContext>['host'],
-    key: string
-  ) => void
+  action: (host: NativeCardHost, key: string) => void,
+  lead: object = PARAGRAPH
 ) {
   const fixture = nativeSurface();
   const context = createRoot((dispose) => ({
@@ -111,7 +123,7 @@ function native(
   }));
   registerCardViews(fixture.view.registry);
   try {
-    fixture.port.setState(stored());
+    fixture.port.setState(stored(lead));
     context.bindView(fixture.view);
     const card = [...fixture.view.mirror.values()].find(
       (node) => node.type === 'document-card'
@@ -127,7 +139,8 @@ function native(
 }
 
 // DatabaseCard.tsx onToggle in an editable document converts the card to a
-// mention with the caret after it; Source does it with $convertCardToMention.
+// mention; Source does it with $convertCardToMention. Only the stored document
+// is compared: the selection selectEnd leaves is not asserted.
 test('database card toggle stores what Source stores', () => {
   const expected = source((card) => {
     $convertCardToMention(card).selectEnd();
@@ -157,4 +170,38 @@ test('the comparison rejects a native result that differs from Source', () => {
   expect(
     native((host, key) => host.setBlockParams(key, { view: 'calendar' }))
   ).not.toEqual(moved);
+});
+
+// Node state other than the session id stays compared. Both engines drop a
+// card's own node state (DocumentCardNode.exportJSON does not write it), so
+// the state rides on the paragraph beside the card.
+const STATEFUL = { ...PARAGRAPH, $: { probe: 'kept' } };
+
+test.each([
+  [
+    'toggle',
+    (host: NativeCardHost, key: string) => host.convertToMention(key, true),
+    (card: DocumentCardNode) => {
+      $convertCardToMention(card).selectEnd();
+    },
+  ],
+  [
+    'location change',
+    (host: NativeCardHost, key: string) =>
+      host.setBlockParams(key, { view: 'board' }),
+    (card: DocumentCardNode) => card.setBlockParams({ view: 'board' }),
+  ],
+] as const)(
+  'database card %s keeps sibling node state as Source does',
+  (_, onNative, onSource) => {
+    expect(native(onNative, STATEFUL)).toEqual(source(onSource, STATEFUL));
+  }
+);
+
+// Control: a node state slot one engine lacks fails the comparison.
+test('the comparison rejects a node state difference', () => {
+  const params = { view: 'board' };
+  expect(
+    native((host, key) => host.setBlockParams(key, params), STATEFUL)
+  ).not.toEqual(source((card) => card.setBlockParams(params)));
 });
