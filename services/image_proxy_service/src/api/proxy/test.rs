@@ -63,10 +63,19 @@ fn test_allows_octet_stream_content_type() {
 #[test]
 fn test_allows_raster_image_content_types() {
     for content_type in [
+        "image/x-png",
+        "image/x-ms-bmp",
+        "image/jpg",
+        "image/pjpeg",
+        "image/apng",
         "image/gif",
         "image/webp",
         "image/avif",
         "image/bmp",
+        "image/tiff",
+        "image/heic",
+        "image/heif",
+        "image/jxl",
         "image/x-icon",
         "image/vnd.microsoft.icon",
         "IMAGE/PNG",
@@ -96,7 +105,7 @@ fn test_rejects_non_raster_image_content_types() {
 
 #[test]
 fn test_non_raster_content_type_is_unsupported_media_type() {
-    let response = ProxyError::NotAnImage("image/svg+xml".into()).into_response();
+    let response = ProxyError::UnsupportedMediaType("image/svg+xml".into()).into_response();
     assert_eq!(response.status(), StatusCode::UNSUPPORTED_MEDIA_TYPE);
 }
 
@@ -177,7 +186,7 @@ fn test_is_private_ip_public() {
 fn test_is_retryable_without_ua() {
     // UA-rejection symptoms — worth a no-UA retry.
     assert!(ProxyError::UpstreamStatus(StatusCode::FORBIDDEN).is_retryable_without_ua());
-    assert!(ProxyError::NotAnImage("text/html".into()).is_retryable_without_ua());
+    assert!(ProxyError::UnsupportedMediaType("text/html".into()).is_retryable_without_ua());
     // Not UA-related — retrying without a UA wouldn't help.
     assert!(!ProxyError::UpstreamTimeout("timed out".into()).is_retryable_without_ua());
     assert!(!ProxyError::UpstreamConnect("refused".into()).is_retryable_without_ua());

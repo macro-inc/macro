@@ -81,7 +81,7 @@ pub enum ProxyError {
     UpstreamRedirect(String),
     UpstreamNetwork(String),
     UpstreamStatus(reqwest::StatusCode),
-    NotAnImage(String),
+    UnsupportedMediaType(String),
     ImageTooLarge { content_length: u64 },
     ResponseBuild(axum::http::Error),
 }
@@ -92,7 +92,10 @@ impl ProxyError {
     /// UA. Network/timeout/redirect errors aren't UA-related, so we don't retry
     /// those (it would just double latency on genuinely-broken hosts).
     fn is_retryable_without_ua(&self) -> bool {
-        matches!(self, Self::UpstreamStatus(_) | Self::NotAnImage(_))
+        matches!(
+            self,
+            Self::UpstreamStatus(_) | Self::UnsupportedMediaType(_)
+        )
     }
 }
 
@@ -117,7 +120,7 @@ impl fmt::Display for ProxyError {
                 write!(f, "network error fetching upstream image: {chain}")
             }
             Self::UpstreamStatus(status) => write!(f, "upstream returned status {status}"),
-            Self::NotAnImage(ct) => write!(
+            Self::UnsupportedMediaType(ct) => write!(
                 f,
                 "upstream content-type is not a supported raster image: {ct}"
             ),
@@ -146,7 +149,7 @@ impl IntoResponse for ProxyError {
             | Self::UpstreamRedirect(_)
             | Self::UpstreamNetwork(_)
             | Self::UpstreamStatus(_) => StatusCode::BAD_GATEWAY,
-            Self::NotAnImage(_) => StatusCode::UNSUPPORTED_MEDIA_TYPE,
+            Self::UnsupportedMediaType(_) => StatusCode::UNSUPPORTED_MEDIA_TYPE,
             Self::ImageTooLarge { .. } => StatusCode::UNPROCESSABLE_ENTITY,
             Self::ResponseBuild(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
@@ -378,23 +381,32 @@ fn extract_content_type(response: &reqwest::Response) -> Result<String, ProxyErr
         .to_string();
 
     if !is_allowed_content_type(&content_type) {
-        return Err(ProxyError::NotAnImage(content_type));
+        return Err(ProxyError::UnsupportedMediaType(content_type));
     }
 
     Ok(content_type)
 }
 
-/// Raster image types only: SVG and other document-like types can run script
+/// Raster image types (and their common aliases) only: SVG and other document-like types can run script
 /// on this origin. `application/octet-stream` stays allowed because many image
 /// hosts send it (or no Content-Type at all); with `nosniff` a browser never
 /// renders it as a document.
 const ALLOWED_MEDIA_TYPES: &[&str] = &[
     "image/png",
+    "image/x-png",
     "image/jpeg",
+    "image/jpg",
+    "image/pjpeg",
+    "image/apng",
     "image/gif",
     "image/webp",
     "image/avif",
     "image/bmp",
+    "image/x-ms-bmp",
+    "image/tiff",
+    "image/heic",
+    "image/heif",
+    "image/jxl",
     "image/x-icon",
     "image/vnd.microsoft.icon",
     "application/octet-stream",
