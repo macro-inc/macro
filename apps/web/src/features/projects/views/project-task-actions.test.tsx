@@ -10,7 +10,8 @@ import {
 const mock = vi.hoisted(() => ({ assignTasks: vi.fn(), mobile: false }));
 vi.mock('@ui', async () => ({
   ...(await import('@app/components/ui/components/Button')),
-  ...(await import('@app/components/ui/components/ButtonGroup')),
+  ...(await import('@app/components/ui/components/EmptyStatePanel')),
+  ...(await import('@app/components/ui/components/PillButton')),
   ...(await import('@app/components/ui/components/Dropdown')),
   ...(await import('@app/components/ui/components/Surface')),
   ...(await import('@app/components/ui/utils/classname')),
@@ -91,25 +92,24 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-it('creates through the main action and the menu without assigning an existing task', async () => {
+it('opens choices without creating and creates only after selecting New task', async () => {
   const create = vi.fn();
   render(() => <ProjectTaskActions project={project} onCreateTask={create} />);
-  fireEvent.click(screen.getByRole('button', { name: 'New task' }));
-  expect(create).toHaveBeenCalledTimes(1);
-  fireEvent.keyDown(screen.getByRole('button', { name: 'More task actions' }), {
+  fireEvent.keyDown(screen.getByRole('button', { name: 'Add task' }), {
     key: 'Enter',
   });
+  expect(create).not.toHaveBeenCalled();
   fireEvent.keyDown(screen.getByRole('menuitem', { name: 'New task' }), {
     key: 'Enter',
   });
-  expect(create).toHaveBeenCalledTimes(2);
+  expect(create).toHaveBeenCalledOnce();
   expect(mock.assignTasks).not.toHaveBeenCalled();
 });
 
 it('assigns only unlinked selected tasks from the menu', async () => {
   mock.assignTasks.mockResolvedValue([{ taskId: 'one' }]);
   render(() => <ProjectTaskActions project={project} onCreateTask={vi.fn()} />);
-  fireEvent.keyDown(screen.getByRole('button', { name: 'More task actions' }), {
+  fireEvent.keyDown(screen.getByRole('button', { name: 'Add task' }), {
     key: 'Enter',
   });
   fireEvent.keyDown(
@@ -130,7 +130,7 @@ it('ignores an assignment result after the project changes', async () => {
   render(() => (
     <ProjectTaskActions project={current()} onCreateTask={vi.fn()} />
   ));
-  fireEvent.keyDown(screen.getByRole('button', { name: 'More task actions' }), {
+  fireEvent.keyDown(screen.getByRole('button', { name: 'Add task' }), {
     key: 'Enter',
   });
   fireEvent.keyDown(
@@ -161,32 +161,34 @@ it('shows both actions in the empty state and hides them without edit access', (
   ));
   expect(screen.getByText('No tasks yet')).toBeTruthy();
   expect(document.querySelector('svg')).toBeTruthy();
-  fireEvent.click(screen.getByRole('button', { name: 'New task' }));
+  fireEvent.keyDown(screen.getByRole('button', { name: 'Add task' }), {
+    key: 'Enter',
+  });
+  fireEvent.keyDown(screen.getByRole('menuitem', { name: 'New task' }), {
+    key: 'Enter',
+  });
   expect(create).toHaveBeenCalledTimes(1);
-  fireEvent.keyDown(
-    screen.getByRole('button', { name: 'Add existing tasks' }),
-    { key: 'Enter' }
-  );
-  expect(screen.getByRole('menu')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Documentation' })).toBeTruthy();
   cleanup();
   render(() => (
     <ProjectTasksEmptyState
       project={{ ...project, access: 'view', taskIds: [] }}
     />
   ));
-  expect(screen.queryByRole('button', { name: 'New task' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Add task' })).toBeNull();
   expect(
     screen.queryByRole('button', { name: 'Add existing tasks' })
   ).toBeNull();
 });
 
-it('keeps the phone Task trigger and offers New and Add existing', () => {
+it('keeps the phone stacked create menu before choosing existing tasks', () => {
   mock.mobile = true;
   const create = vi.fn();
   render(() => <ProjectTaskActions project={project} onCreateTask={create} />);
-  expect(screen.getByRole('button', { name: 'Task' })).toBeTruthy();
-  fireEvent.click(screen.getByRole('button', { name: 'New' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Task' }));
+  fireEvent.click(screen.getByRole('button', { name: 'New task' }));
   expect(create).toHaveBeenCalledOnce();
-  fireEvent.click(screen.getByRole('button', { name: 'Add existing' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Task' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Add existing tasks' }));
   expect(screen.getByTestId('excluded').textContent).toBe('linked');
 });

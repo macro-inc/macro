@@ -1,4 +1,3 @@
-import { t } from '@app/lib/i18n';
 import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
 import { MobileCreateMenu } from '@components/app/mobile/MobileCreateMenu';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
@@ -10,7 +9,7 @@ import PlusIcon from '@icon/system/regular/plus.svg';
 import { Telemetry } from '@macro-inc/observability';
 import { EditorPopover } from '@property/editors/popover/EditorPopover';
 import { PropertyEntitySelector } from '@property/editors/selectors/PropertyEntitySelector';
-import { Button, ButtonGroup, Dropdown } from '@ui';
+import { Button, Dropdown, Hotkey, PillButton } from '@ui';
 import { createMemo, onCleanup, Show, Suspense } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { useProjectsContext } from '../context/projects-context';
@@ -174,107 +173,112 @@ export function AddProjectTasks(props: {
 
   return (
     <Show
-      when={isMobile() && (props.inline || props.onCreateTask)}
+      when={isMobile()}
       fallback={
-        <Show
-          when={props.onCreateTask}
-          fallback={
-            <Dropdown
-              open={state.open}
-              onOpenChange={setOpen}
-              placement="bottom-end"
-            >
-              <Dropdown.Trigger variant="secondary" size="md">
-                <ListPlusIcon class="size-4" />
-                Add existing tasks
-              </Dropdown.Trigger>
-              <Show when={state.open}>
-                <EditorPopover onClose={close}>{picker()}</EditorPopover>
-              </Show>
-            </Dropdown>
-          }
+        <Dropdown
+          open={state.open}
+          onOpenChange={setOpen}
+          placement="bottom-end"
         >
-          <ButtonGroup
-            variant="secondary"
-            size="md"
-            aria-label="Add project task"
-          >
-            <ButtonGroup.Button onClick={createTask}>
-              <PlusIcon class="size-4" />
-              New task
-            </ButtonGroup.Button>
-            <Dropdown
-              open={state.open}
-              onOpenChange={setOpen}
-              placement="bottom-end"
-            >
-              <Dropdown.Trigger
-                as={ButtonGroup.Button}
-                size="icon-md"
-                aria-label="More task actions"
-              >
+          <Show
+            when={props.inline}
+            fallback={
+              <Dropdown.Trigger variant="secondary" size="md">
+                <PlusIcon class="size-4" />
+                {props.onCreateTask ? 'Add task' : 'Add existing tasks'}
                 <CaretDownIcon class="size-4" />
               </Dropdown.Trigger>
-              <Show when={state.open}>
-                <EditorPopover onClose={close}>
-                  <Show when={state.mode === 'choices'} fallback={picker()}>
-                    <Dropdown.Item onSelect={createTask}>
-                      New task
-                    </Dropdown.Item>
-                    <Dropdown.Item
-                      closeOnSelect={false}
-                      onSelect={chooseExisting}
-                    >
-                      Add existing tasks
-                    </Dropdown.Item>
-                  </Show>
-                </EditorPopover>
-              </Show>
-            </Dropdown>
-          </ButtonGroup>
-        </Show>
+            }
+          >
+            <Dropdown.Trigger as={PillButton} tone="cta" icon={PlusIcon}>
+              Add task
+              <CaretDownIcon class="size-4" />
+            </Dropdown.Trigger>
+          </Show>
+          <Show when={state.open}>
+            <Show
+              when={state.mode === 'choices'}
+              fallback={
+                <EditorPopover onClose={close}>{picker()}</EditorPopover>
+              }
+            >
+              <Dropdown.Content
+                onKeyDown={(event) => {
+                  if (event.ctrlKey || event.metaKey || event.altKey) return;
+                  if (event.key.toLowerCase() !== 'c') return;
+                  event.preventDefault();
+                  event.stopPropagation();
+                  createTask();
+                }}
+              >
+                <Dropdown.Group>
+                  <Dropdown.Item aria-label="New task" onSelect={createTask}>
+                    <PlusIcon class="size-4" />
+                    New task
+                    <Hotkey shortcut="c" theme="clear" class="ml-auto" />
+                  </Dropdown.Item>
+                  <Dropdown.Item
+                    closeOnSelect={false}
+                    onSelect={chooseExisting}
+                  >
+                    <ListPlusIcon class="size-4" />
+                    Add existing tasks
+                  </Dropdown.Item>
+                </Dropdown.Group>
+              </Dropdown.Content>
+            </Show>
+          </Show>
+        </Dropdown>
       }
     >
-      <Show
-        when={props.inline}
-        fallback={
-          <FloatRegion region="accessory">
-            <div class="flex justify-end px-(--mobile-chrome-gutter) pointer-events-auto">
-              <MobileCreateMenu
-                label={t('create.taskLabel')}
-                items={[
-                  {
-                    label: t('mobile.new'),
-                    icon: PlusIcon,
-                    onSelect: createTask,
-                  },
-                  {
-                    label: 'Add existing',
-                    icon: ListPlusIcon,
-                    onSelect: openExisting,
-                  },
-                ]}
-              />
-            </div>
-          </FloatRegion>
-        }
-      >
-        <Button variant="secondary" onClick={openExisting}>
-          <ListPlusIcon class="size-4" />
-          Add existing
-        </Button>
-      </Show>
-      <MobileDrawer
-        open={state.open && state.mode === 'existing'}
-        onOpenChange={setOpen}
-      >
+      <MobileDrawer open={state.open} onOpenChange={setOpen}>
+        <Show
+          when={props.inline}
+          fallback={
+            <FloatRegion region="accessory">
+              <div class="flex justify-end px-(--mobile-chrome-gutter) pointer-events-auto">
+                <MobileCreateMenu
+                  label="Task"
+                  items={[
+                    { label: 'New task', icon: PlusIcon, onSelect: createTask },
+                    {
+                      label: 'Add existing tasks',
+                      icon: ListPlusIcon,
+                      onSelect: openExisting,
+                    },
+                  ]}
+                />
+              </div>
+            </FloatRegion>
+          }
+        >
+          <MobileDrawer.Trigger as={PillButton} tone="cta" icon={PlusIcon}>
+            Add task
+            <CaretDownIcon class="size-4" />
+          </MobileDrawer.Trigger>
+        </Show>
         <MobileDrawer.Portal>
           <MobileDrawer.Overlay />
-          <MobileDrawer.Content aria-label="Add project task">
+          <MobileDrawer.Content>
             <MobileDrawer.Handle />
-            <MobileDrawer.Label>Add task</MobileDrawer.Label>
-            <MobileDrawer.ScrollBody>{pickerFields()}</MobileDrawer.ScrollBody>
-            {pickerFooter()}
+            <MobileDrawer.Title class="px-6 pb-3 text-lg font-semibold">
+              {state.mode === 'choices' ? 'Add task' : 'Add existing tasks'}
+            </MobileDrawer.Title>
+            <MobileDrawer.ScrollBody>
+              <Show when={state.mode === 'choices'} fallback={pickerFields()}>
+                <MobileDrawer.Section>
+                  <MobileDrawer.Item onClick={createTask}>
+                    <PlusIcon class="size-5" />
+                    New task
+                  </MobileDrawer.Item>
+                  <MobileDrawer.Item onClick={chooseExisting}>
+                    <ListPlusIcon class="size-5" />
+                    Add existing tasks
+                  </MobileDrawer.Item>
+                </MobileDrawer.Section>
+              </Show>
+            </MobileDrawer.ScrollBody>
+            <Show when={state.mode === 'existing'}>{pickerFooter()}</Show>
           </MobileDrawer.Content>
         </MobileDrawer.Portal>
       </MobileDrawer>

@@ -1,7 +1,7 @@
-import { isMobile } from '@core/mobile/isMobile';
+import { PROJECTS_DOCS_URL } from '@app/constants/docs-links';
 import EmptyStateTasksGraphic from '@design/empty-state-tasks.svg';
-import PlusIcon from '@icon/system/regular/plus.svg';
-import { Button } from '@ui';
+import BookOpenIcon from '@icon/system/regular/book-open.svg';
+import { EmptyStatePanel } from '@ui';
 import type { ProjectDetail } from '../core/project';
 import { AddProjectTasks } from './add-project-tasks';
 
@@ -22,21 +22,22 @@ export function ProjectTasksEmptyState(props: {
   onCreateTask?: () => void;
 }) {
   return (
-    <div
-      class="flex flex-col items-center gap-4 px-6 py-8"
-      classList={{ 'rounded-xl border border-edge-muted': !isMobile() }}
-    >
-      <EmptyStateTasksGraphic class="w-48 max-w-full" aria-hidden="true" />
-      <h2 class="text-base font-medium text-ink">No tasks yet</h2>
-      {props.onCreateTask && (
-        <div class="flex flex-wrap justify-center gap-2">
-          <Button variant="primary" onClick={props.onCreateTask}>
-            <PlusIcon class="size-4" />
-            New task
-          </Button>
-          <AddProjectTasks project={props.project} inline />
-        </div>
-      )}
-    </div>
+    <EmptyStatePanel
+      centered
+      graphic={EmptyStateTasksGraphic}
+      title="No tasks yet"
+      description="Add tasks to plan and track this project's work."
+      documentationUrl={PROJECTS_DOCS_URL}
+      documentationIcon={BookOpenIcon}
+      primaryActionContent={
+        props.onCreateTask && (
+          <AddProjectTasks
+            project={props.project}
+            onCreateTask={props.onCreateTask}
+            inline
+          />
+        )
+      }
+    />
   );
 }

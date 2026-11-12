@@ -60,7 +60,7 @@ function Fixture() {
   const scenario = new URLSearchParams(location.search).get('scenario');
   return (
     <ProjectsProvider context={context}>
-      <main class="relative min-h-screen bg-app p-8 text-ink">
+      <main class="relative @container flex h-screen min-h-0 flex-col bg-app text-ink">
         {scenario === 'empty' || scenario === 'readonly' ? (
           <ProjectTasksEmptyState
             project={{
@@ -78,8 +78,12 @@ function Fixture() {
             onCreateTask={() => setCreates((n) => n + 1)}
           />
         )}
-        <output data-testid="creates">{creates()}</output>
-        <output data-testid="assignments">{assignments()}</output>
+        <output hidden data-testid="creates">
+          {creates()}
+        </output>
+        <output hidden data-testid="assignments">
+          {assignments()}
+        </output>
         <FloatRegionHost />
       </main>
     </ProjectsProvider>
