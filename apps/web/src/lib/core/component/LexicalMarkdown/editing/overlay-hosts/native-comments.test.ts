@@ -257,3 +257,84 @@ test('publication and removal wait for a drained flush, as Source does', async (
     }
   });
 });
+
+test('a mark request is not sent once the comments retire during the flush', async () => {
+  const runtime = mount();
+  await createRoot(async (dispose) => {
+    const comments = createNativeComments(runtime.view);
+    try {
+      const one = textNode(runtime, 'one ');
+      runtime.port.selectionFromView({
+        kind: 'range',
+        anchor: { key: one.key, offset: 0, type: 'text' },
+        focus: { key: one.key, offset: 3, type: 'text' },
+      });
+      const bookmark = comments.captureSelection();
+      if (!bookmark) throw new Error('Missing bookmark');
+      const comment = vi.spyOn(runtime.port, 'comment');
+      const drains: (() => void)[] = [];
+      vi.spyOn(runtime.port, 'flush').mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            drains.push(() => resolve({ kind: 'drained' }));
+          })
+      );
+      // Source changeCommentMark checks its owner is still active after staging.
+      const publishing = comments.publish('mark-c', bookmark);
+      const removing = comments.remove('mark-a');
+      comments.dispose();
+      for (const drain of drains) drain();
+      expect(await publishing).toBe(false);
+      expect(await removing).toBe(false);
+      expect(comment).not.toHaveBeenCalled();
+    } finally {
+      comments.dispose();
+      dispose();
+      await runtime.close();
+      runtime.root.remove();
+    }
+  });
+});
+
+test('a mark request is not sent once the key generation is replaced during the flush', async () => {
+  const runtime = mount();
+  await createRoot(async (dispose) => {
+    const comments = createNativeComments(runtime.view);
+    try {
+      const one = textNode(runtime, 'one ');
+      runtime.port.selectionFromView({
+        kind: 'range',
+        anchor: { key: one.key, offset: 0, type: 'text' },
+        focus: { key: one.key, offset: 3, type: 'text' },
+      });
+      const bookmark = comments.captureSelection();
+      if (!bookmark) throw new Error('Missing bookmark');
+      const comment = vi.spyOn(runtime.port, 'comment');
+      const drains: (() => void)[] = [];
+      vi.spyOn(runtime.port, 'flush').mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            drains.push(() => resolve({ kind: 'drained' }));
+          })
+      );
+      const generation = runtime.view.mirror.keyGeneration;
+      const publishing = comments.publish('mark-c', bookmark);
+      const removing = comments.remove('mark-a');
+      // Synthetic stand-in for a mirror re-initialize, the only path that
+      // replaces the key generation (a reset or resync rebinds the view).
+      if (generation === null) throw new Error('Missing key generation');
+      vi.spyOn(runtime.view.mirror, 'keyGeneration', 'get').mockReturnValue(
+        generation + 1
+      );
+      for (const drain of drains) drain();
+      expect(await publishing).toBe(false);
+      expect(await removing).toBe(false);
+      expect(comment).not.toHaveBeenCalled();
+    } finally {
+      comments.dispose();
+      dispose();
+      await runtime.close();
+      runtime.root.remove();
+    }
+  });
+});

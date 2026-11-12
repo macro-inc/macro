@@ -226,7 +226,9 @@ export function createNativeComments(view: EditorView): NativeComments {
 
   const reply = async (
     markId: string,
-    action: Parameters<SessionPort['comment']>[1]
+    action: Parameters<SessionPort['comment']>[1],
+    /** Generation at request start; the request needs the same live view. */
+    generation: number | null
   ): Promise<boolean> => {
     const span = Telemetry.span('comment.mark.publish');
     span.setAttr('comment.action', action.kind);
@@ -247,6 +249,8 @@ export function createNativeComments(view: EditorView): NativeComments {
       span.setAttr('comment.flush', flushed.kind);
       if (flushed.kind !== 'drained' && flushed.kind !== 'read-only')
         return refuse(flushed.kind === 'offline' ? 'offline' : 'not_flushed');
+      // Source changeCommentMark rechecks its owner after async staging.
+      if (disposed || generation !== view.mirror.keyGeneration) return false;
       const result = await port.comment(markId, action);
       span.setAttr('comment.reply', result.kind);
       return match(result)
@@ -294,11 +298,15 @@ export function createNativeComments(view: EditorView): NativeComments {
     publish(markId, bookmark) {
       if (disposed || bookmark.generation !== view.mirror.keyGeneration)
         return Promise.resolve(false);
-      return reply(markId, { kind: 'add', ...bookmark.cursors });
+      return reply(
+        markId,
+        { kind: 'add', ...bookmark.cursors },
+        bookmark.generation
+      );
     },
     remove(markId) {
       if (disposed) return Promise.resolve(false);
-      return reply(markId, { kind: 'remove' });
+      return reply(markId, { kind: 'remove' }, view.mirror.keyGeneration);
     },
     select(ids) {
       selected = ids;
