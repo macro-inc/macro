@@ -1,3 +1,4 @@
+pub(crate) use super::email::init::InitFailureObserver;
 use crate::calendar_refresh::ConnectionGatewayCalendarRefresh;
 use crate::calendar_request_gate::RedisCalendarRequestGate;
 use crate::calendar_tokens::CalendarTokenProviderAdapter;
@@ -121,8 +122,72 @@ pub(crate) type RecentInboxSvc = email::domain::recent_inbox::RecentInboxService
     >,
 >;
 
+pub(crate) type CalendarDisconnectSvc =
+    email::domain::mailbox::calendar_disconnect::CalendarDisconnectService<
+        crate::outbound::inbox_catalog::PgInboxCatalog,
+        crate::outbound::calendar_disconnect::CalendarDisconnect<CalendarMutationSvc>,
+    >;
+pub(crate) type ContactListSvc = email::domain::mailbox::contacts::list::ContactListService<
+    crate::outbound::inbox_catalog::PgInboxCatalog,
+    crate::outbound::inbox_contacts::PgInboxContacts,
+>;
+pub(crate) type ScheduledDraftSvc = email::domain::scheduled::drafts::ScheduledDraftService<
+    crate::outbound::scheduled_drafts::PgScheduledDrafts,
+>;
+pub(crate) type SignatureSettingsSvc = email::domain::signature_settings::SignatureSettingsService<
+    crate::outbound::signature_settings::PgSignatureSettings,
+    crate::outbound::signature_settings::SignatureImageRehoster,
+    crate::outbound::signature_settings::GmailSignatures,
+>;
+
+pub(crate) type BackfillJobSvc = email::domain::backfill_jobs::BackfillJobService<
+    crate::outbound::backfill_jobs::PgBackfillJobs,
+    crate::outbound::backfill_jobs::BackfillInitializationQueue,
+>;
+
+pub(crate) type InitialConnectionBackfill =
+    crate::outbound::inbox_connection::InitialConnectionBackfill<
+        crate::outbound::backfill_jobs::PgBackfillJobs,
+        crate::outbound::backfill_jobs::BackfillInitializationQueue,
+        crate::outbound::inbox_connection::ConnectionHistory,
+        crate::outbound::inbox_connection::ConnectionEvents<EmailEventBroker>,
+    >;
+pub(crate) type InboxConnectionSvc = email::domain::mailbox::connection::InboxConnectionService<
+    crate::outbound::inbox_connection::PgConnectionLinks<EmailPgRepo>,
+    crate::outbound::inbox_connection::PgConnectionTransactions,
+    crate::outbound::inbox_connection::GoogleConnectionProvider,
+    crate::outbound::inbox_connection::GoogleConnectionGrants<PgCalendarRepository>,
+    MailboxInitializer,
+    InitialConnectionBackfill,
+    crate::outbound::inbox_connection::LoginEmailIdentity,
+    InitFailureObserver,
+>;
+
+pub(crate) type GmailPushAuth = email::domain::mailbox::gmail_push::GooglePushAuthentication<
+    crate::outbound::gmail_push::GooglePushKeyCache,
+    crate::outbound::gmail_push::GooglePushKeySource,
+    crate::outbound::gmail_push::GooglePushTokenVerifier,
+>;
+pub(crate) type GmailPushSvc = email::domain::mailbox::gmail_push::GmailPushService<
+    GmailPushAuth,
+    crate::outbound::gmail_push::PgPushInboxes,
+    crate::outbound::gmail_push::GmailPushNotifications,
+>;
+pub(crate) type UserInboxDeletionSvc = email::domain::mailbox::lifecycle::InboxLifecycleService<
+    crate::outbound::user_deletion::PgDeletedUserInboxes,
+    crate::outbound::user_deletion::DeletedUserNotifications,
+>;
+
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
+    pub gmail_push: Arc<GmailPushSvc>,
+    pub user_inbox_deletion: Arc<UserInboxDeletionSvc>,
+    pub inbox_connection: Arc<InboxConnectionSvc>,
+    pub backfill_jobs: Arc<BackfillJobSvc>,
+    pub calendar_disconnect: Arc<CalendarDisconnectSvc>,
+    pub contacts: Arc<ContactListSvc>,
+    pub scheduled_drafts: Arc<ScheduledDraftSvc>,
+    pub signature_settings: Arc<SignatureSettingsSvc>,
     pub mailbox_notifications: Arc<
         email::domain::mailbox::watches::MailboxWatchNotifications<
             email::outbound::mailbox_pg::PgMailboxSync,
@@ -149,6 +214,18 @@ pub(crate) struct ApiContext {
     pub inbox_health: Arc<crate::composition::InboxHealth>,
     pub attachment_reads: Arc<AttachmentReadSvc>,
     pub message_sources: Arc<MessageSourceSvc>,
+    pub message_labels: Arc<
+        email::domain::message_labels::MessageLabelService<
+            crate::outbound::message_labels::PgMessageLabels,
+            sqs_client::SQS,
+            EmailEventBroker,
+        >,
+    >,
+    pub message_reads: Arc<
+        email::domain::message_reads::MessageReadService<
+            crate::outbound::message_reads::PgMessageReads,
+        >,
+    >,
     /// Reads the top of a user's inboxes straight from the providers.
     pub recent_inbox: Arc<RecentInboxSvc>,
     pub draft_attachments: Arc<DraftAttachmentSvc>,

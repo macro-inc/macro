@@ -15,6 +15,26 @@ use std::sync::Arc;
 use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImpl};
 use tokio_util::sync::CancellationToken;
 
+use crate::outbound::inbox_lifecycle::inbox_sync::{
+    GmailInboxSync, InboxSync, InboxSyncEffects, InboxSyncSqs, PgInboxSync,
+};
+use crate::outbound::message_labels::gmail_ops::PgGmailOps;
+use email::domain::mailbox::inbox_sync::InboxSyncService;
+
+/// Thin listener state: the domain service and receive/acknowledgement handle.
+#[derive(Clone)]
+pub(crate) struct InboxSyncContext {
+    pub(crate) sqs_worker: sqs_worker::SQSWorker,
+    pub(crate) service: Arc<InboxSync>,
+}
+
+impl InboxSyncContext {
+    #[cfg(test)]
+    pub(crate) fn backfill_context(&self) -> PubSubContext {
+        self.service.effects.worker.clone()
+    }
+}
+
 /// method that ingests sqs messages and calls the process function for each
 #[expect(clippy::too_many_arguments, reason = "too annoying to fix right now")]
 pub async fn run_worker(
@@ -55,13 +75,14 @@ pub async fn run_worker(
     .await;
 }
 
-/// Ingests SQS messages until cancellation is requested.
-///
-/// A batch already returned by SQS is fully processed before shutdown.
-#[expect(clippy::too_many_arguments, reason = "too annoying to fix right now")]
-pub async fn run_worker_with_cancellation(
+/// Builds the production context for the worker loop.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "preserves the worker composition inputs"
+)]
+pub(crate) fn context(
     db: sqlx::Pool<sqlx::Postgres>,
-    worker: sqs_worker::SQSWorker,
+    worker: &sqs_worker::SQSWorker,
     sqs_client: sqs_client::SQS,
     contacts_ingress: Arc<SqsContactsIngress<SqsContactsQueue>>,
     email_api: GmailApi,
@@ -75,9 +96,8 @@ pub async fn run_worker_with_cancellation(
     macro_event_broker: PubSubEventBroker,
     notifications_enabled: bool,
     retry_worker: bool,
-    cancellation_token: CancellationToken,
-) {
-    let ctx = PubSubContext {
+) -> InboxSyncContext {
+    let leaves = PubSubContext {
         gmail_history: email::domain::mailbox::gmail_history::GmailHistoryService(
             email::outbound::mailbox_pg::PgMailboxSync::new(db.clone()),
         ),
@@ -101,6 +121,64 @@ pub async fn run_worker_with_cancellation(
         notifications_enabled,
         retry_worker,
     };
+    let service = Arc::new(InboxSyncService {
+        links: PgGmailOps(leaves.db.clone()),
+        repository: PgInboxSync(leaves.db.clone()),
+        gmail: GmailInboxSync(leaves.email_api.clone()),
+        queue: InboxSyncSqs(leaves.sqs_client.clone()),
+        effects: InboxSyncEffects { worker: leaves },
+        retry_worker,
+        features: email::domain::mailbox::inbox_sync::InboxSyncFeatures {
+            attachment_upload: cfg!(feature = "attachment_upload"),
+            contacts_sync: cfg!(feature = "contacts_sync"),
+            notifications_enabled,
+        },
+    });
+    InboxSyncContext {
+        sqs_worker: worker.clone(),
+        service,
+    }
+}
+
+/// Ingests SQS messages until cancellation is requested.
+///
+/// A batch already returned by SQS is fully processed before shutdown.
+#[expect(clippy::too_many_arguments, reason = "too annoying to fix right now")]
+pub async fn run_worker_with_cancellation(
+    db: sqlx::Pool<sqlx::Postgres>,
+    worker: sqs_worker::SQSWorker,
+    sqs_client: sqs_client::SQS,
+    contacts_ingress: Arc<SqsContactsIngress<SqsContactsQueue>>,
+    email_api: GmailApi,
+    redis_client: RedisClient,
+    notification_ingress_service: Arc<NotificationIngressType>,
+    sfs_client: StaticFileServiceClient,
+    connection_gateway_client: ConnectionGatewayClient,
+    dss_client: DocumentStorageServiceClient,
+    system_properties_service: Arc<SystemPropertiesServiceImpl<PgSystemPropertiesRepository>>,
+    crm_service: CrmServiceType,
+    macro_event_broker: PubSubEventBroker,
+    notifications_enabled: bool,
+    retry_worker: bool,
+    cancellation_token: CancellationToken,
+) {
+    let ctx = context(
+        db,
+        &worker,
+        sqs_client,
+        contacts_ingress,
+        email_api,
+        redis_client,
+        notification_ingress_service,
+        sfs_client,
+        connection_gateway_client,
+        dss_client,
+        system_properties_service,
+        crm_service,
+        macro_event_broker,
+        notifications_enabled,
+        retry_worker,
+    );
 
     loop {
         let worker_result = tokio::spawn({

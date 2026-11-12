@@ -15,6 +15,13 @@ use std::sync::Arc;
 use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImpl};
 use tokio_util::sync::CancellationToken;
 
+/// Listener capabilities, assembled once from the existing worker inputs.
+#[derive(Clone)]
+pub(crate) struct BackfillContext {
+    pub(crate) sqs_worker: sqs_worker::SQSWorker,
+    pub(crate) service: Arc<crate::outbound::backfill_jobs::worker::Backfill>,
+}
+
 /// method that ingests sqs messages and calls the process function for each
 #[expect(clippy::too_many_arguments, reason = "too annoying to fix right now")]
 pub async fn run_worker(
@@ -53,13 +60,14 @@ pub async fn run_worker(
     .await;
 }
 
-/// Ingests SQS messages until cancellation is requested.
-///
-/// A batch already returned by SQS is fully processed before shutdown.
-#[expect(clippy::too_many_arguments, reason = "too annoying to fix right now")]
-pub async fn run_worker_with_cancellation(
+/// Builds the production context for the worker loop.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "preserves the worker composition inputs"
+)]
+pub(crate) fn context(
     db: sqlx::Pool<sqlx::Postgres>,
-    worker: sqs_worker::SQSWorker,
+    worker: &sqs_worker::SQSWorker,
     sqs_client: sqs_client::SQS,
     contacts_ingress: Arc<SqsContactsIngress<SqsContactsQueue>>,
     email_api: GmailApi,
@@ -72,9 +80,8 @@ pub async fn run_worker_with_cancellation(
     crm_service: CrmServiceType,
     macro_event_broker: PubSubEventBroker,
     notifications_enabled: bool,
-    cancellation_token: CancellationToken,
-) {
-    let ctx = PubSubContext {
+) -> BackfillContext {
+    let leaves = PubSubContext {
         gmail_history: email::domain::mailbox::gmail_history::GmailHistoryService(
             email::outbound::mailbox_pg::PgMailboxSync::new(db.clone()),
         ),
@@ -98,6 +105,60 @@ pub async fn run_worker_with_cancellation(
         notifications_enabled,
         retry_worker: false,
     };
+    use crate::outbound::backfill_jobs::worker::*;
+    BackfillContext {
+        sqs_worker: leaves.sqs_worker.clone(),
+        service: Arc::new(email::domain::backfill_jobs::worker::BackfillService {
+            repository: PgBackfillWorker {
+                jobs: crate::outbound::backfill_jobs::PgBackfillJobs(leaves.db.clone()),
+            },
+            gmail: GmailBackfill(leaves.email_api.clone()),
+            queue: BackfillSqs(leaves.sqs_client.clone()),
+            effects: BackfillWorkerEffects(leaves.clone()),
+            crm: BackfillWorkerCrm(leaves.crm_service.clone()),
+            contacts_sync: cfg!(feature = "contacts_sync"),
+            attachment_upload: cfg!(feature = "attachment_upload"),
+        }),
+    }
+}
+
+/// Ingests SQS messages until cancellation is requested.
+///
+/// A batch already returned by SQS is fully processed before shutdown.
+#[expect(clippy::too_many_arguments, reason = "too annoying to fix right now")]
+pub async fn run_worker_with_cancellation(
+    db: sqlx::Pool<sqlx::Postgres>,
+    worker: sqs_worker::SQSWorker,
+    sqs_client: sqs_client::SQS,
+    contacts_ingress: Arc<SqsContactsIngress<SqsContactsQueue>>,
+    email_api: GmailApi,
+    redis_client: RedisClient,
+    notification_ingress_service: Arc<NotificationIngressType>,
+    sfs_client: StaticFileServiceClient,
+    connection_gateway_client: ConnectionGatewayClient,
+    dss_client: DocumentStorageServiceClient,
+    system_properties_service: Arc<SystemPropertiesServiceImpl<PgSystemPropertiesRepository>>,
+    crm_service: CrmServiceType,
+    macro_event_broker: PubSubEventBroker,
+    notifications_enabled: bool,
+    cancellation_token: CancellationToken,
+) {
+    let ctx = context(
+        db,
+        &worker,
+        sqs_client,
+        contacts_ingress,
+        email_api,
+        redis_client,
+        notification_ingress_service,
+        sfs_client,
+        connection_gateway_client,
+        dss_client,
+        system_properties_service,
+        crm_service,
+        macro_event_broker,
+        notifications_enabled,
+    );
 
     loop {
         let worker_result = tokio::spawn({

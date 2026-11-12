@@ -75,7 +75,10 @@ Parsed message responses expose the draft generation captured in the same SQL sn
   (`label_present_before`, passed on by older writes given up). Code that
   stages, confirms or abandons a Gmail label write takes
   `lock_thread_label_writes` for its threads first.
-- The mailbox purge (`links::delete`) is bound by storage latency: a
+- `links::delete` exposes the unchanged transaction-scoped purge SQL; the
+  email domain owns batching, cursor/finished-thread selection, pacing and
+  completion. Purge workflow tests live beside `email`'s mailbox-purge adapter.
+- The mailbox purge is bound by storage latency: a
   500-message batch reads about as many pages as its rows, TOAST and child
   rows occupy, so its time tracks per-read latency. A covering
   `(link_id, thread_id, id)` index for its walk only moves the SELECT's heap

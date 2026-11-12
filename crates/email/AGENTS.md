@@ -10,6 +10,49 @@ tools — hexagonal, heavily feature-gated.
 
 - `src/domain/service.rs` + `src/domain/ports.rs`: the domain service and the
   traits its adapters implement.
+- `src/domain/message_reads.rs` (feature `mailbox`): synced message/thread
+  reads, access filtering, pagination, and summary-inbox selection.
+- `src/domain/mailbox/calendar_disconnect.rs`, `mailbox/contacts/list.rs`, and
+  `scheduled/drafts.rs` (feature `mailbox`): separate use cases for calendar
+  removal, contact listing, and scheduled-draft pages; ownership/delegation
+  checks are shared through `mailbox/catalog.rs`.
+- `src/domain/signature_settings.rs` (feature `mailbox`): signature preparation
+  and settings patches. `signature_settings/gmail_images.rs` selects public or
+  mailbox image reads, caches message parts for one import, and preserves retryable
+  image failures behind an image-reader port.
+- `src/domain/attachment_cleanup/sfs_deletion.rs` (feature `ports`): stored-file
+  deletion order, the already-missing-file rule, and delivery disposition.
+- `src/domain/mailbox/contacts/sfs_upload.rs` (feature `mailbox`): URL-backed
+  contact-photo uploads, best-effort persistence, self-contact refresh, and
+  delivery disposition.
+- `src/domain/crm_cleanup.rs` (feature `mailbox`): nightly cleanup job lifecycle,
+  candidate pruning and dispatch, teardown guards, and delivery disposition.
+- `src/domain/mailbox/gmail_push.rs` (feature `mailbox`): key-cache fallback,
+  push-token rotation retry and notification intake; lifecycle also owns ordered
+  deletion requests for a deleted user's inboxes.
+- `src/domain/mailbox/connection.rs` (feature `mailbox`): inbox connection,
+  completed/discovered Google grants, shared promotion, and failed-attempt cleanup.
+  Reuses mailbox initialization and backfill-job services.
+- `src/domain/backfill_jobs.rs` (feature `mailbox`): backfill-job access,
+  cancellation, active-job reuse, and initialization publication. Its `worker`
+  module owns queue admission, retry/deferral policy, listing, thread/message
+  import, initialization, completion accounting and leases, metadata, attachments,
+  sent contact seeding and CRM operations. Its `outbox` module owns durable
+  initialization, completion and consent publication through transaction ports.
+  Backfill and inbox sync share catalog reconciliation, contact parsing,
+  notification selection, CRM normalization and pending-label snapshot rules.
+- `src/domain/mailbox/link_manager.rs` (feature `mailbox`): link-maintenance
+  delivery disposition, probe timeout, and reconnect notification recipients. It
+  reuses the mailbox health and lifecycle services. Its `deletion` service owns
+  provider teardown and retries, CRM cleanup, physical deletion, completion
+  events and promoted-mailbox cleanup through capability ports. Its `purge`
+  service owns incremental deletion order, cursors, batching, pacing and counters;
+  `outbound/mailbox_pg/purge.rs` holds its transaction adapter.
+- `src/domain/mailbox/inbox_sync.rs` (feature `mailbox`): Gmail delivery admission,
+  disposition, provider-error routing, message deletion, and label reconciliation.
+  It also owns history/catalog reconciliation, recovery backfills, provider-message
+  imports, attachment claim release, contact fan-out and notification selection.
+  Reuse the existing Gmail history journal and backfill repository through its ports.
 - `src/inbound/axum.rs`: HTTP routes (feature `axum`); `src/inbound/toolset.rs`:
   the AI email tools (feature `ai_tools`).
 - `src/outbound/email_pg_repo.rs`, `src/outbound/invitation_pg.rs`: Postgres
@@ -55,6 +98,10 @@ tools — hexagonal, heavily feature-gated.
   feature's tests need a local MacroDB — `just setup_macrodb`).
 
 ## Gotchas
+
+- Keep the legacy read policies in `MessageReadService`: public reads union
+  owned and delegated inboxes, internal summaries use only the newest owned
+  inbox, and public/internal pagination have different invalid-bound behavior.
 
 - `Subject` is a message-level filter literal. With a top-level subject term,
   each owned inbox gets a bound (not `unnest`) two-step subscan: threads in
@@ -137,7 +184,13 @@ tools — hexagonal, heavily feature-gated.
 - Gmail thread label writes stage each thread's DB change, then enqueue one
   provider write per inbox holding only the messages whose labels changed
   (`stage_thread_labels` / `commit_thread_label_write` in
-  `domain/service/thread_labels.rs`); route new label actions through them.
+  `domain/service/thread_labels.rs`); route new thread label actions through them.
+  Message-label batches go through `domain/message_labels.rs`, with their atomic
+  staging and unqueued-write undo behind `MessageLabelRepository`. The queued
+  half lives in `domain/message_labels/gmail_ops.rs`: it owns turn ordering,
+  partial acceptance/reversion, retry routing, and delivery dispositions through
+  link, settlement, provider, and retry-queue ports. Provider admission remains
+  inside the host's existing Gmail adapter.
 - Recompute thread metadata inside staged Gmail SPAM/TRASH writes so restored All Mail previews, ordering, and signal state do not wait for the provider worker.
 - `domain/recent_inbox.rs` merges a user's newest messages read live from
   each of their own inboxes (50 by default, at most 100); an inbox whose read
@@ -247,6 +300,11 @@ tools — hexagonal, heavily feature-gated.
   owner, then actor id, retaining one binding per link and actor; the repository
   returns each binding's kind so custody cleanup runs before an owner disconnect
   can suppress it without processing a self-custodian twice.
+- `email_mailbox_folders.total_item_count` is Graph's `totalItemCount` from the
+  latest catalog discovery (every 5 minutes, from the listing discovery already
+  makes), and the discover span sums it as `outlook.provider_item_count`. It
+  counts what the folder holds at the provider, imported or not, so an import
+  is checked against it.
 - Import counts for the health snapshot stay in memory (`ImportTally`) and are
   flushed once a minute to `email_mailbox_import_minutes`; never write per
   imported message for telemetry.

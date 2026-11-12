@@ -269,6 +269,7 @@ async fn explicit_inbox_removal_revokes_authority_without_blocking_the_parent_ca
     Ok(())
 }
 
+#[cfg(feature = "mailbox")]
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../../fixtures", scripts("email_draft"))
@@ -285,10 +286,12 @@ async fn explicit_inbox_purge_removes_an_accepted_send_and_its_retained_deletion
     )
     .await?;
     assert!(!delete_db_message(&pool, message()).await?);
-    let summary = email_db_client::links::delete::purge_link(
-        &pool,
+    let summary = crate::domain::mailbox::link_manager::purge::LinkPurgeService {
+        repository: crate::outbound::mailbox_pg::PgMailboxSync::new(pool.clone()),
+    }
+    .purge_link(
         link(),
-        email_db_client::links::delete::PurgePacing::default(),
+        crate::domain::mailbox::link_manager::purge::PurgePacing::default(),
     )
     .await?;
     // The fixture has four messages in this inbox and one in a second inbox.

@@ -211,6 +211,17 @@ async fn a_viewer_duplicates_every_table_column_view_and_row_into_a_database_the
     let source_status = seeded.status_column.property_definition_id;
     let source_going = option_id(&seeded.world, source_status, "Going");
 
+    let appearance = model_entity::EntityAppearance {
+        icon: Some(model_entity::AppearanceIcon::Emoji {
+            value: "🚀".into()
+        }),
+        color: Some(model_entity::AppearanceColor::Indigo),
+    };
+    seeded
+        .service
+        .set_appearance(edit(seeded.database_id), appearance.clone())
+        .await
+        .unwrap();
     let copy = seeded
         .service
         .duplicate_database(
@@ -224,6 +235,7 @@ async fn a_viewer_duplicates_every_table_column_view_and_row_into_a_database_the
 
     assert_eq!(copy.name, "Offsite copy");
     assert_eq!(copy.owner_id, VIEWER);
+    assert_eq!(copy.appearance, Some(appearance));
     assert_ne!(copy.id, seeded.database_id);
     let w = seeded.world.lock().unwrap();
     // One write batch: the copy commits whole or not at all.
