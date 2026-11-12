@@ -72,8 +72,8 @@ through `rmcp`, returning the result to the caller's tool-calling loop.
   connection to a stored server (transport, OAuth discovery, registration,
   token refresh) goes through `McpHttp`, which refuses non-public addresses
   on the address actually connected to, ignores system proxies, and follows
-  only same-origin 307/308 transport redirects. Build one `McpHttp` per
-  process from `AddressPolicy::for_environment`; only `Local` reaches
+  only same-origin 307/308 transport redirects. Build `McpHttp` once at
+  startup in each composition root from `AddressPolicy::for_environment`; only `Local` reaches
   loopback and private addresses. Never dial a stored server with
   `reqwest::Client::new()`, `StreamableHttpClientTransport::from_uri`, or
   `AuthorizationManager::new`.

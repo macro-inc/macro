@@ -62,7 +62,7 @@ pub struct RefusedAddress {
 /// The OAuth server answered with more than [`MAX_OAUTH_RESPONSE_BYTES`].
 #[derive(Debug, thiserror::Error)]
 #[error("OAuth response body is larger than {MAX_OAUTH_RESPONSE_BYTES} bytes")]
-pub struct OAuthResponseTooLarge;
+struct OAuthResponseTooLarge;
 
 /// The guarded clients every connection to a user's MCP server goes
 /// through, built once at startup.
@@ -186,9 +186,7 @@ impl GuardedOAuthHttpClient {
             .build()?;
         Ok(Arc::new(Self { policy, client }))
     }
-}
 
-impl GuardedOAuthHttpClient {
     async fn send(&self, request: HttpRequest) -> Result<HttpResponse, OAuthHttpClientError> {
         let request = reqwest::Request::try_from(request)?;
         check_url(self.policy, request.url())?;

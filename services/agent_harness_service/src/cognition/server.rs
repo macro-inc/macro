@@ -715,14 +715,14 @@ pub async fn build(
         .as_ref()
         .map(|service| tokio::spawn(granola_sync::inbound::run_worker(service.clone())));
 
-    // The one sanctioned meeting point of the two MCP stacks: agents load
-    // tools through this selector, which prefers a user's Pipedream
-    // connectors and falls back to the native ones (see `mcp_select`).
-    // The import service's live Slack source shares this selector.
     // Users' own MCP servers: public addresses only, except on a local stack.
     let mcp_http = mcp_client::guarded_http::McpHttp::new(
         mcp_client::guarded_http::AddressPolicy::for_environment(config.environment),
     )?;
+    // The one sanctioned meeting point of the two MCP stacks: agents load
+    // tools through this selector, which prefers a user's Pipedream
+    // connectors and falls back to the native ones (see `mcp_select`).
+    // The import service's live Slack source shares this selector.
     let mcp_selector: Arc<ai_tools::ToolMcpSelector> = Arc::new(mcp_select::McpToolSelector::new(
         Arc::new(mcp_server_repo.clone()),
         mcp_http.clone(),
