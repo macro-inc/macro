@@ -310,16 +310,16 @@ export function Notebook(props: {
     if (mode === CommentLayoutMode.lg) return shared;
 
     const gap = mode === CommentLayoutMode.none ? '' : 'gap-6 justify-center';
-    const isMd = mode === CommentLayoutMode.md;
-    if (!isWide()) return `${shared} ${isMd ? 'px-8' : 'px-6'} ${gap}`;
+    if (mode === CommentLayoutMode.md) return `${shared} px-8 ${gap}`;
+    // Beside margin comments (or their rail) the margin below assumes a pane
+    // holding only the text, so it would take width from the text instead.
+    if (!isWide() || mode === CommentLayoutMode.xs)
+      return `${shared} px-6 ${gap}`;
     // Wide mode's margin grows with the pane up to 64px, room for the outline
     // in the left gutter. It never drops below the standard padding, and while
     // the pane is narrower than the standard column plus that margin the text
     // keeps the standard width, so the column only widens as the pane does.
-    const padding = isMd
-      ? 'px-[clamp(2rem,calc((100%_-_48rem)/2),4rem)]'
-      : 'px-[clamp(1.5rem,calc((100%_-_48rem)/2),4rem)]';
-    return `${shared} ${padding} ${gap}`;
+    return `${shared} px-[clamp(1.5rem,calc((100%_-_48rem)/2),4rem)] ${gap}`;
   });
 
   const contentDivClasses = createMemo(() => {

@@ -2,9 +2,9 @@ import { expect, type Page, test } from '@playwright/test';
 
 const FIXTURE = '/src/features/block-md/browser-test/wide-mode.html';
 
-async function openDocument(page: Page) {
+async function openDocument(page: Page, query = '') {
   await page.routeWebSocket('**/*', (socket) => socket.close());
-  await page.goto(FIXTURE);
+  await page.goto(FIXTURE + query);
   await expect(page.getByText('Roadmap')).toBeVisible({ timeout: 30_000 });
 }
 
@@ -70,6 +70,32 @@ test.describe('desktop', () => {
       await expect.poll(() => columnWidth(page)).toBe(expected);
       expect(expected).toBeGreaterThanOrEqual(previous);
       previous = expected;
+    }
+  });
+
+  test('wide mode never narrows the text beside margin comments', async ({
+    page,
+  }) => {
+    // 880px lays the comments out as a rail, 1000px and 1300px as a column
+    // beside the text, and 1600px floats them beside the standard column.
+    for (const width of [880, 1000, 1300, 1600]) {
+      await page.setViewportSize({ width, height: 1000 });
+      await openDocument(page, '?comments');
+      const standard = await columnWidth(page);
+      // The seeded comment reached the layout: without it the text would be
+      // the full standard column at these widths.
+      if (width === 880 || width === 1000) expect(standard).toBeLessThan(768);
+
+      await page.getByRole('button', { name: 'Turn on wide mode' }).click();
+      await expect(
+        page.getByRole('button', { name: 'Turn off wide mode' })
+      ).toBeVisible();
+      await expect
+        .poll(() => columnWidth(page))
+        .toBeGreaterThanOrEqual(standard);
+
+      await page.getByRole('button', { name: 'Turn off wide mode' }).click();
+      await expect.poll(() => columnWidth(page)).toBe(standard);
     }
   });
 });

@@ -30,6 +30,7 @@ import {
   MarkdownDocumentContent,
 } from '../component/MarkdownDocument';
 import { useMarkdownDocumentTools } from '../component/useMarkdownDocumentTools';
+import { useMarkdownDocument } from '../context/markdown-document-context';
 
 const MARKDOWN = `These notes came over from another workspace, where most pages were read at full width. Long paragraphs like this one wrap at the reading column in the standard layout, and run across the whole pane in wide mode, so a reader scrolls less to get through the same page.
 
@@ -55,6 +56,28 @@ export function summarize(rows: { area: string; status: string }[]): string {
 - Archive the pages nobody has opened this year.
 - Move the remaining planning notes before the end of the quarter.
 `;
+
+/**
+ * With `?comments` in the URL, gives the document one comment so the notebook
+ * lays out its margin comment column.
+ */
+function SeedComment() {
+  if (!new URLSearchParams(location.search).has('comments')) return null;
+  const { state } = useMarkdownDocument();
+  state.setCommentState('comments', 'fixture-comment', {
+    id: 'fixture-comment',
+    rootId: 'fixture-comment',
+    threadId: 'fixture-thread',
+    anchorId: 'fixture-anchor',
+    owner: 'fixture-user',
+    author: 'Reviewer',
+    text: 'Can we split this table by quarter?',
+    createdAt: null,
+    isNew: false,
+    children: [],
+  });
+  return null;
+}
 
 function Menu() {
   const { menuTools } = useMarkdownDocumentTools();
@@ -108,6 +131,7 @@ function Fixture() {
       persistedName="Quarterly planning notes"
       fallbackName={undefined}
     >
+      <SeedComment />
       <Menu />
       <MarkdownDocumentContent doInitialSync={doInitialSync} />
     </MarkdownDocument>
