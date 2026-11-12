@@ -280,7 +280,7 @@ fn activity_rows(parts: &[MessagePart], closed: bool) -> Vec<ActivityRow> {
                 name,
                 status,
                 detail,
-            } => code_execution::rows(&id.0, name, detail, closed)
+            } => code_execution::rows(&id.0, name, *status, detail, closed)
                 .unwrap_or_else(|| vec![tool_row(id.0.clone(), name, *status, detail, closed)]),
             MessagePart::Plan { entries } => {
                 let done = entries

@@ -143,7 +143,7 @@ fn code_execution_steps_show_observed_sdk_operations_without_source_or_results()
 }
 
 #[test]
-fn code_without_observed_requests_keeps_its_tool_step() {
+fn code_without_observed_requests_reads_as_workspace_work() {
     let part = MessagePart::ToolUse {
         id: ToolUseId("code-2".into()),
         name: ToolName::Mcp {
@@ -157,7 +157,62 @@ fn code_without_observed_requests_keeps_its_tool_step() {
             error: None,
         },
     };
-    assert_eq!(segments(&[part], true)[0].rows[0].label, "Execute code");
+    assert_eq!(
+        segments(&[part], true)[0].rows,
+        [ActivityRow {
+            id: "code-2".to_owned(),
+            label: "Worked in your workspace".to_owned(),
+            detail: None,
+            status: ActivityStatus::Completed,
+            card: None,
+        }]
+    );
+}
+
+#[test]
+fn code_mode_lookups_are_not_steps() {
+    let lookup = |id: &str, name: ToolName| MessagePart::ToolUse {
+        id: ToolUseId(id.into()),
+        name,
+        status: ToolStatus::Completed,
+        detail: ToolDetail::Macro {
+            input: serde_json::json!({"query": "documents"}),
+            output: None,
+            error: None,
+        },
+    };
+    let parts = [
+        lookup(
+            "describe",
+            ToolName::Mcp {
+                server: "macro_internal".into(),
+                tool: "DescribeCodeTools".into(),
+            },
+        ),
+        lookup(
+            "docs",
+            ToolName::Mcp {
+                server: "macro_internal".into(),
+                tool: "ReadCodeDocs".into(),
+            },
+        ),
+        lookup(
+            "search",
+            ToolName::Native {
+                name: "SearchTools".into(),
+            },
+        ),
+        lookup(
+            "load",
+            ToolName::Mcp {
+                server: "macro".into(),
+                tool: "LoadTools".into(),
+            },
+        ),
+    ];
+    let segments = segments(&parts, true);
+    assert_eq!(kinds(&segments), [(SegmentKind::Activity, true)]);
+    assert_eq!(segments[0].rows, []);
 }
 
 #[test]
