@@ -346,7 +346,10 @@ async fn a_verified_alias_sends_from_its_inbox_under_the_alias(
 
     assert_eq!(resolved.link.id, ALT_INBOX);
     assert_eq!(
-        resolved.sender_address.as_ref().map(|alias| alias.0.as_ref()),
+        resolved
+            .sender_address
+            .as_ref()
+            .map(|alias| alias.0.as_ref()),
         Some("support@example.com"),
         "the alias as Gmail spells it, whatever case the caller used"
     );
