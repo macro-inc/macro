@@ -389,6 +389,45 @@ computer id, name, and outcome; opening one reopens that computer's setup
 dialog on Bring your AI (see the Macro computers walkthrough in
 [settings.md](settings.md)).
 
+## Manual notifications
+
+Agent code (ExecuteCode) and SDK scripts send a notification they write with
+`macro.notifications.send({ title, body?, link, to? })`, which calls
+`POST /user_notifications/send` on the notification service. It becomes a
+`manual` notification: in-app, desktop/browser alert and phone push, all
+subject to the recipient's preferences (**Settings → Notifications → AI →
+Agent notes** turns them off). `to` defaults to the sender; anyone else must
+already see `link`, and the sender must see it too, so a notification never
+reveals an entity. Each sender may send 60 per hour (429 after).
+
+The alert's title and body are the sender's words. An agent's notification
+reads as from the agent (its name and avatar as they were when sent); without
+an agent it reads as from the sending user. Opening one opens the link:
+documents and tasks by their file type, plus chats, channels, projects, email
+threads and agent sessions.
+
+A notification is accepted only when the recipient's inbox and Home would both
+list it, so nothing is delivered unseen. Kinds the feeds never list (routines,
+databases, forms) are refused by type, derived from the inbox's
+`CANDIDATE_TYPES` and Home's candidate types. Every other link is checked for
+the recipient (the sender, for a note to oneself) by asking the inbox and Home
+whether a new notification would be listed: Soup's attention query, probed with
+the link as if a notification were pending, through each feed's own filter and
+hydration. That refuses links reached only by a link share or an attachment,
+deleted entities, snippets (Home leaves them out), unlisted and hidden
+sessions, and mail that is not the recipient's own Signal inbox mail, with 400
+and the feed that refused. Sends are limited to 60 an hour per sender and 60
+an hour per recipient.
+In the unified Notifications view a manual notification is an agent row on its
+linked entity, from the agent (or the sending user when no agent sent it); on
+a channel it is its own row beside the channel's messages.
+
+Verify from an agent session: ask the agent to notify you about a task, and a
+teammate who can and one who cannot see it. You get an inbox row with the
+agent's avatar and a desktop alert titled as written; clicking opens the task.
+The teammate with access gets it; the one without makes the call fail with
+403 and receives nothing.
+
 ## Notification sounds
 
 **Settings → Notifications → Sounds** turns on an in-app sound for incoming

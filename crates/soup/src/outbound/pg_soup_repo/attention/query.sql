@@ -109,7 +109,7 @@ attention_page AS (
             latest_own.occurred_at AS touched_at
         FROM (
             SELECT entity_type, entity_id, attention_at
-            FROM pending
+            FROM {attention_source}
             WHERE ($3::timestamptz IS NULL OR (attention_at, entity_id) < ($3, $4))
             AND ($10::text[] IS NULL OR (entity_type, entity_id) IN (
                 SELECT entity_type, entity_id FROM only_keys

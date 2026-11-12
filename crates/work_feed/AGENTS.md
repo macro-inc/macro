@@ -25,7 +25,8 @@ Built on the shared feed layer, `crates/attention_feed`.
 - Depends on: `attention_feed`, `filter_ast`, `item_filters`,
   `model_notifications`.
 - Used by: `services/document_storage_service`, `crates/graphql_work_feed`,
-  `crates/complete_graph`.
+  `crates/complete_graph`, `services/notification_service`
+  (`admits_new_notification`, for manual notifications).
 
 ## Recipes
 

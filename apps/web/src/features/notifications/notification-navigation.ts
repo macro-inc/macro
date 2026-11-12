@@ -129,6 +129,57 @@ function openSplitIfNotOpen(
   }
 }
 
+/** A manual notification opens the entity its sender linked. */
+function openManualNotificationLink(
+  notification: UnifiedNotification,
+  sourceHandle?: SplitHandle,
+  onApplied?: VoidFunction
+): ((layoutManager: SplitManager, newSplit?: boolean) => Promise<void>) | null {
+  const id = notification.entity_id;
+  const block = match(notification.entity_type)
+    .with('chat', () => 'chat' as const)
+    .with('channel', () => 'channel' as const)
+    .with('project', () => 'project' as const)
+    .with('email_thread', () => 'email' as const)
+    .with('agent_session', () => 'agent' as const)
+    .with('document', () => undefined)
+    .otherwise(() => null);
+  if (block === null) return null;
+
+  return async (lm: SplitManager, newSplit = false) => {
+    const options = { newSplit, sourceHandle, onApplied };
+    if (block) {
+      openSplitIfNotOpen(lm, block, id, options);
+      return;
+    }
+
+    // Tasks, notes and files are all documents; their block comes from the
+    // document itself, or plain document routing when it can't be loaded.
+    const metadata = await catchToResult(async () =>
+      (
+        await import('@queries/storage/document-metadata')
+      ).fetchDocumentMetadata(id)
+    );
+    if (metadata.isErr()) {
+      Telemetry.error(metadata.error, { surface: 'notification-navigation' });
+    }
+    const document = metadata.isOk() ? metadata.value : undefined;
+    openSplitIfNotOpen(
+      lm,
+      itemToBlockName({
+        type: 'document',
+        fileType: document?.fileType ?? undefined,
+        subType:
+          document?.subType && document.subType !== 'initiative_description'
+            ? { type: document.subType }
+            : undefined,
+      }),
+      id,
+      options
+    );
+  };
+}
+
 export function getChannelNotificationParams(
   notification: UnifiedNotification
 ): { messageId?: string; threadId?: string; params?: Record<string, string> } {
@@ -713,6 +764,9 @@ function getSupportedHandler(
           openRuntimesSettings(lm, { newSplit, sourceHandle, onApplied });
         };
       })
+      .with('manual', () =>
+        openManualNotificationLink(notification, sourceHandle, onApplied)
+      )
       // Its machine has no page of its own; Settings → Runtimes points it out.
       .with('runtime_access_removed', () => {
         const harnessId = notification.entity_id;

@@ -70,6 +70,9 @@ async function resolveActorName(
   if (meta.tag === 'agent_sign_in_expiry' || meta.tag === 'computer_setup') {
     return meta.content.computerName;
   }
+  if (meta.tag === 'manual' && meta.content.agent) {
+    return meta.content.agent.name;
+  }
   if ('senderDisplayName' in meta.content && meta.content.senderDisplayName) {
     return meta.content.senderDisplayName;
   }
@@ -121,6 +124,29 @@ export async function toPlatformNotificationData(
     resolveSenderAvatarUrl(notification, resolveUserAvatar),
   ]);
   const actor = actorName ?? USER_NAME_FALLBACK;
+  const sender = actorName
+    ? {
+        id: notification.sender_id ?? actorName,
+        name: actorName,
+        avatarUrl,
+      }
+    : undefined;
+
+  // A manual notification is the sender's own words: its title and body
+  // show as written, with no actor sentence built around them.
+  if (metadata.tag === 'manual') {
+    return {
+      title: metadata.content.title,
+      options: {
+        body: metadata.content.body
+          ? markdownToPlainText(metadata.content.body)
+          : actor,
+        icon,
+      },
+      sender,
+      conversation: { id: notification.entity_id },
+    };
+  }
 
   // An unresolved target is left out of the title, not shown as a placeholder.
   const targetName =
@@ -141,13 +167,7 @@ export async function toPlatformNotificationData(
       body: content ? markdownToPlainText(content) : action,
       icon,
     },
-    sender: actorName
-      ? {
-          id: notification.sender_id ?? actorName,
-          name: actorName,
-          avatarUrl,
-        }
-      : undefined,
+    sender,
     conversation: {
       id: notification.entity_id,
       name: showTarget ? targetName : undefined,

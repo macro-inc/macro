@@ -2389,6 +2389,49 @@ export const listTypedNotificationsResponse = zod
                     .object({
                       content: zod
                         .object({
+                          agent: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  avatarUrl: zod
+                                    .string()
+                                    .nullish()
+                                    .describe("The agent's avatar."),
+                                  id: zod
+                                    .string()
+                                    .describe(
+                                      'A string on the wire: system bots have fixed ids that are not RFC 4122\nuuids.'
+                                    ),
+                                  name: zod
+                                    .string()
+                                    .describe("The agent's display name."),
+                                })
+                                .describe(
+                                  'The agent a manual notification reads as being from, as it was when sent.'
+                                ),
+                            ])
+                            .optional(),
+                          body: zod
+                            .string()
+                            .nullish()
+                            .describe('More detail, as the sender wrote it.'),
+                          title: zod
+                            .string()
+                            .describe('The headline, as the sender wrote it.'),
+                        })
+                        .describe(
+                          "A notification written by its sender: a title, an optional body, and the\nentity it opens. The sender is the notification's `sender_id`, or nobody\nwhen people notify themselves."
+                        ),
+                      tag: zod.enum(['manual']),
+                    })
+                    .describe(
+                      'Someone, usually agent code through the SDK, sent the user a\nnotification they wrote.'
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
                           agents: zod
                             .array(
                               zod
@@ -4656,6 +4699,49 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                     .object({
                       content: zod
                         .object({
+                          agent: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  avatarUrl: zod
+                                    .string()
+                                    .nullish()
+                                    .describe("The agent's avatar."),
+                                  id: zod
+                                    .string()
+                                    .describe(
+                                      'A string on the wire: system bots have fixed ids that are not RFC 4122\nuuids.'
+                                    ),
+                                  name: zod
+                                    .string()
+                                    .describe("The agent's display name."),
+                                })
+                                .describe(
+                                  'The agent a manual notification reads as being from, as it was when sent.'
+                                ),
+                            ])
+                            .optional(),
+                          body: zod
+                            .string()
+                            .nullish()
+                            .describe('More detail, as the sender wrote it.'),
+                          title: zod
+                            .string()
+                            .describe('The headline, as the sender wrote it.'),
+                        })
+                        .describe(
+                          "A notification written by its sender: a title, an optional body, and the\nentity it opens. The sender is the notification's `sender_id`, or nobody\nwhen people notify themselves."
+                        ),
+                      tag: zod.enum(['manual']),
+                    })
+                    .describe(
+                      'Someone, usually agent code through the SDK, sent the user a\nnotification they wrote.'
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
                           agents: zod
                             .array(
                               zod
@@ -6873,6 +6959,49 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                     .object({
                       content: zod
                         .object({
+                          agent: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  avatarUrl: zod
+                                    .string()
+                                    .nullish()
+                                    .describe("The agent's avatar."),
+                                  id: zod
+                                    .string()
+                                    .describe(
+                                      'A string on the wire: system bots have fixed ids that are not RFC 4122\nuuids.'
+                                    ),
+                                  name: zod
+                                    .string()
+                                    .describe("The agent's display name."),
+                                })
+                                .describe(
+                                  'The agent a manual notification reads as being from, as it was when sent.'
+                                ),
+                            ])
+                            .optional(),
+                          body: zod
+                            .string()
+                            .nullish()
+                            .describe('More detail, as the sender wrote it.'),
+                          title: zod
+                            .string()
+                            .describe('The headline, as the sender wrote it.'),
+                        })
+                        .describe(
+                          "A notification written by its sender: a title, an optional body, and the\nentity it opens. The sender is the notification's `sender_id`, or nobody\nwhen people notify themselves."
+                        ),
+                      tag: zod.enum(['manual']),
+                    })
+                    .describe(
+                      'Someone, usually agent code through the SDK, sent the user a\nnotification they wrote.'
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
                           agents: zod
                             .array(
                               zod
@@ -6968,6 +7097,61 @@ export const enableNotificationTypeParams = zod.object({
     .string()
     .describe('The notification event type to enable'),
 });
+
+/**
+ * @summary Send a notification the caller wrote, to themselves or to someone who can
+already see what it links to. Delivered like any other notification and
+subject to the recipient's notification preferences.
+ */
+export const sendManualNotificationBody = zod
+  .object({
+    body: zod
+      .string()
+      .nullish()
+      .describe('More detail, at most 1000 characters.'),
+    link: zod
+      .object({
+        entityId: zod.string().describe("The entity's id."),
+        entityType: zod
+          .enum([
+            'user',
+            'chat',
+            'channel',
+            'channel_message',
+            'document',
+            'project',
+            'email_thread',
+            'calendar_event',
+            'team',
+            'call',
+            'foreign_entity',
+            'static_file',
+            'crm_company',
+            'crm_contact',
+            'crm_pipeline',
+            'reminder',
+            'harness',
+            'skill',
+            'agent_session',
+            'scheduled_action',
+            'initiative',
+            'database',
+            'database_row',
+            'form',
+            'external_chat',
+          ])
+          .describe('The type of an entity in Macro'),
+      })
+      .describe('What a manual notification opens.'),
+    recipientId: zod
+      .string()
+      .nullish()
+      .describe(
+        'Who gets it; the caller when omitted. Anyone else must already be able\nto see `link`.'
+      ),
+    title: zod.string().describe('The headline, at most 120 characters.'),
+  })
+  .describe('A notification written by the caller.');
 
 /**
  * @summary Typed wrapper for getting a single notification by ID.
@@ -8923,6 +9107,49 @@ export const getTypedNotificationByIdResponse = zod
             })
             .describe(
               'A Macro computer the user bought finished first-time setup, or\ncould not be set up.'
+            ),
+          zod
+            .object({
+              content: zod
+                .object({
+                  agent: zod
+                    .union([
+                      zod.null(),
+                      zod
+                        .object({
+                          avatarUrl: zod
+                            .string()
+                            .nullish()
+                            .describe("The agent's avatar."),
+                          id: zod
+                            .string()
+                            .describe(
+                              'A string on the wire: system bots have fixed ids that are not RFC 4122\nuuids.'
+                            ),
+                          name: zod
+                            .string()
+                            .describe("The agent's display name."),
+                        })
+                        .describe(
+                          'The agent a manual notification reads as being from, as it was when sent.'
+                        ),
+                    ])
+                    .optional(),
+                  body: zod
+                    .string()
+                    .nullish()
+                    .describe('More detail, as the sender wrote it.'),
+                  title: zod
+                    .string()
+                    .describe('The headline, as the sender wrote it.'),
+                })
+                .describe(
+                  "A notification written by its sender: a title, an optional body, and the\nentity it opens. The sender is the notification's `sender_id`, or nobody\nwhen people notify themselves."
+                ),
+              tag: zod.enum(['manual']),
+            })
+            .describe(
+              'Someone, usually agent code through the SDK, sent the user a\nnotification they wrote.'
             ),
           zod
             .object({

@@ -12,6 +12,7 @@ import ClockIcon from '@icon/system/regular/clock-clockwise.svg';
 import EnvelopeIcon from '@icon/system/regular/envelope.svg';
 import FilesIcon from '@icon/system/regular/files.svg';
 import HardDrivesIcon from '@icon/system/regular/hard-drives.svg';
+import PaperPlaneIcon from '@icon/system/regular/paper-plane-tilt.svg';
 import PhoneIcon from '@icon/system/regular/phone-call.svg';
 import QuestionIcon from '@icon/system/regular/question.svg';
 import SmileyIcon from '@icon/system/regular/smiley.svg';
@@ -86,6 +87,7 @@ export function getNotificationIcon(
     .with('routine_run_finished', () => ClockIcon)
     .with('agent_sign_in_expiry', () => HardDrivesIcon)
     .with('computer_setup', () => HardDrivesIcon)
+    .with('manual', () => PaperPlaneIcon)
     .exhaustive(() => BellIcon);
 }
 

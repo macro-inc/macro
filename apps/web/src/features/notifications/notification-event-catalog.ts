@@ -214,6 +214,11 @@ export const NOTIFICATION_EVENT_GROUPS: readonly NotificationEventGroup[] = [
           'When a computer you bought is ready, or could not be set up',
         macroComputers: true,
       },
+      {
+        type: 'manual',
+        label: 'Agent notes',
+        description: 'When an agent or a script sends you a notification',
+      },
     ],
   },
   {
