@@ -41,6 +41,50 @@ pub(crate) fn answer_timeout(request: &Request) -> Duration {
     }
 }
 
+/// The most one answer may hold. harnessd answers one short JSON line; a
+/// guest that streams more is stopped rather than buffered.
+pub(crate) const MAX_ANSWER_BYTES: u64 = 1024 * 1024;
+
+/// Send `request` to a `harnessd` process and read its one answer line.
+/// Over [`MAX_ANSWER_BYTES`] the process is dropped, which stops it.
+pub(crate) async fn exchange<Err: std::fmt::Display>(
+    process: hosted_runtimes::domain::ports::GuestProcess<Err>,
+    request: &Request,
+) -> Result<Response, HarnessdError> {
+    use tokio::io::{AsyncBufReadExt as _, AsyncReadExt as _, AsyncWriteExt as _};
+
+    let mut line = serde_json::to_string(request)
+        .map_err(|error| HarnessdError::Unreadable(error.to_string()))?;
+    line.push('\n');
+    let mut stdin = process.stdin;
+    stdin
+        .write_all(line.as_bytes())
+        .await
+        .map_err(|error| HarnessdError::Unreachable(error.to_string()))?;
+    // A closed stdin tells harnessd this was the only request.
+    drop(stdin);
+
+    let mut answer = String::new();
+    tokio::io::BufReader::new(process.stdout.take(MAX_ANSWER_BYTES + 1))
+        .read_line(&mut answer)
+        .await
+        .map_err(|error| HarnessdError::Unreachable(error.to_string()))?;
+    if answer.len() as u64 > MAX_ANSWER_BYTES {
+        return Err(HarnessdError::AnswerTooLarge);
+    }
+    let exit = process
+        .exit
+        .await
+        .map_err(|error| HarnessdError::Unreachable(error.to_string()))?;
+    if answer.trim().is_empty() {
+        return Err(HarnessdError::Unreachable(format!(
+            "harnessd exited with {exit} without answering"
+        )));
+    }
+    serde_json::from_str::<Response>(answer.trim())
+        .map_err(|error| HarnessdError::Unreadable(error.to_string()))
+}
+
 /// Why harnessd gave no usable answer.
 #[derive(Debug, thiserror::Error)]
 pub enum HarnessdError {
@@ -50,6 +94,9 @@ pub enum HarnessdError {
     /// harnessd did not answer in time.
     #[error("harnessd did not answer in time")]
     Timeout,
+    /// harnessd's answer ran past [`MAX_ANSWER_BYTES`].
+    #[error("harnessd's answer is too large")]
+    AnswerTooLarge,
     /// harnessd answered something that is not a response.
     #[error("harnessd answered unexpectedly: {0}")]
     Unreadable(String),
@@ -121,29 +168,12 @@ impl<Harnesses: HarnessService> Harnessd<Harnesses> {
         &self.harnesses
     }
 
-    /// Read and record the Claude sign-in of every awake computer. One
-    /// computer's failure is logged and the rest still refresh.
-    #[tracing::instrument(
-        name = "computer.harnessd.refresh_all",
-        skip_all,
-        fields(computers),
-        err
-    )]
-    pub async fn refresh_awake(&self, pool: &sqlx::PgPool) -> Result<(), HarnessdError> {
-        let awake = sqlx::query!(
-            r#"
-            SELECT id, harness_id AS "harness_id!"
-            FROM hosted_runtime
-            WHERE awake AND harness_id IS NOT NULL
-            "#,
-        )
-        .fetch_all(pool)
-        .await
-        .map_err(|error| HarnessdError::Lock(error.to_string()))?;
-        tracing::Span::current().record("computers", awake.len());
-        for computer in awake {
-            let harness_id = HarnessId::new_from_uuid(computer.harness_id);
-            let computer_id = ComputerId::new_from_uuid(computer.id);
+    /// Read and record the Claude sign-in of each of `computers`, as
+    /// `(harness, computer)`. One computer's failure is logged and the rest
+    /// still refresh.
+    #[tracing::instrument(name = "computer.harnessd.refresh_all", skip_all, fields(computers = computers.len()))]
+    pub async fn refresh_each(&self, computers: &[(HarnessId, ComputerId)]) {
+        for &(harness_id, computer_id) in computers {
             if let Err(error) = self
                 .refresh(harness_id, computer_id, AgentProvider::Claude)
                 .await
@@ -151,7 +181,6 @@ impl<Harnesses: HarnessService> Harnessd<Harnesses> {
                 tracing::warn!(%computer_id, error = ?error, "could not refresh a computer's sign-in");
             }
         }
-        Ok(())
     }
 
     /// Run `request` on the computer behind `harness_id` and record the
@@ -284,16 +313,20 @@ impl HarnessdTransport for NoFleet {
     }
 }
 
-/// [`ComputerLocks`] as a Postgres advisory lock, held by an open
-/// transaction until the lock is dropped.
+/// [`ComputerLocks`] as a session-level Postgres advisory lock on a
+/// connection of its own, outside the service's pool: a sign-in can hold it
+/// for over a minute while Claude answers. Dropping the lock closes the
+/// connection, which releases it.
 pub struct PgComputerLocks {
-    pool: sqlx::PgPool,
+    options: sqlx::postgres::PgConnectOptions,
 }
 
 impl PgComputerLocks {
-    /// Lock through `pool`.
-    pub fn new(pool: sqlx::PgPool) -> Self {
-        Self { pool }
+    /// Lock on connections made like `pool`'s.
+    pub fn new(pool: &sqlx::PgPool) -> Self {
+        Self {
+            options: pool.connect_options().as_ref().clone(),
+        }
     }
 }
 
@@ -303,19 +336,21 @@ impl ComputerLocks for PgComputerLocks {
         computer_id: ComputerId,
     ) -> Pin<Box<dyn Future<Output = Result<ComputerLock, HarnessdError>> + Send + '_>> {
         Box::pin(async move {
-            let mut transaction = self
-                .pool
-                .begin()
+            use sqlx::ConnectOptions as _;
+
+            let mut connection = self
+                .options
+                .connect()
                 .await
                 .map_err(|error| HarnessdError::Lock(error.to_string()))?;
             sqlx::query!(
-                "SELECT pg_advisory_xact_lock(hashtext('harnessd'), hashtext($1::text))",
+                "SELECT pg_advisory_lock(hashtext('harnessd'), hashtext($1::text))",
                 computer_id.to_string(),
             )
-            .execute(&mut *transaction)
+            .execute(&mut connection)
             .await
             .map_err(|error| HarnessdError::Lock(error.to_string()))?;
-            Ok(Box::new(transaction) as ComputerLock)
+            Ok(Box::new(connection) as ComputerLock)
         })
     }
 }

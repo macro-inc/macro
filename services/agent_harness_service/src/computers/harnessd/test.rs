@@ -256,3 +256,49 @@ async fn a_cancel_reaches_harnessd_while_a_completion_holds_the_lock() {
         }
     );
 }
+
+#[tokio::test]
+async fn an_answer_past_the_cap_is_refused_and_the_process_dropped() {
+    let endless = hosted_runtimes::domain::ports::GuestProcess::<std::io::Error> {
+        stdin: Box::pin(tokio::io::sink()),
+        stdout: Box::pin(tokio::io::repeat(b'x')),
+        exit: Box::pin(std::future::pending()),
+    };
+
+    let answer = exchange(
+        endless,
+        &Request::Status {
+            agent: AgentProvider::Claude,
+        },
+    )
+    .await;
+
+    assert!(matches!(answer, Err(HarnessdError::AnswerTooLarge)));
+}
+
+#[tokio::test]
+async fn one_answer_line_is_read_back() {
+    let process = hosted_runtimes::domain::ports::GuestProcess::<std::io::Error> {
+        stdin: Box::pin(tokio::io::sink()),
+        stdout: Box::pin(std::io::Cursor::new(
+            b"{\"result\":\"signed_out\",\"agent\":\"claude\"}\n".to_vec(),
+        )),
+        exit: Box::pin(async { Ok(0) }),
+    };
+
+    let answer = exchange(
+        process,
+        &Request::Status {
+            agent: AgentProvider::Claude,
+        },
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(
+        answer,
+        Response::SignedOut {
+            agent: AgentProvider::Claude
+        }
+    );
+}
