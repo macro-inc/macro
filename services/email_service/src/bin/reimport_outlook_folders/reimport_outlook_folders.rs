@@ -16,11 +16,13 @@
 //! - `DATABASE_URL`: The connection string for the PostgreSQL database.
 //!
 //! ## Optional Environment Variables:
-//! - `LINK_IDS`: Comma-separated link IDs, visited in this order. When unset,
-//!   every Outlook link is visited, oldest connection first.
+//! - `LINK_IDS`: Comma-separated link IDs, visited in this order.
+//! - `ALL_LINKS`: When `true`, visit every Outlook link, oldest connection
+//!   first. A real run needs `LINK_IDS` or `ALL_LINKS=true` (not both), so a
+//!   run with neither refuses and changes nothing.
 //! - `CONCURRENCY`: Links re-importing at once (defaults to 1, capped at 10).
 //! - `VERIFY`: When `true`, read-only mode: reports what each link would do
-//!   and changes nothing.
+//!   and changes nothing. Without `LINK_IDS` it reports every Outlook link.
 
 mod config;
 

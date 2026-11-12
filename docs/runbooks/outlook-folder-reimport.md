@@ -64,17 +64,24 @@ Run it like the other one-off email-service binaries, with `DATABASE_URL`
 pointing at the environment's primary:
 
 ```sh
-DATABASE_URL=… LINK_IDS=… CONCURRENCY=1 VERIFY=true \
+# Dry run of every Outlook link: writes nothing
+DATABASE_URL=… VERIFY=true \
+  cargo run --release -p email_service --bin reimport_outlook_folders
+
+# Real run of chosen links, in this order
+DATABASE_URL=… LINK_IDS=<id>,<id> CONCURRENCY=1 \
   cargo run --release -p email_service --bin reimport_outlook_folders
 ```
 
-`LINK_IDS` is a comma-separated list visited in exactly that order. Without it,
-every Outlook link is visited, oldest connection first.
+`LINK_IDS` is a comma-separated list visited in exactly that order.
+`ALL_LINKS=true` instead visits every Outlook link, oldest connection first. A
+real run needs one of the two and refuses both, so a run with neither changes
+nothing and exits saying so. A dry run without `LINK_IDS` lists every link.
 
 ## 1. Dry run
 
-Run with `VERIFY=true`. Nothing is written. Each link logs "outlook folder
-reimport link done" with its `outcome`:
+Run with `VERIFY=true`, with or without `LINK_IDS`. Nothing is written. Each
+link logs "outlook folder reimport link done" with its `outcome`:
 
 | Outcome | Meaning |
 | --- | --- |
@@ -111,8 +118,9 @@ above).
 
 ## 2. Canary
 
-Run two or three links with `CONCURRENCY=1` and no `VERIFY`, and watch them
-through both phases before widening `LINK_IDS` or raising `CONCURRENCY`.
+Run two or three links with `LINK_IDS`, `CONCURRENCY=1` and no `VERIFY`, and
+watch them through both phases before widening `LINK_IDS`, raising
+`CONCURRENCY`, or moving to `ALL_LINKS=true`.
 
 ## 3. Watch it
 
