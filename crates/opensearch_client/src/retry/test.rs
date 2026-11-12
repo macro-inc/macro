@@ -221,6 +221,7 @@ fn email(message_id: &str) -> UpsertEmailArgs {
         bcc: vec![],
         bcc_names: vec![],
         labels: vec![],
+        is_signal: true,
         link_id: "link-1".to_owned(),
         user_id: "user-1".to_owned(),
         updated_at_millis: EpochMillis::new(20).unwrap(),

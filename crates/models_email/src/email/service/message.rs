@@ -49,6 +49,9 @@ pub struct ParsedSearchMessage {
     // contains the html of the message parsed into plaintext, without hyperlinks
     pub body_parsed_linkless: Option<String>,
     pub internal_date_ts: Option<DateTime<Utc>>,
+    /// Whether the inbox shows the message's thread as Signal
+    /// (`email_threads.is_signal`): search filters importance on it.
+    pub thread_is_signal: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -147,10 +150,13 @@ impl ParsedMessage {
     }
 }
 
-impl From<MessageWithBodyReplyless> for ParsedSearchMessage {
-    fn from(msg: MessageWithBodyReplyless) -> Self {
+impl ParsedSearchMessage {
+    /// The search view of `msg`, whose thread the inbox shows as Signal when
+    /// `thread_is_signal`.
+    pub fn new(msg: MessageWithBodyReplyless, thread_is_signal: bool) -> Self {
         let reply_to = extract_reply_to(msg.inner.headers_json.as_ref());
         Self {
+            thread_is_signal,
             body_parsed_linkless: get_body_parsed_linkless_for_message(&msg),
             db_id: msg.inner.db_id,
             link_id: msg.inner.link_id,

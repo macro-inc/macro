@@ -23,6 +23,7 @@ fn message(label: Option<&str>, content: Option<&str>) -> ParsedSearchMessage {
             .unwrap_or_default(),
         body_parsed_linkless: content.map(str::to_string),
         internal_date_ts: None,
+        thread_is_signal: false,
     }
 }
 

@@ -841,6 +841,11 @@ const EMAIL_BODY = {
         index: false,
         doc_values: true,
       },
+      // The inbox's Signal verdict for the message's thread; search filters
+      // importance on it so its tabs agree with the inbox.
+      is_signal: {
+        type: 'boolean',
+      },
       link_id: {
         type: 'keyword',
         index: true,

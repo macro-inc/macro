@@ -47,6 +47,48 @@ const EMAIL_KEYWORD_FIELDS: &[&str] = &[
 /// so this crate stays free of the email HTML tooling that crate pulls in.
 const MACRO_NOTIFICATION_SENDER_DOMAIN: &str = "notification.macro.com";
 
+/// Messages whose thread the inbox shows as Signal (`signal`) or Noise.
+fn importance_query<'a>(signal: bool) -> QueryType<'a> {
+    let unverdicted = BoolQuery::new()
+        .must_not(QueryType::Exists("is_signal".into()))
+        .filter(legacy_importance_query(signal));
+    QueryType::Bool(
+        BoolQuery::new()
+            .should(QueryType::term("is_signal", signal))
+            .should(QueryType::Bool(unverdicted))
+            .minimum_should_match(1),
+    )
+}
+
+/// The label rule search used before docs carried the inbox's verdict: a
+/// depriority category without a priority label, or Macro's own
+/// notification sender, is Noise.
+fn legacy_importance_query<'a>(signal: bool) -> QueryType<'a> {
+    let depriority = BoolQuery::new()
+        .filter(QueryType::terms(
+            "labels",
+            [
+                "CATEGORY_UPDATES",
+                "CATEGORY_PROMOTIONS",
+                "CATEGORY_SOCIAL",
+                "CATEGORY_FORUMS",
+            ],
+        ))
+        .must_not(QueryType::terms(
+            "labels",
+            ["CATEGORY_PERSONAL", "SENT", "DRAFT"],
+        ));
+    let noise = BoolQuery::new()
+        .should(QueryType::Bool(depriority))
+        .should(macro_notification_sender_query())
+        .minimum_should_match(1);
+    if signal {
+        QueryType::Bool(BoolQuery::new().must_not(QueryType::Bool(noise)))
+    } else {
+        QueryType::Bool(noise)
+    }
+}
+
 /// Matches messages whose `sender` is any address at
 /// [`MACRO_NOTIFICATION_SENDER_DOMAIN`].
 fn macro_notification_sender_query<'a>() -> QueryType<'a> {
@@ -321,54 +363,13 @@ impl EmailQueryBuilder {
             content_bool_query.must_not(QueryType::term("labels", label.clone()));
         }
 
-        // Importance filter. Source of truth for the label logic is in
-        // email/src/outbound/email_pg_repo/dynamic.rs (EmailLiteral::Importance).
-        // Macro's own notification emails are always noise on top of that.
-        match self.importance {
-            Some(true) => {
-                // Exclude emails that have depriority labels UNLESS they also have a priority label.
-                let importance_exclude = BoolQuery::new()
-                    .filter(QueryType::terms(
-                        "labels",
-                        [
-                            "CATEGORY_UPDATES",
-                            "CATEGORY_PROMOTIONS",
-                            "CATEGORY_SOCIAL",
-                            "CATEGORY_FORUMS",
-                        ],
-                    ))
-                    .must_not(QueryType::terms(
-                        "labels",
-                        ["CATEGORY_PERSONAL", "SENT", "DRAFT"],
-                    ));
-                content_bool_query.must_not(QueryType::Bool(importance_exclude));
-                content_bool_query.must_not(macro_notification_sender_query());
-            }
-            Some(false) => {
-                // Only show deprioritized emails: must have a depriority label
-                // AND must not have a priority label, or come from Macro's
-                // own notification sender.
-                let depriority_filter = BoolQuery::new()
-                    .filter(QueryType::terms(
-                        "labels",
-                        [
-                            "CATEGORY_UPDATES",
-                            "CATEGORY_PROMOTIONS",
-                            "CATEGORY_SOCIAL",
-                            "CATEGORY_FORUMS",
-                        ],
-                    ))
-                    .must_not(QueryType::terms(
-                        "labels",
-                        ["CATEGORY_PERSONAL", "SENT", "DRAFT"],
-                    ));
-                let noise_filter = BoolQuery::new()
-                    .should(QueryType::Bool(depriority_filter))
-                    .should(macro_notification_sender_query())
-                    .minimum_should_match(1);
-                content_bool_query.filter(QueryType::Bool(noise_filter));
-            }
-            None => {}
+        // Importance filter. The indexer copies the inbox's thread-level
+        // verdict (`email_threads.is_signal`, which weighs the owner's sender
+        // rules and Outlook's attention state) onto every message doc, so
+        // search and the inbox agree. Docs indexed before that field existed
+        // fall back to the label rule until they are reindexed.
+        if let Some(signal) = self.importance {
+            content_bool_query.filter(importance_query(signal));
         }
         // END CUSTOM ATTRIBUTES SECTION
 
