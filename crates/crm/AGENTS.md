@@ -167,7 +167,8 @@ tools/HTTP/GraphQL surfaces over them.
   company, or anywhere in the team when nobody is filed under the domain with
   it. A mailbox source is recorded per contact and mailbox, not per address:
   `depopulate_contact` keeps it while that mailbox still has mail with another
-  of the contact's addresses (`other_address_mail.sql`).
+  of the contact's addresses (`other_address_mail.sql`), checked before the
+  domain lock like population's mailbox scan.
 - The Sales migration (`SALES_BACKFILL.md`) is forward-only and additive —
   its down migration refuses to erase completion or user edits; never revert
   it to undo a bad migration, only the application code that reads it.

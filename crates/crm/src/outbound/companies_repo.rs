@@ -666,6 +666,44 @@ impl CompaniesRepositoryImpl {
         .map_err(|e| CrmError::StorageLayerError(e.into()))
     }
 
+    /// The addresses a contact holds besides `normalized_email`.
+    async fn other_addresses(
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        contact_id: uuid::Uuid,
+        normalized_email: &str,
+    ) -> Result<Vec<String>, CrmError> {
+        sqlx::query_scalar!(
+            "SELECT email FROM crm_contact_emails WHERE contact_id = $1 AND email <> $2",
+            contact_id,
+            normalized_email,
+        )
+        .fetch_all(&mut **tx)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))
+    }
+
+    /// Whether a mailbox has a message, sent to or received from, any of
+    /// `addresses`. The same test the email service runs for the address it
+    /// asks to tear down.
+    async fn mailbox_has_mail_with(
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        link_id: &uuid::Uuid,
+        addresses: &[String],
+    ) -> Result<bool, CrmError> {
+        if addresses.is_empty() {
+            return Ok(false);
+        }
+
+        sqlx::query_file_scalar!(
+            "src/outbound/companies_repo/other_address_mail.sql",
+            link_id,
+            addresses,
+        )
+        .fetch_one(&mut **tx)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))
+    }
+
     /// Hold the existing team alive through manual or consented email writes.
     /// Record availability is independent of mailbox contribution consent.
     async fn team_exists(
@@ -1373,6 +1411,26 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         // lock from its mailbox scan to its commit; wait it out so the scan's
         // snapshot can't re-add what this teardown removes.
         Self::lock_contact_source(&mut tx, team_id, link_id, &normalized_email).await?;
+
+        // A source stands for the whole contact, not one address: keep it
+        // while this mailbox still has mail with another of its addresses.
+        // Like population's mailbox scan, this runs before the domain lock,
+        // so other writers of the domain don't wait on it.
+        let mut checked_addresses = Vec::new();
+        if let Some(target) =
+            Self::find_depopulate_target(&mut tx, team_id, &normalized_domain, &normalized_email)
+                .await?
+        {
+            checked_addresses =
+                Self::other_addresses(&mut tx, target.contact_id, &normalized_email).await?;
+            if Self::mailbox_has_mail_with(&mut tx, link_id, &checked_addresses).await? {
+                tx.commit()
+                    .await
+                    .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+                return Ok(outcome);
+            }
+        }
+
         let Some(row) =
             Self::lock_depopulate_target(&mut tx, team_id, &normalized_domain, &normalized_email)
                 .await?
@@ -1405,18 +1463,15 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             return Ok(outcome);
         };
 
-        // A source stands for the whole contact, not one address: keep it
-        // while this mailbox still has mail with another of its addresses.
-        let justified_by_other_address = sqlx::query_file_scalar!(
-            "src/outbound/companies_repo/other_address_mail.sql",
-            row.contact_id,
-            link_id,
-            normalized_email,
-        )
-        .fetch_one(&mut *tx)
-        .await
-        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
-        if justified_by_other_address {
+        // An address the contact gained since the check above ran is rare
+        // enough to check here, under the locks.
+        let unchecked: Vec<String> =
+            Self::other_addresses(&mut tx, row.contact_id, &normalized_email)
+                .await?
+                .into_iter()
+                .filter(|address| !checked_addresses.contains(address))
+                .collect();
+        if Self::mailbox_has_mail_with(&mut tx, link_id, &unchecked).await? {
             tx.commit()
                 .await
                 .map_err(|e| CrmError::StorageLayerError(e.into()))?;
