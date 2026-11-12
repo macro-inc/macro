@@ -4,8 +4,8 @@
 
 use super::{
     jid::{Jid, is_group_jid},
-    people::ChatRoster,
     models::*,
+    people::ChatRoster,
     ports::*,
     service::{chat_fallback_name, connected},
 };

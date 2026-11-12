@@ -136,7 +136,10 @@ fn members_seen_writing_go_by_their_whatsapp_name() {
     let members = names.name_members(roster());
 
     assert_eq!(
-        members.info.participants[1].identity.display_name.as_deref(),
+        members.info.participants[1]
+            .identity
+            .display_name
+            .as_deref(),
         Some("Ben")
     );
     assert_eq!(
@@ -209,7 +212,10 @@ fn a_direct_chats_peer_has_the_chats_picture_under_any_jid_and_its_owner_never_d
 
     let people = names.people(None);
 
-    assert_eq!(people.person(&stored(1)).picture_file_id, Some(chat_picture));
+    assert_eq!(
+        people.person(&stored(1)).picture_file_id,
+        Some(chat_picture)
+    );
     assert_eq!(people.get(ANA_LID).picture_file_id, Some(chat_picture));
     assert_eq!(people.person(&stored(2)).picture_file_id, None);
 }

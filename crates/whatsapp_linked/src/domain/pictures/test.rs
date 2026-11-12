@@ -134,10 +134,7 @@ async fn staged_pictures_become_the_owners_files_and_a_failure_retries_alone() {
             (group(120363000000000001), Uuid::from_u128(3)),
         ]
     );
-    assert_eq!(
-        *repository.failed.lock().unwrap(),
-        vec![phone("5550002")]
-    );
+    assert_eq!(*repository.failed.lock().unwrap(), vec![phone("5550002")]);
     assert_eq!(
         *files.owners.lock().unwrap(),
         vec![
