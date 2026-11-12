@@ -53,13 +53,13 @@ tokio-util = { version = "0.7", features = ["io"] }
 # packages/collaboration/src/websocket/platform/tauri-websocket.ts in sync when bumping
 # gzip: the services compress only for clients that ask, and the plugin asks
 # only when built with it.
-tauri-plugin-http = { git = "https://github.com/macro-inc/plugins-workspace", rev = "6d4b8233377c73ede09aa08d609a40796b5c35fa", features = [
+tauri-plugin-http = { git = "https://github.com/macro-inc/plugins-workspace", rev = "5896804dbd481f14bb17e8cadc1828ff5619aa1e", features = [
   "gzip",
   "unsafe-headers",
 ] }
 tauri-plugin-log = { version = "2", features = ["tracing"] }
 tauri-plugin-opener = "2"
-tauri-plugin-websocket = { git = "https://github.com/macro-inc/plugins-workspace", rev = "6d4b8233377c73ede09aa08d609a40796b5c35fa" }
+tauri-plugin-websocket = { git = "https://github.com/macro-inc/plugins-workspace", rev = "5896804dbd481f14bb17e8cadc1828ff5619aa1e" }
 thiserror = "2.0.14"
 tokio = { version = "1.47.1", features = ["full"] }
 tracing = { workspace = true }

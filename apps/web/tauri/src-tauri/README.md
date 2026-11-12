@@ -60,13 +60,16 @@ can see of this.
 A connection kept from before a mobile app was suspended can be dead without
 either end knowing, and a request sent on it hangs. The mobile resume handler in
 `src/lib.rs` therefore calls `Http::reset_connections`; call it from any new
-path that learns the network changed. Nothing does that for a network change or
-for a desktop machine waking from sleep today (the network status plugin
-reports only online and offline). A connection that dies silently is then
-noticed by the plugin's HTTP/2 probe: a request that hears nothing for five
-seconds probes, and the connection is dropped after ten more without an answer.
-An HTTP/1.1 connection, such as one to file storage, has no probe and waits for
-TCP to give up. All of this needs a native app release.
+path that learns the network changed. The plugin drops them itself when the
+machine slept ten seconds or more since the last request, which covers a
+desktop machine waking. Nothing does it for a network change with the machine
+awake (the network status plugin reports only online and offline). A
+connection that dies silently is then noticed by the plugin's HTTP/2 probe: a
+request that hears nothing for five seconds probes, and the connection is
+dropped after twenty more without an answer. The wait is that long because the
+answer queues behind data in flight, and a shorter one drops connections that
+are slow, not dead. An HTTP/1.1 connection, such as one to file storage, has no
+probe and waits for TCP to give up. All of this needs a native app release.
 
 Requests on a shared connection share its flow control, so a response body the
 page neither reads nor cancels holds data against the others until it is read
