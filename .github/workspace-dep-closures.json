@@ -7376,6 +7376,8 @@
     "feature_flags": [
       "crates/cowlike",
       "crates/feature_flags",
+      "crates/macro_env",
+      "crates/macro_env_var",
       "crates/macro_user_id",
       "crates/workspace-hack"
     ],
