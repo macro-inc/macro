@@ -542,8 +542,10 @@ export const useEntityActionHotkeys = (
     }).withGroup(group);
   }
 
-  // Block sender (command menu only, no keybinding)
+  // Block sender - 'shift+b' (plain 'b' creates an event from an email)
   registerHotkey({
+    hotkey: ['shift+b'],
+    hotkeyToken: TOKENS.email.blockSender,
     scopeId,
     description: () => t('entityActions.blockSender'),
     keyDownHandler: () => {

@@ -1019,6 +1019,11 @@ const shortcutSections: ShortcutSection[] = [
         codes: ['ShiftLeft', 'KeyM'],
         description: 'Mute or unmute',
       },
+      {
+        keys: ['shift+b'],
+        codes: ['ShiftLeft', 'KeyB'],
+        description: 'Block sender',
+      },
       { keys: ['z'], codes: ['KeyZ'], description: 'Undo the last action' },
       {
         keys: ['escape'],

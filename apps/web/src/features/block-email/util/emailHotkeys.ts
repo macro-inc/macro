@@ -86,6 +86,7 @@ export function registerEmailHotkeys(
     condition: () => handlers.isThreadMarkedUnread(),
   });
   registerHotkey({
+    hotkey: 'shift+b',
     scopeId: scopeId,
     description: 'Block sender',
     keyDownHandler: handlers.blockSender,

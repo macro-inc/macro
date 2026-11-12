@@ -82,7 +82,9 @@ Email (`g t` is still Tasks elsewhere); `g h` still goes Home. `Escape` in a
 list with nothing selected returns to Signal; in the reading pane it first
 hands the keyboard back to the list. `?` lists every shortcut for the focused
 view. `Shift+M` mutes the selected rows or the open thread, and `S` and
-`Shift+M` also work on a thread opened in its own split. In a thread, `O` opens
+`Shift+M` also work on a thread opened in its own split. `Shift+B` blocks the
+sender of the selected rows or the open thread, like Block sender in the
+Command Menu. In a thread, `O` opens
 or closes the selected message (the latest when none is selected), `Shift+O`
 opens every message including the collapsed middle run, and `N`/`P` step
 messages like the arrows. `B` in an open thread, or `Create event` in its

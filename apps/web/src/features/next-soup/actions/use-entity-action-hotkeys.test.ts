@@ -5,7 +5,7 @@ import { createRoot } from 'solid-js';
 import { expect, it, vi } from 'vitest';
 import { useEntityActionHotkeys } from './use-entity-action-hotkeys';
 
-const { action, markDone, discardDraft } = vi.hoisted(() => {
+const { action, markDone, discardDraft, blockSender } = vi.hoisted(() => {
   const action = () => ({
     canExecute: () => true,
     execute: vi.fn(),
@@ -14,6 +14,7 @@ const { action, markDone, discardDraft } = vi.hoisted(() => {
   return {
     action,
     markDone: action(),
+    blockSender: action(),
     discardDraft: {
       ...action(),
       canExecute: (entity: { isDraft?: boolean }) => entity.isDraft === true,
@@ -53,7 +54,7 @@ vi.mock('@app/features/sharing/global-share-modal/shareable-entity', () => ({
   isShareableEntityType: () => false,
 }));
 vi.mock('./make-block-sender-action', () => ({
-  makeBlockSenderAction: action,
+  makeBlockSenderAction: () => blockSender,
 }));
 vi.mock('./index', () => ({
   makeAddTagAction: action,
@@ -130,6 +131,31 @@ it('discards a row draft with the composer discard keys', () => {
     thread = { type: 'email', id: 'thread', isDraft: false } as EntityData;
     expect(options.condition!()).toBe(false);
     expect(options.keyDownHandler!()).toBe(false);
+    dispose();
+  });
+});
+
+it('blocks the sender of the focused row with shift+b', () => {
+  createRoot((dispose) => {
+    const thread = { type: 'email', id: 'thread' } as EntityData;
+    const list = {} as never;
+    useEntityActionHotkeys({
+      scopeId: 'list',
+      list,
+      selectedEntities: () => [],
+      focusedEntity: () => thread,
+      restoreFocus: () => undefined,
+      viewContext: () => ({ supportsMarkDone: true }) as never,
+    });
+    const options = vi
+      .mocked(registerHotkey)
+      .mock.calls.find(
+        ([options]) => options.hotkeyToken === TOKENS.email.blockSender
+      )![0];
+    expect(options.hotkey).toEqual(['shift+b']);
+    expect(options.condition!()).toBe(true);
+    expect(options.keyDownHandler!()).toBe(true);
+    expect(blockSender.executeWithSoup).toHaveBeenCalledWith([thread], list);
     dispose();
   });
 });
