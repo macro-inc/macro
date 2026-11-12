@@ -36,9 +36,23 @@ function optionLabel(value: unknown): string | undefined {
   return undefined;
 }
 
-export function TagMention(
-  props: TagMentionDecoratorProps & TagMentionHostProp
-) {
+/**
+ * Source `importJSON` and `decorate` hand stored values over unchanged, so null
+ * or omitted fields reach this component. It renders them: ids are only
+ * compared, the name is a text child and a missing color takes TagDot's default.
+ */
+export type TagMentionUIProps = Omit<
+  TagMentionDecoratorProps,
+  'optionId' | 'propertyDefinitionId' | 'scope' | 'name' | 'color'
+> & {
+  optionId?: string | null;
+  propertyDefinitionId?: string | null;
+  scope?: TagMentionDecoratorProps['scope'] | null;
+  name?: string | null;
+  color?: string | null;
+} & TagMentionHostProp;
+
+export function TagMention(props: TagMentionUIProps) {
   const lexicalWrapper = useContext(LexicalWrapperContext);
   const editor = lexicalWrapper?.editor;
   const selection = () => lexicalWrapper?.selection;
@@ -54,7 +68,7 @@ export function TagMention(
     return sel.type === 'node' && sel.nodeKeys.has(props.key);
   });
 
-  const resolvedTag = createMemo(() => {
+  const resolvedOption = createMemo(() => {
     for (const set of tagsQuery.data ?? []) {
       for (const option of set.options) {
         if (option.id !== props.optionId) continue;
@@ -67,25 +81,32 @@ export function TagMention(
         };
       }
     }
-    return props;
+    return undefined;
   });
+  const resolvedTag = () => resolvedOption() ?? props;
 
   createEffect(() => {
-    const tag = resolvedTag();
+    const tag = resolvedOption();
+    // An unresolved tag shows the stored props, which never differ from themselves.
     if (
-      tag.propertyDefinitionId === props.propertyDefinitionId &&
-      tag.scope === props.scope &&
-      tag.name === props.name &&
-      tag.color === props.color
+      !tag ||
+      (tag.propertyDefinitionId === props.propertyDefinitionId &&
+        tag.scope === props.scope &&
+        tag.name === props.name &&
+        tag.color === props.color)
     ) {
       return;
     }
+    // The option resolved, but its label is not text and the stored name is
+    // null or missing: the write takes text names only.
+    const name = tag.name;
+    if (typeof name !== 'string') return;
 
     if (props.host) {
       props.host.setTagInfo(props.key, {
         propertyDefinitionId: tag.propertyDefinitionId,
         scope: tag.scope,
-        name: tag.name,
+        name,
         color: tag.color,
       });
       return;
@@ -97,7 +118,7 @@ export function TagMention(
         node.setTagInfo({
           propertyDefinitionId: tag.propertyDefinitionId,
           scope: tag.scope,
-          name: tag.name,
+          name,
           color: tag.color,
         });
       },
@@ -111,8 +132,18 @@ export function TagMention(
   const open = () => {
     if (isAuthenticated() !== true) return;
 
-    const tag = resolvedTag();
-    navigateToTag(split.openWithSplit, tag, { handle: panel?.handle });
+    // A stored null or missing id names no tag to open.
+    const { optionId, propertyDefinitionId } = resolvedTag();
+    if (
+      typeof optionId !== 'string' ||
+      typeof propertyDefinitionId !== 'string'
+    )
+      return;
+    navigateToTag(
+      split.openWithSplit,
+      { optionId, propertyDefinitionId },
+      { handle: panel?.handle }
+    );
   };
 
   const onEnter = (event: KeyboardEvent | null) => {
@@ -151,7 +182,10 @@ export function TagMention(
         }}
       >
         <span class="relative inline-flex -top-px mr-1">
-          <TagDot color={resolvedTag().color} class="size-[0.5em]" />
+          <TagDot
+            color={resolvedTag().color ?? undefined}
+            class="size-[0.5em]"
+          />
         </span>
         <span class="text-ink underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-2">
           {resolvedTag().name}
