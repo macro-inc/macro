@@ -2,9 +2,9 @@
 
 ## What it is
 
-Part of the Email feature: the SQLx query crate for MacroDB's email tables —
-messages, threads, contacts, labels, links, attachments, sync tokens, CRM
-cleanup, and backfill.
+Part of the Email feature: SQLx access to MacroDB's email tables — messages,
+threads, contacts, labels, links, attachments, sync tokens, CRM cleanup and
+backfill — plus legacy storage/workflow helpers that remain to be separated.
 
 ## Start here
 
@@ -16,10 +16,17 @@ cleanup, and backfill.
 
 ## Scope
 
-- Owns: the `sqlx::query!` call sites for email tables.
-- Not here: email domain/business logic → `crates/email`; provider API calls
-  → `email_api_client`. The schema lives in `crates/macro_db_client/migrations/`
-  (shared MacroDB), not here.
+- Owns: email-table statements, relational predicates and transaction-scoped
+  storage operations. The schema lives in `crates/macro_db_client/migrations/`.
+- Put new workflow policy in `crates/email` and provider protocol implementations
+  in `email_api_client`. Preserve SQL guards and lock order when extracting
+  existing Rust decisions into domain services.
+- Purge batching/cursors/pacing, pending-label folding/restoration and scheduled
+  claim/identity/deletion decisions now live in the email domain. Legacy
+  ingestion/savepoints, label mapping during ingestion, parsed-read assembly,
+  contact normalization and backfill lease/completion composites remain. See the
+  [backend architecture](../../docs/architecture/email-backend.md#remaining-boundaries-to-review)
+  before treating a helper as a statement-only port.
 
 ## Boundaries
 
@@ -40,6 +47,7 @@ cleanup, and backfill.
 
 - `cargo test -p email_db_client` (`SQLX_OFFLINE` unset; requires local
   MacroDB — `just setup_macrodb`).
+- Run root `just check` for shared formatting, dependency and code-rule checks.
 
 Parsed message responses expose the draft generation captured in the same SQL snapshot as their content.
 

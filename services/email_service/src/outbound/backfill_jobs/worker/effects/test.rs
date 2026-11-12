@@ -2,7 +2,6 @@ use super::*;
 use crate::outbound::email_api::{
     EmailServiceTokenSource, GmailApi, RateBudget, RedisGmailRequestGate,
 };
-use crate::pubsub::context::{CrmMetadataResolver, PubSubContext};
 use crate::util::redis::RedisClient;
 use redis::AsyncCommands;
 use std::collections::BTreeMap;
@@ -51,15 +50,11 @@ async fn effects(
             RateBudget::Backfill,
         ),
     );
-    BackfillWorkerEffects(PubSubContext {
-        gmail_history: email::domain::mailbox::gmail_history::GmailHistoryService(
-            email::outbound::mailbox_pg::PgMailboxSync::new(db.clone()),
-        ),
-        invitation_extractor: crate::pubsub::invitation_extraction::compose(
+    BackfillWorkerEffects {
+        invitation_extractor: crate::composition::workers::invitation_extractor(
             db.clone(),
             email_api.clone(),
         ),
-        sqs_worker: sqs_worker::SQSWorker::new(sqs_sdk.clone(), unused_url.to_string(), 1, 1),
         sqs_client,
         contacts_ingress: Arc::new(contacts::domain::service::SqsContactsIngress {
             queue: contacts::outbound::ingress::SqsContactsQueue::new(
@@ -69,14 +64,6 @@ async fn effects(
         }),
         email_api,
         redis_client: RedisClient::new(redis_client, 60),
-        notification_ingress_service: Arc::new(
-            notification::domain::service::SqsNotificationIngress {
-                queue: notification::outbound::queue::SqsQueue::new(
-                    sqs_sdk,
-                    unused_url.to_string(),
-                ),
-            },
-        ),
         sfs_client: static_file_service_client::StaticFileServiceClient::new(
             "test".to_string(),
             unused_url.to_string(),
@@ -92,20 +79,12 @@ async fn effects(
         system_properties_service: Arc::new(system_properties::SystemPropertiesServiceImpl::new(
             system_properties::PgSystemPropertiesRepository::new(db.clone()),
         )),
-        crm_service: crm::domain::service::CrmServiceImpl::new(
-            crm::outbound::companies_repo::CompaniesRepositoryImpl::new(db.clone()),
-            CrmMetadataResolver::new(Arc::new(unfurl::domain::service::UnfurlServiceImpl::new(
-                unfurl::outbound::ReqwestUnfurlFetcher::new().unwrap(),
-            ))),
-        ),
         macro_event_broker: macro_event_broker::MacroEventBrokerService::new(
             macro_event_broker::KafkaEventPublisher::new("127.0.0.1:9").unwrap(),
             tokio_util::task::TaskTracker::new(),
         ),
         db,
-        notifications_enabled: false,
-        retry_worker: false,
-    })
+    }
 }
 
 #[tokio::test]
@@ -127,7 +106,6 @@ async fn delete_thread_progress_removes_only_the_requested_redis_progress() {
         let _: bool = redis.expire(key, 60).await.unwrap();
     }
     effects
-        .0
         .redis_client
         .init_backfill_job_progress(job, 4)
         .await
