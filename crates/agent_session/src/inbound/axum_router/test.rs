@@ -1126,20 +1126,100 @@ async fn a_managed_open_carries_its_first_prompts_id_and_attachments() {
     );
 }
 
-/// A prompt's id or files mean nothing without the prompt, and dropping them
-/// would leave the caller showing a prompt nobody sent.
+/// A prompt's id, files or tab mean nothing without the prompt, and dropping
+/// them would leave the caller showing a prompt nobody sent.
 #[tokio::test]
 async fn a_first_prompts_details_without_a_prompt_are_refused() {
+    for details in [
+        serde_json::json!({ "promptActionId": AgentActionId::mint() }),
+        serde_json::json!({ "promptClientId": Uuid::from_u128(0xc1) }),
+    ] {
+        let opener = Arc::new(RecordingOpener::default());
+        let request = as_user(OWNER, details.to_string());
+
+        let response = router(opener.clone()).oneshot(request).await.unwrap();
+
+        assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+        assert!(opener.managed.lock().unwrap().is_empty());
+    }
+}
+
+/// A first prompt typed in a tab names it on the create, as a control prompt
+/// does, so what the first turn opens reaches that tab.
+#[tokio::test]
+async fn a_person_names_the_tab_they_typed_the_first_prompt_in() {
+    let tab = Uuid::from_u128(0xc1);
     let opener = Arc::new(RecordingOpener::default());
     let request = as_user(
         OWNER,
-        serde_json::json!({ "promptActionId": AgentActionId::mint() }).to_string(),
+        serde_json::json!({ "prompt": "open the plan", "promptClientId": tab }).to_string(),
     );
 
     let response = router(opener.clone()).oneshot(request).await.unwrap();
 
-    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
-    assert!(opener.managed.lock().unwrap().is_empty());
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let managed = opener.managed.lock().unwrap();
+    let [open] = managed.as_slice() else {
+        panic!("expected one managed open, got {managed:?}");
+    };
+    let prompt = open.prompt.as_ref().expect("the first prompt is carried");
+    assert_eq!(
+        prompt.client,
+        Some(crate::domain::model::UiClientId::from_uuid(tab))
+    );
+}
+
+/// A bot or a harness forwarding a prompt for a person has no tab of its own,
+/// so naming one on the create is refused, as it is on the control endpoint.
+#[tokio::test]
+async fn a_runtime_cannot_name_a_tab_on_the_create() {
+    let body = serde_json::json!({
+        "prompt": "open the plan",
+        "promptClientId": Uuid::from_u128(0xc1),
+    })
+    .to_string();
+
+    for request in [
+        as_bot_for("user", Some(OWNER), body.clone()),
+        as_harness_for(OWNER, body.clone()),
+    ] {
+        let opener = Arc::new(RecordingOpener::default());
+
+        let response = router(opener.clone()).oneshot(request).await.unwrap();
+
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        assert!(opener.managed.lock().unwrap().is_empty());
+    }
+}
+
+/// An agent's program using a person's credential still creates the session
+/// as that person, but the tab it names is not kept.
+#[tokio::test]
+async fn a_program_using_a_persons_credential_has_its_tab_dropped_on_the_create() {
+    let opener = Arc::new(RecordingOpener::default());
+    let mut request = as_user(
+        OWNER,
+        serde_json::json!({
+            "prompt": "open the plan",
+            "promptClientId": Uuid::from_u128(0xc1),
+        })
+        .to_string(),
+    );
+    request.headers_mut().insert(
+        macro_authorization::CODE_EXECUTION_HEADER,
+        axum::http::HeaderValue::from_static("1"),
+    );
+
+    let response = router(opener.clone()).oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let managed = opener.managed.lock().unwrap();
+    let [open] = managed.as_slice() else {
+        panic!("expected one managed open, got {managed:?}");
+    };
+    let prompt = open.prompt.as_ref().expect("the first prompt is carried");
+    assert_eq!(prompt.prompt, "open the plan");
+    assert_eq!(prompt.client, None);
 }
 
 #[tokio::test]
