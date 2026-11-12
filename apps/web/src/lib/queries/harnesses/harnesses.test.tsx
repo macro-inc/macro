@@ -1,4 +1,4 @@
-import { render, screen } from '@solidjs/testing-library';
+import { render } from '@solidjs/testing-library';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { err, ok } from 'neverthrow';
 import { createSignal } from 'solid-js';
@@ -98,37 +98,8 @@ it('fetches the runtime directory only after its caller enables sharing', async 
   expect(mocks.getHarnessDirectory).toHaveBeenCalledOnce();
 });
 
-it('refreshes remote access grants and revocations without focus or remount', async () => {
-  mocks.getHarnessDirectory
-    .mockResolvedValueOnce(ok([{ id: 'runtime', access: 'none' }]))
-    .mockResolvedValueOnce(ok([{ id: 'runtime', access: 'read' }]))
-    .mockResolvedValue(ok([{ id: 'runtime', access: 'none' }]));
-  function Probe() {
-    const directory = useHarnessDirectoryQuery();
-    return (
-      <p role="status">
-        {directory.isPending ? 'loading' : directory.data?.[0]?.access}
-      </p>
-    );
-  }
-  unmount = render(() => (
-    <QueryClientProvider client={queryClient}>
-      <Probe />
-    </QueryClientProvider>
-  )).unmount;
-  await vi.advanceTimersByTimeAsync(0);
-  expect(screen.getByRole('status').textContent).toBe('none');
-  await vi.advanceTimersByTimeAsync(15_000);
-  expect(screen.getByRole('status').textContent).toBe('read');
-  await vi.advanceTimersByTimeAsync(15_000);
-  expect(screen.getByRole('status').textContent).toBe('none');
-  expect(mocks.getHarnessDirectory).toHaveBeenCalledTimes(3);
-});
-
-it('stops directory polling after a dead session and resumes after login invalidation', async () => {
-  mocks.getHarnessDirectory.mockResolvedValue(
-    err([{ code: 'UNAUTHORIZED', message: 'Unauthorized' }])
-  );
+it('does not poll the runtime directory', async () => {
+  mocks.getHarnessDirectory.mockResolvedValue(ok([]));
   function Probe() {
     useHarnessDirectoryQuery();
     return null;
@@ -142,9 +113,4 @@ it('stops directory polling after a dead session and resumes after login invalid
   expect(mocks.getHarnessDirectory).toHaveBeenCalledOnce();
   await vi.advanceTimersByTimeAsync(60_000);
   expect(mocks.getHarnessDirectory).toHaveBeenCalledOnce();
-  mocks.getHarnessDirectory.mockResolvedValue(ok([]));
-  await queryClient.invalidateQueries();
-  expect(mocks.getHarnessDirectory).toHaveBeenCalledTimes(2);
-  await vi.advanceTimersByTimeAsync(15_000);
-  expect(mocks.getHarnessDirectory).toHaveBeenCalledTimes(3);
 });

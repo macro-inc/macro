@@ -6,6 +6,7 @@ import {
   invalidateHarnesses,
   useHarnessesQuery,
 } from '@queries/harnesses/harnesses';
+import { harnessKeys } from '@queries/harnesses/keys';
 import {
   type ComputerStatus,
   type ComputerStatusKind,
@@ -69,6 +70,19 @@ export function computerPresenceKey(
     .join(',');
 }
 
+/**
+ * Each computer's lifecycle status, as one comparable string. A change is the
+ * cue to refresh the runtime directory, which shows computers' power state
+ * elsewhere and does not poll on its own.
+ */
+export function computerStatusKey(
+  computers: readonly ComputerStatus[] | undefined
+): string {
+  return (computers ?? [])
+    .map((computer) => `${computer.id}:${computer.status}`)
+    .join(',');
+}
+
 /** The current team's Macro computers; any team member can read them. */
 export function useComputersQuery(enabled: () => boolean) {
   const computers = useQuery(() => computersQueryOptions(enabled()));
@@ -93,6 +107,20 @@ export function useComputersQuery(enabled: () => boolean) {
             'computers-presence'
           );
         }
+      },
+      { defer: true }
+    )
+  );
+  createEffect(
+    on(
+      () => computerStatusKey(computers.data),
+      () => {
+        fireAndForget(
+          queryClient.invalidateQueries({
+            queryKey: harnessKeys.directory.queryKey,
+          }),
+          'computers-directory'
+        );
       },
       { defer: true }
     )
