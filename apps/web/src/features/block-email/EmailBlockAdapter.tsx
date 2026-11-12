@@ -30,8 +30,8 @@ import {
 import type { EmailThreadHostViewProps } from './EmailThreadHostView';
 import { useEmailListNavigation } from './use-email-list-navigation';
 import { registerEmailHotkeys } from './util/emailHotkeys';
-import { DesktopEmailThread } from './views/desktop-email-thread';
-import { MobileEmailThread } from './views/mobile-email-thread';
+import { EmailThread } from './views/email-thread';
+import { MobileEmailThread } from './views/mobile/email-thread';
 
 /**
  * The email block's entry: it owns the thread's target, focus and keyboard,
@@ -128,7 +128,7 @@ export function EmailBlockAdapter(props: {
     <Show
       when={isTouchDevice()}
       fallback={
-        <DesktopEmailThread
+        <EmailThread
           title={props.title}
           threadId={props.threadId}
           source={props.source}

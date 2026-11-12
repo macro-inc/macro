@@ -25,11 +25,12 @@ read their code, and follow that pattern rather than inventing a new one.
   mobile view for phones (touch and under 640px). Native checks (`isPlatform`
   in `@core/util/platform`) are for native bridges and platform-specific
   visual effects, not layout.
-- **FE-70** Give each app view a `views/desktop-<name>.tsx` and a
-  `views/mobile-<name>.tsx` over shared state and parts, switched once in the
-  view's entry with `<Show when={isTouchDevice()}>`; `features/task-composer`
-  and `features/block-email` are the references. Enforced by ast-grep
-  `tsx-desktop-view-no-device-checks`, `tsx-mobile-view-closed`,
+- **FE-70** Give each app view a desktop view in `views/<name>.tsx` and a
+  mobile view in `views/mobile/<name>.tsx` over shared state, switched once
+  in the view's entry with `<Show when={isTouchDevice()}>`. Parts both views
+  render go in `views/shared/`; `features/task-composer` and
+  `features/block-email` are the references. Enforced by ast-grep
+  `tsx-views-no-mobile-imports`, `tsx-mobile-view-closed`,
   `tsx-mobile-header-only-in-mobile-views`, and `tsx-no-device-composition`,
   CI error. See [platform views](../../../docs/architecture/frontend-features.md#platform-views).
 - Never decide by device what exists outside that switch: a shared part adapts

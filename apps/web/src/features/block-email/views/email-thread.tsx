@@ -21,13 +21,13 @@ import {
   EmailThreadHostView,
 } from '../EmailThreadHostView';
 import {
-  desktopEmailThreadMenu,
   EmailThreadActions,
   EmailThreadControlGroups,
   EmailThreadHeaderActions,
-} from './desktop-email-thread-parts';
+  emailThreadMenu,
+} from './email-thread-parts';
 
-function DesktopEmailThreadHeader(props: EmailThreadToolsOptions) {
+function EmailThreadHeader(props: EmailThreadToolsOptions) {
   const panel = useSplitPanelOrThrow();
   const { isInvite, actions, controls, openShare, emailEntity, permissions } =
     useEmailThreadTools(props);
@@ -81,7 +81,7 @@ function DesktopEmailThreadHeader(props: EmailThreadToolsOptions) {
           itemType="email"
           name={props.title}
           ops={[]}
-          tools={desktopEmailThreadMenu(actions)}
+          tools={emailThreadMenu(actions)}
           entity={emailEntity()}
           permissions={permissions()}
           buttonClass="order-first"
@@ -92,7 +92,7 @@ function DesktopEmailThreadHeader(props: EmailThreadToolsOptions) {
 }
 
 /** The email block on desktop: a thread in its own split or an inline preview. */
-export function DesktopEmailThread(props: EmailBlockViewProps) {
+export function EmailThread(props: EmailBlockViewProps) {
   return (
     <EmailThreadHostView
       title={props.title}
@@ -101,7 +101,7 @@ export function DesktopEmailThread(props: EmailBlockViewProps) {
       threadTransport={props.threadTransport}
       host={props.host}
       topBar={(context) => (
-        <DesktopEmailThreadHeader
+        <EmailThreadHeader
           id={props.threadId()}
           title={props.title}
           onCreateTask={context.createTask}

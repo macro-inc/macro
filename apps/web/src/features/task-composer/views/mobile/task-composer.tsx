@@ -3,8 +3,8 @@ import { Property } from '@property';
 import { InlineTagsSheetPill } from '@property/tags';
 import { cn, EntityComposer } from '@ui';
 import { createSignal, onCleanup } from 'solid-js';
-import type { TaskComposerController } from '../primitives/task-composer';
-import { TaskComposer } from './task-composer-parts';
+import type { TaskComposerController } from '../../primitives/task-composer';
+import { TaskComposerParts } from '../shared/task-composer-parts';
 
 /** The task composer in the touch bottom sheet. */
 export function MobileTaskComposer(props: {
@@ -39,7 +39,7 @@ export function MobileTaskComposer(props: {
   };
 
   return (
-    <TaskComposer.Root
+    <TaskComposerParts.Root
       composer={props.composer}
       tagsPill={InlineTagsSheetPill}
       propertyEditor={Property.SheetEditor}
@@ -54,16 +54,16 @@ export function MobileTaskComposer(props: {
         )}
       >
         <div class="flex-1 flex items-center">
-          <TaskComposer.ContinueInSplit />
+          <TaskComposerParts.ContinueInSplit />
         </div>
         {/* Far enough from Create Task that a tap meant for one cannot land
             on the other. */}
         <div class="flex items-center gap-8">
-          <TaskComposer.Clear />
-          <TaskComposer.Submit />
+          <TaskComposerParts.Clear />
+          <TaskComposerParts.Submit />
         </div>
       </EntityComposer.Header>
-      <TaskComposer.Recovery />
+      <TaskComposerParts.Recovery />
       {/* The sheet scrolls rather than shrinking the composer below its
           content, so nothing needs clipping, and the property row can scroll
           to the sheet's edges. */}
@@ -72,21 +72,21 @@ export function MobileTaskComposer(props: {
         onPointerDown={keepTypingFocus}
         onMouseDown={keepTypingFocus}
       >
-        <TaskComposer.Title />
-        <TaskComposer.Body />
+        <TaskComposerParts.Title />
+        <TaskComposerParts.Body />
         <div class="shrink-0 flex items-center py-2">
-          <TaskComposer.Attach />
+          <TaskComposerParts.Attach />
         </div>
         <div class="-mx-4 shrink-0 overflow-x-auto overscroll-x-contain scrollbar-hidden">
-          <TaskComposer.Properties class="w-max flex-nowrap px-4" />
+          <TaskComposerParts.Properties class="w-max flex-nowrap px-4" />
         </div>
       </EntityComposer.Main>
-      <TaskComposer.ErrorMessage />
+      <TaskComposerParts.ErrorMessage />
       {/* Hidden when there is neither a team nor a source to link back to. */}
       <EntityComposer.Footer class="items-center empty:hidden">
-        <TaskComposer.ShareToggle />
-        <TaskComposer.LinkInSourceToggle />
+        <TaskComposerParts.ShareToggle />
+        <TaskComposerParts.LinkInSourceToggle />
       </EntityComposer.Footer>
-    </TaskComposer.Root>
+    </TaskComposerParts.Root>
   );
 }

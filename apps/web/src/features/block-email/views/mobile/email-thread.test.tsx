@@ -8,9 +8,9 @@ import {
 } from '@solidjs/testing-library';
 import { type ComponentProps, For, type JSX } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
-import type { EmailThreadToolsOptions } from '../component/useEmailThreadTools';
-import type { EmailThreadHostViewProps } from '../EmailThreadHostView';
-import { MobileEmailThread } from './mobile-email-thread';
+import type { EmailThreadToolsOptions } from '../../component/useEmailThreadTools';
+import type { EmailThreadHostViewProps } from '../../EmailThreadHostView';
+import { MobileEmailThread } from './email-thread';
 
 const actions = vi.hoisted(() => ({ task: vi.fn(), details: vi.fn() }));
 
@@ -43,7 +43,7 @@ vi.mock('@components/app/split-layout/components/SplitFileMenu', () => ({
     </menu>
   ),
 }));
-vi.mock('../EmailThreadHostView', () => ({
+vi.mock('../../EmailThreadHostView', () => ({
   EmailThreadHostView: (props: EmailThreadHostViewProps) => {
     const context = {
       createTask: actions.task,
@@ -58,7 +58,7 @@ vi.mock('../EmailThreadHostView', () => ({
     );
   },
 }));
-vi.mock('../component/useEmailThreadTools', () => ({
+vi.mock('../../component/useEmailThreadTools', () => ({
   useEmailThreadTools: (options: EmailThreadToolsOptions) => {
     const action = (label: string, run = () => {}) => ({
       label,

@@ -15,11 +15,11 @@ import {
 import { EmailThreadHostView } from '@block-email/EmailThreadHostView';
 import { registerEmailHotkeys } from '@block-email/util/emailHotkeys';
 import {
-  desktopEmailThreadMenu,
   EmailThreadActions,
   EmailThreadControlGroups,
   EmailThreadHeaderActions,
-} from '@block-email/views/desktop-email-thread-parts';
+  emailThreadMenu,
+} from '@block-email/views/email-thread-parts';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { SidePanel } from '@components/app/side-panel';
 import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
@@ -91,7 +91,7 @@ function EmailDetailHeader(
               entity={emailEntity()}
               permissions={permissions()}
               ops={[]}
-              tools={desktopEmailThreadMenu(actions)}
+              tools={emailThreadMenu(actions)}
               onEmailReminderSaved={props.onEmailReminderSaved}
             />
           </Portal>

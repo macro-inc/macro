@@ -67,8 +67,8 @@ may import a block package, `@core/block`, or block-related signal modules.
   `email-compose/primitives/reply-composer.ts` owns the compose workflow.
 - `block-email/EmailBlockAdapter.tsx` translates block focus, keyboard scope,
   location parameters, and block methods into `EmailThreadHost` callbacks, then
-  picks `views/desktop-email-thread.tsx` or, on touch, where every thread opens
-  as this block, `views/mobile-email-thread.tsx`.
+  picks `views/email-thread.tsx` or, on touch, where every thread opens as
+  this block, `views/mobile/email-thread.tsx`.
   `block-email/EmailThreadHostView.tsx` composes the shared thread body without
   reading block state, so the Email view can mount it directly and compose its
   own top bar. The body adds nothing to a host's header: each host passes its

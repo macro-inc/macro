@@ -43,13 +43,13 @@ vi.mock('./use-email-list-navigation', () => ({
   useEmailListNavigation: () => undefined,
 }));
 vi.mock('./util/emailHotkeys', () => ({ registerEmailHotkeys: () => {} }));
-vi.mock('./views/desktop-email-thread', () => ({
-  DesktopEmailThread: (props: { host: EmailThreadHost }) => {
+vi.mock('./views/email-thread', () => ({
+  EmailThread: (props: { host: EmailThreadHost }) => {
     state.host = props.host;
     return <p>Desktop email thread</p>;
   },
 }));
-vi.mock('./views/mobile-email-thread', () => ({
+vi.mock('./views/mobile/email-thread', () => ({
   MobileEmailThread: (props: { host: EmailThreadHost }) => {
     state.host = props.host;
     return <p>Mobile email thread</p>;

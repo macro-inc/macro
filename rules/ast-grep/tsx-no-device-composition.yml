@@ -1,9 +1,9 @@
 id: tsx-no-device-composition
 language: tsx
 severity: error
-message: Only a view's entry decides by device what exists. Move this branch into views/desktop-*.tsx or views/mobile-*.tsx.
+message: Only a view's entry decides by device what exists. Move this branch into the desktop view (views/<name>.tsx) or the mobile view (views/mobile/<name>.tsx).
 note: |-
-  Rule FE-70 in docs/development/style-guide.md. A `Show` / `Match` on
+  Rule FE-70 in .agents/rules/web/mobile.md. A `Show` / `Match` on
   `isTouchDevice()` / `isMobile()`, a device check that yields JSX, or a
   `touch:hidden`-style class makes one component build both the desktop and
   the mobile view, so a desktop change reaches mobile unnoticed. Give the view
@@ -20,7 +20,7 @@ ignores:
   - '**/*.test.tsx'
   - '**/browser-test/**'
   # A mobile view may branch on isMobile() / mobile: for phone versus tablet.
-  - apps/web/src/**/views/mobile-*.tsx
+  - apps/web/src/**/views/mobile/**
   # Entries: the one device switch of each split view.
   - apps/web/src/features/block-email/EmailBlockAdapter.tsx
   - apps/web/src/features/task-composer/compose-task.tsx

@@ -77,7 +77,7 @@ Components, styling, and interaction conventions.
   checkbox settings on `Dropdown.CheckboxItem`. Follow the
   [shared interaction pattern](../../../docs/agent-guide/ui-conventions.md#multiselect-dropdowns).
 - **FE-54** Decide mobile behavior deliberately. A UI change lands in the
-  desktop view unless the task says otherwise; edit a `views/mobile-*.tsx`
+  desktop view unless the task says otherwise; edit a file in `views/mobile/`
   file only on purpose, so a desktop feature is absent on mobile until someone
   adds it there. Unless the change makes it obvious, ask the user how it
   should look and behave on mobile, then follow [`mobile.md`](mobile.md).

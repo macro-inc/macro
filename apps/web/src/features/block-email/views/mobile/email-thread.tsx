@@ -3,11 +3,11 @@ import { BlockSplitFileMenu } from '@components/app/split-layout/components/Spli
 import {
   type EmailThreadToolsOptions,
   useEmailThreadTools,
-} from '../component/useEmailThreadTools';
+} from '../../component/useEmailThreadTools';
 import {
   type EmailBlockViewProps,
   EmailThreadHostView,
-} from '../EmailThreadHostView';
+} from '../../EmailThreadHostView';
 
 /**
  * Back, the subject with its menu, and Info. Every other thread action lives

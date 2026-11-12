@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import type { ComponentProps, JSX } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { EmailThreadHostViewProps } from '../EmailThreadHostView';
-import { DesktopEmailThread } from './desktop-email-thread';
+import { EmailThread } from './email-thread';
 
 const actions = vi.hoisted(() => ({
   share: vi.fn(),
@@ -102,8 +102,8 @@ it('keeps email actions, sharing, and details available in the desktop header', 
     source: {},
     threadTransport: {},
     host: {},
-  } as ComponentProps<typeof DesktopEmailThread>;
-  render(() => <DesktopEmailThread {...props} />);
+  } as ComponentProps<typeof EmailThread>;
+  render(() => <EmailThread {...props} />);
 
   expect(screen.getByRole('heading', { name: 'A shared email' })).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Mark as unread' }));

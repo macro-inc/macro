@@ -63,7 +63,7 @@ apps/web/src/features/<feature>/
   primitives/     Reactive state and actions, without JSX
   components/     Presentational JSX driven by props
   views/          Use-case composition of context, primitives, and components;
-                  an app view has a desktop-<name>.tsx and a mobile-<name>.tsx
+                  an app view has a desktop <name>.tsx and a mobile/<name>.tsx
   context/        Feature contracts and provider/consumer mechanism
   tests/          Shared test clients, context builders, and wire helpers
   <feature>.tsx   App-facing production composition and provider mounting
@@ -278,14 +278,16 @@ both desktop and touch has two compositions, in separate files, so a change
 made for desktop cannot reach mobile unnoticed:
 
 ```text
-<entry>.tsx                  providers, shared state, the one device switch
-views/desktop-<name>.tsx     Desktop<Name>: desktop layout, chrome, actions
-views/mobile-<name>.tsx      Mobile<Name>: touch layout, chrome, actions
-views/<name>-parts.tsx       shared parts that read the feature's context
+<entry>.tsx                    providers, shared state, the one device switch
+views/<name>.tsx               <Name>: desktop layout, chrome, actions
+views/<name>-parts.tsx         parts only the desktop view renders
+views/mobile/<name>.tsx        Mobile<Name>: touch layout, chrome, actions
+views/mobile/<name>-parts.tsx  parts only the mobile view renders
+views/shared/<name>-parts.tsx  parts both views render
 ```
 
 - **The entry holds the only device switch**, written inline:
-  `<Show when={isTouchDevice()} fallback={<DesktopX />}><MobileX /></Show>`.
+  `<Show when={isTouchDevice()} fallback={<X />}><MobileX /></Show>`.
   It keys on touch, not phone width, because the app shell (dock, floating
   header, no sidebar) does: phones and tablets both get the mobile view. An
   entry is the feature's route view, its root component, or a block adapter.
@@ -301,8 +303,12 @@ views/<name>-parts.tsx       shared parts that read the feature's context
   hook that offers actions returns them by name, and each view lists the ones
   it shows. A part that bundles several actions carries every later addition
   to both platforms.
-- **A part only one platform renders is named for it**
-  (`desktop-<name>-parts.tsx`), so the view rules below cover it.
+- **Desktop is the default, so it has no prefix or directory.** A file in
+  `views/` outside `mobile/` and `shared/` is a desktop view, or predates the
+  split and may still serve both platforms. `tsx-no-device-composition` keeps
+  a split desktop view from branching on the device. Only the entry imports
+  from `views/mobile/`, and a mobile view imports nothing from `views/`
+  outside `mobile/` and `shared/`.
 - **A mobile view composes its header with `MobileHeader`**
   (`components/app/mobile-header`). While it is mounted it owns the pane's
   header: nothing else in the pane can add to it. A mobile view may branch on
@@ -640,9 +646,9 @@ for the first three:
 
 | Rule | Applies to | Main check |
 | --- | --- | --- |
-| `tsx-desktop-view-no-device-checks` | `views/desktop-*.tsx` | No device check, touch class variant, or mobile view import |
-| `tsx-mobile-view-closed` | `views/mobile-*.tsx` | No `isTouchDevice`, `touch:` / `not-touch:`, desktop view, or open header outlet |
-| `tsx-mobile-header-only-in-mobile-views` | everything but `mobile-*.tsx` | No `MobileHeader` import |
+| `tsx-views-no-mobile-imports` | `views/*.tsx`, `views/shared/**` | No import from `views/mobile/` |
+| `tsx-mobile-view-closed` | `views/mobile/**` | No `isTouchDevice`, `touch:` / `not-touch:`, import from the desktop side of `views/`, or open header outlet |
+| `tsx-mobile-header-only-in-mobile-views` | everything but `views/mobile/**` | No `MobileHeader` import |
 | `tsx-no-device-composition` | `features/**` | No `Show` / `Match` on a device check, device check yielding JSX, or `touch:hidden`-style class |
 
 `tsx-no-device-composition` ignores two lists of files: the entries, which hold

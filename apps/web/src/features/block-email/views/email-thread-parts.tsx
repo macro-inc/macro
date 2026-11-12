@@ -20,9 +20,7 @@ import type {
 } from '../component/useEmailThreadTools';
 
 /** The desktop title menu, in menu order. */
-export function desktopEmailThreadMenu(
-  actions: EmailThreadMenuActions
-): BlockTool[] {
+export function emailThreadMenu(actions: EmailThreadMenuActions): BlockTool[] {
   return [
     actions.markDone,
     actions.markNotDone,

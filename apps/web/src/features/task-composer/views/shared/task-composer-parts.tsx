@@ -23,20 +23,20 @@ import {
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { tabbable } from 'tabbable';
-import { CustomerContactPill } from '../components/customer-contact-pill';
+import { CustomerContactPill } from '../../components/customer-contact-pill';
 import {
   ComposeTaskTitleEditor,
   TaskTitleAccessory,
-} from '../components/title-editor';
-import { TASK_COMPOSER_TITLE_ATTRIBUTE } from '../new-task-title-focus';
-import type { TaskComposerController } from '../primitives/task-composer';
+} from '../../components/title-editor';
+import { TASK_COMPOSER_TITLE_ATTRIBUTE } from '../../new-task-title-focus';
+import type { TaskComposerController } from '../../primitives/task-composer';
 
 const TaskComposerPartsContext = createContext<TaskComposerController>();
 
 function useTaskComposer() {
   const composer = useContext(TaskComposerPartsContext);
   if (!composer) {
-    throw new Error('TaskComposer parts must be rendered inside Root');
+    throw new Error('TaskComposerParts must be rendered inside Root');
   }
   return composer;
 }
@@ -434,7 +434,7 @@ function SimilarTasks() {
  * Parts of the task composer. A view creates the controller with
  * `createTaskComposer`, hands it to `Root`, and lays out the parts it shows.
  */
-export const TaskComposer = {
+export const TaskComposerParts = {
   Root,
   ContinueInSplit,
   ClearDraft,
