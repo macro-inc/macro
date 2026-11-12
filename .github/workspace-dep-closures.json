@@ -5582,6 +5582,7 @@
       "crates/bot_token",
       "crates/cowlike",
       "crates/dictation",
+      "crates/genai_telemetry",
       "crates/harness_id",
       "crates/harness_token",
       "crates/macro_auth",
@@ -7156,6 +7157,8 @@
     ],
     "embedding": [
       "crates/embedding",
+      "crates/genai_telemetry",
+      "crates/macro_env_var",
       "crates/workspace-hack"
     ],
     "ensure_exists": [
@@ -10398,9 +10401,11 @@
       "crates/macro_env_var",
       "crates/macro_tower_layers",
       "crates/macro_user_id",
+      "crates/macro_uuid",
       "crates/mcp_toolset",
       "crates/model-error-response",
       "crates/model_user",
+      "crates/models_databases",
       "crates/pipedream_mcp",
       "crates/remote_env_var",
       "crates/workspace-hack"

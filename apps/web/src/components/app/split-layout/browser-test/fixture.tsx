@@ -10,6 +10,11 @@ import {
 } from '@app/lib/split-router';
 import { appRoutes } from '@app/lib/split-router/tests/fixtures';
 import { fireAndForget } from '@core/util/fireAndForget';
+import {
+  captureScrollAnchor,
+  keepScrollAnchorOnResize,
+} from '@core/util/scrollAnchor';
+import { For, onCleanup, onMount, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { TiledSplits } from '../TiledSplits';
 
@@ -44,6 +49,38 @@ Reflect.set(window, 'tiledSplitsUrl', () => formatLocation(history.read()));
 const DESTINATIONS = ['/drive', '/mail', '/md/d1', '/md/d2', '/md/d3'];
 let opened = 0;
 let mounts = 0;
+
+const PARAGRAPHS = Array.from(
+  { length: 80 },
+  (_, i) =>
+    `Paragraph ${i}. ` +
+    'Reading text that wraps onto more or fewer lines as the split narrows or widens. '.repeat(
+      1 + (i % 4)
+    )
+);
+
+// A document's scroll container, as a markdown split has one. WebKit has no
+// CSS scroll anchoring; `overflow-anchor: none` gives Chromium the same
+// behavior, so a test sees what a reader sees in Safari or the desktop app.
+function Reading() {
+  let scroller!: HTMLDivElement;
+  let text!: HTMLDivElement;
+  onMount(() =>
+    onCleanup(
+      keepScrollAnchorOnResize(scroller, () =>
+        captureScrollAnchor(scroller, text)
+      )
+    )
+  );
+
+  return (
+    <div ref={scroller} class="reading" data-reading>
+      <div ref={text}>
+        <For each={PARAGRAPHS}>{(paragraph) => <p>{paragraph}</p>}</For>
+      </div>
+    </div>
+  );
+}
 
 function Pane(props: { pane: PaneId }) {
   // Counts mounts, so a test can tell a moved pane from a remounted one.
@@ -88,6 +125,9 @@ function Pane(props: { pane: PaneId }) {
       >
         Close
       </button>
+      <Show when={label() === 'block'}>
+        <Reading />
+      </Show>
     </section>
   );
 }
@@ -100,6 +140,7 @@ function App() {
       body { margin: 0; font: 14px sans-serif; }
       .area { position: absolute; left: 0; top: 0; width: 1200px; height: 800px; }
       .pane { width: 100%; height: 100%; display: flex; flex-direction: column; gap: 4px; padding: 8px; border: 1px solid #888; overflow: hidden; }
+      .reading { flex: 1; min-height: 0; overflow: auto; overflow-anchor: none; }
       `}</style>
       <div class="area">
         <TiledSplits

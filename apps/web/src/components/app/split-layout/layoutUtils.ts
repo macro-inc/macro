@@ -55,7 +55,19 @@ export function useSplitPanelOrThrow() {
 }
 
 /**
+ * The view a split is in: the component it shows, or the nearest one behind
+ * its content in history (the list a detail was opened from).
+ */
+export function splitViewId(
+  handle: Pick<SplitHandle, 'history'>
+): string | undefined {
+  return handle.history().findLast((content) => content.type === 'component')
+    ?.id;
+}
+
+/**
  * Creates or replaces a named resource under the current split panel's owner.
+ * It lasts until the name is reused or the split moves to another view.
  */
 export function withSplitPanelOwner<T>(name: string, factory: () => T): T {
   return useSplitPanelOrThrow().replaceOwnedSlot(name, factory);

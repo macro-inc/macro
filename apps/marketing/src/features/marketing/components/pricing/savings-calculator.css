@@ -37,6 +37,15 @@
   .pricing-savings-body { grid-template-columns: minmax(0, 1fr); }
   .pricing-savings-summary { position: static; }
 }
+/* A phone row cannot hold the name, plan picker, and price side by side:
+   keep the name and price on the first line and move the picker under the name. */
+@media (max-width: 600px) {
+  .pricing-savings-tools > li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 8px; padding: 8px 4px 12px; }
+  .pricing-savings-toggle { gap: 10px; min-height: 44px; padding: 0 4px; }
+  .pricing-savings-price { grid-area: 1 / 2; min-width: 0; padding-right: 4px; font-size: 15px; }
+  .pricing-savings-plans { grid-area: 2 / 1 / auto / -1; justify-self: start; margin-left: 34px; }
+  .pricing-savings-plans button { padding: 7px 14px; }
+}
 
 .pricing-savings-scroll { max-height: 480px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--c1) 30%, transparent) transparent; scrollbar-gutter: stable; border-radius: 10px; }
 .pricing-savings-scroll::-webkit-scrollbar { display: block; width: 6px; }
