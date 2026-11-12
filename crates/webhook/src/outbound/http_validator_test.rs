@@ -74,6 +74,10 @@ fn rejects_localhost_and_private_ips() {
     assert!(validate_endpoint_url("https://169.254.169.254/latest/meta-data", policy).is_err());
     assert!(validate_endpoint_url("https://[::1]/webhook", policy).is_err());
     assert!(validate_endpoint_url("https://[fe80::1]/webhook", policy).is_err());
+    assert!(validate_endpoint_url("https://[::ffff:127.0.0.1]/webhook", policy).is_err());
+    assert!(validate_endpoint_url("https://[64:ff9b::a9fe:a9fe]/webhook", policy).is_err());
+    assert!(validate_endpoint_url("https://100.64.0.1/webhook", policy).is_err());
+    assert!(validate_endpoint_url("https://0.0.0.0/webhook", policy).is_err());
 }
 
 #[tokio::test]
@@ -81,6 +85,7 @@ async fn rejects_hosts_that_resolve_to_blocked_addresses() {
     let error = validate_resolved_endpoint_url(
         "https://localhost/webhook",
         WebhookEndpointSchemePolicy::HttpsOnly,
+        &SystemResolver,
     )
     .await
     .expect_err("localhost is invalid");
@@ -93,6 +98,7 @@ async fn allows_localhost_resolution_when_policy_permits_it() {
     let url = validate_resolved_endpoint_url(
         "http://localhost/webhook",
         WebhookEndpointSchemePolicy::HttpAndHttps,
+        &SystemResolver,
     )
     .await
     .expect("localhost should resolve");

@@ -18,6 +18,9 @@ before changing ingestion or delivery behavior.
   `macro.users`, and `macro.call_notifications`.
 - `src/inbound/worker.rs`: the SQS delivery worker.
 - `src/outbound/http_delivery.rs`: signed HTTPS POST to the webhook endpoint.
+- `src/outbound/address_guard.rs`: blocked-address rules and the connect-time
+  resolver the delivery/validation client uses; extend it, never add a
+  preflight-only check.
 
 ## Scope
 
