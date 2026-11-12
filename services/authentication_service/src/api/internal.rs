@@ -17,6 +17,7 @@ mod post_get_existing_users;
 mod relocate_inbox_grant;
 mod remove_link;
 mod revoke_microsoft_grant;
+mod stripe_inbox_replay;
 
 #[cfg(test)]
 mod fusionauth_fixture;
@@ -46,4 +47,5 @@ pub fn router() -> Router<ApiContext> {
             "/delete_inbox_grant_user",
             delete(delete_inbox_grant_user::handler),
         )
+        .route("/stripe_inbox/replay", post(stripe_inbox_replay::handler))
 }

@@ -79,12 +79,12 @@ access, webhook reconciliation and billing workers remain independent of attachm
   never sent); `charge_status` reads a key's receipt. Removing an item already
   gone, or from a deleted team, succeeds.
 - With no computer prices, purchase returns 503 `computers are not available in this environment` through the shared computer router, before contacting Stripe.
-- Every team subscription webhook re-reads the complete subscription (all item
-  pages) and only reports a `SubscriptionObserved` (status, items with their
-  `computer_id`, period end, read time) to `ComputerBillingObserver`
-  (`ComputerService::observe_subscription`), which decides per computer by
-  computer id, never by price or count. A failed read or observer call fails
-  the webhook (after the subscription work), so Stripe redelivers it.
+- The Stripe inbox's `computers` consumer reports each team subscription
+  snapshot, in order, as a `SubscriptionObserved` (status, items with their
+  `computer_id`, period end, `observed_at` = the event's time) to
+  `ComputerBillingObserver` (`ComputerService::observe_subscription`), which
+  decides per computer by computer id, never by price or count. A snapshot
+  with more than ten items is completed by paging the items once.
 - Computer billing work (effects and purchase confirmation) runs on its own
   `TaskTracker` (`computer_billing`), drained at shutdown.
 - Team deletion releases the team's computers first through
@@ -93,6 +93,20 @@ access, webhook reconciliation and billing workers remain independent of attachm
 - `COMPUTER_RETENTION_DAYS` and `COMPUTER_PAST_DUE_GRACE_DAYS` default to 14
   and 7 (`Config::computer_billing_policy`, zero refused); agent_harness_service
   reads the same keys with the same defaults.
+
+## Stripe webhook and inbox
+
+- `POST /webhooks/user/stripe` only verifies the signature and stores the
+  event (`crates/stripe_inbox`); it calls no Stripe API, so a 500 means only
+  that storing failed. Consumers in `src/outbound/stripe_consumers.rs` apply
+  events in the background on every replica; their decisions are pure
+  functions in `src/domain/stripe_consumers.rs`. See
+  `docs/architecture/stripe-event-inbox.md`.
+- A Stripe customer maps to an account by `User.stripeCustomerId`; only an
+  unmapped customer is read from Stripe once and matched by email.
+- An unknown seat price on a personal subscription dead-letters the event
+  instead of granting a tier. Replay a cursor with
+  `POST /internal/stripe_inbox/replay`.
 
 ## Subscription billing status
 

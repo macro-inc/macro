@@ -2697,6 +2697,7 @@
       "crates/sqs_client",
       "crates/sqs_worker",
       "crates/static_file_service_client",
+      "crates/stripe_inbox",
       "crates/subsequence_match",
       "crates/sync_service",
       "crates/sync_service_client",
@@ -15182,6 +15183,12 @@
       "crates/cowlike",
       "crates/model-entity",
       "crates/stream",
+      "crates/workspace-hack"
+    ],
+    "stripe_inbox": [
+      "crates/cowlike",
+      "crates/macro_user_id",
+      "crates/stripe_inbox",
       "crates/workspace-hack"
     ],
     "subsequence_match": [

@@ -184,6 +184,23 @@ pub(crate) type ComputerServiceType = hosted_runtimes::domain::service::Computer
     hosted_runtimes::outbound::pg::PgComputerRepo,
 >;
 
+/// The authentication service's Stripe inbox consumers.
+pub(crate) type StripeConsumersType = crate::outbound::stripe_consumers::StripeConsumers<
+    UserRolesAndPermissionsServiceImpl<MacroDB>,
+    TeamsServiceType,
+    AiBillingServiceType,
+    GtmInviteServiceType,
+    stripe_inbox::outbound::pg::PgInbox,
+    stripe_inbox::outbound::stripe_api::StripeApiReader,
+>;
+
+/// The Stripe event inbox the webhook stores into.
+pub(crate) type StripeInboxType = stripe_inbox::domain::service::InboxService<
+    stripe_inbox::outbound::pg::PgInbox,
+    stripe_inbox::outbound::stripe_api::StripeApiReader,
+    StripeConsumersType,
+>;
+
 pub(crate) type FavoritesServiceType = favorites::domain::service::FavoritesServiceImpl<
     favorites::outbound::pg_favorites_repo::PgFavoritesRepo,
 >;
@@ -254,8 +271,7 @@ pub(crate) struct ApiContext {
     pub token_context: MacroApiTokenContext,
     pub internal_api_key: InternalApiKey,
     pub stripe_webhook_secret: LocalOrRemoteSecret<StripeWebhookSecretKey>,
-    pub user_roles_and_permissions_service:
-        Arc<UserRolesAndPermissionsServiceImpl<MacroDB>>, // Note: since FromRef doesn't support generics we have to specify the concrete types here
+    pub user_roles_and_permissions_service: Arc<UserRolesAndPermissionsServiceImpl<MacroDB>>, // Note: since FromRef doesn't support generics we have to specify the concrete types here
     pub teams_service: Arc<TeamsServiceType>,
     pub domain_notice_service: Arc<DomainNoticeServiceType>,
     pub channel_service: Arc<ChannelServiceType>,
@@ -278,9 +294,8 @@ pub(crate) struct ApiContext {
     pub computer_prices: crate::domain::computer_billing::ComputerPrices,
     /// Buys and manages Macro computers; also runs their billing effects.
     pub computer_service: Arc<ComputerServiceType>,
-    /// Cancels computers whose subscription items went away outside Macro.
-    pub computer_billing_observer:
-        Arc<dyn crate::domain::computer_billing::ComputerBillingObserver>,
+    /// Stores verified Stripe events for the inbox's consumers to apply.
+    pub stripe_inbox: Arc<StripeInboxType>,
     /// AI allowances, credits, and overage
     pub ai_billing_service: Arc<AiBillingServiceType>,
     pub ai_payment_gateway: Arc<ai_billing::outbound::StripePaymentGateway>,
