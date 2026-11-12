@@ -1343,6 +1343,9 @@ On a physical iPhone, WKWebView still synthesises the compatibility `mousedown`/
 
 4. **Strip the instrumentation before committing.**
 
+## iOS gotcha: a detached file input loses its picker's result
+WebKit drops a file picker's result when it garbage-collects the `<input type="file">` that opened it, and nothing keeps an input created with `document.createElement` alive unless it is in the document. The iOS app's photo and file pickers stay open long enough for that, so the pick vanishes with no `change` and no error. Keep the input in the document until `change` or `cancel`, as `fileSelector` does. Check it in the iOS Simulator by sending `Heap.gc` over the Web Inspector protocol while the picker is open.
+
 ## iOS gotcha: WebKit never collects a stream its own callbacks can reach
 In WebKit, a `ReadableStream` or `TransformStream` whose `start`, `pull`, `cancel` or `flush` callback can reach the stream is never garbage-collected, and neither is anything else those callbacks can reach. Chromium collects it. Reaching includes the scope the callbacks were made in: every closure made in one function call shares that scope, so a callback made beside `const clone = response.clone.bind(response)` holds the response without mentioning it. The published `@tauri-apps/plugin-http` `fetch` has that shape, which kept the `Response` object of every native request alive for the life of the page on iOS, read or not.
 
@@ -1351,9 +1354,6 @@ The stream's JavaScript object, on the other hand, is collected while a `Respons
 **Rule:** make a stream's callbacks in a function of their own that receives only what they need. They never refer to the stream, to its `Response`, or to a closure that holds either. The HTTP plugin's JavaScript patch under `patches/` is written this way so that it can release a native response the page dropped unread; carry it over when the package is upgraded. Its callbacks still hold the abort signal the caller passed, so a listener a caller adds to that signal must not hold the request's response either.
 
 **How to check:** unit tests cannot see this, because Node collects like Chromium. In the iOS Simulator's webview, register the object with a `FinalizationRegistry`, drop it, send `Heap.gc` over the Web Inspector protocol a few times, and see whether the callback ran. Check the built bundle, not only the source: a minifier that inlines the function puts the callbacks back in the caller's scope.
-
-## iOS gotcha: a detached file input loses its picker's result
-WebKit drops a file picker's result when it garbage-collects the `<input type="file">` that opened it, and nothing keeps an input created with `document.createElement` alive unless it is in the document. The iOS app's photo and file pickers stay open long enough for that, so the pick vanishes with no `change` and no error. Keep the input in the document until `change` or `cancel`, as `fileSelector` does. Check it in the iOS Simulator by sending `Heap.gc` over the Web Inspector protocol while the picker is open.
 
 ### Agent session failure indicators
 
