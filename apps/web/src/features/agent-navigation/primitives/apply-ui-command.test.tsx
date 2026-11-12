@@ -88,8 +88,11 @@ afterEach(() => {
   Reflect.deleteProperty(Element.prototype, 'getAnimations');
 });
 
-/** A layout showing the agent's conversation, as when its prompt was typed. */
-function layoutWithAgentPane() {
+/**
+ * A layout showing the agent's conversation, as when its prompt was typed.
+ * `stacked` lays panes out as the phone apps do, one in front of another.
+ */
+function layoutWithAgentPane(stacked = false) {
   return createRoot((dispose) => {
     disposers.push(dispose);
     let manager: ReturnType<typeof createSplitLayout> | undefined;
@@ -103,14 +106,14 @@ function layoutWithAgentPane() {
         defaultLocation: () => ({
           route: paneRoute({ id: 'view-home', params: {} }),
         }),
-        stacked: () => false,
+        stacked: () => stacked,
       }),
     });
     manager = createSplitLayout(orchestrator, {
       router,
       toLocation: (content) => resolveContentLocation(router.routes, content),
       toContent: splitContentFromLocation,
-      stacked: () => false,
+      stacked: () => stacked,
     });
     return { manager, router, arrivals: createAgentArrivals() };
   });
@@ -347,6 +350,24 @@ describe('applyOpen', () => {
 
     expect(again.kind).toBe('shown');
     expect(router.panes()).toEqual(before);
+  });
+
+  it('opens a view in front on the phone apps when the pane showing it is behind', async () => {
+    const { manager, router, arrivals } = layoutWithAgentPane(true);
+    await router.settled();
+    const deps = { router, manager, arrivals, stacked: true };
+    const tasks = command(router, '/tasks');
+    const doc = command(router);
+    const behind = await applyOpen(deps, tasks.frame, tasks.location);
+    if (behind.kind !== 'opened') throw new Error('expected an open');
+    await applyOpen(deps, doc.frame, doc.location);
+    expect(router.panes().at(-1)).not.toBe(behind.pane);
+
+    const again = await applyOpen(deps, tasks.frame, tasks.location);
+
+    expect(again.kind).toBe('opened');
+    if (again.kind !== 'opened') return;
+    expect(router.panes().at(-1)).toBe(again.pane);
   });
 
   it('counts a pane on the view the agent names, whatever else its search holds', async () => {

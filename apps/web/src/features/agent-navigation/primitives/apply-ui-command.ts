@@ -86,16 +86,34 @@ function showsView(entry: Entry | undefined, location: SplitLocation): boolean {
   return includesSearch(entry.location.search, location.search ?? {});
 }
 
+/** The panes on screen: stacked layouts show only the front one. */
+function panesOnScreen(
+  router: SplitRouter,
+  manager: SplitManager | undefined
+): readonly PaneId[] {
+  const panes = router.panes();
+  if (!manager) return panes;
+
+  const visible = manager.getVisibleSplits().map((split) => split.id);
+  return panes.filter((pane) => visible.includes(splitOf(pane)));
+}
+
 /**
  * Already shown, so an open would only bring it forward: by whoever holds its
  * claim (a pane or a preview), or, for a view no claim covers (Tasks, Home),
- * by a pane on that view.
+ * by a pane on screen showing that view. A view in a stacked pane behind the
+ * front one opens in front.
  */
-function alreadyShown(router: SplitRouter, location: SplitLocation): boolean {
+function alreadyShown(
+  { router, manager }: ApplyDeps,
+  location: SplitLocation
+): boolean {
   const claim = claimOf(router.routes, location.route);
   if (claim !== undefined) return router.claims.holderOf(claim) !== undefined;
 
-  return router.panes().some((pane) => showsView(router.entry(pane), location));
+  return panesOnScreen(router, manager).some((pane) =>
+    showsView(router.entry(pane), location)
+  );
 }
 
 /**
@@ -175,7 +193,7 @@ export async function applyOpen(
   const { router, manager } = deps;
   // Opening it again would bring its pane forward and take focus. Checked
   // before room: a full layout has nothing to make room for when it's shown.
-  if (alreadyShown(router, location)) return { kind: 'shown' };
+  if (alreadyShown(deps, location)) return { kind: 'shown' };
 
   const { source, split } = target(router, frame);
   const roomy = split
