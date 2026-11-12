@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use futures::StreamExt;
-use scraper::{ElementRef, Html, Selector};
+use scraper::{ElementRef, Html, Node, Selector};
 use thiserror::Error;
 use tracing::Level;
 use url::Url;
@@ -170,7 +170,8 @@ async fn read_body_start(
         })?;
         let room = max - buf.len();
         buf.extend(chunk.iter().take(room));
-        if chunk.len() > room {
+        // A full prefix is all that's read, even if the body ends right there.
+        if chunk.len() >= room {
             cut = true;
             break;
         }
@@ -253,19 +254,14 @@ fn find_first_paragraph(document: &Html) -> Option<String> {
 /// markers, or the styles and scripts a page embeds in its text.
 fn paragraph_text(paragraph: ElementRef<'_>) -> String {
     let mut text = String::new();
-
-    for node in paragraph.descendants() {
-        let Some(fragment) = node.value().as_text() else {
-            continue;
-        };
-
-        let unseen = node
-            .ancestors()
-            .take_while(|ancestor| ancestor.id() != paragraph.id())
-            .filter_map(|ancestor| ancestor.value().as_element())
-            .any(|element| matches!(element.name(), "sup" | "style" | "script"));
-        if !unseen {
-            text.push_str(fragment);
+    // Depth-first in document order, each node once and without recursion,
+    // so a deeply nested page costs neither time nor stack.
+    let mut stack = vec![*paragraph];
+    while let Some(node) = stack.pop() {
+        match node.value() {
+            Node::Text(fragment) => text.push_str(fragment),
+            Node::Element(element) if matches!(element.name(), "sup" | "style" | "script") => {}
+            _ => stack.extend(node.children().rev()),
         }
     }
 

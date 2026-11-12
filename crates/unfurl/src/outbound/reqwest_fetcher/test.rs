@@ -165,3 +165,60 @@ fn parse_document_reads_the_page_title_not_an_inline_images() {
         Some("Tom & Jerry | Example")
     );
 }
+
+#[tokio::test]
+async fn a_full_prefix_is_read_without_waiting_for_the_rest() {
+    // A server that sends exactly the prefix, promises more, and stalls.
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let (finished, wait) = std::sync::mpsc::channel::<()>();
+    std::thread::spawn(move || {
+        let (mut socket, _) = listener.accept().unwrap();
+        let mut request = [0; 1024];
+        let _ = std::io::Read::read(&mut socket, &mut request);
+        std::io::Write::write_all(
+            &mut socket,
+            b"HTTP/1.1 200 OK\r\ncontent-type: text/html\r\ncontent-length: 1000\r\n\r\nabcd",
+        )
+        .unwrap();
+        let _ = wait.recv();
+    });
+
+    let response = ReqwestUnfurlFetcher::new()
+        .unwrap()
+        .client
+        .get(format!("http://{address}"))
+        .send()
+        .await
+        .unwrap();
+    let text = tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        read_body_start(response, 4),
+    )
+    .await
+    .expect("the reader stopped once it had the prefix")
+    .unwrap();
+
+    assert_eq!(text, "abcd");
+    drop(finished);
+}
+
+#[test]
+fn a_deeply_nested_paragraph_is_read_in_order() {
+    let depth = 20_000;
+    let body = format!(
+        "{}A paragraph nested deep inside its page, still long enough to count as body text.<sup>[1]</sup>{}",
+        "<span>".repeat(depth),
+        "</span>".repeat(depth),
+    );
+    let page = format!("<html><body><main><p>{body} The end.</p></main></body></html>");
+    let url = Url::from_str("http://example.com").unwrap();
+    let tags = parse_document(&page, &url).unwrap();
+
+    assert_eq!(
+        tags.get("paragraph").map(String::as_str),
+        Some(
+            "A paragraph nested deep inside its page, still long enough to count as body text. The end."
+        )
+    );
+}
