@@ -116,16 +116,18 @@ impl<T: MailboxTokenSource, B: MacroEventBroker, C: ContactsIngress> InboxHealth
                 }),
         }
     }
-    async fn refresh_gmail(&self, link: &Link) -> Result<(), MailboxError> {
-        // Preserve contact refresh when a permanent watch configuration error
-        // prevents renewal. Transient failures retain the durable retry.
-        match self.gmail.register_subscription(link.id).await {
-            Ok(_) => (),
-            Err(EmailApiError::Permanent { .. } | EmailApiError::Forbidden) => {
-                tracing::warn!(link_id = %link.id, "Gmail watch renewal was rejected");
-            }
-            Err(error) => return Err(error.into()),
+    async fn renew_gmail_watch(
+        &self,
+        link: &Link,
+        freshness: TokenFreshness,
+    ) -> Result<(), EmailApiError> {
+        match freshness {
+            TokenFreshness::Cached => self.gmail.register_subscription(link.id).await,
+            TokenFreshness::Fresh => self.gmail.register_subscription_without_cache(link).await,
         }
+        .map(|_| ())
+    }
+    async fn sync_gmail_contacts(&self, link: &Link) -> Result<(), MailboxError> {
         crate::util::sync_contacts::sync_contacts(
             link,
             &self.db,

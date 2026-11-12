@@ -73,4 +73,74 @@ describe('createTemplateActivation', () => {
       dispose();
     });
   });
+
+  it('fills a routine with steps on its Ask AI step and keeps its code', () => {
+    createRoot((dispose) => {
+      const label = {
+        type: 'code' as const,
+        title: 'Label invoices',
+        source: 'export async function main() {}',
+      };
+      const apps = [{ app_slug: 'linear', server_name: 'Linear' }];
+      const activation = createTemplateActivation({
+        template: () => ({
+          ...TEMPLATE,
+          task: {
+            steps: [
+              label,
+              { type: 'agent', model: 'model', instructions: `Read ${DOC}` },
+            ],
+            mcp_servers: apps,
+          },
+        }),
+        activator: () => ACTIVATOR,
+        access: () => new Map([['doc-1', false]]),
+      });
+      expect(activation.prompt()).toBe(`Read ${DOC}`);
+      activation.choose('doc-1', 'leave_out');
+      expect(activation.request()?.task).toEqual({
+        steps: [
+          label,
+          { type: 'agent', model: 'model', instructions: 'Read Acme account' },
+        ],
+        mcp_servers: apps,
+      });
+      dispose();
+    });
+  });
+
+  it('fills the author in as the activator in the Ask AI step', () => {
+    createRoot((dispose) => {
+      const author =
+        '<m-user-mention>{"userId":"macro|eric@macro.com","email":"eric@macro.com"}</m-user-mention>';
+      const activation = createTemplateActivation({
+        template: () => ({
+          ...TEMPLATE,
+          task: {
+            steps: [
+              {
+                type: 'agent',
+                model: 'model',
+                instructions: `Page ${author}, and tell ${author} tomorrow`,
+              },
+            ],
+          },
+          variables: [
+            {
+              kind: 'user',
+              id: 'macro|eric@macro.com',
+              label: 'eric@macro.com',
+              fill: 'activator',
+            },
+          ],
+        }),
+        activator: () => ACTIVATOR,
+        access: () => new Map(),
+      });
+      const text = JSON.stringify(activation.request()?.task);
+      expect(text).not.toContain('eric@macro.com');
+      expect(text.match(/jun@macro\.com/g)).toHaveLength(4);
+      dispose();
+    });
+  });
 });

@@ -9,7 +9,7 @@ use harnesses::domain::models::CreatedPairing;
 use tui_input::Input;
 
 use super::agent_catalog::{self, DetectedAgent, PathCommands};
-use super::api::{HarnessSelfApi, Snapshot};
+use super::api::{HarnessSelfApi, Snapshot, dashboard_client};
 use super::config_form::{ConfigForm, Setting, settings};
 use super::input::handle_text_input;
 use super::logging::LogBuffer;
@@ -17,10 +17,11 @@ use super::platform::{BrowserTarget, copy_to_clipboard};
 use super::process;
 use crate::config::{Config, HarnessCredentials};
 use crate::daemon::{Daemon, InheritedAgent};
-use crate::outbound::pairing::{ClaimStatus, PairingClient};
+use crate::outbound::pairing::{ClaimStatus, PairingClient, machine_name};
 
 /// How often the dashboard re-reads the server.
 pub(crate) const REFRESH_EVERY: Duration = Duration::from_secs(3);
+const REFRESH_FAILED: &str = "refresh failed";
 
 /// Which tab is showing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -96,17 +97,18 @@ pub(crate) enum Mode {
     },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ApplyConfig {
-    Now,
-    NextPairing,
-}
-
 /// Everything the UI renders from.
 pub(crate) struct App {
     pub(crate) config_path: PathBuf,
     pub(crate) config: Config,
+    /// This machine's hostname: the name pairing requests, shown until the
+    /// server's name is known.
+    pub(crate) machine_name: String,
     pub(crate) credentials: Option<HarnessCredentials>,
+    /// The one HTTP client every dashboard read sends over. Building a client
+    /// loads and parses the system's root certificates, and the dashboard
+    /// reads every few seconds for as long as the panel is open.
+    http: reqwest::Client,
     pub(crate) snapshot: Snapshot,
     /// This process's pid - the TUI and the daemon are this one process.
     pub(crate) pid: u32,
@@ -148,7 +150,9 @@ impl App {
         Ok(Self {
             config_path: config_path.to_owned(),
             config,
+            machine_name: machine_name(),
             credentials,
+            http: dashboard_client()?,
             snapshot: Snapshot::default(),
             pid: std::process::id(),
             harness_process: None,
@@ -176,6 +180,11 @@ impl App {
     }
 
     /// (Re)start the serving core on the current config and credential.
+    /// Whether this process currently holds a runtime connection.
+    pub(crate) fn runtime_connected(&self) -> bool {
+        self.daemon.as_ref().is_some_and(Daemon::runtime_connected)
+    }
+
     pub(crate) async fn restart_daemon(&mut self) -> bool {
         if let Some(daemon) = self.daemon.take() {
             daemon.stop().await;
@@ -226,7 +235,7 @@ impl App {
     fn api(&self) -> Option<HarnessSelfApi> {
         self.credentials
             .as_ref()
-            .map(|credentials| HarnessSelfApi::new(&self.config, credentials))
+            .map(|credentials| HarnessSelfApi::new(&self.config, credentials, self.http.clone()))
     }
 
     pub(crate) fn ok(&mut self, message: impl Into<String>) {
@@ -252,9 +261,26 @@ impl App {
             Ok(snapshot) => {
                 self.snapshot = snapshot;
                 self.last_refresh = Some(Instant::now());
+                // A failure this refresh recovered from is no longer news, and
+                // left up it reads as a live problem.
+                if self.showing_refresh_failure() {
+                    self.status = None;
+                }
             }
-            Err(error) => self.fail(format!("refresh failed: {error}")),
+            Err(error) => {
+                // Failed refreshes retry on every tick; log the first of a run.
+                if !self.showing_refresh_failure() {
+                    tracing::warn!(error = %error, "could not refresh the dashboard");
+                }
+                self.fail(format!("{REFRESH_FAILED}: {error}"));
+            }
         }
+    }
+
+    fn showing_refresh_failure(&self) -> bool {
+        self.status
+            .as_ref()
+            .is_some_and(|(message, _)| message.starts_with(REFRESH_FAILED))
     }
 
     pub(crate) async fn maybe_refresh(&mut self) {
@@ -267,14 +293,14 @@ impl App {
     }
 
     pub(crate) async fn start_pairing(&mut self) {
-        // Re-read the config so an edit saved a moment ago (a new name or
-        // scope) is what this pairing asks for.
+        // Re-read the config so a deployment edited a moment ago is the one
+        // this pairing targets.
         match Config::load(&self.config_path) {
             Ok(config) => self.config = config,
             Err(error) => return self.fail(format!("config reload failed: {error}")),
         }
         let client = PairingClient::new(&self.config);
-        match client.start(&self.config).await {
+        match client.start().await {
             Ok(created) => {
                 // The approval page pre-fills the code, so opening the
                 // browser is usually the whole remaining gesture.
@@ -446,7 +472,7 @@ impl App {
 
     async fn apply_agent(&mut self, agent: &DetectedAgent) {
         self.form.apply_agent(agent);
-        self.save_config(ApplyConfig::Now).await;
+        self.save_config().await;
     }
 
     pub(crate) async fn poll_install(&mut self) {
@@ -495,17 +521,7 @@ impl App {
         if let Err(message) = self.form.apply_text(setting, &input) {
             return self.fail(message);
         }
-        let apply = match setting {
-            Setting::Workspace
-            | Setting::HerdrModel
-            | Setting::HerdrArguments
-            | Setting::HerdrStorage => ApplyConfig::Now,
-            Setting::Name => ApplyConfig::NextPairing,
-            Setting::Agent | Setting::Scope | Setting::PermissionBypass | Setting::HerdrFocus => {
-                unreachable!("not edited as text")
-            }
-        };
-        self.save_config(apply).await;
+        self.save_config().await;
     }
 
     async fn on_agent_picker_key(&mut self, key: KeyEvent) {
@@ -561,7 +577,7 @@ impl App {
         }
     }
 
-    async fn save_config(&mut self, apply: ApplyConfig) {
+    async fn save_config(&mut self) {
         match self.form.save() {
             Ok(()) => match Config::load(&self.config_path) {
                 Ok(config) => {
@@ -570,14 +586,10 @@ impl App {
                     // means a restart to apply it.
                     self.selected_setting =
                         self.selected_setting.min(settings(&self.config).len() - 1);
-                    if apply == ApplyConfig::Now && self.paired() {
-                        if self.restart_daemon().await {
-                            self.ok("saved and applied");
-                        }
-                    } else if apply == ApplyConfig::NextPairing && self.paired() {
-                        self.ok("saved; applies at next pairing");
-                    } else {
+                    if !self.paired() {
                         self.ok("saved");
+                    } else if self.restart_daemon().await {
+                        self.ok("saved and applied");
                     }
                 }
                 Err(error) => self.fail(format!("saved, but reload failed: {error}")),
@@ -609,6 +621,11 @@ impl App {
             }
             KeyCode::Char('p') => self.start_pairing().await,
             KeyCode::Char('d') if self.paired() => self.mode = Mode::ConfirmDelete,
+            KeyCode::Char('o') if self.tab == Tab::Config => {
+                self.pending_browser = Some(BrowserTarget::Settings(
+                    self.config.macro_api.settings_url(),
+                ));
+            }
             KeyCode::Up | KeyCode::Char('k') if self.tab == Tab::Config => {
                 self.selected_setting = self.selected_setting.saturating_sub(1);
             }
@@ -629,21 +646,11 @@ impl App {
                             .unwrap_or(self.agents.len());
                         self.mode = Mode::AgentPicker { selected };
                     }
-                    Setting::Scope => {
-                        self.form.toggle_scope(&self.config);
-                        self.save_config(ApplyConfig::NextPairing).await;
-                    }
-                    Setting::PermissionBypass => {
-                        self.form
-                            .set_permission_bypass(!self.config.identity.allow_permission_bypass);
-                        self.save_config(ApplyConfig::NextPairing).await;
-                    }
                     Setting::HerdrFocus => {
                         self.form.toggle_herdr_focus(&self.config);
-                        self.save_config(ApplyConfig::Now).await;
+                        self.save_config().await;
                     }
                     setting @ (Setting::Workspace
-                    | Setting::Name
                     | Setting::HerdrModel
                     | Setting::HerdrArguments
                     | Setting::HerdrStorage) => {

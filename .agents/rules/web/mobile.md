@@ -139,7 +139,7 @@ read their code, and follow that pattern rather than inventing a new one.
   ignores taps outside islands). Bottom chrome goes through `FloatRegion` or
   `FloatRegionOrInline` with `px-(--mobile-chrome-gutter)` and
   `pointer-events-auto`. Style it with `island` / `glass`, size it with the
-  px `--mobile-chrome-*` tokens (not rem), and pass Button a `depth`.
+  px `--mobile-chrome-*` tokens (not rem), and use Button's size and finish props.
 - Mark selection with `ink`, never `accent`: a selected pill is `bg-ink
   text-surface`, a selected dock button or drawer row stays at full ink while
   its siblings dim (`text-ink-extra-muted`, `aria-current="page"`). Keep the

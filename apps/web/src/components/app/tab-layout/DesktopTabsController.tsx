@@ -2,6 +2,7 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import type { SplitRouter } from '@app/lib/split-router';
 import { globalTabManager, setGlobalTabManager } from '@app/signal/tabLayout';
+import type { SplitManager } from '@components/app/split-layout/layoutManager';
 import { enableDesktopTabs } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { registerHotkey } from '@core/hotkey/hotkeys';
@@ -72,11 +73,67 @@ function registerTabHotkeys(tabManager: TabManager) {
     },
     runWithInputFocused: true,
   });
+
+  // Browser-style arrows. Skipped while typing, where shift+cmd+arrow selects
+  // to the line edge.
+  registerHotkey({
+    hotkey: 'shift+cmd+arrowright',
+    scopeId: 'global',
+    description: () => t('tabs.nextTab'),
+    condition: () => tabManager.tabs().length > 1,
+    keyDownHandler: () => {
+      tabManager.activateNextTab(1);
+      return true;
+    },
+    runWithInputFocused: false,
+    hide: true,
+  });
+
+  registerHotkey({
+    hotkey: 'shift+cmd+arrowleft',
+    scopeId: 'global',
+    description: () => t('tabs.previousTab'),
+    condition: () => tabManager.tabs().length > 1,
+    keyDownHandler: () => {
+      tabManager.activateNextTab(-1);
+      return true;
+    },
+    runWithInputFocused: false,
+    hide: true,
+  });
+
+  const tabNumbers = ['1', '2', '3', '4', '5', '6', '7', '8', '9'] as const;
+
+  tabNumbers.forEach((key) => {
+    const number = Number(key);
+
+    registerHotkey({
+      hotkeyToken: TOKENS.tabs.goTo[key],
+      hotkey: `cmd+${key}`,
+      scopeId: 'global',
+      description: () =>
+        number === 9 ? t('tabs.goToLastTab') : t('tabs.goToTab', { number }),
+      condition: () => tabManager.tabByNumber(number) !== undefined,
+      keyDownHandler: () => {
+        const tab = tabManager.tabByNumber(number);
+        if (!tab) return false;
+
+        tabManager.activateTab(tab.id);
+        return true;
+      },
+      runWithInputFocused: true,
+      hide: true,
+    });
+  });
 }
+
+/** The split manager, or a page without splits (and so without blocks). */
+type DesktopTabsHost = TabLayoutHost &
+  Partial<Pick<SplitManager, 'getOrchestrator'>>;
 
 function TabsOwner(props: {
   router: SplitRouter;
-  manager: TabLayoutHost;
+  manager: DesktopTabsHost;
   userId: string;
 }) {
   const tabManager = createTabManager({
@@ -89,6 +146,10 @@ function TabsOwner(props: {
   onCleanup(() => {
     if (globalTabManager() === tabManager) setGlobalTabManager(undefined);
   });
+  // Not reset on cleanup: the last live tab's blocks are still mounted, and
+  // the disposed scope keeps resolving to them. A page without splits has no
+  // orchestrator to scope.
+  props.manager.getOrchestrator?.().setBlockScope(tabManager.blockScope);
   onCleanup(installOpenInNewTabIntentTracker());
   registerTabHotkeys(tabManager);
 
@@ -102,7 +163,7 @@ function TabsOwner(props: {
  */
 export function DesktopTabsController(props: {
   router: SplitRouter;
-  manager: TabLayoutHost;
+  manager: DesktopTabsHost;
 }) {
   const flag = useFeatureFlag(enableDesktopTabs);
   const userId = useUserId();

@@ -14,6 +14,110 @@ each run.
   and the ports its adapters implement.
 - `src/domain/event_trigger.rs` + `src/domain/target_runner.rs`: how an event
   (Kafka or polled) turns into a dispatched run.
+- `src/domain/program_runner.rs`: runs a routine's steps (`crates/routine_program`)
+  in order: code steps through the `RoutineCode` port (the harness's Deno
+  executor, with the owner's access) and at most one agent ("Ask
+  AI") step through `target_runner.rs`. An old single-agent task runs as one
+  agent step. Event trigger conditions are answered before a run starts
+  (`event_runs/condition.rs`), not by the runner.
+  Each code step's credential says who it writes as (`CodeRun::acts_as`,
+  from the task's `dangerously_operate_as_user`) and carries the routine id;
+  the run records it as `run.code_acts_as`.
+  `run_context` builds what code receives: the trigger's time (not the
+  clock), the schedule's zone or else the owner's, and the previous run
+  (`ScheduledActionRepo::run_history`, skipped runs excluded). Every tool and
+  code step's output is recorded on its step and the run records its `run`
+  info, for the run page.
+- `src/domain/code_check.rs`: saving a routine gives its steps ids, type-checks
+  all its code steps together and stamps the task's `sdk` (the version from
+  `routine_program::code_version`); unchanged code already checked against the
+  current version isn't checked again.
+- `src/domain/catalog.rs`: `GET /scheduled-actions/catalog?timezone=` serves
+  `routine_program`'s catalog to the new-routine flow: each trigger as an
+  `ActionTrigger` with schedules in that zone, and code steps only where code
+  can be saved.
+- `src/domain/drafts.rs` + `src/inbound/draft_router.rs`: `POST
+  /scheduled-actions/drafts`, AI drafting a routine, a step to add, or a
+  change to a code step from the person's words (Draft it and the step
+  boxes in the web editor). It runs the draft in an ordinary hidden agent
+  session (`RoutineSessions`) of the in-process Macro agent: the person's own
+  (source `user`, origin `requested`) but hidden, a background session
+  (`AgentSession::is_background`) that notifies nobody and only the scheduler
+  may delete, never counted as a routine's run. It runs as the person, with its usual
+  tools, on the model their Ask AI steps use (`DraftContext::agent_model`);
+  the session admits and bills its turns as agent session usage. One
+  prompt, the brief (`brief`): the SDK's routines guide (`DraftAgent::guide`,
+  the `@agent` text on `RoutineNamespace` every code-mode session reads, so
+  the rules for writing a routine live there, not here), the code-step guide,
+  and only what is particular to drafting: leave out an item it can't
+  match exactly, and hand the routine back by checking it with `macro.routines.check`
+  (`POST /scheduled-actions/check`, `check_action`: saving's checks, nothing
+  saved), naming what it created. The draft's `created` merges what its
+  checks named with what its recorded activity shows (`SessionCreations`,
+  read `ACTIVITY_SETTLE` after the turn stops, since activity is written
+  asynchronously), each marked `used` when the routine references it, so the
+  review can show items made for nothing or the routine's work done early. A check from a draft's
+  session, found from the request's code-mode invocation (`RequestSessions`),
+  is kept on its `scheduled_action_draft` row (`DraftHandBacks`), so the
+  session and the drafter may run on different replicas. The drafter reads
+  the session's turn status until it ends, or for `CHECKED_GRACE` after the
+  first passing check (all bounded by `DRAFT_TIMEOUT`), turns the last
+  passing check (else the last check) into the draft, then stops and deletes
+  the session and the row, also when the request is dropped mid-draft;
+  `RoutineDrafts::sweep` (every minute in the harness) cleans up drafts
+  older than `STALE_DRAFT`, from the rows alone. Saving checks every id
+  again. The `routine.draft` span records the session id, checks, items
+  created, the session's tool calls and turns, status reads and outcome
+  (`timeout` included), never the words; `routine.check` records
+  whether a check passed and kept a draft's answer. `DraftContext` still
+  accepts and ignores the `workspace` older web clients send.
+- `src/domain/suggestions.rs` + `src/inbound/suggestion_router.rs`: routine
+  suggestions, the Draft pattern. `POST /scheduled-actions/suggestions/generate`
+  (onboarding calls it once the inbox connects) starts the person's one
+  generation ever: hidden background sessions of the in-process Macro agent,
+  as the person, three at once by surface group (`SuggestionLayout`: email,
+  calendar, tasks; crm, calls, chat; files, reviews, agents), each capped at
+  `SESSION_TIMEOUT` (240 s), handing back catalog picks first, then drafts.
+  A prompt whose delivery is unknown ends the session like a failure, so it
+  gets the one retry. Each brief (`suggestions/prompt.rs`) holds the
+  routines guide, the catalog for its surfaces, what was dismissed, and the
+  newest 100 messages and connected apps inside `<untrusted>` tags (angle
+  brackets in the data are swapped so it can't close them). A session hands
+  back each suggestion through `macro.routines.suggest`
+  (`POST /scheduled-actions/suggestions`), which only the person's own open
+  suggestion session may call (`routine_suggestion_session`, found from the
+  request's code-mode invocation like a draft's check; anything else is 403
+  `NotSuggesting`). `suggestions/decode.rs` is the trust boundary: a catalog
+  key with knob values that fit their knob, or a drafted routine that passes
+  saving's checks, kept switched off and never acting as the user; a one-line
+  reason; no email address, phone number or street address in the reason or
+  the drafted routine's words (`personal_detail`, by shape); the session's
+  surfaces. A session that keeps
+  nothing is retried once; then Macro's templates fill in. `GET
+  /scheduled-actions/suggestions?surface=` never generates: per surface,
+  drafted routines, then catalog picks (each best first, a second with the
+  same catalog title or name left out), then catalog routines marked `suggest` as
+  Macro's templates (stable ids, `template_id`) to `PER_SURFACE`, skipping
+  dismissed (permanent, `.../{id}/dismiss` for either kind) and saved ones
+  (`scheduled_action.suggestion_id`). `onByDefault` marks at most two safe
+  catalog picks AI rated likely kept, never one that affects others. Unlike a draft's, a suggestion session
+  is prepared with `SessionBilling::NonBillable`, so its turns are
+  recorded as the non-billable `NonBillableAgentSession`, never billed as
+  agent session usage. The sweep deletes sessions a stopped
+  process left open. Spans: `routine.suggestions.generate`, `.session`,
+  `.suggest`; log events `routine_suggestions.generated`, `.suggested`,
+  `.dismissed`, `.saved`.
+- The `routine_suggestions.*` INFO logs (`suggestions.rs`, and `saved` in
+  `service.rs`, which names the suggestion through the `SuggestionOrigins`
+  port the harness sets with `with_suggestion_origins`) are the field
+  contract of `infra/stacks/monitoring/monitors/routine-suggestions.ts`;
+  renaming an event or field empties its dashboard or alert.
+- `src/domain/code_upgrade.rs`: before a run uses code checked against an
+  older version (SDK or `StepContext`), it is checked again, and rewritten by
+  a model only if that fails (once per routine and version,
+  `scheduled_action_code_upgrade`); a
+  failed rewrite pauses the routine. `sweep` does the same for every
+  enabled routine when the harness starts after a release.
 - `src/domain/event_trigger/github_selector.rs`, `payload_match.rs`: the
   `github` selector and the exact payload `match` GitHub filters take.
 - `src/domain/event_trigger/property_selector.rs`: the `property` selector task
@@ -30,8 +134,10 @@ each run.
 - Owns: scheduled-action and event-trigger CRUD, dispatch (in-process or
   tokio), run history, and live-update notifications over the connection
   gateway.
-- An authenticated caller with a routine ID can read its detail; listing,
-  run history, and mutations stay owner-scoped.
+- Reading a routine, listing, run history, and mutations are owner-scoped:
+  ID routes take a `ScheduledActionAccessExtractor` receipt and the domain
+  loads the routine only for its owner (`granted_action`). Without a grant
+  they answer 401; with a grant but not the owner, 404.
 - Templates: the owner shares a snapshot of a routine (keyed by the routine's
   ID) with its references marked as variables; publishing, reading, and activation
   require the caller's `enable-routine-sharing` PostHog flag. Missing flags,
@@ -74,10 +180,11 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
 
 ## Gotchas
 
-- A task's `mcp_servers` are apps the routine requires. The owner must have
-  each connected: `TargetValidation` checks on save and
-  `RoutineSessions::prepare` checks again on every run, then adds them to an
-  agent limited to selected apps. An update that omits the key is rejected
+- A task's `mcp_servers` (beside a program's `steps`, or on an old
+  single-agent task) are apps the routine requires, handed to its agent step;
+  a program with apps needs one. The owner must have each connected:
+  `TargetValidation` checks on save and `RoutineSessions::prepare` checks
+  again on every run, then adds them to an agent limited to selected apps. An update that omits the key is rejected
   when the stored task has apps (`require_explicit_selection`).
 - An agent target is any agent the owner may run: built in, their own, or
   one on a self-hosted runtime. `TargetValidation` authorizes it on save
@@ -96,6 +203,9 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   dates are never kept, so those properties only support any-change filters.
 - Enabling a GitHub trigger needs the owner's GitHub link
   (`with_github_links`); without it the service returns `GithubNotLinked`.
+- GitHub presets do not configure subscriptions: use `../github/README.md`
+  and `../github/app-webhooks.json` for App registration and permission approval.
+  Keep event names open so new subscriptions need no routine parser changes.
 - `TODO.md` tracks open follow-ups (unified history list, delete schedules,
   sharing/permissions) — check it before assuming a listed gap is unintentional.
 - A new configuration field needs `#[serde(default)]` in `ActionConfiguration`
@@ -117,8 +227,9 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   `ActionConfigurationUpdate`, with `trigger` required; the cron-only body with a
   top-level `schedule` is gone. Rejections return serde's message, which names
   the field. Cron schedules have 6 or 7 fields.
-- The list response carries each routine's `last_run` (latest finished run)
-  so clients can flag failures; single reads omit it. Every finished run is
+- The list response carries each routine's `last_run`, its latest finished
+  run record (what each step did), so clients can flag failures and say what
+  it did; single reads omit it. Every finished run is
   reported to the owner by the host's `RoutineRunObserver`
   (`services/agent_harness_service/src/scheduling/routine_run_notifications.rs`)
   as an inbox-only `routine_run_finished` notification.
@@ -126,6 +237,11 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   it after the template is unshared or its source routine is deleted.
 - `run_visibility` is copied onto each run's agent session when the run is
   prepared, so changing it affects later runs only.
+- An event stamped with a `routine_id` (a routine run's write, even one
+  operating as its owner) never starts a routine: `IncomingEvent::normalize`
+  rejects it as `RoutineWrite`, for any routine, so two can't trigger each
+  other. Mail received, internal hops and sync-service document edits carry
+  no stamp.
 - `EventReference` rejects unknown keys, so a replica still on older code can't
   read a run row with a new key: write a new optional key only when it is set.
 

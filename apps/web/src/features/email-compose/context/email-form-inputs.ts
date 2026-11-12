@@ -6,6 +6,9 @@ import type { ReplyType } from '../core/reply-type';
 export interface EmailFormContextInputs {
   viewerEmail: Accessor<string | undefined>;
   inboxes: Accessor<SenderInbox[]>;
+  /** The composer's fallback sending inbox, used when a reply's own inbox is
+   *  not the viewer's (a thread shared with them). */
+  primaryInboxId?: Accessor<string | undefined>;
 }
 
 /** Only the reply capabilities consumed by the composer; the caller owns navigation. */
@@ -20,6 +23,9 @@ export interface EmailReplySession {
     | undefined
   >;
   recipientOptions: Accessor<EmailRecipient[]>;
+  /** False for a thread shared with the viewer: it sits in its owner's inbox,
+   *  which the viewer cannot send from. */
+  ownsThreadInbox: Accessor<boolean>;
   isPersonalReply: Accessor<boolean>;
   onDraftRemoved(): void;
   exitToThread(target: 'last' | 'selected'): boolean;

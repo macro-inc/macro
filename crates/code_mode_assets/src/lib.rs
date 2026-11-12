@@ -12,5 +12,10 @@ pub const HANDLEBARS: &str = include_str!(concat!(env!("CODE_MODE_ASSETS"), "/ha
 pub const DOCUMENTATION: &str =
     include_str!(concat!(env!("CODE_MODE_ASSETS"), "/documentation.json"));
 
-/// Display labels for every generated SDK operation, keyed `service.method`, as JSON.
+/// Every generated SDK operation, keyed `service.method`, with its display
+/// label, HTTP method, path and whether it can write, as JSON.
 pub const OPERATIONS: &str = include_str!(concat!(env!("CODE_MODE_ASSETS"), "/operations.json"));
+
+/// The SDK's TypeScript declarations that routine code is type-checked
+/// against, with their fingerprint, as JSON.
+pub const SDK_TYPES: &str = include_str!(concat!(env!("CODE_MODE_ASSETS"), "/sdk-types.json"));

@@ -2,20 +2,59 @@
  * @vitest-environment jsdom
  */
 
-import { fireEvent, render, screen } from '@solidjs/testing-library';
+import type { WorkItem } from '@app/features/agent-work/core/work-item';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@solidjs/testing-library';
 import type { RemoteParticipant, Track } from 'livekit-client';
-import { createSignal, type Setter } from 'solid-js';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createSignal, type JSX, type Setter } from 'solid-js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CallState } from '../CallContext';
 import { CallOverlay } from '../CallOverlay';
+import { CallParticipantsList } from '../CallParticipantsList';
 
 const mocks = vi.hoisted(() => ({
   callContext: undefined as unknown,
   displayNames: new Map<string, string>(),
+  mobile: false,
 }));
 
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitPanel: () => undefined,
+}));
+
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({ enabled: false }),
+}));
+
+const registeredWork = vi.hoisted(() => ({
+  accounts: undefined as undefined | (() => readonly string[]),
+  items: undefined as
+    | undefined
+    | (() => ReadonlyMap<string, readonly WorkItem[]>),
+  loaded: undefined as undefined | (() => boolean),
+}));
+
+vi.mock('@core/component/UserGroup', () => ({ UserGroup: () => null }));
+
+vi.mock('@app/features/agent-work/views/use-work-client', () => ({
+  useWorkClient: () => () => undefined,
+}));
+
+vi.mock('@app/features/agent-work/primitives/create-registered-work', () => ({
+  createRegisteredWork: () => ({
+    loaded: () => registeredWork.loaded?.() ?? false,
+    byAccount: () => registeredWork.items?.() ?? new Map(),
+    accountsWithWork: () => registeredWork.accounts?.() ?? [],
+  }),
+}));
+
+vi.mock('@core/mobile/isMobile', () => ({
+  isMobile: () => mocks.mobile,
 }));
 
 vi.mock('@core/component/UserIcon', () => ({
@@ -32,24 +71,34 @@ vi.mock('@core/signal/profilePicture', () => ({
 }));
 
 vi.mock('@core/user', () => ({
+  isAgentAccount: () => true,
   tryMacroId: (identity: string) => identity,
   getDisplayName: (identity: string) =>
     mocks.displayNames.get(identity) ?? identity,
 }));
 
-vi.mock('@ui', () => ({
+vi.mock('@ui', async () => ({
+  Avatar: (await import('@ui/components/Avatar')).Avatar,
+  Button: (await import('@ui/components/Button')).Button,
+  Hotkey: (await import('@ui/components/Hotkey')).Hotkey,
+  Layer: (await import('@ui/components/Layer')).Layer,
   cn: (...classes: Array<string | false | null | undefined>) =>
     classes.filter(Boolean).join(' '),
-  InlineCheckbox: () => null,
+  Tabs: (await import('@ui/components/Tabs')).Tabs,
+  Dropdown: (await import('@ui/components/Dropdown')).Dropdown,
+  ToggleSwitch: (await import('@ui/components/ToggleSwitch')).ToggleSwitch,
+  SingleSelectCheck: (await import('@ui/components/Checkbox'))
+    .SingleSelectCheck,
   Tooltip: (props: { children: unknown }) => props.children,
 }));
 
 vi.mock('../CallContext', () => ({
   useCallContext: () => mocks.callContext,
+  useCallContextOptional: () => mocks.callContext,
 }));
 
 vi.mock('../CallControls/CallControls', () => ({
-  CallControls: () => null,
+  CallControls: (props: { children?: JSX.Element }) => props.children,
 }));
 
 vi.mock('../chat/CallChat', () => ({
@@ -87,6 +136,7 @@ type ParticipantPublications = Record<string, MockTrackPublication | undefined>;
 type CallStateControls = {
   setChannelId: Setter<string | null>;
   setAudioMuted: Setter<boolean>;
+  setScreenSharing: Setter<boolean>;
   setParticipants: Setter<Map<string, RemoteParticipant>>;
   setTrackVersion: Setter<number>;
 };
@@ -98,12 +148,15 @@ function createTrack(sid: string): Track {
 function createRemoteParticipant(
   identity: string,
   publications: ParticipantPublications,
-  name?: string
+  name?: string,
+  isAgent = false
 ): RemoteParticipant {
   return {
     identity,
     name,
-    isAgent: false,
+    isAgent,
+    getVolume: () => 1,
+    setVolume: vi.fn(),
     getTrackPublication(source: string) {
       return publications[source];
     },
@@ -114,6 +167,7 @@ function setUpCallState(
   initialParticipants: RemoteParticipant[] = []
 ): CallStateControls {
   const [audioMuted, setAudioMuted] = createSignal(false);
+  const [screenSharing, setScreenSharing] = createSignal(false);
   const [channelId, setChannelId] = createSignal<string | null>('channel-1');
   const [participants, setParticipants] = createSignal(
     new Map(
@@ -131,14 +185,20 @@ function setUpCallState(
     activeCallId: () => 'call-id',
     connectionState: () => 'connected',
     isAudioMuted: audioMuted,
+    isInCall: () => true,
+    toggleAudio: vi.fn(),
+    toggleVideo: vi.fn(),
     isConnecting: () => false,
     isLocalSpeaking: () => false,
     isParticipantSpeaking: () => false,
-    isScreenSharing: () => false,
+    isScreenSharing: screenSharing,
+    toggleScreenShare: vi.fn(),
     isSharedWithTeam: () => false,
     isVideoMuted: () => false,
     remoteParticipants: participants,
     room: () => ({
+      on: () => {},
+      off: () => {},
       localParticipant: {
         identity: 'current-user',
         getTrackPublication: () => ({ track: localCameraTrack }),
@@ -147,11 +207,84 @@ function setUpCallState(
     trackVersion,
   } as unknown as CallState;
 
-  return { setChannelId, setAudioMuted, setParticipants, setTrackVersion };
+  return {
+    setChannelId,
+    setAudioMuted,
+    setScreenSharing,
+    setParticipants,
+    setTrackVersion,
+  };
 }
 
+afterEach(() => vi.unstubAllGlobals());
+
 beforeEach(() => {
+  mocks.mobile = false;
+  localStorage.removeItem('call.layout');
   mocks.displayNames.clear();
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
+});
+
+describe('CallOverlay screen share', () => {
+  it('hides participants without remounting tracks and resets when sharing ends', async () => {
+    const screenShare: MockTrackPublication = {
+      isMuted: false,
+      isSubscribed: true,
+      track: createTrack('remote-screen'),
+    };
+    const sharer = createRemoteParticipant(
+      'sharer',
+      {
+        camera: {
+          isMuted: false,
+          isSubscribed: true,
+          track: createTrack('remote-camera'),
+        },
+        screen_share: screenShare,
+      },
+      'Sam Sharer'
+    );
+    const controls = setUpCallState([sharer]);
+    render(() => <CallOverlay onLeave={() => undefined} />);
+    const camera = screen.getByTestId('track-remote-camera');
+    const more = screen.getByRole('button', { name: 'More' });
+    more.focus();
+    fireEvent.keyDown(more, { key: 'ArrowDown' });
+    const toggle = await screen.findByRole('menuitemcheckbox', {
+      name: /Hide participants/,
+    });
+    toggle.focus();
+    fireEvent.keyDown(toggle, { key: 'Enter' });
+    await waitFor(() =>
+      expect(toggle.getAttribute('aria-checked')).toBe('true')
+    );
+    expect(camera.closest('[hidden]')).not.toBeNull();
+    expect(screen.getByTestId('track-remote-camera')).toBe(camera);
+    expect(screen.getByTestId('track-remote-screen')).toBeTruthy();
+
+    fireEvent.keyDown(toggle, { key: 'Enter' });
+    await waitFor(() =>
+      expect(toggle.getAttribute('aria-checked')).toBe('false')
+    );
+    expect(camera.closest('[hidden]')).toBeNull();
+    fireEvent.keyDown(toggle, { key: 'Enter' });
+    await waitFor(() =>
+      expect(toggle.getAttribute('aria-checked')).toBe('true')
+    );
+    screenShare.track = undefined;
+    controls.setTrackVersion((version) => version + 1);
+    expect(
+      screen.queryByRole('menuitemcheckbox', { name: /Hide participants/ })
+    ).toBeNull();
+    expect(camera.closest('[hidden]')).toBeNull();
+  });
 });
 
 describe('CallOverlay muted microphone badges', () => {
@@ -159,13 +292,13 @@ describe('CallOverlay muted microphone badges', () => {
     const controls = setUpCallState();
     controls.setChannelId(null);
     render(() => <CallOverlay onLeave={() => undefined} showTeamSharing />);
-    expect(screen.queryByRole('checkbox')).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Call sharing:/ })).toBeNull();
     controls.setChannelId('channel-1');
     expect(
-      screen.getByRole('checkbox', { name: 'Share with team' })
+      screen.getByRole('button', { name: 'Call sharing: Private' })
     ).toBeTruthy();
     controls.setChannelId(null);
-    expect(screen.queryByRole('checkbox')).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Call sharing:/ })).toBeNull();
   });
 
   it('uses the guest name from the media session and hides team sharing for guests', () => {
@@ -182,7 +315,36 @@ describe('CallOverlay muted microphone badges', () => {
     expect(
       screen.getByRole('status', { name: 'Taylor Guest is muted' })
     ).toBeTruthy();
-    expect(screen.queryByRole('checkbox')).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Call sharing:/ })).toBeNull();
+  });
+
+  it('restores the phone sidebar trigger after Escape', async () => {
+    vi.useFakeTimers();
+    mocks.mobile = true;
+    setUpCallState();
+    const view = render(() => (
+      <>
+        <button>Previous focus</button>
+        <CallOverlay onLeave={() => undefined} />
+      </>
+    ));
+    try {
+      screen.getByRole('button', { name: 'Previous focus' }).focus();
+      const trigger = screen.getByRole('button', {
+        name: 'Open chat and participants',
+      });
+      fireEvent.click(trigger);
+      await vi.advanceTimersByTimeAsync(500);
+      fireEvent.keyDown(screen.getByRole('radio', { name: 'Chat' }), {
+        key: 'Escape',
+      });
+      await vi.advanceTimersByTimeAsync(500);
+      expect(trigger.getAttribute('aria-expanded')).toBe('false');
+      expect(document.activeElement).toBe(trigger);
+    } finally {
+      view.unmount();
+      vi.useRealTimers();
+    }
   });
 
   it('opens chat for a standalone meeting without a channel', async () => {
@@ -191,29 +353,40 @@ describe('CallOverlay muted microphone badges', () => {
     render(() => (
       <CallOverlay onLeave={() => undefined} showTeamSharing={false} />
     ));
-    fireEvent.click(screen.getByRole('button', { name: 'Open chat' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Open chat and participants' })
+    );
     expect(
       await screen.findByRole('textbox', { name: 'Message this call' })
     ).toBeTruthy();
     expect(screen.getByText('call-id')).toBeTruthy();
-    expect(screen.queryByRole('checkbox')).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Call sharing:/ })).toBeNull();
   });
 
-  it('does not mount authenticated message queries for a guest', () => {
+  it('keeps the roster available without mounting unavailable message queries', () => {
     const controls = setUpCallState();
     controls.setChannelId(null);
     render(() => <CallOverlay onLeave={() => undefined} showChat={false} />);
-    expect(screen.queryByRole('button', { name: 'Open chat' })).toBeNull();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Open chat and participants' })
+    );
     expect(
-      screen.queryByRole('complementary', { name: 'Call chat' })
-    ).toBeNull();
+      screen.getByRole('list', { name: 'In-call participants' })
+    ).toBeTruthy();
+    expect(
+      screen.getByRole('radio', { name: 'Chat' }).hasAttribute('disabled')
+    ).toBe(true);
+    expect(screen.queryByRole('textbox')).toBeNull();
+    expect(screen.queryByText('call-id')).toBeNull();
   });
 
   it('opens the call thread without remounting video and restores focus when closed', async () => {
     setUpCallState();
     render(() => <CallOverlay onLeave={() => undefined} />);
     const video = screen.getByTestId('track-local-camera');
-    const toggle = screen.getByRole('button', { name: 'Open chat' });
+    const toggle = screen.getByRole('button', {
+      name: 'Open chat and participants',
+    });
     expect(toggle.getAttribute('aria-expanded')).toBe('false');
     fireEvent.click(toggle);
     const composer = await screen.findByRole('textbox', {
@@ -221,6 +394,14 @@ describe('CallOverlay muted microphone badges', () => {
     });
     fireEvent.input(composer, { target: { value: 'Draft' } });
     expect(screen.getByText('call-id')).toBeTruthy();
+    fireEvent.click(screen.getByRole('radio', { name: /Participants/ }));
+    expect(screen.queryByRole('textbox')).toBeNull();
+    expect(composer.isConnected).toBe(true);
+    fireEvent.click(screen.getByRole('radio', { name: 'Chat' }));
+    expect(screen.getByRole('textbox', { name: 'Message this call' })).toBe(
+      composer
+    );
+    expect((composer as HTMLInputElement).value).toBe('Draft');
     expect(screen.getByTestId('track-local-camera')).toBe(video);
     fireEvent.click(screen.getByRole('button', { name: 'Close sidebar' }));
     expect(document.activeElement).toBe(toggle);
@@ -246,9 +427,9 @@ describe('CallOverlay muted microphone badges', () => {
     });
 
     expect(
-      fullTileBadge.parentElement?.querySelector(
-        '[data-testid="track-local-camera"]'
-      )
+      fullTileBadge
+        .closest('[data-call-tile]')
+        ?.querySelector('[data-testid="track-local-camera"]')
     ).not.toBeNull();
     expect(fullTileBadge.closest('.bottom-4')).toBeNull();
 
@@ -256,7 +437,11 @@ describe('CallOverlay muted microphone badges', () => {
     controls.setParticipants(new Map([[remote.identity, remote]]));
 
     const pipBadge = screen.getByRole('status', { name: 'You are muted' });
-    expect(pipBadge.closest('.bottom-4')).not.toBeNull();
+    expect(
+      pipBadge
+        .closest('[data-call-tile]')
+        ?.querySelector('[data-testid="track-local-camera"]')
+    ).not.toBeNull();
 
     controls.setAudioMuted(false);
     expect(screen.queryByRole('status', { name: 'You are muted' })).toBeNull();
@@ -285,7 +470,9 @@ describe('CallOverlay muted microphone badges', () => {
       name: 'Alex Morgan is muted',
     });
     expect(
-      badge.parentElement?.querySelector('[data-testid="track-alex-camera"]')
+      badge
+        .closest('[data-call-tile]')
+        ?.querySelector('[data-testid="track-alex-camera"]')
     ).not.toBeNull();
 
     microphone.isMuted = false;
@@ -301,6 +488,18 @@ describe('CallOverlay muted microphone badges', () => {
     ).toBeTruthy();
   });
 
+  it('offers the existing stop action instead of replaying the local shared display', () => {
+    const controls = setUpCallState();
+    controls.setScreenSharing(true);
+    render(() => <CallOverlay onLeave={() => undefined} />);
+    expect(screen.getByText("You're sharing your screen")).toBeTruthy();
+    expect(screen.queryByText('Your screen')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Stop sharing' }));
+    expect(
+      (mocks.callContext as CallState).toggleScreenShare
+    ).toHaveBeenCalledOnce();
+  });
+
   it('treats a missing remote microphone as muted over avatar content', () => {
     mocks.displayNames.set('alex', 'Alex Morgan');
     const publications: ParticipantPublications = {};
@@ -312,10 +511,10 @@ describe('CallOverlay muted microphone badges', () => {
     const badge = screen.getByRole('status', {
       name: 'Alex Morgan is muted',
     });
-    const tile = badge.parentElement;
+    const tile = badge.closest('[data-call-tile]');
 
     expect(tile?.classList).toContain('relative');
-    expect(tile?.querySelector('[data-testid="user-avatar"]')).not.toBeNull();
+    expect(tile?.querySelector('[data-testid="user-avatar"]')).toBeNull();
     expect(tile?.textContent).toContain('A');
     expect(tile?.querySelector('[data-testid="track-alex-camera"]')).toBeNull();
 
@@ -328,4 +527,453 @@ describe('CallOverlay muted microphone badges', () => {
       screen.queryByRole('status', { name: 'Alex Morgan is muted' })
     ).toBeNull();
   });
+
+  it('pins, switches and unpins without remounting tracks or changing the saved layout', () => {
+    const first = createRemoteParticipant(
+      'first',
+      {
+        camera: {
+          isMuted: false,
+          isSubscribed: true,
+          track: createTrack('first-camera'),
+        },
+      },
+      'First participant'
+    );
+    const second = createRemoteParticipant(
+      'second',
+      {
+        camera: {
+          isMuted: false,
+          isSubscribed: true,
+          track: createTrack('second-camera'),
+        },
+      },
+      'Second participant'
+    );
+    setUpCallState([first, second]);
+    localStorage.setItem('call.layout', JSON.stringify('grid'));
+    const { container } = render(() => (
+      <CallOverlay onLeave={() => undefined} />
+    ));
+    const firstTrack = screen.getByTestId('track-first-camera');
+    const secondTrack = screen.getByTestId('track-second-camera');
+    const localTrack = screen.getByTestId('track-local-camera');
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'Pin First participant' })[0]
+    );
+    expect(firstTrack.closest('.row-start-1')).toBeTruthy();
+    expect(secondTrack.closest('.row-start-2')).toBeTruthy();
+    expect(localTrack.closest('.row-start-2')).toBeTruthy();
+    expect(container.querySelector('[data-call-layout="grid"]')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Back to grid' })).toBeNull();
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'Pin Second participant' })[0]
+    );
+    expect(secondTrack.closest('.row-start-1')).toBeTruthy();
+    expect(firstTrack.closest('.row-start-2')).toBeTruthy();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Pin You' })[0]);
+    expect(localTrack.closest('.row-start-1')).toBeTruthy();
+    expect(screen.getByTestId('track-first-camera')).toBe(firstTrack);
+    expect(screen.getByTestId('track-second-camera')).toBe(secondTrack);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Unpin You' })[0]);
+    expect(localTrack.closest('.relative')).toBeTruthy();
+    expect(container.querySelector('[data-call-layout="grid"]')).toBeTruthy();
+  });
+
+  it('retains the chosen layout and mounted track when changing Layout while pinned', async () => {
+    const participant = createRemoteParticipant(
+      'first',
+      {
+        camera: {
+          isMuted: false,
+          isSubscribed: true,
+          track: createTrack('camera'),
+        },
+      },
+      'First'
+    );
+    setUpCallState([participant]);
+    const { container } = render(() => (
+      <CallOverlay onLeave={() => undefined} />
+    ));
+    const camera = screen.getByTestId('track-camera');
+    fireEvent.click(screen.getAllByRole('button', { name: 'Pin First' })[0]);
+    fireEvent.keyDown(screen.getByRole('button', { name: 'More' }), {
+      key: 'ArrowDown',
+    });
+    const layout = await screen.findByRole('menuitem', { name: /Layout/ });
+    layout.focus();
+    fireEvent.keyDown(layout, { key: 'ArrowRight' });
+    const sidebar = await screen.findByRole('menuitemradio', {
+      name: /Sidebar/,
+    });
+    sidebar.focus();
+    fireEvent.keyDown(sidebar, { key: 'Enter' });
+    fireEvent.keyDown(sidebar, { key: 'Escape' });
+    expect(
+      container.querySelector('[data-call-layout="sidebar"]')
+    ).toBeTruthy();
+    expect(screen.getByTestId('track-camera')).toBe(camera);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Unpin First' })[0]);
+    expect(
+      container.querySelector('[data-call-layout="sidebar"]')
+    ).toBeTruthy();
+    expect(screen.getByTestId('track-camera')).toBe(camera);
+  });
+
+  it('keeps a sharing track mounted in the strip and clears stale pins when sharing ends or someone leaves', () => {
+    const share: MockTrackPublication = {
+      isMuted: false,
+      isSubscribed: true,
+      track: createTrack('screen'),
+    };
+    const first = createRemoteParticipant(
+      'first',
+      {
+        camera: {
+          isMuted: false,
+          isSubscribed: true,
+          track: createTrack('camera'),
+        },
+        screen_share: share,
+      },
+      'Presenter'
+    );
+    const second = createRemoteParticipant('second', {}, 'Second');
+    const controls = setUpCallState([first, second]);
+    render(() => <CallOverlay onLeave={() => undefined} />);
+    const video = screen.getByTestId('track-camera');
+    const screenTrack = screen.getByTestId('track-screen');
+    fireEvent.click(screen.getAllByRole('button', { name: 'Pin Second' })[0]);
+    expect(screenTrack.closest('.row-start-2')).toBeTruthy();
+    fireEvent.click(
+      screen.getAllByRole('button', { name: "Pin Presenter's screen" })[0]
+    );
+    expect(screenTrack.closest('.row-start-1')).toBeTruthy();
+    expect(video.closest('.row-start-2')).toBeTruthy();
+    share.track = undefined;
+    controls.setTrackVersion((version) => version + 1);
+    expect(
+      screen.queryByRole('button', { name: "Unpin Presenter's screen" })
+    ).toBeNull();
+    share.track = createTrack('new-screen');
+    controls.setTrackVersion((version) => version + 1);
+    expect(
+      screen.getAllByRole('button', { name: "Pin Presenter's screen" })
+    ).toHaveLength(2);
+    expect(screen.getByTestId('track-camera')).toBe(video);
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'Pin Presenter' })[0]
+    );
+    controls.setParticipants(new Map([[second.identity, second]]));
+    expect(
+      screen.queryByRole('button', { name: 'Unpin Presenter' })
+    ).toBeNull();
+    controls.setParticipants(
+      new Map([
+        [first.identity, first],
+        [second.identity, second],
+      ])
+    );
+    expect(
+      screen.getAllByRole('button', { name: 'Pin Presenter' })
+    ).toHaveLength(2);
+  });
+
+  it('pins the local shared screen and clears the pin when sharing stops', () => {
+    const controls = setUpCallState([
+      createRemoteParticipant('remote', {}, 'Remote'),
+    ]);
+    controls.setScreenSharing(true);
+    render(() => <CallOverlay onLeave={() => undefined} />);
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'Pin Your screen' })[0]
+    );
+    expect(
+      screen.getAllByRole('button', { name: 'Unpin Your screen' })
+    ).toHaveLength(2);
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'Unpin Your screen' })[0]
+    );
+    expect(
+      screen.getAllByRole('button', { name: 'Pin Your screen' })
+    ).toHaveLength(2);
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'Pin Your screen' })[0]
+    );
+    controls.setScreenSharing(false);
+    expect(
+      screen.queryByRole('button', { name: 'Unpin Your screen' })
+    ).toBeNull();
+    controls.setScreenSharing(true);
+    expect(
+      screen.getAllByRole('button', { name: 'Pin Your screen' })
+    ).toHaveLength(2);
+  });
+
+  it('keeps the only local tile unchanged when a call becomes solo', () => {
+    const remote = createRemoteParticipant('remote', {}, 'Remote');
+    const controls = setUpCallState([remote]);
+    render(() => <CallOverlay onLeave={() => undefined} />);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Pin You' })[0]);
+    controls.setParticipants(new Map());
+    expect(screen.queryByRole('button', { name: 'Unpin You' })).toBeNull();
+    controls.setParticipants(new Map([[remote.identity, remote]]));
+    expect(screen.getAllByRole('button', { name: 'Pin You' })).toHaveLength(2);
+  });
+
+  it('leaves phone taps for long-press integration', () => {
+    mocks.mobile = true;
+    setUpCallState([createRemoteParticipant('remote', {}, 'Remote')]);
+    render(() => <CallOverlay onLeave={() => undefined} />);
+    expect(screen.queryByRole('button', { name: 'Pin Remote' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Pin You' })).toBeNull();
+  });
+});
+
+it.each(['speaker', 'sidebar'] as const)(
+  'keeps pinned tiles on stage in %s without remounting on unpin',
+  (layout) => {
+    const first = createRemoteParticipant(
+      'first',
+      {
+        camera: {
+          isMuted: false,
+          isSubscribed: true,
+          track: createTrack('first-camera'),
+        },
+      },
+      'First'
+    );
+    const second = createRemoteParticipant('second', {}, 'Second');
+    localStorage.setItem('call.layout', JSON.stringify(layout));
+    setUpCallState([first, second]);
+    const { container } = render(() => (
+      <CallOverlay onLeave={() => undefined} />
+    ));
+    const track = screen.getByTestId('track-first-camera');
+    fireEvent.click(screen.getAllByRole('button', { name: 'Pin First' })[0]);
+    expect(track.closest('.row-start-1')).toBeTruthy();
+    expect(
+      container.querySelector('[data-call-layout="' + layout + '"]')
+    ).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: 'Pin Second' })).toHaveLength(
+      2
+    );
+    fireEvent.click(screen.getAllByRole('button', { name: 'Unpin First' })[0]);
+    expect(screen.getByTestId('track-first-camera')).toBe(track);
+  }
+);
+
+describe('CallOverlay Work', () => {
+  const account = 'macro|agent@example.com';
+  const row: WorkItem = {
+    registrationId: 'registration-1',
+    accountId: account,
+    registeredAt: '2026-11-05T10:00:00Z',
+    sessionId: 'session-1',
+    title: 'Tavily web search',
+    state: 'needs_input',
+  };
+
+  function setUpWork() {
+    const [accounts, setAccounts] = createSignal<readonly string[]>([]);
+    registeredWork.accounts = accounts;
+    registeredWork.items = () => new Map(accounts().map((id) => [id, [row]]));
+    registeredWork.loaded = () => true;
+    setUpCallState([createRemoteParticipant(account, {}, 'Agent teammate')]);
+    return setAccounts;
+  }
+
+  afterEach(() => {
+    registeredWork.accounts = undefined;
+    registeredWork.items = undefined;
+    registeredWork.loaded = undefined;
+  });
+
+  it('prompts when work appears and opens it in the Work tab', async () => {
+    const setAccounts = setUpWork();
+    render(() => <CallOverlay onLeave={() => undefined} />);
+    expect(screen.queryByText('View active work')).toBeNull();
+
+    setAccounts([account]);
+    fireEvent.click(await screen.findByText('View active work'));
+
+    expect(await screen.findByText('Tavily web search')).toBeTruthy();
+    expect(screen.getByText('Needs input')).toBeTruthy();
+    expect(screen.queryByText('View active work')).toBeNull();
+  });
+
+  it('dismisses the prompt without opening the panel', async () => {
+    const setAccounts = setUpWork();
+    render(() => <CallOverlay onLeave={() => undefined} />);
+
+    setAccounts([account]);
+    await screen.findByText('View active work');
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+
+    expect(screen.queryByText('View active work')).toBeNull();
+    expect(screen.queryByText('Tavily web search')).toBeNull();
+  });
+
+  it('returns to Chat when the last work ends', async () => {
+    const setAccounts = setUpWork();
+    render(() => <CallOverlay onLeave={() => undefined} />);
+
+    setAccounts([account]);
+    fireEvent.click(await screen.findByText('View active work'));
+    await screen.findByText('Tavily web search');
+
+    setAccounts([]);
+    await waitFor(() =>
+      expect(screen.queryByRole('radio', { name: 'Work' })).toBeNull()
+    );
+    expect(screen.queryByText('Tavily web search')).toBeNull();
+  });
+});
+
+describe('CallParticipantsList live roster', () => {
+  it('tracks human arrivals and departures without counting recording agents', () => {
+    const guest = createRemoteParticipant('guest-1', {}, 'Guest attendee');
+    const agent = createRemoteParticipant('agent-1', {}, 'Recorder', true);
+    const controls = setUpCallState([guest, agent]);
+    render(() => <CallParticipantsList localName="Local attendee" />);
+    const list = screen.getByRole('list', { name: 'In-call participants' });
+    expect(within(list).getAllByRole('listitem')).toHaveLength(2);
+    expect(list.textContent).toContain('Local attendee');
+    expect(list.textContent).toContain('Guest attendee');
+    expect(list.textContent).not.toContain('Recorder');
+
+    const joined = createRemoteParticipant('guest-2', {}, 'New attendee');
+    controls.setParticipants(
+      new Map([
+        [guest.identity, guest],
+        [agent.identity, agent],
+        [joined.identity, joined],
+      ])
+    );
+    expect(within(list).getAllByRole('listitem')).toHaveLength(3);
+    expect(list.textContent).toContain('New attendee');
+
+    controls.setParticipants(new Map([[agent.identity, agent]]));
+    expect(within(list).getAllByRole('listitem')).toHaveLength(1);
+    expect(list.textContent).not.toContain('Guest attendee');
+    expect(list.textContent).not.toContain('New attendee');
+  });
+
+  it('updates microphone and camera status when live publications change', () => {
+    const publications: ParticipantPublications = {};
+    const guest = createRemoteParticipant(
+      'guest-1',
+      publications,
+      'Guest attendee'
+    );
+    const controls = setUpCallState([guest]);
+    render(() => <CallParticipantsList />);
+    const row = screen.getByText('Guest attendee').closest('li')!;
+    expect(
+      within(row).getByRole('img', { name: 'Microphone off' })
+    ).toBeTruthy();
+    expect(within(row).getByRole('img', { name: 'Camera off' })).toBeTruthy();
+
+    publications.microphone = { isMuted: false, isSubscribed: true };
+    publications.camera = { isMuted: false, isSubscribed: false };
+    controls.setTrackVersion((version) => version + 1);
+    expect(
+      within(row).getByRole('img', { name: 'Microphone on' })
+    ).toBeTruthy();
+    expect(within(row).getByRole('img', { name: 'Camera on' })).toBeTruthy();
+
+    publications.microphone.isMuted = true;
+    publications.camera.isMuted = true;
+    controls.setTrackVersion((version) => version + 1);
+    expect(
+      within(row).getByRole('img', { name: 'Microphone off' })
+    ).toBeTruthy();
+    expect(within(row).getByRole('img', { name: 'Camera off' })).toBeTruthy();
+  });
+});
+
+it.each(['auto', 'speaker', 'sidebar', 'grid'] as const)(
+  'shares edge visibility state with More in %s layout',
+  async (layout) => {
+    const participant = createRemoteParticipant(
+      'presenter',
+      {
+        screen_share: {
+          isMuted: false,
+          isSubscribed: true,
+          track: createTrack('screen'),
+        },
+      },
+      'Presenter'
+    );
+    setUpCallState([participant]);
+    localStorage.setItem('call.layout', JSON.stringify(layout));
+    render(() => <CallOverlay onLeave={() => {}} />);
+    const edge = screen.queryByRole('button', { name: 'Hide participants' });
+    if (layout === 'grid') {
+      expect(edge).toBeNull();
+      return;
+    }
+    expect(
+      edge?.querySelector(
+        `[data-macro-icon="${layout === 'sidebar' ? 'caret-right' : 'caret-down'}"]`
+      )
+    ).toBeTruthy();
+    fireEvent.click(edge!);
+    const restore = screen.getByRole('button', { name: 'Show participants' });
+    expect(
+      restore.querySelector(
+        `[data-macro-icon="${layout === 'sidebar' ? 'caret-left' : 'caret-up'}"]`
+      )
+    ).toBeTruthy();
+    fireEvent.keyDown(screen.getByRole('button', { name: 'More' }), {
+      key: 'ArrowDown',
+    });
+    const item = await screen.findByRole('menuitemcheckbox', {
+      name: /Hide participants/,
+    });
+    expect(item.getAttribute('aria-checked')).toBe('true');
+    item.focus();
+    fireEvent.keyDown(item, { key: 'Enter' });
+    fireEvent.keyDown(item, { key: 'Escape' });
+    expect(
+      await screen.findByRole('button', { name: 'Hide participants' })
+    ).toBeTruthy();
+  }
+);
+
+it('leads shared-screen and speaking chips with their action icon before the avatar', () => {
+  const participant = createRemoteParticipant(
+    'presenter',
+    {
+      screen_share: {
+        isMuted: false,
+        isSubscribed: true,
+        track: createTrack('screen'),
+      },
+    },
+    'Presenter'
+  );
+  setUpCallState([participant]);
+  (mocks.callContext as CallState).isParticipantSpeaking = () => true;
+  const { container } = render(() => <CallOverlay onLeave={() => {}} />);
+  const share = container.querySelector('[data-call-stage-chip="share"]');
+  expect(share?.firstElementChild?.getAttribute('data-macro-icon')).toBe(
+    'screencast'
+  );
+  expect(
+    share?.children[1].querySelector('[data-testid="user-avatar"]')
+  ).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Hide participants' }));
+  const speaker = container.querySelector('[data-call-stage-chip="speaker"]');
+  expect(speaker?.firstElementChild?.getAttribute('data-macro-icon')).toBe(
+    'waveform'
+  );
+  expect(
+    speaker?.children[1].querySelector('[data-testid="user-avatar"]')
+  ).toBeTruthy();
+  expect(speaker?.textContent).toContain('Presenter');
 });

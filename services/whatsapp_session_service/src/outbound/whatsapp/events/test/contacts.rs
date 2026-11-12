@@ -14,7 +14,7 @@ use whatsmeow::types::{
     ContactInfo, DEFAULT_USER_SERVER, IsOnWhatsAppResponse, VerifiedName, new_jid,
 };
 
-use super::super::{chat_setting, contact_chats, lookup_answer};
+use super::super::{chat_setting, contact_chats, contact_name, lookup_answer};
 
 fn listed(jid: &str, name: &str) -> ChatUpdate {
     ChatUpdate {
@@ -160,5 +160,41 @@ async fn a_registered_number_is_its_phone_chat_named_like_any_chat() {
     assert_eq!(
         lookup_answer(&store, &store, &phone("+5550005"), &[]).await,
         LookupAnswer::NotOnWhatsApp
+    );
+}
+
+#[tokio::test]
+async fn a_contact_name_prefers_their_own_whatsapp_name_for_either_address() {
+    let store = MemoryStore::default();
+    let lid: whatsmeow::types::Jid = "987654321@lid".parse().unwrap();
+    let phone = new_jid("5550001", DEFAULT_USER_SERVER);
+    store
+        .put_contact_name(&phone, "Dana Smith", "Dana")
+        .await
+        .unwrap();
+    let sender = |alternate: Option<String>| whatsapp_linked::domain::models::Identity {
+        jid: lid.to_string(),
+        alternate_jid: alternate,
+        display_name: None,
+    };
+
+    assert_eq!(contact_name(&store, &sender(None)).await.unwrap(), None);
+    assert_eq!(
+        contact_name(&store, &sender(Some(phone.to_string())))
+            .await
+            .unwrap()
+            .as_deref(),
+        Some("Dana Smith"),
+        "the address book, through the paired phone number"
+    );
+    store.put_push_name(&lid, "-").await.unwrap();
+    store.put_push_name(&phone, "dana").await.unwrap();
+    assert_eq!(
+        contact_name(&store, &sender(Some(phone.to_string())))
+            .await
+            .unwrap()
+            .as_deref(),
+        Some("dana"),
+        "their own WhatsApp name wins; `-` is none"
     );
 }

@@ -116,21 +116,17 @@ it('keeps navigation controls inside their own workspaces', () => {
   expect(collapsed.get('mail')?.()).toBe(true);
 });
 
-function setup(preserveDuringResize: boolean, persistWidth = false) {
+function setup(preserveDuringResize: boolean, app = 'tasks') {
   const [width, setWidth] = createSignal(1200);
-  const [configuredWidth, setConfiguredWidth] = createSignal(256);
   measurement.width = width;
-  const onWidthChangeEnd = vi.fn((width: number) => {
-    if (persistWidth) setConfiguredWidth(width);
-  });
   const view = render(() => (
     <ViewShell.Root
       resizable
-      asidePreferenceKey="tasks"
-      aside={{ width: configuredWidth(), preserveDuringResize }}
+      asidePreferenceKey={app}
+      aside={{ preserveDuringResize }}
       main={{ preferredWidth: 640 }}
     >
-      <ViewShell.Aside onWidthChangeEnd={onWidthChangeEnd}>
+      <ViewShell.Aside>
         <ViewSidebar.Header>
           <ViewSidebar.Title>Tasks</ViewSidebar.Title>
         </ViewSidebar.Header>
@@ -157,14 +153,15 @@ function setup(preserveDuringResize: boolean, persistWidth = false) {
     fireEvent(window, new MouseEvent('pointermove', { clientX: 296 }));
     fireEvent(window, new MouseEvent('pointerup', { clientX: 296 }));
   };
+  const savedWidth = () =>
+    localStorage.getItem(`macro:pref:view-sidebar:width:${app}`);
   return {
     ...view,
     asideWidth,
     growAside,
     dragAside,
     setWidth,
-    setConfiguredWidth,
-    onWidthChangeEnd,
+    savedWidth,
   };
 }
 
@@ -181,24 +178,21 @@ describe('ViewShell aside resize preference', () => {
     }
   });
 
-  it.each([false, true])(
-    'keeps a manual resize in a constrained split stable as the split grows (persist=%s)',
-    async (persistWidth) => {
-      const view = setup(false, persistWidth);
-      view.setWidth(890);
-      expect(view.asideWidth()).toBeCloseTo(249);
-      await view.growAside();
-      expect(view.asideWidth()).toBeCloseTo(269);
-      for (const width of [891, 900, 1000, 1200]) {
-        view.setWidth(width);
-        expect(view.asideWidth()).toBeCloseTo(269);
-      }
-      view.setWidth(880);
-      expect(view.asideWidth()).toBeCloseTo(259);
-      view.setWidth(1200);
+  it('keeps a manual resize in a constrained split stable as the split grows', async () => {
+    const view = setup(false);
+    view.setWidth(890);
+    expect(view.asideWidth()).toBeCloseTo(249);
+    await view.growAside();
+    expect(view.asideWidth()).toBeCloseTo(269);
+    for (const width of [891, 900, 1000, 1200]) {
+      view.setWidth(width);
       expect(view.asideWidth()).toBeCloseTo(269);
     }
-  );
+    view.setWidth(880);
+    expect(view.asideWidth()).toBeCloseTo(259);
+    view.setWidth(1200);
+    expect(view.asideWidth()).toBeCloseTo(269);
+  });
 
   it('preserves the chosen width through manual collapse and narrow overlays', async () => {
     const view = setup(false);
@@ -223,7 +217,7 @@ describe('ViewShell aside resize preference', () => {
     expect(view.asideWidth()).toBeCloseTo(276);
     view.setWidth(1100);
     expect(view.asideWidth()).toBeCloseTo(276);
-    expect(view.onWidthChangeEnd).toHaveBeenCalledOnce();
+    expect(Number(view.savedWidth())).toBeCloseTo(276);
   });
 
   it('remembers the width after a pointer drag', () => {
@@ -232,7 +226,7 @@ describe('ViewShell aside resize preference', () => {
     expect(view.asideWidth()).toBeCloseTo(296);
     view.setWidth(1100);
     expect(view.asideWidth()).toBeCloseTo(296);
-    expect(view.onWidthChangeEnd).toHaveBeenCalledOnce();
+    expect(Number(view.savedWidth())).toBeCloseTo(296);
   });
 
   it.each([true, false])(
@@ -240,17 +234,32 @@ describe('ViewShell aside resize preference', () => {
     async (preserve) => {
       const view = setup(preserve);
       expect(view.asideWidth()).toBeCloseTo(256);
+      expect(view.savedWidth()).toBeNull();
       await view.growAside();
       expect(view.asideWidth()).toBeCloseTo(276);
-      expect(view.onWidthChangeEnd).toHaveBeenCalledOnce();
-      expect(view.onWidthChangeEnd.mock.calls[0][0]).toBeCloseTo(276);
       view.setWidth(1100);
       expect(view.asideWidth()).toBeCloseTo(276);
       view.setWidth(1400);
       expect(view.asideWidth()).toBeCloseTo(276);
-      expect(view.onWidthChangeEnd).toHaveBeenCalledOnce();
+      expect(Number(view.savedWidth())).toBeCloseTo(276);
     }
   );
+
+  it('restores the dragged width per app after the view remounts', () => {
+    const first = setup(false);
+    first.dragAside();
+    first.unmount();
+
+    expect(setup(false).asideWidth()).toBeCloseTo(296);
+    cleanup();
+    expect(setup(false, 'email').asideWidth()).toBeCloseTo(256);
+  });
+
+  it('fits a saved width to the current bounds', () => {
+    localStorage.setItem('macro:pref:view-sidebar:width:tasks', '900');
+    const view = setup(false);
+    expect(view.asideWidth()).toBeCloseTo(360);
+  });
 
   it('yields to the main preference, then restores the chosen width', async () => {
     const view = setup(false);
@@ -263,21 +272,13 @@ describe('ViewShell aside resize preference', () => {
     view.setWidth(1200);
     expect(view.asideWidth()).toBeCloseTo(276);
   });
-
-  it('honors a new configured width after a manual resize', async () => {
-    const view = setup(true);
-    await view.growAside();
-    view.setConfiguredWidth(300);
-    expect(view.asideWidth()).toBeCloseTo(300);
-    view.setWidth(1100);
-    expect(view.asideWidth()).toBeCloseTo(300);
-  });
 });
 
 function Workspace(props: {
   app: string;
   asideRequired?: boolean;
   asidePinned?: boolean;
+  asideList?: ViewShellRootProps['asideList'];
   breakpoints?: ViewShellRootProps['breakpoints'];
   mounted?: () => void;
 }) {
@@ -299,6 +300,7 @@ function Workspace(props: {
         asidePreferenceKey={props.app}
         asideRequired={props.asideRequired}
         asidePinned={props.asidePinned}
+        asideList={props.asideList}
         breakpoints={props.breakpoints}
       >
         <ViewShell.Aside>
@@ -1126,4 +1128,59 @@ describe('automatic docked navigation exit', () => {
       expect(animate).not.toHaveBeenCalled();
     }
   );
+});
+
+describe('list navigation', () => {
+  const main = () => document.querySelector('[data-view-shell-main]')!;
+  const list = () => document.querySelector('[data-view-shell-aside]')!;
+
+  it('fills a narrow shell with the list until an item opens, then goes back to it', () => {
+    const [width, setWidth] = createSignal(600);
+    measurement.width = width;
+    const [open, setOpen] = createSignal(false);
+    const onBack = vi.fn(() => setOpen(false));
+    render(() => (
+      <Workspace app="channels" asideList={{ open: open(), onBack }} />
+    ));
+
+    expect(screen.getByText('channels')).toBeTruthy();
+    expect(main().getAttribute('aria-hidden')).toBe('true');
+    expect(
+      screen.queryByRole('button', { name: 'Close navigation backdrop' })
+    ).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: 'Hide navigation' })
+    ).toBeNull();
+
+    const listElement = list();
+    setOpen(true);
+    // Hidden, not unmounted, so the list keeps its scroll position.
+    expect(list()).toBe(listElement);
+    expect(list().getAttribute('aria-hidden')).toBe('true');
+    expect(main().getAttribute('aria-hidden')).not.toBe('true');
+    expect(
+      screen.queryByRole('button', { name: 'Show navigation' })
+    ).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    expect(onBack).toHaveBeenCalledOnce();
+    expect(list().getAttribute('aria-hidden')).not.toBe('true');
+    expect(document.activeElement).toBe(listElement);
+
+    // Focus handed to the pane around the view also returns to the list.
+    const pane = screen.getByRole('region', { name: 'channels' });
+    pane.tabIndex = -1;
+    setOpen(true);
+    pane.focus();
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    expect(document.activeElement).toBe(listElement);
+
+    setOpen(true);
+    setWidth(1000);
+    expect(asideDocked()).toBe(true);
+    expect(screen.queryByRole('button', { name: 'Back' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Hide navigation' }));
+    expect(
+      screen.getByRole('button', { name: 'Show navigation' })
+    ).toBeTruthy();
+  });
 });

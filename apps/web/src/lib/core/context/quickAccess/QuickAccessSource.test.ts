@@ -117,8 +117,27 @@ vi.mock('@core/context/channels', () => ({
   }),
   useDmActivityByUserId: () => () => new Map(),
 }));
+vi.mock('@queries/contacts/use-directory', () => ({
+  useContactDirectoryScope: () => () => ({ userId: 'viewer' }),
+}));
+vi.mock('./person-list', () => ({
+  createPersonList: () => ({
+    items: () => [],
+    totalCount: () => 0,
+    hasMore: () => false,
+    isLoading: () => false,
+    isLoadingMore: () => false,
+    error: () => undefined,
+    loadMore: async () => {},
+  }),
+}));
+vi.mock('@core/context/emailLinks', () => ({
+  useEmailLinksContext: () => ({
+    links: () => [],
+    isConnectedSecondaryInbox: () => false,
+  }),
+}));
 vi.mock('@core/user', () => ({
-  useContacts: () => () => [],
   useIsConnectedSecondaryInbox: () => () => false,
 }));
 vi.mock('@queries/channel/channels', () => ({
@@ -1220,6 +1239,17 @@ describe('Quick Access source integration', () => {
     await vi.waitFor(() => expect(list.isLoading()).toBe(false));
     expect(list.items()).toHaveLength(1);
     expect(list.items()[0].data).toMatchObject(restCompany);
+  });
+
+  it('excludes archived REST suggestions and includes restored companies', () => {
+    mocks.cacheEnabled = false;
+    mocks.companies = [{ ...restCompany, hidden: true }];
+    const archived = setup((source) => source.useList('crm_company'));
+    expect(archived.items()).toEqual([]);
+    dispose?.();
+    mocks.companies = [{ ...restCompany, hidden: false }];
+    const restored = setup((source) => source.useList('crm_company'));
+    expect(restored.items().map((item) => item.id)).toEqual(['company-1']);
   });
 
   it('preserves REST company mentions with GraphQL disabled', () => {

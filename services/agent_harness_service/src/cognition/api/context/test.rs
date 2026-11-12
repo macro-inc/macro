@@ -591,6 +591,9 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         ),
         schedule_tool_context: ai_tools::no_op_schedule_context(),
         anthropic_tool_context: ai_tools::build_anthropic_tool_context_test(),
+        web_search_provider: std::sync::Arc::new(web_search::outbound::tavily::TavilyClient::new(
+            &web_search::outbound::tavily::TavilyApiKey::new_unset(),
+        )),
         admission: admission.clone(),
         recorder: recorder.clone(),
         usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),
@@ -632,6 +635,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         let mcp_selector: Arc<ai_tools::ToolMcpSelector> =
             Arc::new(mcp_select::McpToolSelector::new(
                 Arc::new(mcp_repo.clone()),
+                local_mcp_http(),
                 pipedream_connections.clone(),
                 Arc::new(None),
             ));
@@ -817,6 +821,11 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         ai_stream_registry: crate::cognition::service::ai_stream_registry::AiStreamRegistry::new(
             Arc::new(redis::Client::open("redis://127.0.0.1:6379/").expect("valid redis url")),
         ),
+        web_rate_limiter: rate_limit::RateLimitServiceImpl {
+            repo: rate_limit::RedisRateLimitAdapter {
+                redis: redis::Client::open("redis://127.0.0.1:6379/").expect("valid redis url"),
+            },
+        },
         granola_sync: None,
         pipedream_state: pipedream_mcp::inbound::PipedreamRouterState::new(
             pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(pool.clone()),
@@ -843,6 +852,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
                 mcp_repo.clone(),
                 mcp_state_store,
                 client_metadata.clone(),
+                local_mcp_http(),
                 mcp_client::domain::provider_registry::PreRegisteredProviders::empty(),
             );
             mcp_client::inbound::McpRouterState::new(
@@ -857,4 +867,11 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         macro_event_broker,
     };
     Arc::new(api_context)
+}
+
+fn local_mcp_http() -> mcp_client::outbound::guarded_http::McpHttp {
+    mcp_client::outbound::guarded_http::McpHttp::new(
+        mcp_client::outbound::guarded_http::AddressPolicy::AnyAddress,
+    )
+    .unwrap()
 }

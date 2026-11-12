@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT \n          -- Use trim() to remove the leading/trailing angle brackets\n          trim(jsonb_path_query_first(headers_jsonb, '$[*] ? (@.name like_regex \"message-id\" flag \"i\").value') #>> '{}', '<>') as \"message_id\",\n          -- The references header can have multiple IDs, so we just return it raw\n          jsonb_path_query_first(headers_jsonb, '$[*] ? (@.name like_regex \"references\" flag \"i\").value') #>> '{}' as \"references\"\n        FROM email_messages\n        WHERE id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "references",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "3b4a7b87a65ee6b8433ecdf0bd1ca23fedee82259e5f452c11728db3044a42e4"
+}

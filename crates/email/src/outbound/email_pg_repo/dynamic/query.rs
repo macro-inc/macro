@@ -115,24 +115,47 @@ fn push_shared_cte(builder: &mut QueryBuilder<'static, Postgres>, params: &Query
     );
 }
 
+/// Which inbox predicate an Owned candidate scan applies.
+#[derive(Clone, Copy)]
+enum LinkScope {
+    /// `t.link_id = ANY(link_ids)`, or the team's links when team-scoped.
+    All,
+    /// One inbox of the `unnest` fanout.
+    Lateral,
+    /// One inbox as a bound value, so the planner reads its own statistics.
+    Bound(Uuid),
+}
+
+/// True when a top-level subject term splits each owned inbox's scan in
+/// two (see push_thread_candidate_select). Folder views sort on their
+/// folder subquery's date, which the second step cannot read.
+fn uses_subject_subscans(view: &PreviewView, email_filter: &Expr<EmailLiteral>) -> bool {
+    !super::folders::is_folder(view) && build_subject_prefilter(email_filter).is_some()
+}
+
 fn push_source_scope(
     builder: &mut QueryBuilder<'static, Postgres>,
     params: &QueryParams,
     source: ThreadCandidateSource,
-    per_link_fanout: bool,
+    links: LinkScope,
 ) {
     match source {
         ThreadCandidateSource::Owned => match params.team_id {
             // Normal per-mailbox query.
-            None => {
-                if per_link_fanout {
-                    builder.push("t.link_id = links.link_id");
-                } else {
+            None => match links {
+                LinkScope::All => {
                     builder.push("t.link_id = ANY(");
                     builder.push_bind(params.link_ids.clone());
                     builder.push(")");
                 }
-            }
+                LinkScope::Lateral => {
+                    builder.push("t.link_id = links.link_id");
+                }
+                LinkScope::Bound(link_id) => {
+                    builder.push("t.link_id = ");
+                    builder.push_bind(link_id);
+                }
+            },
             // CRM-scoped query: expand to every primary email_link owned by
             // any member of the team. Non-primary links (connected secondary
             // mailboxes, whose address differs from the owner's macro_id
@@ -144,7 +167,7 @@ fn push_source_scope(
             // membership subquery revalidates it at execution time so a
             // member or link removed between resolve_filters and this query
             // can't leak threads (same belt-and-suspenders rationale as the
-            // crm_enabled EXISTS below). The subquery alone remains as a
+            // per-thread consent check below). The subquery alone remains as a
             // fallback for resolutions that didn't carry team links.
             Some(team_id) => {
                 if let Some(team_links) = params.resolved.team_link_ids() {
@@ -196,6 +219,59 @@ fn push_source_scope(
     }
 }
 
+/// True when the candidates are exactly the returned rows: one per-link
+/// index walk that stops at the page LIMIT. Each thread's preview message
+/// is then picked while the thread is scanned, and that pick both filters
+/// the candidate and supplies its preview, replacing the candidate EXISTS
+/// and a second pick after the LIMIT. With several links, or branches that
+/// sort their whole candidate set (team, shared, project, folders, or a
+/// view-history sort), most
+/// candidates are discarded, and fetching their previews costs more than
+/// the second pick saves. Subject subscans match after ordering instead.
+fn picks_preview_in_candidates(
+    view: &PreviewView,
+    email_filter: &Expr<EmailLiteral>,
+    params: &QueryParams,
+) -> bool {
+    wants_message_exists_pushdown(view)
+        && !uses_subject_subscans(view, email_filter)
+        && !super::folders::is_folder(view)
+        && matches!(params.shared, SharedEmailFilter::Exclude)
+        && params.project_scope.is_none()
+        && params.team_id.is_none()
+        && params.link_ids.len() == 1
+        && !sort_uses_view_history(&params.sort_method_str)
+}
+
+/// Pushes the latest message of `t` that the view and filter accept, as
+/// the `subject, snippet, from_contact_id, from_name, is_draft` preview.
+fn push_preview_message_select(
+    builder: &mut QueryBuilder<'static, Postgres>,
+    view: &PreviewView,
+    email_filter: &Expr<EmailLiteral>,
+    params: &QueryParams,
+) {
+    builder.push(
+        r#"
+            SELECT
+                   m.subject,
+                   m.snippet,
+                   m.from_contact_id,
+                   m.from_name,
+                   m.is_draft
+            FROM email_messages m
+            WHERE m.thread_id = t.id
+              AND "#,
+    );
+    build_preview_message_predicate(email_filter, view, &params.resolved)
+        .push_into(builder, &params.user_id);
+    builder.push(
+        r#"
+            ORDER BY COALESCE(m.internal_date_ts, m.created_at) DESC, m.id DESC
+            LIMIT 1"#,
+    );
+}
+
 fn push_thread_candidate_select(
     builder: &mut QueryBuilder<'static, Postgres>,
     view: &PreviewView,
@@ -204,6 +280,155 @@ fn push_thread_candidate_select(
     sort_ts_field: &str,
     source: ThreadCandidateSource,
 ) {
+    // Owned scans fan out one ordered, LIMITed subscan per link.
+    // `link_id = ANY(...)` cannot return index order, even for a single id,
+    // so the planner fetches every matching thread and sorts. A per-link
+    // equality walk stops at LIMIT. Team scope stays on ANY: a per-link
+    // LIMIT would starve the cross-mailbox dedupe.
+    let per_link_fanout = matches!(source, ThreadCandidateSource::Owned)
+        && params.team_id.is_none()
+        && !params.link_ids.is_empty();
+
+    // Subject terms split each subscan in two steps: list the inbox's
+    // threads in order with only the index-backed subject match, then run
+    // the full match (mailbox facts) on that stream until LIMIT. In one step
+    // the planner joins every subject hit to its facts before sorting, which
+    // costs seconds for common words in a large mailbox. Whether walking the
+    // ordered index beats reading the trigram index depends on the inbox's
+    // size, so each inbox is bound rather than read from `unnest`, which
+    // would plan every inbox as the table's average one.
+    if per_link_fanout && uses_subject_subscans(view, email_filter) {
+        builder.push(
+            r#"
+                SELECT per_link.* FROM ("#,
+        );
+        for (index, link_id) in params.link_ids.iter().enumerate() {
+            if index > 0 {
+                builder.push(
+                    r#"
+                UNION ALL"#,
+                );
+            }
+            builder.push(
+                r#"
+                (SELECT ordered.* FROM ("#,
+            );
+            push_candidate_body(
+                builder,
+                view,
+                email_filter,
+                params,
+                sort_ts_field,
+                source,
+                LinkScope::Bound(*link_id),
+            );
+            push_subject_subscan_match(builder, view, email_filter, params, sort_ts_field);
+            builder.push(")");
+        }
+        builder.push(
+            r#"
+                ) AS per_link"#,
+        );
+        return;
+    }
+
+    if !per_link_fanout {
+        push_candidate_body(
+            builder,
+            view,
+            email_filter,
+            params,
+            sort_ts_field,
+            source,
+            LinkScope::All,
+        );
+        return;
+    }
+
+    builder.push(
+        r#"
+                SELECT per_link.* FROM unnest("#,
+    );
+    builder.push_bind(params.link_ids.clone());
+    builder.push(
+        r#") AS links(link_id)
+                CROSS JOIN LATERAL ("#,
+    );
+    push_candidate_body(
+        builder,
+        view,
+        email_filter,
+        params,
+        sort_ts_field,
+        source,
+        LinkScope::Lateral,
+    );
+    // Per-link top-N: the outer candidate sort only ever needs the best
+    // `query_limit` rows from each inbox.
+    builder.push(
+        r#"
+                ORDER BY effective_ts DESC, id DESC
+                LIMIT "#,
+    );
+    builder.push_bind(params.query_limit);
+    builder.push(
+        r#"
+                ) AS per_link"#,
+    );
+}
+
+/// Ends a bound subject subscan: the inner step's order, then the full
+/// match per thread until LIMIT. `OFFSET 0` keeps both steps as written.
+/// With no outer sort or join, the planner passes LIMIT down: dense
+/// keywords walk the ordered index, rare ones read the trigram index, and
+/// the full match runs per thread in this order. It mirrors the lateral's
+/// message match, so LIMIT counts only threads the lateral shows.
+fn push_subject_subscan_match(
+    builder: &mut QueryBuilder<'static, Postgres>,
+    view: &PreviewView,
+    email_filter: &Expr<EmailLiteral>,
+    params: &QueryParams,
+    sort_ts_field: &str,
+) {
+    builder.push(
+        r#"
+                ORDER BY effective_ts DESC, id DESC
+                OFFSET 0
+                ) AS ordered
+                WHERE EXISTS (SELECT 1 FROM email_threads t"#,
+    );
+    if uses_view_history(email_filter, &params.sort_method_str) {
+        builder.push(
+            " LEFT JOIN email_user_history uh ON uh.thread_id = t.id AND uh.link_id = t.link_id",
+        );
+    }
+    builder.push(" WHERE t.id = ordered.id");
+    if wants_message_exists_pushdown(view) {
+        build_thread_message_exists_filter(email_filter, view, &params.resolved)
+            .push_into(builder, &params.user_id);
+    } else {
+        build_thread_email_filter(email_filter, sort_ts_field, &params.resolved)
+            .push_into(builder, &params.user_id);
+    }
+    builder.push(
+        r#" OFFSET 0)
+                LIMIT "#,
+    );
+    builder.push_bind(params.query_limit);
+}
+
+/// One candidate scan: the projection, its source and inbox predicates, the
+/// filters, and the cursor. Callers add any ORDER BY and LIMIT.
+fn push_candidate_body(
+    builder: &mut QueryBuilder<'static, Postgres>,
+    view: &PreviewView,
+    email_filter: &Expr<EmailLiteral>,
+    params: &QueryParams,
+    sort_ts_field: &str,
+    source: ThreadCandidateSource,
+    links: LinkScope,
+) {
+    let pick_preview = picks_preview_in_candidates(view, email_filter, params);
     let defer_uh = !uses_view_history(email_filter, &params.sort_method_str);
     // All Mail displays the latest eligible message date, even when a newer
     // junk/trash message or a read-state write updates the thread metadata.
@@ -215,27 +440,10 @@ fn push_thread_candidate_select(
         ) => sort_ts_field,
         _ => "t.updated_at",
     };
-
-    // Owned scans fan out one ordered, LIMITed subscan per link.
-    // `link_id = ANY(...)` cannot return index order, even for a single id,
-    // so the planner fetches every matching thread and sorts. A per-link
-    // equality walk stops at LIMIT. Team scope stays on ANY: a per-link
-    // LIMIT would starve the cross-mailbox dedupe.
-    let per_link_fanout = matches!(source, ThreadCandidateSource::Owned)
-        && params.team_id.is_none()
-        && !params.link_ids.is_empty();
-
-    if per_link_fanout {
-        builder.push(
-            r#"
-                SELECT per_link.* FROM unnest("#,
-        );
-        builder.push_bind(params.link_ids.clone());
-        builder.push(
-            r#") AS links(link_id)
-                CROSS JOIN LATERAL ("#,
-        );
-    }
+    let subject_prefilter = match links {
+        LinkScope::Bound(_) => build_subject_prefilter(email_filter),
+        LinkScope::All | LinkScope::Lateral => None,
+    };
 
     builder.push(
         r#"
@@ -284,6 +492,17 @@ fn push_thread_candidate_select(
         ));
     }
 
+    if pick_preview {
+        builder.push(
+            r#",
+                    lmp.subject,
+                    lmp.snippet,
+                    lmp.from_contact_id,
+                    lmp.from_name,
+                    lmp.is_draft"#,
+        );
+    }
+
     // Team-scoped queries return one thread copy per team member on the
     // same conversation. Dedupe on the root message's RFC-822 Message-ID
     // (email_messages.global_id) — stable across mailboxes, unlike
@@ -311,7 +530,7 @@ fn push_thread_candidate_select(
 
     if super::folders::is_folder(view) {
         super::folders::push_folder_threads(builder, view, |builder| {
-            push_source_scope(builder, params, source, per_link_fanout);
+            push_source_scope(builder, params, source, links);
         });
     } else {
         builder.push(" FROM email_threads t ");
@@ -321,45 +540,42 @@ fn push_thread_candidate_select(
             " LEFT JOIN email_user_history uh ON uh.thread_id = t.id AND uh.link_id = t.link_id ",
         );
     }
+    if pick_preview {
+        builder.push(" CROSS JOIN LATERAL (");
+        push_preview_message_select(builder, view, email_filter, params);
+        builder.push(") AS lmp ");
+    }
     builder.push(" WHERE ");
 
-    push_source_scope(builder, params, source, per_link_fanout);
-
-    // Belt-and-suspenders killswitch check that covers both the Owned and
-    // Shared branches. Without this, a CRM-scoped request with
-    // `SharedEmailFilter::Include`/`Only` could still return rows after
-    // `team_crm_settings.crm_enabled` flips false between the pre-check
-    // and query execution. EXISTS short-circuits and Postgres planner
-    // treats it as a constant once evaluated per query.
-    if let Some(team_id) = params.team_id {
-        builder.push(
-            r#" AND EXISTS (
-                SELECT 1 FROM team_crm_settings tcs
-                WHERE tcs.team_id = "#,
-        );
-        builder.push_bind(team_id);
-        builder.push(" AND tcs.crm_enabled)");
-    }
+    push_source_scope(builder, params, source, links);
 
     let view_thread_filter = build_view_thread_filter(view);
     if !view_thread_filter.is_empty() {
         view_thread_filter.push_into(builder, &params.user_id);
     }
 
-    if has_thread_literals(email_filter) {
-        build_thread_email_filter(email_filter, sort_ts_field, &params.resolved)
+    if let Some(prefilter) = subject_prefilter {
+        // The full match runs after ordering, in push_subject_subscan_match.
+        build_thread_conjunct_filter(email_filter, sort_ts_field)
             .push_into(builder, &params.user_id);
-    }
+        prefilter.push_into(builder, &params.user_id);
+    } else {
+        if has_thread_literals(email_filter) {
+            build_thread_email_filter(email_filter, sort_ts_field, &params.resolved)
+                .push_into(builder, &params.user_id);
+        }
 
-    // Ensure the candidate LIMIT only counts threads that will survive the
-    // CROSS JOIN LATERAL's message match. When a view-level message filter
-    // is in play mirror the full lateral predicate as a correlated EXISTS;
-    // otherwise push address-only constraints through the index-driven
-    // `matching_threads` CTE referenced via
-    // `t.id IN (SELECT thread_id FROM matching_threads)`.
-    if wants_message_exists_pushdown(view) {
-        build_thread_message_exists_filter(email_filter, view, &params.resolved)
-            .push_into(builder, &params.user_id);
+        // Ensure the candidate LIMIT only counts threads that will survive the
+        // CROSS JOIN LATERAL's message match. When a view-level message filter
+        // is in play mirror the full lateral predicate as a correlated EXISTS;
+        // otherwise push address-only constraints through the index-driven
+        // `matching_threads` CTE referenced via
+        // `t.id IN (SELECT thread_id FROM matching_threads)`. A preview picked
+        // in the candidate stage already is that message match.
+        if wants_message_exists_pushdown(view) && !pick_preview {
+            build_thread_message_exists_filter(email_filter, view, &params.resolved)
+                .push_into(builder, &params.user_id);
+        }
     }
     if has_address_literals(email_filter)
         && (!wants_message_exists_pushdown(view)
@@ -430,21 +646,6 @@ fn push_thread_candidate_select(
         builder.push_bind(params.cursor_id_str.clone());
         builder.push("::uuid))");
     }
-
-    if per_link_fanout {
-        // Per-link top-N: the outer candidate sort only ever needs the best
-        // `query_limit` rows from each inbox.
-        builder.push(
-            r#"
-                ORDER BY effective_ts DESC, id DESC
-                LIMIT "#,
-        );
-        builder.push_bind(params.query_limit);
-        builder.push(
-            r#"
-                ) AS per_link"#,
-        );
-    }
 }
 
 /// Builds a dynamic email thread query with filters applied.
@@ -459,7 +660,6 @@ fn build_query(
         PreviewView::StandardLabel(PreviewViewStandardLabel::Trash)
     );
     let sort_ts_field = get_sort_timestamp_field(view);
-    let view_message_filter = build_view_message_filter(view);
     // When neither ordering nor filtering needs view history, the
     // `email_user_history` join is pushed past the candidate `LIMIT` so it
     // runs once per returned row instead of once per candidate thread.
@@ -590,6 +790,7 @@ fn build_query(
             r#"
                 SELECT DISTINCT ON (dedupe_key) *
                 FROM (
+                SELECT * FROM (
         "#,
         );
     }
@@ -654,9 +855,22 @@ fn build_query(
         );
     }
 
-    if params.team_id.is_some() {
+    if let Some(team_id) = params.team_id {
+        // Every CRM candidate, including the caller's own copy and explicit
+        // shares, must satisfy current mailbox consent and domain exclusions.
+        // The check walks every participant of a thread, so it runs on the
+        // fenced candidate set: `OFFSET 0` stops the planner from pushing it
+        // into the thread scan, where it ran once per thread in each team
+        // mailbox before the cheap filters had narrowed anything.
         builder.push(
             r#"
+                OFFSET 0
+                ) AS unchecked_candidates
+                WHERE crm_email_thread_allowed("#,
+        );
+        builder.push_bind(team_id);
+        builder.push(
+            r#", unchecked_candidates.id)
                 ) AS candidate_threads
                 ORDER BY dedupe_key, is_own_link DESC, effective_ts DESC, id DESC
             ) AS deduped_threads
@@ -685,43 +899,35 @@ fn build_query(
     builder.push_bind(params.query_limit);
 
     builder.push(") AS t");
-    if super::folders::is_folder(view) {
-        // Preserve the folder sort date inside mixed thread/message predicates
-        // in the preview LATERAL, after the candidate relation has been limited.
-        builder
-            .push(" CROSS JOIN LATERAL (SELECT t.created_at AS latest_folder_message_ts) folder ");
-    }
-    builder.push(
-        r#"
-        -- Step 2: For each thread, find its latest message matching the filter
+    if picks_preview_in_candidates(view, email_filter, &params) {
+        builder.push(
+            r#"
+        -- Step 2: the preview message was picked with the candidate
         CROSS JOIN LATERAL (
-            SELECT
-                   m.subject,
-                   m.snippet,
-                   m.from_contact_id,
-                   m.from_name,
-                   m.is_draft
-            FROM email_messages m
-            WHERE m.thread_id = t.id
-              AND "#,
-    );
-    build_lateral_trash_exclusion(&params.resolved).push_into(&mut builder, &params.user_id);
-
-    // Add view-specific message filters
-    if !view_message_filter.is_empty() {
-        view_message_filter.push_into(&mut builder, &params.user_id);
+            SELECT t.subject, t.snippet, t.from_contact_id, t.from_name, t.is_draft
+        ) AS lmp"#,
+        );
+    } else {
+        if super::folders::is_folder(view) {
+            // Preserve the folder sort date inside mixed thread/message predicates
+            // in the preview LATERAL, after the candidate relation has been limited.
+            builder.push(
+                " CROSS JOIN LATERAL (SELECT t.created_at AS latest_folder_message_ts) folder ",
+            );
+        }
+        builder.push(
+            r#"
+        -- Step 2: For each thread, find its latest message matching the filter
+        CROSS JOIN LATERAL ("#,
+        );
+        push_preview_message_select(&mut builder, view, email_filter, &params);
+        builder.push(
+            r#"
+        ) AS lmp"#,
+        );
     }
-
-    if has_message_literals(email_filter) {
-        build_message_email_filter(email_filter, &params.resolved, sort_ts_field)
-            .push_into(&mut builder, &params.user_id);
-    }
-
     builder.push(
         r#"
-            ORDER BY COALESCE(m.internal_date_ts, m.created_at) DESC, m.id DESC
-            LIMIT 1
-        ) AS lmp
         -- Step 3: Join to get the sender's details
         LEFT JOIN email_contacts c ON lmp.from_contact_id = c.id
         -- Step 4: Join to get the thread owner's macro user ID
@@ -1020,6 +1226,8 @@ pub(crate) async fn dynamic_email_thread_cursor(
     if can_short_circuit(email_filter, &resolved) {
         return Ok(Vec::new());
     }
+    let subject_subscans =
+        team_id.is_none() && !link_ids.is_empty() && uses_subject_subscans(view, email_filter);
 
     let mut qb = build_query(
         view,
@@ -1039,7 +1247,8 @@ pub(crate) async fn dynamic_email_thread_cursor(
         },
     );
 
-    qb.build()
+    let query = qb
+        .build()
         // Unnamed statement: the SQL text varies per filter shape (and per
         // interpolated date literal), so cached prepared statements get
         // little reuse but do flip to generic plans after five executions —
@@ -1069,7 +1278,36 @@ pub(crate) async fn dynamic_email_thread_cursor(
                 owner_id: row.try_get("owner_id")?,
                 link_id: row.try_get("link_id")?,
             })
-        })
-        .fetch_all(pool)
-        .await
+        });
+
+    if subject_subscans {
+        // Parallel workers on a subject subscan run ahead of its LIMIT: for
+        // a word in about 1% of a large inbox's threads they walked eight
+        // times the threads one page needs and read 15 times the buffers,
+        // so the page took 2.5 times as long warm, and far longer cold.
+        let mut transaction = pool.begin().await?;
+        sqlx::query!("SET LOCAL max_parallel_workers_per_gather = 0")
+            .execute(&mut *transaction)
+            .await?;
+        let rows = query.fetch_all(&mut *transaction).await?;
+        transaction.commit().await?;
+        return Ok(rows);
+    }
+
+    if team_id.is_none() {
+        return query.fetch_all(pool).await;
+    }
+
+    // Team-scoped (CRM) queries check privacy on every candidate thread
+    // before the LIMIT, so a domain that covers most of a mailbox can run
+    // for tens of minutes. The client gives up after 12s and the server
+    // never cancels the query, so bound it in the database instead.
+    // Slightly above the web client's 12s Soup request timeout.
+    let mut transaction = pool.begin().await?;
+    sqlx::query!("SET LOCAL statement_timeout = '15s'")
+        .execute(&mut *transaction)
+        .await?;
+    let rows = query.fetch_all(&mut *transaction).await?;
+    transaction.commit().await?;
+    Ok(rows)
 }

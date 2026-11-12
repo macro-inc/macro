@@ -32,6 +32,7 @@ async fn setup(pool: &PgPool) {
 
 fn command(document: &str, root: Option<Uuid>, content: &str) -> CreateMessage {
     CreateMessage {
+        kind: MessageKind::Message,
         guest_name: None,
         canonical_root_id: None,
         parent: MessageParent::parse("document", document).unwrap(),
@@ -830,6 +831,37 @@ async fn replacement_attachments_preserve_retained_ids_and_remove_only_missing_i
         .await
         .unwrap();
     assert!(removed.attachments.is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn attachments_read_back_in_the_order_they_were_sent(pool: PgPool) {
+    setup(&pool).await;
+    let repo = PgMessageRepository::new(pool);
+    let sent = [
+        "doc-7", "doc-2", "doc-9", "doc-0", "doc-5", "doc-3", "doc-8", "doc-1", "doc-6", "doc-4",
+    ];
+    let mut create = command("message-doc-a", None, "ten attachments");
+    create.input.attachments = sent
+        .iter()
+        .map(|entity_id| NewAttachment {
+            entity_type: "document".into(),
+            entity_id: (*entity_id).into(),
+            width: None,
+            height: None,
+        })
+        .collect();
+    let message = repo.create(create).await.unwrap();
+    let read = repo
+        .get(&message.parent, message.id)
+        .await
+        .unwrap()
+        .unwrap();
+    let order: Vec<_> = read
+        .attachments
+        .iter()
+        .map(|attachment| attachment.entity_id.as_str())
+        .collect();
+    assert_eq!(order, sent);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

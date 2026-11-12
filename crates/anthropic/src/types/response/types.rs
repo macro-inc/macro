@@ -2,8 +2,6 @@ use crate::types::request::Role;
 use crate::types::response::code_execution::{
     BashCodeExecutionResponse, TextEditorCodeExecutionResponse,
 };
-use crate::types::response::web_fetch::WebFetchResponse;
-use crate::types::response::web_search::WebSearchResponse;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -13,8 +11,6 @@ pub enum ResponseContentKind {
     Thinking(ThinkingResponse),
     ToolUse(ToolUse),
     ServerToolUse(ServerToolUse),
-    WebSearchToolResult(WebSearchResponse),
-    WebFetchToolResult(WebFetchResponse),
     BashCodeExecutionToolResult(BashCodeExecutionResponse),
     TextEditorCodeExecutionToolResult(TextEditorCodeExecutionResponse),
     #[serde(other)]
@@ -32,7 +28,7 @@ pub enum Content {
 pub struct ServerToolUse {
     pub id: String,
     pub input: serde_json::Value,
-    // one of web_search | web_fetch | code_execution | bash_code_execution | text_editor_code_execution
+    // one of code_execution | bash_code_execution | text_editor_code_execution
     pub name: String,
 }
 
@@ -73,7 +69,7 @@ pub enum StopReason {
     MaxTokens,
     StopSequence,
     ToolUse,
-    /// A server-tool loop (web search, web fetch, code execution) hit its
+    /// A server-tool loop (such as code execution) hit its
     /// iteration limit. The content so far is complete up to that point;
     /// sending it back continues the turn.
     PauseTurn,

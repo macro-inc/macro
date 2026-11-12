@@ -451,6 +451,7 @@ where
             | EntityType::Skill
             | EntityType::AgentSession
             | EntityType::ScheduledAction
+            | EntityType::Harness
             | EntityType::DatabaseRow
             | EntityType::Initiative
             | EntityType::ExternalChat => {
@@ -510,6 +511,7 @@ where
             | EntityType::Skill
             | EntityType::AgentSession
             | EntityType::ScheduledAction
+            | EntityType::Harness
             | EntityType::Initiative
             | EntityType::ExternalChat
             | EntityType::DatabaseRow => {
@@ -563,6 +565,7 @@ where
             | EntityType::Skill
             | EntityType::AgentSession
             | EntityType::ScheduledAction
+            | EntityType::Harness
             | EntityType::Initiative
             // Databases are shared by granting access directly; they carry no
             // public/channel share policy.
@@ -625,6 +628,7 @@ where
             | EntityType::Skill
             | EntityType::AgentSession
             | EntityType::ScheduledAction
+            | EntityType::Harness
             | EntityType::DatabaseRow
             | EntityType::Initiative
             | EntityType::ExternalChat => {
@@ -662,6 +666,7 @@ where
             | EntityType::Skill
             | EntityType::AgentSession
             | EntityType::ScheduledAction
+            | EntityType::Harness
             | EntityType::DatabaseRow
             | EntityType::Initiative
             | EntityType::ExternalChat => {
@@ -719,6 +724,7 @@ where
             | EntityType::Skill
             | EntityType::AgentSession
             | EntityType::ScheduledAction
+            | EntityType::Harness
             | EntityType::DatabaseRow
             | EntityType::Initiative
             | EntityType::ExternalChat => {
@@ -770,14 +776,14 @@ where
         let receipt = self.receipt(actor, requested).await?;
         let requested = requested.clone();
         let user_id = actor.user_id.clone();
-        tokio::spawn(
+        tokio::spawn(agent_correlation::context::capture(
             async move {
                 duplicator
                     .duplicate_entity(requested, receipt, user_id, display_name)
                     .await
             }
             .in_current_span(),
-        )
+        ))
         .await
         .map_err(|error| EntityMutationErrorCode::internal(rootcause::report!(error)))?
     }
@@ -825,6 +831,7 @@ where
             | EntityType::Skill
             | EntityType::AgentSession
             | EntityType::ScheduledAction
+            | EntityType::Harness
             | EntityType::Initiative
             | EntityType::ExternalChat
             | EntityType::Form

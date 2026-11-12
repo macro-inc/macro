@@ -111,3 +111,8 @@ export const storageServiceClient = {
     return ok(undefined);
   },
 } satisfies Pick<typeof Storage, 'getContact' | 'setContactHidden'>;
+
+export const prepareCrmVisibilityWrite = () => ({
+  isCurrent: () => true,
+  async commit() {},
+});

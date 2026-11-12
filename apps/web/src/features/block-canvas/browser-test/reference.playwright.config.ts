@@ -7,7 +7,7 @@ const localURL = `http://127.0.0.1:${process.env.CANVAS_REFERENCE_PORT ?? 3029}`
 
 export default defineConfig({
   testDir: directory,
-  testMatch: 'reference.e2e.ts',
+  testMatch: /(reference|artifact)\.e2e\.ts/,
   outputDir: `${directory}/test-results`,
   reporter: 'line',
   use: { baseURL: localURL },

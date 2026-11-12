@@ -45,10 +45,15 @@ impl AttachmentReadRepository for EmailPgRepo {
     async fn existing_attachment_document(
         &self,
         id: Uuid,
-    ) -> Result<Option<String>, AttachmentError> {
-        email_db_client::attachments::provider::get_document_id_by_att_id(&self.pool, id)
-            .await
-            .map_err(failed)
+    ) -> Result<Option<ExistingAttachmentDocument>, AttachmentError> {
+        let document =
+            email_db_client::attachments::provider::get_document_by_att_id(&self.pool, id)
+                .await
+                .map_err(failed)?;
+        Ok(document.map(|document| ExistingAttachmentDocument {
+            id: document.document_id,
+            awaiting_upload: document.awaiting_upload,
+        }))
     }
 }
 

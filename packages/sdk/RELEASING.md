@@ -27,12 +27,13 @@ Then run the same validation the release workflow runs:
 
 ```sh
 bun install --frozen-lockfile
-bun run check && bun test && bun run coverage && bun run build
+bun run check && bun test && bun run coverage && bun run build && bun run check:pack
 npm pack --dry-run --ignore-scripts
 ```
 
 The compiled JavaScript and declaration files referenced by `exports` must
-appear in the package listing. `coverage` checks endpoint wrappers, not test
+appear in the package listing. `check:pack` installs the tarball into isolated
+core, browser, and Node consumers and checks imports, types, and bundle isolation. `coverage` checks endpoint wrappers, not test
 coverage. `SDK Check` runs the same package suite on the PR and again on the
 merge to `main`. Generated-code freshness is checked on the PR by the web app
 workflow's `Generated Code Check`; if it reports staleness, run
@@ -52,7 +53,7 @@ follow-up PR with the bump.
    [`scripts/release.ts`](scripts/release.ts), shared with `just bump` and
    unit-tested in [`tests/release.test.ts`](tests/release.test.ts); `semver`
    does the comparing.
-2. `bun install --frozen-lockfile`, then `check`, `test`, `coverage`, `build`.
+2. `bun install --frozen-lockfile`, then `check`, `test`, `coverage`, `build`, `check:pack`.
 3. `npm publish --access public` over OIDC trusted publishing. A prerelease
    version publishes under the `next` dist-tag so it never becomes what a plain
    `npm install` resolves to.
@@ -87,8 +88,7 @@ secrets. A package maintainer must register the publisher once, on npmjs.com:
 
 Register `publish-sdk.yml` as a second trusted publisher to keep the recovery
 path below working. Until this is done, every release fails at `npm publish`
-with an authentication error — `0.0.1` was published by hand, so OIDC has not
-yet been exercised. Do not interpret network or authentication errors as proof
+with an authentication error. Do not interpret network or authentication errors as proof
 that the package or version is available. npm documents the requirement in its
 [trusted publishing guide](https://docs.npmjs.com/trusted-publishers/).
 

@@ -15,14 +15,22 @@ export class ApiKeyNamespace {
     return UserApiKey.byId(this.client, id);
   }
 
-  /** List metadata for the caller's API keys. */
+  /**
+   * List metadata for the caller's API keys.
+   *
+   * @readonly
+   */
   async list(): Promise<UserApiKey[]> {
     return unwrap(await this.client.storage.listUserApiKeys()).keys.map((k) =>
       UserApiKey.from(this.client, k),
     );
   }
 
-  /** Create a key. Save the secret now; it cannot be retrieved later. */
+  /**
+   * Create a key. Save the secret now; it cannot be retrieved later.
+   *
+   * @write
+   */
   async create(name: string): Promise<{ key: UserApiKey; secret: string }> {
     const record = unwrap(
       await this.client.storage.createUserApiKey({ body: { name } }),
@@ -30,7 +38,11 @@ export class ApiKeyNamespace {
     return { key: UserApiKey.from(this.client, record), secret: record.key };
   }
 
-  /** Exchange an email address for a Macro API token, subject to server authorization. */
+  /**
+   * Exchange an email address for a Macro API token, subject to server authorization.
+   *
+   * @write
+   */
   async tokenForEmail(email: string) {
     return unwrap(await this.client.auth.macroApiToken({ query: { email } }));
   }

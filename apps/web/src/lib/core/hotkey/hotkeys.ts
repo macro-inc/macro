@@ -61,9 +61,9 @@ import {
  * @param args.hotkey - Keyboard shortcut keys, e.g. 'j', 'cmd+j', or
  * 'opt+shift+j'. We use Mac modifier abbreviations ('ctrl', 'opt', 'shift',
  * 'cmd'). Modifiers must be listed in this order: 'ctrl', 'opt', 'shift',
- * 'cmd'. 'cmd' will be translated to 'ctrl' for non-Mac users. For this
- * reason, you should not use both 'cmd' and 'ctrl' in your hotkeys. Can be a
- * single hotkey or an array of hotkeys.
+ * 'cmd'). 'cmd' translates to 'ctrl' for non-Mac users. Give Mac-only
+ * 'ctrl+cmd' bindings a separate non-Mac shortcut. Can be a single hotkey or
+ * an array of hotkeys.
  * @param args.condition - Optional condition to check if the hotkey command
  * should run. Checked on keydown/keyup. If this is reactive, any hotkey UI
  * that displays based on this condition will be reactively updated.
@@ -694,6 +694,16 @@ export function useHotKeyRoot() {
     const scopeTree = hotkeyScopeTree;
     const currentScopeId = activeScope();
     const currentPressedKeys = pressedKeys();
+    // A plain key's release empties the set; finish holds before that early return.
+    if (e.type === 'keyup') {
+      for (const command of [...hotkeysAwaitingKeyUp]) {
+        const key = command.hotkey.split('+').at(-1);
+        if (key && !currentPressedKeys.has(key)) {
+          command.command?.();
+          hotkeysAwaitingKeyUp.splice(hotkeysAwaitingKeyUp.indexOf(command), 1);
+        }
+      }
+    }
     if (currentPressedKeys.size === 0) {
       return;
     }
@@ -783,19 +793,6 @@ export function useHotKeyRoot() {
       scopeNode = scopeNode.parentScopeId
         ? hotkeyScopeTree.get(scopeNode.parentScopeId)
         : undefined;
-    }
-
-    if (e.type === 'keyup') {
-      // check if there are any keyUpHandlers that should be triggered.
-      hotkeysAwaitingKeyUp.forEach((command) => {
-        const key = command.hotkey.split('+').at(-1);
-        const keyReleased = key && !currentPressedKeys.has(key);
-
-        if (keyReleased) {
-          command.command?.();
-          hotkeysAwaitingKeyUp.splice(hotkeysAwaitingKeyUp.indexOf(command), 1);
-        }
-      });
     }
 
     // Build context object with all relevant information

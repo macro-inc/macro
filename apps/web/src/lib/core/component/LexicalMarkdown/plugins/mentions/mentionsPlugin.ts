@@ -376,6 +376,9 @@ const blockItemType = (blockName: string): ItemMention['itemType'] => {
     .with('foreign', () => {
       throw new Error('foreign entities cannot be document mentions');
     })
+    .with('harness', () => {
+      throw new Error('runtimes cannot be document mentions');
+    })
     .with('crm_company', () => 'crm_company')
     .with('crm_contact', () => 'crm_contact')
     .with('crm_pipeline', () => 'crm_pipeline')

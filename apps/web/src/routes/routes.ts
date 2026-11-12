@@ -11,6 +11,7 @@ import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
 import { changesSearch } from '@app/features/changes/changes-search';
 import { mobileSearchRouteStateSchema } from '@app/features/command/mobile/mobile-search-route-state';
 import {
+  CRM_RETIRED_DATABASES_ROUTE_IDS,
   crmItemBlockType,
   crmItemParams,
   crmItemStateSchema,
@@ -22,6 +23,8 @@ import {
   crmRecordParams,
   crmRecordReference,
   crmRecordTrailSchema,
+  crmRetiredDatabaseParams,
+  crmRetiredRecordDatabasesParams,
   crmViewReference,
 } from '@app/features/crm/crm-route';
 import { driveDetailTrailSchema } from '@app/features/drive-view/primitives/drive-detail-trail';
@@ -44,7 +47,12 @@ import {
   ROUTINES_ROUTE_ID,
 } from '@app/features/routines/routine-navigation';
 import { bookingLinksSearch } from '@app/features/scheduling/booking-links-search';
-import { defineRoute, type Entry, routeParams } from '@app/lib/split-router';
+import {
+  defineRoute,
+  type Entry,
+  routeParams,
+  type SplitRouteInfo,
+} from '@app/lib/split-router';
 import { callDetailSearch } from '@block-call/call-route';
 import { URL_PARAMS as CALL_URL_PARAMS } from '@block-call/constants';
 import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
@@ -129,6 +137,14 @@ export const agentSetupRoute = defineRoute({
 export const agentSetupDoneRoute = defineRoute({
   id: 'agent-setup-done',
   path: 'agent-setup/done',
+  externalSearch: '*',
+});
+
+/** The one-time link in an account manager approval message. */
+export const accountManagerRoute = defineRoute({
+  id: 'account-manager',
+  path: 'account-manager/:grantId',
+  params: z.object({ grantId: z.string().uuid() }),
   externalSearch: '*',
 });
 
@@ -223,7 +239,53 @@ export const appRoute = defineRoute({ id: APP_ROUTE_ID });
 
 // Pane routes.
 
+/**
+ * Agents may open this route for the person who prompted them
+ * (`macro.ui.open`). Routes are closed to agents unless they say this; keep
+ * routes with side effects (calls, auth and OAuth callbacks, composing mail,
+ * credential settings, debug views) closed.
+ */
+const OPEN_TO_AGENTS = {
+  navigableByAgent: true,
+} as const satisfies SplitRouteInfo;
+
+/** Legacy `type/id` links agents may open: items, never components or settings. */
+const LEGACY_TYPES_OPEN_TO_AGENTS = [
+  'md',
+  'pdf',
+  'code',
+  'image',
+  'canvas',
+  'spreadsheet',
+  'pptx',
+  'psd',
+  'fig',
+  'ai',
+  'write',
+  'csv',
+  'snippet',
+  'skill',
+  'video',
+  'unknown',
+  'task',
+  'database',
+  'chat',
+  'channel',
+  'project',
+  'initiative',
+  // Not `email`: `/email/new` becomes the mail composer. Threads open at
+  // `/mail/<id>`, which is what links to them use.
+  'contact',
+  'company',
+  'routine',
+  'automation',
+  'pr',
+  'call',
+  'agent',
+] as const;
+
 export const driveCallRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
   id: 'drive-call',
   path: 'call/:callId',
   params: z.object({ callId: z.string().min(1) }),
@@ -245,6 +307,7 @@ const documentRemountKey = ({
   `${driveDocumentBlockType(documentType)}:${documentId}`;
 
 export const driveRootDocumentRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
   id: 'drive-document',
   search: [markdownDetailSearch.namespace, pdfDetailSearch.namespace],
   path: ':documentType/:documentId',
@@ -260,6 +323,7 @@ export const driveRootDocumentRoute = defineRoute({
 });
 
 export const driveFolderDocumentRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
   id: 'drive-folder-document',
   search: [markdownDetailSearch.namespace, pdfDetailSearch.namespace],
   path: ':documentType/:documentId',
@@ -275,6 +339,7 @@ export const driveFolderDocumentRoute = defineRoute({
 });
 
 export const driveTabDocumentRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
   id: 'drive-tab-document',
   search: [markdownDetailSearch.namespace, pdfDetailSearch.namespace],
   path: ':documentType/:documentId',
@@ -290,6 +355,7 @@ export const driveTabDocumentRoute = defineRoute({
 });
 
 export const driveFolderRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
   id: 'drive-folder',
   path: 'folder/:folderId?',
   params: z
@@ -302,6 +368,7 @@ export const driveFolderRoute = defineRoute({
 });
 
 export const driveTabRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
   id: 'drive-tab',
   path: ':tab',
   aliases: ['tab/:tab'],
@@ -310,6 +377,7 @@ export const driveTabRoute = defineRoute({
 });
 
 export const driveSplitRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
   id: 'drive',
   path: 'drive',
   aliases: ['drive/owned', 'drive/tab/owned'],
@@ -352,6 +420,7 @@ export const settingsRoute = defineRoute({
 const AGENTS_WORKSPACE_MOUNT = 'agents-workspace';
 
 export const agentsRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
   id: 'agents',
   path: 'agents/:id',
   params: z.object({ id: z.string() }),
@@ -362,6 +431,7 @@ export const agentsRoute = defineRoute({
 });
 
 export const codersRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
   id: 'coders',
   path: 'coders/:id',
   params: z.object({ id: z.string() }),
@@ -372,6 +442,7 @@ export const codersRoute = defineRoute({
 });
 
 export const agentChatsRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
   id: 'agent-chats',
   path: 'agents/chat/:id',
   aliases: ['agent-chats/:id'],
@@ -383,6 +454,7 @@ export const agentChatsRoute = defineRoute({
 });
 
 export const channelDetailRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
   id: 'channels-channel',
   path: ':channelId',
   params: z.object({ channelId: z.string().min(1) }),
@@ -396,6 +468,7 @@ export const channelDetailRoute = defineRoute({
 });
 
 export const channelsSplitRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
   id: 'view-channels',
   path: 'channels',
   search: '*' as const,
@@ -403,6 +476,7 @@ export const channelsSplitRoute = defineRoute({
 
 /** The Calendar view inline in Home, at the Calendar route's own period path and search. */
 export const homeCalendarRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
   id: 'home-calendar',
   path: 'calendar/:period',
   params: calendarPeriodParams,
@@ -442,6 +516,7 @@ export const homeDocumentRoute = defineRoute({
 });
 
 export const homePreviewRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
   id: 'home-preview',
   path: ':blockType/:previewId',
   params: homePreviewRouteParams,
@@ -478,12 +553,14 @@ export const homePreviewRoute = defineRoute({
 });
 
 export const homeSplitRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
   id: 'view-home',
   path: 'home',
   search: '*' as const,
 });
 
 export const recentRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
   id: 'view-recent',
   path: 'recent',
   search: '*' as const,
@@ -491,13 +568,33 @@ export const recentRoute = defineRoute({
 });
 
 export const activityRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
   id: 'view-activity',
   path: 'activity',
   search: '*' as const,
   claim: () => ({ namespace: 'component', id: 'activity' }),
 });
 
+export const notificationsRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
+  id: 'view-notifications',
+  path: 'notifications',
+  search: '*' as const,
+  claim: () => ({ namespace: 'component', id: 'notifications' }),
+});
+
+/** The Calendar view inline in Notifications, at the Calendar route's own period path and search. */
+export const notificationsCalendarRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
+  id: 'notifications-calendar',
+  path: 'calendar/:period',
+  params: calendarPeriodParams,
+  serializeParams: ({ period }) => ({ period: calendarPeriodPath(period) }),
+  search: [CALENDAR_SEARCH_NAMESPACE],
+});
+
 export const routinesRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
   id: ROUTINES_ROUTE_ID,
   path: 'routines',
   claim: () => ({ namespace: 'component', id: 'routines' }),
@@ -507,10 +604,11 @@ export const routineCreateRoute = defineRoute({
   id: ROUTINE_CREATE_ROUTE_ID,
   path: 'routines/new',
   aliases: ['routine/new', 'automation/new'],
-  claim: () => ({ namespace: 'component', id: 'routine-compose' }),
+  claim: () => ({ namespace: 'component', id: 'routines' }),
 });
 
 export const routineDetailRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
   id: ROUTINE_DETAIL_ROUTE_ID,
   path: 'routines/:routineId',
   aliases: ['routine/:routineId', 'automation/:routineId'],
@@ -521,6 +619,7 @@ export const routineDetailRoute = defineRoute({
 });
 
 export const agentsViewRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
   id: 'view-agents',
   path: 'agents',
   mountKey: AGENTS_WORKSPACE_MOUNT,
@@ -538,6 +637,7 @@ export const emailComposeRoute = defineRoute({
 });
 
 export const emailThreadRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
   id: 'mail-thread',
   path: ':threadId',
   params: z.object({ threadId: z.string().min(1) }),
@@ -551,12 +651,14 @@ export const emailThreadRoute = defineRoute({
 });
 
 export const emailSplitRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
   id: 'view-mail',
   path: 'mail',
   search: '*' as const,
 });
 
 export const taskDetailRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
   id: 'tasks-task',
   path: ':taskId',
   params: z.object({ taskId: z.string().min(1) }),
@@ -570,6 +672,7 @@ export const taskDetailRoute = defineRoute({
 });
 
 export const projectTaskRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
   id: 'tasks-project-task',
   path: 'task/:taskId',
   params: z.object({ taskId: z.string().min(1) }),
@@ -580,6 +683,7 @@ export const projectTaskRoute = defineRoute({
 });
 
 export const projectDetailRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
   id: 'tasks-project',
   path: 'projects/:projectId/:section',
   params: z.object({
@@ -595,18 +699,21 @@ export const projectDetailRoute = defineRoute({
 });
 
 export const tasksProjectsRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
   id: 'tasks-projects',
   path: 'projects',
   params: z.object({}).transform(() => ({ projectsTab: 'projects' as const })),
 });
 
 export const tasksSplitRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
   id: 'view-tasks',
   path: 'tasks',
   search: '*' as const,
 });
 
 export const reviewsPrRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
   id: 'reviews-pr',
   path: 'pr/:foreignEntityId',
   params: z.object({ foreignEntityId: z.string().min(1) }),
@@ -620,6 +727,7 @@ export const reviewsPrRoute = defineRoute({
 });
 
 export const reviewsSplitRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
   id: 'view-reviews',
   path: 'reviews',
   search: [reviewsTabSearch.namespace],
@@ -627,6 +735,7 @@ export const reviewsSplitRoute = defineRoute({
 
 /** A shareable external chat (any provider) in External's main pane, with no channel or legacy block. */
 export const externalChatRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
   id: 'external-chat',
   path: 'chat/:chatId',
   params: z.object({ chatId: z.string().uuid() }),
@@ -636,6 +745,7 @@ export const externalChatRoute = defineRoute({
 
 /** External: outside messaging accounts (WhatsApp) linked into Macro. */
 export const externalRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
   id: 'view-external',
   path: 'external',
   // A WhatsApp pairing handed off to Macro desktop, by id only.
@@ -648,6 +758,7 @@ export const bookingLinksRoute = defineRoute({
   search: [bookingLinksSearch.namespace],
 });
 export const calendarSplitRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
   id: CALENDAR_ROUTE_ID,
   path: 'calendar/:period',
   params: calendarPeriodParams,
@@ -660,6 +771,7 @@ export const calendarSplitRoute = defineRoute({
 });
 
 export const callsRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
   id: 'view-calls',
   path: 'calls',
   search: '*' as const,
@@ -667,6 +779,7 @@ export const callsRoute = defineRoute({
 });
 
 export const callsCallRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
   id: 'calls-call',
   path: 'call/:callId',
   params: z.object({ callId: z.string().min(1) }),
@@ -678,6 +791,7 @@ export const callsCallRoute = defineRoute({
 });
 
 export const callDetailRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
   id: 'call-detail',
   path: 'call/:callId',
   params: z.object({ callId: z.string().min(1) }),
@@ -688,6 +802,7 @@ export const callDetailRoute = defineRoute({
 });
 
 export const companiesRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
   id: 'view-companies',
   path: 'companies',
   search: '*' as const,
@@ -699,6 +814,7 @@ export const companiesRoute = defineRoute({
 
 /** A company or contact opened from a Customers list. */
 export const crmRecordRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
   id: 'companies-record',
   path: ':recordType/:recordId/:section?',
   params: crmRecordParams,
@@ -718,6 +834,7 @@ export const crmPipelineRecordRoute = defineRoute({
 
 /** An item opened from a Customers activity view or record section. */
 export const crmItemRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
   id: 'companies-item',
   path: ':itemType/:itemId/:itemFileType?/:itemSubType?',
   params: crmItemParams,
@@ -760,7 +877,37 @@ export const crmPipelineRecordFileItemRoute = defineRoute({
   id: 'companies-pipeline-record-file-item',
 });
 
+/** A database opened from the retired Customers Databases view; redirects to it. */
+export const crmRetiredDatabaseRoute = defineRoute({
+  id: CRM_RETIRED_DATABASES_ROUTE_IDS.database,
+  path: 'database/:databaseId',
+  params: crmRetiredDatabaseParams,
+  toReference: ({ databaseId }) => uuidRouteReference(databaseId, 'database'),
+});
+
+export const crmPipelineRetiredDatabaseRoute = defineRoute({
+  ...crmRetiredDatabaseRoute,
+  id: CRM_RETIRED_DATABASES_ROUTE_IDS.pipelineDatabase,
+});
+
+/** A record's retired Databases section, or a database opened from it; redirects. */
+export const crmRetiredRecordDatabasesRoute = defineRoute({
+  id: CRM_RETIRED_DATABASES_ROUTE_IDS.record,
+  path: ':recordType/:recordId/databases/:databaseId?',
+  params: crmRetiredRecordDatabasesParams,
+  toReference: ({ recordType, recordId, databaseId }) =>
+    databaseId
+      ? uuidRouteReference(databaseId, 'database')
+      : uuidRouteReference(recordId, recordType),
+});
+
+export const crmPipelineRetiredRecordDatabasesRoute = defineRoute({
+  ...crmRetiredRecordDatabasesRoute,
+  id: CRM_RETIRED_DATABASES_ROUTE_IDS.pipelineRecord,
+});
+
 export const crmPipelineRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
   id: 'companies-pipeline',
   path: 'pipeline/:pipelineId',
   params: crmPipelineParams,
@@ -773,6 +920,7 @@ export const crmPipelineRoute = defineRoute({
 });
 
 export const foldersRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
   id: 'view-folders',
   path: 'folders',
   search: '*' as const,
@@ -780,6 +928,7 @@ export const foldersRoute = defineRoute({
 });
 
 export const searchRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
   id: 'view-search',
   path: 'search',
   search: '*' as const,
@@ -790,6 +939,7 @@ export const searchRoute = defineRoute({
 });
 
 export const prDetailRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
   id: 'pr-detail',
   path: 'pr/:foreignEntityId',
   params: z.object({ foreignEntityId: z.string().min(1) }),
@@ -813,9 +963,7 @@ const debugComponentIds = [
         'md',
         'data',
         'chat',
-        'chat-attachment',
         'chat-tool',
-        'http-stream',
         'static-markdown-stream',
         'resize',
         'notifications-playground',
@@ -860,6 +1008,9 @@ export const debugRoutes = debugComponentIds.map((componentId) => ({
 /** Pre-router `type/id` URLs; the middleware upgrades the ones that have a route now. */
 export const legacyContentRoute = defineRoute({
   id: 'legacy-content',
+  info: {
+    navigableByAgent: { params: { type: LEGACY_TYPES_OPEN_TO_AGENTS } },
+  } satisfies SplitRouteInfo,
   path: ':type/:id',
   search: '*',
   params: z

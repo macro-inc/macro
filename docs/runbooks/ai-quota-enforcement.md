@@ -120,14 +120,15 @@ automatic reload changes, credit purchases, and the sweep. Enable them
 together. Settlement without `ENABLE_AI_USAGE_ENFORCEMENT` finds nothing to
 settle, because only counted rows are chargeable.
 
-A requesting host other than document cognition presents the authentication
-service's own internal key, `AUTHENTICATION_SERVICE_SECRET_KEY` (document
-cognition already holds it). The key is optional in those hosts' configuration
-while `ENABLE_AI_USAGE_BILLING` is false and mandatory once it is true: a host
-enabling billing without the key fails startup rather than quietly recording
-chargeable usage that only the sweep settles. Hosts without the recorder
-(document storage, the standalone trigger service, memory) are covered by the
-sweep alone; memory's usage is exempt and never chargeable.
+A requesting host presents the authentication service's own internal key,
+`AUTHENTICATION_SERVICE_SECRET_KEY`. In deployed Doppler configs this value is
+the Secrets Manager name; services resolve it at startup. Locally it is the
+key itself. The harness, scheduling, and cognition configs require the key
+regardless of `ENABLE_AI_USAGE_BILLING`; a missing key fails configuration
+loading even when billing is disabled. The billing flag controls settlement
+requests, not whether the authentication client is available. Hosts without
+the recorder (document storage, the standalone trigger service, memory) are
+covered by the sweep alone; memory's usage is exempt and never chargeable.
 
 ### Reconciliation sweep and closed periods
 
@@ -350,7 +351,8 @@ requests settlement). Admission itself never records usage or calls settlement.
 | Structured completion / DynamicCompletionsApi | [completion handler](../../services/agent_harness_service/src/cognition/api/structured_completion.rs) | DCS main, same recorder across both phases | [both phases and OpenAPI](../../services/agent_harness_service/src/cognition/api/structured_completion/test.rs) |
 | Chat naming / ChatRename | [chat renamer](../../services/agent_harness_service/src/cognition/service/chat_renamer.rs) | DCS main, same recorder | [safe naming skip](../../services/agent_harness_service/src/cognition/service/chat_renamer/test.rs) |
 | Direct subagent / inherited feature | [operations service](../../crates/ai_tools/src/ai_operations.rs), [subagent](../../crates/ai_tools/src/subagent.rs) | Host common context: T, DCS main, or [MCP context](../../services/agent_harness_service/src/public_mcp/context.rs) using `pg_settling_recorder` | [zero provider calls](../../crates/ai_tools/src/ai_operations/test.rs), [concurrent caller isolation](../../crates/ai_tools/src/subagent/test.rs) |
-| Native Anthropic WebSearch/WebFetch/code tools / inherited feature | [invoke_server_tool](../../crates/anthropic/src/toolset.rs) before both provider branches | Same common contexts via `FromRef`; observation only, **no legacy aggregate producer** | [tool attribution/refusal](../../crates/anthropic/src/toolset/test.rs) |
+| Native Anthropic code tools / inherited feature | [invoke_server_tool](../../crates/anthropic/src/toolset.rs) before both provider branches | Same common contexts via `FromRef`; observation only, **no legacy aggregate producer** | [tool attribution/refusal](../../crates/anthropic/src/toolset/test.rs) |
+| `WebSearch`/`WebFetch` tools and cognition `POST /web/search`, `/web/fetch` / `web_search` | [WebSearchService](../../crates/web_search/src/domain/service.rs) admits `web_search` before the Tavily call | `UsageRecorder` records Tavily's reported credits (`provider_credits`, pricing id `tavily`), counted when enforcement is on | [service and router tests](../../crates/web_search/src/domain/service/test.rs) |
 | AI document editing / AiEditing | [document orchestration](../../crates/documents/src/domain/ai_editing.rs) after verified edit receipt | Common context's recorder, existing per-model worker usage | [domain](../../crates/documents/src/domain/ai_editing/test.rs), [direct tool and permission precedence](../../crates/documents/src/inbound/toolset/edit_document/test.rs) |
 | Notion page imports / Import | [import admission](../../crates/import/src/domain/service/admission.rs), [execution/rechecks](../../crates/import/src/domain/service.rs) | DCS main, wrapped recorder | [delayed/deterministic cases](../../crates/import/src/domain/service/test/admission.rs), [HTTP](../../crates/import/src/inbound/axum_router/test.rs) |
 | Channel responder / ChannelBot | [bot service](../../crates/channel_bots/src/domain/service.rs) | [DSS main](../../services/document_storage_service/src/main.rs), common context T | [response refusal](../../crates/channel_bots/src/domain/service/tests.rs) |
@@ -421,11 +423,11 @@ procedure. Operators must approve and record each release gate.
    `AI_USAGE_INCLUDED_ALLOWANCE_CENTS`, `AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS`,
    and `AI_USAGE_OVERAGE_MARKUP_PERCENT` are mandatory for these same hosts
    whatever the flags say; see [Settlement](#settlement-enable_ai_usage_billing).
-   Before `ENABLE_AI_USAGE_BILLING` is turned on for the agent harness, MCP, or
-   scheduled action service, register `AUTHENTICATION_SERVICE_SECRET_KEY` (the
-   authentication service's internal key, as document cognition already has it)
-   in that service's Doppler config; those hosts refuse to start with billing on
-   and the key absent.
+   Before starting the agent harness, MCP, or scheduled action service,
+   register `AUTHENTICATION_SERVICE_SECRET_KEY` (the authentication service's
+   Secrets Manager name in deployed configs)
+   in that service's Doppler config; those hosts refuse to start with the key
+   absent, regardless of billing flags.
    Verify the effective startup value for every replica/worker. Registration and
    hosted access require operator approval; code defaults are not proof of it.
 4. **Validate locally, then in an approved staging environment.** Use the checklist

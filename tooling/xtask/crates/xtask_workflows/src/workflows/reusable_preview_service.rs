@@ -3,10 +3,12 @@
 //! `reusable_preview_service.yml` (replaces the hand-written
 //! `reusable-preview-service.yml`).
 //!
-//! The preview job is pulumi-preview + occasional Lambda Nix builds (warm runs
-//! are pure cache substitution), so `linux-small` suffices; it mounts the
-//! profile's default `/nix` volume, with `setup-nix` before use and
-//! `teardown-nix` after.
+//! The preview job is pulumi-preview + occasional Lambda Nix builds, so
+//! `linux-small` suffices; it mounts the profile's default `/nix` volume, with
+//! `setup-nix` before use and `teardown-nix` after. A node without that volume
+//! would compile every Lambda, so it reads the deploy pipeline's S3 binary cache
+//! too, which makes an unchanged handler a download. It holds no signing key, so
+//! it can't write to that cache.
 
 use anyhow::Result;
 use gh_workflow::{Event, Job, Step, Use, Workflow, WorkflowCall};
@@ -82,7 +84,7 @@ fn preview() -> Job {
         .runs_on(runners::Runner::Small.to_string())
         .add_step(checkout())
         .add_step(steps::mount_nix_cache_volume())
-        .add_step(steps::setup_nix())
+        .add_step(steps::setup_nix_with_cache())
         .add_step(get_project_name())
         .add_step(preview_pulumi())
         .add_step(steps::teardown_nix())
@@ -124,4 +126,23 @@ fn preview_pulumi() -> Step<Use> {
     .add_with(("use-lfs", "${{ inputs.use-lfs }}"))
     .add_with(("github-token", "${{ inputs.github-token }}"))
     .add_with(("cloud-storage-service-name", "${{ inputs.service-name }}"))
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    /// Preview reads the binary cache so a cold node needn't compile Lambdas, and
+    /// holds no signing key, so it can't write to the cache.
+    #[test]
+    fn preview_reads_the_nix_cache_and_cannot_write_it() {
+        let yaml = reusable_preview_service()
+            .to_string()
+            .expect("workflow yaml");
+        assert!(
+            yaml.contains("nix-cache-url: ${{ vars.NIX_CACHE_URL }}"),
+            "{yaml}"
+        );
+        assert!(!yaml.contains("NIX_CACHE_SIGNING_KEY"), "{yaml}");
+    }
 }

@@ -71,17 +71,31 @@ pub enum CommentMarkPlacement {
     Refused(String),
 }
 
+/// What became of a revision-checked markdown body write.
+#[cfg(feature = "ai_tools")]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MarkdownWrite {
+    /// The body now reads as written, or already did.
+    Written(crate::domain::markdown_body::DocumentMarkdownWritten),
+    /// The document changed since the expected revision; nothing was written.
+    Conflict,
+}
+
 /// Port for applying AI-driven edits to a document via the editing worker.
 #[cfg_attr(test, mockall::automock)]
 pub trait EditingWorkerService: Send + Sync + 'static {
     /// Inspect or edit the live Canvas CRDT using a scoped permission token.
+    /// `artifacts` says whether the requesting user has the artifacts rollout.
     #[cfg(feature = "ai_tools")]
     fn canvas(
         &self,
         document_id: &str,
         document_token: &DocumentPermissionToken,
         request: &crate::domain::canvas::CanvasRequest,
-    ) -> impl Future<Output = anyhow::Result<crate::domain::canvas::CanvasResult>> + Send;
+        artifacts: bool,
+    ) -> impl Future<
+        Output = Result<crate::domain::canvas::CanvasResult, crate::domain::canvas::CanvasError>,
+    > + Send;
 
     /// Run a deterministic spreadsheet operation with a scoped document token.
     #[cfg(feature = "ai_tools")]
@@ -90,7 +104,28 @@ pub trait EditingWorkerService: Send + Sync + 'static {
         document_id: &str,
         document_token: &DocumentPermissionToken,
         request: &crate::domain::spreadsheet::SpreadsheetRequest,
-    ) -> impl Future<Output = anyhow::Result<crate::domain::spreadsheet::SpreadsheetResponse>> + Send;
+    ) -> impl Future<
+        Output = Result<
+            crate::domain::spreadsheet::SpreadsheetResponse,
+            crate::domain::spreadsheet::SpreadsheetError,
+        >,
+    > + Send;
+
+    /// Edit a native spreadsheet by instructions: the worker's writer model
+    /// reads the workbook and commits one batch. Usage comes back with every
+    /// outcome the worker reached.
+    #[cfg(feature = "ai_tools")]
+    fn spreadsheet_instructions(
+        &self,
+        document_id: &str,
+        document_token: &DocumentPermissionToken,
+        instructions: &str,
+    ) -> impl Future<
+        Output = Result<
+            crate::domain::spreadsheet::SpreadsheetWriterResult,
+            crate::domain::spreadsheet::SpreadsheetError,
+        >,
+    > + Send;
 
     /// Read or edit the live collaborative copy of an uploaded Word document.
     #[cfg(feature = "ai_tools")]
@@ -100,6 +135,25 @@ pub trait EditingWorkerService: Send + Sync + 'static {
         document_token: &DocumentPermissionToken,
         request: &crate::domain::word_document::WordDocumentRequest,
     ) -> impl Future<Output = anyhow::Result<crate::domain::word_document::WordDocumentResponse>> + Send;
+
+    /// Read a markdown document's body with the revision it was read at.
+    #[cfg(feature = "ai_tools")]
+    fn read_markdown(
+        &self,
+        document_id: &str,
+        document_token: &DocumentPermissionToken,
+    ) -> impl Future<Output = anyhow::Result<crate::domain::markdown_body::DocumentMarkdown>> + Send;
+
+    /// Replace a markdown document's body, only if the document is still at
+    /// `expected_revision`.
+    #[cfg(feature = "ai_tools")]
+    fn write_markdown(
+        &self,
+        document_id: &str,
+        document_token: &DocumentPermissionToken,
+        expected_revision: &str,
+        markdown: &str,
+    ) -> impl Future<Output = anyhow::Result<MarkdownWrite>> + Send;
 
     /// Wrap the `occurrence`th (1-based) appearance of `text` in `document_id`
     /// in comment mark `mark_id`, merged into the live collaborative document.
