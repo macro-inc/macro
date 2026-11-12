@@ -28,6 +28,16 @@ const harness = vi.hoisted(() => ({
   get: vi.fn(),
   control: vi.fn(),
 }));
+const flags = vi.hoisted(() => ({ agentNavigation: false }));
+vi.mock('@core/constant/featureFlags', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@core/constant/featureFlags')>();
+  return {
+    ...actual,
+    isFeatureEnabled: (flag: unknown) =>
+      flag === actual.enableAgentNavigation && flags.agentNavigation,
+  };
+});
 const logSource = vi.hoisted(() => {
   class Unavailable extends Error {
     constructor(
@@ -309,6 +319,27 @@ describe('AgentSession', () => {
     // Same id back: nothing to reconcile.
     expect(inputs().filter((input) => input.kind === 'retracted')).toEqual([]);
     expect(events).toEqual([[speculated]]);
+    live.release();
+  });
+
+  it('sends the tab a prompt was typed in, and only with prompts', async () => {
+    flags.agentNavigation = true;
+    onTestFinished(() => {
+      flags.agentNavigation = false;
+    });
+    const live = AgentSession.acquire(SESSION);
+    await live.load();
+
+    await live.issue({ type: 'prompt', prompt: 'open the plan' });
+    await live.issue({ type: 'stop' });
+
+    const [prompt, stop] = harness.control.mock.calls.map(
+      ([, request]) => request
+    );
+    expect(prompt.clientId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+    );
+    expect(stop).not.toHaveProperty('clientId');
     live.release();
   });
 
