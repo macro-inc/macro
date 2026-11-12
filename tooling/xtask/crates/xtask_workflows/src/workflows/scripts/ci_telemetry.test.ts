@@ -1,7 +1,7 @@
 // Scenarios for the CI telemetry collector and sender. Run by xtask_workflows' tests.
 
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -462,11 +462,15 @@ describe('Github budget', () => {
 });
 
 /** Run the preflight as actions/github-script does, with a fake client and core. */
-async function preflight(remaining: number, jobs: Job[], runOverrides: Partial<Run> = {}) {
+type PreflightOptions = { run?: Partial<Run>; totalCount?: number; listError?: Error };
+
+async function preflight(remaining: number, jobs: Job[], options: PreflightOptions = {}) {
   const directory = mkdtempSync(join(tmpdir(), 'ci-telemetry-'));
   const file = join(directory, 'jobs.json');
   const calls: string[] = [];
   const outputs: Record<string, unknown> = {};
+  // What would show on the run's summary page; `core.info` only goes to the log.
+  const annotations: string[] = [];
   const github = {
     rest: {
       rateLimit: {
@@ -478,20 +482,23 @@ async function preflight(remaining: number, jobs: Job[], runOverrides: Partial<R
       actions: {
         listJobsForWorkflowRunAttempt: async () => {
           calls.push('jobs');
-          return { data: { total_count: jobs.length, jobs } };
+          if (options.listError) throw options.listError;
+          return { data: { total_count: options.totalCount ?? jobs.length, jobs } };
         },
       },
     },
   };
   const context = {
     repo: { owner: 'acme', repo: 'repo' },
-    payload: { workflow_run: run(runOverrides) },
+    payload: { workflow_run: run(options.run) },
   };
   const core = {
     setOutput: (name: string, value: unknown) => {
       outputs[name] = value;
     },
-    notice: () => {},
+    info: () => {},
+    notice: (message: string) => annotations.push(message),
+    warning: (message: string) => annotations.push(message),
   };
   const source = readFileSync(new URL('./ci_telemetry_preflight.js', import.meta.url), 'utf8');
   const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor;
@@ -503,9 +510,26 @@ async function preflight(remaining: number, jobs: Job[], runOverrides: Partial<R
   } catch (thrown) {
     error = thrown;
   }
-  const listing = JSON.parse(readFileSync(file, 'utf8'));
+  const listing = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : null;
   rmSync(directory, { recursive: true });
-  return { calls, outputs, listing, error };
+  return { calls, outputs, annotations, listing, error };
+}
+
+/** A job that never ran, dated the way GitHub dates one: completed a second before it started. */
+function neverRan(conclusion: 'skipped' | 'cancelled') {
+  const dates = { started_at: at(1, 1), completed_at: at(1) };
+  return ranJob({ id: 12, name: 'never ran', conclusion, ...dates });
+}
+
+/** Expect a green, quiet preflight that leaves the jobs for the collector but no trace. */
+async function expectUntraced(reason: string, jobs: Job[], options: PreflightOptions = {}) {
+  const { error, outputs, annotations, listing } = await preflight(4000, jobs, options);
+  assert.equal(error, null);
+  assert.equal(outputs.export, false);
+  assert.deepEqual(annotations, []);
+  assert.equal(listing.trace, false);
+  assert.equal(listing.untraced, reason);
+  assert.equal(listing.jobs.length, jobs.length);
 }
 
 function ranJob(overrides: Partial<Job> = {}) {
@@ -522,40 +546,68 @@ describe('preflight', () => {
   });
 
   test('lists the jobs once and leaves them for the collector', async () => {
-    const { calls, outputs, listing } = await preflight(4000, [ranJob()]);
+    const { calls, outputs, annotations, listing } = await preflight(4000, [ranJob()]);
     assert.deepEqual(calls, ['rate_limit', 'jobs']);
     assert.equal(outputs.export, true);
+    assert.deepEqual(annotations, []);
     assert.equal(listing.jobs.length, 1);
     assert.equal(listing.remaining, 3999);
     assert.equal(listing.calls, 1);
     assert.equal(listing.trace, true);
+    assert.equal(listing.untraced, null);
   });
 
+  // Every refusal below is a shape the pinned exporter can't trace: it would retry its
+  // assertion up to 240 times at two calls a try, or send a broken span.
   test('a run whose jobs were all skipped gets no trace', async () => {
-    const { outputs, listing } = await preflight(4000, [ranJob({ conclusion: 'skipped' })]);
-    assert.equal(outputs.export, false);
-    assert.equal(listing.trace, false);
+    await expectUntraced('no_job_ran', [neverRan('skipped')]);
   });
 
-  test('a refused trace still leaves the jobs', async () => {
-    const { error, listing } = await preflight(4000, [ranJob({ completed_at: null })]);
-    assert.match(String(error), /incomplete/);
-    assert.equal(listing.jobs.length, 1);
-    assert.equal(listing.trace, false);
+  test('a run with a skipped job stays green without a trace', async () => {
+    await expectUntraced('job_never_ran', [ranJob(), neverRan('skipped')]);
   });
 
-  // The pinned exporter retries a failed assertion up to 240 times, two calls a try.
-  test('a run without its conclusion gets no trace', async () => {
-    const { error, outputs, listing } = await preflight(4000, [ranJob()], { conclusion: null });
-    assert.match(String(error), /conclusion/);
-    assert.equal(outputs.export, undefined);
-    assert.equal(listing.jobs.length, 1);
+  test('a job cancelled before it started stays green without a trace', async () => {
+    await expectUntraced('job_never_ran', [ranJob(), neverRan('cancelled')]);
+  });
+
+  test('a job not finished in a finished run gets no trace', async () => {
+    const queued = { ...ranJob({ id: 12, name: 'queued' }), status: 'queued' };
+    await expectUntraced('job_unfinished', [ranJob(), queued]);
   });
 
   test('a job without its workflow name gets no trace', async () => {
-    const { error, outputs } = await preflight(4000, [{ ...ranJob(), workflow_name: null }]);
-    assert.match(String(error), /incomplete/);
-    assert.equal(outputs.export, undefined);
+    await expectUntraced('job_unfinished', [{ ...ranJob(), workflow_name: null }]);
+  });
+
+  test('a run without its conclusion gets no trace', async () => {
+    await expectUntraced('no_conclusion', [ranJob()], { run: { conclusion: null } });
+  });
+
+  test('a step without timing gets no trace', async () => {
+    const untimed = { name: 'cancelled', started_at: null, completed_at: null, conclusion: null };
+    await expectUntraced('step_timing', [ranJob({ steps: [untimed] })]);
+  });
+
+  test('more than 100 jobs get no trace', async () => {
+    await expectUntraced('over_100_jobs', [ranJob()], { totalCount: 101 });
+  });
+
+  test('equal job names get no trace', async () => {
+    await expectUntraced('duplicate_name', [ranJob(), ranJob({ id: 12 })]);
+  });
+
+  test('512 spans get no trace', async () => {
+    const steps = Array.from({ length: 510 }, (_, index) => step(`step ${index}`, at(1), at(2)));
+    await expectUntraced('over_511_spans', [ranJob({ steps })]);
+  });
+
+  test('a failed job listing still fails the step', async () => {
+    const { error, listing } = await preflight(4000, [ranJob()], {
+      listError: new Error('HTTP 502'),
+    });
+    assert.match(String(error), /502/);
+    assert.equal(listing, null);
   });
 });
 
@@ -611,20 +663,32 @@ describe('collector step', () => {
   });
 
   test('a low budget exports only the export line', async () => {
-    const listing = { limit: 5000, remaining: 1999, reserve: 2000, calls: 0, trace: false };
-    const { records, attributes } = await collectorStep({ ...listing, jobs: null }, pushRun);
+    const budget = { limit: 5000, remaining: 1999, reserve: 2000, calls: 0 };
+    const listing = { ...budget, trace: false, untraced: null, jobs: null };
+    const { records, attributes } = await collectorStep(listing, pushRun);
     assert.equal(records.length, 1);
     assert.equal(attributes.skipped, 'budget');
     assert.equal(attributes.rate_remaining, '1999');
   });
 
   test("counts the preflight's, its own and the trace's calls", async () => {
-    const listing = { limit: 5000, remaining: 3999, reserve: 2000, calls: 1, trace: true };
-    const jobs = [ranJob()];
-    const { records, attributes } = await collectorStep({ ...listing, jobs }, pushRun);
+    const budget = { limit: 5000, remaining: 3999, reserve: 2000, calls: 1 };
+    const listing = { ...budget, trace: true, untraced: null, jobs: [ranJob()] };
+    const { records, attributes } = await collectorStep(listing, pushRun);
     assert.ok(records.length > 1);
     assert.equal(attributes.skipped, undefined);
+    assert.equal(attributes.untraced, undefined);
     assert.equal(attributes.api_calls, '3');
+  });
+
+  test('says why there was no trace and still exports the jobs', async () => {
+    const budget = { limit: 5000, remaining: 3999, reserve: 2000, calls: 1 };
+    const jobs = [ranJob(), neverRan('skipped')];
+    const listing = { ...budget, trace: false, untraced: 'job_never_ran', jobs };
+    const { records, attributes } = await collectorStep(listing, pushRun);
+    assert.ok(records.length > 1);
+    assert.equal(attributes.untraced, 'job_never_ran');
+    assert.equal(attributes.api_calls, '1');
   });
 });
 
