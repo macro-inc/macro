@@ -291,19 +291,45 @@ describe('attachEventHost', () => {
     ]);
   });
 
-  it('trusts the server’s ids filter for events it can’t read an id from', async () => {
+  it('routes session events independently to subscriptions with disjoint ids', () => {
     const { send, posted, latest } = attach();
     send(subscribe(1, ['agent_session.opened'], ['s1']));
-    await flush();
+    send(subscribe(2, ['agent_session.opened'], ['s2']));
+    send(subscribe(3, ['agent_session.opened']));
+    posted.length = 0;
 
     latest().options.onEvent({
       name: 'agent_session.opened',
-      data: { event_type: 'agent_session.opened', session: { id: 's1' } },
+      data: {
+        event_type: 'agent_session.opened',
+        metadata: { identity: { session_id: 's1' } },
+      },
     });
 
     expect(posted).toEqual([
       expect.objectContaining({
         subscription: 1,
+        event: { type: 'agent_session.opened', id: 's1' },
+      }),
+      expect.objectContaining({
+        subscription: 3,
+        event: { type: 'agent_session.opened', id: 's1' },
+      }),
+    ]);
+  });
+
+  it('does not deliver unreadable ids to id-scoped subscriptions', () => {
+    const { send, posted, latest } = attach();
+    send(subscribe(1, ['agent_session.opened'], ['s1']));
+    send(subscribe(2, ['agent_session.opened']));
+    posted.length = 0;
+    latest().options.onEvent({
+      name: 'agent_session.opened',
+      data: { metadata: { identity: null } },
+    });
+    expect(posted).toEqual([
+      expect.objectContaining({
+        subscription: 2,
         event: { type: 'agent_session.opened', id: null },
       }),
     ]);

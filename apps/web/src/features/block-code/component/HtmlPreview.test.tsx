@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
-import { err, ok } from 'neverthrow';
-import { createSignal } from 'solid-js';
+import { err, ok, type Result } from 'neverthrow';
+import { batch, createSignal, Show } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type {
   DocumentBuildResponse,
@@ -172,7 +172,12 @@ describe('HtmlPreview', () => {
       expect(frameToken().frame.getAttribute('srcdoc')).toContain('first')
     );
 
+    const { frame } = frameToken();
+    setSaving(true);
     setSavedVersion(2);
+    expect(frameToken().frame).toBe(frame);
+    expect(harness.getDocumentBuild).toHaveBeenCalledTimes(1);
+    setSaving(false);
     await vi.waitFor(() =>
       expect(frameToken().frame.getAttribute('srcdoc')).toContain('second')
     );
@@ -193,6 +198,62 @@ describe('HtmlPreview', () => {
     await vi.waitFor(() =>
       expect(frameToken().frame.getAttribute('srcdoc')).toBe('<p>raw</p>')
     );
+  });
+
+  it('does not mount a cached frame when returning to Render during a save', async () => {
+    const built = (sourceHash: string): DocumentBuildResponse => ({
+      status: 'built',
+      sourceHash,
+      html: `<p>${sourceHash}</p>`,
+      programs: ['tasks'],
+    });
+    harness.getDocumentBuild.mockResolvedValueOnce(ok(built('old')));
+    const [show, setShow] = createSignal(true);
+    const [saving, setSaving] = createSignal(false);
+    const [version, setVersion] = createSignal(0);
+    const client = new QueryClient();
+    render(() => (
+      <QueryClientProvider client={client}>
+        <Show when={show()}>
+          <HtmlPreview
+            text="<p>edited</p>"
+            documentId="doc"
+            saving={saving()}
+            savedVersion={version()}
+          />
+        </Show>
+      </QueryClientProvider>
+    ));
+    await screen.findByTitle('HTML preview');
+    setShow(false);
+    setSaving(true);
+    setShow(true);
+    expect(screen.queryByTitle('HTML preview')).toBeNull();
+    expect(harness.getDocumentBuild).toHaveBeenCalledTimes(1);
+
+    let finishBuild: (value: Result<DocumentBuildResponse, never>) => void =
+      () => {
+        throw new Error('build not requested');
+      };
+    harness.getDocumentBuild.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishBuild = resolve;
+        })
+    );
+    batch(() => {
+      setVersion(1);
+      setSaving(false);
+    });
+    await vi.waitFor(() =>
+      expect(harness.getDocumentBuild).toHaveBeenCalledTimes(2)
+    );
+    expect(screen.queryByTitle('HTML preview')).toBeNull();
+    finishBuild(ok(built('new')));
+    await vi.waitFor(() =>
+      expect(frameToken().frame.getAttribute('srcdoc')).toContain('<p>new</p>')
+    );
+    client.clear();
   });
 
   const renderPreview = (text: string) => {

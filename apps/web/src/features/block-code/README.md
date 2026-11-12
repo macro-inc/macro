@@ -18,8 +18,10 @@ A block for editing code files with syntax highlighting and formatting.
   `queries/keys.ts` by document and saved version): the page with its
   `text/macro` programs removed and its TypeScript client script bundled, or
   the build's problems by block. `CodeContent` counts the editor's saves, and
-  the build waits for one in flight, so Code→Render shows what was typed. A
-  page with no program blocks (`plain`), or one the server won't build
+  the build waits for one in flight, so Code→Render shows what was typed.
+  A newly opened preview mounts no cached frame during that save or while
+  waiting for the new version's build; an already displayed page stays mounted.
+  A page with no program blocks (`plain`), or one the server won't build
   (`BUILD_UNAVAILABLE`), renders as plain HTML exactly as with the flag off;
   one over the build's 2 MiB (`BUILD_TOO_LARGE`) does too unless it has
   program blocks, when it says it is too large to run; a server failure
@@ -38,7 +40,10 @@ A block for editing code files with syntax highlighting and formatting.
   event stream per frame (`queries/document-events.ts`) whose filters are the
   union of the frame's subscriptions, forwarding only each event's name and
   entity id (the id the server's `ids` filter reads: a message event's
-  conversation). Every open after the frame's first sends `macro.resync`; a
+  conversation, an agent lifecycle event's session, an agent trigger's bot).
+  Each subscription also filters locally by its own ids; an unreadable id
+  reaches only subscriptions without an ids filter.
+  Every open after the frame's first sends `macro.resync`; a
   stream the server refuses (`EventStreamRefused`) isn't retried and reports
   `macro.error`. `navigation-guard.ts` closes a frame that leaves its page
   (the helper's `macro:leaving`, or a second `load` in the same window). A

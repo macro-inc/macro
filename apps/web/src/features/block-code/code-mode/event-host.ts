@@ -38,6 +38,13 @@ const ENTITY_ID_FIELDS: Record<
   document: (metadata) => metadata.document_id,
   channel: (metadata) => metadata.channel_id,
   call: (metadata) => metadata.call_id,
+  webhook: (metadata) => metadata.webhook_id,
+  agent_trigger: (metadata) => metadata.bot_id,
+  agent_session: (metadata) => {
+    const identity = metadata.identity;
+    if (typeof identity !== 'object' || identity === null) return null;
+    return (identity as { session_id?: unknown }).session_id;
+  },
   message: (metadata) => {
     const parent = metadata.parent;
     if (typeof parent !== 'object' || parent === null) return null;
@@ -57,8 +64,8 @@ type Subscription = { events: string[]; ids?: string[] };
 /**
  * The entity an event is about, as the server's `ids` filter reads it, from
  * its broker envelope by the event's family (`document.updated` →
- * `document_id`, `message.posted` → its parent's id). Null for families this
- * host doesn't read, such as agent sessions.
+ * `document_id`, `message.posted` → its parent's id). Null for unknown
+ * families or malformed envelopes.
  */
 export function eventEntityId(name: string, data: unknown): string | null {
   const read = ENTITY_ID_FIELDS[name.split('.')[0] ?? ''];
@@ -146,9 +153,9 @@ export function attachEventHost(
     const id = eventEntityId(name, data);
     for (const [key, subscription] of subscriptions) {
       if (!subscription.events.includes(name)) continue;
-      // The server already narrowed the stream to the union of ids; an id
-      // this host can't read is trusted to that filter.
-      if (subscription.ids && id !== null && !subscription.ids.includes(id))
+      // The server filters the union, so every handler still needs its own
+      // match. An unreadable id cannot satisfy an id-scoped subscription.
+      if (subscription.ids && (id === null || !subscription.ids.includes(id)))
         continue;
       post(key, { type: name, id });
     }

@@ -15,7 +15,8 @@ export interface PageProblem {
  *
  * - `built`: it built, and its programs run when someone opens it (a page
  *   with no programs or client script opens as it is).
- * - `failed`: it doesn't build; `problems` says why.
+ * - `failed`: the build or its request failed; `problems` says why. The page
+ *   is saved; retry with `document.republishPage(html)`, not a new publish.
  * - `busy`: the build didn't finish in time. The page is saved; call
  *   `document.republishPage(html)` with the same page later to build it.
  * - `unavailable`: live pages aren't available to this account yet. The page
@@ -29,7 +30,7 @@ export interface PagePublished {
   document: Document;
   /** How its build went. */
   build: PageBuildStatus;
-  /** Every problem in the page; empty unless `build` is `failed`. */
+  /** Page diagnostics or a build-request failure; empty unless `build` is `failed`. */
   problems: PageProblem[];
 }
 
@@ -49,27 +50,40 @@ export async function publishedPage(
   client: MacroClient,
   document: Document,
 ): Promise<PagePublished> {
-  const response = await client.agentHarness.getDocumentBuild({
-    path: { document_id: document.id },
-  });
-  const status = response.response?.status;
-  if (status === PAGE_TOO_LARGE)
+  try {
+    const response = await client.agentHarness.getDocumentBuild({
+      path: { document_id: document.id },
+    });
+    const status = response.response?.status;
+    if (status === PAGE_TOO_LARGE)
+      return {
+        document,
+        build: 'failed',
+        problems: [{ message: 'the page is over 2 MiB; make it smaller' }],
+      };
+    if (status === PAGES_UNAVAILABLE)
+      return { document, build: 'unavailable', problems: [] };
+    if (status === BUILD_BUSY) return { document, build: 'busy', problems: [] };
+
+    const build = unwrap(response);
+    // A page with no program or client blocks is shown as it is.
+    if (build.status === 'built' || build.status === 'plain')
+      return { document, build: 'built', problems: [] };
+
+    const problems = build.diagnostics.map(({ file, message }) =>
+      file ? { block: file, message } : { message },
+    );
+    return { document, build: 'failed', problems };
+  } catch {
     return {
       document,
       build: 'failed',
-      problems: [{ message: 'the page is over 2 MiB; make it smaller' }],
+      problems: [
+        {
+          message:
+            'The page was saved, but its build request failed. Retry with document.republishPage(html); do not publish a second document.',
+        },
+      ],
     };
-  if (status === PAGES_UNAVAILABLE)
-    return { document, build: 'unavailable', problems: [] };
-  if (status === BUILD_BUSY) return { document, build: 'busy', problems: [] };
-
-  const build = unwrap(response);
-  // A page with no program or client blocks is shown as it is.
-  if (build.status === 'built' || build.status === 'plain')
-    return { document, build: 'built', problems: [] };
-
-  const problems = build.diagnostics.map(({ file, message }) =>
-    file ? { block: file, message } : { message },
-  );
-  return { document, build: 'failed', problems };
+  }
 }

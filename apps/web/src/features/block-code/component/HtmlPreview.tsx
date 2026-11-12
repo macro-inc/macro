@@ -32,7 +32,10 @@ import {
 } from '../code-mode/macro-styles';
 import { attachNavigationGuard } from '../code-mode/navigation-guard';
 import { attachProgramHost } from '../code-mode/preview-runner';
-import { documentBuildQueryOptions } from '../queries/document-programs';
+import {
+  type DocumentBuildResponse,
+  documentBuildQueryOptions,
+} from '../queries/document-programs';
 
 export type HtmlPreviewProps = {
   text: string;
@@ -146,12 +149,20 @@ function BuiltPreview(props: {
     )
   );
   const refused = (code: 'BUILD_UNAVAILABLE' | 'BUILD_TOO_LARGE') =>
-    build.isError && thrownResultErrorHasCode(build.error, code);
+    !props.saving &&
+    build.isError &&
+    thrownResultErrorHasCode(build.error, code);
   // A page over the build's size runs nothing; one with programs would
   // render broken, so it says why instead.
   const tooLarge = () =>
     refused('BUILD_TOO_LARGE') && hasProgramBlocks(props.fallbackHtml);
-  const page = () => (build.isPending ? undefined : build.data);
+  // Disabled queries still expose cached data. Keep only a page already
+  // admitted by this preview during saves; a new preview must wait for the
+  // saved version's real build, not its previous-version placeholder.
+  const page = createMemo<DocumentBuildResponse | undefined>((previous) => {
+    if (props.saving || build.isPlaceholderData) return previous;
+    return build.isPending ? undefined : build.data;
+  });
   // Keyed by source: a refetch of the same source (on reconnect or focus)
   // keeps the frame, its state and its event stream.
   const built = createMemo(

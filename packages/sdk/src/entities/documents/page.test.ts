@@ -12,8 +12,8 @@ interface Requests {
   builds: string[];
 }
 
-/** A build answer: a body, or a bare HTTP status. */
-type BuildAnswer = DocumentBuildResponse | { status: number };
+/** A build answer: a body, a bare HTTP status, or a rejected request. */
+type BuildAnswer = DocumentBuildResponse | { status: number } | Error;
 
 /** A client whose builds answer, in order, with `builds`. */
 function clientBuilding(builds: BuildAnswer[]): {
@@ -52,6 +52,7 @@ function clientBuilding(builds: BuildAnswer[]): {
       getDocumentBuild: async (request: { path: { document_id: string } }) => {
         requests.builds.push(request.path.document_id);
         const answer = builds.shift();
+        if (answer instanceof Error) throw answer;
         if (answer && typeof answer.status === 'number')
           return {
             error: { message: 'refused' },
@@ -65,6 +66,29 @@ function clientBuilding(builds: BuildAnswer[]): {
 }
 
 describe('documents.publishPage', () => {
+  test.each([
+    500,
+    401,
+    403,
+    new TypeError('network failed'),
+  ])('keeps the saved document after build failure %s', async (failure) => {
+    const answer = typeof failure === 'number' ? { status: failure } : failure;
+    const { client, requests } = clientBuilding([answer, answer]);
+    const published = await new DocumentNamespace(client).publishPage({
+      name: 'Page',
+      html: PAGE,
+    });
+    expect(published.document.id).toBe('page');
+    expect(published.build).toBe('failed');
+    expect(published.problems.length).toBeGreaterThan(0);
+    const republished = await published.document.republishPage(PAGE);
+    expect(republished.document).toBe(published.document);
+    expect(republished.build).toBe('failed');
+    expect(republished.problems.length).toBeGreaterThan(0);
+    expect(requests.uploads).toHaveLength(1);
+    expect(requests.saves).toHaveLength(1);
+  });
+
   test('returns the build problems by block, then a republish that builds returns none', async () => {
     const { client, requests } = clientBuilding([
       {

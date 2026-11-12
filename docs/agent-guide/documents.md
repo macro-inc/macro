@@ -3169,8 +3169,9 @@ The server type-checks the programs, then the client with them, so a call with
 the wrong arguments fails the build. A failed build shows its problems by
 block (`program tasks`, `client script`) in place of the page. Switching from
 Code to Render builds once the editor's save lands, so the preview shows what
-was just typed. A build the server fails is retried, then shows an error with
-a Retry button. Program source
+was just typed. A reopened preview waits for that save and its new build before
+mounting a frame, even if an older build is cached. A build the server fails
+is retried, then shows an error with a Retry button. Program source
 never reaches the page, the frame never holds a credential and never sends
 code: a run names a program of the build the page shows, and the server
 refuses it with "this page changed" if the saved document has changed since,
@@ -3195,7 +3196,10 @@ Assignee or Due change emits no event yet, and content edits arrive only as
 document is opened or closed; so a page reloads after its own writes and when
 it regains focus (`window.addEventListener('focus', …)`). Pass
 `ids` to hear about specific entities only; a message event is about its
-conversation, so narrow `message.*` by channel or document id. After a
+conversation, so narrow `message.*` by channel or document id. Agent-session
+lifecycle events use the session id; agent-trigger events use the bot id.
+Each handler receives only events matching its own ids, and an unreadable id
+is delivered only to handlers without an ids filter. After a
 reconnect, or a reopen for changed subscriptions, the handler gets `{ type:
 'macro.resync' }`, because events in the gap are lost; a refused subscription
 (an empty or blank id, or one the server refuses) gets `{ type: 'macro.error',
@@ -3278,8 +3282,10 @@ page loads again from the start in place, and keeps running.
 Agents publish such a page with the SDK's `macro.documents.publishPage({ name,
 html, project })`, which uploads it, builds it and returns `{ document, build,
 problems }`: each problem names its block, and `build: 'built'` means the page
-built. Once the page is saved it never throws: `busy` asks for a republish
-later, and `unavailable` means live pages aren't available to the account. They fix it with `document.republishPage(html)`, which saves the whole
+built. Once the page is saved it never throws: `failed` includes page diagnostics
+or a build-request failure, always with the saved document; `busy` asks for a
+republish later, and `unavailable` means live pages aren't available to the
+account. They fix it with `document.republishPage(html)`, which saves the whole
 page as a new version of the same document and builds again. Both work inside
 code mode. A plain upload or an edit in Drive builds when the page is first
 opened.

@@ -769,7 +769,8 @@ deletion. `documents.byTeamSlug('ENG-42')` resolves a task reference.
 `text/macro` programs run as its viewer, builds it, and returns `{ document,
 build, problems }`; `document.republishPage(html)` saves a fix as a new version
 and builds again. Neither throws once the page is saved: `build` is `built`,
-`failed` (see `problems`), `busy` (republish later) or `unavailable` (live
+`failed` (page diagnostics or a build-request failure in `problems`),
+`busy` (republish later) or `unavailable` (live
 pages aren't available to the account). The page contract is in
 `publishPage`'s TSDoc.
 `sharePermissions`, `permissionsToken` and `documents.validatePermissionsToken`
