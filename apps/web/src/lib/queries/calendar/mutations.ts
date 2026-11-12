@@ -82,15 +82,14 @@ async function patchOccurrenceCaches(
   };
 }
 
-/** Refreshes what a settled write can change; grid edits retain their preview until it settles. */
-function refreshAfterWrite(eventId: string, waitForOccurrences = false) {
+/** Refreshes settled writes without holding the mutation open during a delta sync. */
+function refreshAfterWrite(eventId: string) {
   fireAndForget(invalidateCalendarInvitations(), 'calendar-mutations');
   invalidateCalendarEventPreviews(eventId);
   const revision = occurrenceWriteRevision;
   const refresh = invalidateCalendarOccurrences(
     () => revision === occurrenceWriteRevision
   );
-  if (waitForOccurrences) return refresh;
   fireAndForget(refresh, 'calendar-mutations');
 }
 
@@ -695,8 +694,8 @@ export interface UpdateCalendarEventArgs {
   occurrenceKey?: string;
   /** UI-owned move span; never serialized into the request. */
   parentSpan?: Span;
-  /** Keep a grid preview until the existing occurrence revalidation settles. */
-  waitForOccurrenceRefresh?: boolean;
+  /** UI-owned acceptance notification, before occurrence revalidation starts. */
+  onWriteAccepted?: () => void;
   patch: Omit<
     UpdateCalendarEventRequest,
     'calendarId' | 'scope' | 'recurrenceId'
@@ -835,12 +834,9 @@ export function useUpdateCalendarEventMutation(callbacks?: UpdateCallbacks) {
             )
           );
         },
+        onSuccess: (_data, args) => args.onWriteAccepted?.(),
         onError: (_error, _args, context) => context?.rollback(),
-        onSettled: (_data, error, args) =>
-          refreshAfterWrite(
-            args.eventId,
-            !error && args.waitForOccurrenceRefresh
-          ),
+        onSettled: (_data, _error, args) => refreshAfterWrite(args.eventId),
       },
       callbacks
     ),

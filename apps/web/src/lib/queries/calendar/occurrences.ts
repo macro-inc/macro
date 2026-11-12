@@ -7,7 +7,12 @@ import { storageServiceClient } from '@service-storage/client';
 import type { CalendarOccurrenceItem } from '@service-storage/generated/schemas/calendarOccurrenceItem';
 import type { CalendarOccurrenceResponse } from '@service-storage/generated/schemas/calendarOccurrenceResponse';
 import { CalendarSyncStatus } from '@service-storage/generated/schemas/calendarSyncStatus';
-import { queryOptions, useQuery, useQueryClient } from '@tanstack/solid-query';
+import {
+  hashKey,
+  queryOptions,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/solid-query';
 import { type Accessor, createEffect, onCleanup } from 'solid-js';
 import {
   markCalendarCacheUnsupported,
@@ -33,6 +38,8 @@ export interface CalendarOccurrencesQueryOptions {
   enabled?: boolean;
   pollWhileSyncing?: boolean;
   refetchOnWindowFocus?: boolean;
+  /** Real reads only; optimistic cache writes never count as completed refreshes. */
+  onRefresh?: (phase: 'started' | 'completed') => void;
 }
 
 type CalendarOccurrencesQueryKey =
@@ -193,6 +200,25 @@ export function useCalendarOccurrencesQuery(
 ) {
   const cacheHost = useGraphqlCalendarHost();
   const activeQueryClient = useQueryClient();
+
+  createEffect(() => {
+    const onRefresh = options?.().onRefresh;
+    if (!onRefresh) return;
+    const { userId, range } = input();
+    const keys = calendarKeys.occurrences(userId ?? '', range);
+    const queryHash = hashKey(
+      cacheHost() ? keys._ctx.graphql.queryKey : keys.queryKey
+    );
+    onCleanup(
+      activeQueryClient.getQueryCache().subscribe((event) => {
+        if (event.type !== 'updated' || event.query.queryHash !== queryHash)
+          return;
+        if (event.action.type === 'fetch') onRefresh('started');
+        if (event.action.type === 'success' && !event.action.manual)
+          onRefresh('completed');
+      })
+    );
+  });
 
   createEffect(() => {
     const host = cacheHost();

@@ -707,11 +707,14 @@ describe('useUpdateCalendarEventMutation', () => {
     }
   });
 
-  it('keeps a grid update pending until the existing occurrence refetch settles', async () => {
+  it('notifies acceptance before starting the nonblocking occurrence refresh', async () => {
     updateCalendarEventMock.mockResolvedValue(ok({ id: 'event-2' }));
     const started = Promise.withResolvers<void>();
     const refreshed = Promise.withResolvers<CalendarOccurrencesData>();
+    const onWriteAccepted = vi.fn();
+    const observed = Promise.withResolvers<void>();
     const read = vi.fn(() => {
+      expect(onWriteAccepted).toHaveBeenCalledOnce();
       started.resolve();
       return refreshed.promise;
     });
@@ -719,16 +722,19 @@ describe('useUpdateCalendarEventMutation', () => {
       queryKey: calendarKeys.occurrences('user', viewportA).queryKey,
       queryFn: read,
       staleTime: Number.POSITIVE_INFINITY,
-    }).subscribe(() => {});
+    }).subscribe((query) => {
+      if (query.data?.items[0]?.event.title === 'Refreshed') observed.resolve();
+    });
     const update = renderHook(() => useUpdateCalendarEventMutation());
     const saved = update.mutateAsync({
       eventId: 'event-2',
-      waitForOccurrenceRefresh: true,
+      onWriteAccepted,
       patch: { title: 'Updated' },
     });
     try {
       await started.promise;
-      expect(update.isPending).toBe(true);
+      await saved;
+      expect(update.isSuccess).toBe(true);
       expect(updateCalendarEventMock).toHaveBeenCalledWith('event-2', {
         title: 'Updated',
         calendarId: undefined,
@@ -738,8 +744,7 @@ describe('useUpdateCalendarEventMutation', () => {
       const item = recurringItem();
       item.event.title = 'Refreshed';
       refreshed.resolve({ items: [item], syncStatus: 'ready' });
-      await saved;
-      expect(update.isSuccess).toBe(true);
+      await observed.promise;
       expect(viewportData(viewportA)?.items[0].event.title).toBe('Refreshed');
       expect(read).toHaveBeenCalledOnce();
     } finally {

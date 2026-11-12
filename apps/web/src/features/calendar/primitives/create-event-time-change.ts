@@ -2,7 +2,7 @@ import { type Span, Telemetry } from '@macro-inc/observability';
 import type { UpdateCalendarEventArgs } from '@queries/calendar/mutations';
 import type { EventTime } from '@service-calendar/generated/schemas/eventTime';
 import type { CalendarUpdateScope } from '@service-email/client';
-import { type Accessor, onCleanup } from 'solid-js';
+import { type Accessor, createEffect, on, onCleanup } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import type { CalendarEvent } from '../types';
 import {
@@ -25,12 +25,14 @@ export function createEventTimeChange(options: {
   active: Accessor<boolean>;
   save: (args: UpdateCalendarEventArgs) => Promise<unknown>;
   onError: (error: unknown) => void;
+  refreshStatus?: Accessor<{ started: number; completed: number }>;
 }) {
   const [state, setState] = createStore<{
-    phase: 'idle' | 'choosing' | 'saving';
+    phase: 'idle' | 'choosing' | 'saving' | 'refreshing';
     scope: CalendarUpdateScope;
+    refreshStarted: number;
     change?: PendingTimeChange;
-  }>({ phase: 'idle', scope: 'this_event' });
+  }>({ phase: 'idle', scope: 'this_event', refreshStarted: 0 });
   let disposed = false;
 
   function finish(outcome: 'success' | 'cancelled' | 'error') {
@@ -57,15 +59,30 @@ export function createEventTimeChange(options: {
     const scope = state.scope;
     setState('phase', 'saving');
     change.span.setAttr('calendar.update.scope', scope);
+    let writeAccepted = false;
     try {
       const args = calendarEventTimeUpdate(change.event, change.time, scope);
       await options.save({
         ...args,
         parentSpan: change.span,
-        waitForOccurrenceRefresh: true,
+        onWriteAccepted: () => {
+          writeAccepted = true;
+          if (disposed) {
+            finish('success');
+          } else if (options.refreshStatus) {
+            setState({
+              phase: 'refreshing',
+              refreshStarted: options.refreshStatus().started,
+            });
+          }
+        },
       });
-      finish('success');
+      if (!options.refreshStatus) finish('success');
     } catch (error) {
+      if (writeAccepted) {
+        change.span.error('Calendar refresh failed after saving');
+        return;
+      }
       change.span.error('Calendar time change failed');
       finish('error');
       if (!disposed) options.onError(error);
@@ -106,8 +123,27 @@ export function createEventTimeChange(options: {
     }
   }
 
+  // Release the imperative grid preview only for a successful read that began
+  // after acceptance. A skipped refresh, failed read, or optimistic write is
+  // not proof that the occurrence data has caught up.
+  createEffect(
+    on(
+      () => options.refreshStatus?.().completed,
+      (completed) => {
+        if (
+          state.phase === 'refreshing' &&
+          completed !== undefined &&
+          completed > state.refreshStarted
+        ) {
+          finish('success');
+        }
+      }
+    )
+  );
+
   onCleanup(() => {
     if (state.phase === 'choosing') finish('cancelled');
+    if (state.phase === 'refreshing') finish('success');
     disposed = true;
   });
 

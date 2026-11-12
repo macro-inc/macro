@@ -505,7 +505,9 @@ switches the open details.
 
 Editable recurring events can also be dragged and resized in the grid. The
 `Save repeating event` dialog keeps the dropped position visible until Save or
-Cancel. After Save, the preview stays in place through the occurrence refresh.
+Cancel. After Save, the preview stays in place until an occurrence read started
+after save acceptance succeeds. Failed or superseded refreshes keep the preview;
+a later successful refresh releases it.
 `This event` changes only the selected occurrence and leaves the cached series
 master time untouched; Cancel, Escape, and failed saves restore the original
 position. `All events`, when available, applies

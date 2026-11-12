@@ -2,6 +2,7 @@ import '@fontsource-variable/inter';
 import '../../../index.css';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { createMemo, createSignal, onCleanup, Show } from 'solid-js';
+import { createStore } from 'solid-js/store';
 import { render } from 'solid-js/web';
 import { CalendarGrid } from '../../calendar/components/CalendarGrid';
 import { RecurringEventScopeDialog } from '../../calendar/components/RecurringEventScopeDialog';
@@ -44,15 +45,18 @@ function Fixture() {
   const refreshDone = new Promise<void>((resolve) => {
     finishRefresh = resolve;
   });
+  const [refreshStatus, setRefreshStatus] = createStore({
+    started: 0,
+    completed: 0,
+  });
   const controller = createEventTimeChange({
     active: () => true,
-    save: async ({
-      parentSpan: _span,
-      waitForOccurrenceRefresh: _wait,
-      ...args
-    }) => {
+    refreshStatus: () => refreshStatus,
+    save: async ({ parentSpan: _span, onWriteAccepted, ...args }) => {
       setRequest(JSON.stringify(args));
       if (PARAMS.has('failure')) throw new Error('Fixture save failed');
+      onWriteAccepted?.();
+      setRefreshStatus('started', (revision) => revision + 1);
       if (PARAMS.has('deferRefresh')) await refreshDone;
       const time = args.patch.time;
       if (time?.kind !== 'timed')
@@ -70,6 +74,7 @@ function Fixture() {
           end: new Date(Date.parse(time.endsAt) + offset).toISOString(),
         },
       ]);
+      setRefreshStatus('completed', refreshStatus.started);
     },
     onError: (cause) =>
       setError(cause instanceof Error ? cause.message : 'Save failed'),

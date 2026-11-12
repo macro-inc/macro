@@ -58,6 +58,7 @@ import {
   Show,
   untrack,
 } from 'solid-js';
+import { createStore } from 'solid-js/store';
 import { Portal } from 'solid-js/web';
 import {
   calendarFocusTargetId,
@@ -230,6 +231,10 @@ export function Page(props: {
   const renderedHiddenSourceIds = createDeferred(calendarView.hiddenSourceIds);
   const isRenderedSourceVisible = (sourceId: string) =>
     !renderedHiddenSourceIds().has(sourceId);
+  const [occurrenceRefresh, setOccurrenceRefresh] = createStore({
+    started: 0,
+    completed: 0,
+  });
   const data = useCalendarOccurrenceData({
     range,
     sourceById: calendarView.sourceById,
@@ -238,6 +243,15 @@ export function Page(props: {
     queryOptions: () => ({
       pollWhileSyncing: isActive(),
       refetchOnWindowFocus: isActive(),
+      onRefresh: (phase) => {
+        if (phase === 'started')
+          setOccurrenceRefresh('started', (revision) => revision + 1);
+        else
+          setOccurrenceRefresh(
+            'completed',
+            untrack(() => occurrenceRefresh.started)
+          );
+      },
     }),
   });
   const teamOoo = useTeamOooEvents({
@@ -254,6 +268,7 @@ export function Page(props: {
   const updateEventTime = useUpdateCalendarEventMutation();
   const timeChange = createEventTimeChange({
     active: isActive,
+    refreshStatus: () => occurrenceRefresh,
     save: (args) => updateEventTime.mutateAsync(args),
     onError: (error) => {
       if (isGuestEditRefused(error)) {

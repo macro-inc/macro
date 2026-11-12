@@ -1,6 +1,8 @@
 import { Calendar } from '@fullcalendar/core';
 import timeGridPlugin from '@fullcalendar/timegrid';
+import type { UpdateCalendarEventArgs } from '@queries/calendar/mutations';
 import { createRoot } from 'solid-js';
+import { createStore } from 'solid-js/store';
 import { describe, expect, it, vi } from 'vitest';
 import { RECURRING_EVENT } from '../tests/fixtures';
 import type { CalendarEvent } from '../types';
@@ -8,7 +10,10 @@ import { createEventTimeChange } from './create-event-time-change';
 
 function setup(
   event: CalendarEvent = RECURRING_EVENT,
-  save = vi.fn(async (_args: unknown) => {})
+  save: (args: UpdateCalendarEventArgs) => Promise<unknown> = vi.fn(
+    async () => {}
+  ),
+  refreshStatus?: () => { started: number; completed: number }
 ) {
   return createRoot((dispose) => {
     const calendar = new Calendar(document.createElement('div'), {
@@ -26,6 +31,7 @@ function setup(
       active: () => true,
       save,
       onError,
+      refreshStatus,
     });
     return {
       controller,
@@ -73,7 +79,7 @@ describe('grid time changes', () => {
             calendarId: 'calendar',
             scope,
             parentSpan: expect.anything(),
-            waitForOccurrenceRefresh: true,
+            onWriteAccepted: expect.any(Function),
             recurrenceId:
               scope === 'this_event' ? s.event.occurrenceKey : undefined,
           })
@@ -85,6 +91,57 @@ describe('grid time changes', () => {
       }
     }
   );
+
+  it('keeps accepted changes through an old read, a failed read, and a later successful refresh', async () => {
+    const [refresh, setRefresh] = createStore({ started: 1, completed: 0 });
+    const s = setup(
+      RECURRING_EVENT,
+      vi.fn(async (args) => {
+        args.onWriteAccepted?.();
+      }),
+      () => refresh
+    );
+    try {
+      await s.controller.handle(s.change, s.event);
+      await s.controller.confirm();
+      expect(s.controller.pending()).toBe(true);
+      // A read already in flight when the write was accepted is not proof.
+      setRefresh('completed', 1);
+      expect(s.controller.pending()).toBe(true);
+      // The next read fails, so no completion is published.
+      setRefresh('started', 2);
+      expect(s.controller.pending()).toBe(true);
+      // A later mutation or retry finally brings the source forward.
+      setRefresh({ started: 3, completed: 3 });
+      expect(s.controller.pending()).toBe(false);
+      expect(s.revert).not.toHaveBeenCalled();
+    } finally {
+      s.dispose();
+    }
+  });
+
+  it('does not revert an accepted write when later refresh work rejects', async () => {
+    const [refresh, setRefresh] = createStore({ started: 0, completed: 0 });
+    const s = setup(
+      RECURRING_EVENT,
+      vi.fn(async (args) => {
+        args.onWriteAccepted?.();
+        throw new Error('Refresh failed after acceptance');
+      }),
+      () => refresh
+    );
+    try {
+      await s.controller.handle(s.change, s.event);
+      await s.controller.confirm();
+      expect(s.controller.pending()).toBe(true);
+      expect(s.revert).not.toHaveBeenCalled();
+      expect(s.onError).not.toHaveBeenCalled();
+      setRefresh({ started: 1, completed: 1 });
+      expect(s.controller.pending()).toBe(false);
+    } finally {
+      s.dispose();
+    }
+  });
 
   it('rolls back a failed save and reports the existing error path', async () => {
     const error = new Error('Save refused');
