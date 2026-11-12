@@ -1,0 +1,168 @@
+---
+source: crates/password_import/tests/import/golden.rs
+expression: snapshot(&export)
+---
+{
+  "export": {
+    "dropped": [
+      {
+        "count": 1,
+        "sourceKey": "row:7",
+        "what": "totp_non_default"
+      }
+    ],
+    "folders": [
+      [
+        "Work"
+      ],
+      [
+        "Work",
+        "Clients"
+      ]
+    ],
+    "format": "bitwarden_csv",
+    "items": [
+      {
+        "favorite": true,
+        "fields": [
+          {
+            "concealed": true,
+            "label": "Recovery",
+            "value": "recovery-0000"
+          },
+          {
+            "concealed": true,
+            "label": "Pin",
+            "value": "1234"
+          },
+          {
+            "concealed": true,
+            "label": "Field",
+            "value": "no separator line"
+          },
+          {
+            "concealed": false,
+            "label": "Website 2",
+            "value": "android://com.example.app"
+          },
+          {
+            "concealed": false,
+            "label": "Website 3",
+            "value": "https://second.example.test/"
+          }
+        ],
+        "folder": [
+          "Work",
+          "Clients"
+        ],
+        "kind": "login",
+        "name": "Ünïcødé 🔑 名前",
+        "notes": "Multi-line\nnotes",
+        "password": "pässwörd-🔑",
+        "sourceKey": "row:1",
+        "totp": "JBSWY3DPEHPK3PXP",
+        "url": "https://login.example.test/",
+        "username": "ünïcødé-user"
+      },
+      {
+        "favorite": false,
+        "fields": [],
+        "folder": null,
+        "kind": "login",
+        "name": "Duplicate",
+        "notes": "",
+        "password": "dup-pass",
+        "sourceKey": "row:2",
+        "totp": null,
+        "url": "https://dup.example.test/",
+        "username": "dup-user"
+      },
+      {
+        "favorite": false,
+        "fields": [],
+        "folder": null,
+        "kind": "login",
+        "name": "Duplicate",
+        "notes": "",
+        "password": "",
+        "sourceKey": "row:3",
+        "totp": null,
+        "url": null,
+        "username": ""
+      },
+      {
+        "favorite": false,
+        "fields": [],
+        "folder": [
+          "Work"
+        ],
+        "kind": "note",
+        "name": "Secure note",
+        "notes": "Note body",
+        "password": "",
+        "sourceKey": "row:4",
+        "totp": null,
+        "url": null,
+        "username": ""
+      },
+      {
+        "favorite": false,
+        "fields": [],
+        "folder": null,
+        "kind": "note",
+        "name": "Note at limit",
+        "notes": "<65536 bytes of 'n'>",
+        "password": "",
+        "sourceKey": "row:5",
+        "totp": null,
+        "url": null,
+        "username": ""
+      },
+      {
+        "favorite": false,
+        "fields": [
+          {
+            "concealed": true,
+            "label": "One-time password",
+            "value": "steam://JBSWY3DPEHPK3PXP"
+          }
+        ],
+        "folder": null,
+        "kind": "login",
+        "name": "Steam",
+        "notes": "",
+        "password": "steam-pass",
+        "sourceKey": "row:7",
+        "totp": null,
+        "url": "https://steam.example.test/",
+        "username": "steam-user"
+      }
+    ],
+    "skipped": [
+      {
+        "name": "Note over limit",
+        "reason": "too_large",
+        "sourceKey": "row:6"
+      },
+      {
+        "name": "Card row",
+        "reason": "unsupported_category",
+        "sourceKey": "row:8"
+      }
+    ]
+  },
+  "summary": {
+    "droppedByPart": {
+      "totp_non_default": 1
+    },
+    "folders": 2,
+    "itemsByKind": {
+      "login": 4,
+      "note": 2
+    },
+    "skippedByReason": {
+      "too_large": 1,
+      "unsupported_category": 1
+    }
+  }
+}

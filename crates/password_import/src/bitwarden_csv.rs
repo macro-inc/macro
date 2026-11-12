@@ -39,7 +39,9 @@ pub(crate) fn parse(bytes: &[u8], limits: &Limits) -> Result<Parts, ImportError>
         };
 
         let item_name = Some(row.text(name));
-        if !row.text(collections).trim().is_empty() {
+        // Organization exports have a `collections` column; every row in
+        // them belongs to the organization, collected or not.
+        if collections.is_some() {
             parts.skip(Some(key), item_name, SkipReason::SharedCollection);
             continue;
         }

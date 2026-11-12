@@ -1,0 +1,3 @@
+collections,type,name,notes,fields,reprompt,login_uri,login_username,login_password,login_totp
+Engineering,login,Shared login,,,0,https://shared.example.test/,shared-user,shared-pass,
+,login,Uncollected org login,,,0,https://org.example.test/,org-user,org-pass,

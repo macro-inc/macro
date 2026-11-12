@@ -44,6 +44,12 @@ struct VaultAttributes {
     name: Option<String>,
 }
 
+/// The uuid only, to name an item whose full shape didn't parse.
+#[derive(Deserialize)]
+struct ItemId {
+    uuid: Option<String>,
+}
+
 #[derive(Deserialize)]
 struct Item<'a> {
     uuid: Option<String>,
@@ -220,7 +226,14 @@ pub(crate) fn parse(bytes: &[u8], limits: &Limits) -> Result<Parts, ImportError>
 
                 match serde_json::from_str::<Item<'_>>(raw.get()) {
                     Ok(item) => add_item(&mut parts, item, key, &folder),
-                    Err(_) => parts.skip(Some(key), None, SkipReason::Malformed),
+                    Err(_) => {
+                        let key = serde_json::from_str::<ItemId>(raw.get())
+                            .ok()
+                            .and_then(|item| item.uuid)
+                            .and_then(|uuid| SourceKey::from_source_id(&uuid))
+                            .unwrap_or(key);
+                        parts.skip(Some(key), None, SkipReason::Malformed);
+                    }
                 }
             }
         }
@@ -443,6 +456,8 @@ fn decode(value_type: &str, raw: &RawValue) -> SectionValue {
             Err(_) => SectionValue::Unsupported,
         },
         "file" => SectionValue::Attachment,
+        // A link to another item, meaningless outside 1Password.
+        "reference" => SectionValue::Unsupported,
         // Unknown value types are kept when they are plain text.
         _ => text(false),
     }
@@ -469,8 +484,8 @@ fn add_section_field(
     };
 
     match (category, id) {
-        (Category::Login, "username") => draft.username(value, label),
-        (Category::Login, "password") => draft.password(value, label),
+        (Category::Login, "username" | "pop_username") => draft.username(value, label),
+        (Category::Login, "password" | "pop_password") => draft.password(value, label),
         (Category::Login, "url" | "hostname" | "server") => {
             draft.add_labeled_url(Some(label.to_owned()), value.expose_secret());
         }
