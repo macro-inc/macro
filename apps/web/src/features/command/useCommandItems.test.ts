@@ -148,24 +148,25 @@ describe('command menu entity loading', () => {
     expect(result.isLoadingEntities()).toBe(false);
   });
 
-  it('keeps reporting loading for a typed query until the cache answers it, even with rows listed', () => {
+  it('reports a typed search as pending until the cache answers it, even with rows listed', () => {
     const { result, setItems, setLoading, setSearching } = setup('Document');
     setSearching(true);
     setItems([entity]);
     expect(result.items().some((item) => item.kind === 'entity')).toBe(true);
-    expect(result.isLoadingEntities()).toBe(true);
+    expect(result.isSearchingEntities()).toBe(true);
+    // Listed rows still clear the empty-list notice.
+    expect(result.isLoadingEntities()).toBe(false);
     setSearching(false);
     // A replay of the answered window is not a pending search.
-    expect(result.isLoadingEntities()).toBe(false);
+    expect(result.isSearchingEntities()).toBe(false);
     setLoading(false);
-    expect(result.isLoadingEntities()).toBe(false);
+    expect(result.isSearchingEntities()).toBe(false);
   });
 
-  it('does not report a pending cache search for the recency list once rows are listed', () => {
-    const { result, setItems, setSearching } = setup();
+  it('does not report a pending search for the recency list', () => {
+    const { result, setSearching } = setup();
     setSearching(true);
-    setItems([entity]);
-    expect(result.isLoadingEntities()).toBe(false);
+    expect(result.isSearchingEntities()).toBe(false);
   });
 
   it('distinguishes loading from a settled empty entity category', () => {

@@ -4,6 +4,7 @@ import type {
   SearchCursor,
   SearchDocumentWire,
 } from '@graphql-cache/index';
+import { isOwnerHandoffBlockedError } from '@graphql-cache/protocol';
 import { Telemetry } from '@macro-inc/observability';
 import {
   type Accessor,
@@ -45,12 +46,14 @@ type Request = {
   busy: boolean;
   refreshPending: boolean;
   answered: boolean;
+  awaitingEngine: boolean;
 };
 
 /** A paginated, cache-only search. Refreshes replay the loaded browse window
  * rather than shrinking a scrolled list back to its first page. */
 export function createProjectedList<T extends { id: string }>(options: {
-  host: Pick<CacheHost, 'search'>;
+  host: Pick<CacheHost, 'search'> &
+    Partial<Pick<CacheHost, 'onCacheGenerationChanged'>>;
   /** A reactive getter can change the allowed buckets as feature flags load. */
   buckets: readonly Bucket[];
   revision: Accessor<number>;
@@ -108,6 +111,7 @@ export function createProjectedList<T extends { id: string }>(options: {
     request.busy = true;
     request.refreshPending = false;
     setLoading(append ? 'more' : 'initial');
+    if (!request.answered) setSearching(true);
     const previous = append ? untrack(items) : [];
     const merged = new Map(previous.map((item) => [item.id, item]));
     const visibleIds = new Set([
@@ -180,12 +184,15 @@ export function createProjectedList<T extends { id: string }>(options: {
       request.cursor = cursor;
       request.pages = pages;
       request.answered = true;
+      request.awaitingEngine = false;
       setError(undefined);
       setItems([...merged.values()]);
       setHasMore(cursor !== undefined);
     } catch (error) {
       span.error('Quick Access cache search failed');
       if (current !== request) return;
+      request.awaitingEngine =
+        !request.answered && isOwnerHandoffBlockedError(error);
       setError(error);
       // Rows and their continuation are a committed window. A failed replay
       // (or append) must leave both intact so normal pagination can retry.
@@ -194,10 +201,24 @@ export function createProjectedList<T extends { id: string }>(options: {
       console.warn('Quick Access cache search failed', error);
     } finally {
       span.end();
-      if (current === request) setSearching(false);
+      // A read refused while the cache moves between owners is replayed when
+      // the replacement engine arrives, so the query is still unanswered.
+      if (current === request && !request.awaitingEngine) setSearching(false);
       finishRequest(request);
     }
   };
+
+  // Nothing else replays a refused first answer: cache-change refreshes only
+  // follow a write, and the menu would list no documents until one happened.
+  const stopWatchingEngine = options.host.onCacheGenerationChanged?.(() => {
+    const request = current;
+    if (!request?.awaitingEngine) return;
+
+    if (request.busy) request.refreshPending = true;
+    else
+      fireAndForget(fetchPages(request, request.pages, false), 'quick-access');
+  });
+  onCleanup(() => stopWatchingEngine?.());
 
   createEffect(() => {
     options.revision();
@@ -249,6 +270,7 @@ export function createProjectedList<T extends { id: string }>(options: {
       busy: false,
       refreshPending: false,
       answered: false,
+      awaitingEngine: false,
     };
     current = request;
     fireAndForget(fetchPages(request, request.pages, false), 'quick-access');

@@ -61,7 +61,7 @@ function MobileNameResults(props: {
     contactDiscovery: useCrmContactDiscovery,
   });
   usePending('search.names', source.isLoadingEntities);
-  const searchingShown = createSteadyFlag(source.isLoadingEntities);
+  const searchingShown = createSteadyFlag(source.isSearchingEntities);
   usePending('search.rank', source.isSettling);
   let previousWindow: string | undefined;
   let previousWindowQuery = '';

@@ -22,6 +22,8 @@ type CommandResultsProps = {
   scrollSelectedIntoView: boolean;
   pagination?: PaginationControls;
   loading?: boolean;
+  /** The typed search has not been answered yet, whatever is already listed. */
+  searching?: boolean;
   label?: string;
 };
 
@@ -29,7 +31,7 @@ type CommandResultsProps = {
 export function CommandResults(props: CommandResultsProps) {
   // Rows from faster sources can be listed while the search is still running;
   // a slow one says so below them instead of leaving the list looking final.
-  const searchingShown = createSteadyFlag(() => props.loading ?? false);
+  const searchingShown = createSteadyFlag(() => props.searching ?? false);
   const stillSearching = () => searchingShown() && props.items.length > 0;
   const height = () => {
     if (!props.items.length) return EMPTY_STATE_HEIGHT;
@@ -44,7 +46,7 @@ export function CommandResults(props: CommandResultsProps) {
     <div
       role="listbox"
       aria-label={props.label ?? t('commandMenu.searchResults')}
-      aria-busy={props.loading || undefined}
+      aria-busy={props.loading || props.searching || undefined}
       class="flex flex-col overflow-hidden transition-[height] duration-60 ease-out p-2"
       style={{ height: `${height()}px` }}
     >
