@@ -4,16 +4,20 @@ import {
   FeaturePageSection,
 } from '../../features/marketing/components/FeaturePage';
 import { HomepageClosing } from '../../features/marketing/components/HomepageClosing';
+import { PaperFeatureGraphic } from '../../features/marketing/components/paper/PaperFeatureGraphic';
 import {
   ProductHero,
   ProductPage,
 } from '../../features/marketing/components/product/ProductPage';
+import { GithubConversationDemo } from '../../features/marketing/components/reviews/GithubWorkflow';
+import { TaskContextDemo } from '../../features/marketing/components/tasks/TaskContextDemo';
 import { TaskPaperGraphic } from '../../features/marketing/components/tasks/TaskPaperGraphic';
 import {
   TaskAgentChannelDemo,
   TaskGithubDemo,
 } from '../../features/marketing/components/tasks/TaskStories';
 import { TasksComparison } from '../../features/marketing/components/tasks/TasksComparison';
+import { TaskViewsGraphic } from '../../features/marketing/components/tasks/TaskViewsGraphic';
 import { DEMO_BOOKING_URL } from '../../features/marketing/core/navigation';
 import '../../features/marketing/components/tasks/tasks-page.css';
 import { setPageSeo } from '../utils/utilSeo';
@@ -105,20 +109,14 @@ export function RouteTasks() {
         />
         <FeaturePageSection
           id="from-a-message"
-          title="Create and assign tasks."
-          description="Tasks are quick to create, assign, prioritize and close with keyboard shortcuts. Give it a title, assign a person or available agent, and set its status and priority. Hover any message and click Create task to spin one up, linked to that thread. Or use the shortcut C then T to create a task from wherever you are."
-        >
-          <TaskPaperGraphic kind="tasks" />
-        </FeaturePageSection>
-        <FeaturePageSection
-          id="ask-macro"
           demo={{
             tone: 'tasks',
             glassFrame: true,
           }}
-          title="Ask Rox to create tasks."
-          description="Mention @Rox in Rox Chat and ask it to create tasks from what was just said. It assigns the work and links the tasks back to the conversation. You can also assign an available agent to a task and open its session to follow the work. Through Rox’s MCP server, Claude Code, Codex, and Cursor can find, create, and update your tasks without leaving your editor."
+          title="Create tasks right from Rox Chat."
+          description="Click Create task on any message and the task is linked to that thread, so the conversation on the task and the conversation in the channel are deep linked together. Or mention @Rox and ask it to create tasks from what was just said; it can create many at once. Hit C then T to create one from anywhere."
         >
+          <span id="ask-macro" />
           <DemoInteractionBoundary
             class="feature-page-visual"
             render={() => <TaskAgentChannelDemo />}
@@ -126,17 +124,29 @@ export function RouteTasks() {
         </FeaturePageSection>
         <FeaturePageSection
           id="from-docs-and-email"
-          title="Link tasks to the work behind them."
-          description="Every task is linked back to its source bidirectionally — the task remembers where it came from and the source knows the task exists. Create one from a customer email, or highlight to-do boxes in a document to create several at once. @mention a task in a doc, email, or channel: the live pill stays in sync with its title and status. Click it to jump straight to the task."
+          demo={{
+            tone: 'tasks',
+          }}
+          title="Directly linked to customer Rox Mail."
+          description="Create a task from a customer email, or highlight to-do boxes in a document to create many at once. Tasks are linked back to their source bidirectionally: the task remembers where it came from, and the source knows the task exists. Paste a task into a channel and the pill shows its status, assignee, and priority."
         >
-          <TaskPaperGraphic kind="properties" />
+          <DemoInteractionBoundary
+            class="feature-page-visual"
+            render={() => <TaskContextDemo />}
+          />
         </FeaturePageSection>
         <FeaturePageSection
-          id="task-views"
-          title="See your team’s tasks."
-          description="My Tasks shows your assignments. Created by me shows tasks you created, and All Tasks shows tasks you can access. Filter what shows, switch between a list, a board and a Gantt chart, and sort or group your tasks. You can also ask your agent to give you updates on your team’s tasks."
+          id="task-agents"
+          demo={{
+            tone: 'tasks',
+          }}
+          title="Assign tasks to Rox Agents, like teammates."
+          description="Put an agent on a task and it picks it up and gets to work, with the context linked to the task. Open its session to follow along. Through Rox’s MCP server, Claude Code, Codex, and Cursor can find, create, and update your tasks without leaving your editor."
         >
-          <TaskPaperGraphic kind="views" />
+          <DemoInteractionBoundary
+            class="feature-page-visual"
+            render={() => <GithubConversationDemo agent />}
+          />
         </FeaturePageSection>
         <FeaturePageSection
           id="github"
@@ -144,13 +154,34 @@ export function RouteTasks() {
             tone: 'tasks',
             glassFrame: true,
           }}
-          title="Update task status from GitHub."
-          description="As you create, review, and merge pull requests, the linked task moves through In Progress, In Review, and Completed. The task records which pull request is associated with it. Click the GitHub pill to open the pull request from the task, or go back to the task from the pull request. Your team can see where the work stands without you having to update two systems."
+          title="Linked to Rox GitHub, both ways."
+          description="As you create, review, and merge pull requests, the linked task moves through In Progress, In Review, and Completed. Click the GitHub pill to open the pull request from the task, or go back to the task from the pull request. Your team can see where the work stands without you having to update two systems."
         >
           <DemoInteractionBoundary
             class="feature-page-visual"
             render={() => <TaskGithubDemo />}
           />
+        </FeaturePageSection>
+        <FeaturePageSection
+          id="task-projects"
+          title="Projects and tags."
+          description="Group your work into projects. A project has its own page with a description, a discussion, and all of its tasks. Tags are for everything that cuts across projects: use a project when the work has an owner, a goal, and a finish line, and a tag when a task relates to many things at once."
+        >
+          <TaskPaperGraphic />
+        </FeaturePageSection>
+        <FeaturePageSection
+          id="task-views"
+          title="List, board, or timeline."
+          description="Look at your tasks as a list, as a kanban board, or on a timeline, so you can see what’s in flight and what’s coming up next. Filter, sort, and group them, or ask your agent for an update on your team’s tasks."
+        >
+          <PaperFeatureGraphic
+            interactive
+            height={370}
+            mobileHeight={390}
+            label="The same tasks shown as a list, a board, or a timeline."
+          >
+            <TaskViewsGraphic />
+          </PaperFeatureGraphic>
         </FeaturePageSection>
         <TasksComparison />
         <FeaturePageFaq

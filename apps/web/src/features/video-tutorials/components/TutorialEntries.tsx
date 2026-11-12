@@ -82,11 +82,11 @@ export function TutorialRowView(props: EntryProps) {
         class="grid min-h-[inherit] w-full grid-cols-[var(--soup-row-indicator-width)_minmax(0,1fr)_auto_8ch] items-center gap-x-(--soup-row-column-gap) rounded-xl pr-2 pl-[calc(var(--soup-row-padding-l)+var(--tutorial-row-inset,0px))] text-left text-sm outline-none [--title-width:10rem] focus-visible:bg-list-hover"
       >
         <span aria-hidden="true" />
-        {/* On phones the label takes its own width, and the title truncates
-            (after the snippet has given up its space) instead of overflowing. */}
+        {/* The title truncates (after the snippet has given up its space)
+            instead of overflowing. */}
         <span class="flex min-w-0 items-center gap-2 font-medium">
           <PlayCircleIcon class="size-4 shrink-0 text-ink-muted" />
-          <span class="w-(--title-width) shrink-0 truncate text-ink mobile:w-auto">
+          <span class="w-(--title-width) shrink-0 truncate text-ink">
             {t('tutorials.watchTutorial')}
           </span>
           <span class="min-w-0 truncate text-ink">{props.title}</span>

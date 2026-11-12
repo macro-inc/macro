@@ -80,8 +80,8 @@ export function RouteGithub() {
           demo={{
             tone: 'github',
           }}
-          title="Discuss pull requests in Rox Chat."
-          description="Paste a GitHub link in a document, channel, or anywhere you can write Markdown. Hover over it to see the pull request’s status."
+          title="Paste a GitHub link, get a live pull request."
+          description="GitHub links render as pretty links in a document, in a channel in Rox Chat, or anywhere else you can write Markdown. Hover over one to see the pull request’s status."
         >
           <DemoInteractionBoundary
             class="feature-page-visual"
@@ -89,25 +89,12 @@ export function RouteGithub() {
           />
         </FeaturePageSection>
         <FeaturePageSection
-          id="pr-tasks"
-          demo={{
-            tone: 'github',
-          }}
-          title="Open pull requests beside tasks."
-          description="Click the GitHub pill to go right to the pull request from the task, or vice versa. It all opens in split-screen Rox blocks, so you don’t have to leave your workspace."
-        >
-          <DemoInteractionBoundary
-            class="feature-page-visual"
-            render={() => <GithubTaskDemo />}
-          />
-        </FeaturePageSection>
-        <FeaturePageSection
           id="coding-agents"
           demo={{
             tone: 'github',
           }}
-          title="Give coding agents a task."
-          description="Give a coding agent a task and follow its work through the linked pull request. The task and pull request link back to each other."
+          title="@mention Cursor, merge from Rox Chat."
+          description="Coding agents like Cursor live right in your channels. @mention one and ask it to fix something, and when the pull request is ready, merge it right from the channel. The task and the pull request link back to each other."
         >
           <DemoInteractionBoundary
             class="feature-page-visual"
@@ -115,12 +102,25 @@ export function RouteGithub() {
           />
         </FeaturePageSection>
         <FeaturePageSection
+          id="pr-tasks"
+          demo={{
+            tone: 'github',
+          }}
+          title="Rox Tasks move as the pull request moves."
+          description="As you create, review, and merge a pull request, the linked task moves through In Progress, In Review, and Completed. Click the GitHub pill to go right to the pull request from the task, or vice versa. It opens in a split screen, so you don’t have to leave Rox."
+        >
+          <DemoInteractionBoundary
+            class="feature-page-visual"
+            render={() => <GithubTaskDemo />}
+          />
+        </FeaturePageSection>
+        <FeaturePageSection
           id="review-inbox"
           demo={{
             tone: 'github',
           }}
-          title="Read GitHub updates in your inbox."
-          description="When you receive a comment on a pull request you authored, or you’re mentioned in a pull request, it appears in your unified inbox alongside messages, tasks, and important emails."
+          title="Pull requests in your inbox."
+          description="GitHub’s own notifications are not very good. When you get a comment on a pull request you authored, or you’re mentioned in one, it appears in your unified inbox alongside your messages, tasks, and important emails, so you never miss a pull request."
         >
           <DemoInteractionBoundary
             class="feature-page-visual"

@@ -14,6 +14,15 @@ import { WorkspaceDocuments } from '../workspace/WorkspaceDocuments';
 import '../documents/document-stories.css';
 import { DemoAgentChip } from '../DemoAgentChip';
 import { DemoCursor } from '../DemoCursor';
+import {
+  createHomeInbox,
+  DoneToast,
+  HomeDetail,
+  HomeSidebar,
+  heroGroups,
+  markDoneOnE,
+} from '../reviews/ReviewHome';
+import '../reviews/review-stories.css';
 import { ProductDemo } from '../product/ProductPage';
 import { ProductWorkspace } from '../product/ProductWorkspace';
 import { WorkspaceDesktopDemo } from '../WorkspaceDesktopDemo';
@@ -671,5 +680,36 @@ export function ChannelAgentDemo() {
         </div>
       </Show>
     </ProductDemo>
+  );
+}
+
+/** Home's inbox with channel, DM, and thread rows; E marks the open one done. */
+export function ChannelInboxDemo() {
+  const inbox = createHomeInbox({
+    groups: heroGroups,
+    initial: 'channel-website',
+  });
+  return (
+    <div class="review-flow">
+      <div class="review-flow-frame">
+        <ProductDemo
+          label="An inbox of channel messages, direct messages, and threads"
+          height={520}
+          mobileHeight={500}
+        >
+          <div
+            class="review-home review-home-zoomed"
+            data-pane={inbox.pane()}
+            onKeyDown={markDoneOnE(inbox)}
+          >
+            <HomeSidebar inbox={inbox} />
+            <div class="dummy-main review-home-main">
+              <HomeDetail inbox={inbox} />
+            </div>
+            <DoneToast inbox={inbox} />
+          </div>
+        </ProductDemo>
+      </div>
+    </div>
   );
 }

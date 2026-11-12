@@ -128,6 +128,11 @@ function AgentMessagePart(props: {
               partIndex: props.index,
               inFlight: props.inFlight,
               followedBy: toolUsedAfter(props.message.parts, props.index),
+              current:
+                props.inFlight &&
+                props.message.parts
+                  .slice(props.index + 1)
+                  .every((part) => part.kind === 'thought'),
             }}
           />
         )}

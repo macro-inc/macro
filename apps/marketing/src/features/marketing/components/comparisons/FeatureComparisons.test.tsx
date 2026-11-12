@@ -12,7 +12,7 @@ import { FeatureComparisons } from './FeatureComparisons';
 
 afterEach(cleanup);
 
-it('shows one table with all email competitors with a heading and no disclosure', () => {
+it('shows one table with all email competitors and no heading or disclosure', () => {
   setViewportWidth(1440);
   const view = render(() => (
     <FeatureComparisons
@@ -22,9 +22,7 @@ it('shows one table with all email competitors with a heading and no disclosure'
   ));
   const table = view.getByRole('region', { name: 'Compare Email Clients' });
   expect(view.container.querySelector('details')).toBeNull();
-  expect(
-    view.getByRole('heading', { name: 'Compare Email Clients', level: 2 })
-  ).toBeTruthy();
+  expect(view.queryByRole('heading')).toBeNull();
   expect(within(table).getByText('Superhuman Mail')).toBeTruthy();
   expect(within(table).getByText('Gmail')).toBeTruthy();
   let accountCell = within(table).getByText(
@@ -65,9 +63,6 @@ it('combines Linear and Jira in one mobile-scrollable table', () => {
 it('credits shared CRM capabilities and competitors’ dedicated reporting', () => {
   setViewportWidth(390);
   const view = render(() => <CrmComparison />);
-  expect(
-    view.getByRole('heading', { name: 'Compare CRMs', level: 2 })
-  ).toBeTruthy();
   const table = view.getByRole('region', { name: 'Compare CRMs' });
   expect(view.container.querySelector('details')).toBeNull();
   expect(within(table).getByText('Features')).toBeTruthy();
