@@ -144,6 +144,9 @@ pub(crate) async fn end_consent_in(
         .await
         .map_err(failure)?;
     notify(tx, signals::ACCOUNT_CHANGED, account).await?;
+    if reason.is_some() {
+        notify(tx, signals::ACCOUNT_ENDED, account).await?;
+    }
     notify_change(
         tx,
         Change::Chats {

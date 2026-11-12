@@ -48,6 +48,9 @@ CREATE TABLE slack_account (
     sign_out_requested boolean NOT NULL DEFAULT false,
     -- Last time DSS asked for a catalogue refresh (rate limit).
     catalogue_requested_at timestamptz,
+    -- The generation whose end DSS told the owner about (once per ended
+    -- generation; NULL until the first).
+    ended_notified_generation bigint,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
     UNIQUE (user_id, team_id),
@@ -67,6 +70,9 @@ CREATE TABLE slack_account (
 -- nulled once the replica has moved it into accounts. sealed_state: the
 -- replica's private state between steps (Slack's sign-in cookies, magic-login
 -- codes), sealed under the attempt's data key (purpose slack-login).
+CREATE INDEX slack_account_ended_unnotified ON slack_account(updated_at)
+    WHERE state = 'logged_out' AND ended_notified_generation IS DISTINCT FROM generation;
+
 CREATE TABLE slack_login_attempt (
     id uuid PRIMARY KEY,
     user_id text NOT NULL REFERENCES "User"(id) ON DELETE CASCADE,

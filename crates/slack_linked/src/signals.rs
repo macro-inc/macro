@@ -17,3 +17,6 @@ pub const SEND_REQUESTED: &str = "slack_send_requested";
 pub const READ_REQUESTED: &str = "slack_read_requested";
 /// `<account_id>`: a replica released the account (session service only).
 pub const ACCOUNT_RELEASED: &str = "slack_account_released";
+/// `<account_id>`: Slack ended the account's session; DSS tells its owner
+/// (session service → DSS).
+pub const ACCOUNT_ENDED: &str = "slack_account_ended";

@@ -348,6 +348,14 @@ async fn a_pasted_session_adds_a_slack_connect_channel_and_ingests_its_traffic(p
     assert_eq!(account.state, AccountState::LoggedOut);
     assert_eq!(account.ended_reason, Some(EndedReason::Revoked));
     assert_eq!(account.authorization_generation, 2);
+    let ended = service.ended_accounts(10).await.unwrap();
+    assert_eq!(ended.len(), 1);
+    assert_eq!(ended[0].reason, EndedReason::Revoked);
+    service
+        .ended_notified(ended[0].account_id, ended[0].generation)
+        .await
+        .unwrap();
+    assert!(service.ended_accounts(10).await.unwrap().is_empty());
     assert!(
         repository
             .begin_lease(account_id)

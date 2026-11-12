@@ -140,6 +140,16 @@ impl SlackService {
         self.logins.cancel_login(user, attempt).await
     }
 
+    /// Accounts Slack logged out whose owner hasn't been told yet.
+    pub async fn ended_accounts(&self, limit: i64) -> ExternalChatResult<Vec<EndedAccount>> {
+        self.accounts.ended_accounts(limit).await
+    }
+
+    /// The owner was told this generation ended.
+    pub async fn ended_notified(&self, account: Uuid, generation: i64) -> ExternalChatResult<()> {
+        self.accounts.ended_notified(account, generation).await
+    }
+
     /// The person's accounts, in any state.
     pub async fn accounts(&self, user: &MacroUserIdStr<'_>) -> ExternalChatResult<AccountList> {
         Ok(AccountList {

@@ -66,6 +66,44 @@ impl AccountRepository for PgSlackRepository {
             .map_err(failure)
     }
 
+    async fn ended_accounts(
+        &self,
+        limit: i64,
+    ) -> ExternalChatResult<Vec<crate::domain::ports::EndedAccount>> {
+        sqlx::query!(
+            r#"SELECT id, user_id, team_name, ended_reason AS "ended_reason!", generation FROM slack_account
+            WHERE state = 'logged_out' AND ended_notified_generation IS DISTINCT FROM generation
+            ORDER BY updated_at LIMIT $1"#,
+            limit
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(failure)?
+        .into_iter()
+        .map(|row| {
+            Ok(crate::domain::ports::EndedAccount {
+                account_id: row.id,
+                user_id: row.user_id,
+                team_name: row.team_name,
+                reason: parse(&row.ended_reason, "ended reason")?,
+                generation: row.generation,
+            })
+        })
+        .collect()
+    }
+
+    async fn ended_notified(&self, account: Uuid, generation: i64) -> ExternalChatResult<()> {
+        sqlx::query!(
+            "UPDATE slack_account SET ended_notified_generation = $2 WHERE id = $1 AND generation = $2",
+            account,
+            generation
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(failure)?;
+        Ok(())
+    }
+
     async fn disconnect(
         &self,
         user: &MacroUserIdStr<'_>,

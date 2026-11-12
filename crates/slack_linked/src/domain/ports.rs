@@ -98,6 +98,10 @@ pub trait AccountRepository: Send + Sync {
     async fn accounts(&self, user: &MacroUserIdStr<'_>) -> ExternalChatResult<Vec<Account>>;
     /// The Macro user who signed this account in.
     async fn account_owner(&self, account: Uuid) -> ExternalChatResult<Option<String>>;
+    /// Accounts Slack logged out whose owner hasn't been told yet.
+    async fn ended_accounts(&self, limit: i64) -> ExternalChatResult<Vec<EndedAccount>>;
+    /// The owner was told this generation ended.
+    async fn ended_notified(&self, account: Uuid, generation: i64) -> ExternalChatResult<()>;
     /// End consent at exactly this generation: state `disconnected`,
     /// generation + 1, credentials wiped unless `sign_out` asks the replica
     /// to sign out first, memberships end, undispatched sends fail. Returns
@@ -119,6 +123,21 @@ pub trait AccountRepository: Send + Sync {
         user: &MacroUserIdStr<'_>,
         chat: Uuid,
     ) -> ExternalChatResult<bool>;
+}
+
+/// An account Slack logged out, to tell its owner about.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EndedAccount {
+    /// The account.
+    pub account_id: Uuid,
+    /// Its owner.
+    pub user_id: String,
+    /// Its workspace's name.
+    pub team_name: String,
+    /// Why.
+    pub reason: EndedReason,
+    /// The ended generation.
+    pub generation: i64,
 }
 
 /// One catalogue row of one of the person's accounts.
