@@ -220,6 +220,15 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   delegate, a muted category never sends it, and the notifier only queues.
   `document_storage_service` hosts the ask, so it has its own
   `CalendarRefreshNotifier` (`src/outbound/calendar_refresh.rs`).
+- `update_event_with_macro_call` (`src/domain/meeting_links.rs`) switches an
+  existing event to a Macro call in one provider write, so attendees get one
+  update: it reads the stored content through `CalendarEventDetailsReader`,
+  mints the call, appends the join line and removes the provider conference.
+  Only the calendar service composes it (`macroCall` on `PATCH /events/{id}`);
+  the agent tool forwards through `CalendarMacroCallService`. A retry finds the
+  link already written and mints nothing. Outlook cannot drop a Teams meeting
+  from an event, so that call is refused and the fresh meeting cancelled. The
+  web editor still attaches a call in two writes (`use-event-editor.ts`).
 - Calendar mentions reach the agent as document mentions (`blockName`
   `calendar`), but `ReadContent` and `ReadMetadata` need document access, which
   a channel-shared event never grants. The agent reads a mentioned event with

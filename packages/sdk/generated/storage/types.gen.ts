@@ -27374,6 +27374,25 @@ export type CreateCrmPipelineWithFieldsResponses = {
 
 export type CreateCrmPipelineWithFieldsResponse = CreateCrmPipelineWithFieldsResponses[keyof CreateCrmPipelineWithFieldsResponses];
 
+export type ListCrmPipelineDetailsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/crm/pipelines/details';
+};
+
+export type ListCrmPipelineDetailsErrors = {
+    400: ErrorResponse;
+};
+
+export type ListCrmPipelineDetailsError = ListCrmPipelineDetailsErrors[keyof ListCrmPipelineDetailsErrors];
+
+export type ListCrmPipelineDetailsResponses = {
+    200: Array<PipelineFields>;
+};
+
+export type ListCrmPipelineDetailsResponse = ListCrmPipelineDetailsResponses[keyof ListCrmPipelineDetailsResponses];
+
 export type SearchCrmPipelineEntriesData = {
     body?: never;
     path?: never;
