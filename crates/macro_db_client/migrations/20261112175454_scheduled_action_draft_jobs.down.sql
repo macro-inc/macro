@@ -1,5 +1,7 @@
 SET LOCAL lock_timeout = '5s';
 
+DROP INDEX IF EXISTS scheduled_action_draft_finished;
+DROP INDEX IF EXISTS scheduled_action_draft_unfinished;
 DROP INDEX IF EXISTS scheduled_action_draft_owner_client;
 DROP INDEX IF EXISTS scheduled_action_draft_owner_jobs;
 

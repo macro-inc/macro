@@ -35,3 +35,15 @@ CREATE INDEX scheduled_action_draft_owner_jobs
 CREATE UNIQUE INDEX scheduled_action_draft_owner_client
     ON scheduled_action_draft (owner_id, client_id)
     WHERE state IN ('drafting', 'ready', 'failed');
+
+-- The sweeps, every minute on every replica: drafts that never finished
+-- (blocking drafts, jobs still drafting, cancelled jobs) by age, and finished
+-- jobs by when they finished. Finished jobs are kept for days, so without
+-- these each sweep reads the whole table.
+CREATE INDEX scheduled_action_draft_unfinished
+    ON scheduled_action_draft (created_at)
+    WHERE state IS NULL OR state IN ('drafting', 'cancelled');
+
+CREATE INDEX scheduled_action_draft_finished
+    ON scheduled_action_draft (finished_at)
+    WHERE state IN ('ready', 'failed');
