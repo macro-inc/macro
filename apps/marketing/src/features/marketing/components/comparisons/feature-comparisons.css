@@ -40,7 +40,7 @@
   .feature-page .feature-comparisons { width: calc(100% - 48px); margin-bottom: 48px; }
   .feature-page .product-page .feature-comparisons { width: calc(100% - 16px); }
   .feature-comparison-table { font-size: 12px; line-height: 18px; }
-  .feature-comparison-table :is(th, td) { padding: 8px 5px; }
+  .feature-comparison-table :is(th, td) { padding: 8px 4px; }
   .feature-comparison-table thead th { white-space: nowrap; }
-  .feature-comparison-table tbody th { min-width: 110px; }
+  .feature-comparison-table tbody th { min-width: 96px; }
 }
