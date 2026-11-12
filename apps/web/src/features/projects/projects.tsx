@@ -175,10 +175,12 @@ function ProjectsCollectionHost(props: ProjectsTabProps) {
   createEffect(
     on(
       () => [search.layout, savedViews?.selectedId()] as const,
-      ([layout, savedViewId]) => {
+      ([layout, savedViewId], previous) => {
         // A saved definition owns its raw layout, including the phone List fallback.
         if (savedViewId) return;
-        collection.setLayout(layout ?? entryLayout);
+        const leavingSavedView = previous?.[1] !== undefined;
+        const fallback = leavingSavedView ? 'list' : entryLayout;
+        collection.setLayout(layout ?? fallback);
       }
     )
   );

@@ -1,9 +1,12 @@
 import { cleanup, render, screen } from '@solidjs/testing-library';
-import type { ParentProps } from 'solid-js';
+import { createSignal, type ParentProps, Show } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { DEFAULT_PROJECT_SETTINGS } from './core/project';
 
-const fixture = vi.hoisted(() => ({ touch: false }));
+const fixture = vi.hoisted(() => ({
+  touch: false,
+  savedView: (): string | undefined => 'view',
+}));
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => ({ enabled: true, loading: false }),
   ShowFeatureFlag: (props: ParentProps) => props.children,
@@ -14,7 +17,12 @@ vi.mock('@core/mobile/isTouchDevice', () => ({
 }));
 vi.mock('@app/lib/split-router', () => ({
   createSearchParams: () => [
-    { savedView: 'view', layout: undefined },
+    {
+      get savedView() {
+        return fixture.savedView();
+      },
+      layout: undefined,
+    },
     () => {},
   ],
 }));
@@ -130,10 +138,18 @@ import { ProjectSavedViewsProvider } from './project-saved-views';
 import { ProjectsTab } from './projects';
 
 afterEach(cleanup);
-it.each([false, true])(
-  'retains a cached Gantt definition without dirtying it on touch=%s',
-  (touch) => {
+it.each([
+  [false, false],
+  [false, true],
+  [true, false],
+  [true, true],
+])(
+  'hydrates and clears cached Gantt settings on touch=%s, late mount=%s',
+  (touch, lateMount) => {
     fixture.touch = touch;
+    const [savedView, setSavedView] = createSignal<string | undefined>('view');
+    const [mounted, setMounted] = createSignal(!lateMount);
+    fixture.savedView = savedView;
     render(() => (
       <ProjectSavedViewsProvider
         active={() => true}
@@ -142,9 +158,12 @@ it.each([false, true])(
         location={() => 'projects'}
         onSelect={() => {}}
       >
-        <ProjectsTab onOpen={() => {}} />
+        <Show when={mounted()}>
+          <ProjectsTab onOpen={() => {}} />
+        </Show>
       </ProjectSavedViewsProvider>
     ));
+    setMounted(true);
     expect(
       JSON.parse(screen.getByLabelText('Draft state').textContent ?? '{}')
     ).toMatchObject({ kind: 'saved', dirty: false });
@@ -152,5 +171,11 @@ it.each([false, true])(
     expect(screen.getByLabelText('Status filter').textContent).toBe(
       'saved-status'
     );
+    setSavedView(undefined);
+    expect(screen.getByLabelText('Raw layout').textContent).toBe('list');
+    expect(screen.getByLabelText('Status filter').textContent).toBe('');
+    expect(
+      JSON.parse(screen.getByLabelText('Draft state').textContent ?? '{}')
+    ).toMatchObject({ kind: 'default' });
   }
 );
