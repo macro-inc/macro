@@ -1,7 +1,4 @@
-import {
-  TutorialRow,
-  TutorialSidebarItem,
-} from '@app/features/video-tutorials';
+import { TutorialSidebarItem } from '@app/features/video-tutorials';
 import { usePending } from '@app/observability/flow';
 import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import '@entity/composed/ListEntity.css';
@@ -104,21 +101,14 @@ type HomeListProps = {
 };
 
 /**
- * Home's tutorial entry, shaped like the rows under it: desktop Home is a rail
- * of sidebar items, touch Home a list of inbox rows.
+ * Home's tutorial entry, a sidebar item like the rail's rows under it. Touch
+ * devices show no tutorials.
  */
 function HomeTutorial() {
   return (
-    <Show
-      when={isTouchDevice()}
-      fallback={
-        <div class="mx-(--sidebar-gutter) my-(--sidebar-row-gap) empty:hidden">
-          <TutorialSidebarItem tutorial="home" />
-        </div>
-      }
-    >
-      <TutorialRow tutorial="home" />
-    </Show>
+    <div class="mx-(--sidebar-gutter) my-(--sidebar-row-gap) empty:hidden">
+      <TutorialSidebarItem tutorial="home" />
+    </div>
   );
 }
 
