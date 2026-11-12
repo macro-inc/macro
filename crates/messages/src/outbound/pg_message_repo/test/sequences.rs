@@ -446,3 +446,124 @@ async fn concurrent_channel_replies_and_root_writers_finish_without_deadlocks(po
         WRITERS as i64 + 1
     );
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn channel_counter_wait_timeout_rolls_back_the_entire_message(pool: PgPool) {
+    setup(&pool).await;
+    let channel_id = channel_fixture(&pool).await;
+    let parent = MessageParent::Channel(channel_id);
+    let repo = PgMessageRepository::new(pool.clone());
+    let mut input = command("message-doc-a", None, "committed root");
+    input.parent = parent.clone();
+    let (root, seq) = repo.create(input).await.unwrap();
+    assert_eq!(seq, Some(1));
+
+    // Hold only the counter, leaving the independent message rows free. Each
+    // contender gets as far as its final append before PostgreSQL cancels it.
+    let mut holder = pool.begin().await.unwrap();
+    assert_eq!(
+        PgMessageRepository::append_message_change_in(&mut holder, &parent, root.id)
+            .await
+            .unwrap(),
+        Some(2)
+    );
+    for (lock_timeout, statement_timeout, expected_code, expected_message) in [
+        ("75ms", "0", "55P03", "canceling statement due to lock timeout"),
+        (
+            "0",
+            "75ms",
+            "57014",
+            "canceling statement due to statement timeout",
+        ),
+    ] {
+        let options = pool.connect_options().as_ref().clone().options([
+            ("lock_timeout", lock_timeout),
+            ("statement_timeout", statement_timeout),
+        ]);
+        let timed_pool = sqlx::postgres::PgPoolOptions::new()
+            .max_connections(1)
+            .connect_with(options)
+            .await
+            .unwrap();
+        let timed_repo = PgMessageRepository::new(timed_pool.clone());
+        let failed_id = macro_uuid::generate_uuid_v7();
+        let mut input = command("message-doc-a", None, "must roll back");
+        input.parent = parent.clone();
+        input.input.id = Some(failed_id);
+        let failure = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            timed_repo.create(input),
+        )
+        .await
+        .expect("configured PostgreSQL timeout must stop the counter waiter")
+        .unwrap_err();
+        let MessageError::Repository(report) = failure else {
+            panic!("counter timeout must propagate as a repository failure");
+        };
+        let error = report.downcast_current_context::<sqlx::Error>().unwrap();
+        let database = error.as_database_error().unwrap();
+        assert_eq!(database.code().as_deref(), Some(expected_code));
+        assert_eq!(database.message(), expected_message);
+
+        // Acquiring the sole connection again also waits for SQLx's rollback.
+        assert!(timed_repo.get(&parent, failed_id).await.unwrap().is_none());
+        assert_eq!(
+            channel_change_db_utils::current_seq(&timed_pool, channel_id)
+                .await
+                .unwrap(),
+            1
+        );
+        timed_pool.close().await;
+    }
+    holder.rollback().await.unwrap();
+    let mut input = command("message-doc-a", None, "after cancelled waiters");
+    input.parent = parent;
+    assert_eq!(repo.create(input).await.unwrap().1, Some(2));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn channel_counter_wait_without_timeouts_resumes_after_holder_rolls_back(pool: PgPool) {
+    setup(&pool).await;
+    let channel_id = channel_fixture(&pool).await;
+    let parent = MessageParent::Channel(channel_id);
+    let repo = PgMessageRepository::new(pool.clone());
+    let mut input = command("message-doc-a", None, "committed root");
+    input.parent = parent.clone();
+    let (root, _) = repo.create(input).await.unwrap();
+    let mut holder = pool.begin().await.unwrap();
+    PgMessageRepository::append_message_change_in(&mut holder, &parent, root.id)
+        .await
+        .unwrap();
+
+    let options = pool
+        .connect_options()
+        .as_ref()
+        .clone()
+        .options([("lock_timeout", "0"), ("statement_timeout", "0")]);
+    let waiting_pool = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(1)
+        .connect_with(options)
+        .await
+        .unwrap();
+    let waiting_repo = PgMessageRepository::new(waiting_pool.clone());
+    let mut input = command("message-doc-a", None, "waiting for counter");
+    input.parent = parent;
+    let waiter = waiting_repo.create(input);
+    tokio::pin!(waiter);
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_millis(150), &mut waiter)
+            .await
+            .is_err(),
+        "with no timeout the waiter stays pending while the holder is open"
+    );
+    holder.rollback().await.unwrap();
+    assert_eq!(
+        tokio::time::timeout(std::time::Duration::from_secs(5), waiter)
+            .await
+            .expect("waiter resumes when holder releases the counter")
+            .unwrap()
+            .1,
+        Some(2)
+    );
+    waiting_pool.close().await;
+}
