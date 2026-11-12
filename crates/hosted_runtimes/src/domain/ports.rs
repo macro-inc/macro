@@ -20,8 +20,8 @@ use crate::domain::lifecycle::{
     SubscriptionItemId, TimerKind,
 };
 use crate::domain::models::{
-    BillingInterval, Computer, ComputerRecord, ControlPlaneId, Host, HostRegistration,
-    NewReservation, Quote, Reservation, Reserved, SubscriptionItem,
+    BillingInterval, Computer, ComputerRecord, ControlPlaneId, Host, HostAllocation,
+    HostRegistration, NewReservation, Quote, Reservation, Reserved, SubscriptionItem,
 };
 use crate::domain::size::ComputerSize;
 
@@ -335,6 +335,9 @@ pub trait ComputerRepo: Send + Sync + 'static {
         host: HostId,
         now: DateTime<Utc>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Every host with what its computers and reservations hold, by host id.
+    fn allocation(&self) -> impl Future<Output = Result<Vec<HostAllocation>, Self::Err>> + Send;
 
     /// Sizes that no host can sell at `now`.
     fn sold_out_sizes(

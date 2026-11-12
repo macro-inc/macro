@@ -529,7 +529,7 @@ Current constraints are visible in the
 [Google token source](../../services/email_service/src/outbound/email_api/token_source.rs),
 [mailbox initialization](../../services/email_service/src/api/email/init.rs),
 [sync cursor model](../../crates/email_api_client/src/domain/models/changes.rs), and
-[thread-based backfill](../../services/email_service/src/pubsub/backfill/list_threads.rs).
+[thread-based backfill](../../crates/email/src/domain/backfill_jobs/worker/listing.rs).
 
 ## Domain ownership and provider selection
 

@@ -214,6 +214,30 @@ describe('AssistantMessageParts streaming identity', () => {
       rendered.unmount();
     }
   );
+  it('leaves the agent’s tool lookups out of its activity', () => {
+    const parts: AssistantMessagePart[] = [
+      { type: 'toolCall', id: 'search', name: 'SearchTools', json: {} },
+      { type: 'toolCall', id: 'docs', name: 'ReadCodeDocs', json: {} },
+      { type: 'toolCall', id: 'query-tool', name: 'QueryDatabase', json: {} },
+      { type: 'text', text: 'Here is the result.' },
+    ];
+    const rendered = render(() => (
+      <AssistantMessageParts
+        parts={parts}
+        message={{
+          attachments: [],
+          content: parts,
+          id: 'message-lookups',
+          role: 'assistant',
+        }}
+        isStreaming={false}
+      />
+    ));
+    expect(
+      rendered.getAllByTestId('tool').map((tool) => tool.dataset.name)
+    ).toEqual(['QueryDatabase']);
+    rendered.unmount();
+  });
   it('tells each tool whether a later part of the turn saves the query', () => {
     const parts: AssistantMessagePart[] = [
       { type: 'toolCall', id: 'query-tool', name: 'QueryDatabase', json: {} },

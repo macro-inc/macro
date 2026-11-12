@@ -62,6 +62,7 @@ const {
   setPreviewFileType,
   setPreviewName,
   setPreviewOnCreate,
+  useItemIdentity,
   useItemPreview,
   useItemRawName,
 } = await import('../preview');
@@ -171,6 +172,42 @@ describe('preview transport facade', () => {
         expect.any(Function),
         false
       );
+      dispose();
+    });
+  });
+
+  it('reads live appearance without loading document properties or exposing inaccessible metadata', () => {
+    createRoot((dispose) => {
+      const [data, setData] = createSignal<PreviewItem | undefined>();
+      createGraphqlItemPreviewQueryMock.mockReturnValue({
+        data,
+        shouldFallback: () => false,
+      });
+      const identity = useItemIdentity(() => ({
+        id: 'doc-1',
+        type: 'document',
+      }));
+      expect(identity()).toBeUndefined();
+      setData({
+        ...preview,
+        appearance: { icon: { kind: 'emoji', value: '🚀' }, color: null },
+      });
+      expect(identity()?.appearance?.icon).toEqual({
+        kind: 'emoji',
+        value: '🚀',
+      });
+      expect(createGraphqlItemPreviewQueryMock).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.any(Function),
+        false
+      );
+      setData({
+        id: 'doc-1',
+        type: 'document',
+        access: 'no_access',
+        loading: false,
+      });
+      expect(identity()).toBeUndefined();
       dispose();
     });
   });
