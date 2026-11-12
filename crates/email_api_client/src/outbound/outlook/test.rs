@@ -213,6 +213,7 @@ async fn inline_attachments_are_loaded_even_when_has_attachments_is_false() {
         name: "Boîte de réception".into(),
         role: FolderRole::Inbox,
         has_children: false,
+        total_items: None,
     };
     let message = api
         .message(
@@ -585,6 +586,7 @@ fn folder_subtrees_inherit_trash_without_becoming_move_destinations() {
             name: "Trash".into(),
             role: FolderRole::Trash,
             has_children: true,
+            total_items: None,
         },
         MailFolder {
             id: ProviderId::new("parent").unwrap(),
@@ -592,6 +594,7 @@ fn folder_subtrees_inherit_trash_without_becoming_move_destinations() {
             name: "Deleted project".into(),
             role: FolderRole::Other,
             has_children: true,
+            total_items: None,
         },
         MailFolder {
             id: ProviderId::new("child").unwrap(),
@@ -599,6 +602,7 @@ fn folder_subtrees_inherit_trash_without_becoming_move_destinations() {
             name: "Invoices".into(),
             role: FolderRole::Other,
             has_children: false,
+            total_items: None,
         },
     ];
     let source =
@@ -749,6 +753,7 @@ async fn recent_inbox_messages_retry_a_rejected_token_and_read_one_newest_first_
         name: "Inbox".into(),
         role: FolderRole::Inbox,
         has_children: false,
+        total_items: None,
     };
     let service = MailboxApiService::new(api, Tokens, AlwaysAllowRateLimiter);
 
