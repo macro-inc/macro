@@ -59,6 +59,7 @@ async fn one_bounded_request_expands_only_selected_entities() {
     let result = select_documentation(
         &user(),
         &"x".repeat(20000),
+        None,
         Some(&service),
         Guidance::Inline,
         &CancellationToken::new(),
@@ -90,6 +91,7 @@ async fn errors_and_absent_provider_retain_catalog() {
         &user(),
         "request",
         None,
+        None,
         Guidance::Inline,
         &CancellationToken::new(),
     )
@@ -98,6 +100,7 @@ async fn errors_and_absent_provider_retain_catalog() {
         select_documentation(
             &user(),
             "request",
+            None,
             Some(&classifier),
             Guidance::Inline,
             &CancellationToken::new()
@@ -119,6 +122,7 @@ async fn deadline_and_cancellation_fall_back_without_waiting_for_provider() {
         &user(),
         "request",
         None,
+        None,
         Guidance::Inline,
         &CancellationToken::new(),
     )
@@ -128,6 +132,7 @@ async fn deadline_and_cancellation_fall_back_without_waiting_for_provider() {
         select_documentation(
             &user(),
             "request",
+            None,
             Some(&classifier),
             Guidance::Inline,
             &CancellationToken::new(),
@@ -143,6 +148,7 @@ async fn deadline_and_cancellation_fall_back_without_waiting_for_provider() {
         select_documentation(
             &user(),
             "request",
+            None,
             Some(&classifier),
             Guidance::Inline,
             &cancel,
@@ -285,6 +291,7 @@ async fn routed_turns_bring_each_selected_entitys_guidance_with_its_index() {
     let result = select_documentation(
         &user(),
         "how many rows in Leads have revenue over 10k?",
+        None,
         Some(&classifier),
         Guidance::Selected,
         &CancellationToken::new(),
@@ -351,6 +358,7 @@ async fn entities_past_the_first_32_route_in_another_parallel_call() {
     let result = select_documentation(
         &user(),
         "request",
+        None,
         Some(&service),
         Guidance::Inline,
         &CancellationToken::new(),
@@ -387,4 +395,54 @@ fn the_routines_guide_carries_the_rules_for_writing_a_routine() {
         assert!(guide.contains(rule), "{rule}: {guide}");
     }
     assert!(inline_guides(GuideHost::Code).contains(guide));
+}
+
+/// Ranks the `calendar` entity relevant only when the request it is shown
+/// mentions a booking link, as Jev would.
+struct BookingLinkClassifier;
+
+#[async_trait]
+impl Cognition for BookingLinkClassifier {
+    async fn generate_object(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: GenerateObjectRequest,
+    ) -> Result<GenerateObjectResponse, Report> {
+        panic!("selection must not generate text")
+    }
+
+    async fn decide(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        request: DecisionRequest,
+    ) -> Result<DecisionResponse, Report> {
+        let mentions_booking_link = request.input.to_string().contains("booking link");
+        let probabilities = request
+            .questions
+            .iter()
+            .map(|(key, question)| {
+                let name = question.split_whitespace().nth(4).unwrap();
+                let relevant = mentions_booking_link && name == "calendar";
+                (key.clone(), if relevant { 0.9 } else { 0.1 })
+            })
+            .collect();
+        Ok(DecisionResponse { probabilities })
+    }
+}
+
+#[tokio::test]
+async fn a_follow_up_keeps_the_previous_requests_entities() {
+    let classifier: Arc<dyn Cognition> = Arc::new(BookingLinkClassifier);
+
+    let result = select_documentation(
+        &user(),
+        "now do the same for the other one",
+        Some("switch my intro call booking link from Google Meet to a Macro call"),
+        Some(&classifier),
+        Guidance::Inline,
+        &CancellationToken::new(),
+    )
+    .await;
+
+    assert!(result.contains("\n## calendar\n"));
 }

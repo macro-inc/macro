@@ -175,6 +175,7 @@ async fn entity_route_evaluation() {
             let ranking = rank_entities(
                 &owner,
                 prompt,
+                None,
                 docs,
                 Some(&cognition),
                 Duration::from_secs(5),

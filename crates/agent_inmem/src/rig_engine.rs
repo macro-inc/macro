@@ -665,6 +665,12 @@ async fn drive_turn(
             .filter_map(|message| message.content.user_message_text())
             .collect();
         let requested = user_messages.last().cloned().unwrap_or_default();
+        // The user message before it, so a follow-up keeps the docs and skills
+        // the conversation is using.
+        let previous = user_messages
+            .len()
+            .checked_sub(2)
+            .map(|index| user_messages[index].as_str());
         // Routed turns leave area guidance out of the prompt; the entities the
         // request needs bring theirs, with their indexes, in the turn's part.
         let routed = native_tools.code_mode && skills.entities;
@@ -673,6 +679,7 @@ async fn drive_turn(
                 agent_code_mode::domain::select_documentation(
                     &owner,
                     &requested,
+                    previous,
                     base_context.cognition_tool_context.service.as_ref(),
                     if routed {
                         agent_code_mode::domain::Guidance::Selected
@@ -695,10 +702,7 @@ async fn drive_turn(
                 &owner,
                 skills::domain::selection::SkillRequest {
                     latest: &requested,
-                    previous: user_messages
-                        .len()
-                        .checked_sub(2)
-                        .map(|index| user_messages[index].as_str()),
+                    previous,
                 },
                 &skills.sessions.loaded_ids(session_id),
                 &cancel,

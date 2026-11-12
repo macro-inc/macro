@@ -180,11 +180,14 @@ impl Ranking<'_> {
 }
 
 /// Ask Jev which entities help with `text`, every entity in parallel calls of
-/// 32. Entities whose call fails or misses the deadline are not ranked; the
+/// 32. `previous` is the user message before it, so a follow-up such as "now
+/// do the same for the other one" keeps the entities the conversation is
+/// using. Entities whose call fails or misses the deadline are not ranked; the
 /// rest still are.
 async fn rank_entities<'a>(
     user: &MacroUserIdStr<'static>,
     text: &str,
+    previous: Option<&str>,
     docs: &'a [SdkDocumentation],
     cognition: Option<&Arc<dyn Cognition>>,
     deadline: Duration,
@@ -193,7 +196,10 @@ async fn rank_entities<'a>(
     let Some(cognition) = cognition else {
         return Ranking::nothing(SelectionStatus::Unconfigured);
     };
-    let input = serde_json::json!({"userRequest": text.chars().take(8000).collect::<String>()});
+    let mut input = serde_json::json!({"userRequest": text.chars().take(8000).collect::<String>()});
+    if let Some(previous) = previous {
+        input["previousRequest"] = previous.chars().take(8000).collect::<String>().into();
+    }
     let questions: Vec<String> = docs
         .iter()
         .map(|doc| {
@@ -245,6 +251,7 @@ async fn rank_entities<'a>(
 pub async fn select_documentation(
     user: &MacroUserIdStr<'static>,
     prompt: &str,
+    previous: Option<&str>,
     cognition: Option<&Arc<dyn Cognition>>,
     guidance: Guidance,
     cancel: &CancellationToken,
@@ -260,6 +267,7 @@ pub async fn select_documentation(
     let ranking = rank_entities(
         user,
         prompt,
+        previous,
         docs,
         cognition,
         Duration::from_millis(1000),
@@ -327,7 +335,16 @@ pub async fn documentation_for_task(
 ) -> TaskDocumentation {
     let docs = sdk_documentation();
     // The agent is waiting on this call, unlike the per-turn prompt path.
-    let ranking = rank_entities(user, task, docs, cognition, Duration::from_secs(5), cancel).await;
+    let ranking = rank_entities(
+        user,
+        task,
+        None,
+        docs,
+        cognition,
+        Duration::from_secs(5),
+        cancel,
+    )
+    .await;
     let mut bytes = 0;
     let mut entities = Vec::new();
     let mut omitted = Vec::new();
