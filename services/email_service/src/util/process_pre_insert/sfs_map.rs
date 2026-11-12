@@ -3,7 +3,6 @@ use bytes::{Bytes, BytesMut};
 use futures::{StreamExt, stream};
 use lol_html::html_content::Element;
 use lol_html::{HtmlRewriter, Settings, element};
-use models_email::email::service::{message, thread};
 use scraper::{Html, Selector};
 use sqlx::PgPool;
 use static_file_service_client::StaticFileServiceClient;
@@ -15,7 +14,7 @@ mod public_http;
 pub(crate) use public_http::RefusedImageUrl;
 
 pub(crate) const MAX_IMAGE_SIZE_BYTES: usize = 10 * 1024 * 1024; // 10 MB
-/// Images one email fetches at once.
+/// Images one HTML fragment fetches at once.
 const MAX_CONCURRENT_IMAGE_FETCHES: usize = 4;
 
 /// Where [`rehost_html_images`] reads an image's bytes from.
@@ -38,86 +37,6 @@ impl ImageSource for PublicImages {
     async fn fetch(&self, url: &str) -> anyhow::Result<Option<Bytes>> {
         fetch_image(url).await
     }
-}
-
-// concurrently calls store_messages_images for each message in each passed thread
-pub async fn store_threads_images(
-    threads_vec: &mut [thread::Thread],
-    db: &PgPool,
-    sfs_client: &StaticFileServiceClient,
-) {
-    if cfg!(not(feature = "sfs_map")) {
-        return;
-    }
-
-    let mut image_processing_tasks = Vec::new();
-
-    for thread_data in threads_vec.iter_mut() {
-        for message in thread_data.messages.iter_mut() {
-            let msg_provider_id = message.provider_id.clone().unwrap_or_default();
-            let thread_provider_id = thread_data.provider_id.clone().unwrap_or_default();
-
-            let task = async move {
-                let result = store_message_images(db, sfs_client, message).await;
-                (result, msg_provider_id, thread_provider_id)
-            };
-            image_processing_tasks.push(task);
-        }
-    }
-
-    // Limit to 10 concurrent tasks
-    const MAX_CONCURRENT: usize = 10;
-
-    // Process tasks with limited concurrency
-    let results_with_ids = stream::iter(image_processing_tasks)
-        .buffer_unordered(MAX_CONCURRENT)
-        .collect::<Vec<_>>()
-        .await;
-
-    for (result, msg_provider_id, thread_provider_id) in results_with_ids {
-        if let Err(e) = result {
-            tracing::error!(
-                msg_provider_id = %msg_provider_id,
-                thread_id = %thread_provider_id,
-                error = ?e,
-                "Error processing images for message"
-            );
-        }
-    }
-}
-
-/// stores a message's URL-referenced images in SFS and updates the html of the message to
-/// use the new SFS links.
-#[tracing::instrument(skip(db, sfs_client, msg), err)]
-pub async fn store_message_images(
-    db: &PgPool,
-    sfs_client: &StaticFileServiceClient,
-    msg: &mut message::Message,
-) -> anyhow::Result<()> {
-    if msg.body_html_sanitized.is_none() {
-        return Ok(());
-    }
-
-    let body_html = msg.body_html_sanitized.as_ref().unwrap();
-
-    // extract the image URLs we need to replace
-    let urls = extract_all_image_urls(body_html).context("failed to extract image urls")?;
-
-    if !urls.is_empty() {
-        // cache the images in SFS and return the new links
-        let sfs_map = cache_images(db, sfs_client, urls.clone(), &PublicImages)
-            .await
-            .context("failed to cache images")?;
-
-        if !sfs_map.is_empty() {
-            // update the message html body to use the new links
-            let new_html = rewrite_html_image_links(body_html, &sfs_map)
-                .context("failed to rewrite image URLs")?;
-
-            msg.body_html_sanitized = Some(new_html);
-        }
-    }
-    Ok(())
 }
 
 /// Rehosts every `<img>` in an HTML fragment that `images` can read onto SFS
@@ -236,7 +155,7 @@ async fn cache_images(
 
     if !new_urls.is_empty() {
         // Fetch and upload a few images at a time: each can hold up to
-        // MAX_IMAGE_SIZE_BYTES, and an email may reference thousands.
+        // MAX_IMAGE_SIZE_BYTES, and a fragment may reference thousands.
         let results: Vec<_> = stream::iter(new_urls)
             .map(|source_url| {
                 let sfs_client = sfs_client.clone();
