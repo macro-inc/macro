@@ -33,6 +33,11 @@ export type ToolCallContext = {
   inFlight: boolean;
   /** Whether a later part of the same turn calls this tool. */
   followedBy: (name: MacroToolName) => boolean;
+  /**
+   * This call is where the open turn is: the newest step, with at most the
+   * agent's thinking after it. Its view carries the session's live line.
+   */
+  current?: boolean;
 };
 
 /** Row-level facts common to every tool card, derived once by the dispatcher. */

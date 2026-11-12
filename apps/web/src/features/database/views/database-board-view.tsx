@@ -95,6 +95,7 @@ type DatabaseBoardViewProps = {
   ) => Promise<Result<void, DatabaseOpsError>>;
   renderCell?: DatabaseTableProps['renderCell'];
   renderTextValue?: (value: string) => JSX.Element;
+  renderLinkValue?: (url: string) => JSX.Element;
   renderMentionValue?: (id: string, type: DatabaseEntityType) => JSX.Element;
   controlsRef?: (controls: DatabaseBoardControls) => void;
 };
@@ -339,6 +340,7 @@ function GroupedBoard(
               groupColumn={props.groupColumn}
               renderCell={props.renderCell}
               renderTextValue={props.renderTextValue}
+              renderLinkValue={props.renderLinkValue}
               renderMentionValue={props.renderMentionValue}
               canEdit={props.canEdit}
               rowPending={props.rowPending}
