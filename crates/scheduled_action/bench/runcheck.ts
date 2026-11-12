@@ -1,0 +1,243 @@
+// Putting the workspace back between drafts, and the run check: save a
+// drafted routine, fire its trigger once with a made-up event, and read what
+// the run changed straight from the stack's database.
+
+import { SQL } from 'bun';
+
+import type { Case, Context, DraftResult, Effects, Fire } from './cases';
+import { setTaskStatus } from './setup';
+import { type Stack, call, sdk } from './stack';
+import { OWNER, PERSON_KEYS, userId } from './workspace';
+
+/** Tokens for every seeded person, by key. */
+export type Tokens = Record<string, string>;
+
+/** A routine as the scheduled-action API returns it. */
+export type SavedRoutine = {
+  id: string;
+  name: string;
+  enabled: boolean;
+  kind: string;
+  trigger: { type: string; [key: string]: unknown };
+  task: { steps?: unknown[]; prompt?: string; [key: string]: unknown };
+  created_at: string;
+  updated_at: string;
+  configuration_revision?: number;
+};
+
+const routines = (at: Stack) => `${at.harness}/scheduled-action/scheduled-actions`;
+
+/** Every routine the person has: the list leaves out event routines and sub-routines unless asked. */
+export async function listRoutines(at: Stack, token: string): Promise<SavedRoutine[]> {
+  return call<SavedRoutine[]>(`${routines(at)}?include_events=true&include_children=true`, { token });
+}
+
+/** Seeded ids start with the seed CLI's prefix; anything else the eval or a routine made. */
+const SEEDED = '5eed';
+
+const personOf = (sender: string) =>
+  PERSON_KEYS.find((key) => userId(key) === sender) ?? sender;
+
+/**
+ * Put the owner's workspace back to what `seed` and `setup` made: delete
+ * every routine, the databases, documents and tasks nobody seeded, and the
+ * messages nobody seeded. Runs before and after each case, so a draft never
+ * finds what an earlier draft, run or crashed eval left behind.
+ */
+export async function reset(at: Stack, db: SQL, tokens: Tokens, keep: Set<string>) {
+  const owner = tokens[OWNER];
+  const macro = sdk(at, owner);
+  let removed = 0;
+  for (const routine of await listRoutines(at, owner)) {
+    await call(`${routines(at)}/${routine.id}`, { method: 'DELETE', token: owner });
+    removed++;
+  }
+  // A routine the list missed would fire during later drafts' run checks.
+  const left = await db`select id from scheduled_action where owner = ${userId(OWNER)}`;
+  if (left.length) throw new Error(`reset left ${left.length} routines the list didn't return`);
+  for (const database of await macro.databases.list()) {
+    if (keep.has(database.id)) continue;
+    await trash(at, owner, 'DATABASE', database.id);
+    removed++;
+  }
+  const documents = await db`
+    select id from "Document"
+    where owner = ${userId(OWNER)} and "deletedAt" is null and id::text not like ${`${SEEDED}%`}`;
+  for (const { id } of documents as { id: string }[]) {
+    if (keep.has(id)) continue;
+    await macro.documents.byId(id).delete();
+    removed++;
+  }
+  const messages = await db`
+    select id, sender_id, parent_entity_id as channel from comms_messages
+    where deleted_at is null and id::text not like ${`${SEEDED}%`} and parent_entity_type = 'channel'
+      and (parent_entity_id::text like ${`${SEEDED}%`} or sender_id like ${'%@routines-eval.seed.macro.local'})`;
+  for (const message of messages as { id: string; sender_id: string; channel: string }[]) {
+    // The sender can delete their message; the owner owns every seeded channel.
+    const person = personOf(message.sender_id);
+    const token = tokens[person] ?? owner;
+    try {
+      await sdk(at, token).channels.byId(message.channel).message(message.id).delete();
+    } catch {
+      await sdk(at, owner).channels.byId(message.channel).message(message.id).delete();
+    }
+    removed++;
+  }
+  return removed;
+}
+
+/** Move an entity to the trash through Soup's GraphQL, as the web app does for databases. */
+async function trash(at: Stack, token: string, type: string, id: string) {
+  await call(`${at.storage}/items/soup/graphql`, {
+    method: 'POST',
+    token,
+    body: JSON.stringify({
+      query: `mutation Trash($id: ID!) { trashEntities(entities: [{ type: ${type}, id: $id }]) { results { __typename } } }`,
+      variables: { id },
+    }),
+  });
+}
+
+/** Save a draft as the person's routine, the way the editor's Save does (not acting as them). */
+export async function save(at: Stack, token: string, draft: DraftResult, enabled: boolean): Promise<SavedRoutine> {
+  return call<SavedRoutine>(routines(at), {
+    method: 'POST',
+    token,
+    body: JSON.stringify({
+      name: draft.name ?? 'Eval routine',
+      kind: 'Agent',
+      enabled,
+      trigger: draft.trigger,
+      task: { steps: draft.steps },
+    }),
+  });
+}
+
+/** Whether a trigger fires on events (as opposed to a schedule or a time). */
+export const onEvents = (trigger: unknown) => JSON.stringify(trigger ?? null).includes('"events"');
+
+type RunRecord = { start_time: string; end_time: string; is_success: boolean; result: unknown };
+// Builds before sub-routines list bare records; later ones wrap each with what its run created.
+type HistoryEntry = RunRecord | { record: RunRecord };
+
+async function runsSince(at: Stack, token: string, id: string, since: Date) {
+  const history = await call<HistoryEntry[]>(`${routines(at)}/${id}/history`, { token });
+  return history
+    .map((entry) => ('record' in entry ? entry.record : entry))
+    .filter((record) => new Date(record.start_time).getTime() >= since.getTime() - 1000)
+    .map((record) => ({ isSuccess: record.is_success, result: record.result }));
+}
+
+/** How long a fired routine gets to finish its run. */
+const RUN_TIMEOUT_MS = 240_000;
+/** What a run writes can land just after its record. */
+const SETTLE_MS = 5_000;
+
+export type RunOutcome = {
+  says: string;
+  fired: Fire['type'];
+  holds: boolean;
+  /** Fired to the run's record, or to the timeout. */
+  ms: number;
+  timedOut: boolean;
+  effects: Effects;
+  error?: string;
+};
+
+/**
+ * Fire `routine` once as `item.run` says, wait for its run, read what it
+ * changed and check it. Puts back what firing changed (a task's status);
+ * `reset` removes the rest.
+ */
+export async function runCheck(
+  at: Stack,
+  db: SQL,
+  tokens: Tokens,
+  item: Case,
+  draft: DraftResult,
+  routine: SavedRoutine,
+  context: Context,
+): Promise<RunOutcome | undefined> {
+  if (!item.run) return undefined;
+  const owner = tokens[OWNER];
+  const fire = item.run.fire(draft);
+  const t0 = new Date();
+  let firedMessage: string | undefined;
+  let restore: (() => Promise<void>) | undefined;
+  const started = performance.now();
+  let error: string | undefined;
+  try {
+    if (fire.type === 'execute') {
+      await call(`${routines(at)}/${routine.id}/execute`, { method: 'POST', token: owner });
+    } else if (fire.type === 'message') {
+      const sent = await sdk(at, tokens[fire.from]).channels.byId(context.ids[fire.channel]).send(fire.text);
+      firedMessage = sent.id;
+    } else if (fire.type === 'task_status') {
+      const id = context.ids[fire.task];
+      await setTaskStatus(at, owner, id, fire.status);
+      restore = () => setTaskStatus(at, owner, id, fire.restore);
+    } else {
+      const project = fire.project ? sdk(at, owner).projects.byId(context.ids[fire.project]) : undefined;
+      await sdk(at, owner).tasks.create({ name: fire.name, project });
+    }
+  } catch (cause) {
+    error = `firing failed: ${String(cause)}`;
+  }
+  let runs: Effects['runs'] = [];
+  let timedOut = false;
+  if (!error) {
+    for (;;) {
+      runs = await runsSince(at, owner, routine.id, t0);
+      if (runs.length) break;
+      if (performance.now() - started > RUN_TIMEOUT_MS) {
+        timedOut = true;
+        break;
+      }
+      await Bun.sleep(2000);
+    }
+  }
+  const ms = performance.now() - started;
+  if (runs.length) await Bun.sleep(SETTLE_MS);
+  const effects = await read(db, context, t0, firedMessage);
+  effects.runs = runs.length ? await runsSince(at, owner, routine.id, t0) : runs;
+  await restore?.().catch(() => undefined);
+  return {
+    says: item.run.says,
+    fired: fire.type,
+    holds: !error && item.run.holds(effects, context),
+    ms,
+    timedOut,
+    effects,
+    error,
+  };
+}
+
+/** What changed in the workspace since `since`, from the stack's database. */
+async function read(db: SQL, context: Context, since: Date, fired?: string): Promise<Effects> {
+  const names = new Map(Object.entries(context.ids).map(([name, id]) => [id, name]));
+  const messages = (await db`
+    select m.id, m.sender_id, m.content, m.parent_entity_id as channel, c.name as channel_name
+    from comms_messages m left join comms_channels c on c.id::text = m.parent_entity_id
+    where m.created_at >= ${since} and m.deleted_at is null and m.parent_entity_type = 'channel'
+    order by m.created_at`) as { id: string; sender_id: string; content: string; channel: string; channel_name: string | null }[];
+  const tasks = (await db`
+    select d.id, d.name from "Document" d join document_sub_type t on t.document_id = d.id
+    where d."createdAt" >= ${since} and d."deletedAt" is null
+    order by d."createdAt"`) as { id: string; name: string }[];
+  const notifications = (await db`
+    select n.metadata from user_notification u join notification n on n.id = u.notification_id
+    where u.user_id = ${userId(OWNER)} and u.created_at >= ${since}`) as { metadata: unknown }[];
+  return {
+    runs: [],
+    messages: messages
+      .filter((message) => message.id !== fired)
+      .map((message) => ({
+        channel: names.get(message.channel) ?? `new:${message.channel_name ?? message.channel}`,
+        from: personOf(message.sender_id),
+        text: message.content,
+      })),
+    tasks: tasks.map((task) => ({ id: task.id, name: task.name, text: '' })),
+    notifications: notifications.map((row) => JSON.stringify(row.metadata)),
+  };
+}
+
