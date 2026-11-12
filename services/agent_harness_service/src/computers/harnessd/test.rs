@@ -15,12 +15,20 @@ fn signer() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap()
 }
 
+/// A plausible expiry, the same for every call on a day.
+fn in_six_months() -> chrono::DateTime<chrono::Utc> {
+    use chrono::DurationRound as _;
+    (chrono::Utc::now() + chrono::Duration::days(180))
+        .duration_trunc(chrono::Duration::days(1))
+        .unwrap()
+}
+
 fn signed_in() -> Response {
     Response::SignedIn {
         agent: AgentProvider::Claude,
         claude: Some(ClaudeAccount {
             credential_id: "sha256:0123456789abcdef0123456789abcdef".to_owned(),
-            expires_at: Some("2027-11-11T22:00:00Z".parse().unwrap()),
+            expires_at: Some(in_six_months()),
         }),
     }
 }
@@ -31,7 +39,7 @@ fn claude_sign_in(signed_in_by: Option<MacroUserIdStr<'static>>) -> AccountLogin
         account: ProviderAccountIdentity {
             external_account_id: "sha256:0123456789abcdef0123456789abcdef".to_owned(),
         },
-        expires_at: Some("2027-11-11T22:00:00Z".parse().unwrap()),
+        expires_at: Some(in_six_months()),
         signed_in_by,
     }
 }
@@ -301,4 +309,111 @@ async fn one_answer_line_is_read_back() {
             agent: AgentProvider::Claude
         }
     );
+}
+
+#[tokio::test]
+async fn a_sign_in_with_an_implausible_credential_or_expiry_is_not_recorded() {
+    for claude in [
+        ClaudeAccount {
+            credential_id: "x".repeat(10_000),
+            expires_at: Some(in_six_months()),
+        },
+        ClaudeAccount {
+            credential_id: "sha256:01 23\u{0}".to_owned(),
+            expires_at: Some(in_six_months()),
+        },
+        ClaudeAccount {
+            credential_id: String::new(),
+            expires_at: Some(in_six_months()),
+        },
+        ClaudeAccount {
+            credential_id: "sha256:0123456789abcdef0123456789abcdef".to_owned(),
+            expires_at: Some(chrono::Utc::now() + chrono::Duration::days(800)),
+        },
+    ] {
+        let changes = Arc::new(Mutex::new(Vec::new()));
+        let answer = Response::SignedIn {
+            agent: AgentProvider::Claude,
+            claude: Some(claude),
+        };
+        let harnessd = Harnessd::new(
+            Arc::new(FakeHarnessd::new(move |_| answer.clone())),
+            Arc::new(FakeLocks::default()),
+            Arc::new(recording_harnesses(Arc::clone(&changes))),
+        );
+
+        let result = harnessd
+            .refresh(HARNESS, computer(), AgentProvider::Claude)
+            .await;
+
+        assert!(matches!(result, Err(HarnessdError::Unreadable(_))));
+        assert!(changes.lock().unwrap().is_empty());
+    }
+}
+
+/// A Postgres pool for the lock tests; advisory locks need no schema.
+async fn lock_pool() -> sqlx::PgPool {
+    sqlx::PgPool::connect(&std::env::var("DATABASE_URL").unwrap())
+        .await
+        .unwrap()
+}
+
+#[tokio::test]
+async fn a_lock_held_elsewhere_is_busy_after_the_lock_timeout() {
+    let locks = PgComputerLocks::with_limits(
+        &lock_pool().await,
+        2,
+        std::time::Duration::from_secs(5),
+        "50ms",
+    );
+    let id = ComputerId::new_from_uuid(uuid::Uuid::new_v4());
+
+    let _held = locks.lock(id).await.unwrap();
+    let second = locks.lock(id).await;
+
+    assert!(
+        matches!(second, Err(HarnessdError::Busy)),
+        "{:?}",
+        second.err()
+    );
+}
+
+#[tokio::test]
+async fn locks_past_the_dedicated_pool_are_busy_after_the_acquire_timeout() {
+    let locks = PgComputerLocks::with_limits(
+        &lock_pool().await,
+        1,
+        // Long enough to open the first connection on a loaded machine.
+        std::time::Duration::from_secs(2),
+        "30s",
+    );
+
+    let _held = locks
+        .lock(ComputerId::new_from_uuid(uuid::Uuid::new_v4()))
+        .await
+        .unwrap();
+    let other = locks
+        .lock(ComputerId::new_from_uuid(uuid::Uuid::new_v4()))
+        .await;
+
+    assert!(
+        matches!(other, Err(HarnessdError::Busy)),
+        "{:?}",
+        other.err()
+    );
+}
+
+#[tokio::test]
+async fn a_dropped_lock_frees_its_connection_and_the_lock() {
+    let locks = PgComputerLocks::with_limits(
+        &lock_pool().await,
+        1,
+        std::time::Duration::from_secs(5),
+        "5s",
+    );
+    let id = ComputerId::new_from_uuid(uuid::Uuid::new_v4());
+
+    drop(locks.lock(id).await.unwrap());
+
+    locks.lock(id).await.unwrap();
 }

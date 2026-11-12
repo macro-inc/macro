@@ -92,10 +92,6 @@ where
             post(claude_sign_in_complete_handler::<Harnesses, Auth>),
         )
         .route(
-            "/harnesses/{harness_id}/claude-sign-in/cancel",
-            post(claude_sign_in_cancel_handler::<Harnesses, Auth>),
-        )
-        .route(
             "/harnesses/{harness_id}/claude-sign-out",
             post(claude_sign_out_handler::<Harnesses, Auth>),
         )
@@ -120,10 +116,19 @@ pub struct ClaudeSignInStarted {
 }
 
 /// `POST /harnesses/{harness_id}/claude-sign-in/complete` body.
-#[derive(Debug, serde::Deserialize, utoipa::ToSchema)]
+#[derive(serde::Deserialize, utoipa::ToSchema)]
 pub struct ClaudeSignInComplete {
     /// The code Claude showed after the user signed in.
     pub code: String,
+}
+
+impl std::fmt::Debug for ClaudeSignInComplete {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("ClaudeSignInComplete")
+            .field("code", &"<redacted>")
+            .finish()
+    }
 }
 
 /// `POST /harnesses/{harness_id}/claude-sign-in/complete` answer.
@@ -267,46 +272,6 @@ where
     }
 }
 
-/// Cancel the computer's waiting sign-in, including one a completion is
-/// still finishing.
-#[utoipa::path(
-    post,
-    tag = "computers",
-    operation_id = "cancel_claude_sign_in",
-    path = "/harnesses/{harness_id}/claude-sign-in/cancel",
-    params(("harness_id" = String, Path, description = "Harness ID")),
-    responses((status = 204), (status = 403), (status = 404), (status = 409), (status = 422), (status = 503), (status = 504))
-)]
-pub async fn claude_sign_in_cancel_handler<Harnesses, Auth>(
-    State(state): State<ClaudeAccessState<Harnesses, Auth>>,
-    caller: MacroAuthorizationExtractor<Auth, UserOrInternal>,
-    Path(path): Path<HarnessPath>,
-) -> Result<StatusCode, ComputerRouteError>
-where
-    Harnesses: HarnessService,
-    Auth: MacroAuthorizationService,
-{
-    let computer_id = state
-        .authorize_computer(caller, path.harness_id, HarnessPermission::Manage)
-        .await?;
-    match state
-        .run(
-            path.harness_id,
-            computer_id,
-            Request::SignInCancel {
-                agent: AgentProvider::Claude,
-            },
-            None,
-        )
-        .await?
-    {
-        answer @ harnessd_protocol::Response::Error { .. } => {
-            Err(ComputerRouteError::from_answer(answer))
-        }
-        _ => Ok(StatusCode::NO_CONTENT),
-    }
-}
-
 /// Forget the computer's Claude credential and return it to Macro credits.
 #[utoipa::path(
     post,
@@ -382,6 +347,9 @@ const SIGN_IN_HOSTS: &[&str] = &["claude.com", "claude.ai"];
 /// `url` when it is a Claude OAuth sign-in link, which the browser then
 /// opens. The link comes from the guest, which its users control, so
 /// anything else (another scheme or host) is refused.
+/// The exact paths of Claude's OAuth authorize page.
+const SIGN_IN_PATHS: &[&str] = &["/cai/oauth/authorize", "/oauth/authorize"];
+
 fn trusted_sign_in_url(url: &str) -> Result<&str, ComputerRouteError> {
     let parsed = url::Url::parse(url).map_err(|_| ComputerRouteError::UntrustedSignInUrl)?;
     let trusted = parsed.scheme() == "https"
@@ -391,7 +359,7 @@ fn trusted_sign_in_url(url: &str) -> Result<&str, ComputerRouteError> {
         && parsed
             .host_str()
             .is_some_and(|host| SIGN_IN_HOSTS.contains(&host))
-        && parsed.path().ends_with("/oauth/authorize");
+        && SIGN_IN_PATHS.contains(&parsed.path());
     if !trusted {
         tracing::warn!("a computer returned an untrusted Claude sign-in link");
         return Err(ComputerRouteError::UntrustedSignInUrl);
@@ -538,6 +506,9 @@ impl From<HarnessdError> for ComputerRouteError {
                 Self::Conflict("the computer is not reachable; is it running?".to_owned())
             }
             HarnessdError::Timeout => Self::Timeout,
+            HarnessdError::Busy => {
+                Self::Conflict("the computer is busy with another request; try again".to_owned())
+            }
             HarnessdError::Harness(error) => error.into(),
             error @ (HarnessdError::Unreadable(_)
             | HarnessdError::AnswerTooLarge

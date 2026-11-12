@@ -36,7 +36,6 @@ export const agentHarnessExcluded = [
   'warmAgentSessionHandler',
   // The connect chip's continuation after an app connects is app-internal.
   'reportAgentSessionAppConnected',
-  'cancelClaudeSignIn', // Computer account credentials are managed in the app.
   'claudeSignOut', // Computer account credentials are managed in the app.
   'completeClaudeSignIn', // Computer account credentials are managed in the app.
   'getClaudeMode', // Computer account credentials are managed in the app.

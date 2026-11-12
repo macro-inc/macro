@@ -87,9 +87,12 @@ Pulumi stacks; they do not host extra agent processes.
   `POST /harnesses/{id}/claude-sign-in` → `{url}`,
   `POST /harnesses/{id}/claude-sign-in/complete` `{code}` → `{signedIn}`
   (a rejected code returns 422 with `code: "invalid_code"`),
-  `POST /harnesses/{id}/claude-sign-in/cancel` → 204 (interrupts a start or
-  completion), `POST /harnesses/{id}/claude-sign-out` → `{mode}`, and
+  `POST /harnesses/{id}/claude-sign-out` → `{mode}`, and
   `GET /harnesses/{id}/claude-mode` → `{mode, account?}` (all manage rights).
+  The sign-in link must be `https://claude.com` or `claude.ai` at exactly
+  `/cai/oauth/authorize` or `/oauth/authorize`. A reported login needs a
+  credential id of at most 100 `[A-Za-z0-9:._-]` bytes and an expiry no more
+  than 400 days out (past expiries are real and allowed).
   The account has a signer, sign-in time and expiry, never an email or plan:
   Claude's setup-token credential names no account. Each route runs in a
   tracked task, so a completion whose caller left still records its signer.
@@ -98,7 +101,9 @@ Pulumi stacks; they do not host extra agent processes.
   answer line on stdout) and writes the computer's Claude login rows from
   harnessd's status, under a per-computer Postgres advisory lock held from the
   command through the status read to the write; the cancel goes straight
-  through so it can interrupt a completion holding the lock. The
+  through so it can interrupt a completion holding the lock. The lock lives on
+  a dedicated pool of 4 connections (5 s acquire timeout) with a 30 s
+  `lock_timeout`; a request past either wait gets 409 Busy. The
   `ClaudeStatus` pass (every 60 s) refreshes every awake computer under the
   same lock (a sign-in nobody finished ends there once it is ten minutes old), and `sign_in_ahead.rs` refreshes on connect and then starts a
   sign-in when setup is unfinished or the credential expired. Spans:
