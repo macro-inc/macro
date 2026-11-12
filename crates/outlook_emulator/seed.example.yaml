@@ -1,0 +1,70 @@
+# Two Macro users' Outlook mailboxes, and one outside correspondent's.
+mailboxes:
+  - email: ada@example.com
+    name: Ada Example
+    # The email_links.id this mailbox is connected as, for the
+    # authentication-service stand-in.
+    link_id: 0195a000-0000-7000-8000-00000000a11c
+    folders:
+      - name: Projects
+      - name: Apollo
+        parent: Projects
+    categories: [Receipts]
+    contacts:
+      - { email: grace@example.com, name: Grace Example }
+      - { email: alan@example.com, name: Alan Example }
+    messages:
+      - from: Grace Example <grace@example.com>
+        subject: Quarterly numbers
+        text: The Q3 numbers are ready for review.
+        message_id: q3-1@example.com
+        read: true
+        date: "2026-11-03T09:00:00Z"
+      - from: Ada Example <ada@example.com>
+        to: Grace Example <grace@example.com>
+        subject: "RE: Quarterly numbers"
+        text: Thanks, reading them now.
+        message_id: q3-2@example.com
+        in_reply_to: q3-1@example.com
+        folder: sentitems
+        date: "2026-11-03T09:30:00Z"
+      - from: Grace Example <grace@example.com>
+        subject: "RE: Quarterly numbers"
+        html: "<p>One correction on <b>page 4</b>.</p>"
+        in_reply_to: q3-2@example.com
+        flagged: true
+        date: "2026-11-03T10:00:00Z"
+        attachments:
+          - filename: page4.csv
+            mime_type: text/csv
+            text: "region,total\nwest,42\n"
+      - from: Billing <billing@example.com>
+        subject: Receipt 1042
+        text: Your receipt is attached to your account.
+        categories: [Receipts]
+        other: true
+        date: "2026-11-05T12:00:00Z"
+      - from: Alan Example <alan@example.com>
+        subject: Lunch on Friday?
+        text: Are you free at noon on Friday?
+        date: "2026-11-08T08:15:00Z"
+      - from: Alan Example <alan@example.com>
+        subject: Apollo kickoff
+        text: Notes from the kickoff.
+        folder: Apollo
+        read: true
+        date: "2026-11-09T07:00:00Z"
+  - email: bob@example.com
+    name: Bob Example
+    messages:
+      - from: Carol Example <carol@example.com>
+        subject: Welcome aboard
+        text: Glad to have you on the team.
+        date: "2026-11-02T15:00:00Z"
+      - from: Carol Example <carol@example.com>
+        subject: Your laptop
+        text: It ships on Monday.
+        read: true
+        date: "2026-11-04T11:00:00Z"
+  - email: carol@example.com
+    name: Carol Example

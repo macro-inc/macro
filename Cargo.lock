@@ -69,7 +69,6 @@ name = "activity"
 version = "0.1.0"
 dependencies = [
  "agent_correlation",
- "ai_toolset",
  "async-trait",
  "axum",
  "bot_id",
@@ -7467,6 +7466,7 @@ dependencies = [
  "httpdate",
  "macro_db_migrator",
  "macro_event_broker",
+ "macro_service_urls",
  "mail-builder",
  "mailparse",
  "models_email",
@@ -9174,6 +9174,7 @@ dependencies = [
  "base64 0.22.1",
  "httpdate",
  "jsonwebtoken 10.3.0",
+ "macro_service_urls",
  "models_email",
  "regex",
  "reqwest 0.13.4",
@@ -9182,6 +9183,38 @@ dependencies = [
  "tokio",
  "tracing",
  "wiremock",
+ "workspace-hack",
+]
+
+[[package]]
+name = "gmail_emulator"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "base64 0.22.1",
+ "chrono",
+ "clap",
+ "email_api_client",
+ "gmail_client",
+ "jsonwebtoken 10.3.0",
+ "macro_entrypoint",
+ "macro_env",
+ "mail-builder",
+ "mailparse",
+ "models_email",
+ "nom 8.0.0",
+ "reqwest 0.13.4",
+ "rsa",
+ "serde",
+ "serde_json",
+ "serde_urlencoded",
+ "serde_yaml",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "uuid",
  "workspace-hack",
 ]
 
@@ -13246,6 +13279,7 @@ dependencies = [
  "macro_event_topics",
  "macro_user_id",
  "macro_uuid",
+ "mention_utils",
  "mockall",
  "model",
  "model-entity",
@@ -13899,6 +13933,7 @@ dependencies = [
  "sqlx",
  "thiserror 2.0.18",
  "tracing",
+ "tracing-subscriber",
  "uuid",
  "workspace-hack",
 ]
@@ -15042,6 +15077,37 @@ checksum = "7d8fae84b431384b68627d0f9b3b1245fcf9f46f6c0e3dc902e9dce64edd1967"
 dependencies = [
  "libc",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "outlook_emulator"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "base64 0.22.1",
+ "chrono",
+ "clap",
+ "email_api_client",
+ "macro_entrypoint",
+ "macro_env",
+ "macro_service_urls",
+ "mail-builder",
+ "mailparse",
+ "models_email",
+ "nom 8.0.0",
+ "reqwest 0.13.4",
+ "serde",
+ "serde_json",
+ "serde_urlencoded",
+ "serde_yaml",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "url",
+ "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -18128,6 +18194,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "tracing-subscriber",
  "utoipa",
  "uuid",
  "workspace-hack",
@@ -21632,8 +21699,6 @@ dependencies = [
  "sqs_client",
  "tempfile",
  "tokio",
- "tokio-stream",
- "tokio-util",
  "tracing",
  "walkdir",
  "workspace-hack",

@@ -95,19 +95,19 @@ export function SubagentToolCall(props: {
     inFlight: working() && props.context.inFlight,
   });
   const subtitle = () =>
-    [
-      props.detail.agentType ?? 'subagent',
-      props.detail.background ? 'background' : undefined,
-    ]
+    [props.detail.agentType, props.detail.background ? 'background' : undefined]
       .filter(Boolean)
       .join(' · ') || undefined;
+  // Delegated work can run for minutes, so the row always says where it is.
   const trailing = () =>
     props.common.trailing ??
     (props.detail.result?.error != null ? (
       <span class="text-ink">Failed</span>
-    ) : props.detail.result ? (
-      resultSummary(props.detail.result)
-    ) : undefined);
+    ) : working() ? (
+      'Running'
+    ) : (
+      (props.detail.result && resultSummary(props.detail.result)) || 'Done'
+    ));
   const hasBody = () =>
     props.detail.prompt != null ||
     props.detail.children.length > 0 ||
@@ -126,9 +126,12 @@ export function SubagentToolCall(props: {
         <div class="flex flex-col gap-2">
           <Show when={props.detail.prompt}>
             {(prompt) => (
-              <blockquote class="border-l-2 border-edge-muted pl-2 text-xs text-ink-muted whitespace-pre-wrap wrap-break-word">
-                {prompt()}
-              </blockquote>
+              <section class="flex flex-col gap-1">
+                <h4 class="text-xs text-ink-disabled">Instructions</h4>
+                <blockquote class="max-h-40 overflow-y-auto overscroll-contain border-l-2 border-edge-muted pl-2 text-xs text-ink-muted whitespace-pre-wrap wrap-break-word">
+                  {prompt()}
+                </blockquote>
+              </section>
             )}
           </Show>
           <Show when={props.detail.children.length > 0}>
@@ -154,7 +157,8 @@ export function SubagentToolCall(props: {
           </Show>
           <Show when={props.detail.result}>
             {(result) => (
-              <div class="flex flex-col gap-1">
+              <section class="flex flex-col gap-1">
+                <h4 class="text-xs text-ink-disabled">Result</h4>
                 <Show when={result().error}>
                   {(error) => <FoldedOutput text={error()} />}
                 </Show>
@@ -173,7 +177,7 @@ export function SubagentToolCall(props: {
                     {result().tokens?.toLocaleString()} tokens
                   </span>
                 </Show>
-              </div>
+              </section>
             )}
           </Show>
         </div>
