@@ -742,4 +742,6 @@ pub struct ChannelWebhookResponse {
 pub struct HarnessFacts {
     /// Whether the harness operator permits unattended tool approvals.
     pub allow_permission_bypass: bool,
+    /// Whether the harness runs on a Macro computer.
+    pub on_computer: bool,
 }

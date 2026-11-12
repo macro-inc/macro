@@ -197,6 +197,21 @@ export type Accept = (handled: Handled, event: Event) => Promise<void>;
 /** How the runtime wakes the agent when a handler asks, for the event it was handling. */
 export type WakeFor = (request: string, event: Event) => Promise<Woke>;
 
+/**
+ * Decides when the handling of one event runs: a handler's call for the
+ * event, then `accept`. It must call `handling` exactly once. Its source
+ * moves to the next event when the promise it returns resolves, which may be
+ * before the handling has finished: `inTurn` waits for it, a runtime that
+ * handles a source's events at the same time doesn't.
+ */
+export type Schedule = (
+	handling: () => Promise<void>,
+	event: Event,
+) => Promise<void>;
+
+/** Handles a source's events one at a time: the next waits for this one. */
+export const inTurn: Schedule = (handling) => handling();
+
 /** Starts a handler. Its source is chosen only now, so hooks can be made per run. */
 type Subscription<Context, Sources> = (
 	context: Context,
@@ -204,6 +219,11 @@ type Subscription<Context, Sources> = (
 	wakeFor: (source: Source<unknown>, payload: unknown) => Wake,
 	accept: (
 		handled: Handled,
+		source: Source<unknown>,
+		payload: unknown,
+	) => Promise<void>,
+	schedule: (
+		handling: () => Promise<void>,
 		source: Source<unknown>,
 		payload: unknown,
 	) => Promise<void>,
@@ -286,24 +306,30 @@ const make = <Needs, Provided, Sources, Failures>(
 			sources,
 			wakeFor,
 			accept,
+			schedule,
 		) => {
 			const source = select(sources);
 			const done = (async () => {
-				for await (const payload of source) {
-					// try, not .then: a handler that isn't async can throw before it returns a promise.
-					const handled = await (async (): Promise<Handled> => {
-						try {
-							await handle(payload, {
-								...context,
-								wake: wakeFor(source, payload),
-							});
-							return { kind: "handled" };
-						} catch (error) {
-							return { kind: "failed", error: describeError(error) };
-						}
-					})();
-					await accept(handled, source, payload);
-				}
+				for await (const payload of source)
+					await schedule(
+						async () => {
+							// try, not .then: a handler that isn't async can throw before it returns a promise.
+							const handled = await (async (): Promise<Handled> => {
+								try {
+									await handle(payload, {
+										...context,
+										wake: wakeFor(source, payload),
+									});
+									return { kind: "handled" };
+								} catch (error) {
+									return { kind: "failed", error: describeError(error) };
+								}
+							})();
+							await accept(handled, source, payload);
+						},
+						source,
+						payload,
+					);
 			})();
 			return { source, done };
 		};
@@ -323,18 +349,69 @@ export const behavior = <Needs extends object = {}>(): Behavior<
 > => make({ decorations: {}, sources: {}, capabilities: {}, handlers: [] });
 
 /**
+ * The handlings that were scheduled and haven't finished. A source can end
+ * before they have, when its schedule doesn't wait for them. `failed`
+ * rejects with the error of the first handling that rejects, which no
+ * schedule has to pass on.
+ */
+const unfinished = (): {
+	readonly track: (handling: () => Promise<void>) => () => Promise<void>;
+	readonly finished: () => Promise<void>;
+	readonly failed: Promise<never>;
+} => {
+	const pending = new Set<Promise<void>>();
+	let fail: (error: unknown) => void = () => undefined;
+	const failed = new Promise<never>((_, reject) => {
+		fail = reject;
+	});
+	const finished = async (): Promise<void> => {
+		if (pending.size === 0) return;
+		await Promise.all(pending);
+		await finished();
+	};
+	return {
+		track: (handling) => {
+			let settle: (result: Promise<void>) => void = () => undefined;
+			const settled = new Promise<void>((resolve) => {
+				settle = resolve;
+			}).catch(fail);
+			pending.add(settled);
+			void settled.then(() => pending.delete(settled));
+			return () => {
+				const result = handling();
+				settle(result);
+				return result;
+			};
+		},
+		finished,
+		failed,
+	};
+};
+
+/**
  * Runs every handler until its source ends. A handler's `wake` goes to
  * `wakeFor` with the event it is handling. `accept` receives what happened,
- * including any error a handler threw, which doesn't end its source; a
- * source moves to its next event once every handler on it has returned and
- * `accept` has resolved. Once every other source has ended, the hooks are
- * closed so their handlers end too.
+ * including any error a handler threw, which doesn't end its source.
+ * `schedule` decides when each handling runs; without one a source moves to
+ * its next event once every handler on it has returned and `accept` has
+ * resolved. Once every other source has ended and every handling has
+ * finished, the hooks are closed so their handlers end too. Rejects as soon
+ * as a handling does, i.e. when `accept` rejects.
  */
 export const serve = async <Needs, Provided extends Needs, Sources>(
 	behavior: Behavior<Needs, Provided, Sources, FailuresHandled>,
 	lifecycle: Lifecycle,
-	{ wakeFor, accept }: { readonly wakeFor: WakeFor; readonly accept: Accept },
+	{
+		wakeFor,
+		accept,
+		schedule = inTurn,
+	}: {
+		readonly wakeFor: WakeFor;
+		readonly accept: Accept;
+		readonly schedule?: Schedule;
+	},
 ): Promise<void> => {
+	const running = unfinished();
 	const sources = { ...behavior.sources, hooks: lifecycle.hooks };
 	const names = new Map<unknown, string>([
 		...Object.entries(sources).map(([name, source]) => [source, name] as const),
@@ -347,6 +424,7 @@ export const serve = async <Needs, Provided extends Needs, Sources>(
 		payload,
 		source,
 	});
+	const hooks: readonly unknown[] = Object.values(lifecycle.hooks);
 	const started = behavior.handlers.map((subscription) =>
 		subscription(
 			behavior.decorations,
@@ -354,14 +432,24 @@ export const serve = async <Needs, Provided extends Needs, Sources>(
 			(source, payload) => (request) =>
 				wakeFor(request, event(source, payload)),
 			(handled, source, payload) => accept(handled, event(source, payload)),
+			(handling, source, payload) =>
+				schedule(
+					// A hook's handling is waited for by whatever fired the hook.
+					hooks.includes(source) ? handling : running.track(handling),
+					event(source, payload),
+				),
 		),
 	);
-	const hooks: readonly unknown[] = Object.values(lifecycle.hooks);
-	await Promise.all(
-		started
-			.filter(({ source }) => !hooks.includes(source))
-			.map(({ done }) => done),
-	);
+	const ended = (async () => {
+		await Promise.all(
+			started
+				.filter(({ source }) => !hooks.includes(source))
+				.map(({ done }) => done),
+		);
+		// A schedule may have let a source end while its events are still being handled, and they fire hooks.
+		await running.finished();
+	})();
+	await Promise.race([ended, running.failed]);
 	lifecycle.close();
 	await Promise.all(started.map(({ done }) => done));
 };

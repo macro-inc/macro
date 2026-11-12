@@ -32,11 +32,98 @@ Pulumi stacks; they do not host extra agent processes.
   ends their work registrations first
   (`agent_session::domain::work_registration`).
 - `src/internal_mcp.rs`: the internal MCP server exposed to running sessions.
+- `src/anthropic_gateway.rs` + `src/anthropic_gateway/`: `/anthropic/v1/messages`
+  and `/anthropic/v1/messages/count_tokens` on the egress listener, for runtimes
+  on Macro credits (Claude Code on a Macro computer). Both values come from
+  the `macro_internal` MCP server in `session/new`/`load`/`resume`:
+  `ANTHROPIC_BASE_URL` is its URL with `/mcp/internal` replaced by
+  `/anthropic`, and `ANTHROPIC_AUTH_TOKEN` is the session egress token from
+  its `Authorization: Bearer` header (re-minted on every attach, so restart
+  the runtime with the latest one). Only sessions whose bot runs on a live Macro
+  computer harness (`harnesses.computer_id`) are served; anything else, a
+  failed lookup included, is a 403 with nothing forwarded. The
+  `enable-macro-computers` rollout is not checked: it limits selling
+  computers, not using them. Requests pass through unchanged with
+  `ANTHROPIC_API_KEY`; only `anthropic-version`/`anthropic-beta` are
+  forwarded. Models are a const allowlist (`ALLOWED_MODELS`, each mapped to
+  its `ai_pricing` id, including the image’s bundled Claude Code Opus 4.8 and Sonnet 4.6
+  defaults). `messages` is admitted as `AiFeature::AgentSession`
+  for the session owner, and its `usage` (SSE `message_start`/`message_delta`
+  or the JSON body) goes to the process's settling recorder, which charges
+  only under `ENABLE_AI_USAGE_BILLING`. A caller that hangs up mid-stream does
+  not stop the read: the rest is drained (up to ten minutes) so its usage is
+  still recorded. Span: `anthropic_gateway.messages`.
+- `src/computers.rs`: passes shared computer/pairing IDs and validated Macro buyer IDs
+  directly between the hosted-runtime and harness services; configures the optional fleet operator, runs fleet effects,
+  timers and reconciliation, and reports macrod presence. `COMPUTERS_FLEET` selects
+  `incus` or local-only `docker`; absence means no attached fleet, emits one startup
+  warning and starts no operator. Selected groups remain strictly validated.
+  Shutdown stops computer passes through the shared CancellationToken and waits
+  on their TaskTracker; fleet effects drain for up to thirty seconds and release
+  unfinished leases. See hosted_runtimes' AGENTS.md for redeploy grace,
+  bounded effect execution, and hard-kill recovery.
+  `COMPUTERS_IMAGE` names the versioned image new computers are created
+  from: an Incus alias such as `macro-box/2026-11-10`, or a Docker tag. Each
+  computer records its own image; updates go through hosted_runtimes' image
+  update routes, never by changing this value for existing computers.
+  HostedHarnesses pairing records the buyer as the harness owner, but the
+  harness belongs to the computer's team: its owner and admins manage it
+  (Claude sign-in included) and every member can run agents on it.
+  `src/computers/default_agent.rs` creates the team's `<buyer first name>'s Agent`
+  (`Agent` without one, read from `macro_user_info`) coding agent through
+  `BotService::create_agent` as the buyer (macrod harness, `default` model, all
+  channels, owner connections, the bots default of bypassing permissions on a
+  computer), skipping a harness `HarnessAssignments::bots_on_harness` already
+  lists; the handle is the settings editor's slug, suffixed past handles the
+  buyer sees. `HostedHarnesses::revoke` revokes the harness, then deletes every
+  agent bound to any harness the computer had (`HarnessAgentDeletion`); computer
+  harnesses keep their agents bound when deleted, so a retry still finds them.
+- Computer lifecycle and gateway adapters carry canonical `ComputerId` and
+  `HarnessId`; unwrap only at the harness/storage boundary.
+- `src/computers/claude.rs`: Claude sign-in on Macro computers. All routes
+  require the caller's `enable-macro-computers` flag through
+  `hosted_runtimes::domain::rollout::ComputerRollout` (missing providers/flags
+  and evaluation errors return 403) and an attached fleet (503).
+  `POST /harnesses/{id}/claude-sign-in` → `{url}`,
+  `POST /harnesses/{id}/claude-sign-in/complete` `{code}` → `{signedIn}`
+  (a rejected code returns 422 with `code: "invalid_code"`),
+  `POST /harnesses/{id}/claude-sign-out` → `{mode}`, and
+  `GET /harnesses/{id}/claude-mode` → `{mode, account?}` (all manage rights).
+  The sign-in link must be `https://claude.com` or `claude.ai` at exactly
+  `/cai/oauth/authorize` or `/oauth/authorize`. A reported login needs a
+  credential id of at most 100 `[A-Za-z0-9:._-]` bytes and an expiry no more
+  than 400 days out (past expiries are real and allowed).
+  The account has a signer, sign-in time and expiry, never an email or plan:
+  Claude's setup-token credential names no account. Each route runs in a
+  tracked task, so a completion whose caller left still records its signer.
+- `src/computers/harnessd.rs`: `Harnessd` runs one `harnessd_protocol`
+  request per `Fleet::exec(computer, ["harnessd"])` (request on stdin, one
+  answer line on stdout) and writes the computer's Claude login rows from
+  harnessd's status, under a per-computer Postgres advisory lock held from the
+  command through the status read to the write. The lock is a session
+  advisory lock, like the agent-session lock, taken with
+  `pg_try_advisory_lock` on a dedicated pool of 4 connections (5 s acquire
+  timeout): a computer another request holds answers 409 Busy at once, and
+  the status pass skips it. The
+  `ClaudeStatus` pass (every 60 s) refreshes every awake computer under the
+  same lock (a sign-in nobody finished ends there once it is ten minutes old), and `sign_in_ahead.rs` refreshes on connect and then starts a
+  sign-in when setup is unfinished or the credential expired. Spans:
+  `computer.harnessd.command`/`.refresh`/`.refresh_all`.
+- `src/computers/claude_expiry.rs`: the notices of the operator's
+  `ClaudeSignIns` pass (every 60 s), whose sign-ins come from
+  `hosted_runtimes::outbound::pg_sign_ins::PgClaudeSignIns` (active Claude
+  logins with signer, `expires_at` and last notice, through harnesses'
+  repository; the status pass lists awake computers with
+  `ComputerOperator::awake_computers`); `IngressClaudeSignInNotices` addresses the team's owner and
+  admins (`teams`) and sends `agent_sign_in_expiry` (agent `claude`; inbox, gateway, push)
+  on the harness entity, with an id derived from harness, sign-in, stage and
+  expiry so replicas and retries never notify twice.
 - `src/public_mcp.rs` + `src/public_mcp/`: public workspace MCP and OAuth;
   reuses the harness tool context and retains bearer authentication. Wherever
   the harness can run code, every client but ChatGPT gets only
   `ExecuteCode`/`DescribeCodeTools`/`ReadCodeDocs` on `tools/list`
-  (`tool_service.rs`); hidden native tools stay callable. ChatGPT gets the
+  (`tool_service.rs`) and can call only those; a native tool named directly
+  is refused. ChatGPT gets the
   direct tools: its plugin directory refuses generic executors.
   `src/code_mode/ui_commands.rs` carries `macro.ui.open`: turn facts from
   the session repo, the `enable-agent-navigation` flag, Redis budgets and
@@ -168,6 +255,26 @@ access. Lifecycle, runtime provider connections, billing, and memory stay owner-
 
 ## Configuration and lifecycle
 
+Computer fleets require `COMPUTERS_CONTROL_PLANE_ID` whenever `COMPUTERS_FLEET`
+is `incus` or `docker`. Omit the selector and fleet settings when no fleet is attached;
+`disabled`, blank and unknown selections are invalid. PostHog
+`enable-macro-computers` remains the only product rollout gate.
+Read the stable identity from Doppler in deployed environments; local stacks
+explicitly set `local-<instance>`. Distinct control planes sharing a host
+must use distinct identities; replicas of one control plane share an identity.
+
+An enabled fleet also requires `COMPUTERS_IMAGE`, `COMPUTERS_HOST_NAME`,
+`COMPUTERS_HOST_RESERVE_GB`, and `COMPUTERS_OVERSELL_FACTOR`. Docker additionally
+requires `COMPUTERS_DOCKER_MEMORY_GB`, network and enrollment directory. Incus
+requires its endpoint and mTLS material, `COMPUTERS_INCUS_PROFILE`,
+`COMPUTERS_INCUS_STORAGE_POOL`, `COMPUTERS_INCUS_REQUEST_TIMEOUT_SECS`,
+`COMPUTERS_INCUS_CONNECT_TIMEOUT_SECS`, `COMPUTERS_INCUS_OPERATION_WAIT_SECS`,
+`COMPUTERS_INCUS_OPERATION_WAITS`, `COMPUTERS_INCUS_STATE_CHANGE_TIMEOUT_SECS`,
+and `COMPUTERS_INCUS_SHUTDOWN_GRACE_SECS`. Missing values fail startup with the
+variable name; fleet-specific values are required only for that fleet.
+Local orchestration supplies every value explicitly for each fleet; see
+[required variables and local values](../../docs/development/running-locally.md#macro-computers).
+
 All feature configs read the same harness `APP_SECRETS_JSON`; the harness
 Doppler validation binary validates each config. Stable public origins resolve
 once at startup through `macro_service_urls`: `McpPublicUrl` preserves the
@@ -175,7 +282,9 @@ once at startup through `macro_service_urls`: `McpPublicUrl` preserves the
 `document-cognition[-dev].macro.com` integration callbacks, and `AppServiceUrl`
 supplies browser links and preview form origin. Preview control accepts the
 `PreviewGatewayUrl` host (plus app/loopback hosts locally). Use process-level
-`OVERRIDE_*` values for local instances. The shared gateway preserves the public
+`OVERRIDE_*` values for local instances; each computer enrollment carries a
+typed `Deployment` resolved from this process's `macro_service_urls` values
+(`computers::ServiceDeployment`) when it is issued. The shared gateway preserves the public
 hostnames and internally rewrites cognition paths. `PREVIEW_DOMAIN` and
 `PREVIEW_SSH_HOST` remain infrastructure-generated Doppler settings. Legacy
 `MCP_PUBLIC_URL`, `MCP_CLIENT_PUBLIC_URL`, `PREVIEW_APP_ORIGIN`, and
@@ -204,12 +313,19 @@ memory and exits; lower it only to exercise the release end to end. Values
 below 30 fail startup.
 
 The shared Postgres pool defaults to 30 connections (`DATABASE_MAX_CONNECTIONS`).
+Computer lifecycle observations use one additional dedicated lock connection per
+replica. Serialize connect/disconnect effects by harness across replicas and check
+durable live connections before emitting a disconnect, so an old socket cannot
+mark its replacement offline. Keep this lock pool separate from repository pools
+to avoid exhausting the connections needed inside the guarded operation.
 Routine dispatch waits for the shared HTTP listener and calls its loopback
 address, avoiding an ALB/self-startup race. Shutdown stops scheduling intake and
 projection workers before draining sessions and pending publishes. Preview
 listener failure shuts down the process so ECS can replace the task.
 
 ## Gotchas
+
+- Keep computer domain IDs, harness IDs, and Incus resource names typed in `computers.rs`; unwrap only when calling the existing harness registry or SQL boundary.
 
 - Keep two tasks and rolling replacements in both environments. Preview
   control uses shared Postgres state. SSH claims a tunnel owner; browser HTTP/WS
@@ -239,8 +355,23 @@ listener failure shuts down the process so ECS can replace the task.
   headers and per session by `$mcp_initialize`.
 - Session and scheduling message writers resolve ephemeral agent settings through the same bots-owned reader as DSS. Private source threads must not share their sessions with the channel.
 
+Local MCP uses both configured egress addresses in the in-process catalog;
+the public MCP transport permits its typed service hostname as well as its
+public hostname. Internal MCP also permits the configured local computer egress
+bridge hostname, preserving Host validation for other origins.
+
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/config-and-service-urls.md`
 
 - Code-mode credentials create durable per-invocation agent correlation; the final merged HTTP router validates incoming attribution before handlers.
+
+- `harness_bindings.rs` resolves runtime routing through the harness, bot assignment, and session lookup ports; each owning crate reads its own table.
+
+Hosted computer Claude account requests require the operator-derived
+`FleetAttachment` after the existing rollout and Manage authorization (on a
+computer, the team's owner and admins); no
+attachment answers typed 503 before any command. macrod ingress keeps its
+existing authorization.
+Authentication checks the owning hosted host heartbeat per request, so its
+attachment observation can briefly differ from this service's operator presence.

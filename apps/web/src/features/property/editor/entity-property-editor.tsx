@@ -150,12 +150,12 @@ export function EntityPropertyEditor(props: {
   const localSelectedIds = createMemo(() =>
     localSelectedRefs().map((ref) => ref.entity_id)
   );
-  const people = usePinnedContactUsers(localSelectedIds, isAssignees);
+  const people = usePinnedContactUsers(orderedSelectedIds, isAssignees);
   const users = createMemo(() => {
     if (!isCompanyOwner() && !isAssignees()) return undefined;
     const pool = [...agents(), ...team.users()];
     if (!isAssignees()) return pool;
-    return scopedUserOptions(pool, people(), localSelectedIds());
+    return scopedUserOptions(pool, people(), orderedSelectedIds());
   });
   const { entities } = useEntitiesForProperty(
     () => props.property,
