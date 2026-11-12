@@ -1,5 +1,8 @@
 //! Existing backfill clients behind worker-domain capabilities.
 
+#[cfg(test)]
+mod test;
+
 mod database_error;
 mod effects;
 mod imports;
