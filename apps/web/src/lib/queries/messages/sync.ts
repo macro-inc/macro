@@ -11,6 +11,7 @@ import type {
 import { queryClient } from '../client';
 import { consumeNonce } from '../nonce';
 import { MessageNonceKeys, messageKeys } from './keys';
+import { noteChannelPush } from './local/catch-up';
 import { normalizeMessageSender } from './message-sender';
 import {
   getCachedThreadState,
@@ -83,6 +84,23 @@ async function restartPendingChannelTimeline(parent: MessageParent) {
   });
 }
 
+/** A channel event carries the change sequence number its commit took. */
+type SequencedEvent = { seq?: number | null };
+
+/**
+ * The open views take a committed change from its push, below. The device
+ * cache takes the same change by sequence number, so its copy of the channel
+ * never falls behind what the views show.
+ */
+function noteCommittedChannelChange(
+  parent: MessageParent,
+  seq: number | null | undefined
+) {
+  if (parent.type === 'channel' && typeof seq === 'number') {
+    noteChannelPush(parent.id, seq);
+  }
+}
+
 /** Committed timeline activity, delivered whole so loaded history needs no re-read. */
 export function handleTimelineActivity(event: {
   parent: MessageParent;
@@ -91,6 +109,9 @@ export function handleTimelineActivity(event: {
   // A fact committed before the bottom page's first fetch resolved may be
   // missing from a response the server already computed. Loaded windows still
   // take it below.
+  for (const activity of event.activities) {
+    noteCommittedChannelChange(event.parent, (activity as SequencedEvent).seq);
+  }
   refetchTimelineAwaitingFirstPage(event.parent);
   queryClient.setQueriesData<MessageTimelineData>(
     { queryKey: getMessageTimelineQueryKeyPrefix(event.parent) },
@@ -233,6 +254,7 @@ export function handleMessageEvent(
   if (!event?.parent || !event.change) return;
   const parent = event.parent;
   const change = event.change;
+  noteCommittedChannelChange(parent, (event as SequencedEvent).seq);
   if (change.type === 'typing') {
     handleCommsTyping(
       {

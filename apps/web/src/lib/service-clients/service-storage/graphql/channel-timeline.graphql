@@ -1,0 +1,133 @@
+fragment ChannelMessageBaseFields on GraphqlChannelMessage {
+	__typename
+	id
+	channelId
+	threadId
+	kind
+	sortKey
+	senderId
+	guestName
+	importedAuthorName
+	botProfile {
+		name
+		avatarUrl
+	}
+	mentions {
+		entityType
+		entityId
+	}
+	triggeredBy
+	triggeredVia
+	content
+	createdAt
+	updatedAt
+	editedAt
+	deletedAt
+	attachments {
+		attachmentId
+		entityType
+		entityId
+		width
+		height
+		createdAt
+	}
+	reactions {
+		emoji
+		users
+	}
+}
+
+fragment ChannelMessageFields on GraphqlChannelMessage {
+	...ChannelMessageBaseFields
+	thread {
+		resolved
+		deletedAt
+		createdAt
+		updatedAt
+		userId
+		replyCount
+		latestReplyAt
+		preview {
+			...ChannelMessageBaseFields
+		}
+	}
+	call {
+		state
+		endedAt
+		durationMs
+	}
+}
+
+fragment ChannelTimelineActivityFields on GraphqlChannelTimelineActivity {
+	__typename
+	id
+	channelId
+	sortKey
+	actorId
+	occurredAt
+	action
+	payload
+}
+
+query ChannelTimeline($input: ChannelTimelineInput!) {
+	user {
+		id
+		channelTimeline(input: $input) {
+			entries {
+				... on GraphqlChannelMessage {
+					...ChannelMessageFields
+				}
+				... on GraphqlChannelTimelineActivity {
+					...ChannelTimelineActivityFields
+				}
+			}
+			olderCursor
+			newerCursor
+			seq
+		}
+	}
+}
+
+query ChannelThread($input: ChannelThreadInput!) {
+	user {
+		id
+		channelThread(input: $input) {
+			root {
+				...ChannelMessageFields
+			}
+			replies {
+				...ChannelMessageFields
+			}
+			olderCursor
+			newerCursor
+			seq
+		}
+	}
+}
+
+query ChannelChanges($input: ChannelChangesInput!) {
+	user {
+		id
+		channelChanges(input: $input) {
+			resetRequired
+			seq
+			hasMore
+			messages {
+				...ChannelMessageFields
+			}
+			activities {
+				...ChannelTimelineActivityFields
+			}
+			removedIds
+		}
+	}
+}
+
+query ChannelMessage($channelId: ID!, $messageId: ID!) {
+	user {
+		id
+		channelMessage(channelId: $channelId, messageId: $messageId) {
+			...ChannelMessageFields
+		}
+	}
+}
