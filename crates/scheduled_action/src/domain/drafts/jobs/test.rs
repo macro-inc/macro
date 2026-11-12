@@ -1,4 +1,5 @@
 use std::sync::Mutex;
+use std::sync::atomic::Ordering::SeqCst;
 
 use agent_session::domain::routines::RoutineSessionError;
 use ai_billing::AiAdmissionError;
@@ -80,6 +81,13 @@ impl DraftJobStore for Rows {
     }
 
     async fn finish_job(&self, session: Uuid, draft: &Draft) -> Result<Finished> {
+        let fails = self
+            .failing_results
+            .fetch_update(SeqCst, SeqCst, |failing| failing.checked_sub(1))
+            .is_ok();
+        if fails {
+            anyhow::bail!("the database went away");
+        }
         Ok(match self.jobs.lock().unwrap().get_mut(&session) {
             Some(job) if job.phase == DraftJobPhase::Drafting => {
                 job.phase = DraftJobPhase::finished(draft);
@@ -716,6 +724,28 @@ async fn a_draft_cancelled_as_it_finishes_says_removed_last() {
     assert!(rows.jobs.lock().unwrap().is_empty());
     let session = AgentSessionId::new_from_uuid(job.id);
     assert_eq!(*sessions.deleted.lock().unwrap(), [session]);
+}
+
+/// A result whose first write fails is written on the next, and reaches its
+/// owner.
+#[tokio::test(start_paused = true)]
+async fn a_result_whose_write_fails_once_is_kept() {
+    let rows = Arc::new(Rows {
+        failing_results: 1.into(),
+        ..Rows::default()
+    });
+    let sessions = checks_and_runs(&rows, json!([code_step("Make a task", "good")]));
+    let replica = Replica::new(&rows, &sessions);
+
+    let job = replica.start(routine(BUG_REPORTS)).await.unwrap();
+    replica.settled().await;
+
+    assert_eq!(rows.failing_results.load(SeqCst), 0);
+    assert_eq!(rows.phase(job.id), Some(DraftJobPhase::Ready));
+    assert_eq!(
+        replica.published.of(job.id).last().unwrap().state,
+        DraftUpdateState::Ready
+    );
 }
 
 /// A host that stops ends its drafts within the shutdown's time, failed as

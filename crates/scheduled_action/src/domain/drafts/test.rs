@@ -29,6 +29,8 @@ pub(super) struct Rows {
         Mutex<HashMap<Uuid, (MacroUserIdStr<'static>, BotId, HandedBack, DateTime<Utc>)>>,
     pub(super) jobs: Mutex<HashMap<Uuid, JobRow>>,
     pub(super) finished: Mutex<Vec<Uuid>>,
+    /// How many writes of a job's result fail before one succeeds.
+    pub(super) failing_results: std::sync::atomic::AtomicU8,
 }
 
 /// A background draft's part of its row.

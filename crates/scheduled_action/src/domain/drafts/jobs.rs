@@ -49,6 +49,10 @@ pub const LISTED: u16 = 20;
 pub const INTERRUPTED_AFTER: Duration = DRAFT_TIMEOUT.saturating_add(Duration::from_secs(60));
 /// How long a finished job waits to be opened before the sweep deletes it.
 pub const FINISHED_RETENTION: Duration = Duration::from_secs(7 * 24 * 60 * 60);
+/// How many times a job's result is written before it is given up.
+const RESULT_WRITES: u8 = 3;
+/// How long the first rewrite of a result waits; each later one waits longer.
+const RESULT_REWRITE_WAIT: Duration = Duration::from_millis(200);
 /// What a job's result reads as when this build can't read it.
 pub const UNREADABLE: &str = "Couldn’t open that draft. Please try again.";
 
@@ -433,7 +437,7 @@ impl<Code: RoutineCode, Sessions: RoutineSessions, Updates: RoutineDraftUpdates>
         let action = drafts.action(&owner, session);
         match outcome {
             // Its outcome is recorded once, from what finishing it found.
-            Ok(Some(draft)) => match store.finish_job(id, &draft).await {
+            Ok(Some(draft)) => match write_result(store.as_ref(), id, &draft).await {
                 Ok(Finished::Written) => {
                     let draft = finish(draft);
                     updates
@@ -464,7 +468,8 @@ impl<Code: RoutineCode, Sessions: RoutineSessions, Updates: RoutineDraftUpdates>
                 Ok(Finished::Gone) => {
                     finish(draft);
                 }
-                // Still drafting on its row: the sweep fails it.
+                // Still drafting on its row after every write: the sweep
+                // fails it.
                 Err(error) => {
                     finish(draft);
                     tracing::error!(error = ?error, "could not finish a routine draft");
@@ -497,6 +502,22 @@ impl<Code: RoutineCode, Sessions: RoutineSessions, Updates: RoutineDraftUpdates>
             }
         }
         answer(&answered, Admission::Ended);
+    }
+}
+
+/// Write `draft` as job `id`'s result, up to [`RESULT_WRITES`] times, so one
+/// failed write doesn't lose it.
+async fn write_result(store: &dyn DraftJobStore, id: Uuid, draft: &Draft) -> Result<Finished> {
+    let mut writes = 1;
+    loop {
+        match store.finish_job(id, draft).await {
+            Err(error) if writes < RESULT_WRITES => {
+                tracing::warn!(error = ?error, writes, "could not keep a routine draft's result; trying again");
+                tokio::time::sleep(RESULT_REWRITE_WAIT * u32::from(writes)).await;
+                writes += 1;
+            }
+            finished => return finished,
+        }
     }
 }
 
