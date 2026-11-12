@@ -18,6 +18,7 @@ import {
 import { fireAndForget } from '@core/util/fireAndForget';
 import { holdAutomaticReload } from '@core/util/reloadForNewerBuild';
 import type { ResultError } from '@core/util/result';
+import { Telemetry } from '@macro-inc/observability';
 import { waitForDocumentContentReady } from '@queries/storage/document-location';
 import {
   DOCUMENT_NAME_TOO_LONG_CODE,
@@ -307,30 +308,35 @@ async function uploadFolderZip(
   const sha = getFolderZipSha256(file);
   if (!sha) return handleUploadError('Folder was not prepared for upload');
 
-  const res = await storageServiceClient.projects.createUploadZipRequest({
-    sha,
-    name,
-    parentId: options.projectId,
-  });
-  if (res.isErr()) {
-    return handleUploadError(res.error);
-  }
+  const requestId = await Telemetry.span('folder_upload.send', async (span) => {
+    span.setAttr('folder_upload.zip_bytes', file.size);
+    const res = await storageServiceClient.projects.createUploadZipRequest({
+      sha,
+      name,
+      parentId: options.projectId,
+    });
+    if (res.isErr()) {
+      return handleUploadError(res.error);
+    }
 
-  const { presignedUrl, requestId } = res.value;
-  if (!presignedUrl || !requestId) {
-    return handleUploadError('Failed to upload zip file');
-  }
+    const { presignedUrl, requestId } = res.value;
+    if (!presignedUrl || !requestId) {
+      return handleUploadError('Failed to upload zip file');
+    }
+    span.setAttr('folder_upload.request_id', requestId);
 
-  const sent = await uploadToPresignedUrl({
-    presignedUrl,
-    buffer: file,
-    sha,
-    type: 'application/zip',
-    onProgress: progress?.sending,
+    const sent = await uploadToPresignedUrl({
+      presignedUrl,
+      buffer: file,
+      sha,
+      type: 'application/zip',
+      onProgress: progress?.sending,
+    });
+    if (sent.isErr()) {
+      return handleUploadError('Failed to upload zip file');
+    }
+    return requestId;
   });
-  if (sent.isErr()) {
-    return handleUploadError('Failed to upload zip file');
-  }
   progress?.processing(null);
 
   return {
@@ -363,8 +369,19 @@ async function settleFolderUpload(
   // Reloading into a newer build would lose track of the folder.
   const releaseReloadHold = holdAutomaticReload();
   try {
-    const outcome = await waitForFolderUpload(requestId, (fraction) =>
-      progress?.processing(fraction)
+    const outcome = await Telemetry.span(
+      'folder_upload.server',
+      async (span) => {
+        span.setAttr('folder_upload.request_id', requestId);
+        const outcome = await waitForFolderUpload(requestId, (fraction) =>
+          progress?.processing(fraction)
+        );
+        span.setAttr('folder_upload.outcome', outcome.status);
+        if (outcome.status === 'failed' || outcome.status === 'unknown') {
+          span.error(new Error(`folder upload ended ${outcome.status}`));
+        }
+        return outcome;
+      }
     );
     return match(outcome)
       .with({ status: 'completed' }, ({ projectId }) => {

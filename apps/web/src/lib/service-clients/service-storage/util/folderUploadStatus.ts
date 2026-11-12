@@ -10,6 +10,9 @@ type UploadExtractStatus = GetUploadExtractStatusHandler200['data'];
 /** How often the uploader asks where its folder upload stands. */
 const STATUS_POLL_MS = 3000;
 
+/** A status read slower than this counts as unreadable for that round. */
+const STATUS_READ_TIMEOUT_MS = 15000;
+
 /**
  * The extractor runs for at most 15 minutes, so an upload that shows no change
  * for longer than that will not finish by itself.
@@ -112,34 +115,79 @@ function outcomeOfUpdate(
     .exhaustive((): FolderUploadOutcome => ({ status: 'unknown' }));
 }
 
+type Step =
+  | { kind: 'pushed'; update: UploadFolderStatusUpdate }
+  | { kind: 'read'; status: UploadExtractStatus | undefined }
+  | { kind: 'timeout' };
+
+function after(ms: number): Promise<Step> {
+  return new Promise((resolve) =>
+    setTimeout(() => resolve({ kind: 'timeout' }), ms)
+  );
+}
+
+async function readStep(
+  sources: FolderUploadSources,
+  requestId: string
+): Promise<Step> {
+  try {
+    return { kind: 'read', status: await sources.readStatus(requestId) };
+  } catch {
+    return { kind: 'read', status: undefined };
+  }
+}
+
 /**
  * Follows a sent folder to its end: the result the server pushes over the
  * websocket, or, when that never arrives (a dropped socket, a missed frame),
  * the status the uploader polls. Polling also reports how many files the
- * server has stored. An upload that stops changing for longer than the
- * extractor can run ends as `unknown` rather than as a failure, because the
- * folder may still appear.
+ * server has stored. Every wait races the pushed result, so a slow or hung
+ * status request never holds it up. An upload that stops changing for longer
+ * than the extractor can run ends as `unknown` rather than as a failure,
+ * because the folder may still appear.
  */
 export async function waitForFolderUpload(
   requestId: string,
   onProgress: (fraction: number | null) => void,
   sources: FolderUploadSources = SERVER_SOURCES
 ): Promise<FolderUploadOutcome> {
-  const pushed: { update?: UploadFolderStatusUpdate } = {};
-  let wake = () => {};
-  const unsubscribe = sources.subscribe(requestId, (update) => {
-    pushed.update = update;
-    wake();
+  let resolvePushed: (step: Step) => void = () => {};
+  const pushed = new Promise<Step>((resolve) => {
+    resolvePushed = resolve;
   });
+  const unsubscribe = sources.subscribe(requestId, (update) =>
+    resolvePushed({ kind: 'pushed', update })
+  );
 
   let progress: UploadFolderProgress | undefined;
+
+  // A pushed partial result carries no counts; read them once more so the
+  // message names the final number of failed files.
+  const finishPushed = async (update: UploadFolderStatusUpdate) => {
+    if (update.status === 'partially_completed') {
+      const latest = await Promise.race([
+        readStep(sources, requestId),
+        after(STATUS_READ_TIMEOUT_MS),
+      ]);
+      if (latest.kind === 'read' && latest.status?.progress) {
+        progress = latest.status.progress;
+      }
+    }
+    return outcomeOfUpdate(update, progress);
+  };
+
   let lastSeen = '';
   let lastChangeAt = Date.now();
   try {
-    while (!pushed.update) {
-      const status = await sources.readStatus(requestId);
-      if (pushed.update) break;
+    while (true) {
+      const step = await Promise.race([
+        pushed,
+        readStep(sources, requestId),
+        after(STATUS_READ_TIMEOUT_MS),
+      ]);
+      if (step.kind === 'pushed') return await finishPushed(step.update);
 
+      const status = step.kind === 'read' ? step.status : undefined;
       if (status) {
         const seen = JSON.stringify(status);
         if (seen !== lastSeen) {
@@ -157,15 +205,9 @@ export async function waitForFolderUpload(
         return { status: 'unknown' };
       }
 
-      await new Promise<void>((resolve) => {
-        const timer = setTimeout(resolve, STATUS_POLL_MS);
-        wake = () => {
-          clearTimeout(timer);
-          resolve();
-        };
-      });
+      const waited = await Promise.race([pushed, after(STATUS_POLL_MS)]);
+      if (waited.kind === 'pushed') return await finishPushed(waited.update);
     }
-    return outcomeOfUpdate(pushed.update, progress);
   } finally {
     unsubscribe();
   }

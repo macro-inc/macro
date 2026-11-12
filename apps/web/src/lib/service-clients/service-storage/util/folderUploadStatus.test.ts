@@ -23,8 +23,10 @@ function fakeServer() {
     status: 'uploaded',
   };
   let push: ((update: UploadFolderStatusUpdate) => void) | undefined;
+  let hang = false;
   const sources: FolderUploadSources = {
-    readStatus: async () => status,
+    readStatus: (): Promise<UploadExtractStatus | undefined> =>
+      hang ? new Promise(() => {}) : Promise.resolve(status),
     subscribe: (_requestId, listener) => {
       push = listener;
       return () => {
@@ -38,6 +40,10 @@ function fakeServer() {
       status = next;
     },
     push: (update: UploadFolderStatusUpdate) => push?.(update),
+    /** Status requests from now on never answer, as on a dead connection. */
+    hangReads: () => {
+      hang = true;
+    },
     isSubscribed: () => push !== undefined,
   };
 }
@@ -99,15 +105,20 @@ describe('waitForFolderUpload', () => {
     });
   });
 
-  it('reports a partial upload with the counts it last read', async () => {
+  it('reads the final counts once a partial result is pushed', async () => {
     const server = fakeServer();
     server.setStatus({
       status: 'processing',
-      progress: { filesTotal: 814, filesStored: 811, filesFailed: 3 },
+      progress: { filesTotal: 814, filesStored: 700, filesFailed: 1 },
     });
     const outcome = waitForFolderUpload('request-1', () => {}, server.sources);
     await vi.advanceTimersByTimeAsync(0);
 
+    server.setStatus({
+      status: 'partially_completed',
+      projectId: 'p',
+      progress: { filesTotal: 814, filesStored: 811, filesFailed: 3 },
+    });
     server.push({
       status: 'partially_completed',
       requestId: 'request-1',
@@ -119,6 +130,27 @@ describe('waitForFolderUpload', () => {
       projectId: 'p',
       progress: { filesTotal: 814, filesStored: 811, filesFailed: 3 },
     });
+  });
+
+  it('ends on the pushed result while a status request hangs', async () => {
+    const server = fakeServer();
+    server.hangReads();
+    const outcome = waitForFolderUpload('request-1', () => {}, server.sources);
+    await vi.advanceTimersByTimeAsync(1000);
+
+    server.push({ status: 'failed', requestId: 'request-1' });
+
+    await expect(outcome).resolves.toEqual({ status: 'failed' });
+  });
+
+  it('still gives up as unknown when every status request hangs', async () => {
+    const server = fakeServer();
+    server.hangReads();
+    const outcome = waitForFolderUpload('request-1', () => {}, server.sources);
+
+    await vi.advanceTimersByTimeAsync(FOLDER_UPLOAD_STALLED_AFTER_MS + 20000);
+
+    await expect(outcome).resolves.toEqual({ status: 'unknown' });
   });
 
   it('finds the result by polling when the pushed one is missed', async () => {

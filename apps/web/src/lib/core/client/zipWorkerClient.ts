@@ -5,6 +5,7 @@ import {
 } from '@core/component/UploadProgress/uploadProgress';
 import { humanFileSize } from '@core/util/humanFileSize';
 import { holdAutomaticReload } from '@core/util/reloadForNewerBuild';
+import { Telemetry } from '@macro-inc/observability';
 import shortUUID from 'short-uuid';
 import { match } from 'ts-pattern';
 import type {
@@ -128,11 +129,14 @@ class ZipWorkerWrapper {
   worker: Worker;
   id: number;
   busy: boolean;
+  /** The task this worker is running, if any. */
+  taskId: string | undefined;
 
   constructor(WorkerConstructor: new () => Worker, id: number) {
     this.worker = new WorkerConstructor();
     this.id = id;
     this.busy = false;
+    this.taskId = undefined;
   }
 
   postMessage(message: ZipWorkerRequest): void {
@@ -181,58 +185,68 @@ class ZipWorkerPool {
 
   private initialize(): void {
     for (let i = 0; i < this.size; i++) {
-      const workerWrapper = new ZipWorkerWrapper(this.workerConstructor, i);
-
-      workerWrapper.worker.onmessage = (
-        event: MessageEvent<ZipWorkerResponse>
-      ) => {
-        const response = event.data;
-        const task = this.taskQueue.find((task) => task.id === response.taskId);
-        if (!task) return;
-
-        const finish = () => {
-          this.taskQueue = this.taskQueue.filter((t) => t.id !== task.id);
-          workerWrapper.busy = false;
-          this.availableWorkers.push(workerWrapper);
-          this.processNextTask();
-        };
-
-        match(response)
-          .with({ type: 'complete' }, ({ data }) => {
-            task.resolve(data);
-            finish();
-          })
-          .with({ type: 'progress' }, ({ data }) => task.onProgress?.(data))
-          .with({ type: 'error' }, ({ data }) => {
-            task.reject(new Error(data.message));
-            finish();
-          })
-          .exhaustive((unknown) =>
-            console.warn('zip worker: unknown response', unknown)
-          );
-      };
-
-      workerWrapper.worker.onerror = (error: ErrorEvent) => {
-        console.error(`Worker ${i} error:`, error);
-        const newWorker = new ZipWorkerWrapper(this.workerConstructor, i);
-        this.workers[i] = newWorker;
-
-        // If the worker was processing a task, requeue it
-        const failedTask = this.taskQueue.find(
-          (task) =>
-            task.processing &&
-            !this.availableWorkers.some((w) => w.busy && w.id === i)
-        );
-
-        if (failedTask) {
-          failedTask.processing = false;
-          this.processNextTask();
-        }
-      };
-
+      const workerWrapper = this.createWorker(i);
       this.workers.push(workerWrapper);
       this.availableWorkers.push(workerWrapper);
     }
+  }
+
+  private createWorker(index: number): ZipWorkerWrapper {
+    const workerWrapper = new ZipWorkerWrapper(this.workerConstructor, index);
+
+    const finish = (task: Task) => {
+      this.taskQueue = this.taskQueue.filter((t) => t.id !== task.id);
+      workerWrapper.busy = false;
+      workerWrapper.taskId = undefined;
+      this.availableWorkers.push(workerWrapper);
+      this.processNextTask();
+    };
+
+    workerWrapper.worker.onmessage = (
+      event: MessageEvent<ZipWorkerResponse>
+    ) => {
+      const response = event.data;
+      const task = this.taskQueue.find((task) => task.id === response.taskId);
+      if (!task) return;
+
+      match(response)
+        .with({ type: 'complete' }, ({ data }) => {
+          task.resolve(data);
+          finish(task);
+        })
+        .with({ type: 'progress' }, ({ data }) => task.onProgress?.(data))
+        .with({ type: 'error' }, ({ data }) => {
+          task.reject(new Error(data.message));
+          finish(task);
+        })
+        .exhaustive((unknown) =>
+          console.warn('zip worker: unknown response', unknown)
+        );
+    };
+
+    // A worker that fails to load or crashes never answers again: fail its
+    // task, so the folder's indicator and reload hold end, and replace it.
+    workerWrapper.worker.onerror = (error: ErrorEvent) => {
+      console.error(`Worker ${index} error:`, error);
+      const task = this.taskQueue.find((t) => t.id === workerWrapper.taskId);
+      if (task) {
+        task.reject(
+          new Error(error.message || 'The folder could not be zipped')
+        );
+        this.taskQueue = this.taskQueue.filter((t) => t.id !== task.id);
+      }
+
+      workerWrapper.terminate();
+      const replacement = this.createWorker(index);
+      this.workers[index] = replacement;
+      this.availableWorkers = [
+        ...this.availableWorkers.filter((w) => w !== workerWrapper),
+        replacement,
+      ];
+      this.processNextTask();
+    };
+
+    return workerWrapper;
   }
 
   private processNextTask(): void {
@@ -254,6 +268,7 @@ class ZipWorkerPool {
 
         task.processing = true;
         worker.busy = true;
+        worker.taskId = task.id;
 
         const message = {
           ...task.message,
@@ -481,16 +496,23 @@ async function writeFolderZip(
     }
   }
 
-  const workerPool = ZipWorkerPool.getInstance(ZipWorker);
-  const result = await workerPool.addTask(
-    { action: 'zipFiles', files, fileDetails, folderPaths },
-    ({ processedBytes, totalBytes }) =>
-      progress.preparing(totalBytes > 0 ? processedBytes / totalBytes : null)
-  );
+  return Telemetry.span('folder_upload.zip', async (span) => {
+    span.setAttr('folder_upload.files', files.length);
+    span.setAttr('folder_upload.folders', folderPaths.length);
+    span.setAttr('folder_upload.bytes', totalBytes);
 
-  const zipFile = new File([result.zipBlob], `${folderName}.zip`, {
-    type: 'application/zip',
+    const workerPool = ZipWorkerPool.getInstance(ZipWorker);
+    const result = await workerPool.addTask(
+      { action: 'zipFiles', files, fileDetails, folderPaths },
+      ({ processedBytes, totalBytes }) =>
+        progress.preparing(totalBytes > 0 ? processedBytes / totalBytes : null)
+    );
+    span.setAttr('folder_upload.zip_bytes', result.zipBlob.size);
+
+    const zipFile = new File([result.zipBlob], `${folderName}.zip`, {
+      type: 'application/zip',
+    });
+    folderZipHashes.set(zipFile, result.sha256);
+    return zipFile;
   });
-  folderZipHashes.set(zipFile, result.sha256);
-  return zipFile;
 }
