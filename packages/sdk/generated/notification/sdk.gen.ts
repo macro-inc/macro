@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { BulkDeleteUserNotificationsV2Data, BulkDeleteUserNotificationsV2Errors, BulkDeleteUserNotificationsV2Responses, BulkGetTypedNotificationsByEventItemIdsData, BulkGetTypedNotificationsByEventItemIdsErrors, BulkGetTypedNotificationsByEventItemIdsResponses, BulkMarkNotificationsDoneData, BulkMarkNotificationsDoneErrors, BulkMarkNotificationsDoneResponses, BulkMarkNotificationsSeenData, BulkMarkNotificationsSeenErrors, BulkMarkNotificationsSeenResponses, BulkMarkNotificationsUndoneData, BulkMarkNotificationsUndoneErrors, BulkMarkNotificationsUndoneResponses, DeleteUserNotificationV2Data, DeleteUserNotificationV2Errors, DeleteUserNotificationV2Responses, DisableNotificationTypeData, DisableNotificationTypeErrors, DisableNotificationTypeResponses, EnableNotificationTypeData, EnableNotificationTypeErrors, EnableNotificationTypeResponses, GetNotificationTypePreferencesData, GetNotificationTypePreferencesErrors, GetNotificationTypePreferencesResponses, GetTypedNotificationByIdData, GetTypedNotificationByIdErrors, GetTypedNotificationByIdResponses, GetTypedNotificationsByEventItemIdData, GetTypedNotificationsByEventItemIdErrors, GetTypedNotificationsByEventItemIdResponses, GetUnsubscribesData, GetUnsubscribesErrors, GetUnsubscribesResponses, HealthHandlerData, HealthHandlerResponses, ListTypedNotificationsData, ListTypedNotificationsErrors, ListTypedNotificationsResponses, RemoveUnsubscribeAllData, RemoveUnsubscribeAllErrors, RemoveUnsubscribeAllResponses, RemoveUnsubscribeItemData, RemoveUnsubscribeItemErrors, RemoveUnsubscribeItemResponses, RemoveUnsubscribeItemsData, RemoveUnsubscribeItemsErrors, RemoveUnsubscribeItemsResponses, SendManualNotificationData, SendManualNotificationErrors, SendManualNotificationResponses, UnsubscribeAllData, UnsubscribeAllErrors, UnsubscribeAllResponses, UnsubscribeEmailData, UnsubscribeEmailErrors, UnsubscribeEmailResponses, UnsubscribeItemData, UnsubscribeItemErrors, UnsubscribeItemResponses, UnsubscribeItemsData, UnsubscribeItemsErrors, UnsubscribeItemsResponses } from './types.gen';
+import type { BulkDeleteUserNotificationsV2Data, BulkDeleteUserNotificationsV2Errors, BulkDeleteUserNotificationsV2Responses, BulkGetTypedNotificationsByEventItemIdsData, BulkGetTypedNotificationsByEventItemIdsErrors, BulkGetTypedNotificationsByEventItemIdsResponses, BulkMarkNotificationsDoneData, BulkMarkNotificationsDoneErrors, BulkMarkNotificationsDoneResponses, BulkMarkNotificationsSeenData, BulkMarkNotificationsSeenErrors, BulkMarkNotificationsSeenResponses, BulkMarkNotificationsUndoneData, BulkMarkNotificationsUndoneErrors, BulkMarkNotificationsUndoneResponses, DeleteUserNotificationV2Data, DeleteUserNotificationV2Errors, DeleteUserNotificationV2Responses, DisableNotificationTypeData, DisableNotificationTypeErrors, DisableNotificationTypeResponses, EnableNotificationTypeData, EnableNotificationTypeErrors, EnableNotificationTypeResponses, GetNotificationTypePreferencesData, GetNotificationTypePreferencesErrors, GetNotificationTypePreferencesResponses, GetTypedNotificationByIdData, GetTypedNotificationByIdErrors, GetTypedNotificationByIdResponses, GetTypedNotificationsByEventItemIdData, GetTypedNotificationsByEventItemIdErrors, GetTypedNotificationsByEventItemIdResponses, GetUnsubscribesData, GetUnsubscribesErrors, GetUnsubscribesResponses, HealthHandlerData, HealthHandlerResponses, ListTypedNotificationsData, ListTypedNotificationsErrors, ListTypedNotificationsResponses, RemoveUnsubscribeAllData, RemoveUnsubscribeAllErrors, RemoveUnsubscribeAllResponses, RemoveUnsubscribeItemData, RemoveUnsubscribeItemErrors, RemoveUnsubscribeItemResponses, RemoveUnsubscribeItemsData, RemoveUnsubscribeItemsErrors, RemoveUnsubscribeItemsResponses, SendPingData, SendPingErrors, SendPingResponses, UnsubscribeAllData, UnsubscribeAllErrors, UnsubscribeAllResponses, UnsubscribeEmailData, UnsubscribeEmailErrors, UnsubscribeEmailResponses, UnsubscribeItemData, UnsubscribeItemErrors, UnsubscribeItemResponses, UnsubscribeItemsData, UnsubscribeItemsErrors, UnsubscribeItemsResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -247,12 +247,18 @@ export class Sdk extends HeyApiClient {
     }
 
     /**
-     * Send a notification the caller wrote, to themselves or to someone who can
-     * already see what it links to. Delivered like any other notification and
-     * subject to the recipient's notification preferences.
+     * Send a notification the caller wrote about an entity, to themselves or to
+     * people who can already see that entity. Recipients who cannot see it,
+     * whose inbox would not list it, or who have received 60 from others this
+     * hour are skipped and returned. Delivered like any other notification and
+     * subject to each recipient's notification preferences. The same notification
+     * sent again in the same ten-minute window of the clock is delivered once; a
+     * repeat that falls in the next window is delivered again. A sender can
+     * notify at most 1000 recipients an hour. Refused with 403 while the
+     * `enable-agent-notifications` flag is off for the caller.
      */
-    public sendManualNotification<ThrowOnError extends boolean = false>(options: Options<SendManualNotificationData, ThrowOnError>): RequestResult<SendManualNotificationResponses, SendManualNotificationErrors, ThrowOnError> {
-        return (options.client ?? this.client).post<SendManualNotificationResponses, SendManualNotificationErrors, ThrowOnError>({
+    public sendPing<ThrowOnError extends boolean = false>(options: Options<SendPingData, ThrowOnError>): RequestResult<SendPingResponses, SendPingErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<SendPingResponses, SendPingErrors, ThrowOnError>({
             url: '/v1/user_notifications/send',
             ...options,
             headers: {

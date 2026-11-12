@@ -198,6 +198,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       unsubscribeItem
     `,
     enabled: 'enableNotificationType',
+    sent: 'sendPing',
   },
   properties: {
     labeled: 'ensureTagSet',
