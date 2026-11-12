@@ -91,7 +91,10 @@ function LegacyAgentsView() {
 export const AgentsRouteView = withAuth(() => {
   const panel = useSplitPanelOrThrow();
   useViewRestoration(
-    panel.handle.content().id === 'connections' ? 'agents' : undefined
+    panel.handle.content().id === 'connections' ||
+      panel.handle.content().id === 'artifacts'
+      ? 'agents'
+      : undefined
   );
   const route = () => {
     const content = panel.handle.content();
