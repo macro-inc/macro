@@ -33,10 +33,9 @@ macro_middleware = { path = "../../crates/macro_middleware", default-features = 
   "tracking",
 ] }
 model = { path = "../../crates/model" }
-bytes = { workspace = true }
 futures = { workspace = true }
-reqwest = { workspace = true, features = ["stream"] }
-url = { workspace = true }
+reqwest = { workspace = true }
+safe_fetch = { path = "../../crates/safe_fetch" }
 secretsmanager_client = { path = "../../crates/secretsmanager_client" }
 serde = { workspace = true }
 serde_json = { workspace = true }

@@ -36,7 +36,7 @@ fn test_context() -> ApiContext {
     ApiContext {
         authorization_state: MacroAuthorizationState::new(Arc::new(authorization_service)),
         environment: Environment::Production,
-        http_client: proxy::build_http_client().expect("test HTTP client should build"),
+        fetcher: proxy::build_fetcher().expect("test fetcher should build"),
     }
 }
 

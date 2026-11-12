@@ -10,5 +10,5 @@ pub type AuthorizationService = MacroAuthorizationServiceImpl<MacroAuthJwtValida
 pub struct ApiContext {
     pub authorization_state: MacroAuthorizationState<AuthorizationService>,
     pub environment: Environment,
-    pub http_client: reqwest::Client,
+    pub fetcher: safe_fetch::SafeFetcher,
 }

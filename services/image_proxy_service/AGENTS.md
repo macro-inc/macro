@@ -8,10 +8,9 @@ remote image URLs through an authenticated, SSRF-guarded fetch.
 
 ## Start here
 
-- `src/api/proxy.rs`: the `/proxy` route — size cap (`MAX_IMAGE_SIZE` 10 MB),
-  redirect cap, timeouts, and a browser-like User-Agent to clear strict WAFs.
-- `src/api/proxy/resolver.rs`: `PrivateIpFilteringResolver` — blocks DNS
-  resolution to private/loopback IPs to prevent SSRF.
+- `src/api/proxy.rs`: the `/proxy` route — its `safe_fetch::FetchPolicy`
+  (10 MB, raster images + octet-stream, no SVG, 5 redirects, timeouts) and a
+  browser-like User-Agent to clear strict WAFs.
 - `src/api/context.rs`: `ApiContext` / `AuthorizationService`.
 - `src/openapi.rs`, `src/doppler_config.rs`: separate `[[bin]]` targets for
   OpenAPI generation and Doppler config.
@@ -29,8 +28,10 @@ remote image URLs through an authenticated, SSRF-guarded fetch.
 
 ## Gotchas
 
-- Never bypass or weaken `PrivateIpFilteringResolver` — it is the only thing
-  stopping this service from being an SSRF vector into internal infra.
+- Fetch upstreams only through `safe_fetch::SafeFetcher` — it is the only thing
+  stopping this service from being an SSRF vector into internal infra. Don't
+  add SVG to the accepted media types: an SVG opened from this origin runs
+  script here.
 
 ## Related
 
