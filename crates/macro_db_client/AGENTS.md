@@ -72,6 +72,10 @@ stable across retries, and `announced` records successful pending-message posts.
 The additive migrations are compatible with older service binaries; session
 deletion cascades its rows.
 
+`support_follow_ups` queues the follow-up for a new user's support channel;
+its queries and send policy belong to `authentication_service`. Rows are
+deleted once sent or skipped, and cascade with the channel or the user.
+
 `agent_preview_*` stores preview-specific ownership, credential hashes and
 watchers; its queries and policy belong to `agent_preview`. Leases have a bounded
 TTL, deletion cascades credentials, and sweepers reclaim expired watchers and

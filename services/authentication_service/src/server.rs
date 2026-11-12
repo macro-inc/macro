@@ -276,7 +276,7 @@ async fn run_server() -> anyhow::Result<()> {
                 cipher,
             )
             .with_connections_enabled(config.outlook_connections_enabled)
-            .with_feature_flags(feature_flags),
+            .with_feature_flags(feature_flags.clone()),
         ) as Arc<dyn MicrosoftAuth>
     });
 
@@ -475,9 +475,9 @@ async fn run_server() -> anyhow::Result<()> {
         channel_event_dispatcher.clone(),
         PgChannelReferenceSharePermissions::new(db.clone(), entity_access_service_impl.clone()),
     );
-    // The welcome message goes through the shared message service so it gets the
-    // same persistence and delivery as every other channel message.
-    let channel_messages: Arc<dyn messages::domain::api::MessageCommands> = Arc::new(
+    // The welcome and follow-up go through the shared message service so they
+    // get the same persistence and delivery as every other channel message.
+    let channel_messages: Arc<dyn messages::domain::api::MessageServiceApi> = Arc::new(
         messages::domain::service::MessageService::new(
             messages::outbound::pg_message_repo::PgMessageRepository::new(db.clone())
                 .with_initiatives(initiative::domain::lookup::InitiativeLookup::new(
@@ -721,6 +721,35 @@ async fn run_server() -> anyhow::Result<()> {
             invite_reminders_stop.clone().cancelled_owned(),
         ),
     );
+    let github_link_service = Arc::new(github_link_service_impl);
+    // Sends the support channel follow-ups queued at signup. Every replica
+    // polls; a row claim keeps two from sending the same one.
+    invite_reminders.spawn(
+        crate::service::user::support_channel_follow_up::SupportFollowUpWorker {
+            queue: crate::outbound::support_follow_ups::PgSupportFollowUps::new(db.clone()),
+            db: db.clone(),
+            sender: crate::service::user::support_channel_follow_up::FollowUpSender {
+                messages: channel_messages.clone(),
+                access: entity_access_service_impl.clone(),
+            },
+            teams: teams_repo_impl.clone(),
+            onboarding: onboarding::outbound::pg_onboarding_repo::PgOnboardingRepo::new(db.clone()),
+            connections: pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(
+                db.clone(),
+            ),
+            github: github_link_service.clone(),
+            billing: crate::outbound::subscription_checkout::StripeCheckoutGateway::new(
+                db.clone(),
+                stripe_client.clone(),
+                gtm_invite_service.clone(),
+                stripe_prices.seat_prices(),
+            ),
+            mail: crate::outbound::mail_exchanges::DnsMailExchanges::default(),
+            microsoft: microsoft_auth.clone(),
+            analytics: analytics_client.clone(),
+        }
+        .run(invite_reminders_stop.clone()),
+    );
     invite_reminders.close();
     let user_deletion = Arc::new(
         crate::outbound::user_deletion::UserDeletionAdapter::new(
@@ -768,13 +797,21 @@ async fn run_server() -> anyhow::Result<()> {
         macro_event_broker.clone(),
     ));
 
+    let support_follow_ups = feature_flags.map(|flags| {
+        crate::service::user::support_channel_follow_up::SupportFollowUpScheduler::new(
+            crate::outbound::support_follow_ups::PgSupportFollowUps::new(db.clone()),
+            flags,
+            analytics_client.clone(),
+        )
+    });
+
     let server_result = api::setup_and_serve(
         ApiContext {
             inbox_connections: Arc::new(email::domain::inbox_entitlement::InboxConnectionService(
                 email::outbound::EmailPgRepo::new(db.clone()),
             )),
             db,
-            github_link_service: Arc::new(github_link_service_impl),
+            github_link_service,
             auth_client: Arc::new(auth_client),
             microsoft_auth,
             cursor_api_key_cipher,
@@ -816,7 +853,8 @@ async fn run_server() -> anyhow::Result<()> {
             teams_service,
             domain_notice_service,
             channel_service: Arc::new(channel_service),
-            channel_messages,
+            channel_messages: channel_messages.clone(),
+            support_follow_ups,
             favorites_service: Arc::new(favorites_service),
             entity_access_service: entity_access_service_impl,
             referral_service: Arc::new(referral_service),

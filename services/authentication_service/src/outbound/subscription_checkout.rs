@@ -391,3 +391,22 @@ async fn subscription_history(
     }
     Ok(history)
 }
+
+impl<I: GtmInviteService> StripeCheckoutGateway<I> {
+    /// Whether the user's stored Stripe customer has a live subscription.
+    /// Reads only: it never creates a customer.
+    #[tracing::instrument(name = "support_follow_up.subscribed", skip_all, err, ret)]
+    pub async fn has_subscription(
+        &self,
+        user: &MacroUserIdStr<'_>,
+    ) -> Result<bool, StripeCheckoutError> {
+        Ok(match self.customer(user).await? {
+            Some(customer) => {
+                subscription_history(&self.stripe, &customer)
+                    .await?
+                    .has_existing_subscription
+            }
+            None => false,
+        })
+    }
+}

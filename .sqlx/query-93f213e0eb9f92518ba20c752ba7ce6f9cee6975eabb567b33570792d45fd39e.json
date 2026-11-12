@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO support_follow_ups (channel_id, user_id, message_id)\n            VALUES ($1, $2, $3)\n            ON CONFLICT (channel_id) DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "93f213e0eb9f92518ba20c752ba7ce6f9cee6975eabb567b33570792d45fd39e"
+}

@@ -1765,7 +1765,10 @@ without declining.
 ## Onboarding channel
 
 New users get `Macro Support x <name>` seeded with a welcome message that @mentions them —
-useful as a guaranteed-existing channel in tests.
+useful as a guaranteed-existing channel in tests. Users in the `test` group of the
+`support-channel-follow-up` flag also get one follow-up from the support team about 30
+seconds after finishing onboarding, or five minutes after the welcome, unless someone
+posts in the channel first; don't count on the channel holding exactly one message.
 
 Locally sent channel messages and thread replies enter with a brief upward slide
 and fade, without bubble scaling. Opening history or remounting a row does not

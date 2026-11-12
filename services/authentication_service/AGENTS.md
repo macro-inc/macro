@@ -96,6 +96,47 @@ key issuance, and account merge/link flows.
 API-token exchange preserves verified incoming agent attribution; query/body
 inputs cannot select an agent, and ordinary user credentials remain unattributed.
 
+## Support channel follow-up
+
+- `src/service/user/support_channel_follow_up.rs`: after the welcome posts, the
+  PostHog flag `support-channel-follow-up` splits users into `control` and
+  `test` (exposure is recorded server-side for both); `test` gets a
+  `support_follow_ups` row. Nothing is queued without `POSTHOG_API_KEY`.
+- Each replica's worker looks at a row 30 seconds after setup finishes
+  (`user_onboarding.completed_at`), or at five minutes for someone still in
+  setup, who only gets a message when the reason is known (paid, Gmail never
+  connected, an open checkout, the phone app); otherwise the row is looked at
+  again when its one-minute claim lapses and dropped after an hour. A channel
+  where anyone has posted is skipped; the channel is read last, right before
+  the post. `choose` picks the first message that fits; the sender must stay a
+  member of every support channel.
+- Signals: `/link/gmail` and checkout creation set `gmail_attempted_at` and
+  `checkout_opened_at` to the latest attempt. For five minutes after either,
+  the user may still be on Google's or Stripe's page, so the row waits; Stripe
+  is read once after that, only for someone who opened a checkout, never
+  creating a customer. The mail provider comes from the domain's MX records
+  (`outbound/mail_exchanges.rs`), the phone app from push device
+  registrations, and GitHub from Macro's own link. The Outlook message goes
+  only to users Settings offers Outlook to (`new_connections_enabled`), and
+  someone who joined another person's team gets the teammate message, never
+  the solo ones.
+- Connected tools are the Pipedream and Connect rows; Notion, Linear and Slack
+  share one message when several are connected, and Slack's connector is saved
+  as `slack_v2`. Apps connected through a native MCP server are not seen:
+  that store decrypts credentials, and this service holds no key for it.
+- Native phone signups never complete `user_onboarding`, so they always count
+  as still in setup and can only get the setup messages. iOS registers a push
+  device at sign-in; Android 13 and later does not until notifications are
+  allowed, so those signups get nothing.
+- Three messages cover a missing inbox, and only one can fit: Gmail trouble
+  for someone who started `/link/gmail` and never finished, the Google inbox
+  message for Google-hosted mail (Gmail or a work address) nobody tried to
+  connect, and Outlook. A Google sign-up that leaves the Gmail box unticked
+  never calls `/link/gmail`, so it gets the Google inbox message.
+- The post reuses the row's message id through `post_from_event`, so a retry
+  never posts twice. Events: `support_follow_up_sent` (`path`,
+  `seconds_after_welcome`) and `support_follow_up_skipped` (`reason`).
+
 ## Agent accounts
 
 - An agent can do everything a person can, including inviting other agents. Do

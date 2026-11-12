@@ -222,6 +222,16 @@ pub async fn init_gmail_link_handler(
         &state_str,
     )?;
 
+    // A first connect that never lands tells the support follow-up that Gmail
+    // gave this new user trouble.
+    if reconnect_link_id.is_none()
+        && let Some(follow_ups) = &ctx.support_follow_ups
+    {
+        follow_ups
+            .note_gmail_attempt(&authorization.authorization.user.macro_user_id)
+            .await;
+    }
+
     Ok(Json(InitGmailLinkResponse {
         authorization_url: authorization_url.to_string(),
         link_id,

@@ -253,6 +253,9 @@ pub(crate) struct ApiContext {
     pub domain_notice_service: Arc<DomainNoticeServiceType>,
     pub channel_service: Arc<ChannelServiceType>,
     pub channel_messages: Arc<dyn messages::domain::api::MessageCommands>,
+    /// Queues the support channel follow-up; `None` without a PostHog key.
+    pub support_follow_ups:
+        Option<crate::service::user::support_channel_follow_up::SupportFollowUpScheduler>,
     pub favorites_service: Arc<FavoritesServiceType>,
     pub entity_access_service: Arc<EntityAccessServiceType>,
     pub native_app_service: Arc<NativeAppServiceImpl<DefaultBundleFetcher>>,

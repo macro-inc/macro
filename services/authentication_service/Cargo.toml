@@ -107,6 +107,7 @@ github_pull_requests = { path = "../../crates/github_pull_requests", default-fea
   "outbound",
   "service",
 ] }
+hickory-resolver = { workspace = true }
 hmac = { workspace = true }
 http-body-util = { workspace = true }
 jsonwebtoken = { workspace = true }
@@ -154,7 +155,9 @@ models_permissions = { path = "../../crates/models_permissions" }
 native_app_service = { path = "../../crates/native_app_service" }
 non_empty = { path = "../../crates/non_empty" }
 notification = { path = "../../crates/notification" }
+notification_db_client = { path = "../../crates/notification_db_client" }
 onboarding = { path = "../../crates/onboarding" }
+pipedream_mcp = { path = "../../crates/pipedream_mcp" }
 rand = { workspace = true }
 rate_limit = { path = "../../crates/rate_limit" }
 user_events = { path = "../../crates/user_events" }
