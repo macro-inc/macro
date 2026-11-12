@@ -3353,7 +3353,9 @@ Macro IS_MAC (platform starts with Mac or user agent contains Mac), including
 platform/UA mismatch checks. The native root retains iOS/Android composition
 priority; its single OS enum cannot also encode the independent Mac checklist
 modifier in contradictory mobile/Mac profiles. Undo and redo a newly created code
-subtree: compare complete model JSON, including text leaf IDs, as well as the
+subtree with each text payload delivered as one trusted input event for identity
+checks; test multi-key interval grouping separately without fake clocks. Compare
+complete model JSON, including text leaf IDs, as well as the
 DOM text and selection. Also check the caret and document: enter a newline,
 undo, then redo. Redo must return to the committed paragraph and offset even
 when that paragraph is recreated. Repeat after a remote insertion before the

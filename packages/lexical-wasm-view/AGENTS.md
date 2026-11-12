@@ -166,3 +166,5 @@ Call the preview/test-only `view/dev-stored-comparison` helper through actual `E
 Route Undo, Redo and Select All with pinned Source modifier masks from navigator.platform and exact key/code fallback; preserve generic KeyDown interception and admitted selection.
 
 Keep the paired checklist modifier-Enter fixture on the actual Source checklist plugin and Macro IS_MAC constant; desktop view OS cases complement the root constructor tests, while mobile composition precedence stays separate.
+
+Use one trusted insertText event for each payload in code identity history tests; retain the fence shortcut and all content, caret and complete JSON/ID assertions, and keep multi-key interval behavior in separately timed controls without fake clocks.

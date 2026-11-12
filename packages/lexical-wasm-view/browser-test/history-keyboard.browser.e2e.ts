@@ -104,11 +104,47 @@ for (const redo of ['Control+Shift+z', 'Control+y']) {
     await page.waitForFunction(() => Boolean(window.inputParity));
     await page.evaluate(() => window.inputParity.prepareHistory());
     const root = page.locator('#native');
+    await root.evaluate((element) => {
+      const inputs: {
+        data: string | null;
+        inputType: string;
+        trusted: boolean;
+      }[] = [];
+      Reflect.set(element, '__historyTextInputs', inputs);
+      element.addEventListener(
+        'beforeinput',
+        (event) => {
+          if (event instanceof InputEvent)
+            inputs.push({
+              data: event.data,
+              inputType: event.inputType,
+              trusted: event.isTrusted,
+            });
+        },
+        { capture: true, passive: true }
+      );
+    });
     await root.click();
-    await page.keyboard.type('```');
+    await page.keyboard.insertText('```');
     await page.keyboard.press('Enter');
-    await page.keyboard.type('const localValue = 1;x');
+    // Identity history uses one trusted text event, independent of per-key speed.
+    await page.keyboard.insertText('const localValue = 1;x');
     await expect(root.locator('code')).toHaveText('const localValue = 1;x');
+    expect(
+      await root.evaluate((element) => {
+        const inputs: unknown = Reflect.get(element, '__historyTextInputs');
+        if (!Array.isArray(inputs)) throw new Error('Missing input capture');
+        return inputs.filter(
+          (input) => input.data === 'const localValue = 1;x'
+        );
+      })
+    ).toEqual([
+      {
+        data: 'const localValue = 1;x',
+        inputType: 'insertText',
+        trusted: true,
+      },
+    ]);
     const typed = await page.evaluate(() =>
       window.inputParity.snapshot('native')
     );
