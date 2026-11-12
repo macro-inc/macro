@@ -81,6 +81,9 @@ enforced by the ordinary backend APIs.
   `parseDatabaseQueryData`; `withView()` follows the AI editor's `setDatabaseQueryView` rules.
 - `src/entities/crm/pipeline.ts`: pipeline-authorized table/row/view handles;
   `PipelineTable.views()` returns views whose `positions()` reads saved board order.
+- `crm.pipelines.listWithFields()` returns every pipeline with its fields
+  (Stage's options are its stages) and version in one
+  `GET /crm/pipelines/details`; `list()` stays the plain pipeline list.
 - `src/entities/crm/pipeline-entry.ts`: `PipelineEntry` handles from the
   name-based pipeline methods (`find`, `addRecords`, `updateEntries`,
   `removeRecords`, `edit`, `importCsv`/`exportCsv`), which call
