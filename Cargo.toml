@@ -552,7 +552,7 @@ html-escape = "0.2"
 subtle = "2.6.1"
 
 [patch.crates-io]
-# Byte-identical Loro 1.16.2 source; see vendor/README-LORO.md.
+# Pinned Loro 1.16.2 with local fixes; see vendor/README-LORO.md.
 loro-internal = { path = "vendor/loro-internal" }
 # Only replaces tungstenite 0.27 (GraphQL subscriptions); 0.28/0.29 stay upstream.
 tungstenite = { git = "https://github.com/signalapp/tungstenite-rs", rev = "a1837ccfe96b6895a57352d7f0112e4557516c27" }
