@@ -270,6 +270,17 @@ export type Relay = {
   readonly stop: () => void;
 };
 
+/**
+ * How the child hears that upstream refused or broke the socket: never as a
+ * normal close, which a call would take as the end of speech.
+ */
+const upstreamFailed = 1011;
+const upstreamFailedReason = 'speech upstream failed';
+
+/** Codes an endpoint may send itself; anything else (1006: no close frame) means upstream failed. */
+const sendable = (code: number): boolean =>
+  code === 1000 || (code >= 3000 && code <= 4999);
+
 const capabilityBytes = 32;
 const loopback = '127.0.0.1';
 
@@ -327,8 +338,14 @@ export const startRelay = ({
           if (typeof data === 'string' || data instanceof ArrayBuffer)
             client.send(data);
         });
-        upstream.addEventListener('close', () => client.close());
-        upstream.addEventListener('error', () => client.close());
+        upstream.addEventListener('close', ({ code, reason }) =>
+          sendable(code)
+            ? client.close(code, reason)
+            : client.close(upstreamFailed, upstreamFailedReason)
+        );
+        upstream.addEventListener('error', () =>
+          client.close(upstreamFailed, upstreamFailedReason)
+        );
       },
       message: (client, message) => {
         const upstream = client.data.upstream;
