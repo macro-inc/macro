@@ -111,7 +111,7 @@ const textAtTop = (reader: Locator) =>
       bounds.left + 4,
       bounds.top + 4
     )!;
-    const paragraphs = [...scroller.querySelectorAll('p')];
+    const paragraphs: Element[] = [...scroller.querySelectorAll('p')];
     return {
       paragraph: paragraphs.indexOf(caret.startContainer.parentElement!),
       offset: caret.startOffset,

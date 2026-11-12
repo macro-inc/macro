@@ -343,6 +343,34 @@ describe('keeping the scroll anchor on resize', () => {
     expect(scroller.scrollTop).toBe(1000);
   });
 
+  it('takes the anchor again when the content changes height at the same width', () => {
+    const { scroller, tops, size, resize, scrollTo } = setupResizable();
+    scrollTo(1000);
+
+    // An image above the reader loads and pushes the text down, without a
+    // scroll event.
+    tops[2] = 50;
+    resize.notify();
+    vi.advanceTimersByTime(16);
+
+    size.width = 1200;
+    tops[2] = -100;
+    resize.notify();
+    expect(scroller.scrollTop).toBe(850);
+  });
+
+  it('leaves a hold that is already running in place', () => {
+    const { scroller, tops, size, resize, scrollTo } = setupResizable();
+    scrollTo(1000);
+    // The clicked element when a new split opens, held where it is.
+    holdScrollAnchor(scroller, { top: 0, measure: () => 0 });
+
+    size.width = 1200;
+    tops[2] = -400;
+    resize.notify();
+    expect(scroller.scrollTop).toBe(1000);
+  });
+
   it('stops following the scroller once disposed', () => {
     const { scroller, tops, size, resize, scrollTo, dispose } =
       setupResizable();
