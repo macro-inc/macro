@@ -326,6 +326,22 @@ describe('tauri http plugin response bodies', () => {
     expect(unhandled).toEqual([]);
   });
 
+  it('reads nothing from a body until something asks for it', async () => {
+    const bridge = useBridge(fakeHttpBridge('ok'));
+    const response = await fetch('https://example.com/');
+    await settle();
+
+    // A read begun here would stay open until the native side answered, and
+    // hold the body's callbacks with it: a response dropped while its first
+    // chunk was still on the way could not be released.
+    expect(bridge.calls).toEqual(['fetch', 'fetch_send']);
+
+    expect(await response.text()).toBe('ok');
+    expect(
+      bridge.calls.filter((call) => call === 'fetch_read_body')
+    ).toHaveLength(2);
+  });
+
   it('keeps a clone readable with the address of its response', async () => {
     const bridge = useBridge(fakeHttpBridge('ok'));
     const response = await fetch('https://example.com/');

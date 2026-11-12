@@ -10,11 +10,14 @@ index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2
 diff --git a/node_modules/@tauri-apps/plugin-http/.bun-tag-7e7ced7d20a3a0a3 b/.bun-tag-7e7ced7d20a3a0a3
 new file mode 100644
 index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/node_modules/@tauri-apps/plugin-http/.bun-tag-e56b1a4f30c6282d b/.bun-tag-e56b1a4f30c6282d
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
 diff --git a/dist-js/index.cjs b/dist-js/index.cjs
-index f1bba4502af349efbde8b94ac1b1773a490f4836..910c17c7ac8f09b63a3bf81645a337dc8a09390f 100644
+index f1bba4502af349efbde8b94ac1b1773a490f4836..29e4f4f4570d2d6cfe149728e854a0dcd0d52fa1 100644
 --- a/dist-js/index.cjs
 +++ b/dist-js/index.cjs
-@@ -29,6 +29,95 @@ var core = require('@tauri-apps/api/core');
+@@ -29,6 +29,102 @@ var core = require('@tauri-apps/api/core');
   * @module
   */
  const ERROR_REQUEST_CANCELLED = 'Request cancelled';
@@ -105,12 +108,19 @@ index f1bba4502af349efbde8b94ac1b1773a490f4836..910c17c7ac8f09b63a3bf81645a337dc
 +            // Ensure body resources are released on stream cancellation
 +            void dropBody();
 +        }
++    }, {
++        // Read when something asks. By default a stream asks for its first
++        // chunk as soon as it is made, and that read holds the callbacks
++        // until the native side answers: a response dropped while its first
++        // chunk was still on the way, as from an idle event stream, could not
++        // be released.
++        highWaterMark: 0
 +    });
 +}
  /**
   * Fetch a resource from the network. It returns a `Promise` that resolves to the
   * `Response` to that `Request`, whether it is successful or not.
-@@ -103,64 +192,35 @@ async function fetch(input, init) {
+@@ -103,64 +199,35 @@ async function fetch(input, init) {
              danger
          }
      });
@@ -195,7 +205,7 @@ index f1bba4502af349efbde8b94ac1b1773a490f4836..910c17c7ac8f09b63a3bf81645a337dc
      const res = new Response(body, {
          status,
          statusText
-@@ -175,11 +235,12 @@ async function fetch(input, init) {
+@@ -175,11 +242,12 @@ async function fetch(input, init) {
          value: new Headers(responseHeaders),
          writable: false
      });
@@ -213,10 +223,10 @@ index f1bba4502af349efbde8b94ac1b1773a490f4836..910c17c7ac8f09b63a3bf81645a337dc
              Object.defineProperty(cloned, 'headers', {
                  value: new Headers(responseHeaders),
 diff --git a/dist-js/index.js b/dist-js/index.js
-index 01f0ea49e0fe45425adcb8596f57e97a92c8c958..4174dfd44b9c4c4c26ee27d469bbf65a7ade4a02 100644
+index 01f0ea49e0fe45425adcb8596f57e97a92c8c958..4da0365c455cac43687a8116b0abcad5c46b5af3 100644
 --- a/dist-js/index.js
 +++ b/dist-js/index.js
-@@ -27,6 +27,95 @@ import { invoke } from '@tauri-apps/api/core';
+@@ -27,6 +27,102 @@ import { invoke } from '@tauri-apps/api/core';
   * @module
   */
  const ERROR_REQUEST_CANCELLED = 'Request cancelled';
@@ -307,12 +317,19 @@ index 01f0ea49e0fe45425adcb8596f57e97a92c8c958..4174dfd44b9c4c4c26ee27d469bbf65a
 +            // Ensure body resources are released on stream cancellation
 +            void dropBody();
 +        }
++    }, {
++        // Read when something asks. By default a stream asks for its first
++        // chunk as soon as it is made, and that read holds the callbacks
++        // until the native side answers: a response dropped while its first
++        // chunk was still on the way, as from an idle event stream, could not
++        // be released.
++        highWaterMark: 0
 +    });
 +}
  /**
   * Fetch a resource from the network. It returns a `Promise` that resolves to the
   * `Response` to that `Request`, whether it is successful or not.
-@@ -101,64 +190,35 @@ async function fetch(input, init) {
+@@ -101,64 +197,35 @@ async function fetch(input, init) {
              danger
          }
      });
@@ -397,7 +414,7 @@ index 01f0ea49e0fe45425adcb8596f57e97a92c8c958..4174dfd44b9c4c4c26ee27d469bbf65a
      const res = new Response(body, {
          status,
          statusText
-@@ -173,11 +233,12 @@ async function fetch(input, init) {
+@@ -173,11 +240,12 @@ async function fetch(input, init) {
          value: new Headers(responseHeaders),
          writable: false
      });
