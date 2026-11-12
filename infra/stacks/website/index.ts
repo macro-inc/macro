@@ -145,15 +145,17 @@ const wwwRedirectCode = fs
   .replace(
     '__PAGE_REDIRECTS__',
     JSON.stringify(
-      compactEdgeRedirects(JSON.parse(
-        fs.readFileSync(
-          path.resolve(
-            __dirname,
-            '../../../apps/marketing/seo/page-redirects.json'
-          ),
-          'utf-8'
+      compactEdgeRedirects(
+        JSON.parse(
+          fs.readFileSync(
+            path.resolve(
+              __dirname,
+              '../../../apps/marketing/seo/page-redirects.json'
+            ),
+            'utf-8'
+          )
         )
-      ))
+      )
     )
   );
 
