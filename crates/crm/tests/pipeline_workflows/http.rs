@@ -412,7 +412,13 @@ async fn http_routes_add_find_update_remove_edit_and_move_csv_by_name(pool: PgPo
     assert_eq!(status, StatusCode::OK, "{hiring}");
     assert_eq!(hiring["name"], "Hiring");
     assert_eq!(hiring["recordType"], "contact");
+    assert_eq!(hiring["sharing"], "private");
     let fields = hiring["fields"].as_array().unwrap();
+    let names: Vec<&str> = fields
+        .iter()
+        .map(|field| field["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(names, ["Contact", "Stage", "Owner", "Revenue", "Role"]);
     let stage = fields
         .iter()
         .find(|field| field["name"] == "Stage")

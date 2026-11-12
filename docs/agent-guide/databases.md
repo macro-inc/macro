@@ -180,7 +180,7 @@ row (within the five-second poll) and the company page's **Pipelines** card both
 show the new stage. The company's own Stage, Owner and Revenue properties in the
 side panel are a separate field these tools do not change. A pipeline created or
 renamed from chat appears in the CRM sidebar as soon as the tool finishes.
-In code mode only `CreatePipeline` stays a direct tool; the rest run through
+In code mode every pipeline tool, `CreatePipeline` included, runs through
 `macro.crm.pipelines` in `ExecuteCode`, shown as an ExecuteCode row.
 
 ## Properties and records
