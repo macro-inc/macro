@@ -250,7 +250,7 @@ export function RouteEmail() {
       >
         <PaperFeatureGraphic
           height={360}
-          mobileHeight={390}
+          mobileHeight={300}
           label="An inbox with one highlighted email automatically tagged Customers and Follow up. Callouts point to each tag."
         >
           <EmailAutoTagDemo />
