@@ -153,9 +153,7 @@ function ManagedComputerRow(props: {
 
   // Claude's long-lived credential names no account; it only expires.
   const expired = () => {
-    const expiresAt = mode.isSuccess
-      ? mode.data.account?.expiresAt
-      : undefined;
+    const expiresAt = mode.isSuccess ? mode.data.account?.expiresAt : undefined;
     return expiresAt ? new Date(expiresAt).getTime() <= Date.now() : false;
   };
   const currentMode = () =>
@@ -165,8 +163,7 @@ function ManagedComputerRow(props: {
     if (!props.computer.setupCompletedAt) return { kind: 'unset' };
     const value = currentMode();
     if (value === 'macro_credits') return { kind: 'credits' };
-    if (value === 'own_account')
-      return { kind: 'account', expired: expired() };
+    if (value === 'own_account') return { kind: 'account', expired: expired() };
     return { kind: 'loading' };
   };
   const setupIncomplete = () => !props.computer.setupCompletedAt;

@@ -355,7 +355,7 @@ it('keeps a zero-price offer included through review and purchase', async () => 
   );
 });
 
-it('offers Finish setup before Claude sign-in, and nothing once both are done', () => {
+it('offers Finish setup until setup is done, and nothing once Claude is signed in', () => {
   const harness = {
     id: 'harness-build',
     name: 'Build machine',
@@ -405,9 +405,11 @@ it('offers Finish setup before Claude sign-in, and nothing once both are done', 
   const second = render(() => (
     <MacroComputers harnesses={[harness]} onSharingChange={() => {}} />
   ));
+  // Signed in with Claude and not expired: nothing to do.
   expect(
-    screen.getByRole('button', { name: 'Sign in with Claude' })
-  ).toBeTruthy();
+    screen.queryByRole('button', { name: 'Sign in with Claude' })
+  ).toBeNull();
+  expect(screen.getByText(/Signed in with Claude/)).toBeTruthy();
   second.unmount();
 
   render(() => (

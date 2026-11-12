@@ -32,7 +32,7 @@ type Step = 'open' | 'code';
  */
 export function ClaudeSignInFlow(props: {
   harnessId: string;
-  onSignedIn: (account: string | undefined) => void;
+  onSignedIn: () => void;
   /** Offered beside Complete sign-in; absent when credits are not an option. */
   onUseCredits?: () => void;
   title?: string;
@@ -126,7 +126,7 @@ export function ClaudeSignInFlow(props: {
     request = new AbortController();
     setError(undefined);
     try {
-      const result = await complete.mutateAsync({
+      await complete.mutateAsync({
         harnessId: props.harnessId,
         code: code().trim(),
         signal: request.signal,
