@@ -530,10 +530,7 @@ and timed points remain fixed. Verify both Week and Day with a weekly event you
 created: drag and resize with each offered scope, cancel with both Cancel and
 Escape, and inspect the next occurrence. Do not move another person's event.
 The move trace is `calendar.event_time_change`, with event/calendar IDs, operation
-kind, selected scope, and `calendar.time_change.outcome`. The backend-free
-`time-change.browser.e2e.ts` suite in `features/calendar-view/browser-test`
-exercises the real grid and dialog in Week and Day; it does not validate provider
-writes or notification delivery.
+kind, selected scope, and `calendar.time_change.outcome`.
 
 Desktop event details stay inside the visible calendar grid, including Home
 previews and narrow splits. They overlap wide Day-view events when needed and
