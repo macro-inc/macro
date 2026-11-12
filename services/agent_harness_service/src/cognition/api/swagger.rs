@@ -251,9 +251,9 @@ use utoipa::OpenApi;
                 memory::domain::models::Activity,
                 memory::domain::models::Granularity,
                 // Activity
-                activity::inbound::toolset::ReadActivityResponse,
-                activity::inbound::toolset::ToolActivityEvent,
-                activity::inbound::toolset::ToolActivityAction,
+                activity::domain::activity_range::ReadActivityResponse,
+                activity::domain::activity_range::ToolActivityEvent,
+                activity::domain::activity_range::ToolActivityAction,
                 activity::inbound::axum_router::ActivityErrorBody,
 
                 // Import pipeline

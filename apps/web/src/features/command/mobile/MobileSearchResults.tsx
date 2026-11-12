@@ -15,6 +15,7 @@ import { useIsAuthenticated, useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useOpenDirectMessage } from '@core/util/open-direct-message';
 import { isTransientRequestError } from '@core/util/request-error';
+import { createSteadyFlag } from '@core/util/steady-flag';
 import {
   type EntityData,
   ListEntity,
@@ -60,6 +61,7 @@ function MobileNameResults(props: {
     contactDiscovery: useCrmContactDiscovery,
   });
   usePending('search.names', source.isLoadingEntities);
+  const searchingShown = createSteadyFlag(source.isSearchingEntities);
   usePending('search.rank', source.isSettling);
   let previousWindow: string | undefined;
   let previousWindowQuery = '';
@@ -223,6 +225,11 @@ function MobileNameResults(props: {
             </CommandMenuListItem>
           )}
         </VList>
+      </Show>
+      <Show when={searchingShown() && items().length > 0}>
+        <p role="status" class="px-2 py-2 text-sm text-ink-muted">
+          {t('commandMenu.searching')}
+        </p>
       </Show>
       <Show when={source.isLoadingEntities() && items().length === 0}>
         <p role="status" class="p-3 text-ink-muted">

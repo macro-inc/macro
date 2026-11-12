@@ -371,7 +371,7 @@ async fn leaving_shared_custodian_rebinds_work_and_rejects_old_health_even_with_
 ) {
     let (repo, link, replacement) = shared(&db).await;
     sqlx::query!(
-        "UPDATE email_sync_streams SET import_started_at = now() - interval '1 hour', import_completed_at = now() - interval '5 minutes' WHERE link_id = $1",
+        "UPDATE email_sync_streams SET import_started_at = now() - interval '1 hour', import_completed_at = now() - interval '5 minutes', reader_revision = 1 WHERE link_id = $1",
         link
     )
     .execute(&db)
@@ -422,7 +422,7 @@ async fn leaving_shared_custodian_rebinds_work_and_rejects_old_health_even_with_
         Err(TokenError::ReauthRequired)
     ));
     let rebound_stream = sqlx::query!(
-        r#"SELECT import_started_at < now() - interval '30 minutes' AS "started_before!", import_completed_at IS NOT NULL AS "completed!"
+        r#"SELECT import_started_at < now() - interval '30 minutes' AS "started_before!", import_completed_at IS NOT NULL AS "completed!", reader_revision
         FROM email_sync_streams WHERE link_id = $1 AND generation = 2"#,
         link
     )
@@ -433,6 +433,11 @@ async fn leaving_shared_custodian_rebinds_work_and_rejects_old_health_even_with_
     assert!(
         rebound_stream[0].started_before && rebound_stream[0].completed,
         "the import run continues in the new generation, so it must not report completion again"
+    );
+    assert_eq!(
+        rebound_stream[0].reader_revision,
+        Some(1),
+        "the round continues too, so it keeps the revision it started at"
     );
     assert_eq!(
         sqlx::query_scalar!(

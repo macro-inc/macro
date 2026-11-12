@@ -30,7 +30,7 @@ fn assert_local_refs_resolve(root: &Value, node: &Value) {
 fn provider_schema_contains_the_recursive_view_contract_at_the_tool_root() {
     let validated = generate_validated_input_schema::<DisplayResults>().expect("valid schema");
     assert_eq!(validated.name, "DisplayResults");
-    assert!(validated.description.contains("ReadActivity"));
+    assert!(!validated.description.contains("ReadActivity"));
     let schema = serde_json::to_value(validated.schema).expect("serialize schema");
     assert_eq!(schema["required"], json!(["view"]));
     assert_eq!(schema["properties"]["view"]["required"], json!(["widgets"]));

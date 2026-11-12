@@ -75,6 +75,7 @@ members = [
   "crates/generic_email_domains",
   "crates/git_patch",
   "crates/gmail_client",
+  "crates/gmail_emulator",
   "crates/google_token",
   "crates/graphql_activity",
   "crates/graphql_calendar",
@@ -354,6 +355,8 @@ livekit-api = { version = "0.4.16", default-features = false, features = [
   "services-tokio",
   "webhooks",
 ] }
+mail-builder = "0.4.3"
+mailparse = "0.16.1"
 livekit-protocol = "0.7.2"
 log = "0.4.26"
 logos = "0.16"
@@ -417,6 +420,7 @@ reqwest = { version = "0.13", default-features = false, features = [
 rmcp = "3.9.0"
 skrifa = { version = "0.48", default-features = false, features = ["std"] }
 sse-stream = "0.2"
+rsa = "0.9.10"
 rootcause = { version = "0.12", features = ["compat-anyhow1"] }
 rustls = { version = "0.23.46", default-features = false, features = ["aws_lc_rs"] }
 # Mirrors the ACP SDK's own declaration: `coding_agent_worker` ports its
