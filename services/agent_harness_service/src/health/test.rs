@@ -31,10 +31,12 @@ async fn a_main_runtime_that_stops_ticking_fails_the_check_after_thirty_seconds(
     let heartbeat = MainRuntimeHeartbeat {
         last_tick: Arc::new(Mutex::new(Some(Instant::now()))),
     };
+    let (_api_listening, api_listening_receiver) = tokio::sync::watch::channel(true);
+    let (_runtime_commands_ready, runtime_commands_receiver) = tokio::sync::watch::channel(true);
     let liveness = Liveness {
         heartbeat,
-        api_listening: tokio::sync::watch::channel(true).1,
-        runtime_commands_ready: tokio::sync::watch::channel(true).1,
+        api_listening: api_listening_receiver,
+        runtime_commands_ready: runtime_commands_receiver,
     };
 
     tokio::time::advance(Duration::from_secs(29)).await;
@@ -52,10 +54,12 @@ async fn a_main_runtime_that_stops_ticking_fails_the_check_after_thirty_seconds(
 async fn a_heartbeat_task_that_exits_fails_the_check_at_once() {
     let shutdown = CancellationToken::new();
     let tasks = TaskTracker::new();
+    let (_api_listening, api_listening_receiver) = tokio::sync::watch::channel(true);
+    let (_runtime_commands_ready, runtime_commands_receiver) = tokio::sync::watch::channel(true);
     let liveness = Liveness {
         heartbeat: MainRuntimeHeartbeat::spawn(shutdown.clone(), &tasks),
-        api_listening: tokio::sync::watch::channel(true).1,
-        runtime_commands_ready: tokio::sync::watch::channel(true).1,
+        api_listening: api_listening_receiver,
+        runtime_commands_ready: runtime_commands_receiver,
     };
     assert_eq!(check(liveness.clone()).await, StatusCode::OK);
 
@@ -91,4 +95,25 @@ async fn the_check_fails_until_the_api_listens_and_the_command_bus_connects() {
 
     runtime_commands_ready.send_replace(true);
     assert_eq!(check(liveness).await, StatusCode::OK);
+}
+
+#[tokio::test(start_paused = true)]
+async fn the_check_fails_once_the_command_consumer_stops() {
+    let heartbeat = MainRuntimeHeartbeat {
+        last_tick: Arc::new(Mutex::new(Some(Instant::now()))),
+    };
+    let (_api_listening, api_listening_receiver) = tokio::sync::watch::channel(true);
+    let (runtime_commands_ready, runtime_commands_receiver) = tokio::sync::watch::channel(true);
+    let liveness = Liveness {
+        heartbeat,
+        api_listening: api_listening_receiver,
+        runtime_commands_ready: runtime_commands_receiver,
+    };
+    assert_eq!(check(liveness.clone()).await, StatusCode::OK);
+
+    // The consumer task ends with readiness still set, as after its last
+    // subscription ends or the task panics.
+    drop(runtime_commands_ready);
+
+    assert_eq!(check(liveness).await, StatusCode::SERVICE_UNAVAILABLE);
 }

@@ -1566,6 +1566,10 @@ async fn run() -> anyhow::Result<()> {
             },
         )
         .await;
+        // Retries only reset readiness before the next attempt; the last one
+        // must not leave it set, or the health check keeps passing with no
+        // consumer.
+        runtime_commands_ready.send_replace(false);
         if let Err(error) = result {
             tracing::error!(
                 error = ?error,

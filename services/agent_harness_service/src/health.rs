@@ -133,7 +133,10 @@ async fn health(State(liveness): State<Liveness>) -> StatusCode {
     }
 
     let api_listening = *liveness.api_listening.borrow();
-    let runtime_commands_ready = *liveness.runtime_commands_ready.borrow();
+    // The consumer task owns the sender, so a closed channel means it ended,
+    // however it ended, even with `true` still retained.
+    let runtime_commands_ready = *liveness.runtime_commands_ready.borrow()
+        && liveness.runtime_commands_ready.has_changed().is_ok();
     if api_listening && runtime_commands_ready {
         StatusCode::OK
     } else {
