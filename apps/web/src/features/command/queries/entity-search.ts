@@ -6,6 +6,7 @@ import {
 import { exclude } from '@core/context/quickAccess/types';
 import { useUserId } from '@core/context/user';
 import { isTransientRequestError } from '@core/util/request-error';
+import { useTeamMembers } from '@queries/team/members';
 import { type Accessor, createMemo } from 'solid-js';
 import { contactCommandItems, mergeCommandPeople } from '../contact-items';
 import { rankCommandSearchItems } from '../rank-command-search-items';
@@ -131,6 +132,10 @@ export function useEntitySearch(
       : discovered;
   };
 
+  const team = useTeamMembers(searchActive);
+  const teammateIds = createMemo(
+    () => new Set(team.users().map((user) => user.id))
+  );
   const rankItems = <T extends CommandMenuItem>(
     items: T[],
     queryText: string
@@ -140,6 +145,8 @@ export function useEntitySearch(
       preserveAdditionalEntityMatches:
         quickAccess.usesRecordSelection() || quickAccess.usesSearchProjection(),
       preservedIds: contactItemIds(),
+      teammateIds: teammateIds(),
+      viewerId: people.viewerId(),
     });
   };
 

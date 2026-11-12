@@ -16,7 +16,7 @@ use super::financial::{
 };
 
 /// The reserved system user recorded for completions with no originating
-/// end-user (background tasks, internal summarization, subagents, …).
+/// end-user (background tasks, internal summarization, …).
 ///
 /// Building a [`MacroUserIdStr`] parses the id at runtime (there is no
 /// `const fn` constructor), so this is a `LazyLock` rather than a literal
@@ -340,7 +340,7 @@ pub struct UsageContext {
     /// not paying for it.
     pub agent_api_key_id: Option<Uuid>,
     /// The agent session whose work the completion is part of: its turns,
-    /// the tools and subagents they call, and its titles.
+    /// the tools they call, and its titles.
     pub agent_session_id: Option<Uuid>,
 }
 

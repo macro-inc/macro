@@ -98,7 +98,6 @@ import CaretLeft from '@icon/system/regular/caret-left.svg';
 import PictureIcon from '@icon/system/regular/image.svg';
 import RenameIcon from '@icon/system/regular/pencil-line.svg';
 import TrashIcon from '@icon/system/regular/trash.svg';
-import { useActiveCallQuery } from '@queries/call/call';
 import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
 import { useSearchParams } from '@solidjs/router';
 import { Button, cn } from '@ui';
@@ -115,6 +114,7 @@ import {
   Switch,
   useContext,
 } from 'solid-js';
+import { ActiveCallHeader } from '../../channel/Call/views/ActiveCallHeader';
 import { ChannelTopLeft } from './Top';
 
 const CHANNEL_STATE_ENTRY_KEY = 'channel.state';
@@ -155,7 +155,6 @@ function NewTop(props: { channelId: string }) {
   const renameAction = makeRenameAction({ userId });
   const participantsQuery = useChannelParticipantsQuery(() => props.channelId);
   const call = useCall(() => props.channelId);
-  const activeCallQuery = useActiveCallQuery(() => props.channelId);
   const isActivePhoneCall = () =>
     isMobile() && activeTab() === 'call' && call.isInThisChannel();
   const participants = () =>
@@ -208,8 +207,16 @@ function NewTop(props: { channelId: string }) {
     title: 'View',
     options: tabs().map((tab) => ({
       value: tab.value,
-      label: tab.value === 'call' ? <CallTabLabel /> : tab.label,
-      icon: CHANNEL_TAB_ICONS[tab.value],
+      label:
+        tab.value === 'call' ? (
+          <CallTabLabel channelId={props.channelId} />
+        ) : (
+          tab.label
+        ),
+      icon:
+        tab.value === 'call' && tab.icon
+          ? tab.icon
+          : CHANNEL_TAB_ICONS[tab.value],
     })),
     value: activeTab(),
     onSelect: (value: string) => setActiveTab(value as ChannelTabId),
@@ -322,18 +329,20 @@ function NewTop(props: { channelId: string }) {
         when={ENABLE_CALLS && !channel()?.agent_dm && !call.isInThisChannel()}
       >
         <SplitHeaderRight>
-          <HeaderIsland
-            class={cn(
-              'px-1',
-              // Call in progress: tint the whole island, matching the call
-              // button's `success` variant.
-              !!activeCallQuery.data &&
-                'bg-success ring-success [&_button]:text-surface'
-            )}
-          >
+          <HeaderIsland class="px-1">
             <div class="flex items-center gap-1.5">
               <ChannelCallButton channelId={props.channelId} />
             </div>
+          </HeaderIsland>
+        </SplitHeaderRight>
+      </Show>
+      <Show when={call.isInThisChannel() && !isActivePhoneCall()}>
+        <SplitHeaderRight>
+          <HeaderIsland>
+            <ActiveCallHeader
+              channelId={props.channelId}
+              link={activeTab() === 'call'}
+            />
           </HeaderIsland>
         </SplitHeaderRight>
       </Show>

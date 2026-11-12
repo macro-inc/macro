@@ -545,9 +545,16 @@ async fn run() -> anyhow::Result<()> {
     if let Some(rollout) = ai_tools::macro_connect_rollout(
         config.posthog_api_key.value(),
         config.posthog_host.value(),
+        config.environment,
     )? {
         connectors = connectors.with_rollout(rollout);
     }
+
+    // Session egress reaches only public addresses, except on a local stack
+    // whose MCP and preview services sit on the compose network.
+    let mcp_address_policy =
+        mcp_client::outbound::guarded_http::AddressPolicy::for_environment(config.environment);
+    let mcp_http = mcp_client::outbound::guarded_http::McpHttp::new(mcp_address_policy)?;
 
     // Every session's MCP servers: Macro's own under the reserved `macro`
     // slug, the owner's custom servers by URL key, then the owner's Pipedream
@@ -558,6 +565,7 @@ async fn run() -> anyhow::Result<()> {
         WithCustomMcp::new(
             PipedreamMcpCredentials::new(Arc::clone(&mcp_connections), connectors),
             Arc::clone(&mcp_servers),
+            mcp_http.clone(),
         ),
         MacroApiTokenSigner::new(
             pool.clone(),
@@ -606,7 +614,7 @@ async fn run() -> anyhow::Result<()> {
                 PgGithubSyncRepo::new(pool.clone()),
                 GithubSyncClientImpl::default(),
             )),
-            ReqwestForwarder::new()?,
+            ReqwestForwarder::new(mcp_address_policy)?,
         )
         .with_preview_mcp(
             url::Url::parse(&format!(
@@ -617,7 +625,7 @@ async fn run() -> anyhow::Result<()> {
         )?
         .with_owner_approvals(Arc::clone(&tool_approvals))
         .with_actor_mcp(Arc::new(
-            agent_egress::outbound::actor_mcp::HttpActorMcpTransport::new()?,
+            agent_egress::outbound::actor_mcp::HttpActorMcpTransport::new(mcp_address_policy)?,
         )),
     );
 
@@ -645,6 +653,7 @@ async fn run() -> anyhow::Result<()> {
         pool.clone(),
         event_broker_tracker.clone(),
         import_jobs.clone(),
+        mcp_http,
     )
     .await
     .context("failed to compose cognition APIs")?;
@@ -760,6 +769,7 @@ async fn run() -> anyhow::Result<()> {
                     .unwrap_or("https://us.i.posthog.com"),
                 key.to_owned(),
                 std::time::Duration::from_secs(3),
+                config.environment,
             )
             .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))
         })
@@ -841,6 +851,30 @@ async fn run() -> anyhow::Result<()> {
             connectors: tool_context.connector_tool_context.clone(),
             mcp_servers: tool_context.mcp_server_tool_context.clone(),
         }),
+    );
+    // A running program's `macro.ui.open`: the prompting person's own tab,
+    // through the gateway, within budgets every replica shares.
+    let ui_commands = agent_code_mode::domain::ui_commands::UiCommandService::new(
+        agent_code_mode::domain::ui_commands::UiCommandPorts {
+            store: Arc::clone(&execution_store),
+            active: Arc::clone(&execution_turns),
+            turns: Arc::new(code_mode::ui_commands::SessionUiTurns(session_repo.clone())),
+            flag: Arc::new(code_mode::ui_commands::NavigationFlag(
+                feature_flags.clone(),
+            )),
+            budgets: Arc::new(code_mode::ui_commands::RedisUiBudgets(
+                rate_limit::RateLimitServiceImpl {
+                    repo: rate_limit::RedisRateLimitAdapter {
+                        redis: redis.clone(),
+                    },
+                },
+            )),
+            delivery: Arc::new(code_mode::ui_commands::GatewayUiDelivery(
+                connection_gateway.clone(),
+            )),
+        },
+        agent_code_mode::domain::ui_commands::NavigableRoutes::generated()
+            .context("the generated agent route table does not parse")?,
     );
     let code_mode: Arc<dyn agent_code_mode::domain::SessionCodeMode> =
         Arc::new(agent_code_mode::domain::CodeModeService::new(
@@ -1437,6 +1471,8 @@ async fn run() -> anyhow::Result<()> {
         ))
         .with_conversation_turns(conversation_turns)
         .with_worker_idle_timeout(config.agent_session_idle_timeout()?)
+        // Kill switch for retrying idle releases that kept their session.
+        .with_idle_release_flags(feature_flags.clone())
         .with_admission(admission.clone())
         .with_agent_keys(agent_keys)
         .with_repositories(open_repositories)
@@ -1737,6 +1773,7 @@ async fn run() -> anyhow::Result<()> {
                     .unwrap_or("https://us.i.posthog.com"),
                 key.to_owned(),
                 std::time::Duration::from_secs(3),
+                config.environment,
             )
         })
         .transpose()
@@ -1817,6 +1854,7 @@ async fn run() -> anyhow::Result<()> {
             code_mode,
             reviews,
             connected_apps,
+            ui_commands,
             entity_access.clone(),
             MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
         ),

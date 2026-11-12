@@ -19,6 +19,10 @@ before changing ingestion or delivery behavior.
 - `src/inbound/worker.rs`: the SQS delivery worker.
 - `src/inbound/email_event_access.rs`: credential gate for email subscriptions.
 - `src/outbound/http_delivery.rs`: signed HTTPS POST to the webhook endpoint.
+- `src/domain/blocked_address.rs`: the one blocked-address classifier, used by
+  create/patch validation and outbound delivery. `src/outbound/address_guard.rs`
+  is the connect-time resolver that enforces it; never add a second
+  classifier or a preflight-only check.
 
 ## Scope
 

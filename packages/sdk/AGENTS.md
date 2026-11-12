@@ -85,6 +85,11 @@ enforced by the ordinary backend APIs.
   someone else prompted for the owner's approval. `discover(execution, name)`
   and `Connector.inspect()` mirror `DiscoverConnectors`; `addServer` mirrors
   `ConnectMcpServer`. Only works inside a running execution.
+- `src/entities/ui/`: `macro.ui.open(execution, item)` opens an item (a handle
+  with `webUrl()`, or `macro.ui.link(url)`, which refuses non-Macro links) in a
+  new pane of the tab the user prompted from, through the harness's
+  `ui-commands` route; it resolves `sent`, `no_client` or `declined` with the
+  item's `url` to link instead. Only works inside a running execution.
 - `src/entities/whatsapp/`: the owner's WhatsApp account and chat list; `WhatsAppChat.add()`
   returns an `ExternalChat`.
 - `src/entities/me/`: `macro.me.update()` sets the caller's name and profile
@@ -140,6 +145,7 @@ enforced by the ordinary backend APIs.
 - Keep WhatsApp pairing, passkeys, connection setup/disconnect and rollout configuration out of the handwritten public SDK; operate on accounts linked in the app, with personal bearer sessions for account/access controls. External chat sends/uploads accept the connection owner's session or own API token; bots never send.
 - Use POST to start channel calls and call-id scoped joins/leaves; the legacy GET starts a call as a side effect.
 - One item's mute, snooze and unmute are `muteNotifications`/`unmuteNotifications` on every favoritable handle; keep mute-all, email unsubscribe and bulk item preferences in the app-only coverage exclusions.
+- Keep additive `/channel-sections` endpoints app-only; the public channel-label API retains its legacy membership semantics.
 - Keep `external-chat/` provider-neutral; provider-specific reads (WhatsApp community chats) branch on `provider` with an exhaustive match.
 - Use existing entity handles for reads and mutations. Follow the
   [SDK rule](../../.agents/rules/sdk.md) and `add-sdk-endpoint` skill.
@@ -152,7 +158,8 @@ enforced by the ordinary backend APIs.
 Run from this directory: `bun test`, `bun run check`, `bun run coverage`, and
 `bun run lint`. After building, run `bun run check:pack` to verify isolated
 consumer imports, types, and bundle separation. Coverage requires each generated
-endpoint to be wrapped or explicitly classified in `src/coverage/skipped.ts`. Build output in `dist/` is
+endpoint to be wrapped or explicitly classified in `src/coverage/skipped.ts`, and
+every wrapped method to have a verb in `src/utils/verbs.ts`. Build output in `dist/` is
 excluded from source linting.
 
 ## Local agent APIs

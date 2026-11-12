@@ -291,6 +291,17 @@ are permanent configuration failures. Delivery applies the same HTTPS, DNS,
 blocked-address, reserved-header, signing, and no-redirect protections as
 validation.
 
+Blocked addresses are private, loopback, link-local (including cloud metadata),
+CGNAT `100.64.0.0/10`, `0.0.0.0/8`, unique-local, multicast, reserved and
+documentation ranges, IPv6 outside global unicast `2000::/3` (plus Teredo,
+benchmarking and documentation inside it), and IPv6 forms that wrap one of
+those IPv4 addresses (`::ffff:a.b.c.d`, NAT64 `64:ff9b::/96`, 6to4). A preflight lookup gives the
+user-facing message, and the HTTP client resolves through a filter that drops
+blocked answers at connect time, so a DNS answer that changes after preflight
+is still refused (reported as a retryable network failure). The client ignores
+system proxy settings. Local environments
+(`WebhookEndpointSchemePolicy::HttpAndHttps`) allow HTTP and local addresses.
+
 Every 2xx response succeeds. Network errors, timeouts, DNS resolution failures,
 and HTTP 408, 429, and 5xx responses are retryable. Other non-2xx responses and
 invalid endpoint or header configuration are permanent failures. Delivery
