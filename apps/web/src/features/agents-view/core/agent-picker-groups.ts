@@ -11,14 +11,19 @@ export function agentPickerGroups(roster: readonly RosterAgent[]) {
       ),
     },
     {
+      // A powered-off computer's agent is still one of yours, just off.
       label: 'Your agents',
       agents: agents.filter(
-        (agent) => !agent.unavailableReason && agent.share !== 'system'
+        (agent) =>
+          (!agent.unavailableReason || agent.poweredOff) &&
+          agent.share !== 'system'
       ),
     },
     {
       label: 'Needs connection',
-      agents: agents.filter((agent) => agent.unavailableReason),
+      agents: agents.filter(
+        (agent) => agent.unavailableReason && !agent.poweredOff
+      ),
     },
   ].filter((group) => group.agents.length > 0);
 }

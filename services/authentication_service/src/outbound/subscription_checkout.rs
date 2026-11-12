@@ -203,7 +203,7 @@ impl<I> StripeCheckoutGateway<I> {
         let mut params = checkout_params(
             customer.clone(),
             &request,
-            self.prices.price_id(request.plan)?,
+            self.prices.price_id(request.plan)?.as_str(),
             terms,
             promotion,
         );
