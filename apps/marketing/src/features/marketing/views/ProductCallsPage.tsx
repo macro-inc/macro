@@ -81,7 +81,7 @@ export function RouteCalls() {
           demo={{
             tone: 'calls',
           }}
-          title="Recorded and shared with your team by default."
+          title="Recorded and shared by default."
           description="Other tools make you choose to record a meeting and then share it, and extra steps get skipped, so the context never makes it to your agents. In Macro, channel calls are recorded and shared with your team by default. You can turn off team sharing; standalone meetings stay with their participants unless shared."
         >
           <DemoInteractionBoundary
@@ -94,7 +94,7 @@ export function RouteCalls() {
           demo={{
             tone: 'calls',
           }}
-          title="Agents get the transcript and the summary."
+          title="Macro Agents get the transcript and summary."
           description="Every speaker is identified, so the transcript knows who said what. Agents can read the full transcript, plus a summary of why the call matters and how it fits into the bigger picture of your company. Ask one to create tasks or draft a follow-up from what was discussed."
         >
           <DemoInteractionBoundary

@@ -93,7 +93,7 @@ export function RouteGithub() {
           demo={{
             tone: 'github',
           }}
-          title="@mention Cursor, then merge from the channel."
+          title="@mention Cursor, merge from Macro Chat."
           description="Coding agents like Cursor live right in your channels. @mention one and ask it to fix something, and when the pull request is ready, merge it right from the channel. The task and the pull request link back to each other."
         >
           <DemoInteractionBoundary

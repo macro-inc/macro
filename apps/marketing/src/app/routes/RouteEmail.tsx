@@ -14,11 +14,11 @@ import {
 } from '../../features/marketing/components/FeaturePage';
 import { HomepageClosing } from '../../features/marketing/components/HomepageClosing';
 import { PaperEmailAccounts } from '../../features/marketing/components/paper/PaperEmailAccounts';
-import { PaperEmailTask } from '../../features/marketing/components/paper/PaperEmailTask';
 import { PaperFeatureGraphic } from '../../features/marketing/components/paper/PaperFeatureGraphic';
 import { ProductIntroduction } from '../../features/marketing/components/product/ProductIntroduction';
 import { ProductBrand } from '../../features/marketing/components/product/ProductPage';
 import { TutorialVideoEmbed } from '../../features/marketing/components/TutorialVideoEmbed';
+import { TaskContextDemo } from '../../features/marketing/components/tasks/TaskContextDemo';
 import { setPageSeo } from '../utils/utilSeo';
 import '../../features/marketing/components/crm/crm-page.css';
 import '../../features/marketing/components/email/email-hero.css';
@@ -170,7 +170,7 @@ export function RouteEmail() {
       <FeaturePageSection
         id="email-sharing"
         demo={{ tone: 'email', glassFrame: false }}
-        title="Share an email with your team, no screenshot."
+        title="Share email in Macro Chat, no screenshots."
         description="Share an email in a channel without taking a screenshot of Gmail and pasting it in Slack. Your team sees the full thread, including future replies, so they’re not asking what happened after your screenshot."
       >
         <DemoInteractionBoundary
@@ -193,12 +193,16 @@ export function RouteEmail() {
       </FeaturePageSection>
       <FeaturePageSection
         id="email-to-task"
-        title="Turn an email into a task."
+        demo={{
+          tone: 'email',
+        }}
+        title="Turn emails into Macro Tasks."
         description="Create a task from the thread and assign it without leaving your inbox. The email stays linked as the source, so the original conversation is one click away, and you can see when it’s resolved."
       >
-        <PaperFeatureGraphic label="Create a task from an email, with the original thread linked as its source.">
-          <PaperEmailTask />
-        </PaperFeatureGraphic>
+        <DemoInteractionBoundary
+          class="feature-page-visual"
+          render={() => <TaskContextDemo />}
+        />
       </FeaturePageSection>
       <FeaturePageSection
         id="email-crm"

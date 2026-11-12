@@ -8,12 +8,12 @@ import {
   DemoPlaceholder,
 } from '../../features/marketing/components/DeferredDemo';
 import { DemoInteractionBoundary } from '../../features/marketing/components/DemoInteractionBoundary';
-import HomepagePipelineDemo from '../../features/marketing/components/HomepagePipelineDemo';
 import {
   FeaturePageFaq,
   FeaturePageSection,
 } from '../../features/marketing/components/FeaturePage';
 import { HomepageClosing } from '../../features/marketing/components/HomepageClosing';
+import HomepagePipelineDemo from '../../features/marketing/components/HomepagePipelineDemo';
 import {
   ProductHero,
   ProductPage,
@@ -135,7 +135,7 @@ export function RouteCrm() {
         demo={{
           tone: 'crm',
         }}
-        title="Emails, calls, tasks, and files, right on the record."
+        title="Macro Mail and Macro Calls on every record."
         description="Open a customer email right from their record, in the same email client you already use. @mention a company or contact from a channel, a document, or a task in Macro Tasks, and the record links back to it. No separate tool your team won’t check, and no deciding who gets CRM seats."
       >
         <span id="crm-tasks" />

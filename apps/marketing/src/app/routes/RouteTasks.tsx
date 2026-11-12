@@ -4,20 +4,20 @@ import {
   FeaturePageSection,
 } from '../../features/marketing/components/FeaturePage';
 import { HomepageClosing } from '../../features/marketing/components/HomepageClosing';
+import { PaperFeatureGraphic } from '../../features/marketing/components/paper/PaperFeatureGraphic';
 import {
   ProductHero,
   ProductPage,
 } from '../../features/marketing/components/product/ProductPage';
-import { PaperEmailTask } from '../../features/marketing/components/paper/PaperEmailTask';
-import { PaperFeatureGraphic } from '../../features/marketing/components/paper/PaperFeatureGraphic';
 import { GithubConversationDemo } from '../../features/marketing/components/reviews/GithubWorkflow';
+import { TaskContextDemo } from '../../features/marketing/components/tasks/TaskContextDemo';
 import { TaskPaperGraphic } from '../../features/marketing/components/tasks/TaskPaperGraphic';
 import {
   TaskAgentChannelDemo,
   TaskGithubDemo,
 } from '../../features/marketing/components/tasks/TaskStories';
-import { TaskViewsGraphic } from '../../features/marketing/components/tasks/TaskViewsGraphic';
 import { TasksComparison } from '../../features/marketing/components/tasks/TasksComparison';
+import { TaskViewsGraphic } from '../../features/marketing/components/tasks/TaskViewsGraphic';
 import { DEMO_BOOKING_URL } from '../../features/marketing/core/navigation';
 import '../../features/marketing/components/tasks/tasks-page.css';
 import { setPageSeo } from '../utils/utilSeo';
@@ -113,7 +113,7 @@ export function RouteTasks() {
             tone: 'tasks',
             glassFrame: true,
           }}
-          title="Create tasks where the conversation happens."
+          title="Create tasks right from Macro Chat."
           description="Click Create task on any message and the task is linked to that thread, so the conversation on the task and the conversation in the channel are deep linked together. Or mention @Macro and ask it to create tasks from what was just said; it can create many at once. Hit C then T to create one from anywhere."
         >
           <span id="ask-macro" />
@@ -124,19 +124,23 @@ export function RouteTasks() {
         </FeaturePageSection>
         <FeaturePageSection
           id="from-docs-and-email"
-          title="Linked back to the email or doc it came from."
+          demo={{
+            tone: 'tasks',
+          }}
+          title="Directly linked to customer Macro Mail."
           description="Create a task from a customer email, or highlight to-do boxes in a document to create many at once. Tasks are linked back to their source bidirectionally: the task remembers where it came from, and the source knows the task exists. Paste a task into a channel and the pill shows its status, assignee, and priority."
         >
-          <PaperFeatureGraphic label="Create a task from an email, with the original thread linked as its source.">
-            <PaperEmailTask />
-          </PaperFeatureGraphic>
+          <DemoInteractionBoundary
+            class="feature-page-visual"
+            render={() => <TaskContextDemo />}
+          />
         </FeaturePageSection>
         <FeaturePageSection
           id="task-agents"
           demo={{
             tone: 'tasks',
           }}
-          title="Assign a task to an agent, just like a teammate."
+          title="Assign tasks to Macro Agents, like teammates."
           description="Put an agent on a task and it picks it up and gets to work, with the context linked to the task. Open its session to follow along. Through Macro’s MCP server, Claude Code, Codex, and Cursor can find, create, and update your tasks without leaving your editor."
         >
           <DemoInteractionBoundary

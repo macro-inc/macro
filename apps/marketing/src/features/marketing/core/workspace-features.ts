@@ -79,7 +79,7 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
     tone: 'documents',
     description:
       'Edit records together with your team and agents. Switch between tables, boards, and timelines.',
-    heading: 'A column can hold an @mention of anything.',
+    heading: '@mention anything in a column.',
     detail:
       'Each row is a record, and each column is a field, like text, numbers, dates, a dropdown, or a checkbox. Because it’s Macro, a column can also hold an @mention of people, tasks, documents, emails, or companies. Add another table and link the two together.',
     sceneTitle: 'Launch projects',
@@ -295,7 +295,7 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
     tone: 'email',
     description:
       'Files from email, chat, and uploads, automatically tagged and searchable for your team and agents.',
-    heading: 'Everything shared in chat and email lands in Drive.',
+    heading: 'Files from Macro Chat and Macro Mail land here.',
     detail:
       'Your files are usually split across Slack, Google Drive, and your computer. In Macro, everything shared in channels, DMs, and email attachments is siphoned into one system and organized for you automatically.',
     sceneTitle: 'Launch / Files',
@@ -308,7 +308,7 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
     message: 'The brief, budget, and recording are in the Launch folder.',
     sections: [
       {
-        title: '@mention a file, and the channel can open it.',
+        title: '@mention a file to share it.',
         description:
           '@mention any file in a channel in Macro Chat and it’s shared with everyone in that channel. Join a channel, gain access. You can also mention any file to an agent, in a doc, or on a canvas.',
       },
@@ -323,7 +323,7 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
           'Just ask a question and get an answer from your files. @mention files yourself, or let the agent search your Drive for what it needs. It’s available to your own agents over MCP too, like Claude and ChatGPT, with full-text search.',
       },
       {
-        title: 'Folders and databases, because both have their place.',
+        title: 'Folders and Macro Databases, side by side.',
         description:
           'Folders are good for compatibility and sharing, and databases are good when you want to track and sort things by their properties. Drag files onto a folder to upload them, and narrow any list by type, tag, or creator.',
       },

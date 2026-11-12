@@ -57,7 +57,7 @@ export function RouteChannels() {
         demo={{
           tone: 'chat',
         }}
-        title="Agents are first-class members, like humans."
+        title="Macro Agents are first-class, like humans."
         description="@mention an agent to get it working on something, with the whole conversation as context. Or let it listen in and reply when it’s needed, like a teammate would."
       >
         <DemoInteractionBoundary
@@ -70,7 +70,7 @@ export function RouteChannels() {
         demo={{
           tone: 'chat',
         }}
-        title="Designed for focused technical conversations."
+        title="Built for focused technical conversations."
         description="The first couple of replies show inline and the rest collapse into a thread, so a busy channel stays readable. Slack’s side panel is nice for organization but can make it hard to find things; iMessage and Discord are good for casual conversations, but not deep technical ones."
       >
         <DemoInteractionBoundary
@@ -83,7 +83,7 @@ export function RouteChannels() {
         demo={{
           tone: 'chat',
         }}
-        title="A real inbox, like email."
+        title="A real inbox, like Macro Mail."
         description="Slack has no real inbox, only read and unread. Macro keeps messages waiting for later, so you don’t have to remember to reply, and you mark them done as you go. Mark a channel as Signal or Noise to decide what reaches your main inbox."
       >
         <span id="catch-up" />
