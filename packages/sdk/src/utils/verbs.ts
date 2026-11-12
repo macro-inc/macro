@@ -95,7 +95,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     read: 'getScheduledAction getScheduledActionTemplate',
     created: 'createScheduledAction',
     deleted: 'deleteScheduledAction',
-    edited: 'updateScheduledAction',
+    edited: 'updateScheduledAction detachScheduledAction',
     enabled: 'setScheduledActionEnabled activateScheduledActionTemplate',
     ran: 'executeScheduledActionNow',
     unshared: 'unshareScheduledActionTemplate',
@@ -151,7 +151,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     generated: 'generateImage',
     stopped: 'stopChatStream',
   },
-  contacts: { listed: 'getContacts' },
+  contacts: { searched: 'searchPeople' },
   email: {
     read: `
       getAttachment getAttachmentDocumentId messageOperationStatus resolveMessageOperation

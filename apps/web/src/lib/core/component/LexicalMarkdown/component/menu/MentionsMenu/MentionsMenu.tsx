@@ -30,6 +30,7 @@ import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
 import { flushableDebouncedDependent } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { createSelectionAnchor } from '@core/util/selection-anchor';
+import { createSteadyFlag } from '@core/util/steady-flag';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import type { EmailEntity } from '@entity';
 import { Telemetry } from '@macro-inc/observability';
@@ -433,6 +434,16 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     if (userMention.isLoading()) return;
     return userMention.windowKey();
   };
+  // "No results" is a statement about the typed term. Until the list has
+  // caught up with it and the slower sources have answered, say so instead.
+  const stillSearching = () =>
+    searchTerm() !== props.menu.searchTerm() ||
+    (sourceEnabled('users') && userMention.isLoading()) ||
+    (sourceEnabled('emails') && isLoadingMoreEmails()) ||
+    (contactsEnabled() &&
+      !!contactMention &&
+      'isLoading' in contactMention &&
+      contactMention.isLoading());
   const mobileAllItems = createLazyMemo((): MentionItem[] => {
     const users = sourceEnabled('users') ? mentionUsers() : [];
     const combined: MentionItem[] = [
@@ -611,6 +622,19 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     ignoredIds: () => (blockId ? [blockId] : []),
     targetItems: TARGET_ITEMS,
   });
+
+  // Sources answer within tens of milliseconds of most keystrokes. The
+  // searching label appears only for a search that is really taking a while,
+  // then stays long enough to read; until then the previous label stays, so
+  // nothing flashes between keystrokes.
+  const searchingShown = createSteadyFlag(stillSearching);
+  const emptyLabel = createMemo<string>((shown) => {
+    // A label belongs to one run of empty lists. Once rows are listed or the
+    // menu closes, the next empty list starts without it.
+    if (!menuOpen() || controller.combinedItems().length > 0) return '\u00a0';
+    if (searchingShown()) return t('commandMenu.searching');
+    return stillSearching() ? shown : t('commandMenu.noResults');
+  }, '\u00a0');
 
   // Rows keep arriving from several sources after typing stops. The highlight
   // follows the row the user moved to; a new search term starts from the top.
@@ -909,7 +933,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
                 <Show
                   when={visibleBuckets().length > 0}
                   fallback={
-                    <div class="px-2 text-ink-extra-muted">No results</div>
+                    <div class="px-2 text-ink-extra-muted">{emptyLabel()}</div>
                   }
                 >
                   <div>
@@ -986,7 +1010,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
                 </div>
               </Show>
               <Show when={controller.combinedItems().length === 0}>
-                <div class="px-2 text-ink-extra-muted">No results</div>
+                <div class="px-2 text-ink-extra-muted">{emptyLabel()}</div>
               </Show>
               <VirtualizedItemList
                 items={controller.combinedItems()}
