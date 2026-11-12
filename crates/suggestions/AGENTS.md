@@ -9,14 +9,6 @@ acted on by the person. Served by the harness under the scheduler's gateway
 prefix (`/scheduled-action/suggestions`); its OpenAPI is merged into the
 scheduler's spec.
 
-Naming: the feature was first called Suggestions. Everything outside this crate's
-code says suggestion: the tables (`suggestion`, `suggestion_prompt`,
-`suggestion_entity`, `suggestion_routine` pointing at `routine_suggestion`,
-`suggestion_target`), the routes and their schemas, the SDK
-(`macro.suggestions`, `Suggestion`) and the `enable-suggestions` flag. The
-crate and its Rust types keep the `suggestion` name; a routine suggestion is still
-its own `routine_suggestion` row, which a `routine` suggestion points to.
-
 ## How it works
 
 - A generation session calls `review` (every suggestion, open or not, with limits),
