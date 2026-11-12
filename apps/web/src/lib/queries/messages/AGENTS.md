@@ -113,7 +113,10 @@ live events that keep them current.
   tab runs a channel's writes one at a time. The rows are found through the
   page record (`ChannelCachedPageRows`), not the viewer; a page missing a row
   (left by writers in two windows racing) reads as a miss, so its rows can't
-  be found and stay until written over.
+  be found and stay until written over. The engine keeps the viewer's links
+  to the 1024 most recently written channel pages (`cache-core`
+  `page_retention.rs`); a page whose link it dropped reads as a miss, and its
+  records stay until the next write or eviction deletes them.
 - While the tab is visible and idle, the unread channels and the 20 most
   recently opened are warmed three at a time (`useChannelCachePrewarm`,
   mounted with the navigation unread state): no page reads the latest; a
