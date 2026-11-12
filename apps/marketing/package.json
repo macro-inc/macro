@@ -37,7 +37,7 @@
     "@tailwindcss/vite": "^4.2.4",
     "@types/bun": "^1.2.19",
     "@types/node": "^24.8.0",
-    "happy-dom": "20.10.6",
+    "happy-dom": "21.0.4",
     "jsdom": "^26.1.0",
     "remark-gfm": "^4.0.1",
     "tailwindcss": "^4.2.4",
