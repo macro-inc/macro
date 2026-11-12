@@ -5,6 +5,15 @@ use crate::domain::timeline::{
 };
 
 impl ActivityTimeline for PgActivityRepo {
+    fn read_ids<'a>(
+        &'a self,
+        query: crate::domain::timeline::ActivityTimelineIdsQuery,
+    ) -> std::pin::Pin<
+        Box<dyn Future<Output = Result<Vec<TimelineActivity>, TimelineReadError>> + Send + 'a>,
+    > {
+        Box::pin(self.read_timeline_ids(query))
+    }
+
     fn read<'a>(
         &'a self,
         query: ActivityTimelineQuery,

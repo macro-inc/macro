@@ -12,6 +12,12 @@ they need.
 - `src/domain/models.rs`: shared message/thread models.
 - `src/domain/service.rs` + `src/domain/ports.rs`: use-case orchestration and
   the repository/delivery ports (feature `ports`).
+- `src/domain/changes.rs` + `src/domain/service/changes.rs`: authorized channel
+  catch-up pages and 30-day change-log retention; `channel_changes` includes
+  tombstones and the root of each changed reply, with 200 log rows per page.
+- `crates/channel_change_db_utils`: owns counter/log SQL; message adapters pass
+  transaction boundaries and policy limits to it, then map rows to domain types.
+  DSS composes atomic activity logging; the call repository appends root changes.
 - `src/domain/api.rs`: `MessageServiceApi`, the boundary HTTP/agents/channel
   adapters call through.
 - `src/inbound/axum_router.rs`: the HTTP surface (feature `inbound`).
@@ -27,6 +33,11 @@ they need.
   call discussions; the call domain verifies RTC credentials and membership.
 - `src/outbound/pg_message_repo.rs` + `pg_discussion_context.rs`: Postgres
   adapters (feature `outbound`).
+- `src/outbound/pg_message_repo/write_hydration.rs`: channel writes hydrate in
+  one indexed statement (plus a bot lookup when needed); other parents keep
+  their existing statements.
+- `src/outbound/pg_message_repo/change_log.rs`: append channel changes as the
+  final statement before commit; other message parents run no extra statements.
 - `src/outbound/connection_gateway.rs`, `notification_sender.rs`, `broker.rs`:
   realtime/notification delivery adapters (features `outbound`/`broker`).
 
@@ -41,10 +52,11 @@ they need.
 
 - Depends on (by feature): `entity_access` (ports/inbound), `model` (annotations),
   `properties`/`models_properties`/`model_notifications`/`notification`
-  (delivery), `initiative` (outbound), `macro_event_broker`/`macro_event_topics`
-  (broker).
+  (delivery), `initiative` and `channel_change_db_utils` (outbound), `activity` models,
+  `macro_event_broker`/`macro_event_topics` (broker).
 - Used by: `agent_harness`, `agent_session`, `agent_trigger`, `ai_tools`, `bots`,
-  `channel_bots`, `channels`, `coding_agent_worker`, `crm`, `documents`,
+  `calendar_service`, `call`, `channel_bots`, `channels`, `coding_agent_worker`,
+  `crm`, `documents`,
   `lexical_client`, `lexical_mention_extractor`, `macro_db_client`,
   `soup_realtime`, `webhook`.
 
@@ -58,6 +70,8 @@ they need.
 ## Checks
 
 - `cargo test -p messages --all-features` (`SQLX_OFFLINE` unset).
+- `proofs/README.md`: reproducible local query plans for the channel change log,
+  hydration, retention, and writes on production-size synthetic fixtures.
 
 A finalized bot reply (`NotifyAsPostedMessage` edit by the bot itself) carries
 `completed_reply` on its patch event so agent triggers evaluate it like a new
@@ -76,8 +90,15 @@ grant users another agent invocation's edit, deletion, or reaction authority.
 
 ## Gotchas
 
+- Channel change rows retain 30 days of history; the calendar outbox worker
+  runs their bounded hourly prune even when calendar sync is disabled. Changes
+  pages cover 200 rows; a pruned position, a reset row, or a lag over 1,000
+  requires a fresh snapshot. Realtime pushes carry the committed sequence.
 - `MessageKind::CallRoot` messages stand for a channel call. Only `ensure_call_root` creates them, and
   they announce themselves with `MessageChange::CallRootPosted`, which reaches viewers and nothing else.
+- Channel change-log rows and their counters are read in one snapshot; retention
+  removes a prefix, so the first retained sequence minus one is the resume floor.
+  Keep counters after pruning so sequence numbers are never reused.
 - Most modules are feature-gated (`ai_tools`, `annotations`, `broker`,
   `delivery`, `inbound`, `outbound`, `ports`, `schema`); a caller enabling the wrong
   combination gets a missing-module compile error, not a runtime one — check

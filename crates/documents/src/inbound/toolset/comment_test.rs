@@ -40,6 +40,24 @@ pub(in crate::inbound::toolset) struct FakeMessages {
 
 #[async_trait::async_trait]
 impl MessageReader for FakeMessages {
+    async fn channel_changes(
+        &self,
+        _: entity_access::domain::models::EntityAccessReceipt<
+            messages::domain::service::MessageView,
+        >,
+        _: uuid::Uuid,
+        _: i64,
+    ) -> Result<messages::domain::changes::ChannelChanges, messages::domain::ports::MessageError>
+    {
+        unimplemented!()
+    }
+    async fn channel_seq(
+        &self,
+        _: uuid::Uuid,
+    ) -> Result<i64, messages::domain::ports::MessageError> {
+        unimplemented!()
+    }
+
     async fn get(
         &self,
         _access: EntityAccessReceipt<MessageView>,

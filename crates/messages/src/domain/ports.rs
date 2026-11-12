@@ -479,6 +479,24 @@ pub trait MessageRepository: Send + Sync + 'static {
         query: MessageTimelineQuery,
     ) -> impl Future<Output = Result<MessagePage, MessageError>> + Send;
 
+    /// Current committed position of a channel, or zero before its first change.
+    fn channel_seq(
+        &self,
+        channel_id: Uuid,
+    ) -> impl Future<Output = Result<i64, MessageError>> + Send;
+    /// Read the counter, retention floor, and bounded changes in one snapshot.
+    fn channel_change_log(
+        &self,
+        channel_id: Uuid,
+        after: i64,
+    ) -> impl Future<Output = Result<super::changes::ChannelChangeLog, MessageError>> + Send;
+    /// Hydrate current messages and the roots of changed replies.
+    fn load_channel_message_changes(
+        &self,
+        channel_id: Uuid,
+        ids: &[Uuid],
+    ) -> impl Future<Output = Result<Vec<super::changes::ChannelMessageChange>, MessageError>> + Send;
+
     /// Atomically create a message, its initial references, and any new thread state.
     fn create(
         &self,

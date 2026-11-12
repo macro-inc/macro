@@ -1,6 +1,6 @@
 //! One capability-checked message boundary for every caller and parent.
 
-use super::{models::*, ports::*, service::*};
+use super::{changes::ChannelChanges, models::*, ports::*, service::*};
 use entity_access::domain::models::EntityAccessReceipt;
 use uuid::Uuid;
 
@@ -8,6 +8,15 @@ use uuid::Uuid;
 #[cfg_attr(feature = "test-utils", mockall::automock)]
 #[async_trait::async_trait]
 pub trait MessageReader: Send + Sync + 'static {
+    /// Replay a bounded page of committed channel changes under view access.
+    async fn channel_changes(
+        &self,
+        access: EntityAccessReceipt<MessageView>,
+        channel_id: Uuid,
+        after: i64,
+    ) -> Result<ChannelChanges, MessageError>;
+    /// Read the channel counter for a page watermark; grants no data access.
+    async fn channel_seq(&self, channel_id: Uuid) -> Result<i64, MessageError>;
     /// Read an individual message under its parent's view permission.
     async fn get(
         &self,
@@ -139,6 +148,17 @@ impl<T: MessageReader + MessageCommands> MessageServiceApi for T {}
 
 #[async_trait::async_trait]
 impl<R: MessageRepository, E: MessageEventPublisher> MessageReader for MessageService<R, E> {
+    async fn channel_changes(
+        &self,
+        access: EntityAccessReceipt<MessageView>,
+        channel_id: Uuid,
+        after: i64,
+    ) -> Result<ChannelChanges, MessageError> {
+        MessageService::channel_changes(self, access, channel_id, after).await
+    }
+    async fn channel_seq(&self, channel_id: Uuid) -> Result<i64, MessageError> {
+        MessageService::channel_seq(self, channel_id).await
+    }
     async fn get(
         &self,
         access: EntityAccessReceipt<MessageView>,
@@ -290,6 +310,15 @@ mockall::mock! {
     pub MessageServiceApi {}
     #[async_trait::async_trait]
     impl MessageReader for MessageServiceApi {
+    /// Replay a bounded page of committed channel changes under view access.
+    async fn channel_changes(
+        &self,
+        access: EntityAccessReceipt<MessageView>,
+        channel_id: Uuid,
+        after: i64,
+    ) -> Result<ChannelChanges, MessageError>;
+    /// Read the channel counter for a page watermark; grants no data access.
+    async fn channel_seq(&self, channel_id: Uuid) -> Result<i64, MessageError>;
     /// Read an individual message under its parent's view permission.
     async fn get(
         &self,

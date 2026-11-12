@@ -125,6 +125,18 @@ pub struct ActivityTimelineQuery {
     pub limit: u16,
 }
 
+/// Bounded identities authorized by the domain that owns this timeline.
+pub struct ActivityTimelineIdsQuery {
+    /// Entity kind that owns the activity.
+    pub entity_type: EntityType,
+    /// Entity identity.
+    pub entity_id: String,
+    /// Actions included in the owning domain's timeline.
+    pub selection: TimelineSelection,
+    /// At most 200 identities, in the caller's desired order.
+    pub ids: Vec<Uuid>,
+}
+
 /// Error returned by an activity timeline reader.
 pub type TimelineReadError = Box<dyn std::error::Error + Send + Sync>;
 
@@ -134,5 +146,11 @@ pub trait ActivityTimeline: Send + Sync + 'static {
     fn read<'a>(
         &'a self,
         query: ActivityTimelineQuery,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<TimelineActivity>, TimelineReadError>> + Send + 'a>>;
+
+    /// Load current rows for at most 200 ids, scoped to their owning timeline.
+    fn read_ids<'a>(
+        &'a self,
+        query: ActivityTimelineIdsQuery,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<TimelineActivity>, TimelineReadError>> + Send + 'a>>;
 }
