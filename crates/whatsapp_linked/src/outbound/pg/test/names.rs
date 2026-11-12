@@ -22,7 +22,12 @@ fn from(event: u128, sender: &str, source: &str, name: Option<&str>) -> InboundE
 async fn sender_names(linked: &Linked, chat: &ChatRef) -> Vec<String> {
     linked
         .chats
-        .messages(&receipt::<MessageView>(ALICE, chat.id), None, Some(50))
+        .messages(
+            &receipt::<MessageView>(ALICE, chat.id),
+            None,
+            None,
+            Some(50),
+        )
         .await
         .unwrap()
         .messages

@@ -16,10 +16,7 @@ use external_chat::domain::{
         AccountRef, ChatProvider, ExternalChatResult, Members, MutationTarget, SendIntent,
         SendingFacts, StoredSend,
     },
-    timeline::{
-        ExternalChatMembers, ExternalChatParticipant,
-        view::People,
-    },
+    timeline::{ExternalChatMembers, ExternalChatParticipant, view::People},
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::Arc;

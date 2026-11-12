@@ -39,7 +39,7 @@ joins the sender's trace.
 | `whatsapp_account_changed` | account | DSS → session | consent or added chats changed; re-read |
 | `whatsapp_account_released` | account | session ↔ session | lease handed over |
 | `external_chat_effects` | message | session → DSS | a message notification revision is ready |
-| `whatsapp_media_ready` | blob | session → DSS | attachment bytes are ready to import |
+| `external_chat_media_ready` | blob | session → DSS | attachment bytes are ready to import |
 | `external_chat_changed` | scope | session/DSS → DSS | something a page shows changed; DSS pushes it |
 
 ## Ownership and fencing
@@ -243,7 +243,7 @@ Inbound attachments are reserved per ordinal at ingest, with the download
 locator sealed by the session service under the observing account's key. That
 account's replica claims the download (`claim_media_imports`), checks the
 SHA-256 and hands over the bytes (`complete_media_import`), which wait in
-`external_chat_media_blob` until DSS (signal `whatsapp_media_ready`) stores
+`external_chat_media_blob` until DSS (signal `external_chat_media_ready`) stores
 them as a static file ([External chats](external-chats.md#attachments)).
 Ready bytes are never rewritten. Failures retry with backoff and then expose
 an `unavailable` attachment state; message bodies remain plain WhatsApp text.

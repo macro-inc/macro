@@ -155,6 +155,15 @@ impl ExternalChatService {
             .identity
             .as_deref()
             .ok_or(ExternalChatError::Disconnected)?;
+        if let Some(root) = request.thread {
+            if !provider.capabilities(&chat).threads {
+                return Err(ExternalChatError::Invalid("this chat has no threads").into());
+            }
+            let root = self.thread_root(&chat, user.as_ref(), root).await?;
+            if root.deleted {
+                return Err(ExternalChatError::NotFound.into());
+            }
+        }
         if let Some(quoted) = request.reply_to {
             provider
                 .mutation_target(&chat, quoted)
@@ -216,9 +225,8 @@ impl ExternalChatService {
         sender(authority)?;
         let (user, chat_id) = receipt_scope(access)?;
         tracing::Span::current().record("chat_id", tracing::field::display(chat_id));
-        let kind = MediaKind::of(mime).ok_or(ExternalChatError::Invalid(
-            "this file type cannot be sent",
-        ))?;
+        let kind = MediaKind::of(mime)
+            .ok_or(ExternalChatError::Invalid("this file type cannot be sent"))?;
         let filename = filename.trim();
         if bytes.is_empty()
             || bytes.len() > MEDIA_LIMIT_BYTES

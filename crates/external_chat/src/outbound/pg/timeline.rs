@@ -20,22 +20,26 @@ fn backfill(state: Option<&str>, imported: i32) -> Option<Backfill> {
 }
 
 impl PgExternalChatRepository {
-    /// A newest-first page of the timeline, or only the message `only`.
+    /// A newest-first page of the timeline (thread replies only when also
+    /// sent to the chat), of one thread's replies, or only the message `only`.
     async fn timeline_page(
         &self,
         chat: &ChatRef,
         user: &str,
+        thread: Option<Uuid>,
         before: Option<Uuid>,
         only: Option<Uuid>,
         limit: i64,
     ) -> ExternalChatResult<StoredPage> {
         let rows = sqlx::query!(r#"SELECT m.id,m.person_id,p.user_id,
-            m.body,m.reply_to,m.source_at,m.ingested_at,m.revised_at,m.deleted_at,m.kind,m.rich,m.mentions,m.forwarded,m.view_once
+            m.body,m.reply_to,m.source_at,m.ingested_at,m.revised_at,m.deleted_at,m.kind,m.rich,m.mentions,m.forwarded,m.view_once,
+            m.thread_root,m.thread_broadcast
             FROM external_chat_message m JOIN external_chat_person p ON p.id = m.person_id
             WHERE m.chat_id = $1 AND m.message_id IS NOT NULL
               AND ($2::uuid IS NULL OR (m.source_at,m.id) < (SELECT source_at,id FROM external_chat_message WHERE id = $2 AND chat_id = $1 AND message_id IS NOT NULL))
               AND ($4::uuid IS NULL OR m.id = $4)
-            ORDER BY m.source_at DESC,m.id DESC LIMIT $3"#,chat.id,before,limit+1,only)
+              AND ($4::uuid IS NOT NULL OR m.thread_root = $5 OR ($5::uuid IS NULL AND (m.thread_root IS NULL OR m.thread_broadcast)))
+            ORDER BY m.source_at DESC,m.id DESC LIMIT $3"#,chat.id,before,limit+1,only,thread)
             .fetch_all(&self.pool).await.map_err(failure)?;
         let more = rows.len() > limit as usize;
         let ids: Vec<_> = rows.iter().take(limit as usize).map(|r| r.id).collect();
@@ -105,6 +109,32 @@ impl PgExternalChatRepository {
                 }),
             }
         }
+        let mut threads: HashMap<Uuid, ThreadSummary> = sqlx::query!(
+            r#"SELECT m.thread_root AS "root!", count(*) AS "replies!", max(m.source_at) AS "last_reply_at!",
+                bool_or(p.user_id IS DISTINCT FROM $2 AND (t.message_id IS NULL OR (m.source_at,m.id) > (t.read_at,t.message_id))) AS "unread!"
+            FROM external_chat_message m
+            JOIN external_chat_person p ON p.id = m.person_id
+            LEFT JOIN external_chat_thread_read_state t ON t.thread_root = m.thread_root AND t.user_id = $2
+            WHERE m.thread_root = ANY($1) AND m.message_id IS NOT NULL AND m.deleted_at IS NULL
+            GROUP BY m.thread_root"#,
+            &ids,
+            user
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(failure)?
+        .into_iter()
+        .map(|row| {
+            (
+                row.root,
+                ThreadSummary {
+                    reply_count: u32::try_from(row.replies).unwrap_or(u32::MAX),
+                    last_reply_at: row.last_reply_at,
+                    unread: row.unread,
+                },
+            )
+        })
+        .collect();
         let mut messages = Vec::with_capacity(ids.len());
         for (row, content) in rows.into_iter().take(limit as usize).zip(rich) {
             let deleted = row.deleted_at.is_some();
@@ -140,6 +170,9 @@ impl PgExternalChatRepository {
                     .filter(|vote| vote.message_id == row.id)
                     .cloned()
                     .collect(),
+                thread_root: row.thread_root,
+                thread_broadcast: row.thread_broadcast,
+                thread: threads.remove(&row.id),
             });
         }
         let next_cursor = more.then(|| messages.last().map(|m| m.id)).flatten();
@@ -170,9 +203,11 @@ impl PgExternalChatRepository {
             SELECT g.id,g.provider,g.name,g.kind,g.user_id,g.remote_id,g.state,g.adopted_at,g.backfill_state,g.backfill_imported,
             (SELECT count(*) FROM (SELECT 1 FROM external_chat_message m WHERE m.chat_id=g.id AND m.message_id IS NOT NULL
               AND m.deleted_at IS NULL AND m.origin<>'history' AND m.kind<>'system'
+              AND (m.thread_root IS NULL OR m.thread_broadcast)
               AND NOT EXISTS(SELECT 1 FROM external_chat_person p WHERE p.id=m.person_id AND p.user_id=$1)
               AND (r.message_id IS NULL OR (m.source_at,m.id)>(r.read_at,r.message_id)) LIMIT $3) unread) AS "unread_count!",
-            (SELECT max(source_at) FROM external_chat_message WHERE chat_id=g.id AND message_id IS NOT NULL) AS last_message_at
+            (SELECT max(source_at) FROM external_chat_message WHERE chat_id=g.id AND message_id IS NOT NULL
+              AND (thread_root IS NULL OR thread_broadcast)) AS last_message_at
             FROM candidates c JOIN external_chat g ON g.id=c.id
             LEFT JOIN external_chat_read_state r ON r.chat_id=g.id AND r.user_id=$1
             -- On the candidate, not the chat: Postgres would otherwise check every chat.
@@ -228,10 +263,12 @@ impl TimelineRepository for PgExternalChatRepository {
         &self,
         chat: &ChatRef,
         user: &str,
+        thread: Option<Uuid>,
         before: Option<Uuid>,
         limit: i64,
     ) -> ExternalChatResult<StoredPage> {
-        self.timeline_page(chat, user, before, None, limit).await
+        self.timeline_page(chat, user, thread, before, None, limit)
+            .await
     }
     async fn message(
         &self,
@@ -240,7 +277,7 @@ impl TimelineRepository for PgExternalChatRepository {
         message: Uuid,
     ) -> ExternalChatResult<Option<StoredMessage>> {
         Ok(self
-            .timeline_page(chat, user, None, Some(message), 1)
+            .timeline_page(chat, user, None, None, Some(message), 1)
             .await?
             .messages
             .pop())
@@ -250,20 +287,37 @@ impl TimelineRepository for PgExternalChatRepository {
         chat: Uuid,
         user: &MacroUserIdStr<'_>,
         message: Uuid,
-    ) -> ExternalChatResult<()> {
+    ) -> ExternalChatResult<Option<ReadAdvance>> {
         let user = user.as_ref();
-        let changed = sqlx::query!(r#"INSERT INTO external_chat_read_state (user_id,chat_id,message_id,read_at)
-            SELECT $2,$1,id,source_at FROM external_chat_message WHERE id = $3 AND chat_id = $1 AND message_id IS NOT NULL
-            ON CONFLICT (user_id,chat_id) DO UPDATE SET message_id = excluded.message_id,read_at = excluded.read_at
-            WHERE (external_chat_read_state.read_at,external_chat_read_state.message_id) < (excluded.read_at,excluded.message_id)"#,chat,user,message)
-            .execute(&self.pool).await.map_err(failure)?;
-        if changed.rows_affected() == 0 {
-            let exists=sqlx::query_scalar!("SELECT id FROM external_chat_message WHERE id=$1 AND chat_id=$2 AND message_id IS NOT NULL",message,chat).fetch_optional(&self.pool).await.map_err(failure)?;
-            if exists.is_none() {
-                return Err(ExternalChatError::NotFound.into());
-            }
-        }
-        Ok(())
+        let target = sqlx::query!(
+            "SELECT source_at, thread_root, thread_broadcast FROM external_chat_message WHERE id = $1 AND chat_id = $2 AND message_id IS NOT NULL",
+            message,
+            chat
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(failure)?
+        .ok_or(ExternalChatError::NotFound)?;
+        let thread_root = target.thread_root.filter(|_| !target.thread_broadcast);
+        let changed = match thread_root {
+            None => sqlx::query!(r#"INSERT INTO external_chat_read_state (user_id,chat_id,message_id,read_at)
+                VALUES ($2,$1,$3,$4)
+                ON CONFLICT (user_id,chat_id) DO UPDATE SET message_id = excluded.message_id,read_at = excluded.read_at
+                WHERE (external_chat_read_state.read_at,external_chat_read_state.message_id) < (excluded.read_at,excluded.message_id)"#,
+                chat,user,message,target.source_at)
+                .execute(&self.pool).await.map_err(failure)?,
+            Some(root) => sqlx::query!(r#"INSERT INTO external_chat_thread_read_state (user_id,chat_id,thread_root,message_id,read_at)
+                VALUES ($2,$1,$3,$4,$5)
+                ON CONFLICT (user_id,thread_root) DO UPDATE SET message_id = excluded.message_id,read_at = excluded.read_at
+                WHERE (external_chat_thread_read_state.read_at,external_chat_thread_read_state.message_id) < (excluded.read_at,excluded.message_id)"#,
+                chat,user,root,message,target.source_at)
+                .execute(&self.pool).await.map_err(failure)?,
+        };
+        Ok((changed.rows_affected() > 0).then_some(ReadAdvance {
+            message_id: message,
+            read_at: target.source_at,
+            thread_root,
+        }))
     }
     async fn permissions(&self, chat: Uuid) -> ExternalChatResult<SharePermissionV2> {
         let r=sqlx::query!(r#"SELECT sp.id,sp."linkShare" AS "link_share: LinkShare",sp."linkShareAccessLevel" AS "link_level: AccessLevel",

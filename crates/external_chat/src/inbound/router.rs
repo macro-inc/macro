@@ -52,9 +52,7 @@ impl<Eas, Auth> FromRef<ExternalChatRouterState<Eas, Auth>> for Arc<Eas> {
     }
 }
 
-impl<Eas, Auth> FromRef<ExternalChatRouterState<Eas, Auth>>
-    for MacroAuthorizationState<Auth>
-{
+impl<Eas, Auth> FromRef<ExternalChatRouterState<Eas, Auth>> for MacroAuthorizationState<Auth> {
     fn from_ref(state: &ExternalChatRouterState<Eas, Auth>) -> Self {
         state.authorization_state.clone()
     }
@@ -140,9 +138,7 @@ pub fn no_store<S: Clone + Send + Sync + 'static>(router: Router<S>) -> Router<S
 }
 
 /// Added chats of any provider, under `/external-chats`.
-pub fn external_chats_router<Eas, Auth, S>(
-    state: ExternalChatRouterState<Eas, Auth>,
-) -> Router<S>
+pub fn external_chats_router<Eas, Auth, S>(state: ExternalChatRouterState<Eas, Auth>) -> Router<S>
 where
     Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
@@ -247,18 +243,17 @@ pub async fn remove<Eas: EntityAccessService, Auth: MacroAuthorizationService>(
 #[derive(Deserialize, utoipa::IntoParams)]
 #[serde(rename_all = "camelCase")]
 pub struct TimelineQuery {
+    /// The replies in the thread this message starts, instead of the chat.
+    pub thread: Option<Uuid>,
     /// Last message id in the previous page.
     pub before: Option<Uuid>,
     /// Page size, up to [`PAGE_LIMIT`]; [`DEFAULT_PAGE`] when absent.
     pub limit: Option<i64>,
 }
 
-/// Newest-first timeline through ordinary view access.
+/// Newest-first timeline, or one thread's replies, through ordinary view access.
 #[utoipa::path(get, tag = "external_chat::inbound::router", path = "/external-chats/{chat_id}/messages", operation_id = "external_chat_messages", params(("chat_id" = Uuid, Path), TimelineQuery), responses((status = 200, body = ExternalChatMessages)))]
-pub async fn messages<
-    Eas: EntityAccessService,
-    Auth: MacroAuthorizationService,
->(
+pub async fn messages<Eas: EntityAccessService, Auth: MacroAuthorizationService>(
     State(state): State<ExternalChatRouterState<Eas, Auth>>,
     access: ExternalChatAccessLevelExtractor<ViewAccessLevel, Eas, Auth>,
     Query(query): Query<TimelineQuery>,
@@ -266,7 +261,12 @@ pub async fn messages<
     Ok(Json(
         state
             .service
-            .messages(&access.entity_access_receipt, query.before, query.limit)
+            .messages(
+                &access.entity_access_receipt,
+                query.thread,
+                query.before,
+                query.limit,
+            )
             .await?,
     ))
 }
@@ -297,10 +297,7 @@ pub async fn message<Eas: EntityAccessService, Auth: MacroAuthorizationService>(
 
 /// Attachment states of messages, by message id (at most 100).
 #[utoipa::path(post, tag = "external_chat::inbound::router", path = "/external-chats/{chat_id}/messages/attachments", operation_id = "external_chat_message_attachments", params(("chat_id" = Uuid, Path)), request_body = Vec<Uuid>, responses((status = 200, body = Vec<MessageAttachments>)))]
-pub async fn message_attachments<
-    Eas: EntityAccessService,
-    Auth: MacroAuthorizationService,
->(
+pub async fn message_attachments<Eas: EntityAccessService, Auth: MacroAuthorizationService>(
     State(state): State<ExternalChatRouterState<Eas, Auth>>,
     access: ExternalChatAccessLevelExtractor<ViewAccessLevel, Eas, Auth>,
     Json(ids): Json<Vec<Uuid>>,
@@ -315,10 +312,7 @@ pub async fn message_attachments<
 
 /// Advance this viewer's read position.
 #[utoipa::path(post, tag = "external_chat::inbound::router", path = "/external-chats/{chat_id}/read", operation_id = "external_chat_read", params(("chat_id" = Uuid, Path)), request_body = MarkRead, responses((status = 204)))]
-pub async fn mark_read<
-    Eas: EntityAccessService,
-    Auth: MacroAuthorizationService,
->(
+pub async fn mark_read<Eas: EntityAccessService, Auth: MacroAuthorizationService>(
     State(state): State<ExternalChatRouterState<Eas, Auth>>,
     access: ExternalChatAccessLevelExtractor<ViewAccessLevel, Eas, Auth>,
     Json(body): Json<MarkRead>,
@@ -332,10 +326,7 @@ pub async fn mark_read<
 
 /// Generic Share dialog policy.
 #[utoipa::path(get, tag = "external_chat::inbound::router", path = "/external-chats/{chat_id}/permissions", operation_id = "external_chat_permissions", params(("chat_id" = Uuid, Path)), responses((status = 200, body = SharePermissionV2)))]
-pub async fn permissions<
-    Eas: EntityAccessService,
-    Auth: MacroAuthorizationService,
->(
+pub async fn permissions<Eas: EntityAccessService, Auth: MacroAuthorizationService>(
     State(state): State<ExternalChatRouterState<Eas, Auth>>,
     access: ExternalChatAccessLevelExtractor<ViewAccessLevel, Eas, Auth>,
 ) -> Result<Json<SharePermissionV2>, ApiError> {
@@ -349,10 +340,7 @@ pub async fn permissions<
 
 /// The owner, in their own session, updates link, team and channel sharing.
 #[utoipa::path(patch, tag = "external_chat::inbound::router", path = "/external-chats/{chat_id}/permissions", operation_id = "external_chat_update_permissions", params(("chat_id" = Uuid, Path)), request_body = UpdateSharePermissionRequestV2, responses((status = 204)))]
-pub async fn update_permissions<
-    Eas: EntityAccessService,
-    Auth: MacroAuthorizationService,
->(
+pub async fn update_permissions<Eas: EntityAccessService, Auth: MacroAuthorizationService>(
     State(state): State<ExternalChatRouterState<Eas, Auth>>,
     auth: MacroAuthorizationExtractor<Auth, UserOnly>,
     access: ExternalChatAccessLevelExtractor<OwnerAccessLevel, Eas, Auth>,
@@ -371,10 +359,7 @@ pub async fn update_permissions<
 
 /// Caller-owned pending, failed and uncertain sends.
 #[utoipa::path(get, tag = "external_chat::inbound::router", path = "/external-chats/{chat_id}/sends", operation_id = "external_chat_sends", params(("chat_id" = Uuid, Path)), responses((status = 200, body = Vec<SendProgress>)))]
-pub async fn open_sends<
-    Eas: EntityAccessService,
-    Auth: MacroAuthorizationService,
->(
+pub async fn open_sends<Eas: EntityAccessService, Auth: MacroAuthorizationService>(
     State(state): State<ExternalChatRouterState<Eas, Auth>>,
     access: ExternalChatAccessLevelExtractor<ViewAccessLevel, Eas, Auth>,
 ) -> Result<Json<Vec<SendProgress>>, ApiError> {
@@ -460,10 +445,7 @@ pub async fn upload<Eas: EntityAccessService, Auth: MacroAuthorizationService>(
 
 /// The caller's send progress for intents or messages.
 #[utoipa::path(post, tag = "external_chat::inbound::router", path = "/external-chats/{chat_id}/delivery", operation_id = "external_chat_delivery", params(("chat_id" = Uuid, Path)), request_body = Vec<Uuid>, responses((status = 200, body = Vec<SendProgress>)))]
-pub async fn delivery<
-    Eas: EntityAccessService,
-    Auth: MacroAuthorizationService,
->(
+pub async fn delivery<Eas: EntityAccessService, Auth: MacroAuthorizationService>(
     State(state): State<ExternalChatRouterState<Eas, Auth>>,
     access: ExternalChatAccessLevelExtractor<ViewAccessLevel, Eas, Auth>,
     Json(ids): Json<Vec<Uuid>>,

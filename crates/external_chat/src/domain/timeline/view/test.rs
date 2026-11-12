@@ -226,7 +226,13 @@ fn a_stored_group_created_line_holding_creation_metadata_names_no_subject() {
     let ana = person("Ana", Some("macro|ana@example.com"));
 
     assert_eq!(
-        rich_view(created, &ana, &[], "viewer", &People::new(|_| None, UNKNOWN_PERSON)),
+        rich_view(
+            created,
+            &ana,
+            &[],
+            "viewer",
+            &People::new(|_| None, UNKNOWN_PERSON)
+        ),
         Some(ExternalChatRichContent::System(ExternalChatSystemLine {
             action: SystemAction::GroupCreated,
             actor: Some(ana.clone()),

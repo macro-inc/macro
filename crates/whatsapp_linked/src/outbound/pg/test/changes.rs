@@ -105,6 +105,7 @@ async fn messages_and_send_outcomes_signal_their_group(pool: PgPool) {
                     mentions: vec![],
                 },
                 reply_to: None,
+                thread: None,
             },
             SendAuthority::Human,
         )
@@ -143,6 +144,7 @@ async fn a_retried_send_returns_the_original_whatever_happened_since(pool: PgPoo
             mentions: vec![],
         },
         reply_to: None,
+        thread: None,
     };
     let access = receipt::<MessageWrite>(ALICE, binding.id);
     let original = linked
@@ -205,7 +207,12 @@ async fn change_audiences_come_from_the_store(pool: PgPool) {
         .unwrap();
     let message = linked
         .chats
-        .messages(&receipt::<MessageView>(ALICE, binding.id), None, Some(1))
+        .messages(
+            &receipt::<MessageView>(ALICE, binding.id),
+            None,
+            None,
+            Some(1),
+        )
         .await
         .unwrap()
         .messages[0]

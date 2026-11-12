@@ -43,7 +43,8 @@ impl ExternalChatService {
             };
             let found = provider.communities(&chats).await?;
             for ((position, index), community) in indices.into_iter().enumerate().zip(found) {
-                reasons[index] = reply_block(account.as_ref(), &chats[position], sending.get(position));
+                reasons[index] =
+                    reply_block(account.as_ref(), &chats[position], sending.get(position));
                 communities[index] = community;
             }
         }
@@ -92,11 +93,13 @@ impl ExternalChatService {
             limits: provider.capabilities(&chat),
         })
     }
-    /// Read the complete timeline through view access, without remote
-    /// membership. `limit` defaults to [`DEFAULT_PAGE`], at most [`PAGE_LIMIT`].
+    /// Read the complete timeline, or the replies in the thread `thread`
+    /// starts, through view access, without remote membership. `limit`
+    /// defaults to [`DEFAULT_PAGE`], at most [`PAGE_LIMIT`].
     pub async fn messages<T: RequiredPermission>(
         &self,
         access: &EntityAccessReceipt<T>,
+        thread: Option<Uuid>,
         before: Option<Uuid>,
         limit: Option<i64>,
     ) -> ExternalChatResult<ExternalChatMessages> {
@@ -106,7 +109,13 @@ impl ExternalChatService {
             return Err(ExternalChatError::Invalid("the page size is out of range").into());
         }
         let chat = self.chat(id).await?;
-        let page = self.timeline.messages(&chat, user, before, limit).await?;
+        if let Some(root) = thread {
+            self.thread_root(&chat, user, root).await?;
+        }
+        let page = self
+            .timeline
+            .messages(&chat, user, thread, before, limit)
+            .await?;
         Ok(ExternalChatMessages {
             messages: self.message_views(&chat, user, page.messages).await?,
             next_cursor: page.next_cursor,
@@ -168,16 +177,52 @@ impl ExternalChatService {
             })
             .collect())
     }
-    /// Advance the caller's own read cursor monotonically.
-    #[tracing::instrument(name = "external_chat.read", skip_all, err, fields(chat_id, message_id = %message))]
+    /// A message that starts a thread in this chat: not a reply itself.
+    pub(super) async fn thread_root(
+        &self,
+        chat: &ChatRef,
+        viewer: &str,
+        root: Uuid,
+    ) -> ExternalChatResult<StoredMessage> {
+        self.timeline
+            .message(chat, viewer, root)
+            .await?
+            .filter(|message| message.thread_root.is_none())
+            .ok_or_else(|| ExternalChatError::NotFound.into())
+    }
+    /// Advance the caller's own read cursor monotonically, in the chat or in
+    /// the thread the message replies in. The owner's reads reach the
+    /// provider.
+    #[tracing::instrument(
+        name = "external_chat.read",
+        skip_all,
+        err,
+        fields(chat_id, message_id = %message, thread_root, advanced)
+    )]
     pub async fn mark_read<T: RequiredPermission>(
         &self,
         access: &EntityAccessReceipt<T>,
         message: Uuid,
     ) -> ExternalChatResult<()> {
         let (user, id) = receipt_scope(access)?;
-        tracing::Span::current().record("chat_id", tracing::field::display(id));
-        self.timeline.mark_read(id, user, message).await
+        let span = tracing::Span::current();
+        span.record("chat_id", tracing::field::display(id));
+        let chat = self.chat(id).await?;
+        let advance = self.timeline.mark_read(id, user, message).await?;
+        span.record("advanced", advance.is_some());
+        let Some(advance) = advance else {
+            return Ok(());
+        };
+        if let Some(root) = advance.thread_root {
+            span.record("thread_root", tracing::field::display(root));
+        }
+        if chat.user_id == user.as_ref() {
+            self.providers
+                .get(chat.provider)
+                .read_advanced(&chat, &advance)
+                .await?;
+        }
+        Ok(())
     }
     /// List only the caller's pending, uncertain or failed sends.
     pub async fn open_sends<T: RequiredPermission>(

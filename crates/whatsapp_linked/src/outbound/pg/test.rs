@@ -26,6 +26,7 @@ mod media;
 mod names;
 mod pairing;
 mod rich;
+mod threads;
 mod timeline;
 
 const GROUP: &str = "120363000000000001@g.us";
@@ -579,7 +580,7 @@ async fn a_reaction_before_its_message_is_deferred_and_replayed(pool: PgPool) {
     .unwrap();
     let page = linked
         .store
-        .messages(&binding, BOB, None, 50)
+        .messages(&binding, BOB, None, None, 50)
         .await
         .unwrap();
     assert_eq!(page.messages[0].id, message);
@@ -661,6 +662,7 @@ async fn a_dispatched_send_becomes_unknown_after_takeover_and_settles_from_its_e
             mentions: vec![],
         },
         reply_to: None,
+        thread: None,
     };
     assert!(matches!(
         linked
@@ -810,6 +812,7 @@ async fn an_accepted_send_writes_the_group_message_and_its_echo_converges(pool: 
                     mentions: vec![],
                 },
                 reply_to: Some(question),
+                thread: None,
             },
             SendAuthority::UserApiToken,
         )
@@ -878,6 +881,7 @@ async fn an_accepted_send_writes_the_group_message_and_its_echo_converges(pool: 
                     text: Some("rewritten".into()),
                 },
                 reply_to: None,
+                thread: None,
             },
             SendAuthority::Human,
         )
@@ -899,6 +903,7 @@ async fn an_accepted_send_writes_the_group_message_and_its_echo_converges(pool: 
                     text: Some("Better answer".into()),
                 },
                 reply_to: None,
+                thread: None,
             },
             SendAuthority::Human,
         )
@@ -920,6 +925,7 @@ async fn disconnecting_fails_undispatched_sends_and_stops_observation(pool: PgPo
                     mentions: vec![],
                 },
                 reply_to: None,
+                thread: None,
             },
             SendAuthority::Human,
         )
@@ -1013,6 +1019,7 @@ async fn stored_group_facts_authorize_adoption_and_sending_however_old(pool: PgP
                     mentions: vec![],
                 },
                 reply_to: None,
+                thread: None,
             },
             SendAuthority::Human,
         )
@@ -1118,6 +1125,7 @@ async fn rate_limited_send_never_creates_a_dispatchable_intent(pool: PgPool) {
             mentions: vec![],
         },
         reply_to: None,
+        thread: None,
     };
     let error = chats
         .send_reply(

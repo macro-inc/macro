@@ -223,6 +223,9 @@ pub fn message_view(
         kind: message.kind,
         forwarded: message.forwarded,
         view_once: message.view_once,
+        thread_root: message.thread_root,
+        thread_broadcast: message.thread_broadcast,
+        thread: message.thread,
     }
 }
 

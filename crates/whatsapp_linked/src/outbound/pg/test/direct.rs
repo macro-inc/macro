@@ -134,7 +134,12 @@ async fn a_direct_chat_is_added_kept_and_sent_to_only_by_its_owner(pool: PgPool)
     }
     let messages = linked
         .chats
-        .messages(&receipt::<MessageView>(ALICE, binding.id), None, Some(10))
+        .messages(
+            &receipt::<MessageView>(ALICE, binding.id),
+            None,
+            None,
+            Some(10),
+        )
         .await
         .unwrap()
         .messages;
@@ -191,6 +196,7 @@ async fn a_direct_chat_is_added_kept_and_sent_to_only_by_its_owner(pool: PgPool)
             mentions: vec![],
         },
         reply_to: None,
+        thread: None,
     };
     assert!(
         linked

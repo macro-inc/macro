@@ -451,13 +451,36 @@ pub(super) async fn persist_in(
             > 0);
     }
     if let Some(actor) = r.reaction_actor {
-        return Ok(sqlx::query!(r#"INSERT INTO external_chat_reaction (message_id,person_id,emoji,user_id,source_id,revision,updated_at)
-            VALUES ($1,$2,$3,$4,$5,$6,$7)
-            ON CONFLICT (message_id,person_id) DO UPDATE SET emoji = excluded.emoji,user_id = excluded.user_id,
-                source_id = excluded.source_id,revision = excluded.revision,updated_at = excluded.updated_at
-            WHERE (excluded.revision,excluded.updated_at,excluded.source_id) > (external_chat_reaction.revision,external_chat_reaction.updated_at,external_chat_reaction.source_id)"#,
+        // A WhatsApp person has one reaction per message: a newer one
+        // replaces it, an empty one withdraws it. The chat row is locked.
+        let superseded = sqlx::query_scalar!(
+            r#"SELECT EXISTS(SELECT 1 FROM external_chat_reaction WHERE message_id = $1 AND person_id = $2
+                AND (revision,updated_at,source_id) >= ($3,$4,$5)) AS "superseded!""#,
+            r.message,
+            actor,
+            message.revision,
+            event.source_at,
+            message.source_id
+        )
+        .fetch_one(&mut **tx)
+        .await
+        .map_err(failure)?;
+        if superseded {
+            return Ok(false);
+        }
+        sqlx::query!(
+            "DELETE FROM external_chat_reaction WHERE message_id = $1 AND person_id = $2",
+            r.message,
+            actor
+        )
+        .execute(&mut **tx)
+        .await
+        .map_err(failure)?;
+        sqlx::query!(r#"INSERT INTO external_chat_reaction (message_id,person_id,emoji,user_id,source_id,revision,updated_at)
+            VALUES ($1,$2,$3,$4,$5,$6,$7)"#,
             r.message,actor,message.text,r.associated_user,message.source_id,message.revision,event.source_at)
-            .execute(&mut **tx).await.map_err(failure)?.rows_affected() > 0);
+            .execute(&mut **tx).await.map_err(failure)?;
+        return Ok(true);
     }
     let reply_to = if r.create {
         match message.target.as_ref() {

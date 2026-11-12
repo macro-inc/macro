@@ -39,7 +39,8 @@ fn a_group_created_line_names_the_subject_never_the_creation_metadata() {
 
 #[test]
 fn a_system_line_stored_before_the_rename_still_reads_who_did_it() {
-    let stored = r#"{"action":"subject_changed","participants":[],"value":"Launch","byWhatsapp":true}"#;
+    let stored =
+        r#"{"action":"subject_changed","participants":[],"value":"Launch","byWhatsapp":true}"#;
     let line: SystemLine = serde_json::from_str(stored).unwrap();
     assert!(line.by_provider);
 }

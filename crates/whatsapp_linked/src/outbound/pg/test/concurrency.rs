@@ -22,6 +22,7 @@ async fn sends_and_roster_refreshes_share_a_consistent_lock_order(pool: PgPool) 
                     mentions: vec![],
                 },
                 reply_to: None,
+                thread: None,
             };
             barrier.wait().await;
             repository

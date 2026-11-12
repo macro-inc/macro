@@ -2093,6 +2093,77 @@ impl NotificationExtIos for ExternalChatMessageMetadata {
     }
 }
 
+/// Why a provider stopped a person's linked external chat account.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ExternalChatAccountEndedReason {
+    /// The provider ended the session (signed out, revoked or expired).
+    SessionEnded,
+    /// An administrator at the provider blocks the connection.
+    Restricted,
+    /// Macro can no longer read the stored credentials.
+    Unreadable,
+}
+
+/// A person's linked external chat account stopped syncing; they must sign
+/// in again. Sent once per consent generation, to the account's owner.
+#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ExternalChatAccountEndedMetadata {
+    /// The messaging service the account is at.
+    pub provider: model_entity::ExternalChatProvider,
+    /// The provider account.
+    pub account_id: Uuid,
+    /// What the account is called (a workspace or phone number).
+    pub account_name: String,
+    /// Why it ended.
+    pub reason: ExternalChatAccountEndedReason,
+}
+impl Notification for ExternalChatAccountEndedMetadata {
+    const TYPE_NAME: &'static str = "external_chat_account_ended";
+}
+impl NotificationTitle for ExternalChatAccountEndedMetadata {
+    fn format_title(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        Ok(format!("{} disconnected", self.provider.label()))
+    }
+    fn format_body(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        Ok(match self.reason {
+            ExternalChatAccountEndedReason::SessionEnded
+            | ExternalChatAccountEndedReason::Unreadable => format!(
+                "{} stopped syncing. Sign in again to keep your chats up to date.",
+                self.account_name
+            ),
+            ExternalChatAccountEndedReason::Restricted => format!(
+                "{} stopped syncing because an administrator blocks this connection.",
+                self.account_name
+            ),
+        })
+    }
+}
+
+impl NotificationExtIos for ExternalChatAccountEndedMetadata {
+    type NotifData = PushNotificationData;
+
+    fn collapse_key(&self, _entity: &Entity<'_>) -> NotifCollapseKey {
+        NotifCollapseKey::new("external_chat_account").append(&self.account_id.to_string())
+    }
+
+    fn as_apns<'a>(
+        &self,
+        sender_id: Option<MacroUserIdStr<'a>>,
+        _entity: &Entity<'_>,
+        notification_id: Uuid,
+    ) -> Option<APNSPushNotification<Self::NotifData>> {
+        alert_apns(self, sender_id, notification_id, None).ok()
+    }
+}
+
 /// How a routine run ended, as its notification reports it.
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "snake_case")]

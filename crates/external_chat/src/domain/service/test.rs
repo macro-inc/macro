@@ -96,6 +96,7 @@ fn requests_are_bounded_and_operations_carry_the_right_text() {
                 idempotency_key: key,
                 message: content,
                 reply_to: None,
+                thread: None,
             },
             no_mentions,
         )
@@ -128,6 +129,7 @@ fn requests_are_bounded_and_operations_carry_the_right_text() {
                     idempotency_key: key,
                     message: content,
                     reply_to: None,
+                    thread: None,
                 },
                 no_mentions
             )
@@ -143,6 +145,7 @@ fn requests_are_bounded_and_operations_carry_the_right_text() {
                     mentions: vec![]
                 },
                 reply_to: None,
+                thread: None,
             },
             no_mentions
         )

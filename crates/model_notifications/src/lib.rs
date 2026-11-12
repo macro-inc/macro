@@ -18,16 +18,16 @@ pub use metadata::{
     ChannelMessageReactionMetadata, ChannelMessageSendMetadata, ChannelReplyMetadata, ChannelType,
     ColleagueJoinedMacro, CommentedOnDocumentMetadata, CommonChannelMetadata,
     CrmDiscussionMetadata, CrmDiscussionReason, DocumentMentionMetadata,
-    EntityAccessGrantedMetadata, EntityAccessRequestedMetadata, ExternalChatMessageMetadata,
-    GithubPrCheckRun, GithubPrCheckRunState, GithubPrComment, GithubPrCommentKind,
-    GithubPrEventAction, GithubPrEventStatus, GithubPrMention, GithubPrMentionLocation,
-    GithubPrNotificationCommon, GithubPrReview, GithubPrReviewState, GithubPrStatusChanged,
-    GithubReviewRequested, InboxReauthRequiredMetadata, InitiativeDiscussionMetadata,
-    InitiativeDiscussionReason, InviteToTeamMetadata, InviteePlan, ItemSharedMetadata,
-    MentionedInDocumentCommentMetadata, NewEmailMetadata, NotificationDocumentSubType,
-    NotificationTitle, ReminderMetadata, RepliedToDocumentCommentThreadMetadata,
-    RequestedAccessLevel, RoutineRunFinishedMetadata, RoutineRunOutcome,
-    RuntimeAccessRemovedMetadata, StoppedAgent, TaskAssignedMetadata,
+    EntityAccessGrantedMetadata, EntityAccessRequestedMetadata, ExternalChatAccountEndedMetadata,
+    ExternalChatAccountEndedReason, ExternalChatMessageMetadata, GithubPrCheckRun,
+    GithubPrCheckRunState, GithubPrComment, GithubPrCommentKind, GithubPrEventAction,
+    GithubPrEventStatus, GithubPrMention, GithubPrMentionLocation, GithubPrNotificationCommon,
+    GithubPrReview, GithubPrReviewState, GithubPrStatusChanged, GithubReviewRequested,
+    InboxReauthRequiredMetadata, InitiativeDiscussionMetadata, InitiativeDiscussionReason,
+    InviteToTeamMetadata, InviteePlan, ItemSharedMetadata, MentionedInDocumentCommentMetadata,
+    NewEmailMetadata, NotificationDocumentSubType, NotificationTitle, ReminderMetadata,
+    RepliedToDocumentCommentThreadMetadata, RequestedAccessLevel, RoutineRunFinishedMetadata,
+    RoutineRunOutcome, RuntimeAccessRemovedMetadata, StoppedAgent, TaskAssignedMetadata,
 };
 pub use unsubscribe::UserUnsubscribe;
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -238,6 +238,9 @@ define_notif_event!(
         /// A live message in a shared external chat.
         ExternalChatMessage(ExternalChatMessageMetadata),
 
+        /// A linked external chat account stopped syncing.
+        ExternalChatAccountEnded(ExternalChatAccountEndedMetadata),
+
         /// A calendar event alarm came due.
         CalendarEventReminder(CalendarEventReminderMetadata),
 
@@ -338,6 +341,7 @@ impl NotificationTitle for NotifEvent {
             }
             NotifEvent::Reminder(reminder_metadata) => reminder_metadata.format_title(sender_id),
             NotifEvent::ExternalChatMessage(metadata) => metadata.format_title(sender_id),
+            NotifEvent::ExternalChatAccountEnded(metadata) => metadata.format_title(sender_id),
             NotifEvent::CalendarEventReminder(calendar_event_reminder_metadata) => {
                 calendar_event_reminder_metadata.format_title(sender_id)
             }
@@ -412,6 +416,7 @@ impl NotificationTitle for NotifEvent {
             }
             NotifEvent::Reminder(reminder_metadata) => reminder_metadata.format_body(sender_id),
             NotifEvent::ExternalChatMessage(metadata) => metadata.format_body(sender_id),
+            NotifEvent::ExternalChatAccountEnded(metadata) => metadata.format_body(sender_id),
             NotifEvent::CalendarEventReminder(calendar_event_reminder_metadata) => {
                 calendar_event_reminder_metadata.format_body(sender_id)
             }

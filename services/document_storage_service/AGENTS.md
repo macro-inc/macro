@@ -29,10 +29,11 @@ threads, pins, recents, notifications, folders, activity.
   notification/withdrawal/realtime ports. Policy lives in `crates/access_requests`.
   It also builds the attention feeds (Home's work feed and the notifications
   inbox) from one set of `attention_feed` adapters, triggers and viewer lookup.
-- `src/external_chat.rs`: composes `ExternalChatService<WhatsAppProvider>`,
+- `src/external_chat.rs`: composes `ExternalChatService` over the
+  `ChatProviders` registry (WhatsApp today),
   mounts `/external-chats` (`crates/external_chat`) and `/whatsapp`
   (`crates/whatsapp_linked`) and runs the notification/import worker (LISTEN
-  `external_chat_effects`, `whatsapp_media_ready`; attachments become static
+  `external_chat_effects`, `external_chat_media_ready`; attachments become static
   files through the static file service, which also deletes released ones) and
   the `external_chat_changed` pusher (bare connection-gateway events to the
   account owner or a chat's viewers);

@@ -226,7 +226,7 @@ pub enum ReplyContent {
     },
 }
 
-/// Explicit send action from a person. Only deliberate sends reach WhatsApp.
+/// Explicit send action from a person. Only deliberate sends reach the provider.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
@@ -239,6 +239,10 @@ pub struct SendReply {
     /// Message being quoted, within this chat.
     #[serde(default)]
     pub reply_to: Option<Uuid>,
+    /// Reply in the thread this message starts, where the provider has
+    /// threads ([`Capabilities::threads`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub thread: Option<Uuid>,
 }
 
 /// Observed send state. `unknown` means the request may have reached WhatsApp;
@@ -488,6 +492,8 @@ pub struct Capabilities {
     pub attachment_limit_bytes: u32,
     /// Supported attachment MIME types.
     pub attachment_types: Vec<String>,
+    /// Messages can start threads, and sends can reply in one.
+    pub threads: bool,
 }
 
 impl Default for Capabilities {
@@ -502,6 +508,7 @@ impl Default for Capabilities {
                 .iter()
                 .map(|(mime, _)| (*mime).to_owned())
                 .collect(),
+            threads: false,
         }
     }
 }
