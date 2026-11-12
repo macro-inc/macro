@@ -232,6 +232,13 @@ export function splitLocationFromContent(
   routes: SplitRoutesManifest,
   content: SplitContent
 ): SplitLocation {
+  if (
+    content.type === 'component' &&
+    content.id === 'agents' &&
+    content.params?.agentPage === 'connections'
+  ) {
+    return { route: paneRoute({ id: 'view-connections', params: {} }) };
+  }
   // Persisted panes can still contain the old block discriminator.
   if (['routine', 'automation'].includes(content.type))
     return routineLocation(content.id);
@@ -369,6 +376,14 @@ export function resolveContentLocation(
     }
   }
   route ??= resolve(splitLocationFromContent(routes, content).route);
+  // Older Connections panes saved the Agents URL alongside their page request.
+  // Upgrade that parent route, but never override a newer explicit destination.
+  if (paneRootMatch(route)?.id === 'view-agents') {
+    const requested = splitLocationFromContent(routes, content);
+    if (paneRootMatch(requested.route)?.id === 'view-connections') {
+      route = resolve(requested.route);
+    }
+  }
   const savedSearch = isRecord(metadataLocation?.search)
     ? (metadataLocation.search as SplitSearchState)
     : undefined;

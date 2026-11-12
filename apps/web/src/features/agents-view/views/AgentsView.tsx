@@ -103,11 +103,15 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
   const listView = createConversationListView(userId());
   const [creatingKind, setCreatingKind] = createSignal<AgentKind>();
   const [localPage, setPage] = createSignal<AgentsPage>('new');
-  const isRoutinesPage = () => {
+  const routedPage = () => {
     const content = panel.handle.content();
-    return content.type === 'component' && content.id === 'routines';
+    if (
+      content.type === 'component' &&
+      (content.id === 'routines' || content.id === 'connections')
+    )
+      return content.id;
   };
-  const page = () => (isRoutinesPage() ? 'routines' : localPage());
+  const page = () => routedPage() ?? localPage();
   const [selected, setSelected] = createSignal<
     SelectedConversation | undefined
   >(
@@ -152,7 +156,8 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
     )
   );
   const dataMode = () => dataModeFor(selected() ? mode() : workspace.mode());
-  const [mobileList, setMobileList] = createSignal(!isRoutinesPage());
+  const [mobileList, setMobileList] = createSignal(!routedPage());
+  const showMobileList = () => mobileList() && !routedPage();
   const persistedDraft = createPersistedComposerDraft(undefined, userId);
   const [search, setSearch] = createSignal('');
   // Routines that run often leave their runs unlisted; those stay a click
@@ -225,15 +230,16 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
   const openPage = (next: AgentsPage) => {
     setCreatingKind(undefined);
     setMobileList(false);
-    if (next === 'routines') {
-      layout.openWithSplit(routineContent(), {
-        handle: panel.handle,
-        activate: true,
-        search: {},
-      });
+    if (next === 'routines' || next === 'connections') {
+      layout.openWithSplit(
+        next === 'routines'
+          ? routineContent()
+          : { type: 'component', id: next },
+        { handle: panel.handle, activate: true, search: {} }
+      );
       return;
     }
-    if (isRoutinesPage()) {
+    if (routedPage()) {
       layout.openWithSplit(
         {
           type: 'component',
@@ -422,7 +428,7 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
                 <ViewTour tour={agentsTour} />
                 <main
                   class="main touch:pt-[calc(var(--mobile-content-inset-top,var(--safe-top,0px))+0.5rem)] touch:[&>*]:[--mobile-content-inset-top:0px]"
-                  classList={{ hidden: isTouchDevice() && mobileList() }}
+                  classList={{ hidden: isTouchDevice() && showMobileList() }}
                 >
                   <Show
                     when={selected()?.conversation}
@@ -434,7 +440,19 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
                             title={pageTitle()}
                             onBack={
                               isTouchDevice()
-                                ? () => setMobileList(true)
+                                ? () => {
+                                    if (routedPage()) {
+                                      layout.openWithSplit(
+                                        { type: 'component', id: 'agents' },
+                                        {
+                                          handle: panel.handle,
+                                          activate: true,
+                                          search: {},
+                                        }
+                                      );
+                                    }
+                                    setMobileList(true);
+                                  }
                                 : undefined
                             }
                           />
@@ -482,7 +500,7 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
                                 requestedAgentId={requestedAgentId()}
                                 active={
                                   !isTouchDevice() ||
-                                  (!mobileList() && page() === 'new')
+                                  (!showMobileList() && page() === 'new')
                                 }
                                 registerFocus={(focus) => {
                                   composerFocus = focus;
@@ -547,7 +565,7 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
                     )}
                   </Show>
                 </main>
-                <Show when={isTouchDevice() && mobileList()}>
+                <Show when={isTouchDevice() && showMobileList()}>
                   <div
                     class="size-full min-h-0 pt-[calc(var(--safe-top,0px)+0.5rem)]"
                     style={{

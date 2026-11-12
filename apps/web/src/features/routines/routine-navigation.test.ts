@@ -10,6 +10,7 @@ import {
 import {
   agentsViewRoute,
   appRoute,
+  connectionsRoute,
   legacyContentRoute,
   notFoundRoute,
   routineCreateRoute,
@@ -57,6 +58,7 @@ const definitions: SplitRoutes = {
       children: [
         routinesRoute,
         agentsViewRoute,
+        connectionsRoute,
         routineCreateRoute,
         routineDetailRoute,
         legacyContentRoute,
@@ -230,9 +232,9 @@ describe('routine navigation', () => {
     });
     history.back();
     expect(pane.content()).toMatchObject({
-      id: 'agents',
-      params: { agentPage: 'connections' },
+      id: 'connections',
     });
+    expect(history.read().path).toBe('/connections');
     history.forward();
     expect(routineIdFromContent(pane.content())).toBe('routine-a');
   });

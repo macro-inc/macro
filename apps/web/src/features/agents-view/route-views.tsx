@@ -13,7 +13,9 @@ import { AgentsView } from './views/AgentsView';
 
 export const AgentsRouteView = withAuth(() => {
   const panel = useSplitPanelOrThrow();
-  useViewRestoration();
+  useViewRestoration(
+    panel.handle.content().id === 'connections' ? 'agents' : undefined
+  );
   const route = () => {
     const content = panel.handle.content();
     if (content.type === 'component' && content.id === 'routines') return;
