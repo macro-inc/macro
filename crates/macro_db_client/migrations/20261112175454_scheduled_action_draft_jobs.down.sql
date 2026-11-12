@@ -5,9 +5,8 @@ DROP INDEX IF EXISTS scheduled_action_draft_unfinished;
 DROP INDEX IF EXISTS scheduled_action_draft_owner_client;
 DROP INDEX IF EXISTS scheduled_action_draft_owner_jobs;
 
--- Job rows mean nothing to code without jobs; blocking drafts keep theirs.
-DELETE FROM scheduled_action_draft WHERE state IS NOT NULL;
-
+-- Job rows stay: without these columns they are plain drafts, which the
+-- blocking sweep deletes after STALE_DRAFT, stopping their sessions.
 ALTER TABLE scheduled_action_draft
     DROP COLUMN IF EXISTS client_id,
     DROP COLUMN IF EXISTS traceparent,
