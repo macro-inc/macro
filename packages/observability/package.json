@@ -6,6 +6,7 @@
 	"exports": {
 		".": "./src/index.ts",
 		"./core": "./src/core.ts",
+		"./node": "./src/node.ts",
 		"./web": "./src/web.ts",
 		"./worker": "./src/worker.ts",
 		"./server": "./src/server.ts"
@@ -20,6 +21,7 @@
 		"@microlabs/otel-cf-workers": "^1.0.0-rc.52",
 		"@opentelemetry/api": "^1.9.1",
 		"@opentelemetry/api-logs": "^0.220.0",
+		"@opentelemetry/context-async-hooks": "^2.9.0",
 		"@opentelemetry/core": "^2.9.0",
 		"@opentelemetry/exporter-logs-otlp-http": "^0.220.0",
 		"@opentelemetry/exporter-trace-otlp-http": "^0.220.0",

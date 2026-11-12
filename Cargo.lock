@@ -702,6 +702,7 @@ dependencies = [
  "genai_telemetry",
  "github",
  "github_pull_requests",
+ "gmail_client",
  "granola_sync",
  "harness_id",
  "harnessd_protocol",

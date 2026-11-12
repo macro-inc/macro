@@ -655,6 +655,14 @@ async fn run() -> anyhow::Result<()> {
         config.ai_pricing(),
         recorder.clone(),
         linked_github,
+        // Lets agent sessions' `SendEmail` name a verified send-as alias in `from`.
+        email::outbound::GmailSenderProvider::new(
+            gmail_client::GmailClient::without_watch(),
+            email::outbound::GmailTokenProviderImpl::lazy(
+                redis.clone(),
+                Arc::new(config.auth_service_client()?),
+            ),
+        ),
     )
     .await
     .context("failed to build the in-memory agent tool context")?;
