@@ -299,6 +299,26 @@ async fn channel_changes_match_domain_current_states_tombstones_and_removed_ids(
     .await;
     assert_eq!(pages["channelTimeline"]["seq"], counter.to_string());
     assert_eq!(pages["channelThread"]["seq"], counter.to_string());
+
+    for (reply, root) in [(101, 2), (105, 2), (204, 4)] {
+        set_log(
+            &pool,
+            1,
+            1,
+            vec![ChannelChangeKind::Message(message_id(reply))],
+        )
+        .await;
+        let (_, reply_only) = read_changes(&harness, &context, &reads, 0).await;
+        assert_eq!(
+            reply_only
+                .messages
+                .iter()
+                .map(ChannelMessageChange::id)
+                .collect::<Vec<_>>(),
+            vec![message_id(root), message_id(reply)],
+            "a changed reply includes its root even when the root has no log row"
+        );
+    }
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
