@@ -1,13 +1,13 @@
 // Prints the cache key for one wasm package build: a hash of what the build
 // reads, so a change elsewhere in the workspace keeps the key.
 //
-// - The files of the package's workspace dependency closure
-//   (.github/workspace-dep-closures.json), the toolchain pin, the Nix flake and
-//   its definitions (they choose wasm-pack, wasm-bindgen and binaryen), `.cargo`
-//   and `static_assets`.
-// - Its slice of Cargo.lock: every locked package reachable from the closure's
-//   crates. Lockfile edges cover every target and dependency kind, so the slice
-//   holds at least what the build compiles.
+// - The files of the workspace crates a wasm32 build of the package compiles
+//   (`wasm_closures` in .github/workspace-dep-closures.json, written by
+//   `cargo x deps`), the toolchain pin, the Nix flake and its definitions (they
+//   choose wasm-pack, wasm-bindgen and binaryen), `.cargo` and `static_assets`.
+// - Its slice of Cargo.lock: every locked package reachable from those crates.
+//   Lockfile edges cover every target and dependency kind, so the slice holds at
+//   least what the build compiles.
 // - The root Cargo.toml without its `members` list. Dependencies, profiles,
 //   patches and lints stay in.
 // - The `CARGO_PROFILE_*` variables of the profile the build uses, and the
@@ -172,10 +172,12 @@ export function wasmCacheKey(
 ): string {
   const closures = JSON.parse(
     readFileSync(join(root, '.github/workspace-dep-closures.json'), 'utf8')
-  ) as { closures: Record<string, string[]> };
-  const directories = closures.closures[closurePackage] ?? [];
+  ) as { wasm_closures?: Record<string, string[]> };
+  const directories = closures.wasm_closures?.[closurePackage] ?? [];
   if (directories.length === 0) {
-    throw new Error(`no dependency closure for ${closurePackage}`);
+    throw new Error(
+      `no wasm closure for ${closurePackage}: add it to WASM_PACKAGES in tooling/xtask/crates/xtask_deps/src/closures.rs and run \`cargo x deps\``
+    );
   }
 
   const hash = createHash('sha256');

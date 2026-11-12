@@ -1,7 +1,14 @@
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   lockSlice,
@@ -92,7 +99,9 @@ const BASE_FILES = {
   'rust-toolchain.toml': '[toolchain]\nchannel = "1.94.0"\n',
   'nix/tools.nix': '{ wasm-pack = "0.15.0"; }\n',
   '.github/workspace-dep-closures.json': JSON.stringify({
-    closures: { engine: ['crates/engine'], server: ['crates/server'] },
+    // The plain closure also follows a link a wasm32 build never compiles.
+    closures: { engine: ['crates/engine', 'crates/server'], server: ['crates/server'] },
+    wasm_closures: { engine: ['crates/engine'] },
   }),
   'crates/engine/Cargo.toml': '[package]\nname = "engine"\nversion = "0.1.0"\n',
   'crates/engine/src/lib.rs': 'pub fn draw() {}\n',
@@ -175,5 +184,23 @@ describe('wasmCacheKey', () => {
     expect(wasmCacheKey(first, 'engine', build(first), {})).toBe(
       wasmCacheKey(second, 'engine', build(second), {})
     );
+  });
+});
+
+describe('the closure map', () => {
+  it('has a wasm closure for every package the justfile builds', () => {
+    const repo = resolve(import.meta.dirname, '../../..');
+    const justfile = readFileSync(join(repo, 'apps/web/justfile'), 'utf8');
+    const packages = [...justfile.matchAll(/scripts\/cached-wasm-build\.sh (\S+)/g)].map(
+      (match) => match[1]
+    );
+    const { wasm_closures } = JSON.parse(
+      readFileSync(join(repo, '.github/workspace-dep-closures.json'), 'utf8')
+    ) as { wasm_closures: Record<string, string[]> };
+
+    expect(packages.length).toBeGreaterThan(0);
+    for (const name of packages) {
+      expect(wasm_closures[name]?.length ?? 0, name).toBeGreaterThan(0);
+    }
   });
 });
