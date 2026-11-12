@@ -108,7 +108,9 @@ Each session's commands run one at a time on its command worker
 (`service/queue.rs`). After `WORKER_IDLE_TIMEOUT` with nothing queued, the
 worker tries to release its session (`service/idle.rs`) and exits only when
 nothing is left to free (`IdleRelease::holds_nothing`: released, or another
-runtime's session); a session still held keeps its worker, which tries again.
+runtime's session, such as Cursor, a sandboxed coder or an external (macrod)
+runtime, whose queue copy and `hydrated` mark are forgotten too); a session
+still held keeps its worker, which tries again.
 A try that replayed the log and kept the session, or failed, pushes the next
 one out to twice, four times, then every sixteen times the timeout
 (`idle_wait`, `IdleRelease::backs_off`), because each such try replays the
