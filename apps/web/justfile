@@ -146,9 +146,10 @@ docx_engine_wasm_target := justfile_directory() / "../../target/docx-engine-wasm
 fig_engine_wasm_target := justfile_directory() / "../../target/fig-engine-wasm"
 psd_engine_wasm_target := justfile_directory() / "../../target/psd-engine-wasm"
 ai_engine_wasm_target := justfile_directory() / "../../target/ai-engine-wasm"
+password_import_wasm_target := justfile_directory() / "../../target/password-import-wasm"
 
 [parallel]
-build-wasm: build-cache-wasm build-agent-fold-wasm build-database-sql-wasm build-natural-time-wasm build-pptx-engine-wasm build-docx-engine-wasm build-fig-engine-wasm build-psd-engine-wasm build-ai-engine-wasm
+build-wasm: build-cache-wasm build-agent-fold-wasm build-database-sql-wasm build-natural-time-wasm build-pptx-engine-wasm build-docx-engine-wasm build-fig-engine-wasm build-psd-engine-wasm build-ai-engine-wasm build-password-import-wasm
 
 build-dev: build-wasm
     MODE=development NODE_ENV=production NODE_OPTIONS="{{node_heap}}" bun run --bun build
@@ -379,6 +380,24 @@ ensure-database-sql-wasm:
 # browser) into src/lib/core/natural-time/wasm (gitignored).
 build-natural-time-wasm:
     scripts/cached-wasm-build.sh natural_time {{justfile_directory()}}/src/lib/core/natural-time/wasm -- env CARGO_TARGET_DIR="{{natural_time_wasm_target}}" wasm-pack build {{justfile_directory()}}/../../crates/natural_time --target web --release --out-dir {{justfile_directory()}}/src/lib/core/natural-time/wasm
+
+# Build the password-import wasm module (1Password and Bitwarden export
+# parsing, hosted in a worker by the passwords import dialog) into
+# src/lib/core/password-import/wasm (gitignored).
+build-password-import-wasm:
+    scripts/cached-wasm-build.sh password_import_wasm {{justfile_directory()}}/src/lib/core/password-import/wasm -- env CARGO_TARGET_DIR="{{password_import_wasm_target}}" wasm-pack build {{justfile_directory()}}/../../crates/password_import_wasm --target web --release --out-dir {{justfile_directory()}}/src/lib/core/password-import/wasm
+
+# Dev fast path: build the password-import wasm pkg only when it is missing or
+# the adapter or parser sources are newer than the built artifact.
+ensure-password-import-wasm:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    WASM="{{justfile_directory()}}/src/lib/core/password-import/wasm/password_import_wasm_bg.wasm"
+    CRATE="{{justfile_directory()}}/../../crates/password_import_wasm"
+    PARSER="{{justfile_directory()}}/../../crates/password_import"
+    if [ ! -f "$WASM" ] || [ -n "$(find "$CRATE/src" "$CRATE/Cargo.toml" "$PARSER/src" "$PARSER/Cargo.toml" -newer "$WASM" -print -quit)" ]; then
+        just --justfile "{{justfile()}}" build-password-import-wasm
+    fi
 
 # Dev fast path: build the natural-time wasm pkg only when it is missing or
 # any crate source is newer than the built artifact. The crate has no
