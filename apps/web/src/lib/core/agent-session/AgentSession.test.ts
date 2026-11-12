@@ -38,6 +38,13 @@ vi.mock('@core/constant/featureFlags', async (importOriginal) => {
       flag === actual.enableAgentNavigation && flags.agentNavigation,
   };
 });
+const device = vi.hoisted(() => ({ nativeApp: false, phoneBrowser: false }));
+vi.mock('@core/mobile/isNativeMobilePlatform', () => ({
+  isNativeMobilePlatform: () => device.nativeApp,
+}));
+vi.mock('@core/mobile/isMobile', () => ({
+  isMobile: () => device.phoneBrowser,
+}));
 const logSource = vi.hoisted(() => {
   class Unavailable extends Error {
     constructor(
@@ -340,6 +347,27 @@ describe('AgentSession', () => {
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
     );
     expect(stop).not.toHaveProperty('clientId');
+    live.release();
+  });
+
+  it.each([
+    'nativeApp',
+    'phoneBrowser',
+  ] as const)('sends no tab with a prompt typed on mobile (%s)', async (kind) => {
+    flags.agentNavigation = true;
+    device[kind] = true;
+    onTestFinished(() => {
+      flags.agentNavigation = false;
+      device[kind] = false;
+    });
+    const live = AgentSession.acquire(SESSION);
+    await live.load();
+
+    await live.issue({ type: 'prompt', prompt: 'open the plan' });
+
+    const [[, prompt]] = harness.control.mock.calls;
+    expect(prompt).toMatchObject({ type: 'prompt', prompt: 'open the plan' });
+    expect(prompt).not.toHaveProperty('clientId');
     live.release();
   });
 

@@ -40,6 +40,13 @@ vi.mock('@core/constant/featureFlags', async (importOriginal) => {
     },
   };
 });
+const device = vi.hoisted(() => ({ nativeApp: false, phoneBrowser: false }));
+vi.mock('@core/mobile/isNativeMobilePlatform', () => ({
+  isNativeMobilePlatform: () => device.nativeApp,
+}));
+vi.mock('@core/mobile/isMobile', () => ({
+  isMobile: () => device.phoneBrowser,
+}));
 vi.mock('@service-agent-harness/client', () => ({
   agentHarnessServiceClient: harness,
 }));
@@ -126,6 +133,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   flags.firstPromptOnCreate = true;
   flags.agentNavigation = false;
+  device.nativeApp = false;
+  device.phoneBrowser = false;
   fold.pushSession.mockResolvedValue([]);
   fold.readSession.mockResolvedValue({
     messages: [],
@@ -497,6 +506,20 @@ describe('first prompt on the create', () => {
     expect(request.promptClientId).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
     );
+  });
+
+  it.each([
+    'nativeApp',
+    'phoneBrowser',
+  ] as const)('names no tab for a first prompt typed on mobile (%s)', async (kind) => {
+    flags.agentNavigation = true;
+    device[kind] = true;
+    startPendingSession({ prompt: 'Open the plan', userId: 'me' });
+    await settle();
+
+    const [request] = harness.create.mock.calls[0];
+    expect(request.prompt).toBe('Open the plan');
+    expect(request).not.toHaveProperty('promptClientId');
   });
 
   it("keeps an effort's first prompt for after the session is configured", async () => {

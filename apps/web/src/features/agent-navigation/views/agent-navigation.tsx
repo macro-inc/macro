@@ -12,7 +12,10 @@ import {
   useOptionalSplitRouter,
 } from '@app/lib/split-router';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { uiClientId } from '@core/agent-session/ui-client';
+import {
+  agentNavigationRunsHere,
+  uiClientId,
+} from '@core/agent-session/ui-client';
 import { toast } from '@core/component/Toast/Toast';
 import { enableAgentNavigation } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
@@ -190,6 +193,7 @@ export function AgentNavigationProvider(props: ParentProps) {
   createConnectionWebsocketEffect((message) => {
     if (message.type !== UI_COMMAND_MESSAGE) return;
     if (!navigation().enabled) return;
+    if (!agentNavigationRunsHere()) return;
 
     const user = userId();
     if (!router || !user) return;

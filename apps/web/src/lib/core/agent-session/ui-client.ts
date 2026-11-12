@@ -9,6 +9,8 @@ import {
   enableAgentNavigation,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
+import { isMobile } from '@core/mobile/isMobile';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { z } from 'zod';
 
 const STORAGE_KEY = 'macro.ui-client-id';
@@ -44,11 +46,23 @@ export function uiClientId(): string {
 }
 
 /**
+ * Whether agent navigation runs in this tab. It never runs on mobile: the
+ * native iOS and Android apps (iPad included, where panes stack) and
+ * phone-size touch browsers. There the tab names itself to no one and applies
+ * no `ui_command`, so an agent's open answers `no_client` and the agent links
+ * the item in its reply instead.
+ */
+export function agentNavigationRunsHere(): boolean {
+  return !isNativeMobilePlatform() && !isMobile();
+}
+
+/**
  * The id to send with a prompt typed in this tab: none while agent navigation
- * is off, so the harness records no tab for the turn.
+ * is off or on mobile, so the harness records no tab for the turn.
  */
 export function typedInClientId(): string | undefined {
   if (!isFeatureEnabled(enableAgentNavigation)) return undefined;
+  if (!agentNavigationRunsHere()) return undefined;
 
   return uiClientId();
 }
