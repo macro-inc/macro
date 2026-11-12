@@ -53,19 +53,26 @@ const startedHost: typeof fakeHost = (...args) => {
 describe('loadChannelPage', () => {
   beforeEach(() => resetPendingChannelPages());
 
-  it('answers a held page from the device without a request', async () => {
+  it('answers a channel known to be held from the device without a request', async () => {
     const newest = graphqlMessage(3);
     const joined = graphqlActivity(2);
     const oldest = graphqlMessage(1);
-    const host = startedHost(
-      [
-        devicePage([newest, joined, oldest].map(keyOf), {
-          olderCursor: oldest.sortKey,
-        }),
-      ],
-      { records: [newest, joined, oldest] }
+    const held = devicePage([newest, joined, oldest].map(keyOf), {
+      olderCursor: oldest.sortKey,
+    });
+    const host = startedHost([held, held], {
+      records: [newest, joined, oldest],
+    });
+    // The first open cannot know the device holds the channel, so it asks the
+    // server too; the device answers first.
+    const fetchPage = vi.fn(() => new Promise<FetchedChannelPage>(() => {}));
+    const first = await loadChannelPage(
+      host,
+      { channelId: CHANNEL_ID, limit: 50 },
+      { fetchPage }
     );
-    const fetchPage = vi.fn();
+    expect(first).toMatchObject({ source: 'device' });
+    expect(fetchPage).toHaveBeenCalledTimes(1);
 
     const loaded = await loadChannelPage(
       host,
@@ -73,7 +80,7 @@ describe('loadChannelPage', () => {
       { fetchPage }
     );
 
-    expect(fetchPage).not.toHaveBeenCalled();
+    expect(fetchPage).toHaveBeenCalledTimes(1);
     expect(host.commits).toEqual([]);
     expect(loaded).toMatchObject({ source: 'device', storedSeq: '7' });
     if (typeof loaded === 'string') throw new Error('expected a page');
@@ -161,7 +168,7 @@ describe('loadChannelPage', () => {
 
   it('reports a native engine without channel timelines', async () => {
     const host = startedHost([{ kind: 'unsupported' }]);
-    const fetchPage = vi.fn();
+    const fetchPage = vi.fn(() => new Promise<FetchedChannelPage>(() => {}));
 
     expect(
       await loadChannelPage(
@@ -170,6 +177,47 @@ describe('loadChannelPage', () => {
         { fetchPage }
       )
     ).toBe('unsupported');
+  });
+
+  it('shares one device read and one request between two readers of a page', async () => {
+    const message = graphqlMessage(1);
+    const host = startedHost(() => devicePage([], { covered: false }));
+    const fetchPage = vi.fn(async () =>
+      fetched(serverPage({ entries: [message] }))
+    );
+
+    const [first, second] = await Promise.all([
+      loadChannelPage(
+        host,
+        { channelId: CHANNEL_ID, limit: 50 },
+        { fetchPage }
+      ),
+      loadChannelPage(
+        host,
+        { channelId: CHANNEL_ID, limit: 50 },
+        { fetchPage }
+      ),
+    ]);
+
+    expect(fetchPage).toHaveBeenCalledTimes(1);
+    expect(host.reads).toHaveLength(1);
+    expect(second).toBe(first);
+  });
+
+  it('waits on the device alone for an older page', async () => {
+    const message = graphqlMessage(1);
+    const host = startedHost([devicePage([keyOf(message)])], {
+      records: [message],
+    });
+    const fetchPage = vi.fn();
+
+    const loaded = await loadChannelPage(
+      host,
+      { channelId: CHANNEL_ID, limit: 50, before: graphqlMessage(5).sortKey },
+      { fetchPage }
+    );
+
+    expect(loaded).toMatchObject({ source: 'device' });
     expect(fetchPage).not.toHaveBeenCalled();
   });
   it('shows the server page when the device is still starting, then records it', async () => {
