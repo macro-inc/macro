@@ -18,7 +18,7 @@ use std::sync::Arc;
 use axum::{
     Json, Router,
     body::Body,
-    extract::{FromRef, Path, State},
+    extract::{DefaultBodyLimit, FromRef, Path, State},
     http::{Request, StatusCode},
     middleware::{self, Next},
     response::IntoResponse,
@@ -38,7 +38,10 @@ use self::{
     get_projects::{get_pending_projects_handler, get_projects_handler},
     project_permission::{get_project_access_level_handler, get_project_permissions_handler},
     revert_delete_project::revert_delete_project_handler,
-    upload_folder::{upload_extract_folder_handler, upload_folder_handler},
+    upload_folder::{
+        UPLOAD_FOLDER_MAX_BODY_BYTES, get_upload_extract_status_handler,
+        upload_extract_folder_handler, upload_folder_handler,
+    },
 };
 use crate::domain::{models::ProjectError, ports::ProjectService};
 
@@ -176,11 +179,16 @@ where
         )
         .route(
             "/upload",
-            axum::routing::post(upload_folder_handler::<T, Svc, Auth>),
+            axum::routing::post(upload_folder_handler::<T, Svc, Auth>)
+                .layer(DefaultBodyLimit::max(UPLOAD_FOLDER_MAX_BODY_BYTES)),
         )
         .route(
             "/upload_extract",
             axum::routing::post(upload_extract_folder_handler::<T, Svc, Auth>),
+        )
+        .route(
+            "/upload_extract/{request_id}",
+            axum::routing::get(get_upload_extract_status_handler::<T, Svc, Auth>),
         )
         .with_state(state)
 }

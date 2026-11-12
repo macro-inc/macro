@@ -24913,6 +24913,103 @@
         }
       }
     },
+    "/projects/upload_extract/{request_id}": {
+      "get": {
+        "tags": ["project"],
+        "summary": "Where the caller's folder upload stands, so the uploader can follow it to\nthe end even when a websocket update is missed.",
+        "operationId": "get_upload_extract_status_handler",
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "description": "The upload request id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["error", "data"],
+                  "properties": {
+                    "data": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "description": "Where a folder upload stands, for the uploader to follow it to the end.",
+                          "required": ["status"],
+                          "properties": {
+                            "progress": {
+                              "oneOf": [
+                                {
+                                  "type": "null"
+                                },
+                                {
+                                  "$ref": "#/components/schemas/UploadFolderProgress",
+                                  "description": "Files stored so far, once the extractor has counted them."
+                                }
+                              ]
+                            },
+                            "projectId": {
+                              "type": ["string", "null"],
+                              "description": "The uploaded folder, once it exists."
+                            },
+                            "status": {
+                              "$ref": "#/components/schemas/UploadFolderStatus"
+                            }
+                          }
+                        }
+                      ],
+                      "description": "Data to be returned"
+                    },
+                    "error": {
+                      "type": "boolean",
+                      "description": "Indicates if an error occurred"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/projects/{id}": {
       "get": {
         "tags": ["projects_hex::inbound::axum_router::get_project"],
@@ -62606,6 +62703,31 @@
           }
         }
       },
+      "UploadFolderProgress": {
+        "type": "object",
+        "description": "Files of an extracted folder moved into storage so far.",
+        "required": ["filesTotal", "filesStored", "filesFailed"],
+        "properties": {
+          "filesFailed": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Files that could not be stored.",
+            "minimum": 0
+          },
+          "filesStored": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Files stored successfully.",
+            "minimum": 0
+          },
+          "filesTotal": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Files the folder holds.",
+            "minimum": 0
+          }
+        }
+      },
       "UploadFolderRequest": {
         "type": "object",
         "required": ["content", "rootFolderName", "uploadRequestId"],
@@ -62637,6 +62759,19 @@
             "description": "The upload request id"
           }
         }
+      },
+      "UploadFolderStatus": {
+        "type": "string",
+        "description": "The upload status of the folder",
+        "enum": [
+          "pending",
+          "uploaded",
+          "processing",
+          "partially_completed",
+          "completed",
+          "failed",
+          "unknown"
+        ]
       },
       "UploadGrant": {
         "type": "object",

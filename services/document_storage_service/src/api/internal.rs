@@ -26,6 +26,7 @@ use crate::api::threads::get_thread_access_level;
 use crate::api::{documents::get_documents_metadata, items::validate_item_ids};
 use axum::{
     Router,
+    extract::DefaultBodyLimit,
     routing::{delete, get, post, put},
 };
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
@@ -200,7 +201,10 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
                     EntityAccessService,
                     AuthorizationService,
                 >,
-            ),
+            )
+            .layer(DefaultBodyLimit::max(
+                projects_hex::inbound::axum_router::upload_folder::UPLOAD_FOLDER_MAX_BODY_BYTES,
+            )),
         )
         .route(
             "/projects/mark_uploaded",
