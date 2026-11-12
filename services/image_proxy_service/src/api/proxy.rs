@@ -10,7 +10,7 @@ use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_middleware::tracking::ClientIp;
 use model::response::ErrorResponse;
 use reqwest::StatusCode;
-use reqwest::header::{HeaderMap, HeaderValue, USER_AGENT};
+use reqwest::header::{CONTENT_TYPE, HeaderMap, HeaderValue, USER_AGENT};
 use safe_fetch::{
     AcceptedMediaTypes, AddressPolicy, AllowedPorts, AllowedSchemes, FetchError, FetchPolicy,
     MediaType, SafeFetcher, SafeResponse,
@@ -38,7 +38,11 @@ const UPSTREAM_USER_AGENT: &str = "Mozilla/5.0 (compatible; MacroImageProxy/1.0)
 /// Any port stays allowed, as before. Only [`ALLOWED_MEDIA_TYPES`] are
 /// accepted.
 pub(crate) fn build_fetcher() -> Result<SafeFetcher, safe_fetch::BuildError> {
-    SafeFetcher::new(FetchPolicy {
+    SafeFetcher::new(fetch_policy())
+}
+
+pub(crate) fn fetch_policy() -> FetchPolicy {
+    FetchPolicy {
         schemes: AllowedSchemes::HttpAndHttps,
         ports: AllowedPorts::Any,
         addresses: AddressPolicy::public_only(),
@@ -48,7 +52,7 @@ pub(crate) fn build_fetcher() -> Result<SafeFetcher, safe_fetch::BuildError> {
         body_idle_timeout: Duration::from_secs(10),
         max_body_bytes: MAX_IMAGE_SIZE,
         media_types: AcceptedMediaTypes::only(ALLOWED_MEDIA_TYPES),
-    })
+    }
 }
 
 #[derive(Debug)]
@@ -70,14 +74,46 @@ impl ProxyError {
     }
 }
 
+/// The response bodies are the deployed `/proxy` contract; callers match on
+/// them, so keep them stable.
 impl fmt::Display for ProxyError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Fetch(FetchError::AddressNotAllowed { .. }) => {
+        let error = match self {
+            Self::Fetch(error) => error,
+            Self::ResponseBuild(e) => return write!(f, "could not build response: {e}"),
+        };
+        match error {
+            FetchError::InvalidUrl(e) => write!(f, "invalid URL: {e}"),
+            FetchError::SchemeNotAllowed { .. } => write!(f, "only http/https URLs are allowed"),
+            FetchError::MissingHost => write!(f, "missing host"),
+            FetchError::AddressNotAllowed { .. } => {
                 write!(f, "requests to private/internal IPs are not allowed")
             }
-            Self::Fetch(error) => write!(f, "{error}"),
-            Self::ResponseBuild(e) => write!(f, "could not build response: {e}"),
+            FetchError::Resolution => write!(f, "DNS lookup failed: {error}"),
+            FetchError::TotalTimeout | FetchError::BodyStalled => {
+                write!(f, "timeout fetching upstream image: {error}")
+            }
+            FetchError::Connect(_) => {
+                write!(f, "connection error fetching upstream image: {error}")
+            }
+            FetchError::InvalidRedirect | FetchError::TooManyRedirects { .. } => {
+                write!(f, "too many redirects fetching upstream image: {error}")
+            }
+            FetchError::Status { status } => write!(f, "upstream returned status {status}"),
+            FetchError::MediaTypeNotAllowed { media_type } => write!(
+                f,
+                "upstream content-type is not a supported image: {}",
+                media_type.as_ref().map_or("unparseable", MediaType::as_str)
+            ),
+            FetchError::BodyTooLarge { limit } => {
+                write!(f, "image exceeds max size of {limit} bytes")
+            }
+            FetchError::PortNotAllowed { .. } | FetchError::CredentialsInUrl => {
+                write!(f, "{error}")
+            }
+            FetchError::Transport(_) => {
+                write!(f, "network error fetching upstream image: {error}")
+            }
         }
     }
 }
@@ -149,12 +185,20 @@ pub async fn proxy_request_handler(
         Err(err) => return Err(err),
     };
 
+    // Serve the upstream Content-Type as sent (it passed the allowlist), or
+    // octet-stream when there was none.
+    let content_type = response
+        .headers
+        .get(CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or(response.media_type.as_str())
+        .to_owned();
     let body = response
         .body
         .into_stream()
         .map(|chunk| chunk.map_err(axum::Error::new));
 
-    image_response(response.media_type.as_str(), Body::from_stream(body))
+    image_response(&content_type, Body::from_stream(body))
 }
 
 async fn fetch(

@@ -32,10 +32,14 @@ macro_env = { path = "../../crates/macro_env" }
 macro_middleware = { path = "../../crates/macro_middleware", default-features = false, features = [
   "tracking",
 ] }
+macro_tower_layers = { path = "../../crates/macro_tower_layers" }
 model = { path = "../../crates/model" }
+bytes = { workspace = true }
 futures = { workspace = true }
-reqwest = { workspace = true }
+lazy-regex = { workspace = true }
+reqwest = { workspace = true, features = ["stream"] }
 safe_fetch = { path = "../../crates/safe_fetch" }
+url = { workspace = true }
 secretsmanager_client = { path = "../../crates/secretsmanager_client" }
 serde = { workspace = true }
 serde_json = { workspace = true }

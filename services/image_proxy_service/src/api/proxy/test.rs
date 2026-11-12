@@ -171,3 +171,77 @@ fn upstream_refusals_are_not_found_and_server_errors_bad_gateway() {
     .into_response();
     assert_eq!(response.status(), StatusCode::BAD_GATEWAY);
 }
+
+// These expectations come from the deployed generic proxy contract: callers
+// match on the status, body and content type of each refusal.
+#[tokio::test]
+async fn proxy_error_contract_preserves_status_body_and_content_type() {
+    use http_body_util::BodyExt;
+
+    for (error, status, body) in [
+        (
+            FetchError::SchemeNotAllowed {
+                scheme: "ftp".into(),
+            },
+            StatusCode::BAD_REQUEST,
+            "only http/https URLs are allowed",
+        ),
+        (
+            FetchError::AddressNotAllowed {
+                address: "127.0.0.1".parse().unwrap(),
+            },
+            StatusCode::FORBIDDEN,
+            "requests to private/internal IPs are not allowed",
+        ),
+        (
+            FetchError::TotalTimeout,
+            StatusCode::GATEWAY_TIMEOUT,
+            "timeout fetching upstream image: fetch exceeded its total timeout",
+        ),
+        (
+            FetchError::Status {
+                status: StatusCode::FORBIDDEN,
+            },
+            StatusCode::NOT_FOUND,
+            "upstream returned status 403 Forbidden",
+        ),
+        (
+            FetchError::Status {
+                status: StatusCode::INTERNAL_SERVER_ERROR,
+            },
+            StatusCode::BAD_GATEWAY,
+            "upstream returned status 500 Internal Server Error",
+        ),
+        (
+            FetchError::MediaTypeNotAllowed {
+                media_type: MediaType::from_content_type("text/html"),
+            },
+            StatusCode::UNSUPPORTED_MEDIA_TYPE,
+            "upstream content-type is not a supported image: text/html",
+        ),
+        (
+            FetchError::BodyTooLarge {
+                limit: MAX_IMAGE_SIZE,
+            },
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "image exceeds max size of 10485760 bytes",
+        ),
+        (
+            FetchError::CredentialsInUrl,
+            StatusCode::BAD_REQUEST,
+            "URLs with credentials are not allowed",
+        ),
+    ] {
+        let response = ProxyError::Fetch(error).into_response();
+        assert_eq!(response.status(), status, "{body}");
+        assert_eq!(
+            response.headers()["content-type"],
+            "text/plain; charset=utf-8"
+        );
+        assert!(!response.headers().contains_key("cache-control"));
+        assert_eq!(
+            response.into_body().collect().await.unwrap().to_bytes(),
+            body
+        );
+    }
+}

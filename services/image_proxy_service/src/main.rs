@@ -1,6 +1,8 @@
 #![recursion_limit = "256"]
 mod api;
 mod config;
+mod domain;
+mod outbound;
 
 use std::sync::Arc;
 
@@ -44,6 +46,10 @@ async fn main() -> anyhow::Result<()> {
     let state = api::context::ApiContext {
         authorization_state,
         environment: config.environment,
+        logo_service: domain::LogoService::new(outbound::FaviconProvider(
+            outbound::remote_image::build_http_client()
+                .context("failed to build favicon client")?,
+        )),
         fetcher,
     };
 

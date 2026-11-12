@@ -8,6 +8,7 @@ pub type AuthorizationService = MacroAuthorizationServiceImpl<MacroAuthJwtValida
 
 #[derive(Clone, FromRef)]
 pub struct ApiContext {
+    pub logo_service: crate::domain::LogoService<crate::outbound::FaviconProvider>,
     pub authorization_state: MacroAuthorizationState<AuthorizationService>,
     pub environment: Environment,
     pub fetcher: safe_fetch::SafeFetcher,
