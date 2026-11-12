@@ -368,14 +368,17 @@ describe('a channel write the server keeps turning away', () => {
     expect(host.rollbackOptimisticWrite).not.toHaveBeenCalled();
   });
 
-  it.each(['FORBIDDEN', 'NOT_FOUND', 'BAD_USER_INPUT', 'INTERNAL_SERVER_ERROR'])(
+  it.each([
+    'FORBIDDEN',
+    'NOT_FOUND',
+    'BAD_USER_INPUT',
+    'INTERNAL_SERVER_ERROR',
+  ])(
     'fails for good on a %s refusal, even after BUSY answers',
     async (code) => {
       const { answer, commit, host } = durableWrite();
       expect(await answer({ error: refusal('BUSY') })).toBe('queued');
-      expect(await answer({ error: refusal(code) })).toBe(
-        'permanently-failed'
-      );
+      expect(await answer({ error: refusal(code) })).toBe('permanently-failed');
       expect(host.rollbackOptimisticWrite).toHaveBeenCalledWith(
         '1',
         expect.anything(),
