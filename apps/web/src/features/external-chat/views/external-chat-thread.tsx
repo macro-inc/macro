@@ -1,22 +1,15 @@
 import type { InputHandle } from '@channel/Input/types';
 import { Thread } from '@channel/Thread';
 import { fireAndForget } from '@core/util/fireAndForget';
-import {
-  createEffect,
-  createSignal,
-  For,
-  type JSX,
-  on,
-  onCleanup,
-  Show,
-} from 'solid-js';
+import { createEffect, For, type JSX, on, onCleanup, Show } from 'solid-js';
 import { useExternalChat } from '../context/external-chat-context';
 import type { ChatDetail, ChatMessage } from '../core/chat';
 
 /**
  * A message's thread, inline under it like a channel thread: the reply-count
- * chip expands the replies and a composer for the thread, and the reply
- * button starts one. Only providers with threads (`limits.threads`) show it.
+ * chip expands the replies and a composer for the thread; the row's Reply
+ * opens it (`expanded`) to start or continue one. Only providers with
+ * threads (`limits.threads`) show it.
  */
 export function ExternalChatThread(props: {
   root: ChatMessage;
@@ -33,39 +26,31 @@ export function ExternalChatThread(props: {
   }) => JSX.Element;
   /** The thread's composer, for restoring a draft that wasn't sent. */
   onComposer: (handle: InputHandle | undefined) => void;
+  /** Open under the root; the view owns it so the row's Reply can open it. */
+  expanded: boolean;
+  onExpandedChange: (expanded: boolean) => void;
 }) {
-  const [expanded, setExpanded] = createSignal(false);
   const summary = () => props.root.thread;
   const canReply = () => props.chat.canSend && !props.root.pending;
 
   return (
     <Show when={props.chat.limits.threads && !props.root.deleted}>
       <Show
-        when={expanded()}
+        when={props.expanded}
         fallback={
-          <Show when={summary() || canReply()}>
-            <Thread.ActionsFooter>
-              <div class="flex items-center gap-2">
-                <Show when={summary()}>
-                  {(thread) => (
-                    <Thread.CollapsedIndicator
-                      collapsedRepliesCount={thread().replyCount}
-                      participants={[]}
-                      latestReplyAt={thread().lastReplyAt}
-                      hasNewMessages={thread().unread}
-                      withoutPreview
-                      onClick={() => setExpanded(true)}
-                    />
-                  )}
-                </Show>
-                <Show when={!summary() && canReply()}>
-                  <Thread.ReplyButton
-                    aria-label="Reply in thread"
-                    onClick={() => setExpanded(true)}
-                  />
-                </Show>
-              </div>
-            </Thread.ActionsFooter>
+          <Show when={summary()}>
+            {(thread) => (
+              <Thread.ActionsFooter>
+                <Thread.CollapsedIndicator
+                  collapsedRepliesCount={thread().replyCount}
+                  participants={[]}
+                  latestReplyAt={thread().lastReplyAt}
+                  hasNewMessages={thread().unread}
+                  withoutPreview
+                  onClick={() => props.onExpandedChange(true)}
+                />
+              </Thread.ActionsFooter>
+            )}
           </Show>
         }
       >
@@ -76,7 +61,7 @@ export function ExternalChatThread(props: {
           pending={props.pending}
           composer={props.composer}
           onComposer={props.onComposer}
-          onHide={() => setExpanded(false)}
+          onHide={() => props.onExpandedChange(false)}
         />
       </Show>
     </Show>

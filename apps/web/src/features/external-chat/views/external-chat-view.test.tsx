@@ -859,3 +859,19 @@ it('offers no threads where the provider has none', () => {
   expect(screen.queryByRole('button', { name: 'Reply in thread' })).toBeNull();
   expect(screen.queryByTitle('Expand thread')).toBeNull();
 });
+
+it('replies in a thread from the row where the provider has threads', async () => {
+  const fake = createFakeChat({
+    chat: { ...chat, limits: { ...chat.limits, threads: true } },
+  });
+  mount(fake);
+  const row = document.querySelector('[data-message-id="message-1"]');
+  if (!row) throw new Error('message row missing');
+  fireEvent.pointerEnter(row);
+  fireEvent.click(screen.getByRole('button', { name: 'Reply' }));
+  // A thread opens under the message instead of a quote in the chat composer.
+  expect(screen.queryByText('Replying to Ana Ruiz')).toBeNull();
+  expect(screen.getByRole('button', { name: 'Hide replies' })).toBeTruthy();
+  expect(mocks.composer?.input.id).toBe('external-chat-thread-input-message-1');
+  expect(mocks.focus).toHaveBeenCalled();
+});

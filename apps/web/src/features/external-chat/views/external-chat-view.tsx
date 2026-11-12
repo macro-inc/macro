@@ -127,6 +127,23 @@ export function ExternalChatView(props: {
   let input: InputHandle | undefined;
   // Each open thread's composer, by its root.
   const threadInputs = new Map<string, InputHandle>();
+  // Threads open under their roots, and the one whose composer takes focus
+  // once it mounts (opened by a row's Reply).
+  const [openThreads, setOpenThreads] = createSignal<string[]>([]);
+  let focusThread: string | undefined;
+  const setThreadOpen = (root: string, open: boolean) =>
+    setOpenThreads((current) => {
+      if (!open) return current.filter((id) => id !== root);
+      return current.includes(root) ? current : [...current, root];
+    });
+  /** Where the provider has threads, Reply opens the message's thread. */
+  const replyInThread = (message: ChatMessage) => {
+    const root = message.threadRoot ?? message.id;
+    const open = threadInputs.get(root);
+    if (open) open.focus();
+    else focusThread = root;
+    setThreadOpen(root, true);
+  };
   const [inputSnapshot, setInputSnapshot] = createSignal<InputSnapshot>();
   // The composer's own attachment rows, to put back with a restored draft.
   const snapshots = new WeakMap<Draft, InputSnapshot>();
@@ -376,9 +393,11 @@ export function ExternalChatView(props: {
     };
     return {
       get onReply() {
-        return writable()
-          ? () => setTarget({ kind: 'reply', message })
-          : undefined;
+        const group = writable();
+        if (!group) return undefined;
+        return group.limits.threads
+          ? () => replyInThread(message)
+          : () => setTarget({ kind: 'reply', message });
       },
       get onReact() {
         return writable()?.limits.mutations.includes('reaction')
@@ -525,9 +544,17 @@ export function ExternalChatView(props: {
               chat={chat()}
               renderMessage={renderMessage}
               pending={conversation.threadPending(message.id)}
+              expanded={openThreads().includes(message.id)}
+              onExpandedChange={(open) => setThreadOpen(message.id, open)}
               onComposer={(handle) => {
-                if (handle) threadInputs.set(message.id, handle);
-                else threadInputs.delete(message.id);
+                if (!handle) {
+                  threadInputs.delete(message.id);
+                  return;
+                }
+                threadInputs.set(message.id, handle);
+                if (focusThread !== message.id) return;
+                focusThread = undefined;
+                handle.focus();
               }}
               composer={(thread) => (
                 <ChannelInput
