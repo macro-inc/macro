@@ -127,13 +127,11 @@
     "activity": [
       "crates/activity",
       "crates/agent_correlation",
-      "crates/ai_toolset",
       "crates/bot_id",
       "crates/bot_token",
       "crates/broadcast",
       "crates/channel_sender",
       "crates/cowlike",
-      "crates/genai_telemetry",
       "crates/harness_id",
       "crates/harness_token",
       "crates/kafka_util",
