@@ -102,6 +102,27 @@ impl EditorCore {
     /// Apply one input atomically, retaining any explicitly published early commits on error.
     /// s2: EVT-14, EVT-23, EVT-24, EVT-25, EVT-28, EVT-29, EVT-30, EVT-31, EVT-36, HIS-60, HIS-61, HIS-62, HIS-63, HIS-64
     pub fn apply(&mut self, input: Input, now: HistoryTime) -> Result<Output, ApplyError> {
+        self.apply_inner(input, now, None)
+    }
+    /// Observe only the main transaction commit, before post-commit hooks run.
+    /// Output carriers from early returns do not establish publication.
+    pub fn apply_with_main_commit(
+        &mut self,
+        input: Input,
+        now: HistoryTime,
+        main_commit: &mut MainCommitOutcome,
+    ) -> Result<Output, ApplyError> {
+        self.apply_inner(input, now, Some(main_commit))
+    }
+    fn apply_inner(
+        &mut self,
+        input: Input,
+        now: HistoryTime,
+        mut main_commit: Option<&mut MainCommitOutcome>,
+    ) -> Result<Output, ApplyError> {
+        if let Some(outcome) = &mut main_commit {
+            **outcome = MainCommitOutcome::NotPublished;
+        }
         self.initial = None;
         let error = |error| ApplyError {
             error,
@@ -255,6 +276,12 @@ impl EditorCore {
                 });
             }
         };
+        if let Some(outcome) = main_commit {
+            *outcome = MainCommitOutcome::Published {
+                commit_id: commit.id,
+                handled,
+            };
+        }
         let commit = self.editor.run_after_commit(commit);
         if let Some(history) = &mut self.history {
             for entry in commit

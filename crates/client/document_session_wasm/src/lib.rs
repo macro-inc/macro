@@ -16,7 +16,11 @@ mod document;
 mod editor;
 mod editor_input;
 mod generic;
+#[cfg(not(feature = "compatibility"))]
+mod input_commit;
 mod machine;
+#[cfg(not(feature = "compatibility"))]
+pub use input_commit::{InputCommitKind, InputCommitReceipt};
 mod macro_editor;
 mod output;
 mod query;

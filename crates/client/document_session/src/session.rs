@@ -144,6 +144,21 @@ pub enum ViewEffect {
 pub(crate) mod sealed {
     pub trait Sealed {}
 }
+/// Current local-input facts supplied only by the owning session.
+#[doc(hidden)]
+pub struct LocalInputContext {
+    pub(crate) now: Now,
+    pub(crate) access: Access,
+    pub(crate) ready: bool,
+}
+impl LocalInputContext {
+    /// Bundle the same caller-supplied facts as the raw surface entry point.
+    /// This does not grant native session admission or graph authority.
+    #[doc(hidden)]
+    pub fn new(now: Now, access: Access, ready: bool) -> Self {
+        Self { now, access, ready }
+    }
+}
 /// Sealed surface contract; hosts use EditorSurface or GenericSurface.
 #[allow(private_bounds)]
 pub trait Surface: sealed::Sealed {
@@ -172,10 +187,9 @@ pub trait Surface: sealed::Sealed {
         &mut self,
         doc: &LoroDoc,
         input: SessionInput,
-        now: Now,
-        access: Access,
-        ready: bool,
+        context: LocalInputContext,
         view: &mut Vec<ViewEffect>,
+        main_commit: Option<&mut lexical_model::MainCommitOutcome>,
     ) -> Result<bool, SessionError>;
     #[doc(hidden)]
     fn presence(&self, _doc: &LoroDoc) -> Option<loro::LoroValue> {
@@ -335,6 +349,14 @@ impl<S: Surface> DocumentSession<S> {
     }
     /// Process exactly one host input and return effects borrowing reused buffers.
     pub fn handle(&mut self, now: Now, input: SessionInput) -> &SessionOutput {
+        self.handle_inner(now, input, None)
+    }
+    fn handle_inner(
+        &mut self,
+        now: Now,
+        input: SessionInput,
+        main_commit: Option<&mut lexical_model::MainCommitOutcome>,
+    ) -> &SessionOutput {
         self.out.view.clear();
         #[cfg(feature = "conformance")]
         {
@@ -416,10 +438,13 @@ impl<S: Surface> DocumentSession<S> {
                 let applied = self.surface.local(
                     live,
                     input,
-                    now,
-                    self.access,
-                    self.ready && self.sync.phase() == Phase::Running,
+                    LocalInputContext {
+                        now,
+                        access: self.access,
+                        ready: self.ready && self.sync.phase() == Phase::Running,
+                    },
                     &mut self.out.view,
+                    main_commit,
                 );
                 // Publish local CRDT operations immediately even while remote
                 // operations are excluded from the live editor document.
@@ -866,6 +891,17 @@ impl<S: Surface> DocumentSession<S> {
 }
 
 impl DocumentSession<EditorSurface> {
+    /// Process one editor input while observing only its main transaction commit.
+    /// Admission and earlier/following work retain their ordinary behavior.
+    pub fn handle_editor_with_main_commit(
+        &mut self,
+        now: Now,
+        input: lexical_model::Input,
+        main_commit: &mut lexical_model::MainCommitOutcome,
+    ) -> &SessionOutput {
+        *main_commit = lexical_model::MainCommitOutcome::NotPublished;
+        self.handle_inner(now, SessionInput::Editor(input), Some(main_commit))
+    }
     /// Install inert-by-default typed error metadata, retained across core resets.
     pub fn observe_reported_model_errors(
         &mut self,

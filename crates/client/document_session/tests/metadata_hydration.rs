@@ -93,13 +93,16 @@ fn opening_a_metadata_free_document_keeps_the_persisted_state()
                 resolution_dirty: false,
             },
         }),
-        Now {
-            mono: Millis(1),
-            wall: UnixMillis(1),
-        },
-        Access::Edit,
-        true,
+        document_session::LocalInputContext::new(
+            Now {
+                mono: Millis(1),
+                wall: UnixMillis(1),
+            },
+            Access::Edit,
+            true,
+        ),
         &mut edit_effects,
+        None,
     )?;
     assert!(changed);
     let edited = surface.state().to_json()?;

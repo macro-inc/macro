@@ -125,6 +125,8 @@ impl Machine {
             constructor_clock: None,
             view_commands: None,
             pending_checklist_output: vec![],
+            #[cfg(test)]
+            fail_next_output_generation: false,
         })
     }
 }

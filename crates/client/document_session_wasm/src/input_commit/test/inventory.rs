@@ -1,0 +1,263 @@
+//! Check every cfg-selected ordinary export against the reviewed entry policy.
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    path::{Path, PathBuf},
+};
+use syn::{punctuated::Punctuated, Token};
+
+#[derive(Clone, Copy)]
+enum Profile {
+    OrdinaryDefault,
+    OrdinaryPreview,
+    CompatWeb,
+}
+fn meta_enabled(meta: &syn::Meta, profile: Profile) -> bool {
+    match meta {
+        syn::Meta::Path(path) if path.is_ident("test") => false,
+        syn::Meta::NameValue(pair) => {
+            let syn::Expr::Lit(value) = &pair.value else {
+                panic!("literal cfg");
+            };
+            let syn::Lit::Str(value) = &value.lit else {
+                panic!("string cfg");
+            };
+            if pair.path.is_ident("feature") {
+                match value.value().as_str() {
+                    "compatibility" | "compat-web" => matches!(profile, Profile::CompatWeb),
+                    "bebop-owned-all" => true,
+                    "dev-probes" => matches!(profile, Profile::OrdinaryPreview),
+                    other => panic!("classify new native feature {other}"),
+                }
+            } else if pair.path.is_ident("target_arch") {
+                value.value() == "wasm32"
+            } else {
+                panic!("classify new native cfg");
+            }
+        }
+        syn::Meta::List(list) => {
+            let items = list
+                .parse_args_with(Punctuated::<syn::Meta, Token![,]>::parse_terminated)
+                .expect("cfg args");
+            if list.path.is_ident("not") {
+                assert_eq!(items.len(), 1);
+                !meta_enabled(items.first().expect("not arg"), profile)
+            } else if list.path.is_ident("all") {
+                items.iter().all(|item| meta_enabled(item, profile))
+            } else if list.path.is_ident("any") {
+                items.iter().any(|item| meta_enabled(item, profile))
+            } else {
+                panic!("classify cfg predicate");
+            }
+        }
+        _ => panic!("classify native cfg"),
+    }
+}
+fn enabled(attrs: &[syn::Attribute], profile: Profile) -> bool {
+    attrs
+        .iter()
+        .filter(|attr| attr.path().is_ident("cfg"))
+        .all(|attr| meta_enabled(&attr.parse_args::<syn::Meta>().expect("cfg"), profile))
+}
+fn wasm(attrs: &[syn::Attribute]) -> bool {
+    attrs
+        .iter()
+        .any(|attr| attr.path().is_ident("wasm_bindgen"))
+}
+fn exported_name(method: &syn::ImplItemFn) -> String {
+    let mut name = method.sig.ident.to_string();
+    for attr in method
+        .attrs
+        .iter()
+        .filter(|attr| attr.path().is_ident("wasm_bindgen"))
+    {
+        if !matches!(attr.meta, syn::Meta::List(_)) {
+            continue;
+        }
+        attr.parse_nested_meta(|meta| {
+            if meta.path.is_ident("js_name") {
+                let value = meta.value()?;
+                name = if value.peek(syn::LitStr) {
+                    value.parse::<syn::LitStr>()?.value()
+                } else {
+                    value.parse::<syn::Ident>()?.to_string()
+                };
+            }
+            Ok(())
+        })
+        .expect("review generated export attributes");
+    }
+    name
+}
+fn invalidates_first(method: &syn::ImplItemFn) -> bool {
+    let Some(syn::Stmt::Expr(syn::Expr::MethodCall(call), _)) = method.block.stmts.first() else {
+        return false;
+    };
+    if call.method != "invalidate_input_commit" {
+        return false;
+    }
+    let syn::Expr::Field(field) = &*call.receiver else {
+        return false;
+    };
+    let syn::Member::Named(member) = &field.member else {
+        return false;
+    };
+    let syn::Expr::Path(base) = &*field.base else {
+        return false;
+    };
+    member == "machine" && base.path.is_ident("self")
+}
+#[derive(Default)]
+struct Exports {
+    methods: BTreeMap<String, (bool, String)>,
+    classes: BTreeSet<String>,
+}
+fn collect_file(path: &Path, module_dir: &Path, profile: Profile, exports: &mut Exports) {
+    let text = std::fs::read_to_string(path).expect("source");
+    let file = syn::parse_file(&text).expect("parse actual source");
+    collect_items(&file.items, path, module_dir, profile, exports);
+}
+fn collect_items(
+    items: &[syn::Item],
+    path: &Path,
+    module_dir: &Path,
+    profile: Profile,
+    exports: &mut Exports,
+) {
+    for item in items {
+        match item {
+            syn::Item::Impl(block) if enabled(&block.attrs, profile) && wasm(&block.attrs) => {
+                let syn::Type::Path(target) = &*block.self_ty else {
+                    continue;
+                };
+                if target
+                    .path
+                    .segments
+                    .last()
+                    .is_none_or(|segment| segment.ident != "EditorSession")
+                {
+                    continue;
+                }
+                for item in &block.items {
+                    let syn::ImplItem::Fn(method) = item else {
+                        continue;
+                    };
+                    if !matches!(method.vis, syn::Visibility::Public(_))
+                        || !enabled(&method.attrs, profile)
+                    {
+                        continue;
+                    }
+                    assert!(
+                        exports
+                            .methods
+                            .insert(
+                                method.sig.ident.to_string(),
+                                (invalidates_first(method), exported_name(method))
+                            )
+                            .is_none(),
+                        "duplicate export"
+                    );
+                }
+            }
+            syn::Item::Struct(value) if enabled(&value.attrs, profile) && wasm(&value.attrs) => {
+                exports.classes.insert(value.ident.to_string());
+            }
+            syn::Item::Enum(value) if enabled(&value.attrs, profile) && wasm(&value.attrs) => {
+                exports.classes.insert(value.ident.to_string());
+            }
+            syn::Item::Mod(module) if enabled(&module.attrs, profile) => {
+                if let Some((_, items)) = &module.content {
+                    collect_items(
+                        items,
+                        path,
+                        &module_dir.join(module.ident.to_string()),
+                        profile,
+                        exports,
+                    );
+                } else {
+                    let explicit = module
+                        .attrs
+                        .iter()
+                        .find(|attr| attr.path().is_ident("path"))
+                        .map(|attr| {
+                            let syn::Meta::NameValue(pair) = &attr.meta else {
+                                panic!("path value");
+                            };
+                            let syn::Expr::Lit(value) = &pair.value else {
+                                panic!("path literal");
+                            };
+                            let syn::Lit::Str(value) = &value.lit else {
+                                panic!("path string");
+                            };
+                            path.parent().expect("parent").join(value.value())
+                        });
+                    let name = module.ident.to_string();
+                    let source = explicit.unwrap_or_else(|| {
+                        let source = module_dir.join(format!("{name}.rs"));
+                        if source.exists() {
+                            source
+                        } else {
+                            module_dir.join(&name).join("mod.rs")
+                        }
+                    });
+                    let next_dir = if source.file_name().is_some_and(|name| name == "mod.rs") {
+                        source.parent().expect("parent").to_owned()
+                    } else {
+                        source.with_extension("")
+                    };
+                    collect_file(&source, &next_dir, profile, exports);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+fn exports(profile: Profile) -> Exports {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut exports = Exports::default();
+    collect_file(&root.join("lib.rs"), &root, profile, &mut exports);
+    exports
+}
+#[test]
+fn declared_ordinary_preview_profile_has_complete_export_policy_and_predecode_invalidation() {
+    #[derive(serde::Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct EntryPolicy {
+        policy: String,
+        js_name: String,
+    }
+    let expected: BTreeMap<String, EntryPolicy> =
+        serde_json::from_str(include_str!("entry-policy.json")).expect("reviewed policy");
+    for actual in [
+        exports(Profile::OrdinaryDefault),
+        exports(Profile::OrdinaryPreview),
+    ] {
+        assert_eq!(
+            actual.methods.keys().collect::<Vec<_>>(),
+            expected.keys().collect::<Vec<_>>(),
+            "classify new/removed cfg-selected exports"
+        );
+        for (name, policy) in &expected {
+            assert_eq!(
+                actual.methods[name].1, policy.js_name,
+                "{name} generated name"
+            );
+            if policy.policy == "invalidate-before-decode" {
+                assert!(
+                    actual.methods[name].0,
+                    "{name} must invalidate at Rust entry before decoding"
+                );
+            }
+        }
+        assert!(actual.classes.contains("InputCommitReceipt"));
+        assert!(actual.classes.contains("InputCommitKind"));
+    }
+}
+
+#[test]
+fn compatibility_profile_exports_no_observed_methods_receipt_or_capability_stub() {
+    let actual = exports(Profile::CompatWeb);
+    assert!(!actual.methods.contains_key("input_observed"));
+    assert!(!actual.methods.contains_key("read_input_commit_receipt"));
+    assert!(!actual.classes.contains("InputCommitReceipt"));
+    assert!(!actual.classes.contains("InputCommitKind"));
+}

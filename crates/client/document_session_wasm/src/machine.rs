@@ -22,6 +22,10 @@ pub(crate) struct Machine {
     initial_telemetry: Vec<wire::TelemetryMsg>,
     constructor_clock: Option<Arc<AtomicI64>>,
     view_commands: Option<Arc<crate::view_command_scope::Registry>>,
+    #[cfg(test)]
+    pub(crate) fail_next_output_generation: bool,
+    #[cfg(not(feature = "compatibility"))]
+    pub(crate) input_commits: crate::input_commit::InputCommitLedger,
 }
 impl Machine {
     pub(crate) fn take_output(&mut self) -> Result<Vec<u8>, BoundaryError> {
@@ -166,6 +170,10 @@ impl Machine {
             initial_telemetry: capture.finish(),
             constructor_clock,
             view_commands: None,
+            #[cfg(test)]
+            fail_next_output_generation: false,
+            #[cfg(not(feature = "compatibility"))]
+            input_commits: Default::default(),
         })
     }
     pub(crate) fn generation(&self) -> u32 {
@@ -216,6 +224,35 @@ impl Machine {
         mono: f64,
         wall: Option<f64>,
     ) -> Result<u32, BoundaryError> {
+        self.invalidate_input_commit();
+        self.call_inner_observed(input, mono, wall, None)
+    }
+    pub(crate) fn invalidate_input_commit(&mut self) {
+        #[cfg(not(feature = "compatibility"))]
+        self.input_commits.invalidate();
+    }
+    #[cfg(not(feature = "compatibility"))]
+    pub(crate) fn call_with_main_commit(
+        &mut self,
+        input: Input,
+        mono: f64,
+        wall: f64,
+        main_commit: &mut lexical_model::MainCommitOutcome,
+    ) -> Result<u32, BoundaryError> {
+        self.call_inner_observed(
+            SessionInput::Editor(input),
+            mono,
+            Some(wall),
+            Some(main_commit),
+        )
+    }
+    fn call_inner_observed(
+        &mut self,
+        input: SessionInput,
+        mono: f64,
+        wall: Option<f64>,
+        main_commit: Option<&mut lexical_model::MainCommitOutcome>,
+    ) -> Result<u32, BoundaryError> {
         if let Some(registry) = self.view_commands.clone() {
             let Session::Editor(session) = &mut self.session else {
                 return Err(BoundaryError::Invalid("view commands require an editor"));
@@ -226,17 +263,19 @@ impl Machine {
             registry.rebind(session)?;
             let access = session.effective_access();
             if matches!(&input, SessionInput::Sync(_) | SessionInput::AddPeerIds(_)) {
-                return registry.invoke_control(access, || self.call_inner(input, mono, wall))?;
+                return registry
+                    .invoke_control(access, || self.call_inner(input, mono, wall, main_commit))?;
             }
-            return registry.invoke(access, || self.call_inner(input, mono, wall))?;
+            return registry.invoke(access, || self.call_inner(input, mono, wall, main_commit))?;
         }
-        self.call_inner(input, mono, wall)
+        self.call_inner(input, mono, wall, main_commit)
     }
     fn call_inner(
         &mut self,
         input: SessionInput,
         mono: f64,
         wall: Option<f64>,
+        main_commit: Option<&mut lexical_model::MainCommitOutcome>,
     ) -> Result<u32, BoundaryError> {
         let now = codec::now(mono, wall.unwrap_or(self.wall_origin + mono))?;
         if let Some(clock) = &self.constructor_clock {
@@ -301,10 +340,19 @@ impl Machine {
         };
         let capture = crate::telemetry::begin();
         match &mut self.session {
-            Session::Editor(s) => {
-                s.handle(now, input);
-            }
+            Session::Editor(s) => match (input, main_commit) {
+                (SessionInput::Editor(input), Some(outcome)) => {
+                    s.handle_editor_with_main_commit(now, input, outcome);
+                }
+                (input, None) => {
+                    s.handle(now, input);
+                }
+                (_, Some(_)) => return Err(BoundaryError::Invalid("observed editor input")),
+            },
             Session::Doc(s) => {
+                if main_commit.is_some() {
+                    return Err(BoundaryError::Invalid("observed editor required"));
+                }
                 s.handle(now, input);
             }
         }
@@ -420,6 +468,26 @@ impl Machine {
         } else {
             None
         };
+        // Exercise the real encoder's incompatible-generation failure after the
+        // actual model/session call. This field and branch do not exist in artifacts.
+        #[cfg(test)]
+        let selection_feedback = if std::mem::take(&mut self.fail_next_output_generation) {
+            let generation = surface
+                .ok_or(BoundaryError::Invalid("editor required"))?
+                .state()
+                .max_key()
+                .generation()
+                .wrapping_add(1);
+            Some(ViewEffect::Diff(lexical_model::Diff {
+                generation,
+                full_reconcile: false,
+                view_text_matches: None,
+                decorator_renders: vec![],
+                ops: vec![],
+            }))
+        } else {
+            selection_feedback
+        };
         let mut flags = output::encode_observed(
             out,
             self.terminal,
@@ -454,6 +522,7 @@ impl Machine {
         self.call(SessionInput::Sync(input), mono, wall)
     }
     pub(crate) fn reject_text(&mut self, reason: &'static str) -> Result<u32, BoundaryError> {
+        self.invalidate_input_commit();
         if let Some(registry) = &self.view_commands {
             registry.replace_local_output()?;
         }
@@ -482,6 +551,7 @@ impl Machine {
         self.call(SessionInput::Editor(input), mono, None)
     }
     pub(crate) fn input(&mut self, msg: &[u8], mono: f64, wall: f64) -> Result<u32, BoundaryError> {
+        self.invalidate_input_commit();
         let msg = wire::SessionInputMsg::deserialize(msg)?;
         let input = match msg.kind {
             0 => SessionInput::Sync(SyncInput::Start),

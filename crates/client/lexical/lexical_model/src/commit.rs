@@ -6,6 +6,20 @@ use std::sync::Arc;
 /// Monotonic identity of a commit in one editor.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct CommitId(pub u64);
+/// Outcome of the designated main transaction, independent of earlier or later commits.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum MainCommitOutcome {
+    /// No successful main transaction commit was observed.
+    #[default]
+    NotPublished,
+    /// The main transaction committed, including empty or unhandled transactions.
+    Published {
+        /// Identity returned by that exact transaction commit.
+        commit_id: CommitId,
+        /// Command handling result before post-commit work.
+        handled: Handled,
+    },
+}
 /// Per-record transition.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, strum::Display)]
 #[strum(serialize_all = "lowercase")]

@@ -307,3 +307,7 @@ Use a registered render-signature test decorator for observer failure controls s
 Keep the default-off `dev-probes` feature restricted to preview/test builds; forward it to `document_session/dev-probes` and reject it in production native feature graphs.
 
 Reserve query kind 10 for the `dev-probes` stored comparison text reply with key 0, empty text and flags 0; ordinary builds reject it through the existing unknown-kind arm.
+
+Expose inputObserved/readInputCommitReceipt and primitive receipt classes only in the ordinary non-compatibility profile. Validate canonical decimal correlation IDs before slot replacement; preserve highest ID across ordinary invalidation and leave interrupted calls InFlight/unavailable. Never derive main publication from flags, Diff, versions or flattened commit carriers; receipts grant no attachment, persistence or editing authority.
+
+After matched ordinary and compatibility bindings are built, run `node crates/client/document_session_wasm/tests/input-commit-bindings.mjs <typescript.js> <ordinary-manifest.json> <compat-manifest.json>` to rehash both complete five-file packages and compare actual JS/DTS exports with the cfg-selected source policy. Source AST controls cover only the declared ordinary default/preview and compat-web profiles; they do not replace actual generated binding checks.

@@ -12,7 +12,7 @@ The host supplies identities and both clocks and executes the returned effects.
 - Keep storage, transports, timers and identity generation outside this crate.
 - Forward snapshot statistics from the actual Loro document without exporting, checking out or changing the requested base.
 - Read `last_output` to encode committed effects without processing another input.
-- One host input calls `handle` once; keep keystrokes inside the append/presence window.
+- One host input enters the shared handle path once; keep keystrokes inside the append/presence window.
 - SyncCore owns WAL, catch-up, flush, reset, access and comment delivery policy.
 - Use `EditorSurface::view_diff` for a cold repaint without resetting sync/history.
 - Surface imports queue view effects in the same output as their sync input.
@@ -148,3 +148,5 @@ Observe checklist candidates from actual accepted/error commit arrays and derive
 Forward the default-off `dev-probes` feature only to `lexical_loro/dev-probes`; production native profiles must reject it.
 
 Read the preview/test stored comparison from the current surface core and configured sync policy; do not substitute ordinary JSON queries or a pending read scope.
+
+Forward an opt-in main-commit sink only through the designated local editor application; retain it through projection/recovery errors without observing prefix, remote, resync or follow-up applications. Admission remains in the existing session path.

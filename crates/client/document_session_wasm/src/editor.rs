@@ -118,6 +118,7 @@ impl EditorSession {
     /// Admit a genuine programmatic Enter with an explicit null JS event payload.
     #[wasm_bindgen(js_name=viewCommandEnter)]
     pub fn view_command_enter(&mut self, now: f64, wall: f64) -> Result<u32, JsError> {
+        self.machine.invalidate_input_commit();
         self.reject_compat_view_commands().map_err(js)?;
         self.machine
             .call(
@@ -153,6 +154,7 @@ impl EditorSession {
     /// Admit a programmatic Escape with an explicit null JS event payload.
     #[wasm_bindgen(js_name=viewCommandEscape)]
     pub fn view_command_escape(&mut self, now: f64, wall: f64) -> Result<u32, JsError> {
+        self.machine.invalidate_input_commit();
         self.reject_compat_view_commands().map_err(js)?;
         self.machine
             .call(
@@ -170,6 +172,7 @@ impl EditorSession {
     }
     /// Deliver a cold Bebop input.
     pub fn input(&mut self, msg: &[u8], now: f64, wall: f64) -> Result<u32, JsError> {
+        self.machine.invalidate_input_commit();
         self.machine.input(msg, now, wall).map_err(js)
     }
     /// Copy pending output; no borrowed linear-memory view escapes.
@@ -192,6 +195,7 @@ impl EditorSession {
     /// Physical socket opened.
     #[wasm_bindgen(js_name=socketOpened)]
     pub fn socket_opened(&mut self, conn: u32, now: f64, wall: f64) -> Result<u32, JsError> {
+        self.machine.invalidate_input_commit();
         self.machine
             .sync(
                 SyncInput::Socket {
@@ -206,6 +210,7 @@ impl EditorSession {
     /// One raw framed binary message.
     #[wasm_bindgen(js_name=socketFrame)]
     pub fn socket_frame(&mut self, conn: u32, frame: Vec<u8>, now: f64) -> Result<u32, JsError> {
+        self.machine.invalidate_input_commit();
         self.machine
             .sync(
                 SyncInput::Socket {
@@ -220,6 +225,7 @@ impl EditorSession {
     /// Physical text message.
     #[wasm_bindgen(js_name=socketText)]
     pub fn socket_text(&mut self, conn: u32, text: String, now: f64) -> Result<u32, JsError> {
+        self.machine.invalidate_input_commit();
         self.machine
             .sync(
                 SyncInput::Socket {
@@ -241,6 +247,7 @@ impl EditorSession {
         now: f64,
         wall: f64,
     ) -> Result<u32, JsError> {
+        self.machine.invalidate_input_commit();
         self.machine
             .sync(
                 SyncInput::Socket {
@@ -262,6 +269,7 @@ impl EditorSession {
         now: f64,
         wall: f64,
     ) -> Result<u32, JsError> {
+        self.machine.invalidate_input_commit();
         let event = if let Some(token) = token {
             TokenEvent::Fetched {
                 attempt,
@@ -290,6 +298,7 @@ impl EditorSession {
         now: f64,
         wall: f64,
     ) -> Result<u32, JsError> {
+        self.machine.invalidate_input_commit();
         let result = if ok {
             Ok(())
         } else {
@@ -316,6 +325,7 @@ impl EditorSession {
         now: f64,
         wall: f64,
     ) -> Result<u32, JsError> {
+        self.machine.invalidate_input_commit();
         let result = match msg {
             Some(msg) => wire::LocalStateMsg::deserialize(&msg)
                 .map_err(BoundaryError::from)
@@ -344,6 +354,7 @@ impl EditorSession {
         now: f64,
         wall: f64,
     ) -> Result<u32, JsError> {
+        self.machine.invalidate_input_commit();
         let result = if adopted >= 0 {
             Ok(adopted as u32)
         } else {
@@ -368,6 +379,7 @@ impl EditorSession {
         now: f64,
         wall: f64,
     ) -> Result<u32, JsError> {
+        self.machine.invalidate_input_commit();
         let message = match kind {
             0 => ChatterMessage::Update(data),
             1 => ChatterMessage::Awareness(data),
@@ -386,6 +398,7 @@ impl EditorSession {
     }
     /// Lifecycle notification with fresh wall-clock origin.
     pub fn host(&mut self, signal: u32, now: f64, wall: f64) -> Result<u32, JsError> {
+        self.machine.invalidate_input_commit();
         self.machine
             .sync(
                 SyncInput::Host(codec::host(signal).map_err(js)?),
@@ -403,6 +416,7 @@ impl EditorSession {
         now: f64,
         wall: f64,
     ) -> Result<u32, JsError> {
+        self.machine.invalidate_input_commit();
         self.machine
             .sync(
                 SyncInput::Authorization(AuthorizationState {
@@ -417,6 +431,7 @@ impl EditorSession {
     }
     /// The executor's single timer fired.
     pub fn tick(&mut self, now: f64, wall: f64) -> Result<u32, JsError> {
+        self.machine.invalidate_input_commit();
         self.machine
             .sync(SyncInput::Tick, now, Some(wall))
             .map_err(js)
@@ -442,6 +457,7 @@ impl EditorSession {
         composition_data: Option<js_sys::JsString>,
         now: f64,
     ) -> Result<u32, JsError> {
+        self.machine.invalidate_input_commit();
         let text = match utf16(text) {
             Ok(text) => text,
             Err(_) => return self.machine.reject_text("LoneSurrogate").map_err(js),
@@ -492,6 +508,7 @@ impl EditorSession {
         focus_type: u32,
         now: f64,
     ) -> Result<u32, JsError> {
+        self.machine.invalidate_input_commit();
         let point = |key, offset, kind| {
             editor_input::point(
                 &wire::PointMsg {
@@ -536,6 +553,7 @@ impl EditorSession {
         text: Option<js_sys::JsString>,
         now: f64,
     ) -> Result<u32, JsError> {
+        self.machine.invalidate_input_commit();
         let command =
             editor_input::command(code, a, b, text.map(utf16).transpose()?).map_err(js)?;
         self.machine
@@ -551,6 +569,7 @@ impl EditorSession {
     /// Start IME composition in a text node.
     #[wasm_bindgen(js_name=compositionStart)]
     pub fn composition_start(&mut self, key: u32, offset: u32, now: f64) -> Result<u32, JsError> {
+        self.machine.invalidate_input_commit();
         self.composition_inner(0, key, String::new(), offset, offset, String::new(), now)
     }
     /// End IME composition with the displayed text.
@@ -562,6 +581,7 @@ impl EditorSession {
         data: Option<js_sys::JsString>,
         now: f64,
     ) -> Result<u32, JsError> {
+        self.machine.invalidate_input_commit();
         self.composition_inner(
             1,
             key,
@@ -587,6 +607,7 @@ impl EditorSession {
         data: Option<js_sys::JsString>,
         now: f64,
     ) -> Result<u32, JsError> {
+        self.machine.invalidate_input_commit();
         self.composition_inner(
             kind,
             key,
@@ -618,6 +639,7 @@ impl EditorSession {
         selection_kind: u32,
         now: f64,
     ) -> Result<u32, JsError> {
+        self.machine.invalidate_input_commit();
         let point = |key, offset, kind| {
             editor_input::point(
                 &wire::PointMsg {

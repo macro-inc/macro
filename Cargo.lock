@@ -6796,6 +6796,7 @@ dependencies = [
  "scoped-tls-hkt",
  "serde",
  "serde_json",
+ "syn 2.0.117",
  "sync_protocol",
  "thiserror 2.0.18",
  "tracing",

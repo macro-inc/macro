@@ -38,11 +38,11 @@ impl Surface for EditorSurface {
         &mut self,
         doc: &LoroDoc,
         input: SessionInput,
-        now: Now,
-        access: Access,
-        ready: bool,
+        context: LocalInputContext,
         view: &mut Vec<ViewEffect>,
+        main_commit: Option<&mut lexical_model::MainCommitOutcome>,
     ) -> Result<bool, SessionError> {
+        let LocalInputContext { now, access, ready } = context;
         let SessionInput::Editor(input) = input else {
             return Err(SessionError::WrongSurface);
         };
@@ -94,7 +94,11 @@ impl Surface for EditorSurface {
             self.init(doc, now, access, view)?;
         }
         self.core.set_editable(access == Access::Edit);
-        match self.apply(doc, input, now, access, view) {
+        let result = match main_commit {
+            Some(outcome) => self.apply_with_main_commit(doc, input, now, access, view, outcome),
+            None => self.apply(doc, input, now, access, view),
+        };
+        match result {
             Err(error @ SessionError::Projection(_)) => {
                 view.push(ViewEffect::Error(error));
                 self.resync(doc, now, access, view)?;
@@ -309,11 +313,14 @@ impl Surface for GenericSurface {
         &mut self,
         doc: &LoroDoc,
         input: SessionInput,
-        now: Now,
-        access: Access,
-        ready: bool,
+        context: LocalInputContext,
         view: &mut Vec<ViewEffect>,
+        main_commit: Option<&mut lexical_model::MainCommitOutcome>,
     ) -> Result<bool, SessionError> {
+        let LocalInputContext { now, access, ready } = context;
+        if main_commit.is_some() {
+            return Err(SessionError::WrongSurface);
+        }
         self.local(doc, input, now, access, ready, view)
     }
     fn peer_selection(
