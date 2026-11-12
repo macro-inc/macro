@@ -4,6 +4,9 @@
 /// Domain layer: models, ports, and service.
 pub mod domain;
 
+/// Address-guarded HTTP clients for user-chosen MCP servers.
+pub mod guarded_http;
+
 /// Inbound adapters (HTTP/axum).
 pub mod inbound;
 

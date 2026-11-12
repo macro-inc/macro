@@ -719,8 +719,13 @@ pub async fn build(
     // tools through this selector, which prefers a user's Pipedream
     // connectors and falls back to the native ones (see `mcp_select`).
     // The import service's live Slack source shares this selector.
+    // Users' own MCP servers: public addresses only, except on a local stack.
+    let mcp_http = mcp_client::guarded_http::McpHttp::new(
+        mcp_client::guarded_http::AddressPolicy::for_environment(config.environment),
+    )?;
     let mcp_selector: Arc<ai_tools::ToolMcpSelector> = Arc::new(mcp_select::McpToolSelector::new(
         Arc::new(mcp_server_repo.clone()),
+        mcp_http.clone(),
         Arc::new(pipedream_repo.clone()),
         Arc::new(connectors.clone()),
     ));
@@ -1045,6 +1050,7 @@ pub async fn build(
         mcp_server_repo.clone(),
         mcp_oauth_state_store,
         mcp_client_metadata.clone(),
+        mcp_http,
         mcp_pre_registered,
     );
     // Record connector connects and disconnects for product analytics.

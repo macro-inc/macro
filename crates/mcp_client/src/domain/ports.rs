@@ -1,4 +1,5 @@
 use super::models::{MacroUserIdStr, McpServer, McpServerRecord};
+use crate::guarded_http::McpHttp;
 use std::sync::Arc;
 
 /// Port for persisting MCP server records, keyed by user.
@@ -39,6 +40,7 @@ pub trait McpConnector: Send + Sync {
     /// through `server_store`.
     fn connect<S: McpServerStore>(
         &self,
+        http: &McpHttp,
         server_store: Arc<S>,
     ) -> impl Future<Output = anyhow::Result<McpServer>> + Send;
 }

@@ -179,6 +179,7 @@ fn oauth_service() -> OAuthService<FakeServerStore, FakeStateStore> {
         FakeServerStore,
         FakeStateStore::default(),
         OAuthClientMetadata::new(CLIENT_METADATA_URL.to_string(), REDIRECT_URI.to_string()),
+        McpHttp::new(crate::guarded_http::AddressPolicy::AnyAddress).unwrap(),
         PreRegisteredProviders::empty(),
     )
 }

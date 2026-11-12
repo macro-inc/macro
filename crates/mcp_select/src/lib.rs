@@ -11,6 +11,7 @@ use ai_toolset::{
 use macro_user_id::user_id::MacroUserIdStr;
 use mcp_client::domain::ports::McpServerStore;
 use mcp_client::domain::service::McpToolSet;
+use mcp_client::guarded_http::McpHttp;
 use pipedream_mcp::domain::ports::{ConnectionStore, McpConnection};
 use pipedream_mcp::domain::service::PipedreamToolSet;
 use std::collections::HashSet;
@@ -204,6 +205,7 @@ pub trait ConnectorSelect: Send + Sync + 'static {
 /// The concrete selector: loads both stacks' stores and applies the rule.
 pub struct McpToolSelector<N, P, C> {
     native_store: Arc<N>,
+    native_http: McpHttp,
     pipedream_store: Arc<P>,
     pipedream_connection: Arc<C>,
 }
@@ -212,6 +214,7 @@ impl<N, P, C> Clone for McpToolSelector<N, P, C> {
     fn clone(&self) -> Self {
         Self {
             native_store: self.native_store.clone(),
+            native_http: self.native_http.clone(),
             pipedream_store: self.pipedream_store.clone(),
             pipedream_connection: self.pipedream_connection.clone(),
         }
@@ -225,14 +228,17 @@ where
     C: McpConnection,
 {
     /// Build a selector over the native store and the Pipedream store +
-    /// remote MCP connection.
+    /// remote MCP connection. Native servers are dialed through
+    /// `native_http`.
     pub fn new(
         native_store: Arc<N>,
+        native_http: McpHttp,
         pipedream_store: Arc<P>,
         pipedream_connection: Arc<C>,
     ) -> Self {
         Self {
             native_store,
+            native_http,
             pipedream_store,
             pipedream_connection,
         }
@@ -277,10 +283,12 @@ where
             );
         }
         if pipedream.is_empty() {
-            return UserMcpTools::Native(McpToolSet::new(&native, self.native_store.clone()).await);
+            return UserMcpTools::Native(
+                McpToolSet::new(&native, &self.native_http, self.native_store.clone()).await,
+            );
         }
         let (native, pipedream) = futures::join!(
-            McpToolSet::new(&native, self.native_store.clone()),
+            McpToolSet::new(&native, &self.native_http, self.native_store.clone()),
             PipedreamToolSet::new(&pipedream, self.pipedream_connection.clone()),
         );
         UserMcpTools::Mixed { native, pipedream }
@@ -299,7 +307,7 @@ where
             .map_err(|e| anyhow::anyhow!("mcp store: {e:?}"))?;
         if let Some(record) = native.into_iter().find(|r| native_matches(r, connector)) {
             return Ok(Some(UserMcpTools::Native(
-                McpToolSet::new(&[record], self.native_store.clone()).await,
+                McpToolSet::new(&[record], &self.native_http, self.native_store.clone()).await,
             )));
         }
         let pipedream = self.pipedream_connections(user).await;

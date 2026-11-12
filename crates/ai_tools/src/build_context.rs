@@ -606,6 +606,9 @@ pub async fn build_tool_service_context_from_env(
         );
         let mcp_selector = Arc::new(mcp_select::McpToolSelector::new(
             native_servers.clone(),
+            mcp_client::guarded_http::McpHttp::new(
+                mcp_client::guarded_http::AddressPolicy::for_environment(environment),
+            )?,
             pipedream_connections.clone(),
             Arc::new(pipedream_client.clone()),
         ));
