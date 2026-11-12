@@ -27,6 +27,7 @@ async fn stop_does_not_wait_for_in_flight_work() {
         turns: ActiveTurns::default(),
         handoff: crate::harness::Handoffs::channel().1,
         runtime_connected: watch::channel(false).1,
+        trigger_stream: watch::channel(TriggerStream::Connecting).1,
         _presence_watch: AbortOnDropHandle::new(tokio::spawn(async {})),
     };
 

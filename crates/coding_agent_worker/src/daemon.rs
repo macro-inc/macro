@@ -8,6 +8,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use tokio::sync::watch;
+use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::AbortOnDropHandle;
 
@@ -16,7 +17,7 @@ use crate::dispatch::Dispatcher;
 use crate::harness::{HandoffSender, Handoffs};
 use crate::outbound::acp_process::RunningAgent;
 use crate::outbound::agent_session::HarnessApi;
-use crate::outbound::stream::EventStreamClient;
+use crate::outbound::stream::{EventStreamClient, Next, SILENCE_LIMIT};
 use crate::runtime::Runtime;
 use crate::trigger::{TriggerEvent, handle_event, trigger_filters};
 use crate::turns::ActiveTurns;
@@ -44,7 +45,36 @@ pub struct Daemon {
     )]
     handoff: HandoffSender,
     runtime_connected: watch::Receiver<bool>,
+    trigger_stream: watch::Receiver<TriggerStream>,
     _presence_watch: AbortOnDropHandle<()>,
+}
+
+/// What the agent-trigger event stream is doing, as the serving loop last
+/// reported it.
+#[derive(Debug, Clone)]
+pub enum TriggerStream {
+    /// Opening the first stream.
+    Connecting,
+    /// No agent is bound to this harness, so no stream is open.
+    Unbound,
+    /// Open; `heard` is when the server last sent an event or keep-alive.
+    Open { heard: watch::Receiver<Instant> },
+    /// The last stream or attempt failed; retrying after a backoff.
+    Reconnecting {
+        /// Consecutive failures since a stream last opened.
+        attempt: u32,
+        /// Why the last one ended.
+        cause: StreamEnd,
+    },
+}
+
+/// Why an event stream, or an attempt to open one, ended.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StreamEnd {
+    /// It went silent for [`SILENCE_LIMIT`] and was dropped.
+    Silent,
+    /// The request failed or the server closed it; the error's summary.
+    Failed(String),
 }
 
 /// The agent a previous macrod process image handed over, ready to relay.
@@ -132,6 +162,7 @@ impl Daemon {
             "daemon listening for agent triggers over SSE"
         );
 
+        let (stream_state, trigger_stream) = watch::channel(TriggerStream::Connecting);
         let shutdown = cancel.clone();
         let task = tokio::spawn(async move {
             let mut failures = 0u32;
@@ -139,20 +170,37 @@ impl Daemon {
                 if shutdown.is_cancelled() {
                     return Ok(());
                 }
-                match serve_once(&client, &executor, &shutdown).await {
+                let cause = match serve_once(&client, &executor, &stream_state, &shutdown).await {
                     ServeOutcome::Stopped => return Ok(()),
                     ServeOutcome::Idle => {
                         failures = 0;
+                        continue;
+                    }
+                    ServeOutcome::Silent => {
+                        tracing::warn!(
+                            silent_secs = SILENCE_LIMIT.as_secs(),
+                            "the event stream went silent; reconnecting"
+                        );
+                        StreamEnd::Silent
                     }
                     ServeOutcome::Ended(error) => {
                         tracing::warn!(error = ?error, "event stream ended; reconnecting");
-                        failures = failures.saturating_add(1);
-                        let delay = reconnect_delay(failures);
-                        tokio::select! {
-                            () = shutdown.cancelled() => return Ok(()),
-                            () = tokio::time::sleep(delay) => {}
-                        }
+                        StreamEnd::Failed(error.format_current_context().to_string())
                     }
+                };
+                // A stream that opened starts the count over.
+                if matches!(*stream_state.borrow(), TriggerStream::Open { .. }) {
+                    failures = 0;
+                }
+                failures = failures.saturating_add(1);
+                let delay = reconnect_delay(failures);
+                stream_state.send_replace(TriggerStream::Reconnecting {
+                    attempt: failures,
+                    cause,
+                });
+                tokio::select! {
+                    () = shutdown.cancelled() => return Ok(()),
+                    () = tokio::time::sleep(delay) => {}
                 }
             }
         });
@@ -163,6 +211,7 @@ impl Daemon {
             turns,
             handoff,
             runtime_connected,
+            trigger_stream,
             _presence_watch: presence_watch,
         })
     }
@@ -170,6 +219,11 @@ impl Daemon {
     /// Whether this daemon currently holds a runtime connection.
     pub fn runtime_connected(&self) -> bool {
         *self.runtime_connected.borrow()
+    }
+
+    /// What the agent-trigger event stream is doing.
+    pub fn trigger_stream(&self) -> TriggerStream {
+        self.trigger_stream.borrow().clone()
     }
 
     /// Whether the serving task is still alive.
@@ -311,13 +365,16 @@ fn reconnect_delay(failures: u32) -> Duration {
 enum ServeOutcome {
     Stopped,
     Idle,
+    Silent,
     Ended(rootcause::Report),
 }
 
-/// Open the stream (or wait for bound agents) until it ends or is cancelled.
+/// Open the stream (or wait for bound agents) until it ends or is cancelled,
+/// reporting it through `state`.
 async fn serve_once<Executor: crate::trigger::WorkExecutor>(
     client: &EventStreamClient,
     executor: &Executor,
+    state: &watch::Sender<TriggerStream>,
     cancel: &CancellationToken,
 ) -> ServeOutcome {
     let bots = match client.bound_bot_ids().await {
@@ -325,6 +382,7 @@ async fn serve_once<Executor: crate::trigger::WorkExecutor>(
         Err(error) => return ServeOutcome::Ended(error),
     };
     if bots.is_empty() {
+        state.send_replace(TriggerStream::Unbound);
         tracing::info!("no agents are bound; waiting before opening the event stream");
         tokio::select! {
             () = cancel.cancelled() => return ServeOutcome::Stopped,
@@ -337,6 +395,9 @@ async fn serve_once<Executor: crate::trigger::WorkExecutor>(
         Ok(stream) => stream,
         Err(error) => return ServeOutcome::Ended(error),
     };
+    state.send_replace(TriggerStream::Open {
+        heard: stream.heard(),
+    });
     tracing::info!(
         bound_agents = bots.len(),
         "connected to the agent-trigger event stream"
@@ -357,14 +418,15 @@ async fn serve_once<Executor: crate::trigger::WorkExecutor>(
             }
             next = stream.next_event() => {
                 match next {
-                    Ok(Some(event)) => {
+                    Ok(Next::Event(event)) => {
                         let _ = handle_event(event, executor).await;
                     }
-                    Ok(None) => {
+                    Ok(Next::Closed) => {
                         return ServeOutcome::Ended(rootcause::report!(
                             "the server closed the stream"
                         ));
                     }
+                    Ok(Next::Silent) => return ServeOutcome::Silent,
                     Err(error) => return ServeOutcome::Ended(error),
                 }
             }

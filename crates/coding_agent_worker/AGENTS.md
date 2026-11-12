@@ -29,8 +29,18 @@ the local ACP process (Claude Code, Codex, ...), and drives native
 - `src/daemon.rs` `watch_presence`: each minute a connection has held, asks
   `GET /harnesses/me` with `RUNTIME_CONNECTED_HEADER`. A service that reads the
   harness offline logs `harness_presence_disagreement`, macrod warns, and the TUI
-  header says "machine connected, service reports offline" instead of "paired,
-  machine not dialed in".
+  header says "machine connected, service reports offline" instead of "machine
+  dialing".
+- `src/tui/health.rs`: the header's status line and the Overview card's rows,
+  four states derived separately. `daemon` is whether the serving task runs.
+  `runtime` (shown as "machine") is whether this process holds the runtime
+  WebSocket; the service's flag only adds "service reports offline". `triggers`
+  is the SSE stream's `Daemon::trigger_stream`: live while any byte,
+  keep-alives included, arrived within `SILENCE_LIMIT` (60 s; the server sends
+  one every 20 s), then stalled. `EventStream::next_event` returns
+  `Next::Silent` at that limit, and the serving loop drops the stream and
+  reconnects through its backoff. `viewer` is where this terminal can be seen
+  (README.md, "Herdr versions").
 - `src/tui.rs` (`src/tui/`): the control panel itself (registration, agents,
   sessions, config form, logs).
 - `src/herdr.rs` (`src/herdr/`): native herdr integration — only compiled

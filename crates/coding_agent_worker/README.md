@@ -183,6 +183,14 @@ Transcripts still end its turns. Without a reported session ID, macrod finds
 Codex's transcript by working directory and start time. Viewer windows
 (`macrod herdr-pane`) report their own state through OSC 7501.
 
+The control panel's `viewer` status says where macrod itself can be seen. Every
+30 s it reads macrod's own core terminal (`hc get`). With the app's `herdr.space`
+and `herdr.tab` labels it reads `herdr tab`. Without them, as for a terminal
+started with `hc run --bg`, it reads `background tNN`, and only `hc attach tNN`
+shows it. hc does not count attached clients, so a labelled terminal whose app
+window is closed still reads `herdr tab`. A herdr 0.9 pane always reads
+`herdr pane`.
+
 ## What opened a session
 
 Each `New` trigger event says what opened its session

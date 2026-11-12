@@ -47,6 +47,31 @@ fn a_finished_or_replaced_agent_is_missing() {
 }
 
 #[test]
+fn only_a_terminal_with_the_app_tab_labels_is_shown_in_the_app() {
+    let tab = parse_terminal(
+        "get",
+        r#"{"address":"t36","state":"live","cwd":"/work","labels":{"herdr.space":"sp1","herdr.tab":"tb1","where":"server / 1"}}"#,
+    )
+    .unwrap();
+    assert!(tab.in_app_tab());
+
+    // Started with `hc run --bg`: alive, but no app tab adopts it.
+    let background = parse_terminal(
+        "get",
+        r#"{"address":"t3x","state":"live","cwd":"/work","labels":{"macro.runtime":"codex"}}"#,
+    )
+    .unwrap();
+    assert!(!background.in_app_tab());
+
+    let space_only = parse_terminal(
+        "get",
+        r#"{"address":"t3y","state":"live","cwd":"/work","labels":{"herdr.space":"sp1"}}"#,
+    )
+    .unwrap();
+    assert!(!space_only.in_app_tab());
+}
+
+#[test]
 fn both_herdrs_name_a_missing_agent() {
     let refused = |stderr: &str| HerdrError::Refused {
         command: "get".to_owned(),

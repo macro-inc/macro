@@ -116,6 +116,13 @@ In **New agent**, set the name, **@tag**, and instructions. Under **Where it run
 
 Leave `macrod` running and your computer awake while you use the machine. Its terminal shows your sessions, configuration, and logs. You can also check the machine in **Settings → Machines**.
 
+The second line of the `macrod` header shows four statuses. The **Overview** tab explains each one:
+
+- **daemon:** whether `macrod` is serving.
+- **machine:** whether it is connected to Macro.
+- **triggers:** whether it is receiving @mentions. **live** means it heard from Macro within the last minute. After a minute with nothing, it shows **stalled** and reconnects.
+- **viewer:** where this terminal is shown. In Herdr, **background** means no Herdr tab shows it.
+
 To reconnect later, run `macrod` again; it loads `~/.macrod/macrod.toml` from any directory. If you remove the machine, pair it again before using it. Only one `macrod` can run with a given configuration at a time.
 
 ## Update macrod
