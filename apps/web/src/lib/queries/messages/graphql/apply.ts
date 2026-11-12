@@ -5,6 +5,7 @@ import type {
   MessageThread,
   MessageTimelineEntry,
   MessageTimelinePage,
+  TimelineActivity,
 } from '@service-storage/messages';
 import { queryClient } from '../../client';
 import { getThreadRepliesQueryKeyPrefix } from '../thread-replies';
@@ -133,4 +134,35 @@ export function trimLatestPage(
     entries,
     next_cursor: last ? entryCursor(last) : page.next_cursor,
   };
+}
+
+/** One page of a channel's changes, in timeline shapes. */
+export type TimelineChanges = {
+  entries: MessageTimelineEntry[];
+  activities: TimelineActivity[];
+  removed: ReadonlySet<string>;
+};
+
+/**
+ * A cached latest page brought forward by one page of changes, the way a
+ * loaded timeline takes them, then cut back to its newest `limit` rows. A
+ * changed row older than the page's last row stays out, as it would from a
+ * loaded timeline whose older pages are not loaded.
+ */
+export function applyChangesToLatestPage(
+  page: MessageTimelinePage,
+  changes: TimelineChanges,
+  limit: number
+): MessageTimelinePage {
+  const activities = changes.activities.map(
+    (activity): MessageTimelineEntry => ({ type: 'activity', activity })
+  );
+  const applied = removeTimelineMessages(
+    upsertTimelineEntries({ pages: [page], pageParams: [null] }, [
+      ...changes.entries,
+      ...activities,
+    ]),
+    changes.removed
+  );
+  return trimLatestPage(applied?.pages[0] ?? page, limit);
 }

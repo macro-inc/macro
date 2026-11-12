@@ -1,11 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import {
+  applyChangesToLatestPage,
   removeTimelineMessages,
   trimLatestPage,
   upsertThreadReply,
   upsertTimelineEntries,
 } from '../apply';
-import { at, ids, messageEntry, page, reply, timeline } from './fixtures';
+import {
+  activity,
+  at,
+  ids,
+  messageEntry,
+  page,
+  reply,
+  timeline,
+} from './fixtures';
 
 describe('upsertTimelineEntries', () => {
   const loaded = timeline(
@@ -105,5 +114,44 @@ describe('trimLatestPage', () => {
       )
     ).toEqual(['m3', 'm2']);
     expect(trimmed.next_cursor).toEqual({ created_at: at(2), id: 'm2' });
+  });
+});
+
+describe('applyChangesToLatestPage', () => {
+  const cached = page([
+    messageEntry('m4', 4),
+    messageEntry('m3', 3),
+    messageEntry('m2', 2),
+  ]);
+
+  it('adds, replaces and removes rows, then keeps the newest ones', () => {
+    const next = applyChangesToLatestPage(
+      cached,
+      {
+        entries: [
+          messageEntry('m5', 5),
+          messageEntry('m3', 3, { content: 'edited' }),
+        ],
+        activities: [activity('a6', 6)],
+        removed: new Set(['m4']),
+      },
+      3
+    );
+    expect(ids(timeline(next))).toEqual([['activity:a6', 'm5', 'm3']]);
+    const edited = next.entries[2];
+    expect(edited.type === 'message' && edited.message.content).toBe('edited');
+    expect(next.next_cursor).toEqual({ created_at: at(3), id: 'm3' });
+  });
+
+  it('leaves out a changed row older than the page', () => {
+    const bounded = page(cached.entries, {
+      next_cursor: { created_at: at(2), id: 'm2' },
+    });
+    const next = applyChangesToLatestPage(
+      bounded,
+      { entries: [messageEntry('m1', 1)], activities: [], removed: new Set() },
+      100
+    );
+    expect(ids(timeline(next))).toEqual([['m4', 'm3', 'm2']]);
   });
 });
