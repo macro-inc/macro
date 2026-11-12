@@ -529,7 +529,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
                 pool: db.clone(),
             }),
             correlation_sessions,
-            template_flags.clone(),
+            routine_flags.clone(),
         )),
         authorization_state: authorization_state.clone(),
     };
