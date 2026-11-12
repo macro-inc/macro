@@ -145,11 +145,10 @@ impl WasmStep<'_> {
             .env_remove("BASH_ENV")
             .env(
                 "PATH",
-                format!(
-                    "{}:{}",
-                    bin.display(),
-                    std::env::var("PATH").unwrap_or_default()
-                ),
+                std::env::join_paths(std::iter::once(bin.to_path_buf()).chain(
+                    std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()),
+                ))
+                .expect("stub directory joins the inherited PATH"),
             )
             .env("WASM_PKG_CACHE_DIR", &cache)
             .env("GITHUB_OUTPUT", &output)
