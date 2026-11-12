@@ -61,6 +61,7 @@ export const secretsContext = (
         (crypto.getRandomValues(new Uint32Array(1))[0] ?? 0) / 2 ** 32,
     }),
     clipboard: xClipboard({ shell, clock }),
+    monotonic: () => performance.now(),
     polling: polling(schedules),
   };
   return behavior<Base>().decorate({ secrets });
