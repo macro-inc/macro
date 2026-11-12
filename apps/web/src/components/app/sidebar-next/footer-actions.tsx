@@ -83,7 +83,8 @@ const MobileAppButton = () => {
 /**
  * The rail's bottom actions: a ready app update, the mobile app link, help,
  * then Settings, opened like any other rail view. The gear carries the account
- * photo as a badge, so people with several accounts can tell which one they are in.
+ * photo as a badge, so people with several accounts can tell which one they
+ * are in.
  */
 export const FooterActions = (props: {
   onMenuOpenChange?: (open: boolean) => void;
