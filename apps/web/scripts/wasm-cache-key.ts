@@ -5,9 +5,11 @@
 //   (`wasm_closures` in .github/workspace-dep-closures.json, written by
 //   `cargo x deps`), the toolchain pin, the Nix flake and its definitions (they
 //   choose wasm-pack, wasm-bindgen and binaryen), `.cargo` and `static_assets`.
-// - Its slice of Cargo.lock: every locked package reachable from those crates.
-//   Lockfile edges cover every target and dependency kind, so the slice holds at
-//   least what the build compiles.
+// - Its slice of Cargo.lock: every locked package reachable from those crates
+//   without passing through a workspace crate outside them. Lockfile edges
+//   cover every target and dependency kind, so the slice holds at least what
+//   the build compiles: anything it compiles is reached through crates it
+//   compiles.
 // - The root Cargo.toml without its `members` list. Dependencies, profiles,
 //   patches and lints stay in.
 // - The `CARGO_PROFILE_*` variables of the profile the build uses, and the
@@ -23,6 +25,8 @@ import { join } from 'node:path';
 type LockPackage = {
   name: string;
   version: string;
+  /** No `source`: a crate of this workspace. */
+  local: boolean;
   lines: string[];
   dependencies: string[];
 };
@@ -35,7 +39,7 @@ function parseLock(lockText: string): LockPackage[] {
 
   for (const line of lockText.split('\n')) {
     if (line === '[[package]]') {
-      current = { name: '', version: '', lines: [], dependencies: [] };
+      current = { name: '', version: '', local: true, lines: [], dependencies: [] };
       packages.push(current);
       inDependencies = false;
       continue;
@@ -57,6 +61,7 @@ function parseLock(lockText: string): LockPackage[] {
     const [, key, value] = field;
     if (key === 'name') current.name = JSON.parse(value);
     if (key === 'version') current.version = JSON.parse(value);
+    if (key === 'source') current.local = false;
     if (key === 'dependencies') {
       if (value === '[') {
         inDependencies = true;
@@ -70,8 +75,10 @@ function parseLock(lockText: string): LockPackage[] {
 }
 
 /**
- * The Cargo.lock entries reachable from `roots` (package names), as text in a
- * fixed order.
+ * The Cargo.lock entries reachable from `roots` (the names of the workspace
+ * crates the build compiles), as text in a fixed order. The walk does not enter
+ * other workspace crates: the lock lists a crate's dependencies for every
+ * target, so the edges into them are ones a wasm32 build leaves off.
  */
 export function lockSlice(lockText: string, roots: string[]): string[] {
   const byName = new Map<string, LockPackage[]>();
@@ -91,10 +98,12 @@ export function lockSlice(lockText: string, roots: string[]): string[] {
     return sameName.filter((lockPackage) => lockPackage.version === version);
   };
 
+  const compiled = new Set(roots);
   const reached = new Set<LockPackage>();
   const pending = roots.flatMap((name) => byName.get(name) ?? []);
   for (let next = pending.pop(); next !== undefined; next = pending.pop()) {
     if (reached.has(next)) continue;
+    if (next.local && !compiled.has(next.name)) continue;
 
     reached.add(next);
     for (const dependency of next.dependencies) {

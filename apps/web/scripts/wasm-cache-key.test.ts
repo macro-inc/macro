@@ -26,6 +26,7 @@ version = "0.1.0"
 dependencies = [
  "png",
  "serde 1.0.200",
+ "server",
 ]
 
 [[package]]
@@ -122,6 +123,17 @@ describe('lockSlice', () => {
     expect(slice).toContain('checksum = "bbbb"');
     expect(slice).not.toContain('checksum = "cccc"');
     expect(slice).not.toContain('name = "tokio"');
+  });
+
+  it('stops at workspace crates the build does not compile', () => {
+    // engine's lock entry lists server, a dependency it has only off wasm32.
+    const slice = lockSlice(LOCK, ['engine']).join('\n');
+    expect(slice).not.toContain('name = "server"');
+    expect(slice).not.toContain('checksum = "cccc"');
+
+    const both = lockSlice(LOCK, ['engine', 'server']).join('\n');
+    expect(both).toContain('name = "server"');
+    expect(both).toContain('name = "tokio"');
   });
 });
 
