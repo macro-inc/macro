@@ -1,4 +1,5 @@
 import { fireAndForget } from '@core/util/fireAndForget';
+import type { CacheHost } from '@graphql-cache/index';
 import { Telemetry } from '@macro-inc/observability';
 import type {
   MessageCursor,
@@ -6,8 +7,12 @@ import type {
   MessageTimelinePage,
 } from '@service-storage/messages';
 import { catchUpAndRefresh, catchUpChannel } from './catch-up';
-import { channelCacheHost } from './flag';
-import { type ChannelPageRequest, loadChannelPage } from './pages';
+import { channelCacheAnswered, channelCacheHost } from './flag';
+import {
+  type ChannelPageRequest,
+  type LoadedChannelPage,
+  loadChannelPage,
+} from './pages';
 import { sortKeyFromCursor } from './sort-key';
 import { loadChannelMessage, loadChannelThread } from './thread';
 
@@ -53,6 +58,24 @@ function reportFallback(error: unknown, signal?: AbortSignal): void {
 }
 
 /**
+ * Once a server page is on the device: when the device already held the
+ * channel at an older sequence, replays what changed since so the other
+ * stretches it holds are current too.
+ */
+async function refreshIfBehind(
+  host: CacheHost,
+  channelId: string,
+  loaded: Extract<LoadedChannelPage, { source: 'server' }>,
+  anchored: boolean
+): Promise<void> {
+  const storedSeq = await loaded.stored;
+  if (anchored || storedSeq === null) return;
+  if (BigInt(loaded.serverSeq) > BigInt(storedSeq)) {
+    await catchUpAndRefresh(host, channelId);
+  }
+}
+
+/**
  * One channel timeline page through the device cache. Undefined when channels
  * read over REST for this person, or when the device path failed and REST
  * should answer this read instead.
@@ -65,10 +88,13 @@ export async function loadLocalChannelTimelinePage(
   const request = pageRequest(read);
   if (!request) return undefined;
   const anchored = request.before !== undefined || request.after !== undefined;
+  let caughtUp = false;
   try {
-    if (read.revalidate && !anchored) {
+    // A host still starting would hold the open up; it catches up after.
+    if (read.revalidate && !anchored && channelCacheAnswered(host)) {
       try {
         await catchUpChannel(host, read.channelId);
+        caughtUp = true;
       } catch (error) {
         // Offline or a failed request: what the device holds still opens.
         reportFallback(error, read.signal);
@@ -89,14 +115,12 @@ export async function loadLocalChannelTimelinePage(
         SYNC_SURFACE
       );
     }
-    const behind =
-      loaded.serverSeq !== undefined &&
-      loaded.storedSeq !== null &&
-      BigInt(loaded.serverSeq) > BigInt(loaded.storedSeq);
-    if (
-      !anchored &&
-      ((loaded.source === 'device' && !read.revalidate) || behind)
-    ) {
+    if (loaded.source === 'server') {
+      fireAndForget(
+        refreshIfBehind(host, read.channelId, loaded, anchored),
+        SYNC_SURFACE
+      );
+    } else if (!anchored && (!read.revalidate || !caughtUp)) {
       fireAndForget(catchUpAndRefresh(host, read.channelId), SYNC_SURFACE);
     }
     return loaded.page;
@@ -112,7 +136,8 @@ export async function loadLocalChannelThread(
   rootId: string
 ): Promise<MessageThread | undefined> {
   const host = channelCacheHost();
-  if (!host) return undefined;
+  // A host still starting would hold the open up; REST answers meanwhile.
+  if (!host || !channelCacheAnswered(host)) return undefined;
   try {
     const loaded = await loadChannelThread(host, channelId, rootId);
     if (loaded?.source === 'device') {
@@ -142,7 +167,8 @@ export async function resolveLocalChannelMessage(
   | undefined
 > {
   const host = channelCacheHost();
-  if (!host) return undefined;
+  // A host still starting would hold the open up; REST answers meanwhile.
+  if (!host || !channelCacheAnswered(host)) return undefined;
   try {
     const message = await loadChannelMessage(host, channelId, messageId);
     if (!message) return undefined;

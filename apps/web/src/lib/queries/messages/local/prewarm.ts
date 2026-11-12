@@ -110,13 +110,19 @@ export async function runChannelPrewarm(
         const loaded = await loadChannelPage(
           host,
           { channelId, limit: PREWARM_PAGE_SIZE },
-          { signal, fetchPage: options.fetchPage, now: options.now }
+          {
+            signal,
+            fetchPage: options.fetchPage,
+            now: options.now,
+            background: true,
+          }
         );
         if (loaded === 'unsupported' || loaded === 'not-ready') {
           outcome.unavailable = true;
           break;
         }
         if (loaded.source === 'server') {
+          await loaded.stored;
           outcome.fetched += 1;
         } else {
           await catchUpAndRefresh(host, channelId, options.fetchChanges);

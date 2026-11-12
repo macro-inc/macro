@@ -9,6 +9,7 @@ import { type Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
 import { loadChannelList } from '../../channel/channels';
 import { resetChannelSync } from './catch-up';
 import { channelCacheHost } from './flag';
+import { resetPendingChannelPages } from './pages';
 import {
   evictIdleChannels,
   prewarmChannelIds,
@@ -80,6 +81,7 @@ export function useChannelCache(active: Accessor<boolean>): void {
       unsubscribeReconnect();
       // Sequence bookkeeping belongs to the account and cache it was read for.
       resetChannelSync();
+      resetPendingChannelPages();
     });
   });
 

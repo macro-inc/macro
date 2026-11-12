@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type CacheHost,
   CHANNEL_TIMELINE_HEAD,
@@ -19,7 +20,7 @@ import type {
   MessageTimelineEntry,
   MessageTimelinePage,
 } from '@service-storage/messages';
-import { fetchCached } from '../../calendar/graphql/network';
+import { fetchPublished } from '../../calendar/graphql/network';
 import { withinCacheHeadStart } from '../../calendar/graphql/readiness';
 import {
   CHANNEL_CACHE_HEAD_START_MS,
@@ -41,11 +42,17 @@ export type ChannelPageHost = Pick<
 
 export type ChannelServerPage = ChannelTimelineQuery['user']['channelTimeline'];
 
-/** Fetches one page and resolves once it is written to the cache. */
+export interface FetchedChannelPage {
+  page: ChannelServerPage;
+  /** Settles once the page's records are in the cache. */
+  cached: Promise<void>;
+}
+
+/** Fetches one page; resolves when it arrives, before the cache holds it. */
 export type FetchChannelServerPage = (
   input: ChannelTimelineInput,
   signal?: AbortSignal
-) => Promise<ChannelServerPage>;
+) => Promise<FetchedChannelPage>;
 
 /** One channel page; at most one of the three anchors. */
 export interface ChannelPageRequest {
@@ -61,14 +68,24 @@ export interface ChannelPageRequest {
 
 export type ChannelPageSource = 'device' | 'server';
 
-export interface LoadedChannelPage {
-  page: MessageTimelinePage;
-  source: ChannelPageSource;
-  /** Change sequence the device holds for the channel after this read. */
-  storedSeq: string | null;
-  /** Change sequence the server read the page at; absent for a device page. */
-  serverSeq?: string;
-}
+export type LoadedChannelPage =
+  | {
+      page: MessageTimelinePage;
+      source: 'device';
+      /** Change sequence the device holds for the channel. */
+      storedSeq: string | null;
+    }
+  | {
+      page: MessageTimelinePage;
+      source: 'server';
+      /** Change sequence the server read the page at. */
+      serverSeq: string;
+      /**
+       * Settles once the device holds the page, with the change sequence it
+       * then holds for the channel. The page is usable before that.
+       */
+      stored: Promise<string | null>;
+    };
 
 /** Why a page could not come from the device cache path at all. */
 export type ChannelPageUnavailable = 'unsupported' | 'not-ready';
@@ -78,9 +95,24 @@ const activitySelection = selectRecords(
   ChannelTimelineActivityFieldsFragmentDoc
 );
 
-const fetchChannelServerPage: FetchChannelServerPage = async (input, signal) =>
-  (await fetchCached(ChannelTimelineDocument, { input }, { signal })).user
-    .channelTimeline;
+const fetchChannelServerPage: FetchChannelServerPage = async (
+  input,
+  signal
+) => {
+  const published = await fetchPublished(
+    ChannelTimelineDocument,
+    { input },
+    { signal }
+  );
+  return {
+    page: published.data.user.channelTimeline,
+    cached: published.cached,
+  };
+};
+
+// Server pages still being written to the device, by request. A read of the
+// same page in that window would miss on the device and fetch it again.
+const pendingServerPages = new Map<string, LoadedChannelPage>();
 
 /**
  * Reads the records behind page keys in key order. Undefined when a key has no
@@ -196,9 +228,56 @@ export function serverPageCoverage(
 }
 
 /**
+ * Runs follow-up work whose failure another holder of the same promise
+ * reports, or which changes nothing shown.
+ */
+function quietly(work: () => Promise<unknown>): void {
+  const run = async () => {
+    try {
+      await work();
+    } catch {
+      // Reported where the page is used.
+    }
+  };
+  fireAndForget(run(), 'channel-local-sync');
+}
+
+type RacedRead =
+  | { from: 'device'; device: DeviceRead }
+  | { from: 'server'; fetched: FetchedChannelPage };
+
+/**
+ * How long a failed request waits for a device that is still starting before
+ * the failure stands: offline, the device is the only place a page can come
+ * from.
+ */
+const FAILED_REQUEST_DEVICE_WAIT_MS = 10_000;
+
+/** The server's page; when the request fails, what the device holds instead. */
+async function serverOrDevice(
+  server: Promise<FetchedChannelPage>,
+  read: Promise<DeviceRead>
+): Promise<RacedRead> {
+  try {
+    return { from: 'server', fetched: await server };
+  } catch (error) {
+    const device = await withinCacheHeadStart(
+      read,
+      FAILED_REQUEST_DEVICE_WAIT_MS
+    );
+    if (device === 'not-ready') throw error;
+    return { from: 'device', device };
+  }
+}
+
+/**
  * Loads one channel page: from the device when it holds the stretch, otherwise
- * from the server, which is then recorded as held. Resolves to the reason when
- * the device path cannot serve channels, so the caller reads over REST.
+ * from the server, which is then recorded as held. A host that has not
+ * answered yet is still starting, so the server is asked at the same time and
+ * the first page wins: opening is never slower than without the device.
+ * `background` work instead gives the host a head start and resolves to
+ * `not-ready` past it. Resolves to the reason when the device path cannot
+ * serve channels, so the caller reads over REST.
  */
 export async function loadChannelPage(
   host: ChannelPageHost & object,
@@ -207,6 +286,7 @@ export async function loadChannelPage(
     signal?: AbortSignal;
     fetchPage?: FetchChannelServerPage;
     now?: () => number;
+    background?: boolean;
   } = {}
 ): Promise<LoadedChannelPage | ChannelPageUnavailable> {
   return Telemetry.span('channel.timeline_page', async (span) => {
@@ -222,21 +302,67 @@ export async function loadChannelPage(
             ? 'after'
             : 'latest'
     );
-    const read = readDeviceChannelPage(host, request);
-    const device = channelCacheAnswered(host as CacheHost)
-      ? await read
-      : await withinCacheHeadStart(read, CHANNEL_CACHE_HEAD_START_MS);
-    if (device === 'not-ready') {
-      span.setAttr('page.source', 'not-ready');
-      return 'not-ready';
+    const cacheHost = host as CacheHost;
+    const pendingKey = JSON.stringify(cacheArgs(request));
+    const pending = pendingServerPages.get(pendingKey);
+    if (pending) {
+      span.setAttr('page.source', 'server-pending');
+      return pending;
     }
-    if (device.kind === 'unsupported') {
-      markChannelCacheUnsupported(host as CacheHost);
+    const fetchPage = options.fetchPage ?? fetchChannelServerPage;
+    const fetchServer = () =>
+      fetchPage(
+        {
+          channelId: request.channelId,
+          limit: request.limit,
+          before: request.before,
+          after: request.after,
+          around: request.aroundMessageId,
+        },
+        options.signal
+      );
+    const read = readDeviceChannelPage(host, request);
+    let device: DeviceRead | undefined;
+    let fetched: FetchedChannelPage | undefined;
+    if (channelCacheAnswered(cacheHost)) {
+      device = await read;
+    } else if (options.background) {
+      const early = await withinCacheHeadStart(
+        read,
+        CHANNEL_CACHE_HEAD_START_MS
+      );
+      if (early === 'not-ready') {
+        span.setAttr('page.source', 'not-ready');
+        return 'not-ready';
+      }
+      device = early;
+    } else {
+      const server = fetchServer();
+      const first = await Promise.race<RacedRead>([
+        (async () => ({ from: 'device', device: await read }))(),
+        serverOrDevice(server, read),
+      ]);
+      span.setAttr('page.raced', first.from);
+      if (first.from === 'server') {
+        fetched = first.fetched;
+      } else {
+        device = first.device;
+        if (device.kind === 'miss') {
+          fetched = await server;
+        } else {
+          // The device answered first; the request's records still land in
+          // the cache, and a failure of it changes nothing shown.
+          quietly(async () => (await server).cached);
+        }
+      }
+    }
+    if (device?.kind === 'unsupported') {
+      markChannelCacheUnsupported(cacheHost);
       span.setAttr('page.source', 'unsupported');
       return 'unsupported';
     }
-    markChannelCacheAnswered(host as CacheHost);
-    if (device.kind === 'page') {
+    if (device) markChannelCacheAnswered(cacheHost);
+    if (device?.kind === 'page') {
       span.setAttr('page.source', 'device');
       span.setAttr('page.entries', device.page.entries.length);
       return {
@@ -245,38 +371,59 @@ export async function loadChannelPage(
         storedSeq: device.storedSeq,
       };
     }
-    const fetchPage = options.fetchPage ?? fetchChannelServerPage;
-    const server = await fetchPage(
-      {
-        channelId: request.channelId,
-        limit: request.limit,
-        before: request.before,
-        after: request.after,
-        around: request.aroundMessageId,
-      },
-      options.signal
-    );
+    const { page: server, cached } = fetched ?? (await fetchServer());
     const coverage = serverPageCoverage(request, server);
-    const committed = await host.channelTimelineCommit({
-      channelId: request.channelId,
-      ...(coverage && { coverage: [coverage] }),
-      seq: { kind: 'lower', seq: server.seq },
-      touchedAtMs: (options.now ?? Date.now)(),
-    });
+    const store = async (): Promise<string | null> => {
+      await cached;
+      // The page won a race against a host that had not answered: record it
+      // once the host can, unless it turns out unable to hold channels.
+      const held = device ?? (await read);
+      if (held.kind === 'unsupported') {
+        markChannelCacheUnsupported(cacheHost);
+        return null;
+      }
+      markChannelCacheAnswered(cacheHost);
+      const committed = await host.channelTimelineCommit({
+        channelId: request.channelId,
+        ...(coverage && { coverage: [coverage] }),
+        seq: { kind: 'lower', seq: server.seq },
+        touchedAtMs: (options.now ?? Date.now)(),
+      });
+      return committed.kind === 'committed'
+        ? committed.channelSeq
+        : held.storedSeq;
+    };
+    const stored = store();
     span.setAttr('page.source', 'server');
     span.setAttr('page.entries', server.entries.length);
-    return {
+    const loaded: LoadedChannelPage = {
       page: timelinePage(
         server.entries,
         server.olderCursor,
         server.newerCursor
       ),
       source: 'server',
-      storedSeq:
-        committed.kind === 'committed'
-          ? committed.channelSeq
-          : device.storedSeq,
       serverSeq: server.seq,
+      stored,
     };
+    pendingServerPages.set(pendingKey, loaded);
+    const forget = () => {
+      if (pendingServerPages.get(pendingKey) === loaded) {
+        pendingServerPages.delete(pendingKey);
+      }
+    };
+    quietly(async () => {
+      try {
+        await stored;
+      } finally {
+        forget();
+      }
+    });
+    return loaded;
   });
+}
+
+/** Forgets pages still being written; for account changes and tests. */
+export function resetPendingChannelPages(): void {
+  pendingServerPages.clear();
 }

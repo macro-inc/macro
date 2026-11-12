@@ -84,10 +84,8 @@ describe('runChannelPrewarm', () => {
   it('fetches the latest page of a channel the device does not hold', async () => {
     const host = fakeHost(() => devicePage([], { covered: false }));
     const fetchPage = vi.fn<FetchChannelServerPage>(async () => ({
-      entries: [],
-      olderCursor: null,
-      newerCursor: null,
-      seq: '4',
+      page: { entries: [], olderCursor: null, newerCursor: null, seq: '4' },
+      cached: Promise.resolve(),
     }));
     const outcome = await runChannelPrewarm(host, ['a', 'b'], {
       signal: signal(),
@@ -138,10 +136,8 @@ describe('runChannelPrewarm', () => {
       .fn()
       .mockRejectedValueOnce(new Error('offline'))
       .mockResolvedValue({
-        entries: [],
-        olderCursor: null,
-        newerCursor: null,
-        seq: '1',
+        page: { entries: [], olderCursor: null, newerCursor: null, seq: '1' },
+        cached: Promise.resolve(),
       });
     const outcome = await runChannelPrewarm(host, ['a', 'b'], {
       signal: signal(),
