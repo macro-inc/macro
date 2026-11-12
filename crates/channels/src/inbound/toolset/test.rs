@@ -957,7 +957,7 @@ fn contended_message_mutation_has_retry_guidance_and_retains_the_internal_cause(
         rootcause::report!("private database detail"),
     ));
 
-    assert_eq!(error.description, "channel is busy; retry the request");
+    assert_eq!(error.description, "conversation is busy; retry the request");
     let Some(MessageError::Contended(cause)) = error.internal_error.downcast_ref::<MessageError>()
     else {
         panic!("expected the typed contention cause");

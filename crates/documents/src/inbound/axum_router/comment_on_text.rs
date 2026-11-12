@@ -135,12 +135,9 @@ impl IntoResponse for CommentOnTextError {
                     StatusCode::CONFLICT,
                     "message id already exists".to_string(),
                 ),
-                MessageError::Contended(error) => {
-                    tracing::warn!(error = ?error, "channel sequence is contended");
-                    let mut response = message(
-                        StatusCode::SERVICE_UNAVAILABLE,
-                        "channel is busy; retry the request".to_string(),
-                    );
+                error @ MessageError::Contended(_) => {
+                    tracing::warn!(error = ?error, "message write is busy");
+                    let mut response = message(StatusCode::SERVICE_UNAVAILABLE, error.to_string());
                     response
                         .headers_mut()
                         .insert(RETRY_AFTER, HeaderValue::from_static("1"));
