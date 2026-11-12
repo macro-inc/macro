@@ -129,7 +129,10 @@ export type UploadSource =
   | { kind: 'file'; file: File; sha: string; size: number }
   | { kind: 'staged'; staged: NativeStagedUpload; sha: string; size: number };
 
-export async function resolveUploadSource(file: File): Promise<UploadSource> {
+export async function resolveUploadSource(
+  file: File,
+  onHashProgress?: (fraction: number) => void
+): Promise<UploadSource> {
   const staged = getNativeStagedUpload(file);
   if (staged) {
     const sha = await getNativeStagedUploadChecksum(staged);
@@ -138,7 +141,7 @@ export async function resolveUploadSource(file: File): Promise<UploadSource> {
   return {
     kind: 'file',
     file,
-    sha: await hashFile(file),
+    sha: await hashFile(file, onHashProgress),
     size: file.size,
   };
 }

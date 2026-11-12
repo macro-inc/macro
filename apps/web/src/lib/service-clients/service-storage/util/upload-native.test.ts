@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   toastFailure: vi.fn(),
   toastAlert: vi.fn(),
   trackUpload: vi.fn(),
+  uploadPreparing: vi.fn(),
   uploadSending: vi.fn(),
   uploadProcessing: vi.fn(),
   uploadDone: vi.fn(),
@@ -105,6 +106,7 @@ beforeEach(() => {
   mocks.contentHash.mockResolvedValue('cd'.repeat(32));
   mocks.hashFile.mockResolvedValue('cd'.repeat(32));
   mocks.trackUpload.mockReturnValue({
+    preparing: mocks.uploadPreparing,
     sending: mocks.uploadSending,
     processing: mocks.uploadProcessing,
     done: mocks.uploadDone,
@@ -243,7 +245,7 @@ describe('browser upload checksums', () => {
 
     await upload(file);
 
-    expect(mocks.hashFile).toHaveBeenCalledWith(file);
+    expect(mocks.hashFile).toHaveBeenCalledWith(file, mocks.uploadPreparing);
     expect(mocks.browserPut).toHaveBeenCalledWith({
       presignedUrl: 'https://example.com/upload',
       buffer: file,

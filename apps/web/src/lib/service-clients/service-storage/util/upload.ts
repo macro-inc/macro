@@ -188,7 +188,7 @@ async function uploadWithProgress(
 
   let source: UploadSource;
   try {
-    source = await resolveUploadSource(file);
+    source = await resolveUploadSource(file, progress?.preparing);
   } catch (error) {
     return handleUploadError(error instanceof Error ? error : String(error));
   }

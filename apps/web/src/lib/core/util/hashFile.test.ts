@@ -68,4 +68,15 @@ describe('hashFile', () => {
     );
     expect(workers.started).toBe(started + 1);
   });
+
+  it('reports how much of a streamed file it has hashed', async () => {
+    const bytes = new Uint8Array(40 * 1024 * 1024).fill(7);
+    const fractions: number[] = [];
+
+    await hashFile(unreadableWhole(bytes, 'scan.pdf'), (fraction) =>
+      fractions.push(fraction)
+    );
+
+    expect(fractions).toEqual([0.2, 0.4, 0.6, 0.8, 1]);
+  });
 });
