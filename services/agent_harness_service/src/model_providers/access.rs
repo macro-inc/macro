@@ -1,6 +1,6 @@
 //! Authorization adapter for registered harness model discovery.
 
-use agent_harness::domain::model_load::HarnessModelAccess;
+use agent_harness::domain::model_load::{HarnessModelAccess, HarnessModelReach};
 use harness_id::HarnessId;
 use harnesses::domain::ports::{HarnessRepo, HarnessService};
 use harnesses::domain::service::HarnessServiceImpl;
@@ -24,15 +24,22 @@ impl<Repo> HarnessModelAccess for VisibleHarnessAccess<Repo>
 where
     Repo: HarnessRepo,
 {
-    async fn can_use(
+    async fn reach(
         &self,
         caller: &MacroUserIdStr<'static>,
         harness: HarnessId,
-    ) -> Result<bool, String> {
-        self.harnesses
+    ) -> Result<HarnessModelReach, String> {
+        let visible = self
+            .harnesses
             .list_harnesses(caller.clone())
             .await
-            .map(|visible| visible.iter().any(|candidate| candidate.id == harness))
-            .map_err(|error| error.to_string())
+            .map_err(|error| error.to_string())?;
+        Ok(
+            match visible.iter().find(|candidate| candidate.id == harness) {
+                None => HarnessModelReach::Forbidden,
+                Some(found) if found.connected => HarnessModelReach::Connected,
+                Some(_) => HarnessModelReach::Disconnected,
+            },
+        )
     }
 }

@@ -12,6 +12,7 @@ fn working_state_requires_valid_embedded_credentials() {
     config.credentials = Some(HarnessCredentials {
         harness_id: HarnessId::TEST_A,
         token: "invalid".to_owned(),
+        pairing_id: None,
     });
     assert!(!config_is_working(&config));
 

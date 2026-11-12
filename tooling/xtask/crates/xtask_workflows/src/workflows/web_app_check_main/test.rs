@@ -869,6 +869,11 @@ fn every_former_typecheck_step_still_runs() {
             "bun run type-check",
         ),
         (
+            "Check Observability Package",
+            "packages/observability",
+            "bun run type-check && bun run test",
+        ),
+        (
             "Check Lexical Service Types",
             "services/lexical-service",
             "bun run check",

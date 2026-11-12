@@ -43936,6 +43936,13 @@ export const approveHarnessPairingResponse = zod
       .describe(
         'Whether agents may bypass ACP permission requests on this harness.'
       ),
+    claude_mode: zod
+      .enum(['macro_credits', 'own_account'])
+      .optional()
+      .describe(
+        'How Claude Code on a Macro computer is paid for: its own Claude account\nwhen it has an active Claude login, otherwise Macro credits.'
+      ),
+    computer_id: zod.union([zod.null(), zod.string()]).optional(),
     connected: zod
       .boolean()
       .describe('Whether the daemon currently holds a runtime connection.'),
@@ -43976,7 +43983,7 @@ code) addresses it.
  * @summary Handler for `POST /harness-pairings/{pairing_id}/claim`.
  */
 export const claimHarnessPairingParams = zod.object({
-  pairing_id: zod.uuid().describe('Pairing ID'),
+  pairing_id: zod.string().describe('Pairing ID'),
 });
 
 export const claimHarnessPairingBody = zod
@@ -44003,6 +44010,13 @@ export const claimHarnessPairingResponse = zod
           .describe(
             'Whether agents may bypass ACP permission requests on this harness.'
           ),
+        claude_mode: zod
+          .enum(['macro_credits', 'own_account'])
+          .optional()
+          .describe(
+            'How Claude Code on a Macro computer is paid for: its own Claude account\nwhen it has an active Claude login, otherwise Macro credits.'
+          ),
+        computer_id: zod.union([zod.null(), zod.string()]).optional(),
         connected: zod
           .boolean()
           .describe('Whether the daemon currently holds a runtime connection.'),
@@ -44058,6 +44072,13 @@ export const listHarnessesResponseItem = zod
       .describe(
         'Whether agents may bypass ACP permission requests on this harness.'
       ),
+    claude_mode: zod
+      .enum(['macro_credits', 'own_account'])
+      .optional()
+      .describe(
+        'How Claude Code on a Macro computer is paid for: its own Claude account\nwhen it has an active Claude login, otherwise Macro credits.'
+      ),
+    computer_id: zod.union([zod.null(), zod.string()]).optional(),
     connected: zod
       .boolean()
       .describe('Whether the daemon currently holds a runtime connection.'),
@@ -44107,6 +44128,13 @@ export const listHarnessDirectoryResponseItem = zod
       .describe(
         'Whether agents may bypass ACP permission requests on this harness.'
       ),
+    claude_mode: zod
+      .enum(['macro_credits', 'own_account'])
+      .optional()
+      .describe(
+        'How Claude Code on a Macro computer is paid for: its own Claude account\nwhen it has an active Claude login, otherwise Macro credits.'
+      ),
+    computer_id: zod.union([zod.null(), zod.string()]).optional(),
     connected: zod
       .boolean()
       .describe('Whether the daemon currently holds a runtime connection.'),
@@ -44158,6 +44186,13 @@ export const getSelfHarnessResponse = zod
       .describe(
         'Whether agents may bypass ACP permission requests on this harness.'
       ),
+    claude_mode: zod
+      .enum(['macro_credits', 'own_account'])
+      .optional()
+      .describe(
+        'How Claude Code on a Macro computer is paid for: its own Claude account\nwhen it has an active Claude login, otherwise Macro credits.'
+      ),
+    computer_id: zod.union([zod.null(), zod.string()]).optional(),
     connected: zod
       .boolean()
       .describe('Whether the daemon currently holds a runtime connection.'),
@@ -44270,6 +44305,13 @@ export const patchHarnessResponse = zod
       .describe(
         'Whether agents may bypass ACP permission requests on this harness.'
       ),
+    claude_mode: zod
+      .enum(['macro_credits', 'own_account'])
+      .optional()
+      .describe(
+        'How Claude Code on a Macro computer is paid for: its own Claude account\nwhen it has an active Claude login, otherwise Macro credits.'
+      ),
+    computer_id: zod.union([zod.null(), zod.string()]).optional(),
     connected: zod
       .boolean()
       .describe('Whether the daemon currently holds a runtime connection.'),

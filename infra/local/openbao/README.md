@@ -46,7 +46,9 @@ python3 infra/local/openbao/bootstrap.py \
   --jwt-issuer macro-local-passwords
 ```
 
-Provision each new Macro team explicitly. The bootstrap refuses remote origins
+The provisioning logic lives in `infra/openbao/openbao_provisioning.py`, shared with the
+hosted dev entrypoint (`infra/openbao/README.md`). Provision each new Macro team
+explicitly. The bootstrap refuses remote origins
 and redirects. It may be repeated: it preserves existing values and versions,
 validates mount types, and reapplies policy/auth configuration.
 It does not create teams or change Postgres.
