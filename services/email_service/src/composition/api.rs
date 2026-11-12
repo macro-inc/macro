@@ -262,6 +262,26 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
         failure_observer: crate::api::context::InitFailureObserver,
     });
     Ok(ApiContext {
+        gmail_push: Arc::new(email::domain::mailbox::gmail_push::GmailPushService {
+            authentication: email::domain::mailbox::gmail_push::GooglePushAuthentication {
+                cache: crate::outbound::gmail_push::GooglePushKeyCache(redis_client.clone()),
+                source: crate::outbound::gmail_push::GooglePushKeySource(gmail_client.clone()),
+                verifier: crate::outbound::gmail_push::GooglePushTokenVerifier(
+                    gmail_client.clone(),
+                ),
+            },
+            require_authentication: cfg!(feature = "gmail_webhook_auth"),
+            inboxes: crate::outbound::gmail_push::PgPushInboxes(db.clone()),
+            queue: crate::outbound::gmail_push::GmailPushNotifications(sqs_client.as_ref().clone()),
+        }),
+        user_inbox_deletion: Arc::new(
+            email::domain::mailbox::lifecycle::InboxLifecycleService::new(
+                crate::outbound::user_deletion::PgDeletedUserInboxes(db.clone()),
+                crate::outbound::user_deletion::DeletedUserNotifications(
+                    sqs_client.as_ref().clone(),
+                ),
+            ),
+        ),
         inbox_connection,
         backfill_jobs,
         calendar_disconnect: Arc::new(

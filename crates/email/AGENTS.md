@@ -20,6 +20,9 @@ tools — hexagonal, heavily feature-gated.
   and settings patches. `signature_settings/gmail_images.rs` selects public or
   mailbox image reads, caches message parts for one import, and preserves retryable
   image failures behind an image-reader port.
+- `src/domain/mailbox/gmail_push.rs` (feature `mailbox`): key-cache fallback,
+  push-token rotation retry and notification intake; lifecycle also owns ordered
+  deletion requests for a deleted user's inboxes.
 - `src/domain/mailbox/connection.rs` (feature `mailbox`): inbox connection,
   completed/discovered Google grants, shared promotion, and failed-attempt cleanup.
   Reuses mailbox initialization and backfill-job services.

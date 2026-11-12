@@ -18,6 +18,9 @@ the gateway `/email` prefix.
   inbox-scoped use cases; handlers delegate to their email-domain services.
   `outbound/signature_settings/gmail_images.rs` performs mailbox/public image reads;
   source selection and retry handling stay in the signature domain service.
+- `src/outbound/gmail_push.rs` and `user_deletion.rs`: adapters for domain-owned
+  Gmail push authentication/intake and deleted-user inbox removal. The webhook
+  auth feature is selected once in composition; handlers only extract and render.
 - `src/outbound/inbox_connection.rs`: adapters for the domain-owned `/email/init`
   flow; transaction boundaries, legacy errors, and token-info HTTP are preserved.
   The transport failure observer and shared HTTP status rule live in `src/api/email/init.rs`.

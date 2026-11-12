@@ -163,8 +163,25 @@ pub(crate) type InboxConnectionSvc = email::domain::mailbox::connection::InboxCo
     InitFailureObserver,
 >;
 
+pub(crate) type GmailPushAuth = email::domain::mailbox::gmail_push::GooglePushAuthentication<
+    crate::outbound::gmail_push::GooglePushKeyCache,
+    crate::outbound::gmail_push::GooglePushKeySource,
+    crate::outbound::gmail_push::GooglePushTokenVerifier,
+>;
+pub(crate) type GmailPushSvc = email::domain::mailbox::gmail_push::GmailPushService<
+    GmailPushAuth,
+    crate::outbound::gmail_push::PgPushInboxes,
+    crate::outbound::gmail_push::GmailPushNotifications,
+>;
+pub(crate) type UserInboxDeletionSvc = email::domain::mailbox::lifecycle::InboxLifecycleService<
+    crate::outbound::user_deletion::PgDeletedUserInboxes,
+    crate::outbound::user_deletion::DeletedUserNotifications,
+>;
+
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
+    pub gmail_push: Arc<GmailPushSvc>,
+    pub user_inbox_deletion: Arc<UserInboxDeletionSvc>,
     pub inbox_connection: Arc<InboxConnectionSvc>,
     pub backfill_jobs: Arc<BackfillJobSvc>,
     pub calendar_disconnect: Arc<CalendarDisconnectSvc>,
