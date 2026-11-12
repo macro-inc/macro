@@ -78,8 +78,9 @@ const DAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 /** The days of the week a day-of-week field names, or none when it uses syntax this doesn't read (steps, `L`, `#`). */
 function days(field: string): Set<string> {
   if (field === '*' || field === '?') return new Set(DAYS);
+  // Numbers from 1 = Sunday; names by their first three letters (`Thurs`, `Monday`).
   const named = (part: string) =>
-    /^\d+$/.test(part) ? DAYS[(Number(part) - 1) % 7] : part.toUpperCase();
+    /^\d+$/.test(part) ? DAYS[(Number(part) - 1) % 7] : /^[a-z]+$/i.test(part) ? part.slice(0, 3).toUpperCase() : part;
   const out = new Set<string>();
   for (const part of field.split(',')) {
     const [from, to, ...rest] = part.split('-').map(named);
@@ -96,13 +97,14 @@ function days(field: string): Set<string> {
   return out;
 }
 
-/** A schedule that runs at `hour:minute` on exactly `on` (every day if omitted). */
+/** A schedule that runs at `hour:minute` on exactly `on` (every day if omitted), in every month and on any day of it. */
 const at = (hour: number, minute: number, on?: string[]): Expectation => ({
   says: `runs at ${hour}:${String(minute).padStart(2, '0')}${on ? ` on ${on.join(', ')}` : ''}`,
   holds: (draft) =>
     schedules(draft.trigger).some((fields) => {
-      const [, min, hr, , , dow = '*'] = fields;
+      const [, min, hr, dom, month, dow = '*'] = fields;
       if (Number(min) !== minute || Number(hr) !== hour) return false;
+      if (![dom, month].every((field) => field === '*' || field === '?')) return false;
       const named = days(dow);
       const want = on ?? DAYS;
       return named.size === want.length && want.every((day) => named.has(day));
@@ -205,14 +207,16 @@ export const CASES: Case[] = [
       {
         says: 'leaves the missing #marketing channel for the person to pick',
         // Neither another channel's id nor the name itself, in a knob or as a
-        // string in a step's code (escaped quotes: it is read from JSON).
+        // string in a code step's source.
         holds: (draft, ids) =>
           !['design-feedback', 'engineering', 'eng-announcements'].some(
             (name) =>
               text([draft.trigger, draft.steps]).includes(ids[name] ?? '-'),
           ) &&
           !knobNamed(draft, 'marketing') &&
-          !/(\\"|'|`)#?marketing(\\"|'|`)/i.test(text(draft.steps)),
+          !(draft.steps ?? []).some((step) =>
+            /(["'`])#?marketing\1/i.test(String((step as { source?: unknown }).source ?? '')),
+          ),
       },
       nothingUnused,
     ],

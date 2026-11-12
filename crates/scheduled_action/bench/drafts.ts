@@ -303,11 +303,12 @@ function breakdown({ spans, checks }: { spans: Span[]; checks: Span[] }): Breakd
   }
   const interval = (span: Span): Interval => [span.start, span.end];
   const busy = [...chats, ...toolSpans];
-  // With nothing traced, the whole span counts as setup and none as tail.
-  const firstModel = chats[0]?.start ?? (busy.length ? Math.min(...busy.map((span) => span.start)) : draft.end);
+  // Setup ends at the first traced work (a model call, unless that call is
+  // missing from the trace); with nothing traced, the whole span is setup.
+  const firstBusy = busy.length ? Math.min(...busy.map((span) => span.start)) : draft.end;
   const lastBusy = busy.length ? Math.max(...busy.map((span) => span.end)) : draft.end;
   const serverMs = draft.end - draft.start;
-  const setupMs = Math.max(0, firstModel - draft.start);
+  const setupMs = Math.max(0, firstBusy - draft.start);
   const tailMs = Math.max(0, draft.end - lastBusy);
   const toolWaitMs = covered(busy.map(interval)) - covered(chats.map(interval));
   const calls = merged(busy.map(interval));
