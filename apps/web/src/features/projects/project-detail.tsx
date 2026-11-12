@@ -72,6 +72,13 @@ function ProjectBreadcrumbContent(props: ProjectBreadcrumbProps) {
   const source = useProjectsContext().createProjectSource(
     () => props.entry.data.id
   );
+  const appearanceFlag = useFeatureFlag(enableEntityAppearance);
+  const editableProject = () => {
+    const project = source.project();
+    return project && canEditProject(project) && appearanceFlag().enabled
+      ? project
+      : undefined;
+  };
   const name = () =>
     source.project()?.name ?? props.entry.data.fallbackName ?? 'Project';
   return (
@@ -82,7 +89,7 @@ function ProjectBreadcrumbContent(props: ProjectBreadcrumbProps) {
     >
       {(item) => (
         <div class="flex min-w-0 items-center">
-          <Show when={source.project()}>
+          <Show when={editableProject()}>
             {(project) => (
               <EntityAppearanceTrigger
                 entity={{
@@ -92,7 +99,7 @@ function ProjectBreadcrumbContent(props: ProjectBreadcrumbProps) {
                   ownerId: project().ownerId,
                   appearance: project().appearance,
                 }}
-                editable={canEditProject(project())}
+                editable
               />
             )}
           </Show>
@@ -102,8 +109,12 @@ function ProjectBreadcrumbContent(props: ProjectBreadcrumbProps) {
             onClick={item.onSelect}
             tooltip={name()}
           >
-            <Show when={!source.project()}>
-              <EntityIcon targetType="initiative" size="xs" />
+            <Show when={!editableProject()}>
+              <EntityIcon
+                targetType="initiative"
+                appearance={source.project()?.appearance}
+                size="xs"
+              />
             </Show>
             <span class="truncate">{name()}</span>
           </ViewBreadcrumbs.Button>

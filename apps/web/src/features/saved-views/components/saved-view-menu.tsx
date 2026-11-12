@@ -34,7 +34,7 @@ export function SavedViewMenuItems(props: {
         </Dropdown.Item>
         <Show when={props.onCopyLink}>
           {(onCopyLink) => (
-            <Dropdown.CopyItem onCopy={onCopyLink()}>
+            <Dropdown.CopyItem disabled={props.disabled} onCopy={onCopyLink()}>
               Copy link
             </Dropdown.CopyItem>
           )}
