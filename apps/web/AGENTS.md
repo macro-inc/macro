@@ -344,6 +344,12 @@ and Unicode contact names at the server's character limit:
 Nested picker selection must keep its containing drawer open when the option
 unmounts during the tap; drawer dismissal checks the original event path.
 
+Collapsible document sections (the real heading-folds plugin and its gutter
+controls) have a backend-free desktop/tablet/phone regression: placement in
+the 24px phone gutter, hover and touch visibility, nested folds, reload, and
+Mod+Enter:
+`bunx playwright test --config src/lib/core/component/LexicalMarkdown/component/misc/browser-test/playwright.config.ts`.
+
 Composer typeahead menus choosing the side with room for their full list
 (`floatWithSelection`'s `fullHeight`), above a composer at the bottom of a
 phone screen and below one near the top, and the floating format menu staying
