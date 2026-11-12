@@ -132,6 +132,24 @@ def main():
             f"{row['variant']} | {latency} | {row['achieved_ops_s']} |"
         )
     lines += [
+        "", "## Individual-run tails", "",
+        "Every run with p99 at least 10 ms is repeated below so medians do not",
+        "hide large tails. These are per-run percentiles, not maximum request",
+        "durations. The shared-host measurements do not identify their cause.", "",
+        "| Run | Channels | Offered writes/s | Variant | p50 / p95 / p99 ms | Achieved writes/s |",
+        "| ---: | ---: | ---: | --- | ---: | ---: |",
+    ]
+    large_tails = sorted((row for row in rows if float(row["arrival_p99_ms"]) >= 10),
+                         key=lambda row: float(row["arrival_p99_ms"]), reverse=True)
+    for row in large_tails:
+        latency = " / ".join(row[f"arrival_p{p}_ms"] for p in (50, 95, 99))
+        lines.append(
+            f"| {row['run']} | {row['channels']} | {row['offered_ops_s']} | "
+            f"{row['variant']} | {latency} | {row['achieved_ops_s']} |"
+        )
+    if not large_tails:
+        lines.append("No measured run had p99 at least 10 ms.")
+    lines += [
         "", "The raw CSV also retains service latency, wall time and the verified",
         "zero requested/actual holds. Historical pre-timeout results remain in",
         "[channel_arrival_latency_results.md](channel_arrival_latency_results.md).",

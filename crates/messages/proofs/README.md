@@ -469,8 +469,9 @@ and old/current variants. Each row must contain 2,000 writes and no artificial
 hold. It validates finite ordered latency percentiles and achieved rate against
 wall time. It writes `channel_deadline_arrival_latency_runs.csv` and
 `channel_deadline_arrival_latency_results.md`, retaining every run plus medians
-of each run's p50/p95/p99 and achieved rates. Historical arrival/commit-delay
-files are unchanged. The old saturation-with-delay runner remains historical;
+of each run's p50/p95/p99 and achieved rates. Runs with p99 at least 10 ms
+also appear in an explicit tail table so medians do not hide them. Historical
+arrival/commit-delay files are unchanged. The old saturation-with-delay runner remains historical;
 use the result-recording shared-pool runner for current saturation evidence.
 
 
