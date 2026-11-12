@@ -526,7 +526,14 @@ async fn metadata_grants_intents_folders_and_deletion_are_team_isolated(pool: Pg
             .expect("hourly retry deferred")
             .is_empty()
     );
-    repository.finish(operation).await.expect("finish");
+    // Completion is part of `save_reconciled`; mark the journal entry directly.
+    sqlx::query!(
+        "UPDATE password_write_intents SET completed_at=now() WHERE operation_id=$1",
+        operation
+    )
+    .execute(&repository.pool)
+    .await
+    .expect("finish");
     assert_eq!(
         repository
             .staged(first, record.metadata.id, operation)

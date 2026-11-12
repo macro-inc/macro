@@ -42,6 +42,8 @@ pub enum InboxRowType {
     CalendarEvent,
     /// A request to join a calendar event the viewer shared.
     CalendarJoinRequest,
+    /// An agent's request for access to a vault item the viewer manages.
+    PasswordAccessRequested,
     /// A request for access to something the viewer can share.
     AccessRequested,
     /// Access the viewer requested was granted.

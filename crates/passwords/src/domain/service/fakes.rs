@@ -30,6 +30,8 @@ pub struct FakeRepository {
     pub erased_items: Mutex<HashSet<Uuid>>,
     pub audits: Mutex<Vec<Action>>,
     pub enrollments: Mutex<HashMap<Uuid, FakeEnrollment>>,
+    /// Operations whose intents completed through `save_reconciled`.
+    pub reconciled: Mutex<Vec<Uuid>>,
 }
 impl FakeRepository {
     pub fn new() -> Self {
@@ -47,6 +49,7 @@ impl FakeRepository {
             erased_items: Mutex::new(HashSet::new()),
             audits: Mutex::new(vec![]),
             enrollments: Mutex::new(HashMap::new()),
+            reconciled: Mutex::new(vec![]),
         }
     }
 }
@@ -306,8 +309,17 @@ impl Repository for FakeRepository {
         }
         Ok(record)
     }
-    async fn finish(&self, _: Uuid) -> Result<(), Error> {
-        self.calls.fetch_add(1, Ordering::SeqCst);
+    async fn save_reconciled(
+        &self,
+        record: &Record,
+        expected: Option<i32>,
+        operation: Uuid,
+    ) -> Result<(), Error> {
+        self.save(record, expected).await?;
+        self.reconciled
+            .lock()
+            .expect("fixture lock")
+            .push(operation);
         Ok(())
     }
     async fn teams(&self, actor: &Actor) -> Result<Vec<TeamId>, Error> {

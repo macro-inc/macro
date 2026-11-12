@@ -204,7 +204,8 @@ pub struct Grant {
     /// Maximum capability granted to the named recipient.
     pub permission: Permission,
 }
-/// Future principals can extend this without exposing agent controls in v1.
+/// Grant recipient category. Agent grants are managed only through the agent
+/// access routes and never appear in, or count toward, human sharing.
 #[derive(Clone, Debug, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "snake_case")]
 #[schema(as=PasswordGranteeKind)]
@@ -213,6 +214,8 @@ pub enum GranteeKind {
     User,
     /// All current members of the vault team.
     Team,
+    /// One directory-admitted agent account; never matches human access.
+    Agent,
 }
 /// Grant capability.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]

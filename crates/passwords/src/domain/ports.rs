@@ -29,6 +29,7 @@ pub trait Repository: Send + Sync {
     /// Persist a unique pending enrollment before any provider mutation.
     async fn stage_totp(&self, team: TeamId, item: ItemId, key: TotpKeyId) -> Result<(), Error>;
     /// Select a successful enrollment only while its authorized metadata revision remains current.
+    /// An agent identity retained on the enrollment is audited in the same transaction.
     async fn activate_totp(
         &self,
         team: TeamId,
@@ -68,8 +69,15 @@ pub trait Repository: Send + Sync {
         item: ItemId,
         operation: uuid::Uuid,
     ) -> Result<Record, Error>;
-    /// Retire a reconciled metadata intent.
-    async fn finish(&self, operation: uuid::Uuid) -> Result<(), Error>;
+    /// Commit a reconciled intent's metadata with its version guard, record the
+    /// agent audit retained on the intent and mark the intent complete, in one
+    /// transaction. A live record's folder is share-locked as in `save`.
+    async fn save_reconciled(
+        &self,
+        record: &Record,
+        expected_version: Option<i32>,
+        operation: uuid::Uuid,
+    ) -> Result<(), Error>;
     /// Return current memberships from the authoritative team store.
     async fn teams(&self, actor: &Actor) -> Result<Vec<TeamId>, Error>;
     /// Search metadata visible to the actor within the team.

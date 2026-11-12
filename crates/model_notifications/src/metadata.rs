@@ -1,11 +1,13 @@
 mod access_request;
 mod calendar_join_request;
 mod channel_push;
+mod password_access_request;
 pub use access_request::{
     ChannelAccessRequestedMetadata, EntityAccessGrantedMetadata, EntityAccessRequestedMetadata,
     RequestedAccessLevel, RuntimeAccessRemovedMetadata, StoppedAgent,
 };
 pub use calendar_join_request::CalendarEventJoinRequestMetadata;
+pub use password_access_request::PasswordAccessRequestedMetadata;
 use chrono::{DateTime, NaiveDate, Utc};
 pub use invite_email::{
     ChannelInviteMetadata, ColleagueJoinedMacro, InviteToTeamMetadata, InviteePlan,

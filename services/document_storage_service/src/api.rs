@@ -455,7 +455,15 @@ fn api_router(state: ApiContext) -> Router {
         .nest("/saved_views", saved_views::router())
         .nest(
             "/passwords",
-            passwords::inbound::router::router(state.passwords_state.clone()),
+            passwords::inbound::router::router(state.passwords_state.clone()).merge(
+                passwords::inbound::agent_router::review_router(
+                    state.passwords_agent_state.clone(),
+                ),
+            ),
+        )
+        .nest(
+            "/passwords/agent",
+            passwords::inbound::agent_router::agent_router(state.passwords_agent_state.clone()),
         )
         .with_state(state);
     let dss_router = Router::new()

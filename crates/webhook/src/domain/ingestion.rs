@@ -28,6 +28,7 @@ use macro_event_broker::Event;
 use macro_user_id::user_id::MacroUserIdStr;
 use messages::domain::models::MessageParent;
 use messages::outbound::broker::MessageTopicEvent;
+use password_events::PasswordTopicEvent;
 use std::future::Future;
 use std::sync::Arc;
 use tracing::Instrument as _;
@@ -40,6 +41,7 @@ const CALL_ENTITY_TYPE: &str = "call";
 const USER_ENTITY_TYPE: &str = "user";
 const WEBHOOK_ENTITY_TYPE: &str = "webhook";
 const AGENT_SESSION_ENTITY_TYPE: &str = "agent_session";
+const PASSWORD_ITEM_ENTITY_TYPE: &str = "password_item";
 
 /// Webhook event ingestion error.
 #[derive(Debug, thiserror::Error)]
@@ -142,6 +144,12 @@ pub trait WebhookEventIngestionService: Clone + Send + Sync + 'static {
     fn ingest_user_event(
         &self,
         event: Event<UserTopicEvent>,
+    ) -> impl Future<Output = Result<(), WebhookEventIngestionError>> + Send;
+
+    /// Ingest one `macro.passwords` event envelope.
+    fn ingest_password_event(
+        &self,
+        event: Event<PasswordTopicEvent>,
     ) -> impl Future<Output = Result<(), WebhookEventIngestionError>> + Send;
 }
 
@@ -407,6 +415,39 @@ pub(crate) fn normalized_user_event(
             broker_envelope,
         ),
         user_id,
+    ))
+}
+
+/// Normalize one vault fact addressed to a single account and remove its
+/// private routing field. The entity is the vault item; the recipient is the
+/// only audience.
+pub(crate) fn normalized_password_event(
+    event: &Event<PasswordTopicEvent>,
+) -> Result<(NormalizedWebhookEvent, MacroUserIdStr<'static>), WebhookEventIngestionError> {
+    let (event_name, recipient, item_id) = match &event.event {
+        PasswordTopicEvent::AccessRequestResolved(metadata) => (
+            "passwords.access_request.resolved",
+            metadata.recipient_user_id.clone(),
+            metadata.item_id.to_string(),
+        ),
+    };
+    let mut broker_envelope = serde_json::to_value(event)?;
+    if let Some(metadata) = broker_envelope
+        .get_mut("metadata")
+        .and_then(serde_json::Value::as_object_mut)
+    {
+        metadata.remove("recipientUserId");
+    }
+    Ok((
+        normalized_event(
+            event.event_id,
+            event.schema_version,
+            event_name,
+            PASSWORD_ITEM_ENTITY_TYPE,
+            &item_id,
+            broker_envelope,
+        ),
+        recipient,
     ))
 }
 
@@ -816,5 +857,16 @@ where
             .await
             .map_err(|error| WebhookEventIngestionError::WorkspaceResolution(error.into()))?;
         self.match_and_enqueue(normalized, workspace_ids).await
+    }
+
+    #[tracing::instrument(skip_all, fields(event_id = %event.event_id), err)]
+    async fn ingest_password_event(
+        &self,
+        event: Event<PasswordTopicEvent>,
+    ) -> Result<(), WebhookEventIngestionError> {
+        let (normalized, recipient) = normalized_password_event(&event)?;
+        // Only the addressed account's personal workspace receives it.
+        self.match_and_enqueue(normalized, vec![recipient.as_ref().to_string()])
+            .await
     }
 }

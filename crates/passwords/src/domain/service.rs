@@ -20,6 +20,7 @@ impl PasswordService {
         record.metadata.share_count = record
             .grants
             .iter()
+            .filter(|grant| !matches!(grant.kind, GranteeKind::Agent))
             .map(|grant| (matches!(grant.kind, GranteeKind::Team), grant.id.as_str()))
             .collect::<std::collections::HashSet<_>>()
             .len();
@@ -49,7 +50,7 @@ impl PasswordService {
         }
         self.repository.teams(actor).await
     }
-    async fn membership(&self, actor: &Actor, team: TeamId) -> Result<(), Error> {
+    pub(crate) async fn membership(&self, actor: &Actor, team: TeamId) -> Result<(), Error> {
         self.availability.require_enabled(actor).await?;
         if !self.repository.is_human(&actor.user_id).await? {
             return Err(Error::Forbidden);
@@ -79,13 +80,14 @@ impl PasswordService {
                 let matches = match grant.kind {
                     GranteeKind::User => grant.id == actor.user_id.as_ref(),
                     GranteeKind::Team => grant.id == team.0.to_string(),
+                    GranteeKind::Agent => false,
                 };
                 matches && (!edit || grant.permission == Permission::Edit)
             })
     }
     /// A lost provider response can be reconciled from its operation UUID and durable metadata intent.
     /// Every caller holds the same distributed item lock throughout this and the protected action.
-    async fn reconcile(&self, team: TeamId, item: ItemId) -> Result<(), Error> {
+    pub(crate) async fn reconcile(&self, team: TeamId, item: ItemId) -> Result<(), Error> {
         let current = self.repository.get(team, item).await;
         let current_record = current.as_ref().ok().cloned();
         if matches!(&current,Ok(record) if record.deleting) {
@@ -128,18 +130,25 @@ impl PasswordService {
                 Err(error) => return Err(error),
             }
         }
-        record.metadata.shared = !record.grants.is_empty();
-        match self.repository.save(&record, expected).await {
+        record.metadata.shared = Self::human_shared(&record.grants);
+        // Metadata, the intent's retained agent audit and its completion commit
+        // together, so no reconciler can save metadata and lose the audit.
+        match self
+            .repository
+            .save_reconciled(&record, expected, operation)
+            .await
+        {
             // The folder was deleted after validation; land the write unfiled.
             Err(Error::FolderMissing) => {
                 record.metadata.folder_id = None;
-                self.repository.save(&record, expected).await?;
+                self.repository
+                    .save_reconciled(&record, expected, operation)
+                    .await
             }
-            result => result?,
+            result => result,
         }
-        self.repository.finish(operation).await
     }
-    async fn access(
+    pub(crate) async fn access(
         &self,
         actor: &Actor,
         team: TeamId,
@@ -559,9 +568,19 @@ impl PasswordService {
                     grant.id = recipient.user_id.to_string();
                 }
                 GranteeKind::Team => {}
+                GranteeKind::Agent => return Err(Error::Invalid),
             }
         }
-        record.metadata.shared = !grants.is_empty();
+        // Agent grants change only through the agent access routes, which keep
+        // their approvals and revisions consistent; human sharing preserves them.
+        grants.extend(
+            record
+                .grants
+                .iter()
+                .filter(|grant| matches!(grant.kind, GranteeKind::Agent))
+                .cloned(),
+        );
+        record.metadata.shared = Self::human_shared(&grants);
         record.grants = grants;
         self.repository
             .save(&record, Some(record.metadata.version))
@@ -583,7 +602,17 @@ impl PasswordService {
         {
             return Err(Error::Forbidden);
         }
-        Ok(record.grants)
+        Ok(record
+            .grants
+            .into_iter()
+            .filter(|grant| !matches!(grant.kind, GranteeKind::Agent))
+            .collect())
+    }
+    /// Whether any human-visible grant exists; Agent grants are not sharing.
+    pub(crate) fn human_shared(grants: &[Grant]) -> bool {
+        grants
+            .iter()
+            .any(|grant| !matches!(grant.kind, GranteeKind::Agent))
     }
     /// List the current team vault folders.
     pub async fn folders(&self, actor: &Actor, team: TeamId) -> Result<Vec<Folder>, Error> {

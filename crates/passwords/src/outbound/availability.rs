@@ -1,5 +1,6 @@
 //! Shared service authority with additional actor targeting for human admissions.
 use crate::domain::{
+    agent::ports::AgentAvailability,
     models::{Actor, Error},
     ports::Availability,
 };
@@ -8,6 +9,8 @@ use feature_flags::{FeatureFlags, FlagSnapshot, FlagValue, ServiceContext, Servi
 
 /// Fresh global rollout key shared with the web registry.
 pub const PASSWORDS_FLAG: &str = "enable-passwords-v1";
+/// Agent vault rollout key; agent routes require it with `PASSWORDS_FLAG`.
+pub const AGENT_VAULT_FLAG: &str = "enable-agent-vault";
 /// Stable service context; never an authenticated or fabricated user ID.
 pub const PASSWORDS_CONTEXT: ServiceContext = ServiceContext::new("passwords-v1");
 
@@ -50,6 +53,34 @@ impl<F: FeatureFlags + ServiceFeatureFlags> Availability for PasswordAvailabilit
     }
 }
 
+fn agent_vault(flags: &FlagSnapshot) -> bool {
+    flags.is_enabled(PASSWORDS_FLAG) && flags.is_enabled(AGENT_VAULT_FLAG)
+}
+
+#[async_trait]
+impl<F: FeatureFlags + ServiceFeatureFlags> AgentAvailability for PasswordAvailability<F> {
+    #[tracing::instrument(skip_all, name = "passwords.agent.admission.flags")]
+    async fn agent_enabled(&self, agent: &macro_user_id::user_id::MacroUserIdStr<'_>) -> bool {
+        // The agent's own snapshot never inherits its responsible human's rollout.
+        self.agent_service_enabled().await
+            && self
+                .flags
+                .load(agent)
+                .await
+                .is_ok_and(|flags| agent_vault(&flags))
+    }
+    #[tracing::instrument(skip_all, name = "passwords.agent.availability")]
+    async fn agent_service_enabled(&self) -> bool {
+        self.flags
+            .load_service(PASSWORDS_CONTEXT)
+            .await
+            .is_ok_and(|flags| agent_vault(&flags))
+    }
+    fn provider_configured(&self) -> bool {
+        self.provider_configured
+    }
+}
+
 /// Explicit local-only development snapshot, selected at the composition root.
 pub struct LocalPasswordsFlags;
 impl FeatureFlags for LocalPasswordsFlags {
@@ -62,10 +93,10 @@ impl FeatureFlags for LocalPasswordsFlags {
 }
 impl ServiceFeatureFlags for LocalPasswordsFlags {
     async fn load_service(&self, _: ServiceContext) -> Result<FlagSnapshot, rootcause::Report> {
-        Ok(FlagSnapshot::new([(
-            PASSWORDS_FLAG.into(),
-            FlagValue::Boolean(true),
-        )]))
+        Ok(FlagSnapshot::new([
+            (PASSWORDS_FLAG.into(), FlagValue::Boolean(true)),
+            (AGENT_VAULT_FLAG.into(), FlagValue::Boolean(true)),
+        ]))
     }
 }
 #[cfg(test)]

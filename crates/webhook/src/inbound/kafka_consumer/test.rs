@@ -240,6 +240,13 @@ impl WebhookEventIngestionService for FlakyIngestionService {
     ) -> Result<(), WebhookEventIngestionError> {
         self.ingest()
     }
+
+    async fn ingest_password_event(
+        &self,
+        _event: Event<password_events::PasswordTopicEvent>,
+    ) -> Result<(), WebhookEventIngestionError> {
+        self.ingest()
+    }
 }
 
 fn flaky_service(failures: u32, transient: bool) -> (FlakyIngestionService, Arc<AtomicU32>) {

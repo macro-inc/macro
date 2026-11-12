@@ -12,7 +12,7 @@ pub use device::DeviceType;
 pub use metadata::{
     AgentSessionMentionedMetadata, AgentSessionNotificationRef, AgentSessionOriginParent,
     AgentSessionSettledMetadata, AgentSessionWaitingForInputMetadata, AiResponseMetadata,
-    CalendarEventJoinRequestMetadata, CalendarEventReminderMetadata, CallStartedMetadata,
+    CalendarEventJoinRequestMetadata, CalendarEventReminderMetadata, PasswordAccessRequestedMetadata, CallStartedMetadata,
     ChannelAccessRequestedMetadata, ChannelInviteMetadata, ChannelMentionMetadata,
     ChannelMessageReactionMetadata, ChannelMessageSendMetadata, ChannelReplyMetadata, ChannelType,
     ColleagueJoinedMacro, CommentedOnDocumentMetadata, CommonChannelMetadata,
@@ -283,6 +283,8 @@ define_notif_event!(
 
         /// Someone asked to join a channel the user participates in.
         ChannelAccessRequested(ChannelAccessRequestedMetadata),
+        /// An agent asked for access to a vault item the user manages.
+        PasswordAccessRequested(PasswordAccessRequestedMetadata),
         /// One of the user's routines finished a run, successfully or not.
         RoutineRunFinished(RoutineRunFinishedMetadata),
         /// A runtime's owner removed the user's access to it, and agents of
@@ -319,6 +321,7 @@ impl NotificationTitle for NotifEvent {
             }
             NotifEvent::ChannelMessageReaction(m) => m.format_title(sender_id),
             NotifEvent::CalendarEventJoinRequest(m) => m.format_title(sender_id),
+            NotifEvent::PasswordAccessRequested(m) => m.format_title(sender_id),
             NotifEvent::ChannelMessageReply(channel_reply_metadata) => {
                 channel_reply_metadata.format_title(sender_id)
             }
@@ -392,6 +395,7 @@ impl NotificationTitle for NotifEvent {
             }
             NotifEvent::ChannelMessageReaction(m) => m.format_body(sender_id),
             NotifEvent::CalendarEventJoinRequest(m) => m.format_body(sender_id),
+            NotifEvent::PasswordAccessRequested(m) => m.format_body(sender_id),
             NotifEvent::ChannelMessageReply(channel_reply_metadata) => {
                 channel_reply_metadata.format_body(sender_id)
             }
