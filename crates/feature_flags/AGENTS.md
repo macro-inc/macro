@@ -3,7 +3,7 @@
 ## What it is
 
 Shared infrastructure for cross-feature rollout gating: async flag loading
-for the authenticated Macro user, where one load returns a stable
+for authenticated Macro users or explicit global service contexts; one load returns a stable
 `FlagSnapshot`, read synchronously after.
 
 ## Start here
@@ -15,7 +15,7 @@ for the authenticated Macro user, where one load returns a stable
 
 ## Scope
 
-- Owns: the `FeatureFlags` port, `FlagSnapshot`/`FlagValue`, and the PostHog
+- Owns: the `FeatureFlags` and `ServiceFeatureFlags` ports, `FlagSnapshot`/`FlagValue`, and the PostHog
   and fake adapters.
 - Not here: which flag name gates which feature — that lives at the call site.
 

@@ -115,6 +115,8 @@ pub enum Port {
     PreviewHttps = 8443,
     /// Local-only plaintext gateway reachable from Macro computers.
     ComputerGateway = 8112,
+    /// Local Passwords vault API. Loopback-only, outside the browser proxy.
+    OpenBao = 8200,
 }
 
 impl Port {

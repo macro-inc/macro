@@ -1,6 +1,60 @@
 use super::*;
 
 #[test]
+fn passwords_vault_persists_in_isolated_local_storage_without_dev_credentials() {
+    for name in [None, Some("passwords-isolation")] {
+        let instance = Instance::derive(name, None).unwrap();
+        let mut services = IndexMap::new();
+        add_local_infra(&mut services, &instance, false).unwrap();
+        let compose = dct::Compose {
+            services: dct::Services(services),
+            ..Default::default()
+        };
+        let mut value = serde_yaml::to_value(compose).unwrap();
+        set_networks_and_volumes(&mut value, Mode::Local, &instance);
+        let vault = &value["services"]["openbao"];
+        assert_eq!(
+            vault["ports"][0],
+            format!("127.0.0.1:{}:8200", instance.port(Port::OpenBao))
+        );
+        assert_eq!(vault["networks"]["services"]["aliases"][0], "openbao");
+        assert!(vault["volumes"][0].as_str().unwrap().ends_with(":ro,z"));
+        assert_eq!(
+            vault["entrypoint"],
+            serde_yaml::to_value([
+                "/usr/bin/dumb-init",
+                "--",
+                "/bin/sh",
+                "/openbao/config/start.sh",
+            ])
+            .unwrap()
+        );
+        assert_eq!(vault["command"], Value::Sequence(vec![]));
+        assert_eq!(vault["volumes"][2], "openbao_data:/openbao/file");
+        assert_eq!(vault["restart"], "unless-stopped");
+        assert_eq!(
+            vault["environment"],
+            serde_yaml::to_value(serde_json::json!({"BAO_ADDR": "http://127.0.0.1:8200"})).unwrap()
+        );
+        assert_eq!(
+            value["volumes"]["openbao_data"]["name"],
+            format!("{}_openbao_data", instance.project_name())
+        );
+        assert!(value["volumes"]["openbao_data"]["external"].is_null());
+    }
+}
+
+#[test]
+fn remote_dev_mode_does_not_define_local_vault_storage() {
+    for name in [None, Some("passwords-isolation")] {
+        let instance = Instance::derive(name, None).unwrap();
+        let mut value = serde_yaml::to_value(dct::Compose::default()).unwrap();
+        set_networks_and_volumes(&mut value, Mode::Dev, &instance);
+        assert!(value["volumes"]["openbao_data"].is_null());
+    }
+}
+
+#[test]
 fn generated_services_have_bounded_console_logs_in_every_mode() {
     for mode in [Mode::Local, Mode::Dev] {
         for name in [None, Some("logging-test")] {

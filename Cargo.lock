@@ -2312,6 +2312,7 @@ dependencies = [
  "non_empty",
  "notification",
  "onboarding",
+ "passwords",
  "rand 0.9.4",
  "rate_limit",
  "redis",
@@ -6780,6 +6781,7 @@ dependencies = [
  "opensearch_client",
  "opentelemetry",
  "opentelemetry_sdk",
+ "passwords",
  "projects",
  "properties",
  "rate_limit",
@@ -6842,6 +6844,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bot_id",
+ "macro_tower_layers",
  "model",
  "model_owner",
  "models_bulk_upload",
@@ -10901,6 +10904,7 @@ dependencies = [
  "futures",
  "http-body-util",
  "jsonwebtoken 10.3.0",
+ "lazy-regex",
  "macro_auth",
  "macro_authorization",
  "macro_aws_config",
@@ -10909,6 +10913,7 @@ dependencies = [
  "macro_entrypoint",
  "macro_env",
  "macro_middleware",
+ "macro_tower_layers",
  "model",
  "reqwest 0.13.4",
  "secretsmanager_client",
@@ -14718,6 +14723,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c08d65885ee38876c4f86fa503fb49d7b507c2b62552df7c70b2fce627e06381"
 
 [[package]]
+name = "openbao_client"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "chrono",
+ "jsonwebtoken 10.3.0",
+ "macro_tower_layers",
+ "progenitor-client",
+ "reqwest 0.13.4",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "wiremock",
+ "workspace-hack",
+ "zeroize",
+]
+
+[[package]]
 name = "opensearch"
 version = "2.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -15157,6 +15182,40 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aab41826031698d6ffcd9cff78ef56ef998e39dc7e5067cdfebe373842d4723b"
 dependencies = [
  "phc",
+]
+
+[[package]]
+name = "passwords"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "chrono",
+ "feature_flags",
+ "jsonwebtoken 10.3.0",
+ "lazy-regex",
+ "macro_authorization",
+ "macro_db_client",
+ "macro_db_migrator",
+ "macro_user_id",
+ "model_user",
+ "openbao_client",
+ "opentelemetry",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower 0.5.3",
+ "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
+ "url",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+ "zeroize",
 ]
 
 [[package]]
