@@ -18,6 +18,9 @@ the gateway `/email` prefix.
   inbox-scoped use cases; handlers delegate to their email-domain services.
   `outbound/signature_settings/gmail_images.rs` performs mailbox/public image reads;
   source selection and retry handling stay in the signature domain service.
+- `src/outbound/inbox_connection.rs`: adapters for the domain-owned `/email/init`
+  flow; transaction boundaries, legacy errors, and token-info HTTP are preserved.
+  The transport failure observer and shared HTTP status rule live in `src/api/email/init.rs`.
 - `src/outbound/backfill_jobs.rs`: the existing job queries and initialization
   queue send behind the email domain backfill-job service.
 

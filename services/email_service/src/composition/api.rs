@@ -223,13 +223,47 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
         crate::outbound::inbox_catalog::PgInboxCatalog(db.clone()),
     ));
     let signature_sfs_client = Arc::new(sfs_client.clone());
-    Ok(ApiContext {
-        backfill_jobs: Arc::new(email::domain::backfill_jobs::BackfillJobService {
-            repository: crate::outbound::backfill_jobs::PgBackfillJobs(db.clone()),
-            queue: crate::outbound::backfill_jobs::BackfillInitializationQueue(
-                sqs_client.as_ref().clone(),
+    let backfill_jobs = Arc::new(email::domain::backfill_jobs::BackfillJobService {
+        repository: crate::outbound::backfill_jobs::PgBackfillJobs(db.clone()),
+        queue: crate::outbound::backfill_jobs::BackfillInitializationQueue(
+            sqs_client.as_ref().clone(),
+        ),
+    });
+    let mailbox_initializer = Arc::new(
+        email::domain::mailbox::initialization::MailboxInitializationService::new(
+            crate::outbound::mailbox_init::PgMailboxInitialization(db.clone()),
+            crate::outbound::mailbox_init::MicrosoftGrantSource(
+                auth_service_client.as_ref().clone(),
             ),
-        }),
+        )
+        .with_connections_enabled(config.outlook_connections_enabled),
+    );
+    let inbox_connection = Arc::new(email::domain::mailbox::connection::InboxConnectionService {
+        links: crate::outbound::inbox_connection::PgConnectionLinks {
+            db: db.clone(),
+            lookup: email::outbound::EmailPgRepo::new(db.clone()),
+        },
+        transactions: crate::outbound::inbox_connection::PgConnectionTransactions(db.clone()),
+        provider: crate::outbound::inbox_connection::GoogleConnectionProvider {
+            gmail: email_api.clone(),
+            auth: auth_service_client.clone(),
+        },
+        grants: crate::outbound::inbox_connection::GoogleConnectionGrants {
+            db: db.clone(),
+            calendar: calendar_service.clone(),
+        },
+        initializer: mailbox_initializer.clone(),
+        backfill: crate::outbound::inbox_connection::InitialConnectionBackfill {
+            jobs: backfill_jobs.clone(),
+            history: crate::outbound::inbox_connection::ConnectionHistory(db.clone()),
+            events: crate::outbound::inbox_connection::ConnectionEvents(macro_event_broker.clone()),
+        },
+        identity: crate::outbound::inbox_connection::LoginEmailIdentity,
+        failure_observer: crate::api::context::InitFailureObserver,
+    });
+    Ok(ApiContext {
+        inbox_connection,
+        backfill_jobs,
         calendar_disconnect: Arc::new(
             email::domain::mailbox::calendar_disconnect::CalendarDisconnectService {
                 catalog: inbox_catalog.clone(),
@@ -367,15 +401,7 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
             },
             access: entity_access_service.as_ref().clone(),
         }),
-        mailbox_initializer: Arc::new(
-            email::domain::mailbox::initialization::MailboxInitializationService::new(
-                crate::outbound::mailbox_init::PgMailboxInitialization(db.clone()),
-                crate::outbound::mailbox_init::MicrosoftGrantSource(
-                    auth_service_client.as_ref().clone(),
-                ),
-            )
-            .with_connections_enabled(config.outlook_connections_enabled),
-        ),
+        mailbox_initializer,
         read_receipts,
         invitation_snapshots: email::outbound::invitation_pg::InvitationPgRepository(db.clone()),
         // calendar_service's sync kill switch rejects RSVP writes itself.

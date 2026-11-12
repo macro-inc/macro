@@ -20,6 +20,9 @@ tools — hexagonal, heavily feature-gated.
   and settings patches. `signature_settings/gmail_images.rs` selects public or
   mailbox image reads, caches message parts for one import, and preserves retryable
   image failures behind an image-reader port.
+- `src/domain/mailbox/connection.rs` (feature `mailbox`): inbox connection,
+  completed/discovered Google grants, shared promotion, and failed-attempt cleanup.
+  Reuses mailbox initialization and backfill-job services.
 - `src/domain/backfill_jobs.rs` (feature `mailbox`): backfill-job access,
   cancellation, active-job reuse, and initialization publication.
 - `src/inbound/axum.rs`: HTTP routes (feature `axum`); `src/inbound/toolset.rs`:
