@@ -10,8 +10,9 @@
 use super::fake_gmail::{FakeGmail, GmailMessage, GmailState};
 use super::fake_sqs::{self, FakeSqs};
 use super::wiring;
-use crate::pubsub::context::{CrmMetadataResolver, PubSubContext};
+use crate::pubsub::context::CrmMetadataResolver;
 use crate::pubsub::gmail_ops::worker::GmailOpsContext;
+use crate::pubsub::inbox_sync::worker::InboxSyncContext;
 use axum::Router;
 use axum::response::IntoResponse;
 use email::domain::service::EmailServiceImpl;
@@ -85,8 +86,8 @@ pub struct World {
     pub queues: Queues,
     pub ops: GmailOpsContext,
     pub ops_retry: GmailOpsContext,
-    pub sync: PubSubContext,
-    pub sync_retry: PubSubContext,
+    pub sync: InboxSyncContext,
+    pub sync_retry: InboxSyncContext,
     pub email: EmailSvc,
     /// Provider message id → database id.
     pub message_ids: BTreeMap<String, Uuid>,
@@ -238,12 +239,14 @@ impl World {
         .await;
         let worker =
             |queue: &str| sqs_worker::SQSWorker::new(sqs_sdk.clone(), queue.to_string(), 1, 1);
-        let ops_context = |retry_worker: bool, queue: &str| GmailOpsContext {
-            db: db.clone(),
-            sqs_worker: worker(queue),
-            sqs_client: sqs_client.clone(),
-            email_api: email_api.clone(),
-            retry_worker,
+        let ops_context = |retry_worker: bool, queue: &str| {
+            crate::pubsub::gmail_ops::worker::context(
+                db.clone(),
+                &worker(queue),
+                sqs_client.clone(),
+                email_api.clone(),
+                retry_worker,
+            )
         };
         let broker = MacroEventBrokerService::new(
             KafkaEventPublisher::new("127.0.0.1:9092").expect("kafka publisher"),
@@ -255,55 +258,45 @@ impl World {
                 unfurl::outbound::ReqwestUnfurlFetcher::new().expect("unfurl fetcher"),
             ))),
         );
-        let sync_context = |retry_worker: bool, queue: &str| PubSubContext {
-            gmail_history: email::domain::mailbox::gmail_history::GmailHistoryService(
-                email::outbound::mailbox_pg::PgMailboxSync::new(db.clone()),
-            ),
-            invitation_extractor: crate::pubsub::invitation_extraction::compose(
+        let sync_context = |retry_worker: bool, queue: &str| {
+            crate::pubsub::inbox_sync::worker::context(
                 db.clone(),
+                &worker(queue),
+                sqs_client.clone(),
+                Arc::new(contacts::domain::service::SqsContactsIngress {
+                    queue: contacts::outbound::ingress::SqsContactsQueue::new(
+                        sqs_sdk.clone(),
+                        format!("{services_url}/queue/contacts"),
+                    ),
+                }),
                 email_api.clone(),
-            ),
-            db: db.clone(),
-            sqs_worker: worker(queue),
-            sqs_client: sqs_client.clone(),
-            contacts_ingress: Arc::new(contacts::domain::service::SqsContactsIngress {
-                queue: contacts::outbound::ingress::SqsContactsQueue::new(
-                    sqs_sdk.clone(),
-                    format!("{services_url}/queue/contacts"),
-                ),
-            }),
-            email_api: email_api.clone(),
-            redis_client: wiring::redis_client(redis_client.clone()),
-            notification_ingress_service: Arc::new(
-                notification::domain::service::SqsNotificationIngress {
+                wiring::redis_client(redis_client.clone()),
+                Arc::new(notification::domain::service::SqsNotificationIngress {
                     queue: notification::outbound::queue::SqsQueue::new(
                         sqs_sdk.clone(),
                         format!("{services_url}/queue/notifications"),
                     ),
-                },
-            ),
-            sfs_client: static_file_service_client::StaticFileServiceClient::new(
-                "key".to_string(),
-                services_url.to_string(),
-            ),
-            connection_gateway_client:
+                }),
+                static_file_service_client::StaticFileServiceClient::new(
+                    "key".to_string(),
+                    services_url.to_string(),
+                ),
                 connection_gateway_client::client::ConnectionGatewayClient::new(
                     "key".to_string(),
                     services_url.to_string(),
                 ),
-            dss_client: document_storage_service_client::DocumentStorageServiceClient::new(
-                "key".to_string(),
-                services_url.to_string(),
-            ),
-            system_properties_service: Arc::new(
-                system_properties::SystemPropertiesServiceImpl::new(
-                    system_properties::PgSystemPropertiesRepository::new(db.clone()),
+                document_storage_service_client::DocumentStorageServiceClient::new(
+                    "key".to_string(),
+                    services_url.to_string(),
                 ),
-            ),
-            crm_service: crm_service.clone(),
-            macro_event_broker: broker.clone(),
-            notifications_enabled: false,
-            retry_worker,
+                Arc::new(system_properties::SystemPropertiesServiceImpl::new(
+                    system_properties::PgSystemPropertiesRepository::new(db.clone()),
+                )),
+                crm_service.clone(),
+                broker.clone(),
+                false,
+                retry_worker,
+            )
         };
         let email = EmailServiceImpl::new(
             EmailPgRepo::new(db.clone()),

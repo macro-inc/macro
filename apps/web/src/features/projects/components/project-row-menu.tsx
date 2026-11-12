@@ -40,6 +40,7 @@ type ProjectMenuProps = {
   priority?: Property;
   canOpenInNewSplit: boolean;
   onOpenInNewSplit(row: ProjectRow): void;
+  onChangeIcon?(row: ProjectRow): void;
   /** Omit where the host cannot open a project in a new desktop tab. */
   onOpenInNewTab?(row: ProjectRow): void;
   onRename(row: ProjectRow): void;
@@ -115,6 +116,7 @@ function projectMenuEntries(
       splits: !isMobile(),
       tabs: Boolean(props.onOpenInNewTab) && canOpenInNewTab(),
       share: Boolean(props.onShare),
+      appearance: Boolean(props.onChangeIcon),
       status: Boolean(props.status),
       priority: Boolean(props.priority),
     }
@@ -142,6 +144,9 @@ function projectMenuEntries(
         )
         .with('rename', (id) =>
           action(id, t('entityActions.rename'), single(props.onRename))
+        )
+        .with('change-icon', (id) =>
+          action(id, t('appearance.title'), single(props.onChangeIcon))
         )
         .with('status', (id) =>
           options(id, t('entityActions.setStatus'), props.status)
@@ -212,6 +217,7 @@ const initiativeEntity = (row: ProjectRow): InitiativeEntity => ({
   id: row.project.id,
   name: row.project.name,
   ownerId: '',
+  appearance: row.project.appearance,
 });
 
 /**
@@ -301,10 +307,11 @@ export function ProjectMenuDropdown(props: ProjectMenuProps) {
 }
 
 function ProjectMenuItems(props: ProjectMenuProps) {
-  // Mounted per opening, so the entries match the rows they act on.
-  const entries = projectMenuEntries(props, props.targets());
+  // Freeze action targets per opening; keep available actions reactive.
+  const rows = props.targets();
+  const entries = () => projectMenuEntries(props, rows);
   return (
-    <For each={entries}>
+    <For each={entries()}>
       {(group, index) => (
         <>
           <Show when={index() > 0}>

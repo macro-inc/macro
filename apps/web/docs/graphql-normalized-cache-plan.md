@@ -1028,7 +1028,7 @@ measurements, not production p90s.
 #### Cache notification coalescing
 
 Native maintained views return a `registrationId` bound to the engine's retained
-validated specification. The native host keeps at most 32 descriptors; subsequent
+validated specification. The native host keeps at most 256 descriptors; subsequent
 reads of the same descriptor send only its view id, registration token and
 subscriber revision. Token lookup and the read share the engine lease. Replacement,
 release, eviction or reset makes resume miss, so the host registers the complete
@@ -1459,7 +1459,7 @@ request in flight at once, so a timer that fires more than a second late starts
 a new window.
 
 Native live views advertise a specification-bound registration token. The host
-retains at most 32 descriptors and resumes an unchanged specification from its
+retains at most 256 descriptors and resumes an unchanged specification from its
 id, token and revision; a missing registration triggers a full request. Changed
 specifications, release, reset and disposal invalidate retention. Older
 installed binaries omit the token and keep receiving full requests. Empty record

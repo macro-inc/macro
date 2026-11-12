@@ -8,6 +8,8 @@ use models_email::{
 };
 use uuid::Uuid;
 
+pub(crate) mod inbox_sync;
+
 use email_api_client::domain::models::{AccessToken, MailboxAccess, ProviderId};
 use email_api_client::domain::ports::{MailboxWatchClient, ScopedMailboxRepository};
 

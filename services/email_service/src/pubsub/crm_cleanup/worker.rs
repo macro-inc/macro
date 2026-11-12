@@ -32,6 +32,21 @@ pub async fn run_worker(
     .await;
 }
 
+/// Builds the production context for the worker loop.
+pub(crate) fn context(
+    db: sqlx::Pool<sqlx::Postgres>,
+    worker: &sqs_worker::SQSWorker,
+    sqs_client: sqs_client::SQS,
+    crm_service: CrmServiceType,
+) -> CrmCleanupContext {
+    CrmCleanupContext {
+        db,
+        sqs_worker: worker.clone(),
+        sqs_client,
+        crm_service,
+    }
+}
+
 /// Ingests CRM cleanup messages until cancellation is requested.
 ///
 /// A batch already returned by SQS is fully processed before shutdown.
@@ -42,12 +57,7 @@ pub async fn run_worker_with_cancellation(
     crm_service: CrmServiceType,
     cancellation_token: CancellationToken,
 ) {
-    let ctx = CrmCleanupContext {
-        db,
-        sqs_worker: worker.clone(),
-        sqs_client,
-        crm_service,
-    };
+    let ctx = context(db, &worker, sqs_client, crm_service);
 
     loop {
         let worker_result = tokio::spawn({

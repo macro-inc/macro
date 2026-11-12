@@ -1,0 +1,17 @@
+# Appearance field patches update identity without replacing query membership.
+fragment EntityAppearanceFields on GraphqlSoupEntity {
+  __typename
+  id
+  ... on GraphqlSoupDocument { appearance }
+  ... on GraphqlSoupInitiative { appearance }
+}
+subscription EntityAppearanceCacheWrite {
+  soupUpdates {
+    __typename
+    ... on SoupUpdated {
+      item {
+        ...EntityAppearanceFields
+      }
+    }
+  }
+}

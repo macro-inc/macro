@@ -7,6 +7,35 @@ use futures::StreamExt;
 use sqlx::PgPool;
 use tokio_util::sync::CancellationToken;
 
+/// Builds the scheduled worker context for the binary.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "mirrors the ScheduledContext fields"
+)]
+pub fn context(
+    worker: sqs_worker::SQSWorker,
+    db: PgPool,
+    email_api: GmailApi,
+    attachment_bytes: std::sync::Arc<
+        dyn email::domain::attachment_access::AuthorizedAttachmentBytes,
+    >,
+    s3_client: s3_client::S3,
+    attachment_bucket: String,
+    macro_event_broker: PubSubEventBroker,
+    read_receipts: crate::composition::ReadReceipts,
+) -> ScheduledContext {
+    ScheduledContext {
+        sqs_worker: worker,
+        db,
+        email_api,
+        attachment_bytes,
+        s3_client,
+        attachment_bucket,
+        macro_event_broker,
+        read_receipts,
+    }
+}
+
 /// method that ingests sqs messages and calls the process function for each
 #[expect(
     clippy::too_many_arguments,
@@ -25,8 +54,8 @@ pub async fn run_worker(
     read_receipts: crate::composition::ReadReceipts,
 ) {
     run_worker_with_cancellation(
-        ScheduledContext {
-            sqs_worker: worker,
+        context(
+            worker,
             db,
             email_api,
             attachment_bytes,
@@ -34,7 +63,7 @@ pub async fn run_worker(
             attachment_bucket,
             macro_event_broker,
             read_receipts,
-        },
+        ),
         CancellationToken::new(),
     )
     .await;
