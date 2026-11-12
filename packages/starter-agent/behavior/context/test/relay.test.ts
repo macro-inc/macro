@@ -356,6 +356,71 @@ describe('startRelay sockets', () => {
     }
   });
 
+  test('a speech socket upstream refuses closes the child as a failure, not a normal close', async () => {
+    const harness = Bun.serve({
+      hostname: '127.0.0.1',
+      port: 0,
+      fetch: () => new Response('forbidden', { status: 403 }),
+    });
+    const relay = startRelay({
+      targets: {},
+      egress: harness.url.href,
+      apiKey,
+    });
+    try {
+      const socket = new WebSocket(
+        `${relay.url.replace('http', 'ws')}/speech/tts`,
+        { headers: { 'x-macro-user-api-key': relay.token } }
+      );
+      const closed = await new Promise<{ code: number; reason: string }>(
+        (resolve) =>
+          socket.addEventListener('close', ({ code, reason }) =>
+            resolve({ code, reason })
+          )
+      );
+      expect(closed).toEqual({ code: 1011, reason: 'speech upstream failed' });
+    } finally {
+      relay.stop();
+      harness.stop(true);
+    }
+  });
+
+  test("passes upstream's own close code and reason on to the child", async () => {
+    const harness = Bun.serve({
+      hostname: '127.0.0.1',
+      port: 0,
+      fetch: (request, server) =>
+        server.upgrade(request, { data: undefined })
+          ? undefined
+          : new Response('no', { status: 400 }),
+      websocket: {
+        open: (socket) => socket.close(4008, 'session too long'),
+        message: () => {},
+      },
+    });
+    const relay = startRelay({
+      targets: {},
+      egress: harness.url.href,
+      apiKey,
+    });
+    try {
+      const socket = new WebSocket(
+        `${relay.url.replace('http', 'ws')}/speech/stt`,
+        { headers: { 'x-macro-user-api-key': relay.token } }
+      );
+      const closed = await new Promise<{ code: number; reason: string }>(
+        (resolve) =>
+          socket.addEventListener('close', ({ code, reason }) =>
+            resolve({ code, reason })
+          )
+      );
+      expect(closed).toEqual({ code: 4008, reason: 'session too long' });
+    } finally {
+      relay.stop();
+      harness.stop(true);
+    }
+  });
+
   test('refuses a socket to any other path, with nothing opened upstream', async () => {
     const seen: string[] = [];
     const harness = Bun.serve({
