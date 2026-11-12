@@ -142,7 +142,8 @@ function elementProps(
       fields?.format ?? 0
     ] ?? '';
   if (alignment || dom.style.textAlign) dom.style.textAlign = alignment;
-  if (fields?.indent) dom.style.paddingInlineStart = `${fields.indent * 40}px`;
+  if (fields?.indent)
+    dom.style.paddingInlineStart = `calc(${fields.indent} * var(--lexical-indent-base-value, 40px))`;
   if (node.type === 'link' || node.type === 'autolink') {
     // The model stores the URL; the view only applies a safe DOM attribute.
     const url = typeof props.url === 'string' ? props.url : '';

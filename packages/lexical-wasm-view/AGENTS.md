@@ -76,6 +76,7 @@ tests are separate from Rust-backed production compatibility acceptance.
 - Render custom-code through its own view porting Source CodeNode/CustomCodeNode createDOM/updateDOM (class reset, spellcheck, data-language, data-theme, style, SVG preview-mode with contenteditable, then dir); update in place without resetting className, writing style changes with the retargeted Source setDOMStyleFromCSS so foreign inline properties survive. The app always writes Source data-gutter from code mutations, as Source registers it with every view. Only once code highlighting activates (the session has a code tokenizer; dormant today) does it write data-highlight-language from the model's group-b.code-highlight transform reports checked with this package's isCodeLanguageLoaded; data-line-count is the native highlighter's paint instrumentation only.
 - Resolve code aliases through theme.code so Macro custom-code retains the Source block layout and margins.
 - Match pinned link URL formatting and parsed-protocol filtering before painting href.
+- Preserve Source's indent CSS variable expression on element creation and update so `--lexical-indent-base-value` keeps cascading from the host.
 - Handle session effect kind 9 before painting: end native composition and suppress
   its redundant synchronous input/end events; Rust already merged the accepted text.
 
