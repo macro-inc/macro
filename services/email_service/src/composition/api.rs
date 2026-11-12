@@ -423,31 +423,20 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
         }),
         mailbox_initializer,
         read_receipts,
-        invitation_snapshots: email::outbound::invitation_pg::InvitationPgRepository(db.clone()),
-        // calendar_service's sync kill switch rejects RSVP writes itself.
-        invitation_resolver: Arc::new(CalendarInvitationResolver::new(PgCalendarRepository::new(
-            db.clone(),
-        ))),
-        db,
+        invitations: Arc::new(email::domain::invitations::InvitationService::new(
+            email::outbound::invitation_pg::InvitationPgRepository(db.clone()),
+            // calendar_service's sync kill switch rejects RSVP writes itself.
+            CalendarInvitationResolver::new(PgCalendarRepository::new(db.clone())),
+            calendar_mutation_service,
+        )),
+        correlation: agent_correlation::inbound::CorrelationState::new(db, jwt_args),
         internal_api_key: config.internal_api_key.clone(),
         config: Arc::new(config),
-        auth_service_client,
-        redis_client,
-        sqs_client,
-        sfs_client: Arc::new(sfs_client),
-        gmail_client: gmail_client.clone(),
-        email_api,
-        s3_client: Arc::new(s3_client),
-        dss_client: Arc::new(dss_client),
-        system_properties_service,
         authorization_state: authorization_state.clone(),
-        jwt_args,
         email_service,
         entity_access_service,
         email_thread_state,
         gmail_token_state,
-        macro_event_broker: Arc::new(macro_event_broker),
         calendar_service,
-        calendar_mutation_service,
     })
 }

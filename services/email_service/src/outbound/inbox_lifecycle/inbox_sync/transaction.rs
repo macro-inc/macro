@@ -1,4 +1,6 @@
 use super::*;
+use email::domain::message_labels::state as label_state;
+use email::outbound::label_state_pg::PgLabelState;
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use models_email::{db, service};
 use sqlx::{Postgres, Transaction};
@@ -53,8 +55,8 @@ impl InboxSyncDeleteTransaction for PgInboxSyncTransaction {
         &mut self,
         message: &service::message::SimpleMessage,
     ) -> Result<MessageDeletion, Self::Err> {
-        use email_db_client::messages::delete::MessageDeletion as StoredDeletion;
-        email_db_client::messages::delete::delete_message_with_tx(&mut self.0, message)
+        use email::domain::scheduled_delivery::deletion::MessageDeletion as StoredDeletion;
+        email::domain::scheduled_delivery::deletion::delete_message_with_tx(&mut *self.0, message)
             .await
             .map(|deletion| match deletion {
                 StoredDeletion::AlreadyDeleted => MessageDeletion::AlreadyDeleted,
@@ -109,8 +111,8 @@ impl InboxSyncLabelTransaction for PgInboxSyncTransaction {
         message_id: Uuid,
         labels: &[String],
     ) -> Result<(), Self::Err> {
-        email_db_client::labels::delete::delete_db_message_labels(
-            &mut self.0,
+        label_state::delete_db_message_labels(
+            &mut PgLabelState(&mut self.0),
             message_id,
             labels,
             link_id,
@@ -125,8 +127,8 @@ impl InboxSyncLabelTransaction for PgInboxSyncTransaction {
         message_id: Uuid,
         is_read: bool,
     ) -> Result<(), Self::Err> {
-        email_db_client::messages::update::update_message_read_status(
-            &mut self.0,
+        label_state::update_message_read_status(
+            &mut PgLabelState(&mut self.0),
             message_id,
             link_id,
             is_read,

@@ -17,7 +17,7 @@ impl ScheduledDraftRepository for PgScheduledDrafts {
         limit: u32,
     ) -> Result<Vec<Message>, Self::Err> {
         Ok(
-            email_db_client::messages::scheduled::get::get_scheduled_messages_by_link_id(
+            email::domain::scheduled::drafts::get_scheduled_messages_by_link_id(
                 &self.0, link, offset, limit,
             )
             .await?,

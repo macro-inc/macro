@@ -7,7 +7,6 @@ use calendar_events::{
     domain::{mutations::CalendarMutationServiceImpl, service::CalendarService},
     outbound::{google::GoogleCalendarClient, pg::PgCalendarRepository},
 };
-use document_storage_service_client::DocumentStorageServiceClient;
 use email::{
     domain::service::EmailServiceImpl,
     inbound::axum::{
@@ -18,21 +17,16 @@ use email::{
 };
 
 use crate::config::Config;
-use crate::outbound::email_api::GmailApi;
 use crate::outbound::mailbox_init::{MicrosoftGrantSource, PgMailboxInitialization};
-use crate::util::redis::RedisClient;
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use entity_access_management::domain::service::EntityAccessManagementServiceImpl;
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use macro_auth::InternalApiKey;
-use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_authorization::{
     MacroAuthJwtValidator, MacroAuthorizationServiceImpl, MacroAuthorizationState,
 };
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
-use static_file_service_client::StaticFileServiceClient;
 use std::sync::Arc;
-use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImpl};
 use tokio_util::task::TaskTracker;
 
 pub(crate) type AuthorizationService = MacroAuthorizationServiceImpl<MacroAuthJwtValidator>;
@@ -178,6 +172,12 @@ pub(crate) type UserInboxDeletionSvc = email::domain::mailbox::lifecycle::InboxL
     crate::outbound::user_deletion::DeletedUserNotifications,
 >;
 
+pub(crate) type InvitationSvc = email::domain::invitations::InvitationService<
+    email::outbound::invitation_pg::InvitationPgRepository,
+    calendar_events::domain::invitations::CalendarInvitationResolver<PgCalendarRepository>,
+    CalendarMutationSvc,
+>;
+
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
     pub gmail_push: Arc<GmailPushSvc>,
@@ -238,25 +238,9 @@ pub(crate) struct ApiContext {
     >,
     pub mailbox_initializer: Arc<MailboxInitializer>,
     pub read_receipts: crate::composition::ReadReceipts,
-    pub invitation_snapshots: email::outbound::invitation_pg::InvitationPgRepository,
-    pub invitation_resolver: Arc<
-        calendar_events::domain::invitations::CalendarInvitationResolver<
-            calendar_events::outbound::pg::PgCalendarRepository,
-        >,
-    >,
-    pub db: sqlx::Pool<sqlx::Postgres>,
-    pub auth_service_client: Arc<authentication_service_client::AuthServiceClient>,
-    // The raw client is retained only for Gmail webhook JWKS/JWT authentication.
-    pub gmail_client: Arc<gmail_client::GmailClient>,
-    pub email_api: GmailApi,
-    pub redis_client: Arc<RedisClient>,
-    pub sqs_client: Arc<sqs_client::SQS>,
-    pub s3_client: Arc<s3_client::S3>,
-    pub sfs_client: Arc<StaticFileServiceClient>,
-    pub dss_client: Arc<DocumentStorageServiceClient>,
-    pub system_properties_service: Arc<SystemPropertiesServiceImpl<PgSystemPropertiesRepository>>,
+    pub invitations: Arc<InvitationSvc>,
+    pub correlation: agent_correlation::inbound::CorrelationState,
     pub authorization_state: MacroAuthorizationState<AuthorizationService>,
-    pub jwt_args: JwtValidationArgs,
     pub config: Arc<Config>,
     pub internal_api_key: InternalApiKey,
     pub email_service: EmailRouterState<EmailSvc>,
@@ -264,7 +248,5 @@ pub(crate) struct ApiContext {
     pub email_thread_state:
         EmailThreadRouterState<EmailSvc, EmailEntityAccessService, AuthorizationService>,
     pub gmail_token_state: GmailTokenState<GmailTokenProviderImpl>,
-    pub macro_event_broker: Arc<EmailEventBroker>,
     pub calendar_service: Arc<CalendarGrantService>,
-    pub calendar_mutation_service: Arc<CalendarMutationSvc>,
 }

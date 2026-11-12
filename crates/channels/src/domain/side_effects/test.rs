@@ -828,16 +828,17 @@ async fn bot_thread_reply_sends_reply_notification() {
 }
 
 #[tokio::test]
-async fn people_connected_to_the_threads_call_get_no_reply_notification() {
+async fn channel_members_connected_to_the_threads_call_get_a_reply_notification() {
     let channel_id = Uuid::new_v4();
     let connected = user("connected@example.com");
+    let outsider = user("outsider@example.com");
     let away = user("away@example.com");
     let notifications = FakeNotifications::default();
     let service = ChannelSideEffectService::new(
         FakeContext {
             thread_context: ThreadNotificationContext {
-                connected_call_participants: vec![connected.clone()],
-                participants: vec![connected.clone(), away.clone()],
+                connected_call_participants: vec![connected.clone(), outsider.clone()],
+                participants: vec![away.clone()],
                 parent_sender_id: None,
             },
             ..FakeContext::default()
@@ -860,11 +861,11 @@ async fn people_connected_to_the_threads_call_get_no_reply_notification() {
     let ChannelNotificationEffect::Reply { recipient_ids, .. } = &notification_effects[0] else {
         panic!("expected a reply notification");
     };
-    assert_eq!(recipient_ids, &HashSet::from([away]));
+    assert_eq!(recipient_ids, &HashSet::from([connected, away]));
 }
 
 #[tokio::test]
-async fn a_mention_of_someone_connected_to_the_threads_call_is_dropped() {
+async fn a_mention_of_someone_connected_to_the_threads_call_is_delivered() {
     let channel_id = Uuid::new_v4();
     let now = Utc::now();
     let sender = user("sender@example.com");
@@ -918,7 +919,7 @@ async fn a_mention_of_someone_connected_to_the_threads_call_is_dropped() {
     else {
         panic!("expected a mention notification");
     };
-    assert_eq!(recipient_ids, &HashSet::from([away]));
+    assert_eq!(recipient_ids, &HashSet::from([connected, away]));
 }
 
 #[tokio::test]

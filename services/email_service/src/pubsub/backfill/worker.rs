@@ -1,8 +1,6 @@
+use crate::composition::workers::{CrmServiceType, NotificationIngressType, PubSubEventBroker};
 use crate::outbound::email_api::GmailApi;
 use crate::pubsub::backfill::process;
-use crate::pubsub::context::{
-    CrmServiceType, NotificationIngressType, PubSubContext, PubSubEventBroker,
-};
 use crate::pubsub::worker_lifecycle::run_until_cancelled;
 use crate::util::redis::RedisClient;
 use connection_gateway_client::client::ConnectionGatewayClient;
@@ -72,50 +70,42 @@ pub(crate) fn context(
     contacts_ingress: Arc<SqsContactsIngress<SqsContactsQueue>>,
     email_api: GmailApi,
     redis_client: RedisClient,
-    notification_ingress_service: Arc<NotificationIngressType>,
+    _notification_ingress_service: Arc<NotificationIngressType>,
     sfs_client: StaticFileServiceClient,
     connection_gateway_client: ConnectionGatewayClient,
     dss_client: DocumentStorageServiceClient,
     system_properties_service: Arc<SystemPropertiesServiceImpl<PgSystemPropertiesRepository>>,
     crm_service: CrmServiceType,
     macro_event_broker: PubSubEventBroker,
-    notifications_enabled: bool,
+    _notifications_enabled: bool,
 ) -> BackfillContext {
-    let leaves = PubSubContext {
-        gmail_history: email::domain::mailbox::gmail_history::GmailHistoryService(
-            email::outbound::mailbox_pg::PgMailboxSync::new(db.clone()),
-        ),
-        invitation_extractor: crate::pubsub::invitation_extraction::compose(
+    use crate::outbound::backfill_jobs::worker::*;
+    let effects = BackfillWorkerEffects {
+        invitation_extractor: crate::composition::workers::invitation_extractor(
             db.clone(),
             email_api.clone(),
         ),
-        db,
-        sqs_worker: worker.clone(),
-        sqs_client,
+        db: db.clone(),
+        sqs_client: sqs_client.clone(),
         contacts_ingress,
-        email_api,
+        email_api: email_api.clone(),
         redis_client,
-        notification_ingress_service,
         sfs_client,
         connection_gateway_client,
         dss_client,
         system_properties_service,
-        crm_service,
         macro_event_broker,
-        notifications_enabled,
-        retry_worker: false,
     };
-    use crate::outbound::backfill_jobs::worker::*;
     BackfillContext {
-        sqs_worker: leaves.sqs_worker.clone(),
+        sqs_worker: worker.clone(),
         service: Arc::new(email::domain::backfill_jobs::worker::BackfillService {
             repository: PgBackfillWorker {
-                jobs: crate::outbound::backfill_jobs::PgBackfillJobs(leaves.db.clone()),
+                jobs: crate::outbound::backfill_jobs::PgBackfillJobs(db),
             },
-            gmail: GmailBackfill(leaves.email_api.clone()),
-            queue: BackfillSqs(leaves.sqs_client.clone()),
-            effects: BackfillWorkerEffects(leaves.clone()),
-            crm: BackfillWorkerCrm(leaves.crm_service.clone()),
+            gmail: GmailBackfill(email_api),
+            queue: BackfillSqs(sqs_client),
+            effects,
+            crm: BackfillWorkerCrm(crm_service),
             contacts_sync: cfg!(feature = "contacts_sync"),
             attachment_upload: cfg!(feature = "attachment_upload"),
         }),

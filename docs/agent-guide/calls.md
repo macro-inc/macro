@@ -286,14 +286,16 @@ This is presentation only: nothing posts top-level from the panel. A popup count
 others have sent to the channel since you joined, and **View** swaps to the Messages tab with the
 call still connected. On the meeting page it navigates to the channel.
 
-People connected to the call get no notification from its thread, mentions included; they stay
-followers, so later replies reach them after they leave. The call's root accepts replies and nothing
-else: no edit, delete or reactions. On a call's record the chat is read-only;
-its contents require channel read access. Deleting a record leaves the thread in the channel.
+Channel members connected to the call are notified of its thread's messages like followers, so a
+message sent in the call chat pops up for everyone else on the call, even before they post in it.
+The call's root accepts replies and nothing else: no edit, delete or reactions. On a call's record
+the chat is read-only; its contents require channel read access. Deleting a record leaves the thread
+in the channel.
 
 To verify, turn the flag on for your test user in PostHog, start a call in a channel from one account,
 and open the channel from a second. Check replying from each side, a quote reply inside the thread,
-that no notification reaches the person in the call, and that ending the call updates the row.
+that a message sent in the call chat notifies the other person in the call, and that ending the
+call updates the row.
 
 While you are in a call, a green phone button (`Return to call`,
 `data-sidebar-next-item="active-call"`) sits at the bottom of the desktop rail,
@@ -377,6 +379,8 @@ press `Join call`. Setup requests microphone permission and waits until that
 prompt finishes before requesting the camera, then previews video locally;
 sharing starts only after joining.
 Permission denial leaves the affected device off and still allows joining.
+A level meter under the preview lights as the microphone picks up sound
+(`Speak to test your mic`); muting it empties the meter and shows `Mic is off`.
 Shared-link setup shows the people currently connected, with avatars, names, and
 an attendee count. It refreshes every 15 seconds while setup is open; guests see
 this only for standalone links. Empty calls show `No one else is here yet`; a

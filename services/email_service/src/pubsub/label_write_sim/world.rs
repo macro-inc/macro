@@ -10,7 +10,7 @@
 use super::fake_gmail::{FakeGmail, GmailMessage, GmailState};
 use super::fake_sqs::{self, FakeSqs};
 use super::wiring;
-use crate::pubsub::context::CrmMetadataResolver;
+use crate::composition::workers::CrmMetadataResolver;
 use crate::pubsub::gmail_ops::worker::GmailOpsContext;
 use crate::pubsub::inbox_sync::worker::InboxSyncContext;
 use axum::Router;
@@ -88,6 +88,7 @@ pub struct World {
     pub ops_retry: GmailOpsContext,
     pub sync: InboxSyncContext,
     pub sync_retry: InboxSyncContext,
+    pub backfill: crate::pubsub::backfill::worker::BackfillContext,
     pub email: EmailSvc,
     /// Provider message id → database id.
     pub message_ids: BTreeMap<String, Uuid>,
@@ -318,6 +319,43 @@ impl World {
             ops_retry: ops_context(true, &queues.ops_retry),
             sync: sync_context(false, &queues.sync),
             sync_retry: sync_context(true, &queues.sync_retry),
+            backfill: crate::pubsub::backfill::worker::context(
+                db.clone(),
+                &worker(&queues.sync),
+                sqs_client.clone(),
+                Arc::new(contacts::domain::service::SqsContactsIngress {
+                    queue: contacts::outbound::ingress::SqsContactsQueue::new(
+                        sqs_sdk.clone(),
+                        format!("{services_url}/queue/contacts"),
+                    ),
+                }),
+                email_api.clone(),
+                wiring::redis_client(redis_client.clone()),
+                Arc::new(notification::domain::service::SqsNotificationIngress {
+                    queue: notification::outbound::queue::SqsQueue::new(
+                        sqs_sdk.clone(),
+                        format!("{services_url}/queue/notifications"),
+                    ),
+                }),
+                static_file_service_client::StaticFileServiceClient::new(
+                    "key".to_string(),
+                    services_url.to_string(),
+                ),
+                connection_gateway_client::client::ConnectionGatewayClient::new(
+                    "key".to_string(),
+                    services_url.to_string(),
+                ),
+                document_storage_service_client::DocumentStorageServiceClient::new(
+                    "key".to_string(),
+                    services_url.to_string(),
+                ),
+                Arc::new(system_properties::SystemPropertiesServiceImpl::new(
+                    system_properties::PgSystemPropertiesRepository::new(db.clone()),
+                )),
+                crm_service.clone(),
+                broker.clone(),
+                false,
+            ),
             db,
             gmail,
             sqs,

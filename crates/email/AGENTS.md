@@ -12,6 +12,14 @@ tools — hexagonal, heavily feature-gated.
   traits its adapters implement.
 - `src/domain/message_reads.rs` (feature `mailbox`): synced message/thread
   reads, access filtering, pagination, and summary-inbox selection.
+- `src/domain/message_labels/state.rs` (feature `ports`): pending-write folding,
+  restoration and batch validation; catalog operations also require `mailbox`.
+  Its PostgreSQL adapters borrow the caller's transaction or pool.
+- `src/domain/scheduled_delivery.rs` (feature `ports`): the composed
+  `ScheduledDeliveryService` delegates each delivery to the fenced workflow.
+  Its `state`, `identity` and `deletion` modules (feature `mailbox`) own claim,
+  reconciliation and retained-deletion decisions; `outbound/scheduled_delivery_pg.rs`
+  implements the transaction capabilities.
 - `src/domain/mailbox/calendar_disconnect.rs`, `mailbox/contacts/list.rs`, and
   `scheduled/drafts.rs` (feature `mailbox`): separate use cases for calendar
   removal, contact listing, and scheduled-draft pages; ownership/delegation
@@ -20,6 +28,9 @@ tools — hexagonal, heavily feature-gated.
   and settings patches. `signature_settings/gmail_images.rs` selects public or
   mailbox image reads, caches message parts for one import, and preserves retryable
   image failures behind an image-reader port.
+- `src/domain/invitations.rs` (feature `calendar_invitations`): composes saved
+  invitation resolution and import with their snapshot and calendar ports;
+  HTTP handlers pass only the authorized thread receipt and request values.
 - `src/domain/attachment_cleanup/sfs_deletion.rs` (feature `ports`): stored-file
   deletion order, the already-missing-file rule, and delivery disposition.
 - `src/domain/mailbox/contacts/sfs_upload.rs` (feature `mailbox`): URL-backed
@@ -40,7 +51,8 @@ tools — hexagonal, heavily feature-gated.
   sent contact seeding and CRM operations. Its `outbox` module owns durable
   initialization, completion and consent publication through transaction ports.
   Backfill and inbox sync share catalog reconciliation, contact parsing,
-  notification selection, CRM normalization and pending-label snapshot rules.
+  CRM normalization and pending-label snapshot rules. Inbox sync and link manager
+  share notification-recipient selection.
 - `src/domain/mailbox/link_manager.rs` (feature `mailbox`): link-maintenance
   delivery disposition, probe timeout, and reconnect notification recipients. It
   reuses the mailbox health and lifecycle services. Its `deletion` service owns
@@ -70,9 +82,10 @@ tools — hexagonal, heavily feature-gated.
   (`domain/event_forward.rs`): that same file, or, for an organizer outside
   Google, a real invitation (`METHOD:REQUEST`) sent as the message's calendar
   body to the recipients and the organizer, whichever the calendar decides.
-- Not here: raw provider API calls → `email_api_client`; HTML
-  parsing/sanitization → `email_utils`; SQLx queries over email tables →
-  `email_db_client`.
+- Provider protocol implementations live in `email_api_client`; HTTP/queue
+  hosting lives in `services/email_service`; HTML parsing/sanitization lives in
+  `email_utils`. PostgreSQL adapters in this crate and `email_db_client` perform
+  database I/O; domain modules call their ports.
 
 ## Boundaries
 
@@ -83,6 +96,16 @@ tools — hexagonal, heavily feature-gated.
 - Used by: many crates and services, including `ai_tools`, `graphql_email`,
   `teams`, `databases_sql`, `attention_feed`, `calendar_service`, `email_service`,
   `email_scheduled_handler`, `search_processing_service`.
+
+- Hosts construct concrete adapters and inject them into domain services.
+  HTTP handlers and worker deliveries reuse those composed services; they do
+  not reconstruct repositories for each call. See the
+  [backend architecture](../../docs/architecture/email-backend.md)
+  for the service map, guard exceptions and remaining legacy adapter policy.
+- The domain/inbound guards reject direct infrastructure use, including provider
+  repositories and environment reads. Existing storage composites in
+  `email_db_client` and the remaining adapter decisions still need individual
+  review; a clean guard scan does not certify those layers.
 
 ## Recipes
 
@@ -96,6 +119,8 @@ tools — hexagonal, heavily feature-gated.
 
 - `cargo test -p email --all-features` (`SQLX_OFFLINE` unset; the `outbound`
   feature's tests need a local MacroDB — `just setup_macrodb`).
+- Run root `just check`; boundary-rule changes also run the
+  [native ast-grep tests](../../docs/development/style-guide.md#email-backend-boundary-checks).
 
 ## Gotchas
 
@@ -178,6 +203,13 @@ tools — hexagonal, heavily feature-gated.
   attempts to mark clean drafts as junk.
 
 - Reconcile deferred message deletion before claiming scheduled work; unresolved sends retain their message, attachments, and delivery job.
+- `domain/scheduled_delivery/{state,identity,deletion}.rs` owns claim
+  classification, sent-identity adoption and retained-deletion sequencing.
+  `outbound/scheduled_delivery_pg.rs` supplies caller-owned and independent
+  transaction capabilities using the statement-sized queries in `email_db_client`;
+  keep relational guards in SQL. Compose `ScheduledDeliveryService` once while
+  keeping claims and transactions per delivery. Scheduled page validation and
+  expansion sequencing live in `domain/scheduled/drafts.rs`.
 - Durable send admission supports Gmail and Outlook; Outlook delivery stays with its provider coordinator.
 - Carry the captured `draft_generation` through every draft mutation; advance it on send acceptance/cancellation under the message lock and preserve attempt tombstones after message deletion.
 
@@ -227,6 +259,10 @@ tools — hexagonal, heavily feature-gated.
   dependency belongs under before wiring it in.
 - `domain/ports.rs` defines the traits adapters implement — call through the
   domain service, never an outbound adapter directly from another crate.
+- `domain/message_labels/state.rs` owns pending-write turn folding, restoration
+  sequencing, batch validation/count interpretation, and catalog id/deletion
+  policy; `outbound/label_state_pg.rs` borrows the caller's transaction or pool
+  for the original statement-sized queries in `email_db_client`.
 - `EmailRepo::stage_thread_label_change` reads which messages change, applies
   the change and marks the changed provider messages (exactly what
   `commit_thread_label_write` enqueues) in one transaction holding the thread's

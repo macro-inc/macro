@@ -6,8 +6,39 @@ use uuid::Uuid;
 
 /// Approved attachment identity checks shared by delivery adapters.
 pub mod attachments;
+/// Retained deletion resolution and message/thread cleanup sequencing.
+#[cfg(feature = "mailbox")]
+pub mod deletion;
+/// Adoption of provider identities after a confirmed send.
+#[cfg(feature = "mailbox")]
+pub mod identity;
 /// Recovery scanning and queue notification policy.
 pub mod recovery;
+/// Durable claim classification and fenced persistence decisions.
+#[cfg(feature = "mailbox")]
+pub mod state;
+
+/// Scheduled delivery composed once with its persistence and provider capabilities.
+pub struct ScheduledDeliveryService<A> {
+    adapter: A,
+}
+
+impl<A> ScheduledDeliveryService<A> {
+    /// Retain the already-constructed adapter for all deliveries.
+    pub fn new(adapter: A) -> Self {
+        Self { adapter }
+    }
+}
+
+impl<A> ScheduledDeliveryService<A>
+where
+    A: ScheduledDeliveryRepo + ScheduledMessageSender<A::Claim, A::Sent>,
+{
+    /// Execute the existing fenced delivery workflow.
+    pub async fn deliver(&self, link_id: Uuid, message_id: Uuid) -> anyhow::Result<()> {
+        deliver_scheduled(&self.adapter, &self.adapter, link_id, message_id).await
+    }
+}
 
 /// A worker must renew ownership before crossing the provider boundary.
 pub const DELIVERY_LEASE_SECONDS: i32 = 300;

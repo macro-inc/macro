@@ -3,9 +3,9 @@
 mod deletion;
 pub(crate) use deletion::{DeletionAuth, DeletionGmail, DeletionRefresh, PgLinkDeletion};
 
+use crate::composition::workers::NotificationIngressType;
 use crate::outbound::message_labels::gmail_ops::PgGmailOps;
 use crate::outbound::persistence_error::InboxPersistenceError;
-use crate::pubsub::context::NotificationIngressType;
 use email::domain::mailbox::link_manager::{
     LinkManagerNotifications, LinkManagerRepository, ReauthNotification,
 };

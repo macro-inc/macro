@@ -64,3 +64,36 @@ impl<R: ScheduledDraftRepository> ScheduledDraftService<R> {
             .map_err(ScheduledDraftError::Query)
     }
 }
+
+/// Raw page reads and the existing concurrent expansion capability.
+pub trait ScheduledDraftQueries: Sync {
+    /// Storage rows, kept opaque to page validation and sequencing.
+    type Stored: Send;
+    /// Read the original page in storage order.
+    fn scheduled_rows(
+        &self,
+        link: Uuid,
+        offset: u32,
+        limit: u32,
+    ) -> impl Future<Output = anyhow::Result<Vec<Self::Stored>>> + Send;
+    /// Use the existing message-expansion implementation.
+    fn expand_rows(
+        &self,
+        rows: Vec<Self::Stored>,
+    ) -> impl Future<Output = anyhow::Result<Vec<Message>>> + Send;
+}
+
+/// Validate and expand the stored scheduled page without changing its SQL or expansion.
+#[tracing::instrument(target = "email_db_client::messages::scheduled::get", skip(pool), err)]
+pub async fn get_scheduled_messages_by_link_id(
+    pool: &impl ScheduledDraftQueries,
+    link_id: Uuid,
+    offset: u32,
+    limit: u32,
+) -> anyhow::Result<Vec<Message>> {
+    if limit == 0 {
+        anyhow::bail!("limit must be positive");
+    }
+    let db_messages = pool.scheduled_rows(link_id, offset, limit).await?;
+    pool.expand_rows(db_messages).await
+}

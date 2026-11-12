@@ -10,6 +10,9 @@ use uuid::Uuid;
 #[cfg(feature = "mailbox")]
 pub mod gmail_ops;
 
+/// Label-state rules over narrow persistence operations.
+pub mod state;
+
 #[cfg(test)]
 mod test;
 

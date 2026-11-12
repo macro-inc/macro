@@ -7,16 +7,7 @@ use models_email::service::link::Link;
 use std::collections::HashMap;
 use uuid::Uuid;
 
-/// Position of one pending write among the writes for a message's labels.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum LabelWriteTurn {
-    /// This write can reach Gmail now.
-    Send,
-    /// A newer unconfirmed write must finish first.
-    Wait,
-    /// A newer confirmed write already owns the state.
-    Superseded,
-}
+pub use crate::domain::message_labels::state::LabelWriteTurn;
 
 /// Legacy flag update required after inverting the first label in a payload.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

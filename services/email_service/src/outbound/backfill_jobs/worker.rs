@@ -12,7 +12,6 @@ mod transaction;
 
 use crate::outbound::email_api::GmailApi;
 use crate::outbound::persistence_error::InboxPersistenceError;
-use crate::pubsub::context::PubSubContext;
 use email::domain::backfill_jobs::worker::*;
 use email_api_client::domain::models::{EmailApiError, MessageWithCalendarParts};
 use futures::future::BoxFuture;
@@ -32,8 +31,28 @@ pub(crate) struct PgBackfillWorker {
 }
 pub(crate) struct GmailBackfill(pub GmailApi);
 pub(crate) struct BackfillSqs(pub sqs_client::SQS);
-pub(crate) struct BackfillWorkerEffects(pub PubSubContext);
-pub(crate) struct BackfillWorkerCrm(pub crate::pubsub::context::CrmServiceType);
+pub(crate) struct BackfillWorkerEffects {
+    pub invitation_extractor: crate::composition::workers::EmailInvitationExtractor,
+    pub db: sqlx::PgPool,
+    pub sqs_client: sqs_client::SQS,
+    pub contacts_ingress: std::sync::Arc<
+        contacts::domain::service::SqsContactsIngress<
+            contacts::outbound::ingress::SqsContactsQueue,
+        >,
+    >,
+    pub email_api: GmailApi,
+    pub redis_client: crate::util::redis::RedisClient,
+    pub sfs_client: static_file_service_client::StaticFileServiceClient,
+    pub connection_gateway_client: connection_gateway_client::client::ConnectionGatewayClient,
+    pub dss_client: document_storage_service_client::DocumentStorageServiceClient,
+    pub system_properties_service: std::sync::Arc<
+        system_properties::SystemPropertiesServiceImpl<
+            system_properties::PgSystemPropertiesRepository,
+        >,
+    >,
+    pub macro_event_broker: crate::composition::workers::PubSubEventBroker,
+}
+pub(crate) struct BackfillWorkerCrm(pub crate::composition::workers::CrmServiceType);
 
 impl BackfillGmail for GmailBackfill {
     fn labels(

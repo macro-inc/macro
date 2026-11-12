@@ -11,6 +11,11 @@ the gateway `/email` prefix.
 - `src/main.rs` / `src/lib.rs`: entrypoint and `run()`.
 - `src/api.rs` + `src/api/context.rs`: HTTP surface and `ApiContext`.
 - `src/composition/api.rs`: production API dependencies and service wiring.
+  It composes optional activity correlation and the saved-invitation service;
+  `ApiContext` holds services, authentication/router states and configuration;
+  raw database/provider clients belong to the composed adapters.
+- `src/composition/workers.rs`: shared worker service aliases and invitation
+  extraction composition. Per-worker constructors stay in `worker::context`.
 - `src/outbound/message_reads.rs`: query adapter for the email domain's synced
   read service; handlers retain only extraction and HTTP/error rendering.
 - `src/outbound/inbox_access.rs`, `inbox_contacts.rs`, `scheduled_drafts.rs`,
@@ -32,15 +37,17 @@ the gateway `/email` prefix.
   `scheduled` (scheduled sends),
   `sfs_uploader`/`sfs_deleter` (attachment storage), `gmail_ops`, `backfill`,
   `crm_cleanup`, `worker_lifecycle`.
-  Each worker's `worker::context` builds its production context; the label-write
-  simulation reuses those builders. Gmail operations compose
+  Each worker's `worker::context` builds a service plus its SQS receive/ack handle.
+  Backfill and inbox sync have separate outbound effect dependencies; there is
+  no shared `PubSubContext`. Scheduled delivery and its forwarded-attachment
+  adapter are composed once at startup, with delivery state and transactions
+  scoped to each call. Gmail operations compose
   the email domain's `message_labels::gmail_ops` service there; their listener
   only decodes and acknowledges the domain disposition. Settlement transactions,
   Gmail calls, and retry publication are in `outbound/message_labels/gmail_ops.rs`.
   Inbox sync composes `email::domain::mailbox::inbox_sync` with adapters in
-  `outbound/inbox_lifecycle/inbox_sync/`; its separate `InboxSyncContext` holds
-  only its service and receiver. Backfill also has a separate `BackfillContext`: its
-  domain worker owns admission, retry/deferral, listing, thread/message import,
+  `outbound/inbox_lifecycle/inbox_sync/`. Backfill's domain worker owns
+  admission, retry/deferral, listing, thread/message import,
   initialization, completion accounting and leases, metadata, attachment and CRM
   policy, with adapters in `outbound/backfill_jobs/worker/`. Inbox sync's history and upsert
   orchestration also live in the domain; these adapters retain the existing
@@ -49,8 +56,9 @@ the gateway `/email` prefix.
   disposition, probes, reconnect notifications and physical deletion; its
   context holds only the service and receiver. `outbound/link_manager/deletion.rs`
   implements the cleanup capabilities without owning deletion policy.
-  Both workers reuse the domain's catalog, contact, notification and pending-label
-  rules; their adapters retain the existing atomic writes and savepoints.
+  Backfill and inbox sync reuse the domain's catalog, contact and pending-label
+  rules; inbox sync and link manager share notification-recipient selection.
+  Adapters retain the existing atomic writes and savepoints.
   SFS deletion composes `email::domain::attachment_cleanup::sfs_deletion` with
   `outbound/sfs_deletion.rs`; its listener only decodes and acknowledges the
   domain disposition. The domain deletes the file before its database row and
@@ -85,6 +93,17 @@ the gateway `/email` prefix.
   `email_scheduled_handler`, `email_sfs_delete_handler`, `email_refresh_handler`
   (this service consumes the queues they publish to).
 
+## Boundaries
+
+- Read the [backend architecture](../../docs/architecture/email-backend.md) for
+  ownership, startup composition, guard exceptions and remaining legacy helpers.
+- Keep authentication/transport extraction at the edge and use-case authorization
+  in the domain. Call services from handlers and delivery processors; preserve
+  the listener's cancellation, visibility-renewal and acknowledgement boundaries.
+- The `email-*` ast-grep rules guard API/domain/worker I/O and raw client state.
+  Concrete service declarations and `worker::context` are composition; they are
+  not a reason to allow client calls in delivery loops.
+
 ## Recipes
 
 - Add an email API route: `src/api/email.rs` (or `src/api/gmail.rs`,
@@ -100,8 +119,10 @@ the gateway `/email` prefix.
 
 - `cargo test -p email_service` (`SQLX_OFFLINE` unset; the `label_write_sim`
   tests also need Redis, at `REDIS_URI` or `redis://127.0.0.1:6379`).
-- `just check` (from this directory) runs `cargo check` with `SQLX_OFFLINE=true`.
-
+- `just check` from this directory runs `cargo check` with `SQLX_OFFLINE=true`.
+  Run root `just check` as well for the shared code-rule and privacy checks.
+  Changes to the boundary rules also run their
+  [native ast-grep tests](../../docs/development/style-guide.md#email-backend-boundary-checks).
 - Local SQS: `just create-localstack` / `create-queues` before running
   `pubsub_workers` locally; queue names are in the `justfile`.
 
@@ -115,6 +136,7 @@ the gateway `/email` prefix.
   in `#[tracing::instrument]` and record `link_id` or provider ids instead.
 
 - Provider-sync deletions deferred by active sends publish no deletion event; scheduled recovery reconciles the retained marker before trying to claim delivery.
+- Scheduled delivery calls the email domain for durable claims, completion fences, provider identity adoption and retained deletions; its PostgreSQL capabilities are wired by `email::outbound::scheduled_delivery_pg`. The worker adapter retains provider I/O, event publication and attachment cleanup.
 
 - Draft edit routes carry `draft_generation` from the editing lifetime, including attachments, deletion, transfer, and schedules; regenerate OpenAPI clients when this contract changes.
 
@@ -162,9 +184,10 @@ the gateway `/email` prefix.
   the thread row and all of its messages in one transaction
   (`insert_backfilled_thread`), so a failed write leaves nothing for a retry
   to skip. Each message has its own savepoint: one whose data can never be
-  stored (`outbound/backfill_jobs/worker/database_error.rs`) is skipped and logged, and the rest of the
-  thread commits. The CRM fan-out is enqueued after the write slot is taken
-  and before the write: after the commit nothing in the handler may request a
+  stored ([`database_error::is_unstorable`](src/outbound/backfill_jobs/worker/database_error.rs))
+  is skipped and logged, and the rest of the thread commits. The CRM fan-out is
+  enqueued after the write slot is taken and before the write: after the commit
+  nothing in the handler may request a
   retry, because a retry would find the thread and skip it, and an operation
   deferred for a busy slot must not repeat the fan-out. Invitation and attachment fan-outs only log their
   failures, and the metadata step is enqueued last. BackfillMessage only drains
@@ -202,6 +225,9 @@ the gateway `/email` prefix.
   redeploy both services. Before rolling workers back past that release, turn
   it off and let the gmail-ops queues drain. Retire the single-message form
   only after every producer sends batches.
+- Message-label adapters call `email::domain::message_labels::state` with
+  `PgLabelState` for transaction statements and `PgLabelCatalog` for pool reads
+  and catalog statements; preserve the surrounding transaction and lock scope.
 - Gmail label writes leave a marker in `email_gmail_pending_label_writes`.
   Inbox sync keeps the local state of a label marked before or after it reads
   Gmail (`email::domain::mailbox::inbox_sync`); a re-sync or recovery
@@ -233,7 +259,8 @@ the gateway `/email` prefix.
   the primary queue dead-letters after three receives.
 - Header addresses that Gmail accepts can fail `MacroUserIdStr::try_from_email`.
   Skip the bad address with a WARN that omits it (the parse error echoes it)
-  instead of failing the step; see `email::domain::mailbox::inbox_sync::build_contact_connections`.
+  instead of failing the step; see
+  `email::domain::mailbox::inbox_sync::build_contact_connections`.
 - The `link_manager` worker receives one message at a time and renews its
   visibility while processing. Don't raise its receive batch: messages queued
   behind a long mailbox purge would be redelivered and purged twice.
