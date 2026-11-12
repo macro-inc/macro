@@ -148,7 +148,8 @@ impl<
 
     /// Keep a computer whose billing ended, during retention: its item is
     /// re-added and the rest of the period invoiced now (a comped computer is
-    /// comped again). The stopped guest and its disk are kept.
+    /// comped again while the comp policy still comps its team). The stopped
+    /// guest and its disk are kept.
     #[tracing::instrument(skip(self), err)]
     pub async fn restore(
         &self,
@@ -182,14 +183,23 @@ impl<
             Readd::Restore => restore_allowed(&computer.state, now)?,
         }
         let (event, charged) = match (&computer.funding, intent) {
-            (Funding::Comped { reason }, Readd::Restore) => (
-                Event::Restore {
-                    billing: ComputerBilling::Comped {
-                        reason: reason.clone(),
+            (Funding::Comped { .. }, Readd::Restore) => {
+                // The comp is the team's now, not the one it was bought with.
+                let Some(reason) = self
+                    .comp_policy
+                    .comp_reason(team_id)
+                    .await
+                    .map_err(internal)?
+                else {
+                    return Err(Rejected::InvalidRestore.into());
+                };
+                (
+                    Event::Restore {
+                        billing: ComputerBilling::Comped { reason },
                     },
-                },
-                None,
-            ),
+                    None,
+                )
+            }
             (Funding::Comped { .. }, Readd::UndoCancel) => {
                 return Err(Rejected::InvalidRestore.into());
             }

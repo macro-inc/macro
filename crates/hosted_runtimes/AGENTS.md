@@ -119,7 +119,8 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   quarantine validation.
 - **Sold resources**: Snapshot `ComputerResources { vcpus: Vcpus, memory_gib: MemoryGib, disk_gib: DiskGib }`,
   `CatalogEntryId` and the price (or comp reason) once at purchase. Comped rows
-  have NULL price IDs; restores copy the saved price. Use the versioned catalog only
+  have NULL price IDs; restores copy the saved price, and a comped restore asks
+  `CompPolicy` again (refused once the team is no longer comped). Use the versioned catalog only
   for new offers and purchases; never infer size from resources. Fleet CPU/RAM/root
   limits, capacity and reconcile drift checks read recorded resources.
   Drift logs an operator error without resizing.
