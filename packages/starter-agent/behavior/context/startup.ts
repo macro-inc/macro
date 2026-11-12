@@ -77,19 +77,29 @@ export type Startup = {
 /** Set by systemd when the unit loads credentials (`LoadCredential=`). */
 const credentialsDirectory = 'CREDENTIALS_DIRECTORY';
 
-/** Bubblewrap's argv prefix that hides `directory` and changes nothing else. */
-export const hiding = (directory: string): readonly string[] => [
+/** Where harnessd keeps the computer's Claude sign-in, which the `claude` wrapper reads; set by the agent's unit. */
+const harnessdStateDirectory = 'HARNESSD_STATE_DIRECTORY';
+
+/**
+ * Bubblewrap's argv prefix: the enrollment's credentials hidden, harnessd's
+ * Claude sign-in readable but not writable, and nothing else changed (its
+ * socket and the rest of the system as they are).
+ */
+export const hiding = (
+  credentials: string,
+  harnessd: string
+): readonly string[] => [
   'bwrap',
   '--dev-bind',
   '/',
   '/',
   '--tmpfs',
-  directory,
+  credentials,
+  '--ro-bind',
+  harnessd,
+  harnessd,
   '--',
 ];
-
-const sandboxOf = (directory: string | undefined): readonly string[] =>
-  directory === undefined ? [] : hiding(directory);
 
 export type RunFiles = { readonly lastGood: string; readonly restart: string };
 
@@ -207,13 +217,21 @@ export const startup = (
     reserved
   );
   if (servers.kind === 'invalid') return servers;
+  // Only on a computer (systemd credentials) do children run sandboxed.
+  const hidden = given(environment, credentialsDirectory);
+  const harnessd = given(environment, harnessdStateDirectory);
+  if (hidden !== undefined && harnessd === undefined)
+    return notSet(harnessdStateDirectory);
   return {
     kind: 'configured',
     value: {
       workspace,
       credentials: credentials.value,
       mcpServers: servers.value,
-      sandbox: sandboxOf(given(environment, credentialsDirectory)),
+      sandbox:
+        hidden === undefined || harnessd === undefined
+          ? []
+          : hiding(hidden, harnessd),
     },
   };
 };
