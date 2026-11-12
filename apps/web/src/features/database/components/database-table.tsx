@@ -762,7 +762,7 @@ export function DatabaseTable(props: DatabaseTableProps) {
     if (
       !(target instanceof HTMLElement) ||
       target.closest(
-        'input:not([type="checkbox"]), textarea, [contenteditable="true"]'
+        'input:not([type="checkbox"]), textarea, [contenteditable="true"], a[href]'
       )
     )
       return false;

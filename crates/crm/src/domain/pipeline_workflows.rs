@@ -699,7 +699,10 @@ where
         } else {
             let op = DatabaseOp::Rows {
                 table: overview.pipeline.pipeline.table_id,
-                change: RowsChange::Insert { rows: inserts },
+                change: RowsChange::Insert {
+                    rows: inserts,
+                    ids: None,
+                },
             };
             let (results, version) = self.apply(receipt, viewer, OpBatch::from(vec![op])).await?;
             let added = results

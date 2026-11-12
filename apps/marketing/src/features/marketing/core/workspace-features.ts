@@ -34,22 +34,32 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
     tone: 'tasks',
     description:
       'A high performance, agent-native spreadsheet that works with Excel, Google Sheets and CSV.',
-    heading: 'Mention your work in spreadsheet cells.',
+    heading: '@mention anything in a cell.',
     detail:
-      'Mention a document from Macro Docs or a task from Macro Tasks right in a cell. Ask an agent to calculate something, edit a range, or build a chart from the sheet.',
+      'It’s a normal spreadsheet: formulas, number formats, fill down, everything you’d expect from Excel or Google Sheets. The difference is it’s linked to everything else. Type @ in a cell to mention a person, a document from Macro Docs, an email from Macro Mail, or a task from Macro Tasks.',
     sceneTitle: 'Launch budget',
     rows: [],
     message: '',
     sections: [
       {
-        title: 'Bring your Excel files.',
+        title: 'Macro Agents edit the sheet, like teammates.',
         description:
-          'Upload an Excel workbook or CSV and choose Edit in Macro to make an editable copy. Export the workbook with its formulas and formatting, or download one sheet as CSV.',
+          'Agents can edit the sheet too, including external agents like ChatGPT or Claude. Ask one to add up the spend by team, or build a forecast for next quarter, and watch its cursor move through the cells as it works. You can all collaborate in the same sheet.',
+      },
+      {
+        title: 'Tightly integrated with Macro CRM.',
+        description:
+          'Mention a company or a contact in a cell, and it’s the same record you work from in your CRM. See the stage, the owner, the last email, and the next call right from the sheet, or open the record. Your customer list and your CRM stop being two things to keep in sync.',
       },
       {
         title: 'Add formulas, charts, and comments.',
         description:
           'Reference cells across sheets, add dropdowns, and build charts that update when the data changes. Leave a comment on a range so the discussion stays with the numbers.',
+      },
+      {
+        title: 'Bring your Excel files.',
+        description:
+          'Upload an Excel workbook or CSV and choose Edit in Macro to make an editable copy. Export the workbook with its formulas and formatting, or download one sheet as CSV.',
       },
     ],
     faq: [
@@ -74,27 +84,27 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
     tone: 'documents',
     description:
       'Edit records together with your team and agents. Switch between tables, boards, and timelines.',
-    heading: 'Migrate from Notion with 1 click.',
+    heading: '@mention anything in a column.',
     detail:
-      'Connect Notion, choose the pages and databases you want, and import them into Macro. Your originals stay in Notion.',
+      'Each row is a record, and each column is a field, like text, numbers, dates, a dropdown, or a checkbox. Because it’s Macro, a column can also hold an @mention of people, tasks, documents, emails, or companies. Add another table and link the two together. Responses from Macro Forms land here as rows.',
     sceneTitle: 'Launch projects',
     rows: [],
     message: 'I added the launch tasks to the table.',
     sections: [
-      {
-        title: 'Connect records to Macro Mail.',
-        description:
-          'Add people, dates, formulas, and links to other tables. A record can mention the customer email, task, or document it refers to.',
-      },
       {
         title: 'Switch between table, board, and timeline.',
         description:
           'Keep records in the view that makes sense for the work. Saved views are shared, so your team opens the same view of the database.',
       },
       {
-        title: 'Ask agents to edit your records.',
+        title: 'Ask Macro Agents to edit your records.',
         description:
           'Attach the database to an agent conversation to ask questions or edit records, columns, and tables. Use a routine for updates you want to happen again.',
+      },
+      {
+        title: 'Migrate from Notion with 1 click.',
+        description:
+          'If your databases are in Notion today, connect Notion, choose the pages and databases you want, and import them straight into Macro. Your originals stay in Notion.',
       },
     ],
     faq: [
@@ -119,9 +129,9 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
     tone: 'chat',
     description:
       'Draw diagrams and plan with your team. Add shapes, notes, and images alongside live mentions of docs and tasks.',
-    heading: 'Put the plan on a canvas.',
+    heading: '@mention Macro Tasks, Macro Docs, and Macro Mail.',
     detail:
-      'Draw shapes, connect them with arrows, and add notes or images. Group and align the pieces as the plan takes shape.',
+      'Mention a task, a document from Macro Docs, an email, or a call directly on the canvas. Task mentions show current status and priority, and open the original when you need the details.',
     sceneTitle: 'Website launch',
     rows: [
       'Brief → Design → Build',
@@ -131,9 +141,9 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
     message: 'I linked the brief and the launch tasks on the canvas.',
     sections: [
       {
-        title: 'Bring Macro Docs onto your canvas.',
+        title: 'Put the plan on a canvas.',
         description:
-          'Mention a task, doc, email, or call directly on the canvas. Task mentions show current status and priority, and open the original when you need the details.',
+          'Draw shapes, connect them with arrows, and add notes or images. Group and align the pieces as the plan takes shape.',
       },
       {
         title: 'Share the part you’re looking at.',
@@ -172,7 +182,7 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
       {
         title: 'Insert snippets wherever you write.',
         description:
-          'Type ; in Macro Docs or Macro Chat to insert a saved snippet. Snippets also work in tasks, canvas text boxes, and agent instructions. Search by name and insert the snippet with its formatting intact.',
+          'Type ; in Macro Docs or Macro Chat to insert a saved snippet. Snippets also work in Macro Tasks, Macro Canvas text boxes, and agent instructions. Search by name and insert the snippet with its formatting intact.',
       },
       {
         title: 'Keep your team’s templates together.',
@@ -194,7 +204,7 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
   calendar: {
     tutorial: 'calendar',
     product: 'Calendar',
-    title: 'Say hello to more time.',
+    title: 'A really fast calendar, with agents that do the scheduling.',
     tone: 'calls',
     description:
       'All your Google and Microsoft calendars in one view. Find time with your team and ask agents to handle the invites.',
@@ -208,12 +218,17 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
       {
         title: 'Find a time with your team.',
         description:
-          'Ask an agent in a channel to find a time when everyone is free. Turn on team availability sharing in Calendar settings and choose which calendars count as busy.',
+          'Ask an agent in Macro Chat to find a time for the team to meet. It checks everyone’s availability and finds a time that works. Teammates who share busy blocks show when they’re busy, not what.',
       },
       {
-        title: 'Let agents send and edit invites.',
+        title: 'Let Macro Agents send and edit invites.',
         description:
-          'Ask an agent to invite your team, move a meeting, or update the guest list. Review the details before it sends the invitation or changes your calendar.',
+          'Ask an agent to invite your team, move a meeting, or update the guest list, and review the details before it changes your calendar. The invite shows up right in the channel as a calendar pill, and you can @mention events anywhere in Macro.',
+      },
+      {
+        title: 'Let guests book with Macro Booking Links.',
+        description:
+          'Send a booking link and guests pick from your open times in their own time zone, without a Macro account. Busy times on your connected calendars are left out, and the meeting lands on your calendar with an invitation for everyone.',
       },
     ],
     faq: [
@@ -290,9 +305,9 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
     tone: 'email',
     description:
       'Files from email, chat, and uploads, automatically tagged and searchable for your team and agents.',
-    heading: 'Share files in Macro Chat.',
+    heading: 'Files from Macro Chat and Macro Mail land here.',
     detail:
-      'Mention a file in a channel so your team can open it while you discuss it. Files uploaded to channels also appear in Drive.',
+      'Your files are usually split across Slack, Google Drive, and your computer. In Macro, everything shared in channels, DMs, and email attachments is siphoned into one system and organized for you automatically.',
     sceneTitle: 'Launch / Files',
     rows: [
       'Website launch plan.md',
@@ -303,14 +318,24 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
     message: 'The brief, budget, and recording are in the Launch folder.',
     sections: [
       {
-        title: 'Find the file you were working on.',
+        title: '@mention a file to share it.',
         description:
-          'Use My Files, Recent, or Shared with me, then narrow the list by type, tag, or creator. Search Drive looks in the current tab or folder; unified search looks across your workspace.',
+          '@mention any file in a channel in Macro Chat and it’s shared with everyone in that channel. Join a channel, gain access. You can also mention any file to an agent, in a doc, or on a canvas.',
       },
       {
-        title: 'Create and upload files in folders.',
+        title: 'Open pretty much any file type.',
         description:
-          'Drag files from your computer onto a folder to upload them, or create a doc, sheet, or canvas there. Files shared in channels appear in Drive too; email attachments are available through the file filter.',
+          'Photoshop, Illustrator, Figma, PowerPoint, Word, PDFs: open them right in Macro, without leaving your workspace.',
+      },
+      {
+        title: 'Macro Agents can read everything in Drive.',
+        description:
+          'Just ask a question and get an answer from your files. @mention files yourself, or let the agent search your Drive for what it needs. It’s available to your own agents over MCP too, like Claude and ChatGPT, with full-text search.',
+      },
+      {
+        title: 'Folders and Macro Databases, side by side.',
+        description:
+          'Folders are good for compatibility and sharing, and databases are good when you want to track and sort things by their properties. Drag files onto a folder to upload them, and narrow any list by type, tag, or creator.',
       },
     ],
     faq: [
@@ -331,7 +356,7 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
     tone: 'agents',
     description:
       'Schedule agent prompts to run, or trigger them when your workspace changes.',
-    heading: 'Run a daily project update.',
+    heading: 'A saved prompt, run on a schedule.',
     detail:
       'Ask for a daily project update, a draft when an email arrives, or a sheet update when a task changes. Open any run’s conversation to see what the agent did.',
     sceneTitle: 'Morning project update',
@@ -344,9 +369,9 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
     message: 'Send me the open launch blockers each morning.',
     sections: [
       {
-        title: 'Run agents when your work changes.',
+        title: 'Run Macro Agents when your work changes.',
         description:
-          'Start a routine when email arrives in Macro Mail, a task changes, or a call ends. A call-ended routine gets the participants and transcript, so it can work from what was discussed.',
+          'Start a routine when email arrives in Macro Mail, a task changes in Macro Tasks, or a call ends in Macro Calls. A call-ended routine gets the participants and transcript, so it can work from what was discussed.',
       },
       {
         title: 'Review what each agent run did.',
@@ -381,9 +406,9 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
     tone: 'agents',
     description:
       'Save instructions your agents can reuse, from code reviews to release notes.',
-    heading: 'Edit a skill like a document.',
+    heading: 'Write the instructions once.',
     detail:
-      'Skills are documents in Macro Drive. Share them like any other document so your team can maintain the same instructions.',
+      'Save the release notes format, review checklist, or other instructions you keep giving agents. Edit the skill when the process changes; agents use the current version.',
     sceneTitle: 'Release notes',
     rows: [
       'Start with what changed for the user.',
@@ -394,14 +419,14 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
     message: 'Use /release-notes to draft this week’s update.',
     sections: [
       {
-        title: 'Write the instructions once.',
-        description:
-          'Save the release notes format, review checklist, or other instructions you keep giving agents. Edit the skill in Drive when the process changes; agents use the current version.',
-      },
-      {
-        title: 'Tell the agent when to use it.',
+        title: 'Tell Macro Agents when to use it.',
         description:
           'Give the skill a clear name and describe when it should and shouldn’t be used. Agents can find a matching skill themselves, or you can attach one from the / menu.',
+      },
+      {
+        title: 'Edit a skill like a document.',
+        description:
+          'Skills are documents in Macro Drive. Share them like any other document so your team can maintain the same instructions.',
       },
     ],
     faq: [

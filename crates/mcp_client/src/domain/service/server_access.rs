@@ -15,9 +15,8 @@ use oauth2::TokenResponse as _;
 use rmcp::transport::auth::AuthError;
 
 use crate::domain::models::{McpServerRecord, StoredCredentials};
-use crate::domain::ports::McpServerStore;
+use crate::domain::ports::{McpServerHttp, McpServerStore};
 use crate::domain::service::PersistingCredentialStore;
-use crate::outbound::guarded_http::McpHttp;
 
 #[cfg(test)]
 mod test;
@@ -86,7 +85,7 @@ pub fn unexpired_access_token(
 #[tracing::instrument(skip_all, err, fields(server = %record.server_name))]
 pub async fn server_access<S: McpServerStore>(
     record: &McpServerRecord,
-    http: &McpHttp,
+    http: &impl McpServerHttp,
     store: Arc<S>,
 ) -> Result<ServerAccess, AuthError> {
     let Some(credentials) = &record.credentials else {

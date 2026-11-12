@@ -15406,7 +15406,7 @@ export interface SearchSkillsResponse {
   results: SkillSearchResult[];
 }
 /**
- * Find tools by keyword: Macro tools whose parameters are not loaded yet, and tools from connected integrations (e.g. Slack, Gmail, Linear, GitHub). The top matches are loaded automatically: call them by exact name on your next step. Matches past the auto-load cap come back under `additional_matches` and need `LoadTools` first. Searching is cheap, so cast a wide net.
+ * Find tools by keyword: Macro tools whose parameters are not loaded yet, and tools from connected integrations (e.g. Slack, Gmail, Linear, GitHub). The top matches are loaded automatically: call them by exact name on your next step. Matches past the auto-load cap come back under `additional_matches` and need `LoadTools` first. Tools sent with every request (such as `ExecuteCode`, when you have it) are never loaded by search; matching ones are named under `already_available`, so call them directly. Searching is cheap, so cast a wide net.
  */
 export interface SearchTools {
   /**
@@ -15430,6 +15430,12 @@ export interface SearchToolsResponse {
    * to `LoadTools` if one of these is the tool you need.
    */
   additional_matches: ToolMatch[];
+  /**
+   * Tools matching the query that are already in the tool list, such as
+   * `ExecuteCode`: they are never in the searchable catalog, so call them
+   * directly. Names only; their descriptions are already in the tool list.
+   */
+  already_available?: string[];
 }
 /**
  * Learn what Macro is and how it works. Call this whenever the user asks an open-ended question about Macro itself — what it is, what it's for, what it can do, or how to do something in Macro — instead of answering from memory (your training data may be stale). Takes no arguments. Returns an overview of Macro and a map of links into the official docs at docs.macro.com; every docs page is readable as Markdown (append `.md` to its URL), so follow up with WebFetch on the relevant page for details and cite it.
@@ -15496,13 +15502,15 @@ export interface SendConfirmedEmail {
    */
   subject: string;
   /**
-   * The address of the inbox to send from, when the user has more than one
-   * connected and this email belongs to a particular one. Use the exact
-   * `emailAddress` of a connected inbox — `ListInboxes` lists them, and
-   * `GetThread` reports the `inbox` a thread belongs to. Omit it unless
-   * you know which inbox is right: a reply then goes out from the inbox
-   * that received the message it answers, and a new email from the user's
-   * primary inbox. The user can change it in the composer either way.
+   * The address to send from, when the user has more than one and this
+   * email belongs to a particular one: the exact `emailAddress` of a
+   * connected inbox (`ListInboxes` lists them, and `GetThread` reports the
+   * `inbox` a thread belongs to), or a verified Gmail send-as alias of one,
+   * which then sends from that inbox under the alias's display name. Omit
+   * it unless you know which address is right: a reply then goes out from
+   * the inbox that received the message it answers, and a new email from
+   * the user's primary inbox. The user can change it in the composer
+   * either way.
    */
   from?: string | null;
   /**
@@ -15577,13 +15585,15 @@ export interface SendEmail {
    */
   subject: string;
   /**
-   * The address of the inbox to send from, when the user has more than one
-   * connected and this email belongs to a particular one. Use the exact
-   * `emailAddress` of a connected inbox — `ListInboxes` lists them, and
-   * `GetThread` reports the `inbox` a thread belongs to. Omit it unless
-   * you know which inbox is right: a reply then goes out from the inbox
-   * that received the message it answers, and a new email from the user's
-   * primary inbox. The user can change it in the composer either way.
+   * The address to send from, when the user has more than one and this
+   * email belongs to a particular one: the exact `emailAddress` of a
+   * connected inbox (`ListInboxes` lists them, and `GetThread` reports the
+   * `inbox` a thread belongs to), or a verified Gmail send-as alias of one,
+   * which then sends from that inbox under the alias's display name. Omit
+   * it unless you know which address is right: a reply then goes out from
+   * the inbox that received the message it answers, and a new email from
+   * the user's primary inbox. The user can change it in the composer
+   * either way.
    */
   from?: string | null;
   /**
@@ -15879,18 +15889,6 @@ export interface ShareWithChannelResponse {
    * Human-readable result.
    */
   summary: string;
-}
-/**
- * Delegate a task to a subagent that can independently use tools to research and complete it. The subagent has access to search, documents, properties, calls, and channel tools. Use this for tasks that require multiple tool calls or independent research.
- */
-export interface Subagent {
-  /**
-   * A detailed description of the task for the subagent to complete. Be specific about what information to find or what action to take.
-   */
-  task: string;
-}
-export interface SubagentResponse {
-  result: string;
 }
 /**
  * Use a text editor in a sandboxed environment using Claude's built-in code execution tool. Its files live only in the sandbox: to create a document or file for the user, use CreateDocument, or macro.documents in ExecuteCode where CreateDocument is absent.
@@ -16616,7 +16614,7 @@ export interface CodeGuide {
  *
  * Prefer ExecuteCode for supported Macro work, including a single precise call. Entity indexes in context list each method with its signature. Before writing a program, read the symbols it needs with ReadCodeDocs for their parameters, options and return types, all together in one call, unless their reference is already in context; do not guess option names. Use DescribeCodeTools for the index of an entity not in context or for workflow guides, requesting entities together (e.g. documents, email, ai, core).
  *
- * For editable email/calendar drafts, persist them with execution.reviews.create({kind, title, drafts}), then return reviews: [await review.reference()]. This does not send emails or create calendar events. Creation immediately presents a completed PresentReview ACP tool call, even while main continues. "Presented to the user" means saved in the conversation, not approved or sent. The saved cards remain usable after this execution and chat continues. User decisions arrive as typed system events referring to the same review ID. Use GetReview to read final drafts and confirmed outcomes; notifications never authorize repeating an action. To show the user what the program made, changed or found, present a view with await execution.views.present(view). It is checked and drawn at once, while main continues; nothing is saved and nothing comes back. When to present a view, and its format, are in the PresentView schema at the end of this description. Direct human-interactive tools, subagents and unsupported SDK operations remain available. Never sleep, call setTimeout or poll inside ExecuteCode to wait for something. To check back later, create a routine with a once trigger due shortly, macro.routines.create({trigger: {type: "once", at}, ...}), whose prompt says what to check and where to report, then finish; it runs within about a second of at.
+ * For editable email/calendar drafts, persist them with execution.reviews.create({kind, title, drafts}), then return reviews: [await review.reference()]. This does not send emails or create calendar events. Creation immediately presents a completed PresentReview ACP tool call, even while main continues. "Presented to the user" means saved in the conversation, not approved or sent. The saved cards remain usable after this execution and chat continues. User decisions arrive as typed system events referring to the same review ID. Use GetReview to read final drafts and confirmed outcomes; notifications never authorize repeating an action. To show the user what the program made, changed or found, present a view with await execution.views.present(view). It is checked and drawn at once, while main continues; nothing is saved and nothing comes back. When to present a view, and its format, are in the PresentView schema at the end of this description. Direct human-interactive tools and unsupported SDK operations remain available. Never sleep, call setTimeout or poll inside ExecuteCode to wait for something. To check back later, create a routine with a once trigger due shortly, macro.routines.create({trigger: {type: "once", at}, ...}), whose prompt says what to check and where to report, then finish; it runs within about a second of at.
  *
  * Change the text of existing markdown documents and task bodies in place with the SDK document edit(instructions) method; pass {fast: true} for small edits, because a full edit can take tens of seconds of the execution deadline. Read and edit canvases with document.canvas(). Read, calculate and edit native spreadsheets with macro.documents.spreadsheet(document).
  *
@@ -16791,4 +16789,10 @@ export interface MessageWithAttachments {
   content: string;
   date: string;
   attachmentIds: string[];
+}
+export interface Subagent {
+  task: string;
+}
+export interface SubagentResponse {
+  result: string;
 }

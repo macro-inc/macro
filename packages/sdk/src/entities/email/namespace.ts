@@ -41,7 +41,7 @@ export interface InboxOptions {
  * ## Sending email
  *
  * - Nothing leaves without the user seeing it. A program cannot call `send` or `EmailThread.reply`; they are refused, and so is a draft's `send` or `schedule` without `userConfirmation`.
- * - In an agent session, present the email as a review: `execution.reviews.create({kind: 'email', title, drafts})`, each draft with the same fields as `sendConfirmed` (Markdown `body`, `to`/`cc`/`bcc`, `from` as the inbox's address, `replyingToId`, `attachments: [{documentId}]`), then return `reviews: [await review.reference()]`. The user sends it from the card. For a forward, `await message.forwardDraft({to, body})` is the draft.
+ * - In an agent session, present the email as a review: `execution.reviews.create({kind: 'email', title, drafts})`, each draft with the same fields as `sendConfirmed` (Markdown `body`, `to`/`cc`/`bcc`, `from` as the inbox's address or a verified send-as alias of it, `replyingToId`, `attachments: [{documentId}]`), then return `reviews: [await review.reference()]`. The user sends it from the card. For a forward, `await message.forwardDraft({to, body})` is the draft.
  * - For a prompt from a channel or document thread, where no card is seen: write the whole email into your reply, ask whether to send it, and stop. Only once the user replies approving that email, send it with their reply quoted in `userConfirmation`: `sendConfirmed` for a new email or a reply, `EmailMessage.forwardConfirmed` for a forward, `EmailDraft.send` or `EmailDraft.schedule` for a saved draft. Being asked to send an email is a request to draft one, never the approval.
  */
 export class EmailNamespace {

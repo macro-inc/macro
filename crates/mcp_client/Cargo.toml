@@ -41,4 +41,4 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 regex.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["test-util"] }

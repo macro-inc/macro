@@ -368,7 +368,9 @@ export function SplitHeader(props: {
     return (
       isListViewID(content.id) ||
       (content.type === 'component' &&
-        (content.id === 'booking-links' || content.id === 'external'))
+        (content.id === 'booking-links' ||
+          content.id === 'external' ||
+          content.id === 'passwords'))
     );
   };
 
