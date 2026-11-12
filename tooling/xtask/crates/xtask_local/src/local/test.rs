@@ -68,3 +68,34 @@ fn durable_bake_covers_every_repository_built_local_image() {
         ["proxy", "mailpit", "static_file_cdn"]
     );
 }
+
+#[test]
+fn a_running_global_collector_is_reused_not_recreated() {
+    assert_eq!(
+        collector_action(Some("macro-lgtm-1 macro lgtm"), "lgtm"),
+        CollectorAction::Reuse("macro-lgtm-1".to_string())
+    );
+}
+
+#[test]
+fn a_collector_from_another_project_or_backend_is_replaced() {
+    // An instance named `lgtm` has the same-looking container name.
+    assert_eq!(
+        collector_action(Some("macro-lgtm-lgtm-1 macro-lgtm lgtm"), "lgtm"),
+        CollectorAction::Replace("macro-lgtm-lgtm-1".to_string())
+    );
+    assert_eq!(
+        collector_action(Some("macro-jaeger-1 macro jaeger"), "lgtm"),
+        CollectorAction::Replace("macro-jaeger-1".to_string())
+    );
+    // Not a compose container at all.
+    assert_eq!(
+        collector_action(Some("otel  "), "lgtm"),
+        CollectorAction::Replace("otel".to_string())
+    );
+}
+
+#[test]
+fn a_free_port_starts_the_collector() {
+    assert_eq!(collector_action(None, "lgtm"), CollectorAction::Start);
+}
