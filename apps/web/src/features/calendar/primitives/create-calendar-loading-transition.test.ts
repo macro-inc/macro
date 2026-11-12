@@ -36,6 +36,37 @@ describe('calendar loading transition', () => {
     expect(phases).not.toContain('visible');
   });
 
+  it('counts a frame that follows a long task as one frame', () => {
+    const frames: FrameRequestCallback[] = [];
+    vi.stubGlobal('requestAnimationFrame', (frame: FrameRequestCallback) =>
+      frames.push(frame)
+    );
+    vi.stubGlobal('cancelAnimationFrame', () => {});
+    const runFrameAt = (time: number) => frames.shift()?.(time);
+    const phases: CalendarLoadingPhase[] = [];
+
+    createRoot((dispose) => {
+      const transition = createCalendarLoadingTransition((phase) =>
+        phases.push(phase)
+      );
+
+      transition.setLoading(true);
+      runFrameAt(0);
+      // A grid mounted for half a second between these two frames.
+      runFrameAt(500);
+      runFrameAt(516);
+
+      expect(phases).not.toContain('visible');
+
+      for (let time = 532; time <= 660; time += 16) runFrameAt(time);
+
+      expect(phases).toContain('visible');
+      dispose();
+    });
+
+    vi.unstubAllGlobals();
+  });
+
   it('holds a shown skeleton for its minimum unless given none', () => {
     const phaseAfterLoad = (minimumVisibleMs?: number) => {
       let phase: CalendarLoadingPhase | undefined;
