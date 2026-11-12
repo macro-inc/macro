@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { fireEvent, render, screen } from '@solidjs/testing-library';
-import { expect, it, vi } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import { CHANNEL_FILE_PICKER_ACCEPT } from '../accepted-file-types';
 import { InputProvider } from '../context';
 import { AttachFilesAction } from '../InputActions';
@@ -12,6 +12,10 @@ vi.mock('@core/util/platform', () => ({
       ? target.includes(platform.current)
       : target === platform.current,
 }));
+
+afterEach(() => {
+  platform.current = 'web';
+});
 
 it('routes a custom trigger through the existing picker and attachment command', () => {
   const attachFiles = vi.fn(async () => {});
