@@ -48,8 +48,8 @@ export type SavedQueryDisplay =
   | { mode: SavedQueryChartMode; chart: SavedQueryChart };
 
 /**
- * Options for {@link DatabaseNamespace.saveQuery}, {@link Database.saveQuery}
- * and {@link DatabaseTable.saveQuery}.
+ * Options for `macro.databases.saveQuery`, {@link Database.saveQuery} and
+ * {@link DatabaseTable.saveQuery}.
  */
 export type SaveQueryOptions = {
   /** One `SELECT`, exactly as it ran with `query`. */
