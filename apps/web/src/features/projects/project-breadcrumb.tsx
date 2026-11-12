@@ -1,4 +1,5 @@
 import { ViewBreadcrumbs } from '@app/components/view-shell';
+import { t } from '@app/lib/i18n';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { useProjectsContext } from './context/projects-context';
 import type { ProjectIdentity } from './core/project';
@@ -18,7 +19,9 @@ export function ProjectBreadcrumbItem(
   }
 ) {
   const name = () =>
-    props.project?.name ?? props.entry.data.fallbackName ?? 'Project';
+    props.project?.name ??
+    props.entry.data.fallbackName ??
+    t('tabs.projectFallbackName');
   return (
     <ViewBreadcrumbs.Item
       value={props.entry.value}

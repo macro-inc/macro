@@ -188,7 +188,9 @@ function ProjectDetailHost(props: ProjectDetailProps) {
   const context = useProjectsContext();
   const source = context.createProjectSource(() => props.route.id);
   usePending('project.detail', source.loading);
-  useSplitDisplayName(() => source.project()?.name ?? 'Project');
+  useSplitDisplayName(
+    () => source.project()?.name ?? t('tabs.projectFallbackName')
+  );
   const commands = context.createCommands();
   const openShare = useProjectShareModal(source.project, commands);
   const panel = useSplitPanelOrThrow();
