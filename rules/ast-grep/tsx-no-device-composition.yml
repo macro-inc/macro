@@ -220,8 +220,6 @@ ignores:
   - apps/web/src/features/tasks-view/components/task-list/TaskListEntity.tsx
   - apps/web/src/features/tutorial/InteractiveOnboardingModal.tsx
   - apps/web/src/features/universal-input/views/universal-composer.tsx
-  - apps/web/src/features/video-tutorials/components/TutorialShelf.tsx
-  - apps/web/src/features/video-tutorials/components/TutorialVideoDialog.tsx
   - apps/web/src/features/whatsapp-linked/components/chat-list.tsx
   - apps/web/src/features/whatsapp-linked/views/whatsapp-page.tsx
 utils:
