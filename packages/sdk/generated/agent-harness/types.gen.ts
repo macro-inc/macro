@@ -3269,57 +3269,6 @@ export type WorkRegistrationResponse = {
     registeredAt: string;
 };
 
-export type GetAgentVoicesData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/voices';
-};
-
-export type GetAgentVoicesErrors = {
-    401: ErrorResponse;
-    403: ErrorResponse;
-    502: ErrorResponse;
-};
-
-export type GetAgentVoicesError = GetAgentVoicesErrors[keyof GetAgentVoicesErrors];
-
-export type GetAgentVoicesResponses = {
-    200: Array<Voice>;
-};
-
-export type GetAgentVoicesResponse = GetAgentVoicesResponses[keyof GetAgentVoicesResponses];
-
-export type GetAgentVoiceSampleData = {
-    body?: never;
-    path: {
-        /**
-         * An Aura-2 model, such as aura-2-thalia-en
-         */
-        model: string;
-    };
-    query?: never;
-    url: '/voices/{model}/sample';
-};
-
-export type GetAgentVoiceSampleErrors = {
-    400: ErrorResponse;
-    401: ErrorResponse;
-    403: ErrorResponse;
-    502: ErrorResponse;
-};
-
-export type GetAgentVoiceSampleError = GetAgentVoiceSampleErrors[keyof GetAgentVoiceSampleErrors];
-
-export type GetAgentVoiceSampleResponses = {
-    /**
-     * WAV audio
-     */
-    200: Array<number>;
-};
-
-export type GetAgentVoiceSampleResponse = GetAgentVoiceSampleResponses[keyof GetAgentVoiceSampleResponses];
-
 export type GetAgentAutoArchivePreferencesData = {
     body?: never;
     path?: never;
@@ -5242,3 +5191,54 @@ export type ExtractResponses = {
 };
 
 export type ExtractResponse = ExtractResponses[keyof ExtractResponses];
+
+export type GetAgentVoicesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/voices';
+};
+
+export type GetAgentVoicesErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    502: ErrorResponse;
+};
+
+export type GetAgentVoicesError = GetAgentVoicesErrors[keyof GetAgentVoicesErrors];
+
+export type GetAgentVoicesResponses = {
+    200: Array<Voice>;
+};
+
+export type GetAgentVoicesResponse = GetAgentVoicesResponses[keyof GetAgentVoicesResponses];
+
+export type GetAgentVoiceSampleData = {
+    body?: never;
+    path: {
+        /**
+         * An Aura-2 model, such as aura-2-thalia-en
+         */
+        model: string;
+    };
+    query?: never;
+    url: '/voices/{model}/sample';
+};
+
+export type GetAgentVoiceSampleErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    502: ErrorResponse;
+};
+
+export type GetAgentVoiceSampleError = GetAgentVoiceSampleErrors[keyof GetAgentVoiceSampleErrors];
+
+export type GetAgentVoiceSampleResponses = {
+    /**
+     * WAV audio
+     */
+    200: Array<number>;
+};
+
+export type GetAgentVoiceSampleResponse = GetAgentVoiceSampleResponses[keyof GetAgentVoiceSampleResponses];

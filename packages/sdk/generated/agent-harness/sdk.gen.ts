@@ -58,21 +58,6 @@ export class Sdk extends HeyApiClient {
     }
 
     /**
-     * The voices an agent teammate can speak with on calls. Team admins only.
-     */
-    public getAgentVoices<ThrowOnError extends boolean = false>(options?: Options<GetAgentVoicesData, ThrowOnError>): RequestResult<GetAgentVoicesResponses, GetAgentVoicesErrors, ThrowOnError> {
-        return (options?.client ?? this.client).get<GetAgentVoicesResponses, GetAgentVoicesErrors, ThrowOnError>({ url: '/voices', ...options });
-    }
-
-    /**
-     * A catalog voice saying a fixed line, as WAV. Team admins only; the first
-     * play of each voice is billed to the admin's team.
-     */
-    public getAgentVoiceSample<ThrowOnError extends boolean = false>(options: Options<GetAgentVoiceSampleData, ThrowOnError>): RequestResult<GetAgentVoiceSampleResponses, GetAgentVoiceSampleErrors, ThrowOnError> {
-        return (options.client ?? this.client).get<GetAgentVoiceSampleResponses, GetAgentVoiceSampleErrors, ThrowOnError>({ url: '/voices/{model}/sample', ...options });
-    }
-
-    /**
      * Read which triggers archive the caller's sessions by default.
      */
     public getAgentAutoArchivePreferences<ThrowOnError extends boolean = false>(options?: Options<GetAgentAutoArchivePreferencesData, ThrowOnError>): RequestResult<GetAgentAutoArchivePreferencesResponses, GetAgentAutoArchivePreferencesErrors, ThrowOnError> {
@@ -875,5 +860,20 @@ export class Sdk extends HeyApiClient {
                 ...options.headers
             }
         });
+    }
+
+    /**
+     * The voices an agent teammate can speak with on calls. Team admins only.
+     */
+    public getAgentVoices<ThrowOnError extends boolean = false>(options?: Options<GetAgentVoicesData, ThrowOnError>): RequestResult<GetAgentVoicesResponses, GetAgentVoicesErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<GetAgentVoicesResponses, GetAgentVoicesErrors, ThrowOnError>({ url: '/voices', ...options });
+    }
+
+    /**
+     * A catalog voice saying a fixed line, as WAV. Team admins only; the first
+     * play of each voice is billed to the admin's team.
+     */
+    public getAgentVoiceSample<ThrowOnError extends boolean = false>(options: Options<GetAgentVoiceSampleData, ThrowOnError>): RequestResult<GetAgentVoiceSampleResponses, GetAgentVoiceSampleErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetAgentVoiceSampleResponses, GetAgentVoiceSampleErrors, ThrowOnError>({ url: '/voices/{model}/sample', ...options });
     }
 }
