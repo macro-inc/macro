@@ -26,10 +26,12 @@ import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { enableEntityAppearance } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
 import SquaresFourIcon from '@icon/system/regular/squares-four.svg';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { Property } from '@property/types';
-import { Tabs } from '@ui';
+import { Dropdown, Tabs } from '@ui';
 import { createSignal, Match, Show, Suspense, Switch } from 'solid-js';
 import { useChangeEntityIcon } from '../entity-appearance/entity-appearance';
 import type { TaskCreateOptions } from '../tasks-view/types';
@@ -120,7 +122,9 @@ function ProjectTitleMenu(props: {
   commands: ReturnType<ProjectsContext['createCommands']>;
   section: ProjectSection;
   onShare(): void;
+  onSectionChange(section: ProjectSection): void;
   onDelete(): void;
+  mobile?: boolean;
 }) {
   const definitions = useProjectsContext().createPropertyDefinitionsSource();
   const layout = useSplitLayout();
@@ -166,50 +170,108 @@ function ProjectTitleMenu(props: {
   };
   return (
     <>
-      <ProjectMenuDropdown
-        targets={() => [
-          { project: props.project, properties: props.source.properties() },
-        ]}
-        status={definition(SYSTEM_PROPERTY_IDS.STATUS)}
-        priority={definition(SYSTEM_PROPERTY_IDS.PRIORITY)}
-        canOpenInNewSplit={globalSplitManager()?.canAppendSplit() ?? false}
-        onOpenInNewSplit={(row) =>
-          openProject(layout, row.project.id, {
-            section: props.section,
-            newSplit: true,
-          })
+      <Show
+        when={props.mobile}
+        fallback={
+          <ProjectMenuDropdown
+            targets={() => [
+              { project: props.project, properties: props.source.properties() },
+            ]}
+            status={definition(SYSTEM_PROPERTY_IDS.STATUS)}
+            priority={definition(SYSTEM_PROPERTY_IDS.PRIORITY)}
+            canOpenInNewSplit={globalSplitManager()?.canAppendSplit() ?? false}
+            onOpenInNewSplit={(row) =>
+              openProject(layout, row.project.id, {
+                section: props.section,
+                newSplit: true,
+              })
+            }
+            onRename={() => setRenaming(true)}
+            onChangeIcon={
+              appearanceFlag().enabled
+                ? (row) =>
+                    changeIcon({
+                      type: 'initiative',
+                      id: row.project.id,
+                      name: row.project.name,
+                      ownerId: props.project.ownerId,
+                      appearance: row.project.appearance,
+                    })
+                : undefined
+            }
+            onSetOption={(_, property, optionId) =>
+              fireAndForget(setOption(property, optionId), 'projects')
+            }
+            onCopyLink={(row) =>
+              fireAndForget(
+                copyLink.executeByBlock(row.project.id, 'initiative'),
+                'projects'
+              )
+            }
+            onCopyId={(row) =>
+              fireAndForget(copyId.executeById(row.project.id), 'projects')
+            }
+            onShare={props.onShare}
+            onDelete={() => {
+              setError(undefined);
+              setDeleting(true);
+            }}
+          />
         }
-        onRename={() => setRenaming(true)}
-        onChangeIcon={
-          appearanceFlag().enabled
-            ? (row) =>
-                changeIcon({
-                  type: 'initiative',
-                  id: row.project.id,
-                  name: row.project.name,
-                  ownerId: props.project.ownerId,
-                  appearance: row.project.appearance,
-                })
-            : undefined
-        }
-        onSetOption={(_, property, optionId) =>
-          fireAndForget(setOption(property, optionId), 'projects')
-        }
-        onCopyLink={(row) =>
-          fireAndForget(
-            copyLink.executeByBlock(row.project.id, 'initiative'),
-            'projects'
-          )
-        }
-        onCopyId={(row) =>
-          fireAndForget(copyId.executeById(row.project.id), 'projects')
-        }
-        onShare={props.onShare}
-        onDelete={() => {
-          setError(undefined);
-          setDeleting(true);
-        }}
-      />
+      >
+        <Dropdown placement="bottom-start">
+          <Dropdown.Trigger
+            variant="secondary"
+            class="max-w-[min(65vw,18rem)] rounded-full gap-2"
+            aria-label={props.project.name}
+          >
+            <EntityIcon
+              targetType="initiative"
+              appearance={props.project.appearance}
+              size="xs"
+            />
+            <span class="truncate">{props.project.name}</span>
+            <CaretDownIcon class="size-4 shrink-0" />
+          </Dropdown.Trigger>
+          <Dropdown.Content class="min-w-60">
+            <Dropdown.Item onSelect={() => props.onSectionChange('overview')}>
+              <SquaresFourIcon class="size-5" />
+              {t('tabs.project-overview')}
+              <Show when={props.section === 'overview'}>
+                <CheckIcon class="ml-auto size-4" />
+              </Show>
+            </Dropdown.Item>
+            <Dropdown.Item onSelect={() => props.onSectionChange('tasks')}>
+              <span class="size-5">
+                <EntityIcon targetType="task" size="xs" />
+              </span>
+              {t('tabs.project-tasks')}
+              <Show when={props.section === 'tasks'}>
+                <CheckIcon class="ml-auto size-4" />
+              </Show>
+            </Dropdown.Item>
+            <Dropdown.Separator />
+            <Dropdown.Item onSelect={props.onShare}>
+              {t('entityActions.share')}
+            </Dropdown.Item>
+            <Dropdown.Item
+              onSelect={() =>
+                fireAndForget(
+                  copyLink.executeByBlock(props.project.id, 'initiative'),
+                  'projects'
+                )
+              }
+            >
+              {t('entityActions.copyLink')}
+            </Dropdown.Item>
+            <Show when={canEditProject(props.project)}>
+              <Dropdown.Item onSelect={() => setRenaming(true)}>
+                {t('entityActions.rename')}
+              </Dropdown.Item>
+            </Show>
+          </Dropdown.Content>
+        </Dropdown>
+      </Show>
       <Show when={renaming()}>
         <RenameProjectDialog
           name={props.project.name}
@@ -269,6 +331,25 @@ function ProjectDetailHost(props: ProjectDetailProps) {
         {(breadcrumb) => <ProjectBreadcrumbContent {...breadcrumb()} />}
       </Show>
       <EntityDetailTopBar
+        mobileTitle={
+          <Show when={source.project()}>
+            {(project) => (
+              <ProjectTitleMenu
+                mobile
+                project={project()}
+                source={source}
+                commands={commands}
+                section={props.route.section}
+                onSectionChange={section}
+                onShare={openShare}
+                onDelete={
+                  props.onDelete ??
+                  (() => navigate({ route: tasksSplitRoute, params: {} }))
+                }
+              />
+            )}
+          </Show>
+        }
         titleMenu={
           <Show when={source.project()}>
             {(project) => (
@@ -277,6 +358,7 @@ function ProjectDetailHost(props: ProjectDetailProps) {
                 source={source}
                 commands={commands}
                 section={props.route.section}
+                onSectionChange={section}
                 onShare={openShare}
                 onDelete={
                   props.onDelete ??

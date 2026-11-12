@@ -1,4 +1,5 @@
 import { SidePanel } from '@components/app/side-panel';
+import { isMobile } from '@core/mobile/isMobile';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { cn } from '@ui';
 import {
@@ -21,6 +22,7 @@ export function EntityDetailTopBar(
     /** Collapses while `compact`, so the title keeps its room. */
     navigation?: (compact: Accessor<boolean>) => JSX.Element;
     titleMenu?: JSX.Element;
+    mobileTitle?: JSX.Element;
   }>
 ) {
   const [topBar, setTopBar] = createSignal<HTMLDivElement>();
@@ -36,14 +38,23 @@ export function EntityDetailTopBar(
         props.navigation && 'gap-3'
       )}
     >
-      <ViewBreadcrumbs.Outlet
-        aria-label="Task location"
-        fallback={<EntityDetailBreadcrumbSkeleton />}
+      <Show
+        when={isMobile() && props.mobileTitle}
+        fallback={
+          <ViewBreadcrumbs.Outlet
+            aria-label="Task location"
+            fallback={<EntityDetailBreadcrumbSkeleton />}
+          >
+            {props.titleMenu}
+          </ViewBreadcrumbs.Outlet>
+        }
       >
-        {props.titleMenu}
-      </ViewBreadcrumbs.Outlet>
-      <Show when={props.navigation}>
-        {(navigation) => <div class="shrink-0">{navigation()(compact)}</div>}
+        {props.mobileTitle}
+      </Show>
+      <Show when={!isMobile()}>
+        <Show when={props.navigation}>
+          {(navigation) => <div class="shrink-0">{navigation()(compact)}</div>}
+        </Show>
       </Show>
       <div class="ml-auto flex shrink-0 items-center gap-2 touch:gap-1">
         <SidePanel.HeaderActionsOutlet />
