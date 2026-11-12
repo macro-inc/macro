@@ -9,13 +9,14 @@ use tracing::Instrument;
 use super::*;
 use crate::domain::models::{ActionExecutionRecord, CreatedRoutine};
 
-impl<Rpo, Exe, Grants, Targets, Github, Code, Upgrades>
-    ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github, Code, Upgrades>
+impl<Rpo, Exe, Grants, Targets, Github, Code, Upgrades, Rollout>
+    ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github, Code, Upgrades, Rollout>
 where
     Rpo: ScheduledActionRepo + SubRoutines,
     Targets: TaskTargetValidator,
     Github: GithubInstallationClaims,
     Code: RoutineCode,
+    Rollout: EventRoutineRollout,
 {
     /// The routine run in progress that a create comes from, when its
     /// credential proves one: a code step's token is signed for its routine,
