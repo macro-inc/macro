@@ -33,6 +33,10 @@ export type ExternalChatCapabilities = {
   upload: (
     file: File
   ) => Promise<Result<{ uploadId: string; audio: boolean }, SendFailure>>;
+  /** The stored replies of the thread `root` starts, oldest first; idle while unset. */
+  thread: (root: Accessor<string | undefined>) => SourceRead<ChatMessage[]>;
+  /** Marks a thread read through this reply. */
+  markThreadRead: (messageId: string) => Promise<unknown>;
   /** A stored file's URL, resolved like Chat's static media. */
   fileUrl: (fileId: string) => string;
   markRead: (messageId: string) => Promise<unknown>;

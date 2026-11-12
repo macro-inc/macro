@@ -48,6 +48,7 @@ it('decodes shared viewing separately from the callers own sending account and h
       mutations: ['reaction', 'edit', 'delete'],
       mutationWindowSeconds: 900,
       attachmentTypes: ['image/png', 'application/pdf'],
+      threads: false,
     },
   } satisfies ExternalChatDetail;
   client.detail.mockResolvedValue(ok(detail));
@@ -73,6 +74,9 @@ it('decodes pagination, deleted flags, reaction ownership and attachment states 
         mentions: [],
         forwarded: false,
         viewOnce: false,
+        threadRoot: null,
+        threadBroadcast: false,
+        thread: null,
         rich: null,
         replyTo: null,
         sentAt: '2026-10-21T12:00:00Z',
@@ -105,7 +109,11 @@ it('decodes pagination, deleted flags, reaction ownership and attachment states 
   } satisfies ExternalChatMessages;
   client.messages.mockResolvedValue(ok(page));
   const result = await externalChatApi.messages('chat-id', 'before-id');
-  expect(client.messages).toHaveBeenCalledWith('chat-id', 'before-id');
+  expect(client.messages).toHaveBeenCalledWith(
+    'chat-id',
+    'before-id',
+    undefined
+  );
   expect(result.before).toBe(page.nextCursor);
   expect(result.messages[0]).toMatchObject({
     deleted: true,
@@ -142,6 +150,9 @@ it('decodes mentions, forwarding, media presentation and every rich type, keepin
     mentions: [],
     forwarded: false,
     viewOnce: false,
+    threadRoot: null,
+    threadBroadcast: false,
+    thread: null,
     rich: null,
   };
   const page = {

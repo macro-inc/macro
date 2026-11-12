@@ -22,7 +22,12 @@ import { externalChatsKeys } from './keys';
 export type ExternalChatApi = {
   list: () => Promise<ChatSummary[]>;
   detail: (chatId: string) => Promise<ChatDetail>;
-  messages: (chatId: string, before?: string) => Promise<MessagePage>;
+  /** The timeline, or with `thread` the replies in that thread. */
+  messages: (
+    chatId: string,
+    before?: string,
+    thread?: string
+  ) => Promise<MessagePage>;
   /** Records one deliberate send; DSS dedupes by the idempotency key. */
   send: (
     chatId: string,
@@ -75,6 +80,28 @@ function messagesOptions(api: ExternalChatApi, userId: string, chatId: string) {
     throwOnError: false,
   });
 }
+/**
+ * The newest replies of one thread, oldest first. Refreshed with the chat's
+ * timeline, whose key it sits under.
+ */
+function threadOptions(
+  api: ExternalChatApi,
+  userId: string,
+  chatId: string,
+  root: string | undefined
+) {
+  return queryOptions({
+    queryKey: externalChatsKeys.messages(userId, chatId)._ctx.thread(root ?? '')
+      .queryKey,
+    queryFn: async () => {
+      const page = await api.messages(chatId, undefined, root);
+      return [...page.messages].reverse();
+    },
+    enabled: !!userId && !!chatId && !!root,
+    staleTime: 0,
+    throwOnError: false,
+  });
+}
 /** Outcomes of this viewer's in-flight sends; checked again on every push. */
 const DELIVERY_CHECK_MS = 5000;
 function deliveryOptions(
@@ -111,6 +138,15 @@ export function useExternalChatQueries(
     messagesOptions(api, userId(), chatId())
   );
   return { chat, messages };
+}
+/** An expanded thread's replies; idle while `root` is unset. */
+export function useExternalChatThreadQuery(
+  api: ExternalChatApi,
+  userId: Accessor<string>,
+  chatId: Accessor<string>,
+  root: Accessor<string | undefined>
+) {
+  return useQuery(() => threadOptions(api, userId(), chatId(), root()));
 }
 /** One chat's detail alone, e.g. to name a mention of it. */
 export function useExternalChatDetailQuery(

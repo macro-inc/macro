@@ -67,6 +67,8 @@ type PendingPart = {
   key: string;
   draft: Draft;
   target: ConversationTarget | undefined;
+  /** The thread it replies in, whose page shows it instead of the timeline. */
+  thread?: string;
   sendId?: string;
   row: ChatMessage;
 };
@@ -77,8 +79,12 @@ const RETRY_DELAYS_MS = [1000, 2000, 4000];
 type ConversationHost = {
   /** Tells the person why a write did not go through. */
   notify: (message: string) => void;
-  /** Puts a draft that was not sent back in the composer. */
-  restore: (draft: Draft, target: ConversationTarget | undefined) => void;
+  /** Puts a draft that was not sent back in its composer (a thread's, or the chat's). */
+  restore: (
+    draft: Draft,
+    target: ConversationTarget | undefined,
+    thread: string | undefined
+  ) => void;
   retryDelays?: number[];
 };
 
@@ -135,20 +141,28 @@ export function createConversation(
   const storedIds = createMemo(
     () => new Set((source.timeline.data ?? []).map((message) => message.id))
   );
-  /** Accepted sends whose stored message has arrived replace their row. */
+  /**
+   * Accepted sends whose stored message has arrived replace their row. A
+   * thread reply's page refetches with the timeline, so it is gone once
+   * accepted.
+   */
   const arrived = (part: PendingPart) => {
     const progress = part.sendId && progressBySend().get(part.sendId);
     return (
       !!progress &&
       recordedOutcome(progress, label()) === 'accepted' &&
-      (!progress.messageId || storedIds().has(progress.messageId))
+      (!progress.messageId ||
+        !!part.thread ||
+        storedIds().has(progress.messageId))
     );
   };
+  const pendingRows = (thread: string | undefined) =>
+    pending()
+      .filter((part) => part.thread === thread && !arrived(part))
+      .map((part) => part.row);
   const rows = () => [
     ...(source.timeline.data ?? []),
-    ...pending()
-      .filter((part) => !arrived(part))
-      .map((part) => part.row),
+    ...pendingRows(undefined),
   ];
 
   // Files this page sent keep their local preview and size on the stored
@@ -194,8 +208,8 @@ export function createConversation(
           // A failed send may be retried as a new one; an unknown one keeps
           // its key so resending the restored draft cannot duplicate it.
           if (send.state === 'failed')
-            draftKeys.delete(fingerprint(part.draft, part.target));
-          if (!disposed) host.restore(part.draft, part.target);
+            draftKeys.delete(fingerprint(part.draft, part.target, part.thread));
+          if (!disposed) host.restore(part.draft, part.target, part.thread);
         }
       }
     )
@@ -220,6 +234,7 @@ export function createConversation(
     parts: { request: ChatSend; key: string }[],
     draft: Draft,
     sentTarget: ConversationTarget | undefined,
+    thread: string | undefined,
     draftFingerprint: string
   ) =>
     Telemetry.span('external_chat.send', async (span) => {
@@ -245,7 +260,8 @@ export function createConversation(
           result.error.kind === 'refused' ? result.error.reason : unknownSend()
         );
         // Once part of a draft went out, restoring all of it would resend that part.
-        if (recorded === 0 && !disposed) host.restore(draft, sentTarget);
+        if (recorded === 0 && !disposed)
+          host.restore(draft, sentTarget, thread);
         return;
       }
       draftKeys.delete(draftFingerprint);
@@ -257,14 +273,15 @@ export function createConversation(
     draft: Draft,
     text: string,
     mentions: string[],
-    sentTarget: ConversationTarget | undefined
+    sentTarget: ConversationTarget | undefined,
+    thread: string | undefined
   ): ChatSend[] => {
     if (sentTarget?.kind === 'edit')
       return [{ kind: 'edit', messageId: sentTarget.message.id, text }];
     const replyTo =
       sentTarget?.kind === 'reply' ? sentTarget.message.id : undefined;
     if (draft.attachments.length === 0)
-      return [{ kind: 'text', text, replyTo, mentions }];
+      return [{ kind: 'text', text, replyTo, mentions, thread }];
     // WhatsApp mentions ride on text only, so a mentioning text follows the
     // files instead of captioning them.
     const captioned =
@@ -277,19 +294,25 @@ export function createConversation(
         uploadId: file.id,
         caption: file === captioned && text ? text : undefined,
         replyTo: index === 0 ? replyTo : undefined,
+        thread,
       })
     );
     // WhatsApp refuses captions on audio, so the text follows on its own.
     return text && !captioned
-      ? [...media, { kind: 'text', text, mentions }]
+      ? [...media, { kind: 'text', text, mentions, thread }]
       : media;
   };
 
   /**
-   * Sends a draft, or says why it can't go (the composer keeps it). The
-   * returned delivery reports its outcome through `host`, never by rejecting.
+   * Sends a draft, in the thread `thread` starts when given, or says why it
+   * can't go (the composer keeps it). The returned delivery reports its
+   * outcome through `host`, never by rejecting. A thread's composer has no
+   * reply or edit target.
    */
-  const submit = (draft: Draft): Result<Promise<void>, string> => {
+  const submit = (
+    draft: Draft,
+    thread?: string
+  ): Result<Promise<void>, string> => {
     const group = source.chat.data;
     const senderId = userId();
     if (!group || !senderId) return err('This chat is still loading.');
@@ -301,7 +324,9 @@ export function createConversation(
     const text = chatProvider(group.provider).formatting.fromMarkdown(
       mentioned.markdown
     );
-    const sentTarget = target();
+    const sentTarget = thread ? undefined : target();
+    if (thread && !group.limits.threads)
+      return err(`${label()} has no threads.`);
     if (new TextEncoder().encode(text).length > group.limits.textBytes)
       return err(`This message is too long for ${label()}.`);
     if (sentTarget?.kind === 'edit') {
@@ -319,12 +344,18 @@ export function createConversation(
       )
         return err('This message can no longer be edited.');
     }
-    const requests = partsOf(draft, text, mentioned.mentions, sentTarget);
+    const requests = partsOf(
+      draft,
+      text,
+      mentioned.mentions,
+      sentTarget,
+      thread
+    );
     const names = new Map(
       group.members.map((member) => [member.id, member.name])
     );
     if (requests.length === 0) return err('Write a message first.');
-    const draftFingerprint = fingerprint(draft, sentTarget);
+    const draftFingerprint = fingerprint(draft, sentTarget, thread);
     const key = draftKeys.get(draftFingerprint) ?? crypto.randomUUID();
     draftKeys.set(draftFingerprint, key);
     const parts = requests.map((request, index) => ({
@@ -341,6 +372,7 @@ export function createConversation(
                 key: partKey,
                 draft,
                 target: sentTarget,
+                thread,
                 row: {
                   id: partKey,
                   kind: 'message',
@@ -361,6 +393,7 @@ export function createConversation(
                   edited: false,
                   deleted: false,
                   replyTo: request.replyTo,
+                  threadRoot: thread,
                   reactions: [],
                   attachments:
                     request.kind === 'media'
@@ -375,8 +408,8 @@ export function createConversation(
           : []
       ),
     ]);
-    setTarget(undefined);
-    return ok(deliver(parts, draft, sentTarget, draftFingerprint));
+    if (!thread) setTarget(undefined);
+    return ok(deliver(parts, draft, sentTarget, thread, draftFingerprint));
   };
 
   /** Reactions and deletes: no draft to restore, just the reason. */
@@ -410,6 +443,8 @@ export function createConversation(
 
   return {
     rows,
+    /** This page's unsent replies in a thread, after its stored ones. */
+    threadPending: (root: string) => pendingRows(root),
     sentFiles,
     target,
     initialRead,
@@ -451,11 +486,16 @@ export function createConversation(
   };
 }
 
-function fingerprint(draft: Draft, target: ConversationTarget | undefined) {
+function fingerprint(
+  draft: Draft,
+  target: ConversationTarget | undefined,
+  thread: string | undefined
+) {
   return JSON.stringify([
     draft.markdown,
     draft.attachments.map((file) => file.id),
     target?.kind,
     target?.message.id,
+    thread,
   ]);
 }

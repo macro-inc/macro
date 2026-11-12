@@ -307,6 +307,7 @@ async function mount(page: Page, state: LinkedServer, query = '') {
                 maxAttachments: 1,
                 mutations: ['reaction', 'edit', 'delete'],
                 attachmentTypes: ['image/png', 'application/pdf', 'audio/ogg'],
+                threads: false,
               },
             },
           });
