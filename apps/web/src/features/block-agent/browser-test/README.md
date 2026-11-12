@@ -1,7 +1,7 @@
 # Agent session browser checks
 
-Run the existing notification, mention, queued-message and transcript checks
-with:
+Run the existing notification, mention, transcript, queued-message and session
+composer checks with:
 
 ```sh
 PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/path/to/chrome \

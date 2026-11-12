@@ -21,6 +21,7 @@ import type {
   Row,
 } from '@core/database-sql/generated/types';
 import type { DatabaseSqlStepTrace } from '@core/database-sql/trace';
+import { abortedBy } from '@core/util/abort-signal';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { buildGraphqlEntitySoupInput } from '@queries/soup/graphql/entity-input';
 import {
@@ -48,12 +49,23 @@ import {
   createRequest,
   type DocumentInput,
   getOperationName,
+  type OperationResult,
   type RequestPolicy,
   stringifyDocument,
 } from '@urql/core';
 import { err, errAsync, ok, okAsync, Result, ResultAsync } from 'neverthrow';
 import { match, P } from 'ts-pattern';
 import { NIL as NIL_UUID } from 'uuid';
+import {
+  concat,
+  filter,
+  fromValue,
+  map,
+  merge,
+  pipe,
+  take,
+  toPromise,
+} from 'wonka';
 
 interface GraphqlRowSourceCapabilities {
   /** The app's GraphQL client; its exchanges decide cache or network. */
@@ -72,6 +84,8 @@ interface GraphqlRowSourceCapabilities {
   membership?: LocalMembership;
   /** Bounded keys only; this capability must never enumerate the directory. */
   people?: (ids: string[]) => ResultAsync<Row[], DatabaseSqlSourceFailure>;
+  /** Ends the source's network reads once the run that made it is replaced. */
+  signal?: AbortSignal;
 }
 
 /** Local reconciliation for first pages, shared across runs of a statement. */
@@ -106,6 +120,12 @@ function thrownFetchFailure(thrown: unknown): DatabaseSqlFetchFailure {
   );
 }
 
+/** How a query settled: answered, ended without an answer, or aborted. */
+type QuerySettled<Data, Variables extends AnyVariables> =
+  | { kind: 'answered'; result: OperationResult<Data, Variables> }
+  | { kind: 'ended' }
+  | { kind: 'aborted' };
+
 /**
  * One GraphQL read inside the step's trace; a GraphQL error or a missing
  * answer is a fetch failure.
@@ -117,24 +137,44 @@ function graphqlQuery<Data, Variables extends AnyVariables>(
   requestPolicy: RequestPolicy,
   name: string,
   step: DatabaseSqlStepTrace,
-  cache?: Pick<CacheHost, 'readQuery'>
+  cache?: Pick<CacheHost, 'readQuery'>,
+  signal?: AbortSignal
 ): ResultAsync<Data, DatabaseSqlFetchFailure> {
   step.request(stringifyDocument(document), variables);
   const network = () =>
     ResultAsync.fromPromise(
-      client
-        .query(document, variables, {
-          requestPolicy:
-            cache && requestPolicy === 'cache-first'
-              ? 'network-only'
-              : requestPolicy,
-          fetchOptions: { headers: step.headers() },
-        })
-        .toPromise(),
+      pipe(
+        merge<QuerySettled<Data, Variables>>([
+          concat<QuerySettled<Data, Variables>>([
+            pipe(
+              client.query(document, variables, {
+                requestPolicy:
+                  cache && requestPolicy === 'cache-first'
+                    ? 'network-only'
+                    : requestPolicy,
+                fetchOptions: { headers: step.headers() },
+              }),
+              // The answer, as urql's own toPromise takes it.
+              filter((result) => !result.stale && !result.hasNext),
+              map((result) => ({ kind: 'answered' as const, result }))
+            ),
+            fromValue({ kind: 'ended' as const }),
+          ]),
+          pipe(
+            abortedBy(signal),
+            map(() => ({ kind: 'aborted' as const }))
+          ),
+        ]),
+        take(1),
+        toPromise
+      ),
       thrownFetchFailure
-    ).andThen((result): Result<Data, DatabaseSqlFetchFailure> => {
-      if (!result)
+    ).andThen((settled): Result<Data, DatabaseSqlFetchFailure> => {
+      if (settled.kind === 'aborted')
+        return err(fetchFailure(`the ${name} query was cancelled`));
+      if (settled.kind === 'ended')
         return err(fetchFailure(`the ${name} query ended without data`));
+      const { result } = settled;
       if (result.error) return err(fetchFailure(result.error.message));
       if (!result.data)
         return err(fetchFailure(`the ${name} query returned no data`));
@@ -218,6 +258,7 @@ export function createGraphqlRowSource({
   cache,
   membership,
   people,
+  signal,
 }: GraphqlRowSourceCapabilities): RowSource {
   return {
     page: (query, _needs, cursor, limit, step) =>
@@ -225,7 +266,15 @@ export function createGraphqlRowSource({
         .returnType<ResultAsync<Page, DatabaseSqlSourceFailure>>()
         .with({ type: 'soup' }, (soup) =>
           soupInput(soup, cursor, limit).asyncAndThen((input) =>
-            soupPage(client, requestPolicy, input, membership, step, cache)
+            soupPage(
+              client,
+              requestPolicy,
+              input,
+              membership,
+              step,
+              cache,
+              signal
+            )
           )
         )
         .with({ type: 'people' }, (query) =>
@@ -241,7 +290,15 @@ export function createGraphqlRowSource({
       match(query)
         .returnType<ResultAsync<Bin[], DatabaseSqlFetchFailure>>()
         .with({ type: 'groupSoup' }, (grouped) =>
-          groupBins(client, requestPolicy, catalog, grouped, step, cache)
+          groupBins(
+            client,
+            requestPolicy,
+            catalog,
+            grouped,
+            step,
+            cache,
+            signal
+          )
         )
         .with({ type: P.union('soup', 'people') }, () =>
           errAsync(fetchFailure('only a grouped query has bins'))
@@ -404,7 +461,8 @@ function soupPage(
   input: SoupInput,
   membership: LocalMembership | undefined,
   step: DatabaseSqlStepTrace,
-  cache?: Pick<CacheHost, 'readQuery'>
+  cache?: Pick<CacheHost, 'readQuery'>,
+  signal?: AbortSignal
 ): ResultAsync<Page, DatabaseSqlFetchFailure> {
   const evidence = input.initial ? JSON.stringify(input) : undefined;
   const local: ResultAsync<Page | undefined, DatabaseSqlFetchFailure> =
@@ -421,7 +479,8 @@ function soupPage(
           requestPolicy,
           'database rows',
           step,
-          cache
+          cache,
+          signal
         ).andThen((data) => {
           const { items, nextCursor } = data.user.soup;
           if (evidence && membership && isNetworkRead(requestPolicy)) {
@@ -575,7 +634,8 @@ function groupBins(
   catalog: Catalog,
   { table, propf, groupBy }: Extract<GqlQuery, { type: 'groupSoup' }>,
   step: DatabaseSqlStepTrace,
-  cache?: Pick<CacheHost, 'readQuery'>
+  cache?: Pick<CacheHost, 'readQuery'>,
+  signal?: AbortSignal
 ): ResultAsync<Bin[], DatabaseSqlFetchFailure> {
   const kind = catalog.tables
     .find((candidate) => candidate.id === table)
@@ -616,7 +676,8 @@ function groupBins(
         requestPolicy,
         'grouped Soup',
         step,
-        cache
+        cache,
+        signal
       )
     )
     .andThen((data) =>
