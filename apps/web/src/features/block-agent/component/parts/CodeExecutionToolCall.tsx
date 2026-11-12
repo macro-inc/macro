@@ -46,12 +46,14 @@ export function CodeExecutionToolCall(props: {
           title="Workspace activity"
           status={props.common.status}
           muted={props.common.muted}
+          // In the subtitle, which truncates on a narrow pane.
+          subtitle={isToolActive(props.common.status) ? summary() : undefined}
           trailing={
             props.common.trailing ??
             (calls().length > 0
               ? `${calls().length} tool calls`
-              : isToolActive(props.common.status)
-                ? (summary() ?? 'Working in your workspace…')
+              : isToolActive(props.common.status) && !summary()
+                ? 'Working in your workspace…'
                 : undefined)
           }
         />

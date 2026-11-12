@@ -99,6 +99,9 @@ describe('CodeExecutionToolCall', () => {
     ));
 
     expect(view.container.textContent).toContain('Running code…');
+    expect(view.container.textContent).not.toContain(
+      'Working in your workspace'
+    );
   });
 
   it('keeps the tool count on a program the turn has moved past', () => {
