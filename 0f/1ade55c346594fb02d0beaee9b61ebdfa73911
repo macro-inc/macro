@@ -1,0 +1,33 @@
+docs/development/running-locally.md
+  s_8bdfeaf42f53a1::t_79a1b3fdb6b53d 684,686-721,729-740
+infra/stacks/observability/README.md
+  s_291e5bb5901a50::t_ad4bc7c0bfaa00 92-93,97-99,106
+infra/stacks/observability/nixos/local-dashboard.nix
+  s_291e5bb5901a50::t_48297992945392 25
+infra/stacks/observability/nixos/local-report.json
+  s_291e5bb5901a50::t_c6e66cdd61c2ad 2
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "0f1ade55c346594fb02d0beaee9b61ebdfa73911",
+  "prompts": {},
+  "sessions": {
+    "s_291e5bb5901a50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "099d1068-e380-41fc-96f2-2667531971e2",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_8bdfeaf42f53a1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8775cf08-de9f-420f-b28f-f92dd60e8239",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
