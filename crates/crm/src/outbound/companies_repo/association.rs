@@ -63,11 +63,11 @@ impl CompaniesRepositoryImpl {
         // Every step is a probe by key, so the cost stays with the team's own
         // records whatever the planner knows about the tables. The teams are
         // collected into an array first, so both arms start from their team
-        // index. Each contact's addresses are read behind an `OFFSET 0` fence:
-        // unfenced, the planner can hash the whole address table, which holds
-        // every team's contacts. Contacts without a company are narrowed to
-        // the team behind a fence too, so the scan cannot start from every
-        // team's company-less contacts.
+        // index. Each contact's addresses and each company's domains are read
+        // behind an `OFFSET 0` fence: unfenced, the planner can hash the whole
+        // address or domain table, which holds every team's rows. Contacts
+        // without a company are narrowed to the team behind a fence too, so
+        // the scan cannot start from every team's company-less contacts.
         let rows = sqlx::query!(
             r#"
             WITH scope AS (
@@ -82,7 +82,9 @@ impl CompaniesRepositoryImpl {
             LEFT JOIN LATERAL (
                 SELECT ce.email FROM crm_contact_emails ce WHERE ce.contact_id = ct.id OFFSET 0
             ) address ON TRUE
-            LEFT JOIN crm_domains d ON d.company_id = co.id
+            LEFT JOIN LATERAL (
+                SELECT d.domain FROM crm_domains d WHERE d.company_id = co.id OFFSET 0
+            ) d ON TRUE
             WHERE NOT co.hidden
               AND co.team_id = ANY(ARRAY(SELECT team_id FROM scope))
             UNION ALL

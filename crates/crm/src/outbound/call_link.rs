@@ -90,13 +90,17 @@ impl<S: SystemPropertiesService> PgCallCrmLinker<S> {
                 SELECT ce.contact_id FROM crm_contact_emails ce WHERE ce.email = o.email OFFSET 0
             ) held
             CROSS JOIN LATERAL (
-                SELECT ct.id, ct.team_id
+                SELECT ct.id, ct.team_id, ct.company_id, ct.hidden
                 FROM crm_contacts ct
-                LEFT JOIN crm_companies co ON co.id = ct.company_id
-                WHERE ct.id = held.contact_id AND NOT ct.hidden AND co.hidden IS NOT TRUE
+                WHERE ct.id = held.contact_id
                 OFFSET 0
             ) ct
+            LEFT JOIN LATERAL (
+                SELECT co.hidden FROM crm_companies co WHERE co.id = ct.company_id OFFSET 0
+            ) company ON TRUE
             WHERE ct.team_id = o.team_id
+              AND NOT ct.hidden
+              AND company.hidden IS NOT TRUE
             "#,
             &user_ids,
             &emails,
