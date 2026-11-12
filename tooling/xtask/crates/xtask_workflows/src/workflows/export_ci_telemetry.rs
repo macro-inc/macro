@@ -10,12 +10,12 @@ use crate::workflows::steps;
 #[cfg(test)]
 mod test;
 
-// Explicit names avoid recursively observing this exporter. Add new workflows here,
-// and every workflow a PR runs: a push counts as finished when these have finished.
+// Explicit names avoid recursively observing this exporter. Add new workflows here.
+// A push counts as finished when the last of its workflows has, and only a listed
+// workflow's completion triggers the exporter, so every workflow a PR runs is either
+// listed or in `UNOBSERVED_PR_WORKFLOWS`.
 const OBSERVED_WORKFLOWS: &[&str] = &[
     "Android Play Release",
-    "Android Release Drift",
-    "Auto Label PRs",
     "Build Agent Daemon on Tag",
     "Build CEF with codecs",
     "Build AppImage",
@@ -23,12 +23,7 @@ const OBSERVED_WORKFLOWS: &[&str] = &[
     "Build Rust CI Image",
     "Build Web App",
     "Build macOS DMG",
-    "CI Gate Reminder",
-    "CI Gate for Forks",
-    "CI Gate Label Check",
-    "CLA",
     "Cancel Stuck Cloud Storage Deploys",
-    "Cleanup Preview",
     "Deploy AI Editing Worker",
     "Deploy All Services",
     "Deploy CLA Worker",
@@ -45,16 +40,12 @@ const OBSERVED_WORKFLOWS: &[&str] = &[
     "Ensure Daytona Snapshot",
     "Export Datadog observability definitions",
     "Migrate Macro Database",
-    "Native Check Label",
     "PR CI",
-    "PR Privacy Check",
     "Publish Android to Google Play",
     "Publish SDK",
-    "Pull Request",
     "Pulumi Preview on PR",
     "Push local stack binaries",
     "Release SDK",
-    "Release Label Check",
     "Reusable Deploy Service",
     "Reusable Preview Service",
     "SDK Check",
@@ -71,11 +62,33 @@ const OBSERVED_WORKFLOWS: &[&str] = &[
     "iOS App Store Publish",
     "iOS App Store Release",
     "iOS Preview",
-    "iOS Release Drift",
     "infra code check",
 ];
-const HAS_JOBS: &str = "steps.preflight.outputs.export == 'true'";
+// PR bookkeeping: labels, statuses, comments and text checks that finish in seconds.
+// Each PR event starts several of them, and exporting every one used most of the
+// repository's shared hourly API budget, so PR CI couldn't start. None finished
+// last on a push that ran PR CI. A push where only these ran didn't run CI and gets
+// no push line. A test checks every PR workflow is in one of the two lists.
+#[cfg(test)]
+const UNOBSERVED_PR_WORKFLOWS: &[&str] = &[
+    "Android Release Drift",
+    "Auto Label PRs",
+    "CI Gate Label Check",
+    "CI Gate Reminder",
+    "CI Gate for Forks",
+    "CLA",
+    "Cleanup Preview",
+    "Native Check Label",
+    "PR Privacy Check",
+    "Pull Request",
+    "Release Label Check",
+    "iOS Release Drift",
+];
+const EXPORT_TRACE: &str = "steps.preflight.outputs.export == 'true'";
 const EVENTS_FILE: &str = "${{ runner.temp }}/ci-telemetry-events.json";
+const JOBS_FILE: &str = "${{ runner.temp }}/ci-telemetry-jobs.json";
+// A run whose jobs were all skipped has no events and no trace worth a call.
+const RAN: &str = "github.event.workflow_run.conclusion != 'skipped'";
 
 /// Build the CI telemetry observer without checking out code or downloading artifacts.
 pub fn export_ci_telemetry() -> Workflow {
@@ -105,14 +118,17 @@ fn export() -> Job {
         // GitHub's hosted image supplies AWS CLI, Python and Node without a checkout/setup step.
         .runs_on("ubuntu-latest")
         .timeout_minutes(10u32)
+        .cond(Expression::new(RAN))
+        // The only step that lists the run's jobs; it leaves them for the collector.
         .add_step(
-            Step::new("Check upstream exporter limits")
+            Step::new("Check API budget and upstream exporter limits")
                 .uses(
                     "actions",
                     "github-script",
                     "f28e40c7f34bde8b3046d885e986cb6290c5673b",
                 )
                 .id("preflight")
+                .add_env(("CI_TELEMETRY_JOBS", JOBS_FILE))
                 .add_with(("script", include_str!("scripts/ci_telemetry_preflight.js"))),
         )
         // Before any credential exists, so nothing the run produced shares a step with it.
@@ -126,6 +142,7 @@ fn export() -> Job {
                 .continue_on_error(true)
                 .timeout_minutes(2u32)
                 .add_env(("GITHUB_TOKEN", "${{ github.token }}"))
+                .add_env(("CI_TELEMETRY_JOBS", JOBS_FILE))
                 .add_env(("CI_TELEMETRY_EVENTS", EVENTS_FILE)),
         )
         .add_step(
@@ -173,7 +190,7 @@ fn export() -> Job {
                     "b1c422726cc4ff4adb0838ebca67586f24babb42",
                 )
                 .id("traces")
-                .if_condition(Expression::new(HAS_JOBS))
+                .if_condition(Expression::new(EXPORT_TRACE))
                 .add_with(("github-token", "${{ github.token }}"))
                 .add_env(("OTEL_SERVICE_NAME", "github-actions"))
                 .add_env(("OTEL_RESOURCE_ATTRIBUTES", "deployment.environment=ci"))

@@ -18,6 +18,30 @@ hierarchy is workflow → jobs → steps, stored in Tempo with
 triggering PR checkout, artifact download, raw build-log collection, or Datadog
 export. Individual test cases are outside this integration.
 
+### GitHub API budget
+
+Every workflow's `GITHUB_TOKEN` draws on one budget of 5,000 REST calls an hour
+for the repository, and PR CI fails to start without its own calls. Exporting
+every completion of about 50 workflows, most of them PR bookkeeping, once used
+nearly all of it. So:
+
+- PR bookkeeping workflows (labels, statuses, comments, text checks; the
+  `UNOBSERVED_PR_WORKFLOWS` list) are not observed. They finish in seconds and
+  never finished last on a push that ran PR CI. A test makes every new PR
+  workflow pick a list.
+- A run whose jobs were all skipped doesn't start the exporter.
+- The preflight reads the budget first, which GitHub doesn't count. Below 40% of
+  the limit it skips the export and makes no calls; the collector stops at the
+  same line. Otherwise it lists the run's jobs once, for both the collector and
+  its own checks of the upstream action's limits.
+- The trace step runs only when a job ran: a trace of skipped jobs costs two
+  calls and shows nothing.
+
+An exporter run costs one call to list jobs, two for the trace, and, on a PR
+event, one to list the head's runs. The run that completes a push adds one call
+per other workflow that ran, one for the PR, one to three for its files and one
+for the push time.
+
 ### CI events in Loki
 
 Tempo refuses metrics queries over three hours and keeps traces for seven days, so
@@ -31,7 +55,7 @@ without a parser; each line's `trace_id` links to the run's trace.
 | `push` | `pr_type`, `wall_seconds`, `wall_start`, `start_lag_seconds`, `conclusion`, `last_workflow`, `last_job`, `slowest_job`, `queue_max_seconds`, `cold_volumes`, `files_changed`, `rust_crates_changed`, `experiment`, `rerun`, `pr_draft` |
 | `job` | `workflow`, `job`, `conclusion`, `run_seconds`, `queue_seconds`, `runner_profile`, `volume_state`, `dev_shell_seconds` |
 | `step` | `workflow`, `job`, `step`, `conclusion`, `run_seconds` |
-| `export` | The exporter's own cost: `collect_seconds`, `api_calls`, `rate_remaining`, `rate_limit` |
+| `export` | The exporter's own cost: `collect_seconds`, `api_calls` (every GitHub call of the run, the trace step's included), `rate_remaining`, `rate_limit`, and `skipped` (`budget`, `no_listing`) when it made no calls |
 
 `pr_type` is `web`, `rust-small`, `rust-medium`, `rust-large`, `mixed`, `infra`,
 `other` or `unknown`. Rust size counts changed crates: up to 2, up to 9, then large,
@@ -39,7 +63,9 @@ or any root manifest change. `wall_seconds` runs from the push, or from opening 
 PR when that came later, to the last job. If neither fits, such as a reopen or
 leaving draft, it runs from the first workflow run and `wall_start` says
 `first_run`. A push counts as finished when every workflow it started has finished,
-so a workflow a PR runs must be on the exporter's list; a test enforces this. A run
+and only an observed workflow's completion can notice that, so PR bookkeeping that
+can't finish last is all that goes unobserved. A push where only bookkeeping ran,
+or only one workflow, didn't run CI and has no `push` line. A run
 that starts after everything on its head has finished came from something else, such
 as a PR edit, a label or leaving draft. It forms its own line with `rerun=true`,
 which also leaves a commit's first full run after draft out of the real PR numbers.

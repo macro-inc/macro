@@ -1,13 +1,19 @@
 // Scenarios for the CI telemetry collector and sender. Run by xtask_workflows' tests.
 
 import assert from 'node:assert/strict';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, test } from 'node:test';
 import {
+  BudgetError,
   classifyFiles,
   clockStart,
   collect,
   collectPush,
   DEV_SHELL_STEP,
+  Github,
   type GithubApi,
   type Job,
   jobEvents,
@@ -299,6 +305,7 @@ describe('sameTriggerRuns', () => {
 class FakeGithub implements GithubApi {
   responses: Record<string, unknown>;
   calls = 0;
+  paths: string[] = [];
   rateLimit = null;
   rateRemaining = null;
 
@@ -308,8 +315,10 @@ class FakeGithub implements GithubApi {
 
   async get(path: string) {
     this.calls += 1;
+    this.paths.push(path);
     const response = this.responses[path];
     if (response instanceof Error) throw response;
+    if (response === undefined) throw new Error(`unexpected call: ${path}`);
     return response;
   }
 }
@@ -319,6 +328,7 @@ function responses(...runs: Run[]): Record<string, unknown> {
     'actions/runs': { workflow_runs: runs },
     'actions/runs/1/attempts/1/jobs': { jobs: [job()] },
     'actions/runs/2/attempts/1/jobs': { jobs: [job({ name: 'build', id: 12 })] },
+    'actions/runs/3/attempts/1/jobs': { jobs: [job({ name: 'lint', id: 13 })] },
     'pulls/7': { created_at: at(0), draft: false },
     'pulls/7/files': [{ filename: 'apps/web/a.ts' }],
     activity: [{ after: 'abc', timestamp: at(0, 5) }],
@@ -326,61 +336,211 @@ function responses(...runs: Run[]): Record<string, unknown> {
 }
 
 describe('collectPush', () => {
+  // The completing run's jobs, which the preflight listed.
+  const own = [job()];
+
   test('waits for every check', async () => {
     const github = new FakeGithub(
       responses(run(), run({ id: 2, status: 'in_progress', conclusion: null }))
     );
-    assert.equal(await collectPush(github, REPO, run()), null);
+    assert.equal(await collectPush(github, REPO, run(), own), null);
     assert.equal(github.calls, 1);
   });
 
   test('a finished push is classified', async () => {
     const github = new FakeGithub(responses(run(), run({ id: 2 })));
-    const event = await collectPush(github, REPO, run());
+    const event = await collectPush(github, REPO, run(), own);
     assert.equal(event?.attributes.pr_type, 'web');
     assert.equal(event?.attributes.wall_start, 'push');
+  });
+
+  test("the completing run's jobs are not listed again", async () => {
+    const github = new FakeGithub(responses(run(), run({ id: 2 })));
+    await collectPush(github, REPO, run(), own);
+    assert.ok(!github.paths.includes('actions/runs/1/attempts/1/jobs'));
+    assert.deepEqual(github.paths, [
+      'actions/runs',
+      'actions/runs/2/attempts/1/jobs',
+      'pulls/7',
+      'pulls/7/files',
+      'activity',
+    ]);
+  });
+
+  test('a lone workflow has no push event and lists nothing more', async () => {
+    const github = new FakeGithub(responses(run()));
+    assert.equal(await collectPush(github, REPO, run(), own), null);
+    assert.equal(github.calls, 1);
   });
 
   test('a run without its PR still finds the PR through its group', async () => {
     const last = run({ id: 2, pull_requests: [] });
     const github = new FakeGithub(responses(run(), last));
-    const event = await collectPush(github, REPO, last);
+    const event = await collectPush(github, REPO, last, [job({ name: 'build', id: 12 })]);
     assert.equal(event?.attributes.pr_type, 'web');
     assert.equal(event?.attributes.pr_number, 7);
   });
 
   test('a later edit does not hold up the push', async () => {
     const github = new FakeGithub(
-      responses(run(), run({ id: 2, created_at: at(40), status: 'in_progress' }))
+      responses(
+        run(),
+        run({ id: 3, name: 'lint' }),
+        run({ id: 2, created_at: at(40), status: 'in_progress' })
+      )
     );
-    const event = await collectPush(github, REPO, run());
+    const event = await collectPush(github, REPO, run(), own);
     assert.equal(event?.attributes.rerun, false);
+    assert.equal(event?.attributes.workflows, 2);
   });
 
   test('cleanup and other events do not block', async () => {
     const github = new FakeGithub(
       responses(
         run(),
+        run({ id: 2, name: 'web' }),
         run({ id: 3, name: 'Cleanup Preview', status: 'in_progress' }),
         run({ id: 4, event: 'push', status: 'in_progress' })
       )
     );
-    assert.notEqual(await collectPush(github, REPO, run()), null);
+    assert.notEqual(await collectPush(github, REPO, run(), own), null);
   });
 
   test('a main push has no push event', async () => {
     const github = new FakeGithub({});
-    assert.equal(await collectPush(github, REPO, run({ event: 'push' })), null);
+    assert.equal(await collectPush(github, REPO, run({ event: 'push' }), own), null);
     assert.equal(github.calls, 0);
   });
 
   test('an error keeps the job events', async () => {
     const github = new FakeGithub({ ...responses(run()), 'actions/runs': new Error('boom') });
-    const events = await collect(github, REPO, run());
+    const events = await collect(github, REPO, run(), own);
     assert.deepEqual(
       events.map((event) => event.attributes.event),
       ['job']
     );
+  });
+});
+
+describe('Github budget', () => {
+  const realFetch = globalThis.fetch;
+
+  function stubFetch(remaining: number) {
+    const requests: string[] = [];
+    globalThis.fetch = (async (url: string) => {
+      requests.push(url);
+      return new Response('{}', {
+        headers: { 'x-ratelimit-limit': '5000', 'x-ratelimit-remaining': String(remaining) },
+      });
+    }) as typeof fetch;
+    return requests;
+  }
+
+  test('stops at the reserve before calling', async (context) => {
+    context.after(() => {
+      globalThis.fetch = realFetch;
+    });
+    const requests = stubFetch(1999);
+    const github = new Github(REPO, 'token', { limit: 5000, remaining: 2001, reserve: 2000 });
+    await github.get('actions/runs');
+    assert.equal(github.rateRemaining, 1999);
+    await assert.rejects(github.get('actions/runs'), BudgetError);
+    assert.equal(requests.length, 1);
+    assert.equal(github.calls, 1);
+  });
+
+  test('calls nothing without the preflight reading the budget', async (context) => {
+    context.after(() => {
+      globalThis.fetch = realFetch;
+    });
+    const requests = stubFetch(4000);
+    const github = new Github(REPO, 'token', null);
+    await assert.rejects(github.get('actions/runs'), BudgetError);
+    assert.equal(requests.length, 0);
+  });
+});
+
+/** Run the preflight as actions/github-script does, with a fake client and core. */
+async function preflight(remaining: number, jobs: Job[]) {
+  const directory = mkdtempSync(join(tmpdir(), 'ci-telemetry-'));
+  const file = join(directory, 'jobs.json');
+  const calls: string[] = [];
+  const outputs: Record<string, unknown> = {};
+  const github = {
+    rest: {
+      rateLimit: {
+        get: async () => {
+          calls.push('rate_limit');
+          return { data: { resources: { core: { limit: 5000, remaining } } } };
+        },
+      },
+      actions: {
+        listJobsForWorkflowRunAttempt: async () => {
+          calls.push('jobs');
+          return { data: { total_count: jobs.length, jobs } };
+        },
+      },
+    },
+  };
+  const context = {
+    repo: { owner: 'acme', repo: 'repo' },
+    payload: { workflow_run: run() },
+  };
+  const core = {
+    setOutput: (name: string, value: unknown) => {
+      outputs[name] = value;
+    },
+    notice: () => {},
+  };
+  const source = readFileSync(new URL('./ci_telemetry_preflight.js', import.meta.url), 'utf8');
+  const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor;
+  const script = new AsyncFunction('require', 'github', 'context', 'core', 'process', source);
+  const env = { env: { CI_TELEMETRY_JOBS: file } };
+  let error: unknown = null;
+  try {
+    await script(createRequire(import.meta.url), github, context, core, env);
+  } catch (thrown) {
+    error = thrown;
+  }
+  const listing = JSON.parse(readFileSync(file, 'utf8'));
+  rmSync(directory, { recursive: true });
+  return { calls, outputs, listing, error };
+}
+
+function ranJob(overrides: Partial<Job> = {}) {
+  return { ...job(overrides), status: 'completed', workflow_name: 'code check' };
+}
+
+describe('preflight', () => {
+  test('a low budget makes no counted call and exports nothing', async () => {
+    const { calls, outputs, listing } = await preflight(1999, [ranJob()]);
+    assert.deepEqual(calls, ['rate_limit']);
+    assert.equal(outputs.export, false);
+    assert.equal(listing.jobs, null);
+    assert.equal(listing.reserve, 2000);
+  });
+
+  test('lists the jobs once and leaves them for the collector', async () => {
+    const { calls, outputs, listing } = await preflight(4000, [ranJob()]);
+    assert.deepEqual(calls, ['rate_limit', 'jobs']);
+    assert.equal(outputs.export, true);
+    assert.equal(listing.jobs.length, 1);
+    assert.equal(listing.remaining, 3999);
+    assert.equal(listing.calls, 1);
+    assert.equal(listing.trace, true);
+  });
+
+  test('a run whose jobs were all skipped gets no trace', async () => {
+    const { outputs, listing } = await preflight(4000, [ranJob({ conclusion: 'skipped' })]);
+    assert.equal(outputs.export, false);
+    assert.equal(listing.trace, false);
+  });
+
+  test('a refused trace still leaves the jobs', async () => {
+    const { error, listing } = await preflight(4000, [ranJob({ completed_at: null })]);
+    assert.match(String(error), /incomplete/);
+    assert.equal(listing.jobs.length, 1);
+    assert.equal(listing.trace, false);
   });
 });
 

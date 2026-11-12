@@ -7,8 +7,6 @@ name: Export CI telemetry
     - completed
     workflows:
     - Android Play Release
-    - Android Release Drift
-    - Auto Label PRs
     - Build Agent Daemon on Tag
     - Build CEF with codecs
     - Build AppImage
@@ -16,12 +14,7 @@ name: Export CI telemetry
     - Build Rust CI Image
     - Build Web App
     - Build macOS DMG
-    - CI Gate Reminder
-    - CI Gate for Forks
-    - CI Gate Label Check
-    - CLA
     - Cancel Stuck Cloud Storage Deploys
-    - Cleanup Preview
     - Deploy AI Editing Worker
     - Deploy All Services
     - Deploy CLA Worker
@@ -38,16 +31,12 @@ name: Export CI telemetry
     - Ensure Daytona Snapshot
     - Export Datadog observability definitions
     - Migrate Macro Database
-    - Native Check Label
     - PR CI
-    - PR Privacy Check
     - Publish Android to Google Play
     - Publish SDK
-    - Pull Request
     - Pulumi Preview on PR
     - Push local stack binaries
     - Release SDK
-    - Release Label Check
     - Reusable Deploy Service
     - Reusable Preview Service
     - SDK Check
@@ -64,7 +53,6 @@ name: Export CI telemetry
     - iOS App Store Publish
     - iOS App Store Release
     - iOS Preview
-    - iOS Release Drift
     - infra code check
 permissions:
   actions: read
@@ -73,21 +61,52 @@ permissions:
   id-token: write
 jobs:
   export:
+    if: github.event.workflow_run.conclusion != 'skipped'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
     - id: preflight
-      name: Check upstream exporter limits
+      name: Check API budget and upstream exporter limits
       uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
       with:
         script: |
+          // Every workflow's GITHUB_TOKEN shares one hourly API budget, and PR CI can't start
+          // without its own calls. Below this share of it the exporter makes no more calls.
+          // Reading the budget is free: GitHub doesn't count `GET /rate_limit`.
+          const RESERVE_FRACTION = 0.4;
+          const { writeFileSync } = require('node:fs');
+          const listingFile = process.env.CI_TELEMETRY_JOBS;
+          const { data: limits } = await github.rest.rateLimit.get();
+          const { limit, remaining } = limits.resources.core;
+          const reserve = Math.ceil(limit * RESERVE_FRACTION);
+          if (remaining < reserve) {
+            const listing = { limit, remaining, reserve, calls: 0, trace: false, jobs: null };
+            writeFileSync(listingFile, JSON.stringify(listing));
+            core.notice(`GitHub API budget is low (${remaining} of ${limit} left); skipping this export`);
+            core.setOutput('export', false);
+            return;
+          }
           const run = context.payload.workflow_run;
           const { data } = await github.rest.actions.listJobsForWorkflowRunAttempt({
             ...context.repo, run_id: run.id, attempt_number: run.run_attempt, per_page: 100,
           });
+          // The event collector reads this listing instead of fetching it again, also when
+          // the checks below refuse the trace.
+          const listing = {
+            limit,
+            remaining: remaining - 1,
+            reserve,
+            calls: 1,
+            trace: false,
+            jobs: data.jobs,
+          };
+          writeFileSync(listingFile, JSON.stringify(listing));
           if (data.total_count > 100 || data.jobs.length !== data.total_count) {
             throw new Error('Grafana exporter supports at most 100 jobs; refusing a partial trace');
           }
+          // The pinned exporter retries a failed assertion up to 240 times, two calls each, so
+          // check everything it asserts before it starts.
+          if (!run.conclusion) throw new Error('Run conclusion is unavailable; retry after GitHub sets it');
           // Check the pinned exporter's name-based IDs and timestamp requirements.
           const { createHash } = require('node:crypto');
           const prefix = `${context.repo.owner}/${context.repo.repo}${run.id}${run.run_attempt}`;
@@ -104,7 +123,7 @@ jobs:
           }
           span('s');
           for (const job of data.jobs) {
-            if (job.status !== 'completed' || !timed(job)) {
+            if (job.status !== 'completed' || !timed(job) || !job.workflow_name) {
               throw new Error('Job timing is incomplete; retry after GitHub finalizes this attempt');
             }
             span(job.name);
@@ -115,8 +134,13 @@ jobs:
           }
           // At 512 spans upstream starts an asynchronous batch whose failure can be swallowed.
           if (ids.size >= 512) throw new Error('Grafana exporter cannot reliably report delivery failures for 512+ spans');
-          core.setOutput('export', data.jobs.length > 0);
-          if (!data.jobs.length) core.notice('No jobs in this attempt; no execution trace to export');
+          // A trace of skipped jobs shows nothing and costs the exporter two calls.
+          const ran = data.jobs.some((job) => job.conclusion !== 'skipped');
+          writeFileSync(listingFile, JSON.stringify({ ...listing, trace: ran }));
+          core.setOutput('export', ran);
+          if (!ran) core.notice('No job ran in this attempt; no execution trace to export');
+      env:
+        CI_TELEMETRY_JOBS: ${{ runner.temp }}/ci-telemetry-jobs.json
     - name: Collect push, job and step events
       if: always()
       run: |
@@ -129,7 +153,7 @@ jobs:
         // branch names, actors, titles or file paths.
 
         import { createHash } from 'node:crypto';
-        import { readFileSync, writeFileSync } from 'node:fs';
+        import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 
         const API = 'https://api.github.com';
         const PR_EVENTS = new Set(['pull_request', 'pull_request_target']);
@@ -144,8 +168,6 @@ jobs:
         const MAX_PUSH_LAG_SECONDS = 600;
         // Below this a step is noise, and it stays visible in the trace.
         const MIN_STEP_SECONDS = 1;
-        // Stop before the exporter's own traces start failing for lack of API budget.
-        const MIN_RATE_REMAINING = 100;
         const MAX_FILE_PAGES = 3;
         // Roll-up jobs finish last by design, so they never say what held a push up.
         const ROLL_UP_JOB = /status[ -]check/i;
@@ -190,6 +212,23 @@ jobs:
 
         export type PullRequest = { created_at: string; draft?: boolean };
 
+        /**
+         * What the preflight leaves for this step: the API budget it saw, its own calls,
+         * whether the trace step will run, and the run's jobs. No jobs means the budget was
+         * already down to the share kept for other workflows.
+         */
+        export type Listing = {
+          limit: number;
+          remaining: number;
+          reserve: number;
+          calls: number;
+          trace: boolean;
+          jobs: Job[] | null;
+        };
+
+        // The pinned trace exporter gets the run attempt and lists its jobs.
+        const TRACE_CALLS = 2;
+
         type Interval = [Date, Date];
         type Attributes = Record<string, string | number | boolean>;
 
@@ -228,22 +267,37 @@ jobs:
           }
         }
 
-        /** Counts its own calls and stops before exhausting the shared token budget. */
-        class Github implements GithubApi {
+        export class BudgetError extends Error {}
+
+        /**
+         * Counts its own calls and stops at the share of the shared budget kept for other
+         * workflows. Without the preflight's reading of the budget it makes no calls.
+         */
+        export class Github implements GithubApi {
           repo: string;
           token: string;
+          reserve: number;
           calls = 0;
           rateLimit: number | null = null;
           rateRemaining: number | null = null;
 
-          constructor(repo: string, token: string) {
+          constructor(
+            repo: string,
+            token: string,
+            budget: Pick<Listing, 'limit' | 'remaining' | 'reserve'> | null
+          ) {
             this.repo = repo;
             this.token = token;
+            this.reserve = budget?.reserve ?? Infinity;
+            if (budget) {
+              this.rateLimit = budget.limit;
+              this.rateRemaining = budget.remaining;
+            }
           }
 
           async get(path: string, params: Record<string, string | number> = {}) {
-            if (this.rateRemaining !== null && this.rateRemaining < MIN_RATE_REMAINING) {
-              throw new Error('GitHub API budget is low');
+            if (this.rateRemaining === null || this.rateRemaining < this.reserve) {
+              throw new BudgetError('GitHub API budget is low');
             }
             const query = new URLSearchParams(
               Object.entries(params).map(([key, value]): [string, string] => [key, String(value)])
@@ -570,11 +624,15 @@ jobs:
           return paths;
         }
 
-        /** The push event once this completion is the last one, otherwise null. */
+        /**
+         * The push event once this completion is the last one, otherwise null. `jobs` are
+         * this run's, which the preflight already listed.
+         */
         export async function collectPush(
           github: GithubApi,
           repo: string,
-          run: Run
+          run: Run,
+          jobs: Job[]
         ): Promise<TelemetryEvent | null> {
           if (!PR_EVENTS.has(run.event)) return null;
           const listing: { workflow_runs: Run[] } = await github.get('actions/runs', {
@@ -585,22 +643,20 @@ jobs:
             (candidate) => PR_EVENTS.has(candidate.event) && !NOT_A_CHECK.has(candidate.name)
           );
           const [runs, repeat] = sameTriggerRuns(checks, run);
-          if (runs.length === 0 || runs.some((candidate) => candidate.status !== 'completed')) {
+          // A lone workflow means CI didn't run, and every report leaves such pushes out.
+          if (runs.length < 2 || runs.some((candidate) => candidate.status !== 'completed')) {
             return null;
           }
           const jobsByRun = new Map<number, Job[]>();
           for (const candidate of runs) {
-            jobsByRun.set(
-              candidate.id,
-              candidate.conclusion === 'skipped'
-                ? []
-                : (
-                    await github.get(
-                      `actions/runs/${candidate.id}/attempts/${candidate.run_attempt}/jobs`,
-                      { per_page: 100 }
-                    )
-                  ).jobs
-            );
+            if (candidate.id === run.id && candidate.run_attempt === run.run_attempt) {
+              jobsByRun.set(candidate.id, jobs);
+            } else if (candidate.conclusion === 'skipped') {
+              jobsByRun.set(candidate.id, []);
+            } else {
+              const path = `actions/runs/${candidate.id}/attempts/${candidate.run_attempt}/jobs`;
+              jobsByRun.set(candidate.id, (await github.get(path, { per_page: 100 })).jobs);
+            }
           }
           // GitHub leaves `pull_requests` empty on some runs, so ask the group when this is one.
           const head = run.pull_requests?.length
@@ -650,15 +706,10 @@ jobs:
           };
         }
 
-        export async function collect(github: GithubApi, repo: string, run: Run) {
-          const events: TelemetryEvent[] = [];
+        export async function collect(github: GithubApi, repo: string, run: Run, jobs: Job[]) {
+          const events: TelemetryEvent[] = jobEvents(repo, run, jobs);
           try {
-            const { jobs } = await github.get(
-              `actions/runs/${run.id}/attempts/${run.run_attempt}/jobs`,
-              { per_page: 100 }
-            );
-            events.push(...jobEvents(repo, run, jobs));
-            const push = await collectPush(github, repo, run);
+            const push = await collectPush(github, repo, run, jobs);
             if (push) events.push(push);
           } catch (error) {
             // A partial export still helps. The class and status can't carry a token or a payload.
@@ -682,16 +733,21 @@ jobs:
           const started = performance.now();
           const repo = required('GITHUB_REPOSITORY');
           const run: Run = JSON.parse(readFileSync(required('GITHUB_EVENT_PATH'), 'utf8')).workflow_run;
-          const github = new Github(repo, required('GITHUB_TOKEN'));
-          const events = await collect(github, repo, run);
+          // No listing means the preflight failed before it had one; this step won't call either.
+          const path = required('CI_TELEMETRY_JOBS');
+          const listing: Listing | null = existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : null;
+          const github = new Github(repo, required('GITHUB_TOKEN'), listing);
+          const events = listing?.jobs ? await collect(github, repo, run, listing.jobs) : [];
           const now = new Date();
           const counts: Attributes = {
             event: 'export',
             ...runAttributes(run),
             events: events.length,
-            api_calls: github.calls,
+            // Every call this exporter run makes: the preflight's, this step's and the trace's.
+            api_calls: (listing?.calls ?? 0) + github.calls + (listing?.trace ? TRACE_CALLS : 0),
             collect_seconds: Math.round((performance.now() - started) / 1000),
           };
+          if (!listing?.jobs) counts.skipped = listing ? 'budget' : 'no_listing';
           if (github.rateRemaining !== null) counts.rate_remaining = github.rateRemaining;
           if (github.rateLimit) counts.rate_limit = github.rateLimit;
           events.push({
@@ -718,6 +774,7 @@ jobs:
       shell: bash
       env:
         GITHUB_TOKEN: ${{ github.token }}
+        CI_TELEMETRY_JOBS: ${{ runner.temp }}/ci-telemetry-jobs.json
         CI_TELEMETRY_EVENTS: ${{ runner.temp }}/ci-telemetry-events.json
       timeout-minutes: 2
       continue-on-error: true

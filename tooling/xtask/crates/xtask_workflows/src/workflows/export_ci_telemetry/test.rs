@@ -42,12 +42,9 @@ fn only_the_send_step_sees_the_ingestion_headers() {
     }
 }
 
-/// A push counts as finished once every check has, and only a listed workflow's
-/// completion triggers the exporter, so an unlisted one that finishes last loses the push.
-#[test]
-fn every_pull_request_workflow_is_observed() {
+fn workflow_names(pull_request_only: bool) -> Vec<String> {
     let workflows = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../../.github/workflows");
-    let mut missing = Vec::new();
+    let mut names = Vec::new();
     for entry in std::fs::read_dir(workflows).unwrap() {
         let path = entry.unwrap().path();
         if !matches!(
@@ -66,12 +63,76 @@ fn every_pull_request_workflow_is_observed() {
                     .as_sequence()
                     .is_some_and(|list| list.iter().any(|item| item.as_str() == Some(name)))
         });
-        let name = workflow["name"].as_str().unwrap_or_default();
-        if on_pull_request && !OBSERVED_WORKFLOWS.contains(&name) {
-            missing.push(name.to_owned());
+        if on_pull_request || !pull_request_only {
+            names.push(workflow["name"].as_str().unwrap_or_default().to_owned());
         }
     }
-    assert!(missing.is_empty(), "add to OBSERVED_WORKFLOWS: {missing:?}");
+    names
+}
+
+/// A push counts as finished once every check has, and only a listed workflow's
+/// completion triggers the exporter, so an unlisted one that finishes last loses the
+/// push. A new PR workflow must choose: observed, or bookkeeping that never finishes last.
+#[test]
+fn every_pull_request_workflow_is_observed_or_bookkeeping() {
+    let missing: Vec<_> = workflow_names(true)
+        .into_iter()
+        .filter(|name| {
+            !OBSERVED_WORKFLOWS.contains(&name.as_str())
+                && !UNOBSERVED_PR_WORKFLOWS.contains(&name.as_str())
+        })
+        .collect();
+    assert!(
+        missing.is_empty(),
+        "add to OBSERVED_WORKFLOWS or UNOBSERVED_PR_WORKFLOWS: {missing:?}"
+    );
+}
+
+#[test]
+fn unobserved_workflows_exist_and_are_not_observed() {
+    let names = workflow_names(false);
+    for name in UNOBSERVED_PR_WORKFLOWS {
+        assert!(
+            names.iter().any(|known| known == name),
+            "no workflow named {name}"
+        );
+        assert!(
+            !OBSERVED_WORKFLOWS.contains(name),
+            "{name} is in both lists"
+        );
+    }
+}
+
+/// A run whose jobs were all skipped must not start the exporter: it has nothing to
+/// export, and about half of all completions are such runs.
+#[test]
+fn skipped_runs_start_no_export() {
+    let job = serde_json::to_value(export()).unwrap();
+    assert_eq!(
+        job["if"],
+        "github.event.workflow_run.conclusion != 'skipped'"
+    );
+}
+
+/// Only the preflight lists the run's jobs, after it checked the budget, and the
+/// collector reads the same file instead of listing them again.
+#[test]
+fn preflight_and_collector_share_the_job_listing() {
+    let job = serde_json::to_value(export()).unwrap();
+    let steps = job["steps"].as_array().unwrap();
+    let files: Vec<_> = steps
+        .iter()
+        .filter_map(|step| step["env"]["CI_TELEMETRY_JOBS"].as_str())
+        .collect();
+    assert_eq!(files, [JOBS_FILE, JOBS_FILE]);
+    assert_eq!(steps[0]["id"], "preflight");
+    let preflight = include_str!("../scripts/ci_telemetry_preflight.js");
+    let budget = preflight.find("rateLimit.get()").unwrap();
+    let listing = preflight.find("listJobsForWorkflowRunAttempt").unwrap();
+    assert!(
+        budget < listing,
+        "check the budget before the first counted call"
+    );
 }
 
 /// Actions would expand this in the embedded source before the shell ever saw it.
