@@ -1,0 +1,166 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, owner, name, schedule, kind, timezone, task, claimed, created_at,\n                   updated_at, next_run_at, enabled, trigger_type, event_filters,\n                   configuration_revision, event_activated_at, trigger_config, run_visibility, template_id, suggestion_id,\n                   description, parent_id, created_by_run_id, child_key, paused_by_parent\n            FROM scheduled_action\n            WHERE id = ANY($1) AND parent_id IS NULL\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "owner",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "schedule",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "timezone",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "task",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 7,
+        "name": "claimed",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "next_run_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "enabled",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 12,
+        "name": "trigger_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "event_filters",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 14,
+        "name": "configuration_revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 15,
+        "name": "event_activated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 16,
+        "name": "trigger_config",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 17,
+        "name": "run_visibility",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 18,
+        "name": "template_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 19,
+        "name": "suggestion_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 20,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 21,
+        "name": "parent_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 22,
+        "name": "created_by_run_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 23,
+        "name": "child_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 24,
+        "name": "paused_by_parent",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      false,
+      true,
+      false,
+      false,
+      true,
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      false,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "ccdfd6d9f949c86f1796318decfd62820882f6afb55387687975f53fadc6905d"
+}

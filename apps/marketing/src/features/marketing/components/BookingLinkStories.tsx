@@ -1,6 +1,56 @@
 import { For } from 'solid-js';
 import { FeaturePageSection } from './FeaturePage';
+import { FormBookingGraphic } from './forms/FormBookingGraphic';
 import './booking-link-stories.css';
+
+/** A guest's view of a booking link: the meeting, open days, and times. */
+export function BookingGuestGraphic() {
+  return (
+    <div
+      class="booking-story-card glass"
+      role="img"
+      aria-label="Example guest booking page for a 30-minute Macro demo, with available dates and times."
+    >
+      <div class="booking-story-topline">
+        MACRO <span>Booking preview</span>
+      </div>
+      <div class="booking-story-guest">
+        <div class="booking-story-meeting">
+          <span class="booking-story-kicker">Meet the team</span>
+          <h3>Macro demo</h3>
+          <p>30 minutes · Video call</p>
+          <p>Tell us what you’re working on. We’ll show you around.</p>
+          <span class="booking-story-zone">America / New York</span>
+        </div>
+        <div class="booking-story-calendar">
+          <h4>November 2026</h4>
+          <div class="booking-story-days">
+            <For each={['S', 'M', 'T', 'W', 'T', 'F', 'S']}>
+              {(day) => <span class="booking-story-weekday">{day}</span>}
+            </For>
+            <For each={Array.from({ length: 30 }, (_, i) => i + 1)}>
+              {(day) => (
+                <span
+                  classList={{
+                    'is-selected': day === 5,
+                    'is-available': [6, 9, 10, 11, 12, 13].includes(day),
+                  }}
+                >
+                  {day}
+                </span>
+              )}
+            </For>
+          </div>
+          <div class="booking-story-times">
+            <span>11:00 AM</span>
+            <span>11:30 AM</span>
+            <span>1:00 PM</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /** Illustrative booking states; the working scheduler lives in the app. */
 export function BookingLinkStories() {
@@ -18,49 +68,7 @@ export function BookingLinkStories() {
           },
         }}
       >
-        <div
-          class="booking-story-card glass"
-          role="img"
-          aria-label="Example guest booking page for a 30-minute Macro demo, with available dates and times."
-        >
-          <div class="booking-story-topline">
-            MACRO <span>Booking preview</span>
-          </div>
-          <div class="booking-story-guest">
-            <div class="booking-story-meeting">
-              <span class="booking-story-kicker">Meet the team</span>
-              <h3>Macro demo</h3>
-              <p>30 minutes · Video call</p>
-              <p>Tell us what you’re working on. We’ll show you around.</p>
-              <span class="booking-story-zone">America / New York</span>
-            </div>
-            <div class="booking-story-calendar">
-              <h4>November 2026</h4>
-              <div class="booking-story-days">
-                <For each={['S', 'M', 'T', 'W', 'T', 'F', 'S']}>
-                  {(day) => <span class="booking-story-weekday">{day}</span>}
-                </For>
-                <For each={Array.from({ length: 30 }, (_, i) => i + 1)}>
-                  {(day) => (
-                    <span
-                      classList={{
-                        'is-selected': day === 5,
-                        'is-available': [6, 9, 10, 11, 12, 13].includes(day),
-                      }}
-                    >
-                      {day}
-                    </span>
-                  )}
-                </For>
-              </div>
-              <div class="booking-story-times">
-                <span>11:00 AM</span>
-                <span>11:30 AM</span>
-                <span>1:00 PM</span>
-              </div>
-            </div>
-          </div>
-        </div>
+        <BookingGuestGraphic />
       </FeaturePageSection>
 
       <FeaturePageSection
@@ -113,8 +121,16 @@ export function BookingLinkStories() {
       </FeaturePageSection>
 
       <FeaturePageSection
+        id="booking-links-forms"
+        title="Qualify guests first with Macro Forms."
+        description="Put a form in front of the link. Add a gate to qualify requests, and people who pass it choose a time after their response is saved. Their answers land in a database, so you know who you’re meeting before the call."
+      >
+        <FormBookingGraphic />
+      </FeaturePageSection>
+
+      <FeaturePageSection
         id="booking-links-agent"
-        title="Ask an agent to create a booking link."
+        title="Ask Macro Agents to create a booking link."
         description="Describe the meeting, hosts, and availability you want. Your agent prepares the link and shows you the details for approval before saving."
         demo={{
           tone: 'calls',
