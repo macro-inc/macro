@@ -13,8 +13,74 @@ use async_trait::async_trait;
 
 /// Failed checks or imports before a picture is marked `failed`.
 const MAX_PICTURE_ATTEMPTS: i32 = 5;
+/// A settled picture (stored, not set, or failed) is checked again after
+/// this many days, plus up to [`RECHECK_SPREAD_DAYS`] so checks don't bunch
+/// up.
+const RECHECK_DAYS: i32 = 6;
+/// A hidden picture's privacy setting rarely flips: checked again after this
+/// many days, plus the spread.
+const HIDDEN_RECHECK_DAYS: i32 = 13;
+/// See [`RECHECK_DAYS`].
+const RECHECK_SPREAD_DAYS: i32 = 2;
+/// A claimed check or import is held this long, so a replica that dies
+/// mid-way leaves it due again.
+const CLAIM_HOLD_MINUTES: i32 = 5;
 
-/// Start tracking the pictures of these people or groups as the chat
+/// A picture's settled answer, as `whatsapp_profile_picture.state` spells it.
+#[derive(Clone, Copy, strum::IntoStaticStr)]
+#[strum(serialize_all = "snake_case")]
+enum Settled {
+    Hidden,
+    #[strum(serialize = "none")]
+    NotSet,
+}
+
+/// Start tracking a person's picture as the chat owner's account sees it,
+/// by `preferred` (one of their `aliases`), unless it is already tracked by
+/// any of their aliases: one person is queried once.
+pub(super) async fn track_person_in(
+    tx: &mut Transaction<'_, Postgres>,
+    owner: &str,
+    preferred: &str,
+    aliases: &[String],
+) -> ExternalChatResult<()> {
+    sqlx::query!(
+        r#"INSERT INTO whatsapp_profile_picture (account_id, jid, state)
+        SELECT a.id, $2, 'due' FROM whatsapp_linked_account a
+        WHERE a.user_id = $1
+          AND NOT EXISTS (SELECT 1 FROM whatsapp_profile_picture p WHERE p.account_id = a.id AND p.jid = ANY($3))
+        ON CONFLICT (account_id, jid) DO NOTHING"#,
+        owner,
+        preferred,
+        aliases
+    )
+    .execute(&mut **tx)
+    .await
+    .map_err(failure)?;
+    Ok(())
+}
+
+/// The account's consent ended (logged out, disconnected, relinked perhaps
+/// to another number): what it saw is no longer what the next consent sees,
+/// so stored pictures are dropped (their files released) and every tracked
+/// picture is checked again once an account connects.
+pub(super) async fn recheck_pictures_in(
+    tx: &mut Transaction<'_, Postgres>,
+    account: Uuid,
+) -> ExternalChatResult<()> {
+    sqlx::query!(
+        r#"UPDATE whatsapp_profile_picture SET state = 'due', picture_id = NULL, static_file_id = NULL,
+            staged = NULL, mime = NULL, attempts = 0, retry_at = now()
+        WHERE account_id = $1"#,
+        account
+    )
+    .execute(&mut **tx)
+    .await
+    .map_err(failure)?;
+    Ok(())
+}
+
+/// Start tracking the pictures of these groups or direct chats as the chat
 /// owner's account sees them (chats show what their owner's account sees);
 /// already tracked ones are left alone.
 pub(super) async fn track_pictures_in(
@@ -65,6 +131,15 @@ pub(super) async fn claim_picture_checks_in(
     account: &Fenced,
     limit: i64,
 ) -> ExternalChatResult<Vec<PictureCheck>> {
+    // Serializes claims of one account, so two can't spend the same budget,
+    // without blocking the account's other writes.
+    sqlx::query!(
+        "SELECT pg_advisory_xact_lock(hashtextextended('whatsapp-pictures:' || $1::uuid::text, 0))",
+        account.id
+    )
+    .execute(&mut **tx)
+    .await
+    .map_err(failure)?;
     sqlx::query!(
         "DELETE FROM whatsapp_picture_query WHERE account_id = $1 AND queried_at <= now() - interval '1 day'",
         account.id
@@ -88,26 +163,30 @@ pub(super) async fn claim_picture_checks_in(
         return Ok(vec![]);
     }
 
-    // A claimed check is held for five minutes, so a replica that dies
-    // mid-check leaves it due again. The existing id is only offered when the
-    // picture is stored, so "unchanged" always means a stored file is current.
-    // A person's common group is one of the owner's added groups they are in.
+    // The existing id is only offered for a ready picture, whose id is the
+    // stored file's, so "unchanged" always means the stored file is current
+    // (a staged id that never got stored is not offered). A person's common
+    // group is one of the owner's added groups they are in, probed per group
+    // through the alias key (there is no jid-only alias index).
     let rows = sqlx::query!(
-        r#"UPDATE whatsapp_profile_picture p SET retry_at = now() + interval '5 minutes'
+        r#"UPDATE whatsapp_profile_picture p SET retry_at = now() + make_interval(mins => $4)
         WHERE p.account_id = $1 AND p.jid IN (
             SELECT jid FROM whatsapp_profile_picture
             WHERE account_id = $1 AND state <> 'staged' AND retry_at <= now()
             ORDER BY retry_at LIMIT $2 FOR UPDATE SKIP LOCKED)
         RETURNING p.jid,
-            CASE WHEN p.static_file_id IS NOT NULL THEN p.picture_id END AS existing_id,
+            CASE WHEN p.state = 'ready' THEN p.picture_id END AS existing_id,
             CASE WHEN p.jid NOT LIKE '%@g.us' THEN (
                 SELECT c.remote_id FROM external_chat c
+                CROSS JOIN LATERAL (
+                    SELECT 1 FROM whatsapp_identity_alias a WHERE a.chat_id = c.id AND a.jid = p.jid LIMIT 1
+                ) member
                 WHERE c.user_id = $3 AND c.provider = 'whatsapp' AND c.kind = 'group' AND c.state <> 'detached'
-                  AND EXISTS (SELECT 1 FROM whatsapp_identity_alias a WHERE a.chat_id = c.id AND a.jid = p.jid)
                 LIMIT 1) END AS common_group"#,
         account.id,
         allowed,
-        account.user_id
+        account.user_id,
+        CLAIM_HOLD_MINUTES
     )
     .fetch_all(&mut **tx)
     .await
@@ -148,18 +227,16 @@ pub(super) async fn complete_picture_check_in(
         return Ok(());
     };
 
-    // Settled answers are checked again in about a week (two for hidden,
-    // which rarely flips), spread over two days so checks don't bunch up.
     match answer {
         PictureAnswer::Unchanged => {
             sqlx::query!(
-                r#"UPDATE whatsapp_profile_picture SET
-                    state = CASE WHEN static_file_id IS NOT NULL THEN 'ready' ELSE 'due' END,
-                    checked_at = now(), attempts = 0,
-                    retry_at = now() + interval '6 days' + random() * interval '2 days'
+                r#"UPDATE whatsapp_profile_picture SET checked_at = now(), attempts = 0,
+                    retry_at = now() + make_interval(days => $3) + random() * make_interval(days => $4)
                 WHERE account_id = $1 AND jid = $2"#,
                 account.id,
-                jid
+                jid,
+                RECHECK_DAYS,
+                RECHECK_SPREAD_DAYS
             )
             .execute(&mut **tx)
             .await
@@ -182,19 +259,22 @@ pub(super) async fn complete_picture_check_in(
             notify(tx, signals::PICTURE_STAGED, account.id).await?;
         }
         PictureAnswer::Hidden | PictureAnswer::NotSet => {
-            let (state, days) = match answer {
-                PictureAnswer::Hidden => ("hidden", 13),
-                _ => ("none", 6),
+            let (state, days) = if matches!(answer, PictureAnswer::Hidden) {
+                (Settled::Hidden, HIDDEN_RECHECK_DAYS)
+            } else {
+                (Settled::NotSet, RECHECK_DAYS)
             };
+            let state: &'static str = state.into();
             sqlx::query!(
                 r#"UPDATE whatsapp_profile_picture SET state = $3, picture_id = NULL, static_file_id = NULL,
                     checked_at = now(), attempts = 0,
-                    retry_at = now() + make_interval(days => $4) + random() * interval '2 days'
+                    retry_at = now() + make_interval(days => $4) + random() * make_interval(days => $5)
                 WHERE account_id = $1 AND jid = $2"#,
                 account.id,
                 jid,
                 state,
-                days
+                days,
+                RECHECK_SPREAD_DAYS
             )
             .execute(&mut **tx)
             .await
@@ -218,12 +298,14 @@ pub(super) async fn complete_picture_check_in(
                 r#"UPDATE whatsapp_profile_picture SET attempts = attempts + 1,
                     state = CASE WHEN attempts + 1 >= $3 THEN 'failed' ELSE state END,
                     retry_at = CASE WHEN attempts + 1 >= $3
-                        THEN now() + interval '6 days' + random() * interval '2 days'
+                        THEN now() + make_interval(days => $4) + random() * make_interval(days => $5)
                         ELSE now() + least(interval '1 minute' * power(2, attempts), interval '1 day') END
                 WHERE account_id = $1 AND jid = $2"#,
                 account.id,
                 jid,
-                MAX_PICTURE_ATTEMPTS
+                MAX_PICTURE_ATTEMPTS,
+                RECHECK_DAYS,
+                RECHECK_SPREAD_DAYS
             )
             .execute(&mut **tx)
             .await
@@ -249,11 +331,13 @@ pub(super) async fn picture_changed_in(
                     WHERE account_id = $1 AND jid = ANY($2) FOR UPDATE)
                 UPDATE whatsapp_profile_picture p SET state = 'none', picture_id = NULL, static_file_id = NULL,
                     staged = NULL, mime = NULL, checked_at = now(), attempts = 0,
-                    retry_at = now() + interval '6 days' + random() * interval '2 days'
+                    retry_at = now() + make_interval(days => $3) + random() * make_interval(days => $4)
                 FROM old WHERE p.account_id = $1 AND p.jid = old.jid
                 RETURNING old.static_file_id IS NOT NULL AS "had_file!""#,
                 account.id,
-                jids
+                jids,
+                RECHECK_DAYS,
+                RECHECK_SPREAD_DAYS
             )
             .fetch_all(&mut **tx)
             .await
@@ -285,10 +369,9 @@ pub(super) async fn picture_changed_in(
 #[async_trait]
 impl PictureRepository for PgWhatsAppRepository {
     async fn staged_pictures(&self, limit: i64) -> ExternalChatResult<Vec<StagedPicture>> {
-        // Held for five minutes so DSS replicas don't import the same picture
-        // twice; a replica that dies leaves it due again.
+        // Held so DSS replicas don't import the same picture twice.
         let rows = sqlx::query!(
-            r#"UPDATE whatsapp_profile_picture p SET retry_at = now() + interval '5 minutes'
+            r#"UPDATE whatsapp_profile_picture p SET retry_at = now() + make_interval(mins => $2)
             FROM whatsapp_linked_account a
             WHERE a.id = p.account_id AND (p.account_id, p.jid) IN (
                 SELECT account_id, jid FROM whatsapp_profile_picture
@@ -296,7 +379,8 @@ impl PictureRepository for PgWhatsAppRepository {
                 ORDER BY retry_at LIMIT $1 FOR UPDATE SKIP LOCKED)
             RETURNING p.account_id, a.user_id, p.jid, p.picture_id AS "picture_id!",
                 p.staged AS "staged!", p.mime AS "mime!""#,
-            limit
+            limit,
+            CLAIM_HOLD_MINUTES
         )
         .fetch_all(&self.pool)
         .await
@@ -324,14 +408,16 @@ impl PictureRepository for PgWhatsAppRepository {
         let mut tx = self.pool.begin().await.map_err(failure)?;
         let owner = sqlx::query_scalar!(
             r#"UPDATE whatsapp_profile_picture p SET state = 'ready', static_file_id = $4, staged = NULL, mime = NULL,
-                attempts = 0, retry_at = now() + interval '6 days' + random() * interval '2 days'
+                attempts = 0, retry_at = now() + make_interval(days => $5) + random() * make_interval(days => $6)
             FROM whatsapp_linked_account a
             WHERE a.id = p.account_id AND p.account_id = $1 AND p.jid = $2 AND p.state = 'staged' AND p.picture_id = $3
             RETURNING a.user_id"#,
             account,
             jid,
             picture_id,
-            static_file_id
+            static_file_id,
+            RECHECK_DAYS,
+            RECHECK_SPREAD_DAYS
         )
         .fetch_optional(&mut *tx)
         .await
@@ -366,13 +452,15 @@ impl PictureRepository for PgWhatsAppRepository {
                 staged = CASE WHEN attempts + 1 >= $4 THEN NULL ELSE staged END,
                 mime = CASE WHEN attempts + 1 >= $4 THEN NULL ELSE mime END,
                 retry_at = CASE WHEN attempts + 1 >= $4
-                    THEN now() + interval '6 days' + random() * interval '2 days'
+                    THEN now() + make_interval(days => $5) + random() * make_interval(days => $6)
                     ELSE now() + least(interval '1 minute' * power(2, attempts), interval '6 hours') END
             WHERE account_id = $1 AND jid = $2 AND state = 'staged' AND picture_id = $3"#,
             account,
             jid,
             picture_id,
-            MAX_PICTURE_ATTEMPTS
+            MAX_PICTURE_ATTEMPTS,
+            RECHECK_DAYS,
+            RECHECK_SPREAD_DAYS
         )
         .execute(&self.pool)
         .await

@@ -192,8 +192,7 @@ pub(super) async fn reserve_in(
             .iter()
             .find(|jid| jid.ends_with("@lid"))
             .unwrap_or(&sender.jid);
-        super::pictures::track_pictures_in(tx, &binding.user_id, std::slice::from_ref(preferred))
-            .await?;
+        super::pictures::track_person_in(tx, &binding.user_id, preferred, &aliases).await?;
     }
     for alias in &aliases {
         sqlx::query!(

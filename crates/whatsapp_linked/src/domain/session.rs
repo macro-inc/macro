@@ -332,23 +332,26 @@ impl SessionService {
         Ok(checks)
     }
 
-    /// Record what WhatsApp answered about a claimed picture check.
+    /// Record what WhatsApp answered about a claimed picture check. A
+    /// picture too large, not an image, or with an id too long to store
+    /// counts as a failed check, so it backs off instead of being retried at
+    /// once.
     pub async fn complete_picture_check(
         &self,
         scope: SessionScope,
         jid: &str,
         answer: &PictureAnswer,
     ) -> ExternalChatResult<()> {
-        if let PictureAnswer::Picture { id, bytes, mime } = answer
-            && (bytes.len() > PICTURE_LIMIT_BYTES
-                || id.len() > 64
-                || mime.len() > 64
-                || !mime.starts_with("image/"))
-        {
-            return Err(
-                ExternalChatError::Invalid("profile picture too large or not an image").into(),
-            );
-        }
+        let unstorable = matches!(answer, PictureAnswer::Picture { id, bytes, mime }
+            if bytes.len() > PICTURE_LIMIT_BYTES
+                || id.len() > PICTURE_ID_LIMIT_BYTES
+                || mime.len() > PICTURE_MIME_LIMIT_BYTES
+                || !mime.starts_with("image/"));
+        let answer = if unstorable {
+            &PictureAnswer::Failed
+        } else {
+            answer
+        };
         self.repository
             .complete_picture_check(scope, jid, answer)
             .await

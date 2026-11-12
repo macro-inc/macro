@@ -324,3 +324,128 @@ async fn checks_stop_when_the_hourly_or_daily_budget_is_spent(pool: PgPool) {
     .unwrap();
     assert_eq!(counted, PICTURE_QUERIES_PER_HOUR + 1);
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_picture_whose_import_failed_is_never_offered_as_unchanged(pool: PgPool) {
+    let (_, session, repository, _, alice, _) = adopted(&pool).await;
+    session.claim_picture_checks(alice, 10).await.unwrap();
+    session
+        .complete_picture_check(
+            alice,
+            GROUP,
+            &PictureAnswer::Picture {
+                id: "1700000001".to_owned(),
+                bytes: b"first logo".to_vec(),
+                mime: "image/png".to_owned(),
+            },
+        )
+        .await
+        .unwrap();
+    repository.staged_pictures(10).await.unwrap();
+    let first_file = Uuid::now_v7();
+    assert!(
+        repository
+            .picture_stored(alice.account_id, GROUP, "1700000001", first_file)
+            .await
+            .unwrap()
+    );
+
+    // A new picture is staged, but DSS never manages to store it.
+    session
+        .picture_changed(alice, &[GROUP.to_owned()], Some("1700000002"))
+        .await
+        .unwrap();
+    session.claim_picture_checks(alice, 10).await.unwrap();
+    session
+        .complete_picture_check(
+            alice,
+            GROUP,
+            &PictureAnswer::Picture {
+                id: "1700000002".to_owned(),
+                bytes: b"second logo".to_vec(),
+                mime: "image/png".to_owned(),
+            },
+        )
+        .await
+        .unwrap();
+    for _ in 0..5 {
+        repository
+            .picture_store_failed(alice.account_id, GROUP, "1700000002")
+            .await
+            .unwrap();
+    }
+    sqlx::query!(
+        "UPDATE whatsapp_profile_picture SET retry_at = now() WHERE account_id = $1",
+        alice.account_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(
+        session.claim_picture_checks(alice, 10).await.unwrap(),
+        vec![PictureCheck {
+            jid: GROUP.to_owned(),
+            existing_id: None,
+            common_group: None,
+        }],
+        "the stored file is the first picture, so the second's id must not be offered"
+    );
+    assert_eq!(
+        pictures(&pool, alice.account_id).await,
+        vec![(
+            GROUP.to_owned(),
+            "failed".to_owned(),
+            Some("1700000002".to_owned()),
+            Some(first_file)
+        )],
+        "the first picture stays shown meanwhile"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn ending_consent_drops_what_the_account_saw_and_checks_again(pool: PgPool) {
+    let (linked, session, repository, _, alice, _) = adopted(&pool).await;
+    session.claim_picture_checks(alice, 10).await.unwrap();
+    session
+        .complete_picture_check(
+            alice,
+            GROUP,
+            &PictureAnswer::Picture {
+                id: "1700000001".to_owned(),
+                bytes: b"group logo".to_vec(),
+                mime: "image/png".to_owned(),
+            },
+        )
+        .await
+        .unwrap();
+    repository.staged_pictures(10).await.unwrap();
+    let file = Uuid::now_v7();
+    repository
+        .picture_stored(alice.account_id, GROUP, "1700000001", file)
+        .await
+        .unwrap();
+
+    let account = linked
+        .whatsapp
+        .account(&person(ALICE))
+        .await
+        .unwrap()
+        .unwrap();
+    linked
+        .whatsapp
+        .disconnect(
+            &person(ALICE),
+            account.authorization_generation,
+            SendAuthority::Human,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        pictures(&pool, alice.account_id).await,
+        vec![(GROUP.to_owned(), "due".to_owned(), None, None)],
+        "a relink, perhaps with another number, sees for itself"
+    );
+    assert_eq!(released_files(&pool).await, vec![file]);
+}
