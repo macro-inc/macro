@@ -134,18 +134,20 @@ def main():
         rate_delta = f"{new_rate - old_rate:+.1f} writes/s ({100 * (new_rate - old_rate) / old_rate:+.1f}%)"
         lines.append(f"| {operation} | {' | '.join(changes)} | {rate_delta} |")
     lines += [
-        "", "## Run variation", "",
-        "The values below retain individual p95 results in run 1 / 2 / 3 order.", "",
-        "| Writers | Channels | Operation | Old p95 ms | Current p95 ms |",
-        "| ---: | ---: | --- | ---: | ---: |",
+        "", "## Every measured run", "",
+        "Latency varies across repetitions on this shared host. Read these rows",
+        "alongside the aggregate table before attributing a difference to the",
+        "implementation. The signed deltas compare complete repository methods;",
+        "they do not isolate the deadline preflight or remove host variability.", "",
+        "| Run | Writers | Channels | Operation | Variant | p50 / p95 / p99 ms | Writes/s |",
+        "| ---: | ---: | ---: | --- | --- | ---: | ---: |",
     ]
-    for writers, channels in LAYOUTS:
-        for operation in OPERATIONS:
-            values = []
-            for variant in ("before", "after"):
-                group = sorted(groups[(writers, channels, operation, variant)], key=lambda row: int(row["run"]))
-                values.append(" / ".join(row["p95_ms"] for row in group))
-            lines.append(f"| {writers} | {channels} | {operation} | {' | '.join(values)} |")
+    for row in rows:
+        latency = " / ".join(row[field] for field in ("median_ms", "p95_ms", "p99_ms"))
+        lines.append(
+            f"| {row['run']} | {row['writers']} | {row['channels']} | {row['operation']} | "
+            f"{row['variant']} | {latency} | {row['throughput_ops_s']} |"
+        )
     lines += [
         "", "This report is separate from the historical pre-timeout tables in",
         "[channel_write_latency_results.md](channel_write_latency_results.md).",

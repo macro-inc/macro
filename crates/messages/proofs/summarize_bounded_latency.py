@@ -85,7 +85,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("logs", type=Path, nargs="+")
     parser.add_argument("--output", type=Path, default=Path(__file__).parent)
+    parser.add_argument("--source-revision", required=True,
+                        help="exact tested deadline source, including any working-tree qualifier")
     args = parser.parse_args()
+    assert args.source_revision.strip()
+    assert "\n" not in args.source_revision and "`" not in args.source_revision
     rows = read_rows(args.logs)
     args.output.mkdir(parents=True, exist_ok=True)
     with (args.output / "channel_bounded_latency_runs.csv").open("w") as output:
@@ -95,8 +99,11 @@ def main():
     measured = [row for row in rows if row["phase"] == "measured"]
     all_errors = sum(int(row["errors"]) for row in rows)
     measured_errors = sum(int(row["errors"]) for row in measured)
+    measured_count = sum(int(row["attempts"]) for row in measured)
+    warmup_count = sum(int(row["attempts"]) for row in rows if row["phase"] == "warmup")
     lines = [
         "# Current-repository below-ceiling write results", "",
+        f"Tested deadline implementation source: `{args.source_revision}`.", "",
         "Release build, sixteen Tokio workers and sixteen connections, one channel,",
         "three repetitions of 2,000 measured mixed writes per case (500 each of",
         "create, edit, react and delete). All connections are opened before timing.",
@@ -118,6 +125,7 @@ def main():
         "fsync and synchronous_commit enabled; this worktree's compiler, plan jobs",
         "and tests idle during timing. The host is shared with other worktrees.",
         "This synthetic hold is not a measurement of production commit latency.", "",
+        f"Measured requests: **{measured_count:,}**. Warmup requests: **{warmup_count:,}**.",
         f"Measured errors: **{measured_errors}**. Errors including warmup: **{all_errors}**.",
         "The no-error criterion passes only when both totals are zero. Every",
         "failed attempt remains in the latency and error counts.", "",
