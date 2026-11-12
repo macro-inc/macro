@@ -261,6 +261,21 @@ persona accounts it created. It is safe to run against a stack that you tested i
 
 ## Integration Secrets
 
+Passwords uses a local OpenBao server with team-scoped namespaces and single-node
+integrated Raft on a named Compose volume per instance. Startup initializes it once
+and unseals it automatically with a generated local seal key. Provision each new team
+using the [local vault bootstrap](../../infra/local/openbao/README.md); container
+and stack restarts preserve credentials, TOTP seeds, and provisioning without a
+reseed. Keep the volume and seal key together, and use synthetic credentials only.
+Migrating from the old in-memory development server requires restoring its values
+once; Postgres metadata alone cannot recover them. Do not reset Postgres or remove
+other stack volumes for that migration.
+
+For non-destructive restarts use `docker compose restart` with the instance's
+project and Compose files, or Compose `down`/`up` without `--volumes`. The xtask
+up/down paths can reset metadata or remove volumes, and stack init snapshots do
+not include the vault.
+
 A `--no-doppler` stack supplies deterministic stubs for required configuration. External integrations still need real values, and the agent harness additionally needs the Google Gmail identity provider created from real Google OAuth configuration:
 
 | Integration | Keys | Stub behavior |
@@ -306,6 +321,16 @@ across instances) debugging containers:
   `chrome-devtools` MCP server in `.mcp.json` / `opencode.json` /
   `.cursor/mcp.json` points at it). Watch what an agent is doing live at
   http://localhost:6080/vnc.html.
+
+Older local-tool builds can recreate the shared LGTM collector and drop other
+stacks' network attachments. For a static frontend refresh, reuse the
+complete recorded binary set with `just stack update --frontend --binaries-dir
+<recorded-dir> --instance <name>` to avoid backend builds and collector startup.
+`--traces off` also skips collector startup, but omits automatic backend OTLP
+wiring and disables Vite browser telemetry. When collecting trace proof, preserve
+explicit backend and browser exporter settings and connect the existing collector
+to the instance's services network with the `otel-collector` alias, without
+restarting it.
 
 See `.agents/skills/live-debug/SKILL.md` for query recipes (Tempo/Loki HTTP
 APIs) and the browser-debugging workflow.
@@ -712,6 +737,9 @@ The seeded persona login links embed the proxy port. If an instance's window
 moves, run `just seed-scenario apply` again to get links that match.
 
 ## What the Stack Rebuilds
+
+Local service builds inherit `RUSTC_WRAPPER`, including an empty value to disable
+compiler caching.
 
 The Rust services are built on the host with one `cargo build` in the Nix shell, into `target/debug`, the same directory `cargo build` and `cargo test` use. The binaries are mounted, together with `/nix/store` (which holds the loader and libraries they link), into a runtime image tagged by the Dockerfile and target-platform content hash. Generated compose files use that exact tag, so another worktree rebuilding a different runtime recipe cannot replace a running stack's image. The recipe includes git for agent workspace repositories. Docker does not compile these services during a normal `run_local`. `cargo x build-services` runs the same build on its own.
 

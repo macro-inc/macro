@@ -678,6 +678,10 @@ async fn run_server() -> anyhow::Result<()> {
     let harness_url = macro_service_urls::AgentHarnessServiceUrl::new()?.to_string();
     let scheduled_action_url = macro_service_urls::ScheduledActionServiceUrl::new()?.to_string();
     let team_owned_entity_cleanup = TeamOwnedEntityCleanupAdapter::new(
+        Arc::new(
+            passwords::outbound::postgres::PgRepository::new(db.clone())
+                .map_err(|_| anyhow::anyhow!("invalid Passwords metadata pool capacity"))?,
+        ),
         PgBotsRepo::new(db.clone()),
         EntityRegistryServiceImpl::new(PgEntityRegistryRepository::new(db.clone())),
         document_storage_service_client.clone(),

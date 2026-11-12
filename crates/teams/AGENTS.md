@@ -145,3 +145,10 @@ event contract (schema, sanitization, delivery semantics).
 - Subscription item/pricing data errors are typed in `customer_repo/subscription_error.rs`, bridged to the existing customer error contract.
 
 - `customer_repo/billing.rs` handles subscription locks, schedules, and request construction; `subscription_items.rs` handles item quantities and provider value mapping.
+## Team vault cleanup
+
+- Run `OwnedEntityCleanup::prepare_team_deletion` before census and ordinary cleanup;
+  namespace failures stop before entity, session, subscription or team deletion.
+  Retain its optional opaque guard in `ClearedTeam` through billing and row deletion.
+- Keep membership removal and rollback unchanged: vault items belong to the team,
+  retain their creator, and lose departing members through current membership checks.

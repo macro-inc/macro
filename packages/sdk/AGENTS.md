@@ -146,6 +146,8 @@ enforced by the ordinary backend APIs.
 ## Boundaries
 
 - Keep handwritten behavior in `src/`; never edit `generated/` or `specs/`.
+- Keep the human-session-only Passwords vault endpoints in coverage exclusions;
+  normal human-session authorization and secret disclosure are outside v1 agent capabilities.
 - Keep WhatsApp pairing, passkeys, connection setup/disconnect and rollout configuration out of the handwritten public SDK; operate on accounts linked in the app, with personal bearer sessions for account/access controls. External chat sends/uploads accept the connection owner's session or own API token; bots never send.
 - Keep hosted-computer management, Claude sign-in and internal provisioning
   routes in app-only coverage exclusions.

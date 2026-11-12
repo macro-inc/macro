@@ -134,6 +134,11 @@ impl LocalEnv {
     pub fn to_env(&self) -> BTreeMap<String, String> {
         let mut env = BTreeMap::new();
         env.insert("ENVIRONMENT".into(), self.environment.into());
+        env.insert("OPENBAO_ADDRESS".into(), "http://openbao:8200".into());
+        env.insert(
+            "PASSWORDS_JWT_ISSUER".into(),
+            "macro-local-passwords".into(),
+        );
         env.insert("COMPOSE_PROJECT_NAME".into(), self.project_name.clone());
         env.insert("PORT".into(), "8080".into());
         env.insert("FRONTEND_PORT".into(), self.frontend_port.to_string());

@@ -1142,3 +1142,15 @@ export const enableWhatsappLinked = defineFlag({
   key: 'enable-whatsapp-linked',
   env: 'ENABLE_WHATSAPP_LINKED',
 });
+
+/**
+ * Passwords v1: the `/passwords` route and its rail and dock entries (which
+ * also need a team). The backend evaluates the same key. On only for local
+ * stacks; hosted dev and production follow the remote PostHog flag. Override
+ * locally with VITE_ENABLE_PASSWORDS=true.
+ */
+export const enablePasswords = defineFlag({
+  key: 'enable-passwords-v1',
+  env: 'ENABLE_PASSWORDS',
+  default: LOCAL_ONLY || undefined,
+});
