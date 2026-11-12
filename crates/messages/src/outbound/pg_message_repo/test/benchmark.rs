@@ -1,6 +1,8 @@
 //! Run against a dedicated local MacroDB, with SQLX_OFFLINE unset:
 //! cargo test -p messages --all-features repository_write_latency -- --ignored --nocapture
 //! Repeat with --release after compilation and all other checks are idle.
+//! Default tests run on an explicit sixteen-worker Tokio runtime. The
+//! repository_current_thread_* tests preserve the SQLx test runtime for comparison.
 //! The baseline retains the previous repository SQL, hydration and transaction
 //! boundaries. Main measurements disable query logging; the separate ignored
 //! commit-phase diagnostic explicitly enables it and is not a baseline result.
@@ -208,26 +210,21 @@ async fn cleanup(pool: &PgPool, channels: &[Uuid]) {
     .unwrap();
 }
 
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-#[ignore = "3 runs of 2000 writes per operation, variant and concurrency; run with an idle database"]
-async fn repository_write_latency(pool: PgPool) {
-    setup(&pool).await;
+async fn measure_write_latency(options: sqlx::postgres::PgConnectOptions, runtime: &'static str) {
     let benchmark_pool = sqlx::postgres::PgPoolOptions::new()
         .max_connections(32)
-        .connect_with(
-            pool.connect_options()
-                .as_ref()
-                .clone()
-                .disable_statement_logging(),
-        )
+        .connect_with(options.disable_statement_logging())
         .await
         .unwrap();
+    setup(&benchmark_pool).await;
     warm_pool(&benchmark_pool).await;
     let repo = PgMessageRepository::new(benchmark_pool.clone());
     println!(
-        "| profile | run | writers | channels | operation | variant | n | median_ms | p95_ms | p99_ms | total_wall_ms | throughput_ops_s |"
+        "| runtime | profile | run | writers | channels | operation | variant | n | median_ms | p95_ms | p99_ms | total_wall_ms | throughput_ops_s |"
     );
-    println!("| --- | ---: | ---: | ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |");
+    println!(
+        "| --- | --- | ---: | ---: | ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |"
+    );
     for run in 1..=3 {
         for (writers, channel_count) in [(1, 1), (4, 1), (16, 1), (16, 16)] {
             for operation in OPERATIONS {
@@ -261,7 +258,7 @@ async fn repository_write_latency(pool: PgPool) {
                     let throughput = MEASURED as f64 / measurements.wall.as_secs_f64();
                     let variant = if previous { "before" } else { "after" };
                     println!(
-                        "| {} | {run} | {writers} | {channel_count} | {operation:?} | {variant} | {MEASURED} | {median:.3} | {p95:.3} | {p99:.3} | {wall_ms:.3} | {throughput:.1} |",
+                        "| {runtime} | {} | {run} | {writers} | {channel_count} | {operation:?} | {variant} | {MEASURED} | {median:.3} | {p95:.3} | {p99:.3} | {wall_ms:.3} | {throughput:.1} |",
                         profile()
                     );
                     cleanup(&benchmark_pool, &channels).await;
@@ -272,27 +269,23 @@ async fn repository_write_latency(pool: PgPool) {
     benchmark_pool.close().await;
 }
 
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-#[ignore = "SQL tracing diagnostic; do not run alongside the uninstrumented latency benchmark"]
-async fn repository_commit_phase_latency(pool: PgPool) {
-    setup(&pool).await;
+async fn measure_commit_phase_latency(
+    options: sqlx::postgres::PgConnectOptions,
+    runtime: &'static str,
+) {
     let diagnostic_pool = sqlx::postgres::PgPoolOptions::new()
         .max_connections(32)
-        .connect_with(
-            pool.connect_options()
-                .as_ref()
-                .clone()
-                .log_statements("trace".parse().unwrap()),
-        )
+        .connect_with(options.log_statements("trace".parse().unwrap()))
         .await
         .unwrap();
+    setup(&diagnostic_pool).await;
     warm_pool(&diagnostic_pool).await;
     let repo = PgMessageRepository::new(diagnostic_pool.clone());
     println!(
-        "| profile | writers | operation | n | commit_median_ms | commit_p95_ms | commit_p99_ms | post_append_observed_median_ms | post_append_observed_p95_ms | post_append_observed_p99_ms | append_to_commit_upper_median_ms | append_to_commit_upper_p95_ms | append_to_commit_upper_p99_ms |"
+        "| runtime | profile | writers | operation | n | commit_median_ms | commit_p95_ms | commit_p99_ms | post_append_observed_median_ms | post_append_observed_p95_ms | post_append_observed_p99_ms | append_to_commit_upper_median_ms | append_to_commit_upper_p95_ms | append_to_commit_upper_p99_ms |"
     );
     println!(
-        "| --- | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"
+        "| --- | --- | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"
     );
     for writers in [1, 16] {
         for operation in OPERATIONS {
@@ -365,7 +358,7 @@ async fn repository_commit_phase_latency(pool: PgPool) {
             post_append.sort_unstable();
             windows.sort_unstable();
             println!(
-                "| {} | {writers} | {operation:?} | {MEASURED} | {:.3} | {:.3} | {:.3} | {:.3} | {:.3} | {:.3} | {:.3} | {:.3} | {:.3} |",
+                "| {runtime} | {} | {writers} | {operation:?} | {MEASURED} | {:.3} | {:.3} | {:.3} | {:.3} | {:.3} | {:.3} | {:.3} | {:.3} | {:.3} |",
                 profile(),
                 percentile_ms(&commits, 50),
                 percentile_ms(&commits, 95),
@@ -381,4 +374,47 @@ async fn repository_commit_phase_latency(pool: PgPool) {
         }
     }
     diagnostic_pool.close().await;
+}
+
+async fn on_sixteen_worker_runtime(task: impl std::future::Future<Output = ()> + Send + 'static) {
+    // SQLx's test runtime uses one current thread. Keep it alive to own the
+    // scratch database, but build all benchmark pools on the measured runtime.
+    tokio::task::spawn_blocking(move || {
+        tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(16)
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(task);
+    })
+    .await
+    .unwrap();
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+#[ignore = "3 runs of 2000 writes per case on 16 Tokio workers; run with an idle database"]
+async fn repository_write_latency(pool: PgPool) {
+    let options = pool.connect_options().as_ref().clone();
+    on_sixteen_worker_runtime(measure_write_latency(options, "multi_thread_16")).await;
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+#[ignore = "SQL tracing diagnostic on 16 Tokio workers; run separately from write latency"]
+async fn repository_commit_phase_latency(pool: PgPool) {
+    let options = pool.connect_options().as_ref().clone();
+    on_sixteen_worker_runtime(measure_commit_phase_latency(options, "multi_thread_16")).await;
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+#[ignore = "3 runs of 2000 writes per case on the SQLx current-thread test runtime"]
+async fn repository_current_thread_write_latency(pool: PgPool) {
+    let options = pool.connect_options().as_ref().clone();
+    measure_write_latency(options, "current_thread").await;
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+#[ignore = "SQL tracing diagnostic on the SQLx current-thread test runtime"]
+async fn repository_current_thread_commit_phase_latency(pool: PgPool) {
+    let options = pool.connect_options().as_ref().clone();
+    measure_commit_phase_latency(options, "current_thread").await;
 }
