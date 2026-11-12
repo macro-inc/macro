@@ -161,6 +161,7 @@ impl<R: InitiativeRepo, S: InitiativeDescriptionSurfaces> InitiativeServiceImpl<
             .count();
         Ok(InitiativePageRow {
             initiative: crate::domain::models::InitiativeSummary {
+                appearance: detail.appearance.clone(),
                 id: detail.id,
                 name: detail.name.clone(),
                 updated_at: detail.updated_at,
