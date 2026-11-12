@@ -126,6 +126,7 @@
     {"route":"drive","navigable":true,"segments":["drive"]},
     {"route":"settings","navigable":false,"segments":["settings"]},
     {"route":"view-routines","navigable":true,"segments":["routines"]},
+    {"route":"view-connections","navigable":true,"segments":["connections"]},
     {"route":"view-home","navigable":true,"segments":["home"]},
     {"route":"view-recent","navigable":true,"segments":["recent"]},
     {"route":"view-activity","navigable":true,"segments":["activity"]},

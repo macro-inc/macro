@@ -108,6 +108,7 @@ import {
   channelsSplitRoute,
   codersRoute,
   companiesRoute,
+  connectionsRoute,
   crmItemRoute,
   crmPipelineItemRoute,
   crmPipelineRecordFileItemRoute,
@@ -349,6 +350,11 @@ export function appRouteElements(): JSX.Element {
         />
         <Route
           definition={agentsRoute}
+          component={AgentsRouteView}
+          loading={AgentsViewSkeleton}
+        />
+        <Route
+          definition={connectionsRoute}
           component={AgentsRouteView}
           loading={AgentsViewSkeleton}
         />
