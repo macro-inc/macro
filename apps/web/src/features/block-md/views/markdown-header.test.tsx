@@ -84,6 +84,7 @@ vi.mock('../component/useMarkdownDocumentTools', () => ({
       openShare: item.share,
       actions: {
         history: action('History'),
+        wideMode: action('Turn on wide mode'),
         askMacro: action('Ask Macro'),
         codeActions: action('Code Actions'),
         share: action('Share'),
@@ -117,7 +118,13 @@ it('offers Dispatch Agent, Ask Macro and Share on a task', () => {
     screen.getByRole('heading', { name: 'Ship the release' })
   ).toBeTruthy();
   expect(headerButtons()).toEqual(['Dispatch Agent', 'Ask Macro', 'Share']);
-  expect(menuRows()).toEqual(['History', 'Ask Macro', 'Code Actions', 'Share']);
+  expect(menuRows()).toEqual([
+    'History',
+    'Turn on wide mode',
+    'Ask Macro',
+    'Code Actions',
+    'Share',
+  ]);
 
   const [share] = screen
     .getAllByRole('button', { name: 'Share' })

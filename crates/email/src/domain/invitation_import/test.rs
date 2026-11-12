@@ -158,18 +158,19 @@ async fn adds_the_saved_event_of_the_named_message_as_the_viewer() {
             invitation: invite,
         },
     ]);
-    let importer = Importer::default();
+    let importer = std::sync::Arc::new(Importer::default());
     let calendar_id = Uuid::now_v7();
 
-    let result = add_to_calendar(
-        &importer,
-        &snapshots,
-        receipt(thread_id),
-        message_id,
-        &invitation_id,
-        Some(calendar_id),
-    )
-    .await;
+    let service =
+        crate::domain::invitations::InvitationService::new(snapshots, (), importer.clone());
+    let result = service
+        .add_to_calendar(
+            receipt(thread_id),
+            message_id,
+            &invitation_id,
+            Some(calendar_id),
+        )
+        .await;
 
     assert!(matches!(
         result,

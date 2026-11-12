@@ -1,3 +1,4 @@
+import { supportsEntityAppearance } from '@app/features/entity-appearance/core/appearance';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import {
@@ -9,7 +10,6 @@ import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { enableProjects } from '@core/constant/featureFlags';
 import { useChannelName } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
-import ProjectIcon from '@icon/system/regular/cube.svg';
 import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { createLazyMemo } from '@solid-primitives/memo';
@@ -168,7 +168,20 @@ export function usePropertyEntityDisplay(
     match(entityType())
       .when(
         (type) => type === 'INITIATIVE' && projectSource(),
-        () => <ProjectIcon class="size-4" />
+        () => {
+          const source = projectSource();
+          return (
+            <CoreEntityIcon
+              targetType="initiative"
+              size="xs"
+              appearance={
+                source && !source.isPending && !source.isError
+                  ? source.data?.appearance
+                  : undefined
+              }
+            />
+          );
+        }
       )
       .with('USER', () => (
         <UserIcon id={entityId()} size="sm" photoUrl={user.photoUrl()} />
@@ -194,6 +207,9 @@ export function usePropertyEntityDisplay(
         return (
           <CoreEntityIcon
             targetType={blockName}
+            appearance={
+              supportsEntityAppearance(item) ? item.appearance : undefined
+            }
             size={options?.iconSize ?? 'xs'}
           />
         );

@@ -1,4 +1,5 @@
 import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
+import type { BlockTool } from '@components/app/block-tool';
 import {
   CollaborationStatusIndicator,
   isCollaborationStatusVisible,
@@ -12,9 +13,27 @@ import type { SyncSourceStatus } from '@macro-inc/collaboration/collab/source';
 import { type Accessor, Show } from 'solid-js';
 import { DispatchAgentButton } from '../../component/DispatchAgentMenu';
 import { useMarkdownName } from '../../component/MarkdownNameProvider';
-import { useMarkdownDocumentTools } from '../../component/useMarkdownDocumentTools';
+import {
+  type MarkdownDocumentActions,
+  useMarkdownDocumentTools,
+} from '../../component/useMarkdownDocumentTools';
 import { useMarkdownDocument } from '../../context/markdown-document-context';
 import { SkillBadge } from '../shared/markdown-header-parts';
+
+/**
+ * The title menu rows of the mobile header. Phones offer no version history,
+ * and no wide mode because the document already fills the screen.
+ */
+export function mobileMarkdownHeaderMenu(
+  actions: MarkdownDocumentActions
+): BlockTool[] {
+  return [
+    ...(isMobile() ? [] : [actions.history, actions.wideMode]),
+    actions.askMacro,
+    actions.codeActions,
+    actions.share,
+  ];
+}
 
 /**
  * The Markdown block's header on touch, where every document and task opens
@@ -28,8 +47,6 @@ export function MobileMarkdownHeader(props: {
   const name = () => displayName() ?? '';
   const iconType = () => (kind() === 'document' ? 'md' : kind());
   const { fileOperations, actions } = useMarkdownDocumentTools();
-  // Phones don't offer version history.
-  const history = () => (isMobile() ? [] : [actions.history]);
 
   return (
     <>
@@ -84,12 +101,7 @@ export function MobileMarkdownHeader(props: {
         itemType="document"
         name={name()}
         ops={fileOperations}
-        tools={[
-          ...history(),
-          actions.askMacro,
-          actions.codeActions,
-          actions.share,
-        ]}
+        tools={mobileMarkdownHeaderMenu(actions)}
       />
     </>
   );

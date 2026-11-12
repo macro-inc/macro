@@ -78,6 +78,14 @@ maybe_env_vars! {
     /// deploy before the price exists in Stripe; until it is set, Max checkout
     /// and plan changes answer 400 and every subscription maps to Premium.
     pub struct StripeMaxPriceId;
+    /// Stripe price ids for Macro computers, one per size and billing
+    /// interval. Absent as a group means computers are not sold here.
+    pub struct StripeComputerStandardMonthlyPriceId;
+    pub struct StripeComputerLargeMonthlyPriceId;
+    pub struct StripeComputerXlMonthlyPriceId;
+    pub struct StripeComputerStandardYearlyPriceId;
+    pub struct StripeComputerLargeYearlyPriceId;
+    pub struct StripeComputerXlYearlyPriceId;
 }
 
 /// The configuration parameters for the application.
@@ -204,6 +212,21 @@ pub struct Config {
     /// The stripe price id for the Max plan seat (optional, see
     /// [`StripeMaxPriceId`])
     pub stripe_max_price_id: StripeMaxPriceId,
+    /// Macro computer prices: all six or none, independent of fleet attachment.
+    pub stripe_computer_standard_monthly_price_id: StripeComputerStandardMonthlyPriceId,
+    pub stripe_computer_large_monthly_price_id: StripeComputerLargeMonthlyPriceId,
+    pub stripe_computer_xl_monthly_price_id: StripeComputerXlMonthlyPriceId,
+    pub stripe_computer_standard_yearly_price_id: StripeComputerStandardYearlyPriceId,
+    pub stripe_computer_large_yearly_price_id: StripeComputerLargeYearlyPriceId,
+    pub stripe_computer_xl_yearly_price_id: StripeComputerXlYearlyPriceId,
+    /// Days a Macro computer whose billing ended keeps its disk, restorable,
+    /// before it is destroyed.
+    #[macro_config_default(14)]
+    pub computer_retention_days: u32,
+    /// Days a Macro computer keeps running on a past-due subscription before
+    /// it is turned off.
+    #[macro_config_default(7)]
+    pub computer_past_due_grace_days: u32,
     /// The internal api key
     pub internal_api_key: InternalApiKey,
     /// Comma-separated Kafka bootstrap servers for the macro event broker.
@@ -223,6 +246,17 @@ pub(crate) struct MicrosoftCredentials {
     pub(crate) token_kms_key_id: String,
 }
 
+/// Parse a configured Stripe price id, rejecting anything but `price_` and a safe suffix.
+///
+/// `stripe::PriceId` accepts any string, so malformed configuration fails here instead.
+pub fn configured_price_id(value: &str) -> anyhow::Result<stripe::PriceId> {
+    anyhow::ensure!(
+        lazy_regex::regex_is_match!(r"^price_[A-Za-z0-9_]{1,64}$", value),
+        "Stripe price id {value:?} must match ^price_[A-Za-z0-9_]{{1,64}}$"
+    );
+    Ok(value.parse()?)
+}
+
 impl Config {
     /// The AI pricing every billing component is composed with. Every value
     /// is validated when the configuration loads.
@@ -237,6 +271,79 @@ impl Config {
         )
     }
 
+    /// Reject partial price groups independently of physical fleet attachment.
+    pub fn validate_computer_config(&self) -> anyhow::Result<()> {
+        let prices = [
+            (
+                "STRIPE_COMPUTER_STANDARD_MONTHLY_PRICE_ID",
+                self.stripe_computer_standard_monthly_price_id.value(),
+            ),
+            (
+                "STRIPE_COMPUTER_LARGE_MONTHLY_PRICE_ID",
+                self.stripe_computer_large_monthly_price_id.value(),
+            ),
+            (
+                "STRIPE_COMPUTER_XL_MONTHLY_PRICE_ID",
+                self.stripe_computer_xl_monthly_price_id.value(),
+            ),
+            (
+                "STRIPE_COMPUTER_STANDARD_YEARLY_PRICE_ID",
+                self.stripe_computer_standard_yearly_price_id.value(),
+            ),
+            (
+                "STRIPE_COMPUTER_LARGE_YEARLY_PRICE_ID",
+                self.stripe_computer_large_yearly_price_id.value(),
+            ),
+            (
+                "STRIPE_COMPUTER_XL_YEARLY_PRICE_ID",
+                self.stripe_computer_xl_yearly_price_id.value(),
+            ),
+        ];
+        if prices.iter().any(|(_, value)| value.is_some()) {
+            for (name, value) in prices {
+                anyhow::ensure!(
+                    nonblank_value(value).is_some(),
+                    "{name} is required when any computer price is set"
+                );
+            }
+        }
+        Ok(())
+    }
+
+    /// Macro computers' retention and past-due grace.
+    pub fn computer_billing_policy(
+        &self,
+    ) -> anyhow::Result<hosted_runtimes::domain::lifecycle::BillingPolicy> {
+        Ok(
+            hosted_runtimes::domain::lifecycle::BillingPolicy::from_days(
+                self.computer_retention_days,
+                self.computer_past_due_grace_days,
+            )?,
+        )
+    }
+
+    /// The Stripe price of each computer size per billing interval.
+    pub fn computer_prices(
+        &self,
+    ) -> anyhow::Result<crate::domain::computer_billing::ComputerPrices> {
+        self.validate_computer_config()?;
+        let price = |id: Option<&str>| id.map(configured_price_id).transpose();
+        Ok(crate::domain::computer_billing::ComputerPrices {
+            standard: crate::domain::computer_billing::IntervalPrices {
+                monthly: price(self.stripe_computer_standard_monthly_price_id.value())?,
+                yearly: price(self.stripe_computer_standard_yearly_price_id.value())?,
+            },
+            large: crate::domain::computer_billing::IntervalPrices {
+                monthly: price(self.stripe_computer_large_monthly_price_id.value())?,
+                yearly: price(self.stripe_computer_large_yearly_price_id.value())?,
+            },
+            xl: crate::domain::computer_billing::IntervalPrices {
+                monthly: price(self.stripe_computer_xl_monthly_price_id.value())?,
+                yearly: price(self.stripe_computer_xl_yearly_price_id.value())?,
+            },
+        })
+    }
+
     pub fn from_env() -> anyhow::Result<Self> {
         let enforcement = ai_usage::config::load_ai_usage_enforcement()
             .map_err(|error| anyhow::anyhow!("{error}"))?;
@@ -246,6 +353,7 @@ impl Config {
             .context("failed to load authentication service config")?;
         config.enable_ai_usage_enforcement = enforcement;
         config.enable_ai_usage_billing = billing;
+        config.computer_prices()?;
         Ok(config)
     }
 
@@ -317,13 +425,9 @@ impl Config {
         &self,
         environment: Environment,
     ) -> anyhow::Result<SignupPolicy> {
-        // Temporarily open Develop signups even when Doppler disables the bypass.
-        // Remove this override to restore the configured allowlist policy.
-        let bypass_allowlist =
-            self.development_bypass_signup_allowlist || matches!(environment, Environment::Develop);
         resolve_signup_policy(
             environment,
-            bypass_allowlist,
+            self.development_bypass_signup_allowlist,
             &self.development_signup_allowlist_json,
         )
     }

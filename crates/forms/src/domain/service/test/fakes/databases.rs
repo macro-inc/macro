@@ -186,6 +186,7 @@ fn detail(database: &FakeDatabase, grant: AccessLevel) -> DatabaseDetail {
         keys_between(None, None, database.tables.len()).expect("positions in order");
     DatabaseDetail {
         database: Database {
+            appearance: None,
             id: database.id,
             name: database.name.clone(),
             owner_id: database.owner.clone(),
@@ -389,7 +390,7 @@ fn apply_op(
                     .collect()
             };
             let result = match change {
-                RowsChange::Insert { rows } => {
+                RowsChange::Insert { rows, .. } => {
                     let mut inserted = Vec::new();
                     for (row_index, cells) in rows.iter().enumerate() {
                         let values = checked(found, row_index, cells)?;
@@ -512,6 +513,13 @@ fn apply_grid_change(world: &mut super::World, change: GridChange) {
 }
 
 impl DatabasesService for FakeDatabases {
+    async fn set_appearance(
+        &self,
+        _receipt: EntityAccessReceipt<EditAccessLevel>,
+        _appearance: model_entity::EntityAppearance,
+    ) -> Result<model_entity::EntityAppearance, DatabaseError> {
+        Err(DatabaseError::Unauthorized)
+    }
     async fn create_database(&self, command: CreateDatabase) -> Result<Database, DatabaseError> {
         let id = DatabaseId::new();
         let mut world = self.0.lock().unwrap();
@@ -537,6 +545,7 @@ impl DatabasesService for FakeDatabases {
             .created_databases
             .push((command.name.clone(), command.owner_id.to_string()));
         Ok(Database {
+            appearance: None,
             id,
             name: command.name,
             owner_id: command.owner_id.to_string(),
@@ -605,6 +614,7 @@ impl DatabasesService for FakeDatabases {
             .ok_or(DatabaseError::NotFound)?;
         database.name = name;
         Ok(Database {
+            appearance: None,
             id: database.id,
             name: database.name.clone(),
             owner_id: database.owner.clone(),
@@ -825,6 +835,7 @@ impl DatabaseMetadataReads for FakeDatabases {
             .iter()
             .find(|database| database.id == database_id)
             .map(|database| Database {
+                appearance: None,
                 id: database.id,
                 name: database.name.clone(),
                 owner_id: database.owner.clone(),

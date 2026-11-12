@@ -1,6 +1,7 @@
 use crate::domain::models::contact::{Contact, ContactName, ContactPage};
 use crate::domain::models::messages::{ContactConnection, ContactConnections, ContactsNodes};
 use crate::domain::models::page::{ContactCursor, ContactIdPage, ContactPageSize};
+use crate::domain::models::people::{PeopleSearchLimit, PeopleSearchQuery, PersonMatch};
 use crate::domain::models::query::{ContactLookup, ContactSearch};
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
@@ -62,6 +63,31 @@ pub trait ContactsPageService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<ContactIdPage, Report>> + Send;
 }
 
+/// One bounded, ranked read of the people a viewer may search for.
+pub trait PeopleSearchRepository: Send + Sync + 'static {
+    /// Match `needle` (lowercase, at least two characters) against the email and
+    /// Macro profile name of the viewer's contacts, self, and current teammates.
+    /// Rank teammates first, then prefix matches, and return at most `limit`.
+    fn search_people(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        needle: &str,
+        limit: PeopleSearchLimit,
+    ) -> impl Future<Output = Result<Vec<PersonMatch>, Report>> + Send;
+}
+
+/// Ranked people search for authenticated inbound adapters.
+pub trait PeopleSearchService: Send + Sync + 'static {
+    /// Search only the authenticated viewer's contacts and current team. A query
+    /// too short to search returns no people without reading storage.
+    fn search_people(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        query: &PeopleSearchQuery,
+        limit: PeopleSearchLimit,
+    ) -> impl Future<Output = Result<Vec<PersonMatch>, Report>> + Send;
+}
+
 /// Resolves names only for the authorized, bounded IDs selected by the directory.
 pub trait ContactNameReader: Send + Sync + 'static {
     /// Resolve at most MAX_CONTACT_PAGE_SIZE IDs with Macro profile names taking
@@ -108,6 +134,17 @@ pub trait ContactsNotifier: Send + Sync + 'static {
     fn invalidate_contacts_for_users(
         &self,
         user_ids: Vec<MacroUserIdStr<'_>>,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+}
+
+/// Port trait for telling a user's contacts that the user's picture changed.
+pub trait UserPictureNotifier: Send + Sync + 'static {
+    /// Notify `recipients` (one bounded page of contacts) that `user_id`'s
+    /// picture changed so they refetch it.
+    fn notify_picture_changed(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        recipients: &[MacroUserIdStr<'static>],
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 

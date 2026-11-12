@@ -46,7 +46,8 @@
     "gen-agent-fold-types": "just gen-agent-fold-types",
     "gen-database-sql-types": "just gen-database-sql-types",
     "gen-agent-review-types": "just gen-agent-review-types",
-    "type-check": "bun ../../node_modules/typescript-native/bin/tsc --noEmit --skipLibCheck --project tsconfig.json",
+    "check-entity-icons": "bun ../../tooling/icons/generate-entity-icons.ts --check && bun test ../../tooling/icons/generate-entity-icons.test.ts",
+    "type-check": "bun run check-entity-icons && bun ../../node_modules/typescript-native/bin/tsc --noEmit --skipLibCheck --project tsconfig.json",
     "check": "bun check-cache-people-schema && bun check-graphql-cache-schema && bun type-check && bun biome check",
     "preview": "vite preview -c vite.config.ts --outDir dist --base /app",
     "preview:dev": "vite preview -c vite.config.ts --outDir dist --base /app",
@@ -105,6 +106,7 @@
     "@lukemorales/query-key-factory": "^1.3.4",
     "@macro-inc/collaboration": "workspace:*",
     "@macro-inc/email-renderer": "workspace:*",
+    "@macro-inc/entity-icons": "workspace:*",
     "@macro-inc/graphics": "workspace:*",
     "@macro-inc/lexical-core": "workspace:*",
     "@macro-inc/machine": "workspace:*",
@@ -141,7 +143,7 @@
     "@tauri-apps/plugin-os": "~2",
     "@thisbeyond/solid-dnd": "^0.7.5",
     "@urql/core": "^6.0.3",
-    "@vitest/ui": "5.0.1",
+    "@vitest/ui": "5.1.0",
     "@zoompinch/core": "^0.0.38",
     "async-mutex": "^0.5.0",
     "codemirror": "^6.0.2",
@@ -239,7 +241,7 @@
     "vite-plugin-solid": "^2.11.8",
     "vite-plugin-solid-svg": "^0.8.1",
     "vite-tsconfig-paths": "^5.1.4",
-    "vitest": "5.0.1",
+    "vitest": "5.1.0",
     "webdriverio": "9.29.1"
   }
 }

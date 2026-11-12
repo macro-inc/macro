@@ -18,6 +18,10 @@ import {
 } from '@block-pr/data/queries';
 import { prDisplayName } from '@block-pr/util/prKey';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import {
+  canOpenInNewTab,
+  openInNewTab,
+} from '@components/app/tab-layout/open-in-new-tab';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { githubLabelColor } from '@entity/components/GithubLabelPill';
@@ -26,6 +30,7 @@ import SplitIcon from '@icon/system/regular/columns.svg';
 import EyeIcon from '@icon/system/regular/eye.svg';
 import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
 import StarIcon from '@icon/system/regular/star.svg';
+import BrowserTabIcon from '@icon/system/regular/tabs.svg';
 import UserIcon from '@icon/system/regular/user.svg';
 import UserCircleCheckIcon from '@icon/system/regular/user-circle-check.svg';
 import UsersThreeIcon from '@icon/system/regular/users-three.svg';
@@ -100,6 +105,17 @@ function ReviewFavoriteRow(props: {
                 props.onOpenReview(props.favorite.entityId, true);
             }}
           />
+          <Show when={canOpenInNewTab()}>
+            <MenuItem
+              icon={BrowserTabIcon}
+              text={t('entityActions.openInNewTab')}
+              onClick={() =>
+                openInNewTab(() =>
+                  props.onOpenReview(props.favorite.entityId, false)
+                )
+              }
+            />
+          </Show>
           <MenuItem
             icon={StarIcon}
             text={t('entityActions.removeFromFavorites')}

@@ -27,6 +27,7 @@ ignores:
   - apps/web/src/features/task-composer/compose-task.tsx
   # Not yet split.
   - apps/web/src/features/activity/views/my-activity-view.tsx
+  - apps/web/src/features/agent-session-activity/components/activity-row.tsx
   - apps/web/src/features/agents-view/components/AgentsSidebar.tsx
   - apps/web/src/features/agents-view/components/ChatComposer.tsx
   - apps/web/src/features/agents-view/route-views.tsx
@@ -39,7 +40,10 @@ ignores:
   - apps/web/src/features/block-agent/ui/AgentModelSelector.tsx
   - apps/web/src/features/block-ai/ai-block.tsx
   - apps/web/src/features/block-call/component/CallRecording/CallRecordingBody.tsx
+  - apps/web/src/features/block-call/component/CallRecording/CallRecordingControls.tsx
   - apps/web/src/features/block-call/component/CallRecording/CallRecordingSplitHeader.tsx
+  - apps/web/src/features/block-call/component/CallRecording/CallRecordingTitle.tsx
+  - apps/web/src/features/block-call/views/CallDetailMobileHeader.tsx
   - apps/web/src/features/block-call/views/CallDetailView.tsx
   - apps/web/src/features/block-canvas/component/TopBar.tsx
   - apps/web/src/features/block-channel/component/NewChannelBlockAdapter.tsx
@@ -85,9 +89,15 @@ ignores:
   - apps/web/src/features/calls-view/views/calls-view.tsx
   - apps/web/src/features/changes/views/ChangesPane.tsx
   - apps/web/src/features/changes/views/ChangesSplit.tsx
+  - apps/web/src/features/channel/Call/CallControls/CallControlBar.tsx
   - apps/web/src/features/channel/Call/CallControls/CallSettingsMenu.tsx
   - apps/web/src/features/channel/Call/CallOverlay.tsx
+  - apps/web/src/features/channel/Call/ChannelCallButton.tsx
   - apps/web/src/features/channel/Call/ChannelCallTab.tsx
+  - apps/web/src/features/channel/Call/chat/components/CallChatPanel.tsx
+  - apps/web/src/features/channel/Call/views/CallParticipantTiles.tsx
+  - apps/web/src/features/channel/Call/views/CallParticipantVolume.tsx
+  - apps/web/src/features/channel/Call/views/PhoneAudioOutput.tsx
   - apps/web/src/features/channel/Channel/ChannelDetail.tsx
   - apps/web/src/features/channel/Channel/ChannelTopBarLiveIndicators.tsx
   - apps/web/src/features/channel/Channel/InlineMessageEditor.tsx
@@ -104,6 +114,7 @@ ignores:
   - apps/web/src/features/channels-view/components/rail/ChannelListViews.tsx
   - apps/web/src/features/channels-view/components/rail/ChannelOption.tsx
   - apps/web/src/features/channels-view/components/rail/ExpandedChannelsRail.tsx
+  - apps/web/src/features/channels-view/components/rail/next/SectionDialog.tsx
   - apps/web/src/features/command/Launcher.tsx
   - apps/web/src/features/crm/activity-tasks-adapter.tsx
   - apps/web/src/features/crm/components/activity-controls.tsx
@@ -140,6 +151,7 @@ ignores:
   - apps/web/src/features/email-view/components/EmailList.tsx
   - apps/web/src/features/email-view/components/EmailSidebar.tsx
   - apps/web/src/features/email-view/email-view.tsx
+  - apps/web/src/features/entity-appearance/views/appearance-editor.tsx
   - apps/web/src/features/entity/bulk-edit/BulkMoveToProjectView.tsx
   - apps/web/src/features/entity/composed/ListEntity.tsx
   - apps/web/src/features/external-chat/components/chat-header.tsx
@@ -166,6 +178,8 @@ ignores:
   - apps/web/src/features/notifications-inbox/views/notifications-view.tsx
   - apps/web/src/features/notifications/components/SnoozePicker.tsx
   - apps/web/src/features/onboarding/views/team-step.tsx
+  - apps/web/src/features/passwords/components/new-item-menu.tsx
+  - apps/web/src/features/passwords/views/vault-view.tsx
   - apps/web/src/features/projects/components/project-row-menu.tsx
   - apps/web/src/features/projects/components/project-skeletons.tsx
   - apps/web/src/features/projects/projects.tsx
@@ -192,7 +206,9 @@ ignores:
   - apps/web/src/features/settings/MobileApp.tsx
   - apps/web/src/features/settings/Settings.tsx
   - apps/web/src/features/settings/components/runtime-options.tsx
+  - apps/web/src/features/settings/computers/components/computer-actions-menu.tsx
   - apps/web/src/features/settings/primitives.tsx
+  - apps/web/src/features/sharing/share-delivery/views/bulk-share-view.tsx
   - apps/web/src/features/soup/SoupEntityContextMenu.tsx
   - apps/web/src/features/tasks-view/components/TasksControls.tsx
   - apps/web/src/features/tasks-view/components/TasksHeader.tsx

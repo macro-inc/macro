@@ -53,6 +53,49 @@ Button API and composition details live in the
 [shared primitive contract](../../.agents/rules/web/ui-primitives.md#button-and-buttongroup).
 Inline calendar-invitation text actions remove the transparent border to keep alignment.
 
+## Entity icons and colors
+
+Ordinary Markdown, snippets, routines, task projects, forms, and databases support
+shared entity appearance. Users with edit access click the header icon or choose
+**Change icon** after Rename in an entity menu, without a leading menu icon.
+Document header icons open the picker separately from their breadcrumb name's
+navigation button. Header buttons are 24px with unchanged 16px glyphs and the
+shared larger touch targets. Row icons still navigate. Sidebar category icons do
+not change. Drive folders, tasks, skills, and internal descriptions do not have
+appearance editing.
+Document content titles have no leading icon. Without a custom icon, **Add icon**
+appears before the other title pills for editors.
+Editing requires `enable-entity-appearance`; disabled or loading flags hide all
+entry points, and disabling closes an open picker. Saved appearance remains
+visible, including public/read-only views; API/SDK access and permissions do not
+change. Development defaults on; `VITE_ENABLE_ENTITY_APPEARANCE` overrides it.
+
+Desktop uses a compact 344px anchored popover; phones use a bottom sheet with
+**Remove**, Icons/Emoji tabs, and **Done**. Picks save immediately and the picker
+stays open. Escape, outside clicks, and Done close without undoing saved choices.
+There is no draft, preview header, or Apply/Cancel footer. Failed saves roll back
+the rejected choice without replacing a newer edit.
+
+The Icons tab shows Default (a ring in the entity's type color) and the same
+twelve fixed colors as tags, in tag-palette order. Swatches wrap in narrow panes.
+The Emoji tab hides the row; emoji retain native colors. **Remove** clears only
+the icon, while Default clears only color.
+Recent picks are stored per account and include only current picker choices.
+The dedicated entity catalog has fourteen sections; tooltips show icon nouns.
+Search matches names and nouns (for example, Idea and Dining), plus emoji.
+Retired icons and aliases remain renderable without appearing in the picker.
+Both catalogs render virtualized rows,
+including search results. Arrow keys traverse all rows, not only mounted cells;
+Enter picks, and typing focuses search. Recent reordering preserves focus. The
+Emoji category bar stays pinned and jumps to unmounted sections. Both tabs show
+the compact “Everyone with access sees this icon” footer.
+Opening the editor must not blank or remount the surrounding app.
+
+Readers, including public viewers, see saved appearance wherever an entity icon
+already appears. Appearance edits do not reorder content, update content recency,
+or send notifications. They create entity-history entries without entering
+broader activity feeds. Copies and template instances retain the appearance.
+
 ## Responsive workspace navigation
 
 At the narrow breakpoint, docked ViewShell navigation closes over 140ms while
@@ -331,9 +374,8 @@ and contact views (both inside the CRM workspace and in standalone blocks).
 Interface glyphs use the original Macro SVG family. Open `/app/debug/icon-gallery`
 to review regular, filled, and bold variants at 14/16/20/24 px in light and dark
 themes. The Original icons tab is the default; Legacy animated icons remains
-available. Interactive icons provide brief press feedback and selective mouse
-hover feedback, respecting reduced motion. Control layouts and hit targets are
-independent of glyph geometry. See the [icon guide](../../apps/web/src/components/icon/system/README.md).
+available. Interface icons never animate on press or hover. Control layouts and
+hit targets are independent of glyph geometry. See the [icon guide](../../apps/web/src/components/icon/system/README.md).
 
 ![Original icons in the live gallery](images/icon-system.png)
 

@@ -35,6 +35,12 @@ export interface SendEmailOptions {
   subject: string;
   /** Plain-text body. */
   bodyText: string;
+  /**
+   * The address to send from: the primary inbox's own address or one of its
+   * verified Gmail send-as aliases, which sends under the alias's display
+   * name. An unverified or unknown address is refused.
+   */
+  from?: string;
 }
 
 // The HTTP schema is opaque: the server serializes the Rust tool response,
@@ -56,11 +62,13 @@ export interface ConfirmedEmailOptions {
   /** The body, written as Markdown; it is rendered to HTML on send. */
   body: string;
   /**
-   * The connected inbox to send from. Omit it unless you know which inbox is
-   * right: a reply then goes out from the inbox that received the message it
-   * answers, and a new email from the user's primary inbox.
+   * The connected inbox to send from, or the address of a verified Gmail
+   * send-as alias of one, which then sends from that inbox under the alias's
+   * display name. Omit it unless you know which is right: a reply then goes
+   * out from the inbox that received the message it answers, and a new email
+   * from the user's primary inbox. An unverified alias is refused.
    */
-  from?: Link;
+  from?: Link | string;
   /** The message this answers; the email is then sent as a reply in its thread. */
   replyingTo?: EmailMessage;
   /**
@@ -89,14 +97,25 @@ export interface ForwardEmailOptions {
   bcc?: EmailRecipient[];
   /** A note above the forwarded message, written as Markdown. */
   body?: string;
-  /** The connected inbox to send from; defaults to the inbox holding the message. */
-  from?: Link;
+  /**
+   * The connected inbox to send from, or a verified Gmail send-as alias of
+   * one; defaults to the inbox holding the message.
+   */
+  from?: Link | string;
   /** `false` leaves the inbox signature off this one email; omit for the inbox's default. */
   includeSignature?: boolean;
 }
 
 /** The first line of a forwarded message, as the web composer writes it. */
 const FORWARDED_MESSAGE_HEADER = '---------- Forwarded message ----------';
+
+/** The address a `from` option names: an inbox's own address, or an alias as given. */
+async function senderAddress(
+  from: Link | string | undefined,
+): Promise<string | undefined> {
+  if (typeof from === 'string') return from;
+  return from?.emailAddress();
+}
 
 /** Escape text so Markdown renders it literally. */
 function literalMarkdown(text: string): string {
@@ -150,6 +169,7 @@ export class EmailMessage extends MacroEntity<EmailMessageData> {
             bcc: opts.bcc ?? null,
             subject: opts.subject,
             body_text: opts.bodyText,
+            from: opts.from ?? null,
           },
         },
       }),
@@ -168,7 +188,7 @@ export class EmailMessage extends MacroEntity<EmailMessageData> {
       to: opts.to,
       cc: opts.cc,
       bcc: opts.bcc,
-      from: opts.from ? await opts.from.emailAddress() : undefined,
+      from: await senderAddress(opts.from),
       replyingToId: opts.replyingTo?.id,
       includeSignature: opts.includeSignature,
       attachments: opts.attachments?.map((document) => ({
@@ -199,7 +219,11 @@ export class EmailMessage extends MacroEntity<EmailMessageData> {
     };
   }
 
-  /** The files attached to this message, from its thread's first 100 messages. */
+  /**
+   * The files attached to this message, from its thread's first 100 messages.
+   *
+   * @readonly
+   */
   async attachments(): Promise<EmailAttachment[]> {
     const { thread_db_id } = await this.detail.get();
     const { thread } = unwrap(
@@ -221,6 +245,9 @@ export class EmailMessage extends MacroEntity<EmailMessageData> {
    * message under the forwarded-message header, and its attachments as
    * Macro documents. Pass it to `execution.reviews.create({kind: 'email'})`
    * in a session; in a thread, use {@link forwardConfirmed}.
+   *
+   * @write
+   * @idempotent
    */
   async forwardDraft(opts: ForwardEmailOptions): Promise<SendEmail> {
     const [message, attachments] = await Promise.all([
@@ -230,7 +257,6 @@ export class EmailMessage extends MacroEntity<EmailMessageData> {
     const documents = await Promise.all(
       attachments.map((attachment) => attachment.toDocument()),
     );
-    const inbox = opts.from ?? Link.byId(this.client, message.link_id);
     const subject = message.subject ?? '';
     const people = (contacts: EmailMessageData['to']) =>
       contacts
@@ -261,7 +287,9 @@ export class EmailMessage extends MacroEntity<EmailMessageData> {
       to: opts.to,
       cc: opts.cc,
       bcc: opts.bcc,
-      from: await inbox.emailAddress(),
+      from: await senderAddress(
+        opts.from ?? Link.byId(this.client, message.link_id),
+      ),
       includeSignature: opts.includeSignature,
       attachments: documents.map((document) => ({ documentId: document.id })),
     };
@@ -276,6 +304,9 @@ export class EmailMessage extends MacroEntity<EmailMessageData> {
    * `forwardDraft` as a review instead. The forward is a new email that
    * quotes this message and carries its attachments; it takes effect at once
    * and is never retried.
+   *
+   * @send
+   * @openworld
    */
   async forwardConfirmed(
     opts: ForwardEmailOptions & { userConfirmation: string },
@@ -316,7 +347,11 @@ export class EmailMessage extends MacroEntity<EmailMessageData> {
     Link.byId(this.client, id),
   );
 
-  /** Read the draft's durable send, upload, or conflict status without retrying it. */
+  /**
+   * Read the draft's durable send, upload, or conflict status without retrying it.
+   *
+   * @readonly
+   */
   async operationStatus(): Promise<MessageOperationResponse> {
     return unwrap(
       await this.client.email.messageOperationStatus({ path: { id: this.id } }),
@@ -324,7 +359,11 @@ export class EmailMessage extends MacroEntity<EmailMessageData> {
   }
 
   /** Resolve the displayed operation revision after the user chooses an action.
-   * Retrying an uncertain send requires explicit duplicate-risk acceptance. */
+   * Retrying an uncertain send requires explicit duplicate-risk acceptance.
+   *
+   * @destructive
+   * @openworld
+   */
   async resolveOperation(
     request: ResolveMessageOperationRequest,
   ): Promise<void> {
@@ -333,7 +372,12 @@ export class EmailMessage extends MacroEntity<EmailMessageData> {
     );
   }
 
-  /** Verify an uploaded attachment using the draft generation captured when its upload began. */
+  /**
+   * Verify an uploaded attachment using the draft generation captured when its upload began.
+   *
+   * @write
+   * @idempotent
+   */
   async completeDraftAttachment(
     attachmentId: string,
     draftGeneration = 0,
@@ -350,7 +394,12 @@ export class EmailMessage extends MacroEntity<EmailMessageData> {
 
   /** Move a draft to another inbox using a caller-persisted operation UUID.
    * Continue editing the returned message_id; the original identity is retired.
-   * On an interrupted response, use email.recoverDraftTransfer(operation_id). */
+   * On an interrupted response, use email.recoverDraftTransfer(operation_id).
+   *
+   * @write
+   * @openworld
+   * @idempotent
+   */
   async transferDraft(
     request: TransferDraftRequest,
   ): Promise<TransferDraftResponse> {
@@ -368,7 +417,13 @@ export class EmailMessage extends MacroEntity<EmailMessageData> {
     );
   }
 
-  /** Add a label to this message. */
+  /**
+   * Add a label to this message.
+   *
+   * @write
+   * @openworld
+   * @idempotent
+   */
   async addLabel(label: Label): Promise<void> {
     await this.mutate((c) =>
       c.email.addRemoveLabel({
@@ -381,7 +436,13 @@ export class EmailMessage extends MacroEntity<EmailMessageData> {
     );
   }
 
-  /** Remove a label from this message. */
+  /**
+   * Remove a label from this message.
+   *
+   * @write
+   * @openworld
+   * @idempotent
+   */
   async removeLabel(label: Label): Promise<void> {
     await this.mutate((c) =>
       c.email.addRemoveLabel({
@@ -394,7 +455,11 @@ export class EmailMessage extends MacroEntity<EmailMessageData> {
     );
   }
 
-  /** The thread this message belongs to. */
+  /**
+   * The thread this message belongs to.
+   *
+   * @readonly
+   */
   async thread(): Promise<EmailThread> {
     return EmailThread.byId(
       this.client,
@@ -406,6 +471,9 @@ export class EmailMessage extends MacroEntity<EmailMessageData> {
    * The message's original source, exactly as Gmail or Outlook holds it, as
    * `message/rfc822` bytes for an `.eml` file. Drafts and messages still on
    * their way have no source yet and fail with a 404.
+   *
+   * @readonly
+   * @mcp-exclude Returns raw bytes only; MCP calls carry JSON.
    */
   async downloadEml(): Promise<Blob> {
     return unwrap(

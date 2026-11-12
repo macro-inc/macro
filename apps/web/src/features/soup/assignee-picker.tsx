@@ -63,6 +63,9 @@ export function useAssigneePicker(
         icon: () => <CircleDashedIcon class="size-3.5 text-ink-muted" />,
       });
       for (const member of members) add(member.id);
+      for (const id of selectedIdsAtViewEntry()) {
+        if (id !== NO_ASSIGNEE) add(id);
+      }
       for (const id of activeIds()) {
         if (id !== NO_ASSIGNEE) add(id);
       }

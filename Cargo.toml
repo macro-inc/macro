@@ -4,6 +4,8 @@ resolver = "2"
 exclude = ["vendor"]
 
 members = [
+  "crates/passwords",
+  "crates/openbao_client",
   "crates/access_requests",
   "crates/agent_api_keys",
   "crates/routines",
@@ -95,9 +97,15 @@ members = [
   "crates/graphql_registered_work",
   "crates/graphql_work_feed",
   "crates/gtm_invite",
+  "crates/computer_id",
+  "crates/pairing_id",
   "crates/harness_id",
   "crates/harness_token",
+  "crates/harnessd",
+  "crates/harnessd_protocol",
   "crates/harnesses",
+  "crates/hosted_runtimes",
+  "crates/incus_client",
   "crates/import",
   "crates/import_notion",
   "crates/import_tracker",
@@ -149,6 +157,7 @@ members = [
   "crates/upstream_error",
   "crates/account_manager",
   "crates/user_api_key",
+  "crates/user_events",
   "crates/user_language",
   "crates/webhook_signature",
   "crates/whatsapp_e2e",
@@ -215,6 +224,10 @@ members = [
 ]
 
 [workspace.dependencies]
+computer_id = { path = "crates/computer_id" }
+harnessd_protocol = { path = "crates/harnessd_protocol" }
+pairing_id = { path = "crates/pairing_id" }
+openbao_client = { path = "crates/openbao_client" }
 macro_user_id = { path = "crates/macro_user_id" }
 aes = "0.8.4"
 aes-gcm = { version = "0.10.3", features = ["zeroize"] }
@@ -286,6 +299,7 @@ determinator = "0.12.0"
 dotenvy = "0.15.7"
 ego-tree = "0.6.2"
 either = "1"
+emojis = "0.9.1"
 eventsource-stream = "0.2.3"
 flate2 = "1"
 fractional_index = { version = "2.0.2", default-features = false }
@@ -375,6 +389,7 @@ pgvector = { version = "0.4", features = ["postgres", "sqlx"] }
 png = "0.18"
 postcard = { version = "1", features = ["use-std"] }
 pollster = "0.4"
+progenitor-client = "0.15.1"
 proptest = { version = "1.11", default-features = false, features = ["std"] }
 prost = "0.14"
 prost-build = "0.14"
@@ -488,6 +503,9 @@ utoipa = { version = "5.4.0", features = [
 # the crate and every service above it differ per checkout.
 utoipa-swagger-ui = { version = "9", features = ["axum", "vendored", "debug-embed"] }
 uuid = { version = "1.15.1", features = ["fast-rng", "serde", "v4", "v5", "v7"] }
+# The terminal emulator harnessd reads `claude setup-token` screens through.
+# 0.15: 0.16 needs a unicode-width that ratatui 0.29 pins below.
+vt100 = "0.15.2"
 webpki-roots = "1.0.10"
 wiremock = "0.6.5"
 zeroize = "1.8.2"

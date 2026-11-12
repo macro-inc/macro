@@ -50,6 +50,8 @@ mod utils;
 
 #[cfg(test)]
 mod test;
+#[cfg(test)]
+pub(crate) mod trace_capture;
 
 /// Path prefix the shared gateway ALB forwards unmodified. Dual-mounted
 /// alongside `/` so the dedicated ALB keeps working during cutover.
@@ -111,6 +113,23 @@ fn swagger_ui() -> Router {
         )
 }
 
+fn computer_router_state(
+    state: &ApiContext,
+) -> hosted_runtimes::inbound::axum_router::ComputerRouterState<
+    hosted_runtimes::outbound::pg::PgComputerRepo,
+    crate::outbound::computer_billing::TeamComputerBilling<crate::api::context::TeamsServiceType>,
+    hosted_runtimes::domain::service::SystemClock,
+    crate::api::context::EntityAccessServiceType,
+    crate::api::context::AuthorizationService,
+    hosted_runtimes::outbound::pg::PgComputerRepo,
+> {
+    hosted_runtimes::inbound::axum_router::ComputerRouterState {
+        service: state.computer_service.clone(),
+        entity_access_service: state.entity_access_service.clone(),
+        authorization_state: state.authorization_state.clone(),
+    }
+}
+
 fn api_router(state: ApiContext) -> Router<ApiContext> {
     Router::new()
         .merge(native_app_service::inbound::native_app_router(
@@ -148,6 +167,9 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
                 },
             ),
         )
+        .merge(hosted_runtimes::inbound::axum_router::team_router(
+            computer_router_state(&state),
+        ))
         .merge(
             teams::inbound::axum_router::domain_notice::domain_notice_router(
                 teams::inbound::axum_router::domain_notice::DomainNoticeRouterState {

@@ -1,5 +1,7 @@
 import { openBulkEditModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
 import { toastMovedToFolder } from '@app/features/entity/bulk-edit/moved-to-folder-toast';
+import { supportsEntityAppearance } from '@app/features/entity-appearance/core/appearance';
+import { useChangeEntityIcon } from '@app/features/entity-appearance/entity-appearance';
 import {
   makeAddTagAction,
   makeCopyEntityIdAction,
@@ -24,7 +26,11 @@ import { useItemOperations } from '@core/component/FileList/useItemOperations';
 import { Permissions } from '@core/component/SharePermissions';
 import { toast } from '@core/component/Toast/Toast';
 import { resolveBlockAlias } from '@core/constant/allBlocks';
-import { enableProjects, enableReminders } from '@core/constant/featureFlags';
+import {
+  enableEntityAppearance,
+  enableProjects,
+  enableReminders,
+} from '@core/constant/featureFlags';
 import { useQuickAccess } from '@core/context/quickAccess';
 import { triggerFocusInput } from '@core/directive/focusInput';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
@@ -35,11 +41,9 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { buildEntityData, type EntityData } from '@entity';
 import ArrowRight from '@icon/system/regular/arrow-right.svg';
 import BellSimple from '@icon/system/regular/bell-simple.svg';
-import BellSlash from '@icon/system/regular/bell-slash.svg';
 import CaretDown from '@icon/system/regular/caret-down.svg';
 import CaretRight from '@icon/system/regular/caret-right.svg';
 import Check from '@icon/system/regular/check.svg';
-import Clock from '@icon/system/regular/clock.svg';
 import Copy from '@icon/system/regular/copy.svg';
 import ProjectIcon from '@icon/system/regular/cube.svg';
 import DotsThree from '@icon/system/regular/dots-three.svg';
@@ -48,6 +52,10 @@ import Rename from '@icon/system/regular/pencil-line.svg';
 import Star from '@icon/system/regular/star.svg';
 import Tag from '@icon/system/regular/tag.svg';
 import Trash from '@icon/system/regular/trash-simple.svg';
+import {
+  NotificationMuteMenu,
+  NotificationMutePage,
+} from '@notifications/components/NotificationMuteMenu';
 import type { ItemType } from '@service-storage/itemType';
 import { cn, Dropdown, Hotkey } from '@ui';
 import {
@@ -119,10 +127,14 @@ function SplitMenuItemContent(
 ) {
   return (
     <>
-      <Dynamic
-        component={props.icon as Component<JSX.SvgSVGAttributes<SVGSVGElement>>}
-        class="size-4 shrink-0"
-      />
+      <Show when={props.icon}>
+        {(icon) => (
+          <Dynamic
+            component={icon() as Component<JSX.SvgSVGAttributes<SVGSVGElement>>}
+            class="size-4 shrink-0"
+          />
+        )}
+      </Show>
       <div class="flex-1 truncate">{props.label}</div>
       <Show when={props.showHotkey !== false && props.hotkeyToken}>
         <Hotkey
@@ -147,6 +159,13 @@ function DesktopRender(props: SplitFileMenuRenderProps) {
   const sections = () => getSplitFileMenuActionSections(props.groups);
 
   const item = (action: SplitFileMenuAction) => {
+    if (action.muteMenu)
+      return (
+        <NotificationMuteMenu
+          {...action.muteMenu}
+          onActionComplete={() => props.onOpenChange(false)}
+        />
+      );
     const children = () => action.children?.filter(Boolean) ?? [];
 
     return (
@@ -206,8 +225,39 @@ function MobileRender(
   const [expandedSubmenu, setExpandedSubmenu] =
     createSignal<SplitFileMenuAction>();
   const sections = () => getSplitFileMenuActionSections(props.groups);
+  const [muting, setMuting] = createSignal(false);
+  const muteMenu = () =>
+    muting()
+      ? sections()
+          .flatMap((section) => section.actions)
+          .find((action) => action.muteMenu)?.muteMenu
+      : undefined;
+  const close = () => {
+    setMuting(false);
+    props.onOpenChange(false);
+  };
 
   const item = (action: SplitFileMenuAction, nested = false) => {
+    if (action.muteMenu) {
+      return (
+        <MobileDrawer.Item
+          disabled={action.muteMenu.disabled}
+          onClick={() => {
+            if (action.muteMenu?.muted) {
+              action.muteMenu.onMute(false);
+              close();
+            } else setMuting(true);
+          }}
+        >
+          {action.muteMenu.muted
+            ? action.muteMenu.unmuteLabel
+            : action.muteMenu.label}
+          <Show when={!action.muteMenu.muted}>
+            <CaretRight class="size-3.5" />
+          </Show>
+        </MobileDrawer.Item>
+      );
+    }
     const children = () => action.children?.filter(Boolean) ?? [];
     const expanded = () => expandedSubmenu() === action;
 
@@ -255,7 +305,10 @@ function MobileRender(
     <MobileDrawer
       side="bottom"
       open={props.open}
-      onOpenChange={props.onOpenChange}
+      onOpenChange={(open) => {
+        if (!open) setMuting(false);
+        props.onOpenChange(open);
+      }}
       preventScroll={false}
       preventScrollbarShift={false}
     >
@@ -264,62 +317,79 @@ function MobileRender(
         <MobileDrawer.Content aria-label={t('splitMenu.fileActions')}>
           <MobileDrawer.Handle />
           <MobileDrawer.ScrollBody>
-            <Show when={props.views}>
-              {(views) => (
+            <Show
+              when={muteMenu()}
+              fallback={
                 <>
-                  <MobileDrawer.Label id="split-file-menu-views-label">
-                    {views().title}
-                  </MobileDrawer.Label>
-                  <MobileDrawer.Section
-                    role="radiogroup"
-                    aria-labelledby="split-file-menu-views-label"
-                    class="flex flex-col shrink-0 mb-3"
-                  >
-                    <For each={views().options}>
-                      {(option) => (
-                        <MobileDrawer.Item
-                          type="button"
-                          role="radio"
-                          aria-checked={views().value === option.value}
-                          onClick={() => {
-                            views().onSelect(option.value);
-                            props.onOpenChange(false);
-                          }}
+                  <Show when={props.views}>
+                    {(views) => (
+                      <>
+                        <MobileDrawer.Label id="split-file-menu-views-label">
+                          {views().title}
+                        </MobileDrawer.Label>
+                        <MobileDrawer.Section
+                          role="radiogroup"
+                          aria-labelledby="split-file-menu-views-label"
+                          class="flex flex-col shrink-0 mb-3"
                         >
-                          <SplitMenuItemContent
-                            icon={option.icon}
-                            label={option.label}
-                            showHotkey={false}
-                          />
-                          <Show when={views().value === option.value}>
-                            <Check class="size-3.5 text-accent shrink-0" />
-                          </Show>
-                        </MobileDrawer.Item>
-                      )}
-                    </For>
-                  </MobileDrawer.Section>
-                  {/* With a views group leading the drawer, title the action
+                          <For each={views().options}>
+                            {(option) => (
+                              <MobileDrawer.Item
+                                type="button"
+                                role="radio"
+                                aria-checked={views().value === option.value}
+                                onClick={() => {
+                                  views().onSelect(option.value);
+                                  props.onOpenChange(false);
+                                }}
+                              >
+                                <SplitMenuItemContent
+                                  icon={option.icon}
+                                  label={option.label}
+                                  showHotkey={false}
+                                />
+                                <Show when={views().value === option.value}>
+                                  <Check class="size-3.5 text-accent shrink-0" />
+                                </Show>
+                              </MobileDrawer.Item>
+                            )}
+                          </For>
+                        </MobileDrawer.Section>
+                        {/* With a views group leading the drawer, title the action
                       sections to set the two apart. */}
-                  <Show when={sections().length > 0}>
-                    <MobileDrawer.Label>
-                      {t('entityActions.actions')}
-                    </MobileDrawer.Label>
+                        <Show when={sections().length > 0}>
+                          <MobileDrawer.Label>
+                            {t('entityActions.actions')}
+                          </MobileDrawer.Label>
+                        </Show>
+                      </>
+                    )}
                   </Show>
+                  <For each={sections()}>
+                    {(section, index) => (
+                      <>
+                        <Show when={index() > 0}>
+                          <div class="mt-3" />
+                        </Show>
+                        <MobileDrawer.Section class="flex flex-col shrink-0">
+                          <For each={section.actions}>
+                            {(action) => item(action)}
+                          </For>
+                        </MobileDrawer.Section>
+                      </>
+                    )}
+                  </For>
                 </>
+              }
+            >
+              {(menu) => (
+                <NotificationMutePage
+                  {...menu()}
+                  onBack={() => setMuting(false)}
+                  onActionComplete={close}
+                />
               )}
             </Show>
-            <For each={sections()}>
-              {(section, index) => (
-                <>
-                  <Show when={index() > 0}>
-                    <div class="mt-3" />
-                  </Show>
-                  <MobileDrawer.Section class="flex flex-col shrink-0">
-                    <For each={section.actions}>{(action) => item(action)}</For>
-                  </MobileDrawer.Section>
-                </>
-              )}
-            </For>
           </MobileDrawer.ScrollBody>
         </MobileDrawer.Content>
       </MobileDrawer.Portal>
@@ -360,6 +430,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
   const [open, setOpen] = createSignal(false);
   const [assigningProject, setAssigningProject] = createSignal(false);
   const projectsFlag = useFeatureFlag(enableProjects);
+  const appearanceFlag = useFeatureFlag(enableEntityAppearance);
   const itemOperations = useItemOperations();
   const quickAccess = useQuickAccess();
   const favoriteAction = makeFavoriteAction();
@@ -373,6 +444,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
   const addTagAction = makeAddTagAction();
   const copyLinkAction = makeCopyLinkAction();
   const copyEntityIdAction = makeCopyEntityIdAction();
+  const changeIcon = useChangeEntityIcon();
   // Read shortcut availability from row getters so focus changes update only
   // the hint, without recreating the action groups and losing menu focus.
   const activeHotkeyToken = (token: HotkeyToken): HotkeyToken | undefined => {
@@ -394,6 +466,28 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
       blockName: props.entityKind,
     });
   });
+  const appearanceOp = (): SplitFileMenuAction | undefined => {
+    const entity = menuEntity();
+    if (
+      !appearanceFlag().enabled ||
+      !entity ||
+      !supportsEntityAppearance(entity)
+    )
+      return;
+    if (
+      props.permissions !== Permissions.OWNER &&
+      props.permissions !== Permissions.CAN_EDIT
+    )
+      return;
+    return {
+      label: t('appearance.title'),
+      group: 'file',
+      action: () => {
+        setOpen(false);
+        changeIcon(entity);
+      },
+    };
+  };
 
   const favoriteOp = (): SplitFileMenuAction | undefined => {
     const entity = menuEntity();
@@ -421,26 +515,13 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
       label: muted
         ? t('entityActions.unmuteNotifications')
         : t('entityActions.muteNotifications'),
-      icon: muted ? BellSimple : BellSlash,
+      icon: BellSimple,
+      muteMenu: muteAction.menu([entity]),
       action: () => {
         fireAndForget(muteAction.execute([entity]), 'entity-actions');
       },
       get hotkeyToken() {
         return activeHotkeyToken(TOKENS.entity.action.mute);
-      },
-      group: 'macro' as const,
-    };
-  };
-
-  const snoozeOp = (): SplitFileMenuAction | undefined => {
-    const entity = menuEntity();
-    if (!entity || !muteAction.canExecute(entity)) return undefined;
-    return {
-      label: t('entityActions.snoozeNotifications'),
-      icon: Clock,
-      action: () => {
-        setOpen(false);
-        muteAction.snooze([entity]);
       },
       group: 'macro' as const,
     };
@@ -647,9 +728,17 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
         }
       })
       .filter((op) => !!op);
+    const appearance = appearanceOp();
+    if (appearance) {
+      const renameIndex = mapped.findIndex((op) => op.icon === Rename);
+      mapped.splice(
+        renameIndex < 0 ? mapped.length : renameIndex + 1,
+        0,
+        appearance
+      );
+    }
     return [
       favoriteOp(),
-      snoozeOp(),
       muteOp(),
       reminderOp(),
       addTagOp(),

@@ -2,6 +2,7 @@ import {
   ChatWithAgentIcon,
   openChatWithAgent,
 } from '@app/features/chat/ChatWithAgentButton';
+import { t } from '@app/lib/i18n';
 import type { BlockTool } from '@components/app/block-tool';
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
 import { Permissions } from '@core/component/SharePermissions';
@@ -12,6 +13,8 @@ import {
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { copyBranchNameToClipboard } from '@core/util/branchName';
+import ArrowsInLineHorizontal from '@icon/system/regular/arrows-in-line-horizontal.svg';
+import ArrowsOutLineHorizontal from '@icon/system/regular/arrows-out-line-horizontal.svg';
 import ClockCounterClockwise from '@icon/system/regular/clock-counter-clockwise.svg';
 import Copy from '@icon/system/regular/copy.svg';
 import Download from '@icon/system/regular/download.svg';
@@ -22,6 +25,7 @@ import { queryReadyGate } from '@queries/gate';
 import { useDocumentMetadataQuery } from '@queries/storage/document-metadata';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 import { useHistory } from '../history/HistoryContext';
+import { markdownWideMode, setMarkdownWideMode } from '../wide-mode';
 import { useDispatchAgentSplitFileActions } from './DispatchAgentMenu';
 import { useMarkdownName } from './MarkdownNameProvider';
 import {
@@ -119,6 +123,18 @@ export function useMarkdownDocumentTools() {
       focusTarget: () =>
         element()?.querySelector<HTMLElement>('[data-history-close]') ?? null,
     },
+    wideMode: {
+      label: () =>
+        markdownWideMode()
+          ? t('entityActions.turnOffWideMode')
+          : t('entityActions.turnOnWideMode'),
+      get icon() {
+        return markdownWideMode()
+          ? ArrowsInLineHorizontal
+          : ArrowsOutLineHorizontal;
+      },
+      action: () => setMarkdownWideMode((wide) => !wide),
+    },
     askMacro: {
       label: 'Ask Macro',
       icon: ChatWithAgentIcon,
@@ -142,3 +158,7 @@ export function useMarkdownDocumentTools() {
 
   return { fileOperations, actions, openShare };
 }
+
+export type MarkdownDocumentActions = ReturnType<
+  typeof useMarkdownDocumentTools
+>['actions'];

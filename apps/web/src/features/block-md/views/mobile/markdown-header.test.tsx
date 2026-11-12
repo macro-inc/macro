@@ -73,6 +73,7 @@ vi.mock('../../component/useMarkdownDocumentTools', () => ({
       fileOperations: [],
       actions: {
         history: action('History'),
+        wideMode: action('Turn on wide mode'),
         askMacro: action('Ask Macro'),
         codeActions: action('Code Actions'),
         share: action('Share'),
@@ -91,7 +92,7 @@ const names = (container: HTMLElement) =>
     .getAllByRole('button')
     .map((button) => button.textContent);
 
-it('keeps History and Dispatch Agent off a phone', () => {
+it('keeps History, wide mode and Dispatch Agent off a phone', () => {
   render(() => <MobileMarkdownHeader collaborationStatus={() => undefined} />);
 
   expect(
@@ -106,7 +107,7 @@ it('keeps History and Dispatch Agent off a phone', () => {
   );
 });
 
-it('offers History and Dispatch Agent on a tablet', () => {
+it('offers History, wide mode and Dispatch Agent on a tablet', () => {
   device.phone = false;
   render(() => <MobileMarkdownHeader collaborationStatus={() => undefined} />);
 
@@ -116,6 +117,6 @@ it('offers History and Dispatch Agent on a tablet', () => {
     'Show details',
   ]);
   expect(names(screen.getByRole('list', { name: 'Document actions' }))).toEqual(
-    ['History', 'Ask Macro', 'Code Actions', 'Share']
+    ['History', 'Turn on wide mode', 'Ask Macro', 'Code Actions', 'Share']
   );
 });

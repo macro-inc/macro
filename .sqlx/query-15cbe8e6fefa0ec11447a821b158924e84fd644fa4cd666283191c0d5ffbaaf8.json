@@ -1,0 +1,62 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO database_entities (database_id, name, user_id, created_at, appearance)\n            VALUES ($1, $2, $3, COALESCE($4::timestamptz, now()), $5)\n            RETURNING database_id AS id, name, appearance AS \"appearance: _\", user_id AS owner_id, created_at, trashed_at, project_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "appearance: _",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "owner_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "trashed_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "project_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Jsonb"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "15cbe8e6fefa0ec11447a821b158924e84fd644fa4cd666283191c0d5ffbaaf8"
+}

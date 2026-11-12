@@ -1,3 +1,4 @@
+import type { BlockTool } from '@components/app/block-tool';
 import { BlockToolbar } from '@components/app/block-toolbar';
 import {
   CollaborationStatusIndicator,
@@ -17,10 +18,26 @@ import { ENABLE_MARKDOWN_SIDE_PANEL } from '@core/constant/featureFlags';
 import type { SyncSourceStatus } from '@macro-inc/collaboration/collab/source';
 import { type Accessor, Show } from 'solid-js';
 import { useMarkdownName } from '../component/MarkdownNameProvider';
-import { useMarkdownDocumentTools } from '../component/useMarkdownDocumentTools';
+import {
+  type MarkdownDocumentActions,
+  useMarkdownDocumentTools,
+} from '../component/useMarkdownDocumentTools';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 import { MarkdownHeaderActions } from './markdown-header-parts';
 import { SkillBadge } from './shared/markdown-header-parts';
+
+/** The title menu rows of the desktop header. */
+export function markdownHeaderMenu(
+  actions: MarkdownDocumentActions
+): BlockTool[] {
+  return [
+    actions.history,
+    actions.wideMode,
+    actions.askMacro,
+    actions.codeActions,
+    actions.share,
+  ];
+}
 
 /** The Markdown block's header on desktop, where the block shows a preview. */
 export function MarkdownHeader(props: {
@@ -59,12 +76,7 @@ export function MarkdownHeader(props: {
 
       <BlockToolbar
         trailing={<ShareTrigger onClick={openShare} />}
-        menuTools={[
-          actions.history,
-          actions.askMacro,
-          actions.codeActions,
-          actions.share,
-        ]}
+        menuTools={markdownHeaderMenu(actions)}
         ops={fileOperations}
         id={documentId()}
         itemType="document"

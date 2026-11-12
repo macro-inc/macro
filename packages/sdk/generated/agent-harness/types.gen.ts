@@ -31,6 +31,10 @@ export type ActivityWireRow = {
      */
     agent_correlation_id?: string | null;
     /**
+     * SDK display verb, absent on older events.
+     */
+    agent_verb?: string | null;
+    /**
      * The entity acted on.
      */
     entity_id: string;
@@ -1166,6 +1170,74 @@ export type ClassifyInputResponse = {
 };
 
 /**
+ * A computer's active Claude sign-in. Claude's long-lived credential names
+ * no account, so there is no email or plan to show.
+ */
+export type ClaudeAccountStatus = {
+    /**
+     * When the credential stops working, as the computer last reported it.
+     */
+    expiresAt?: string | null;
+    /**
+     * When it was signed in.
+     */
+    signedInAt: string;
+    /**
+     * Who signed it in through Macro; absent once that user is deleted or
+     * when it was signed in on the computer itself.
+     */
+    signedInBy?: string | null;
+};
+
+/**
+ * How Claude Code on a Macro computer is paid for: its own Claude account
+ * when it has an active Claude login, otherwise Macro credits.
+ */
+export type ClaudeMode = 'macro_credits' | 'own_account';
+
+/**
+ * How Claude Code on a computer is paid for, and its Claude sign-in when it
+ * uses its own.
+ */
+export type ClaudeModeResponse = {
+    account?: null | ClaudeAccountStatus;
+    /**
+     * How Claude Code is paid for.
+     */
+    mode: ClaudeMode;
+};
+
+/**
+ * `POST /harnesses/{harness_id}/claude-sign-in/complete` body.
+ */
+export type ClaudeSignInComplete = {
+    /**
+     * The code Claude showed after the user signed in.
+     */
+    code: string;
+};
+
+/**
+ * `POST /harnesses/{harness_id}/claude-sign-in` answer.
+ */
+export type ClaudeSignInStarted = {
+    /**
+     * Where the user signs in to Claude, in their own browser.
+     */
+    url: string;
+};
+
+/**
+ * `POST /harnesses/{harness_id}/claude-sign-in/complete` answer.
+ */
+export type ClaudeSignedIn = {
+    /**
+     * Always `true`.
+     */
+    signedIn: boolean;
+};
+
+/**
  * Information used to choose a coding persona for a task.
  */
 export type CodingAgent = {
@@ -1384,6 +1456,12 @@ export type ConnectorTool = {
 export type ControlRequest = AgentAction & {
     actionId?: null | AgentActionId;
     /**
+     * The app tab the person typed this in (a UUID the tab keeps for its
+     * lifetime), so what the turn opens in the app reaches that tab only.
+     * Only a person's own request may send it; a runtime's is refused.
+     */
+    clientId?: string | null;
+    /**
      * Why the agent is being asked. Only a runtime forwarding a triggered
      * prompt may send it; a user's request carrying it is refused.
      */
@@ -1484,9 +1562,11 @@ export type CreateAgentSessionRequest = {
      */
     owner?: string | null;
     /**
-     * First prompt to deliver once the session is running. Managed sessions
-     * only - an external runtime sends its own first prompt through the
-     * control endpoint. Omitted, the session opens idle.
+     * First prompt to deliver once the session is running. The managed shape
+     * only: a persona its operator runs gets it through the session's control
+     * path once its runtime opens the session, while a runtime opening its
+     * own (the `workspace` shape) sends its first prompt through the control
+     * endpoint. Omitted, the session opens idle.
      */
     prompt?: string | null;
     promptActionId?: null | AgentActionId;
@@ -1495,6 +1575,14 @@ export type CreateAgentSessionRequest = {
      * Requires `prompt`.
      */
     promptAttachments?: Array<PromptAttachment>;
+    /**
+     * The app tab the person typed `prompt` in, as `clientId` on a control
+     * request, so what the first turn opens in the app reaches that tab
+     * only. Requires `prompt`. Only a person's own request may send it; a
+     * runtime's is refused, and a program using a person's credential has
+     * it dropped.
+     */
+    promptClientId?: string | null;
     /**
      * Starting branch for a managed coding session's selected repository.
      * Omitted, the session starts on the repository's default branch.
@@ -2111,6 +2199,11 @@ export type LoadAgentModelsRequest = {
  */
 export type LoadAgentModelsResponse = {
     /**
+     * When a paired runtime that is off or unreachable last reported this
+     * catalog; null when it was probed live.
+     */
+    cachedAt?: string | null;
+    /**
      * Current provider model, if model selection is available.
      */
     currentModel?: string | null;
@@ -2240,6 +2333,26 @@ export type NoteSuggestions = {
      * Suggested note, task, or event title.
      */
     title?: string | null;
+};
+
+/**
+ * Open an item in the prompting person's app tab.
+ */
+export type OpenInApp = {
+    /**
+     * The running execution asking; it must belong to the session's
+     * current turn.
+     */
+    executionId: ExecutionId;
+    /**
+     * An app path, such as `/md/<id>` or `/channels/<id>?s0.channels.messageId=<id>`:
+     * what follows `/app` in a Macro link. Never an origin.
+     */
+    path: string;
+    /**
+     * Where to put it; beside the agent by default.
+     */
+    placement?: UiPlacement;
 };
 
 /**
@@ -3010,6 +3123,35 @@ export type TriggerOrigin = {
 } | {
     origin: 'unknown';
 };
+
+/**
+ * What happened to a command.
+ */
+export type UiCommandOutcome = {
+    /**
+     * The command's id, as the tab sees it.
+     */
+    commandId: string;
+    status: 'sent';
+} | {
+    status: 'no_client';
+} | {
+    /**
+     * Why.
+     */
+    reason: UiDeclineReason;
+    status: 'declined';
+};
+
+/**
+ * Why a command was not sent.
+ */
+export type UiDeclineReason = 'turned_off' | 'not_allowed_route' | 'rate_limited';
+
+/**
+ * Where the opened item goes. Neither replaces what the person is reading.
+ */
+export type UiPlacement = 'beside-agent' | 'new';
 
 export type UpdateChannelSharePermission = {
     accessLevel?: null | AccessLevel;
@@ -4675,6 +4817,26 @@ export type AnswerAgentSessionToolApprovalResponses = {
 
 export type AnswerAgentSessionToolApprovalResponse = AnswerAgentSessionToolApprovalResponses[keyof AnswerAgentSessionToolApprovalResponses];
 
+export type OpenInAppData = {
+    body: OpenInApp;
+    path: {
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/ui-commands';
+};
+
+export type OpenInAppErrors = {
+    400: unknown;
+    403: unknown;
+};
+
+export type OpenInAppResponses = {
+    200: UiCommandOutcome;
+};
+
+export type OpenInAppResponse = OpenInAppResponses[keyof OpenInAppResponses];
+
 export type PresentSessionViewData = {
     body: PresentView;
     path: {
@@ -4796,6 +4958,113 @@ export type ListCodingAgentsResponses = {
 };
 
 export type ListCodingAgentsResponse = ListCodingAgentsResponses[keyof ListCodingAgentsResponses];
+
+export type GetClaudeModeData = {
+    body?: never;
+    path: {
+        /**
+         * Harness ID
+         */
+        harness_id: string;
+    };
+    query?: never;
+    url: '/harnesses/{harness_id}/claude-mode';
+};
+
+export type GetClaudeModeErrors = {
+    403: unknown;
+    404: unknown;
+    503: unknown;
+};
+
+export type GetClaudeModeResponses = {
+    200: ClaudeModeResponse;
+};
+
+export type GetClaudeModeResponse = GetClaudeModeResponses[keyof GetClaudeModeResponses];
+
+export type StartClaudeSignInData = {
+    body?: never;
+    path: {
+        /**
+         * Harness ID
+         */
+        harness_id: string;
+    };
+    query?: never;
+    url: '/harnesses/{harness_id}/claude-sign-in';
+};
+
+export type StartClaudeSignInErrors = {
+    400: unknown;
+    403: unknown;
+    404: unknown;
+    409: unknown;
+    422: unknown;
+    503: unknown;
+    504: unknown;
+};
+
+export type StartClaudeSignInResponses = {
+    200: ClaudeSignInStarted;
+};
+
+export type StartClaudeSignInResponse = StartClaudeSignInResponses[keyof StartClaudeSignInResponses];
+
+export type CompleteClaudeSignInData = {
+    body: ClaudeSignInComplete;
+    path: {
+        /**
+         * Harness ID
+         */
+        harness_id: string;
+    };
+    query?: never;
+    url: '/harnesses/{harness_id}/claude-sign-in/complete';
+};
+
+export type CompleteClaudeSignInErrors = {
+    400: unknown;
+    403: unknown;
+    404: unknown;
+    409: unknown;
+    422: unknown;
+    503: unknown;
+    504: unknown;
+};
+
+export type CompleteClaudeSignInResponses = {
+    200: ClaudeSignedIn;
+};
+
+export type CompleteClaudeSignInResponse = CompleteClaudeSignInResponses[keyof CompleteClaudeSignInResponses];
+
+export type ClaudeSignOutData = {
+    body?: never;
+    path: {
+        /**
+         * Harness ID
+         */
+        harness_id: string;
+    };
+    query?: never;
+    url: '/harnesses/{harness_id}/claude-sign-out';
+};
+
+export type ClaudeSignOutErrors = {
+    403: unknown;
+    404: unknown;
+    409: unknown;
+    422: unknown;
+    503: unknown;
+    504: unknown;
+};
+
+export type ClaudeSignOutResponses = {
+    200: ClaudeModeResponse;
+};
+
+export type ClaudeSignOutResponse = ClaudeSignOutResponses[keyof ClaudeSignOutResponses];
 
 export type ClassifyData = {
     body: ClassifyInputRequest;

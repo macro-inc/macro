@@ -668,8 +668,8 @@ each view's one switch, and "Not yet split", a baseline of files that predate
 the rule. When you split a view, delete its files from the baseline and add its
 entry. Never add a file to the baseline.
 
-The four feature-layer rules currently have warning severity and their `files` lists cover
-activity and the three email features. They do not automatically enforce every
+The four feature-layer rules have warning severity and cover only the feature
+paths registered in their `files` lists. They do not automatically enforce every
 feature directory, resolve the whole transitive import graph, or prove that a
 component is presentational.
 Passing the scan is supporting evidence, not a complete architecture review.

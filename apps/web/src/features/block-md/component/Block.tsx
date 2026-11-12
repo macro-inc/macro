@@ -1,3 +1,4 @@
+import { markdownEntityFromMetadata } from '@app/features/entity-appearance/queries/document-appearance';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { SidePanel } from '@components/app/side-panel';
@@ -13,6 +14,7 @@ import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 import {
   blockErrorSignal,
   blockHandleSignal,
+  blockMetadataSignal,
   blockSourceSignal,
 } from '@core/signal/load';
 import {
@@ -21,6 +23,7 @@ import {
   useIsDocumentOwner,
 } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
+import type { DocumentEntity } from '@entity';
 import { DocumentNotificationReadMarker } from '@notifications';
 import { Show, Suspense } from 'solid-js';
 import { createMarkdownDocumentState } from '../context/markdown-document-state';
@@ -106,11 +109,25 @@ export default function MarkdownBlockAdapter(props: BlockMarkdownProps) {
   const canEdit = useCanEdit();
   const isOwner = useIsDocumentOwner();
 
+  const documentEntity = (): DocumentEntity | undefined => {
+    const metadata = blockMetadataSignal();
+    if (
+      (kind !== 'document' && kind !== 'snippet') ||
+      !metadata ||
+      metadata.documentId !== documentId
+    )
+      return;
+    return markdownEntityFromMetadata(
+      metadata,
+      persistedName() ?? metadata.documentName ?? ''
+    );
+  };
   return (
     <DocumentBlockContainer>
       <MarkdownDocument
         documentId={documentId}
         kind={kind}
+        entity={documentEntity()}
         state={markdownState}
         documentSource={documentSource()}
         permissions={{
