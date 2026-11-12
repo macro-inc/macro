@@ -32,7 +32,6 @@ export interface SubscriptionBillingLineItem {
    */
   quantity: number;
   size?: SubscriptionBillingLineItemSize;
-  /** Computer status supplied by its owning service. */
   status?: SubscriptionBillingLineItemStatus;
   /** Provider price per unit in minor units, when fixed. */
   unitAmount?: SubscriptionBillingLineItemUnitAmount;

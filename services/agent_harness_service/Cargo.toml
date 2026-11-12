@@ -107,7 +107,7 @@ github_pull_requests = { path = "../../crates/github_pull_requests", features = 
 granola_sync = { path = "../../crates/granola_sync" }
 harness_id = { path = "../../crates/harness_id" }
 harnessd_protocol = { workspace = true }
-harnesses = { path = "../../crates/harnesses", default-features = false, features = ["outbound", "ports"] }
+harnesses = { path = "../../crates/harnesses", default-features = false, features = ["inbound", "outbound", "ports"] }
 user_api_key = { path = "../../crates/user_api_key", features = ["postgres"] }
 agent_credentials = { path = "../../crates/agent_credentials" }
 hosted_runtimes = { path = "../../crates/hosted_runtimes", default-features = false, features = ["outbound", "ports"] }

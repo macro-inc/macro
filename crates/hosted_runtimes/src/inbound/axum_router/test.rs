@@ -191,7 +191,7 @@ async fn registered_routes_reject_detached_fleet_without_side_effects() {
             entity_access_service: Arc::new(TeamAccess),
             authorization_state: MacroAuthorizationState::new(Arc::new(Authorization)),
         };
-        let router: Router = team_router(state.clone()).nest("/internal", internal_router(state));
+        let router: Router = team_router(state);
         for (method, path, body) in [
             (
                 Method::POST,
@@ -200,18 +200,7 @@ async fn registered_routes_reject_detached_fleet_without_side_effects() {
             ),
             (
                 Method::GET,
-                "/team/computers/quote?size=standard".to_owned(),
-                String::new(),
-            ),
-            (
-                Method::GET,
                 "/team/computers/offers".to_owned(),
-                String::new(),
-            ),
-            (Method::GET, format!("/team/computers/{id}"), String::new()),
-            (
-                Method::GET,
-                format!("/team/computers/{}", Uuid::now_v7()),
                 String::new(),
             ),
             (
@@ -239,29 +228,12 @@ async fn registered_routes_reject_detached_fleet_without_side_effects() {
                 format!("/team/computers/{id}/release"),
                 r#"{"confirmName":"Build box"}"#.to_owned(),
             ),
-            (
-                Method::GET,
-                format!("/internal/computers/quote?teamId={TEAM}&size=standard"),
-                String::new(),
-            ),
-            (
-                Method::GET,
-                format!("/internal/computers/{id}?teamId={TEAM}"),
-                String::new(),
-            ),
         ] {
-            let mut request = Request::builder()
+            let request = Request::builder()
                 .method(method)
                 .uri(&path)
-                .header("content-type", "application/json");
-            if path.starts_with("/internal") {
-                request = request.header(
-                    macro_authorization::INTERNAL_API_KEY_HEADER,
-                    "test-internal-key",
-                );
-            } else {
-                request = request.header("authorization", "Bearer test-user");
-            }
+                .header("content-type", "application/json")
+                .header("authorization", "Bearer test-user");
             let response = router
                 .clone()
                 .oneshot(request.body(Body::from(body)).unwrap())
@@ -288,21 +260,20 @@ async fn registered_routes_reject_detached_fleet_without_side_effects() {
 }
 
 #[tokio::test]
-async fn registered_routes_preserve_rollout_and_internal_authentication_denials() {
-    let (service, id) = detached_router_service(false, false).await;
+async fn registered_routes_preserve_rollout_denials() {
+    let (service, _) = detached_router_service(false, false).await;
     let state = ComputerRouterState {
         service: service.clone(),
         entity_access_service: Arc::new(TeamAccess),
         authorization_state: MacroAuthorizationState::new(Arc::new(Authorization)),
     };
-    let router: Router = team_router(state.clone()).nest("/internal", internal_router(state));
+    let router: Router = team_router(state);
     for (method, path, body) in [
         (
             Method::POST,
             "/team/computers",
             r#"{"size":"standard","purchaseKey":"buy-dialog-1"}"#,
         ),
-        (Method::GET, "/team/computers/quote?size=standard", ""),
         (Method::GET, "/team/computers/offers", ""),
     ] {
         let response = router
@@ -314,26 +285,6 @@ async fn registered_routes_preserve_rollout_and_internal_authentication_denials(
                     .header("authorization", "Bearer test-user")
                     .header("content-type", "application/json")
                     .body(Body::from(body))
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-        assert_eq!(response.status(), StatusCode::FORBIDDEN);
-    }
-    for path in [
-        format!("/internal/computers/quote?teamId={TEAM}&size=standard"),
-        format!("/internal/computers/{id}?teamId={TEAM}"),
-    ] {
-        let method = Method::GET;
-        let response = router
-            .clone()
-            .oneshot(
-                Request::builder()
-                    .method(method)
-                    .uri(path)
-                    .header("authorization", "Bearer test-user")
-                    .header("content-type", "application/json")
-                    .body(Body::from("{}"))
                     .unwrap(),
             )
             .await

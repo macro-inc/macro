@@ -13,7 +13,7 @@ use crate::domain::ids::ComputerId;
 use crate::domain::lifecycle::{Event, Rejected};
 use crate::domain::models::{
     Computer, ComputerName, ComputerRecord, ComputerStatus, FleetUnavailable, InvalidComputerName,
-    PurchaseBilling, Quote, Reservation, RosterComputerStatus, SizeOffer,
+    PurchaseBilling, Quote, Reservation, SizeOffer,
 };
 use crate::domain::ports::{
     Applied, Billing, BillingError, CompPolicy, ComputerRepo, FleetAttachmentSource, NoComps,
@@ -194,11 +194,6 @@ impl<
         Ok(())
     }
 
-    /// Team-agent lifecycle maintenance, independent of HTTP availability gates.
-    pub fn maintenance(&self) -> ComputerMaintenance<'_> {
-        ComputerMaintenance { service: self }
-    }
-
     /// Configure the fail-closed rollout at the composition root.
     pub fn with_rollout(mut self, rollout: crate::domain::rollout::ComputerRollout) -> Self {
         self.rollout = rollout;
@@ -253,23 +248,9 @@ impl<
         )
     }
 
-    /// Quote using server-side team policy.
-    #[tracing::instrument(skip(self, user_id), err)]
-    pub async fn quote_for_team(
-        &self,
-        user_id: &MacroUserIdStr<'static>,
-        team_id: Uuid,
-        size: ComputerSize,
-    ) -> Result<Quote, ComputerError> {
-        self.require_rollout(user_id).await?;
-        self.require_attached().await?;
-        self.quote(team_id, size, &self.purchase_billing(team_id).await?)
-            .await
-    }
-
     /// The price of one computer of `size` for the team.
     #[tracing::instrument(skip(self, billing), err)]
-    pub async fn quote(
+    async fn quote(
         &self,
         team_id: Uuid,
         size: ComputerSize,
@@ -533,86 +514,6 @@ impl<
             Applied::Changed(computer) => Ok(*computer),
             Applied::Rejected(rejected) => Err(rejected.into()),
         }
-    }
-}
-
-/// Team-agent maintenance only; no HTTP route exposes this capability.
-pub struct ComputerMaintenance<'a> {
-    service: &'a dyn MaintenanceOperations,
-}
-
-type MaintenanceFuture<'a, T> =
-    std::pin::Pin<Box<dyn Future<Output = Result<T, ComputerError>> + Send + 'a>>;
-
-trait MaintenanceOperations: Sync {
-    fn status_for_roster(
-        &self,
-        team_id: Uuid,
-        computer_id: ComputerId,
-    ) -> MaintenanceFuture<'_, RosterComputerStatus>;
-    fn request_release(
-        &self,
-        team_id: Uuid,
-        computer_id: ComputerId,
-    ) -> MaintenanceFuture<'_, ComputerStatus>;
-}
-
-impl ComputerMaintenance<'_> {
-    /// Read durable roster status without refusing a detached fleet.
-    #[tracing::instrument(skip(self), err)]
-    pub async fn status_for_roster(
-        &self,
-        team_id: Uuid,
-        computer_id: ComputerId,
-    ) -> Result<RosterComputerStatus, ComputerError> {
-        self.service.status_for_roster(team_id, computer_id).await
-    }
-
-    /// Queue release through the lifecycle without fleet access or name confirmation.
-    #[tracing::instrument(skip(self), err)]
-    pub async fn request_release(
-        &self,
-        team_id: Uuid,
-        computer_id: ComputerId,
-    ) -> Result<ComputerStatus, ComputerError> {
-        self.service.request_release(team_id, computer_id).await
-    }
-}
-
-impl<
-    Repo: ComputerRepo,
-    Bill: Billing,
-    Time: Clock,
-    Attachment: FleetAttachmentSource,
-    Policy: CompPolicy,
-> MaintenanceOperations for ComputerService<Repo, Bill, Time, Attachment, Policy>
-{
-    fn status_for_roster(
-        &self,
-        team_id: Uuid,
-        computer_id: ComputerId,
-    ) -> MaintenanceFuture<'_, RosterComputerStatus> {
-        Box::pin(async move {
-            let availability = self
-                .attachment
-                .attachment(self.clock.now())
-                .await
-                .map_err(internal)?;
-            let record = self.team_record(team_id, computer_id).await?;
-            let status = self.status_of(&record).await?;
-            Ok(RosterComputerStatus {
-                status,
-                availability,
-            })
-        })
-    }
-
-    fn request_release(
-        &self,
-        team_id: Uuid,
-        computer_id: ComputerId,
-    ) -> MaintenanceFuture<'_, ComputerStatus> {
-        Box::pin(self.apply_for_team(team_id, computer_id, Event::ReleaseNow))
     }
 }
 

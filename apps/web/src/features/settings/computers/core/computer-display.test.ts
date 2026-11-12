@@ -1,6 +1,11 @@
+import { ThrownResultError } from '@core/util/result';
 import type { ComputerStatus, SetupStep } from '@service-auth/computers';
 import { describe, expect, it } from 'vitest';
-import { canTogglePower, computerStatusLabel } from './computer-display';
+import {
+  canTogglePower,
+  computerFailureMessage,
+  computerStatusLabel,
+} from './computer-display';
 
 const waiting: ComputerStatus = {
   id: 'computer-capacity-test',
@@ -84,5 +89,25 @@ it('keeps an unrecognized runtime step generic without exposing raw text', () =>
     label: 'Setting up',
     detail: undefined,
     tone: 'progress',
+  });
+});
+
+describe('computerFailureMessage', () => {
+  it('shows a translated message for each known failure and the fallback otherwise', () => {
+    const failure = (code: string) =>
+      new ThrownResultError([{ code, message: 'server wording' }]);
+
+    expect(computerFailureMessage(failure('PAYMENT_FAILED'), 'Fallback')).toBe(
+      "Your team's payment method was declined."
+    );
+    expect(computerFailureMessage(failure('NAME_MISMATCH'), 'Fallback')).toBe(
+      "The name you typed doesn't match this computer."
+    );
+    expect(computerFailureMessage(failure('HTTP_500'), 'Fallback')).toBe(
+      'Fallback'
+    );
+    expect(computerFailureMessage(new Error('boom'), 'Fallback')).toBe(
+      'Fallback'
+    );
   });
 });

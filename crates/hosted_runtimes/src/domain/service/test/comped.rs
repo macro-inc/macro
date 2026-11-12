@@ -139,12 +139,18 @@ async fn comped_quote_preserves_stripe_terms_and_requires_a_subscription() {
         .with_comp_policy(TeamCompPolicy)
         .with_rollout(super::rollout::enabled_rollout());
         let quote = service
-            .quote_for_team(
-                &MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
+            .offers(
                 TEAM,
-                ComputerSize::Standard,
+                MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
             )
-            .await;
+            .await
+            .map(|offers| {
+                offers
+                    .into_iter()
+                    .find(|offer| offer.size == ComputerSize::Standard)
+                    .unwrap()
+                    .quote
+            });
         if no_subscription {
             assert!(matches!(
                 quote,
@@ -221,5 +227,54 @@ async fn policy_failure_cannot_reserve_or_charge_a_computer() {
         .await;
     assert!(matches!(result, Err(ComputerError::Internal(_))));
     assert!(service.repo.computers.lock().unwrap().is_empty());
+    assert!(service.billing.calls.lock().unwrap().is_empty());
+}
+
+/// A comp the team can lose: its reason, or none once the team pays.
+struct ChangingCompPolicy(std::sync::Mutex<Option<String>>);
+
+impl CompPolicy for ChangingCompPolicy {
+    type Err = std::convert::Infallible;
+
+    async fn comp_reason(&self, _team_id: Uuid) -> Result<Option<String>, Self::Err> {
+        Ok(self.0.lock().unwrap().clone())
+    }
+}
+
+#[tokio::test]
+async fn restore_comps_again_only_while_the_team_is_still_comped() {
+    let service = ComputerService::new(
+        FakeRepo {
+            sold_units: 8,
+            ..FakeRepo::default()
+        },
+        FakeBilling::default(),
+        FixedClock,
+        StaticFleetAttachment(FleetAttachment::Attached),
+    )
+    .with_comp_policy(ChangingCompPolicy(std::sync::Mutex::new(Some(
+        "internal team".to_owned(),
+    ))))
+    .with_rollout(super::rollout::enabled_rollout());
+    let id = service
+        .purchase_for_team(standard_purchase("buy-dialog-1"))
+        .await
+        .unwrap()
+        .computer_id();
+    service.cancel(TEAM, id).await.unwrap();
+
+    *service.comp_policy.0.lock().unwrap() = None;
+    let refused = service.restore(TEAM, id).await;
+    assert!(
+        matches!(
+            refused,
+            Err(ComputerError::Rejected(Rejected::InvalidRestore))
+        ),
+        "{refused:?}"
+    );
+
+    *service.comp_policy.0.lock().unwrap() = Some("internal team".to_owned());
+    let restored = service.restore(TEAM, id).await.unwrap();
+    assert_eq!(restored.billing, Some(BillingStatus::Comped));
     assert!(service.billing.calls.lock().unwrap().is_empty());
 }

@@ -95,8 +95,6 @@ import type {
   PutProfilePictureFileRequest,
   PutProfilePictureParams,
   PutUserNameParams,
-  Quote,
-  QuoteTeamComputerParams,
   RedeemGtmInviteLinkRequest,
   ReleaseBody,
   ResendFusionauthVerifyUserEmailRequest,
@@ -4985,112 +4983,6 @@ export const listTeamComputerOffers = async (
     status: res.status,
     headers: res.headers,
   } as listTeamComputerOffersResponse;
-};
-
-/**
- * @summary The price of one computer of a size for the team.
- */
-export type quoteTeamComputerResponse200 = {
-  data: Quote;
-  status: 200;
-};
-
-export type quoteTeamComputerResponse503 = {
-  data: ErrorResponse;
-  status: 503;
-};
-
-export type quoteTeamComputerResponseSuccess = quoteTeamComputerResponse200 & {
-  headers: Headers;
-};
-export type quoteTeamComputerResponseError = quoteTeamComputerResponse503 & {
-  headers: Headers;
-};
-
-export type quoteTeamComputerResponse =
-  | quoteTeamComputerResponseSuccess
-  | quoteTeamComputerResponseError;
-
-export const getQuoteTeamComputerUrl = (params: QuoteTeamComputerParams) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString());
-    }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0
-    ? `/team/computers/quote?${stringifiedParams}`
-    : `/team/computers/quote`;
-};
-
-export const quoteTeamComputer = async (
-  params: QuoteTeamComputerParams,
-  options?: RequestInit
-): Promise<quoteTeamComputerResponse> => {
-  const res = await fetch(getQuoteTeamComputerUrl(params), {
-    ...options,
-    method: 'GET',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: quoteTeamComputerResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as quoteTeamComputerResponse;
-};
-
-/**
- * @summary One computer, with setup progress until it first connects.
- */
-export type getTeamComputerResponse200 = {
-  data: ComputerStatus;
-  status: 200;
-};
-
-export type getTeamComputerResponse404 = {
-  data: ErrorResponse;
-  status: 404;
-};
-
-export type getTeamComputerResponseSuccess = getTeamComputerResponse200 & {
-  headers: Headers;
-};
-export type getTeamComputerResponseError = getTeamComputerResponse404 & {
-  headers: Headers;
-};
-
-export type getTeamComputerResponse =
-  | getTeamComputerResponseSuccess
-  | getTeamComputerResponseError;
-
-export const getGetTeamComputerUrl = (computerId: string) => {
-  return `/team/computers/${computerId}`;
-};
-
-export const getTeamComputer = async (
-  computerId: string,
-  options?: RequestInit
-): Promise<getTeamComputerResponse> => {
-  const res = await fetch(getGetTeamComputerUrl(computerId), {
-    ...options,
-    method: 'GET',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: getTeamComputerResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as getTeamComputerResponse;
 };
 
 /**

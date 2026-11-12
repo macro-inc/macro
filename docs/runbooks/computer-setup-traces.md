@@ -6,7 +6,7 @@ being Ready.
 ## What one trace contains
 
 The purchase request is the root. Every later step joins it while first setup
-runs (`crates/hosted_runtimes/AGENTS.md#observability`):
+runs ([Macro computers: Observability](../architecture/macro-computers.md#observability)):
 
 | Span | Service | Meaning |
 | --- | --- | --- |

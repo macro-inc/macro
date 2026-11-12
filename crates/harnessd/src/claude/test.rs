@@ -361,3 +361,23 @@ async fn the_real_cli_gives_a_url_and_rejects_a_junk_code() {
         Err(ErrorKind::InvalidCode)
     );
 }
+
+#[tokio::test]
+async fn an_abandoned_sign_in_ends_once_it_is_too_old_to_hand_out() {
+    let directory = tempfile::tempdir().expect("a directory");
+    let program = directory.path().join("claude");
+    std::fs::write(
+        &program,
+        "#!/usr/bin/env bash\nprintf 'https://claude.com/cai/oauth/authorize?state=abandoned\\r\\n\\r\\nPaste code here if prompted >'\nread -r code\n",
+    )
+    .expect("the stub");
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).expect("executable");
+    let mut stale_config = config(directory.path(), program);
+    stale_config.pending_lifetime = Duration::ZERO;
+    let auth = ClaudeAuth::new(stale_config);
+
+    auth.start().await.expect("a url");
+
+    assert_eq!(auth.status().await, Ok(AgentStatus::SignedOut));
+    assert!(auth.current().is_none());
+}

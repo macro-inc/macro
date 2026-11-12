@@ -39,14 +39,19 @@ Pulumi stacks; they do not host extra agent processes.
   `ANTHROPIC_BASE_URL` is its URL with `/mcp/internal` replaced by
   `/anthropic`, and `ANTHROPIC_AUTH_TOKEN` is the session egress token from
   its `Authorization: Bearer` header (re-minted on every attach, so restart
-  the runtime with the latest one). Requests pass through unchanged with
+  the runtime with the latest one). Only sessions whose bot runs on a Macro
+  computer (`harnesses.computer_id`), for an owner with
+  `enable-macro-computers`, are served; anything else, a failed lookup
+  included, is a 403 with nothing forwarded. Requests pass through unchanged with
   `ANTHROPIC_API_KEY`; only `anthropic-version`/`anthropic-beta` are
   forwarded. Models are a const allowlist (`ALLOWED_MODELS`, each mapped to
   its `ai_pricing` id, including the image’s bundled Claude Code Opus 4.8 and Sonnet 4.6
   defaults). `messages` is admitted as `AiFeature::AgentSession`
   for the session owner, and its `usage` (SSE `message_start`/`message_delta`
   or the JSON body) goes to the process's settling recorder, which charges
-  only under `ENABLE_AI_USAGE_BILLING`. Span: `anthropic_gateway.messages`.
+  only under `ENABLE_AI_USAGE_BILLING`. A caller that hangs up mid-stream does
+  not stop the read: the rest is drained (up to ten minutes) so its usage is
+  still recorded. Span: `anthropic_gateway.messages`.
   `/brain/anthropic/*` serves agent teammates' brains the same way, but
   authenticates the agent's own Macro API key (`anthropic_gateway/brain.rs`)
   and counts usage against the agent account, with no session entity.
@@ -67,8 +72,9 @@ Pulumi stacks; they do not host extra agent processes.
   from: an Incus alias such as `macro-box/2026-11-10`, or a Docker tag. Each
   computer records its own image; updates go through hosted_runtimes' image
   update routes, never by changing this value for existing computers.
-  HostedHarnesses pairing retains the buying admin as the harness owner and
-  grants the computer's team User access, so every teammate can run agents on it.
+  HostedHarnesses pairing records the buyer as the harness owner, but the
+  harness belongs to the computer's team: its owner and admins manage it
+  (Claude sign-in included) and every member can run agents on it.
   `src/computers/default_agent.rs` creates the team's `<buyer first name>'s Agent`
   (`Agent` without one, read from `macro_user_info`) coding agent through
   `BotService::create_agent` as the buyer (macrod harness, `default` model, all
@@ -100,13 +106,14 @@ Pulumi stacks; they do not host extra agent processes.
   command through the status read to the write; the cancel goes straight
   through so it can interrupt a completion holding the lock. The
   `ClaudeStatus` pass (every 60 s) refreshes every awake computer under the
-  same lock, and `sign_in_ahead.rs` refreshes on connect and then starts a
+  same lock (a sign-in nobody finished ends there once it is ten minutes old), and `sign_in_ahead.rs` refreshes on connect and then starts a
   sign-in when setup is unfinished or the credential expired. Spans:
   `computer.harnessd.command`/`.refresh`/`.refresh_all`.
-- `src/computers/claude_expiry.rs`: the ports of the operator's
-  `ClaudeSignIns` pass (every 60 s): `PgClaudeSignIns` reads live computers'
-  active Claude logins (signer, `expires_at` and last notice from
-  `harness_account_logins`, the team from the computer) and records sent notices on the login row; `IngressClaudeSignInNotices` addresses the team's owner and
+- `src/computers/claude_expiry.rs`: the notices of the operator's
+  `ClaudeSignIns` pass (every 60 s), whose sign-ins come from
+  `hosted_runtimes::outbound::pg_sign_ins::PgClaudeSignIns` (active Claude
+  logins with signer, `expires_at` and last notice; it also lists the awake
+  computers for the status pass); `IngressClaudeSignInNotices` addresses the team's owner and
   admins (`teams`) and sends `agent_sign_in_expiry` (agent `claude`; inbox, gateway, push)
   on the harness entity, with an id derived from harness, sign-in, stage and
   expiry so replicas and retries never notify twice.
@@ -243,8 +250,7 @@ produce events, independently of public session control.
 
 ## Checks
 
-- `cargo test -p agent_harness_service` (`SQLX_OFFLINE` unset; computer
-  account-lease tests require `REDIS_URI` pointing at isolated local Redis). Add
+- `cargo test -p agent_harness_service` (`SQLX_OFFLINE` unset). Add
   `-- --include-ignored` with Deno 2.9.6 on `PATH` for the real-runtime
   routine code tests.
 - `just check` (`SQLX_OFFLINE=true cargo check`).
@@ -370,7 +376,8 @@ bridge hostname, preserving Host validation for other origins.
 - `harness_bindings.rs` resolves runtime routing through the harness, bot assignment, and session lookup ports; each owning crate reads its own table.
 
 Hosted computer Claude account requests require the operator-derived
-`FleetAttachment` after the existing rollout and Manage authorization; no
+`FleetAttachment` after the existing rollout and Manage authorization (on a
+computer, the team's owner and admins); no
 attachment answers typed 503 before any command. macrod ingress keeps its
 existing authorization.
 Authentication checks the owning hosted host heartbeat per request, so its

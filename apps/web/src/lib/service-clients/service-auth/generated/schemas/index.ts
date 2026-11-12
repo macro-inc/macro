@@ -231,7 +231,6 @@ export * from './putUserNameQueryParams';
 export * from './putUserNameQueryParamsFirstName';
 export * from './putUserNameQueryParamsLastName';
 export * from './quote';
-export * from './quoteTeamComputerParams';
 export * from './redeemGtmInviteLinkRequest';
 export * from './releaseBody';
 export * from './resendFusionauthVerifyUserEmailRequest';

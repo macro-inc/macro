@@ -38,11 +38,13 @@ pub enum AgentStatus {
 /// A stored credential's details, per agent.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Account {
+    /// Claude's setup-token credential.
     Claude(ClaudeAccount),
 }
 
 /// The adapter for each agent harnessd signs in.
 pub struct Agents<Claude> {
+    /// Claude Code's sign-in.
     pub claude: Claude,
 }
 

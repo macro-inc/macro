@@ -139,16 +139,12 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
         ))
         .nest(
             "/internal",
-            internal::router()
-                .merge(hosted_runtimes::inbound::axum_router::internal_router(
-                    computer_router_state(&state),
-                ))
-                .merge(team_agents::inbound::axum_router::agent_enrollment_router(
-                    team_agents::inbound::axum_router::AgentEnrollmentRouterState {
-                        service: state.team_agents_service.clone(),
-                        authorization_state: state.authorization_state.clone(),
-                    },
-                )),
+            internal::router().merge(team_agents::inbound::axum_router::agent_enrollment_router(
+                team_agents::inbound::axum_router::AgentEnrollmentRouterState {
+                    service: state.team_agents_service.clone(),
+                    authorization_state: state.authorization_state.clone(),
+                },
+            )),
         )
         .nest("/permissions", permissions::router())
         .nest("/login", login::router(state.clone()))

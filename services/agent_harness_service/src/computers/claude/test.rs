@@ -438,3 +438,143 @@ async fn a_completion_whose_caller_left_still_records_its_signer() {
         )]
     );
 }
+
+#[test]
+fn only_claudes_own_https_sign_in_links_are_handed_out() {
+    let real = "https://claude.com/cai/oauth/authorize?code=true&client_id=9d1c250a-e61b-44d9-88ed-5944d1962f5e&response_type=code&scope=user%3Ainference&state=abc";
+    assert_eq!(super::trusted_sign_in_url(real).unwrap(), real);
+    assert!(super::trusted_sign_in_url("https://claude.ai/oauth/authorize?state=abc").is_ok());
+
+    for untrusted in [
+        "javascript:alert(1)",
+        "http://claude.com/cai/oauth/authorize?state=abc",
+        "https://claude.com.evil.test/cai/oauth/authorize?state=abc",
+        "https://evil.test/cai/oauth/authorize?state=abc",
+        "https://claude.com/somewhere/else",
+        "not a url",
+    ] {
+        assert!(
+            matches!(
+                super::trusted_sign_in_url(untrusted),
+                Err(super::ComputerRouteError::UntrustedSignInUrl)
+            ),
+            "{untrusted}"
+        );
+    }
+}
+
+/// Claude sign-in on a computer is for its team's admins: another admin may
+/// start it, and the buyer may not once they left the team.
+#[tokio::test]
+async fn claude_sign_in_follows_the_computer_teams_admins_not_its_buyer() {
+    use axum::{
+        body::Body,
+        http::{Request, StatusCode},
+    };
+    use harness_id::HarnessId;
+    use harnesses::domain::{
+        models::{ClaudeMode, Harness, HarnessAccess, HarnessOwner},
+        ports::MockHarnessRepo,
+        service::HarnessServiceImpl,
+    };
+    use macro_authorization::{
+        InternalAuthConfig, MacroAuthorizationServiceImpl, MacroAuthorizationState,
+        NoBotAuthorizer, NoUserApiKeyAuthorizer,
+    };
+    use std::sync::Arc;
+    use tower::ServiceExt as _;
+
+    let mut repo = MockHarnessRepo::new();
+    repo.expect_get_harness().returning(|id| {
+        Box::pin(async move {
+            Ok(Some(Harness {
+                id,
+                kind: "macrod".to_owned(),
+                name: "Computer".to_owned(),
+                // "owner" bought it, then left the team.
+                owner: HarnessOwner::User {
+                    user_id: "macro|owner@example.com".to_owned(),
+                },
+                created_by: "macro|owner@example.com".to_owned(),
+                created_at: "2026-01-01T00:00:00Z".parse().unwrap(),
+                updated_at: "2026-01-01T00:00:00Z".parse().unwrap(),
+                allow_permission_bypass: true,
+                access: Default::default(),
+                shared_team_ids: vec![uuid::Uuid::from_u128(7)],
+                connected: true,
+                last_connected_at: None,
+                computer_id: Some(computer_id::ComputerId::new_from_uuid(
+                    uuid::Uuid::from_u128(1),
+                )),
+                claude_mode: ClaudeMode::MacroCredits,
+            }))
+        })
+    });
+    // "other" is an admin of the computer's team.
+    repo.expect_harness_access().returning(|_, caller| {
+        Box::pin(async move {
+            Ok(match caller.as_ref() {
+                "macro|other@example.com" => HarnessAccess::Owner,
+                _ => HarnessAccess::None,
+            })
+        })
+    });
+    repo.expect_user_owns_team()
+        .returning(|_, _| Box::pin(async { Ok(false) }));
+    let authorization = MacroAuthorizationServiceImpl::new(
+        TestIdentity,
+        InternalAuthConfig {
+            api_key: "test-internal-key".to_owned(),
+            default_user_id: None,
+        },
+        NoBotAuthorizer,
+        NoUserApiKeyAuthorizer,
+    );
+    let mut flags = feature_flags::outbound::fake::FakeFeatureFlags::default();
+    for user in ["macro|owner@example.com", "macro|other@example.com"] {
+        flags.set(
+            macro_user_id::user_id::MacroUserIdStr::try_from(user.to_owned()).unwrap(),
+            Ok(feature_flags::FlagSnapshot::new([(
+                "enable-macro-computers".into(),
+                feature_flags::FlagValue::Boolean(true),
+            )])),
+        );
+    }
+    let harnesses = Arc::new(HarnessServiceImpl::new(repo));
+    let transport = Arc::new(crate::computers::harnessd::fakes::FakeHarnessd::new(|_| {
+        harnessd_protocol::Response::SignInStarted {
+            agent: harnessd_protocol::AgentProvider::Claude,
+            url: "https://claude.com/cai/oauth/authorize?code=true&client_id=test".to_owned(),
+        }
+    }));
+    let harnessd = crate::computers::harnessd::Harnessd::new(
+        transport.clone(),
+        Arc::new(crate::computers::harnessd::fakes::FakeLocks::default()),
+        Arc::clone(&harnesses),
+    );
+    let tasks = tokio_util::task::TaskTracker::new();
+    let app = super::router(
+        harnessd,
+        harnesses,
+        MacroAuthorizationState::new(Arc::new(authorization)),
+        hosted_runtimes::domain::rollout::ComputerRollout::new(flags),
+        FleetAttachment::Attached,
+        &tasks,
+    );
+    let sign_in = |bearer: &str| {
+        Request::builder()
+            .method("POST")
+            .uri(format!("/harnesses/{}/claude-sign-in", HarnessId::TEST_A))
+            .header("authorization", format!("Bearer {bearer}"))
+            .body(Body::empty())
+            .unwrap()
+    };
+
+    let admin = app.clone().oneshot(sign_in("other")).await.unwrap();
+    assert_eq!(admin.status(), StatusCode::OK);
+    let buyer = app.oneshot(sign_in("owner")).await.unwrap();
+    assert_eq!(buyer.status(), StatusCode::FORBIDDEN);
+    assert_eq!(transport.requests.lock().unwrap().len(), 1);
+    tasks.close();
+    tasks.wait().await;
+}

@@ -473,9 +473,12 @@ pub enum HarnessError {
     /// Pairing creation is throttled.
     #[error("too many open pairing requests")]
     Throttled,
-    /// The harness belongs to a Macro computer, which only releasing the
-    /// computer may delete.
-    #[error("This machine is a Macro computer. Release it from Macro computers instead.")]
+    /// The harness belongs to a Macro computer, which belongs to its team:
+    /// only releasing the computer deletes it, and it is never shared with
+    /// another team.
+    #[error(
+        "This machine is a Macro computer, which belongs to its team. Manage it from Macro computers instead."
+    )]
     ComputerHarness,
     /// Repository error.
     #[error(transparent)]

@@ -60,10 +60,10 @@ key issuance, and account merge/link flows.
 
 ## Macro computers billing
 
-Team computer purchase, quote and offers use the shared fail-closed
+Team computer purchase and offers use the shared fail-closed
 `enable-macro-computers` rollout via `ComputerService::with_rollout`; compose
-it from the existing PostHog provider. Existing management and internal APIs keep
-their authorization policy. Every computer HTTP use case also requires a fresh
+it from the existing PostHog provider. Existing management keeps its authorization
+policy. Every computer HTTP use case also requires a fresh
 host heartbeat through `PgComputerRepo` and returns typed 503 before reads or
 effects when detached. The five-minute freshness policy belongs to hosted runtimes;
 authentication has no fleet selector or startup availability latch. Pure catalog

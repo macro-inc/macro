@@ -5,7 +5,7 @@ import { enableMacroComputers } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { ThrownResultError, thrownResultErrorHasCode } from '@core/util/result';
+import { thrownResultErrorHasCode } from '@core/util/result';
 import HardDrivesIcon from '@icon/system/regular/hard-drives.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import { useAgentsQuery } from '@queries/agents/agents';
@@ -18,6 +18,7 @@ import {
   useComputerOffersQuery,
   useReleaseComputerMutation,
   useRestoreComputerMutation,
+  useRetryComputerMutation,
   useSetComputerPowerMutation,
   useUndoCancelComputerMutation,
 } from '@queries/computers/computers';
@@ -29,12 +30,9 @@ import {
 } from '@service-auth/computers';
 import type { Harness as RegisteredHarness } from '@service-storage/client';
 import { Button, confirmDialog } from '@ui';
-import { createSignal, For, Show, Suspense } from 'solid-js';
+import { createSignal, For, Show } from 'solid-js';
 import { match } from 'ts-pattern';
-import {
-  MachineRow,
-  RuntimeShareDialog,
-} from '../../components/connected-runtimes-section';
+import { MachineRow } from '../../components/connected-runtimes-section';
 import { HarnessIcon } from '../../integration-ui';
 import { IntegrationRow, SettingsCard } from '../../primitives';
 import type { ComputerMenuItem } from '../components/computer-actions-menu';
@@ -46,16 +44,13 @@ import {
 import { ReleaseComputerDialog } from '../components/release-computer-dialog';
 import {
   canTogglePower,
+  computerFailureMessage,
   formatComputerDate,
   formatQuote,
 } from '../core/computer-display';
 import { useTeamComputers } from '../primitives/team-computers';
 import { ClaudeSignInDialog } from './claude-sign-in-dialog';
 import { ComputerBuyFlow } from './computer-buy-flow';
-
-function failureMessage(error: unknown, fallback: string): string {
-  return (error instanceof ThrownResultError && error.message) || fallback;
-}
 
 /** Opens Billing, where a trialing team ends its trial and subscribes. */
 function TrialBillingButton() {
@@ -82,10 +77,25 @@ export function offersBlockedByTrial(offers: {
   );
 }
 
-/** The cheapest size on sale, for "From $20/month". */
-export function cheapestOffer(
-  offers: readonly SizeOffer[]
-): SizeOffer | undefined {
+/**
+ * "From $20/month" (or "from $20/month" mid-line) for the cheapest size on
+ * sale; "Included" when the team's computers are comped.
+ */
+export function fromPriceText(
+  offers: readonly SizeOffer[] | undefined,
+  placement: 'leading' | 'inline'
+): string | undefined {
+  const offer = offers ? cheapestOffer(offers) : undefined;
+  if (!offer) return undefined;
+  if (offer.quote.amount === 0) return t('computers.included');
+  const price = formatQuote(offer.quote);
+  return placement === 'leading'
+    ? t('computers.fromPrice', { price })
+    : t('computers.fromPriceLower', { price });
+}
+
+/** The cheapest size on sale. */
+function cheapestOffer(offers: readonly SizeOffer[]): SizeOffer | undefined {
   return offers
     .filter((offer) => !offer.soldOut)
     .reduce<SizeOffer | undefined>(
@@ -136,7 +146,6 @@ function ManagedComputerRow(props: {
   canFinishSetup: boolean;
   onFinishSetup: () => void;
   onSignIn: () => void;
-  onShare: () => void;
   onRelease: () => void;
 }) {
   const rollout = useFeatureFlag(enableMacroComputers);
@@ -149,6 +158,7 @@ function ManagedComputerRow(props: {
   const cancel = useCancelComputerMutation();
   const undoCancel = useUndoCancelComputerMutation();
   const restore = useRestoreComputerMutation();
+  const retry = useRetryComputerMutation();
   const signOut = useClaudeSignOutMutation();
 
   // Claude's long-lived credential names no account; it only expires.
@@ -199,7 +209,7 @@ function ManagedComputerRow(props: {
       await power.mutateAsync({ computerId: props.computer.id, on });
     } catch (error) {
       toast.failure(
-        failureMessage(
+        computerFailureMessage(
           error,
           on ? t('computers.powerOnFailed') : t('computers.powerOffFailed')
         )
@@ -241,7 +251,7 @@ function ManagedComputerRow(props: {
           : t('computers.cancelAtPeriodEnd', { name: props.computer.name })
       );
     } catch (error) {
-      toast.failure(failureMessage(error, t('computers.cancelFailed')));
+      toast.failure(computerFailureMessage(error, t('computers.cancelFailed')));
     }
   };
   const keep = async () => {
@@ -249,7 +259,7 @@ function ManagedComputerRow(props: {
       await undoCancel.mutateAsync(props.computer.id);
       toast.success(t('computers.keeping', { name: props.computer.name }));
     } catch (error) {
-      toast.failure(failureMessage(error, t('computers.keepFailed')));
+      toast.failure(computerFailureMessage(error, t('computers.keepFailed')));
     }
   };
 
@@ -266,7 +276,17 @@ function ManagedComputerRow(props: {
       await restore.mutateAsync(props.computer.id);
       toast.success(t('computers.restored', { name: props.computer.name }));
     } catch (error) {
-      toast.failure(failureMessage(error, t('computers.restoreFailed')));
+      toast.failure(
+        computerFailureMessage(error, t('computers.restoreFailed'))
+      );
+    }
+  };
+
+  const retrySetup = async () => {
+    try {
+      await retry.mutateAsync(props.computer.id);
+    } catch (error) {
+      toast.failure(computerFailureMessage(error, t('computers.retryFailed')));
     }
   };
 
@@ -314,6 +334,14 @@ function ManagedComputerRow(props: {
     const canPower =
       canTogglePower(computer) &&
       (computer.poweredOn || computer.billing !== 'ended');
+    if (props.canManage && computer.status === 'failed') {
+      items.push({
+        label: t('computers.retry'),
+        icon: 'retry',
+        disabled: retry.isPending,
+        onSelect: () => run(retrySetup()),
+      });
+    }
     if (props.canManage && canPower) {
       items.push(
         computer.poweredOn
@@ -364,15 +392,6 @@ function ManagedComputerRow(props: {
       computer={props.computer}
       claude={claude()}
       primary={primary()}
-      share={
-        props.harness?.access === 'owner'
-          ? {
-              label: t('runtimeSharing.share'),
-              icon: 'share',
-              onSelect: props.onShare,
-            }
-          : undefined
-      }
       menu={menu()}
       harness={props.harness?.access === 'owner' ? props.harness : undefined}
     />
@@ -386,9 +405,6 @@ function ManagedComputerRow(props: {
  */
 export function MacroComputers(props: {
   harnesses: readonly RegisteredHarness[];
-  /** The runtime whose Share menu is open, e.g. from an access request. */
-  sharing?: string;
-  onSharingChange: (harnessId: string | undefined) => void;
 }) {
   const isAdmin = useIsTeamAdmin();
   const isTeamOwner = useIsTeamOwner();
@@ -408,32 +424,26 @@ export function MacroComputers(props: {
   const harnessFor = (computer: ComputerStatus) =>
     props.harnesses.find((candidate) => candidate.id === computer.harnessId);
 
-  const canManageClaude = (computer: ComputerStatus) => {
-    const harness = harnessFor(computer);
-    const viewer = userId();
-    if (!harness || !viewer) return false;
-    if (harness.owner.type === 'user') return harness.owner.user_id === viewer;
-    return harness.created_by === viewer || isTeamOwner();
-  };
+  // The computer's team owner and admins own its harness, not its buyer.
+  const canManageClaude = (computer: ComputerStatus) =>
+    harnessFor(computer)?.access === 'owner';
 
-  const fromPriceLine = () => {
-    const offer = offers.isSuccess ? cheapestOffer(offers.data) : undefined;
-    if (!offer) return undefined;
-    if (offer.quote.amount === 0) return t('computers.included');
-    return t('computers.fromPriceLower', { price: formatQuote(offer.quote) });
-  };
+  const fromPriceLine = () =>
+    fromPriceText(offers.isSuccess ? offers.data : undefined, 'inline');
 
-  const releaseNow = async (computer: ComputerStatus) => {
+  const releaseNow = async (computer: ComputerStatus, typedName: string) => {
     setReleaseError(undefined);
     try {
       await release.mutateAsync({
         computerId: computer.id,
-        confirmName: computer.name,
+        confirmName: typedName,
       });
       setReleasing(undefined);
       toast.success(t('computers.released', { name: computer.name }));
     } catch (error) {
-      setReleaseError(failureMessage(error, t('computers.releaseFailed')));
+      setReleaseError(
+        computerFailureMessage(error, t('computers.releaseFailed'))
+      );
     }
   };
 
@@ -478,9 +488,6 @@ export function MacroComputers(props: {
                   }
                   onFinishSetup={() => setSettingUp(computer.id)}
                   onSignIn={() => setSigningIn(computer.id)}
-                  onShare={() =>
-                    props.onSharingChange(computer.harnessId ?? undefined)
-                  }
                   onRelease={() => {
                     setReleaseError(undefined);
                     setReleasing(computer);
@@ -536,23 +543,6 @@ export function MacroComputers(props: {
           />
         )}
       </Show>
-      <Show
-        when={props.harnesses.find(
-          (harness) =>
-            harness.id === props.sharing &&
-            computers().some((computer) => computer.harnessId === harness.id)
-        )}
-      >
-        {(harness) => (
-          <Suspense>
-            <RuntimeShareDialog
-              harness={harness()}
-              open
-              onOpenChange={(open) => !open && props.onSharingChange(undefined)}
-            />
-          </Suspense>
-        )}
-      </Show>
       <Show when={releasing()} keyed>
         {(computer) => (
           <ReleaseComputerDialog
@@ -562,8 +552,8 @@ export function MacroComputers(props: {
             pending={release.isPending}
             error={releaseError()}
             onClose={closeRelease}
-            onRelease={() =>
-              fireAndForget(releaseNow(computer), 'macro-computers')
+            onRelease={(typedName) =>
+              fireAndForget(releaseNow(computer, typedName), 'macro-computers')
             }
           />
         )}

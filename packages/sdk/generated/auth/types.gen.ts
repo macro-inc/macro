@@ -2186,10 +2186,7 @@ export type SubscriptionBillingLineItem = {
      */
     quantity: number;
     size?: null | ComputerSize;
-    /**
-     * Computer status supplied by its owning service.
-     */
-    status?: string | null;
+    status?: null | ComputerStatusKind;
     /**
      * Provider price per unit in minor units, when fixed.
      */
@@ -4562,51 +4559,6 @@ export type ListTeamComputerOffersResponses = {
 };
 
 export type ListTeamComputerOffersResponse = ListTeamComputerOffersResponses[keyof ListTeamComputerOffersResponses];
-
-export type QuoteTeamComputerData = {
-    body?: never;
-    path?: never;
-    query: {
-        /**
-         * Purchased catalog size.
-         */
-        size: ComputerSize;
-    };
-    url: '/team/computers/quote';
-};
-
-export type QuoteTeamComputerErrors = {
-    503: ErrorResponse;
-};
-
-export type QuoteTeamComputerError = QuoteTeamComputerErrors[keyof QuoteTeamComputerErrors];
-
-export type QuoteTeamComputerResponses = {
-    200: Quote;
-};
-
-export type QuoteTeamComputerResponse = QuoteTeamComputerResponses[keyof QuoteTeamComputerResponses];
-
-export type GetTeamComputerData = {
-    body?: never;
-    path: {
-        computer_id: string;
-    };
-    query?: never;
-    url: '/team/computers/{computer_id}';
-};
-
-export type GetTeamComputerErrors = {
-    404: ErrorResponse;
-};
-
-export type GetTeamComputerError = GetTeamComputerErrors[keyof GetTeamComputerErrors];
-
-export type GetTeamComputerResponses = {
-    200: ComputerStatus;
-};
-
-export type GetTeamComputerResponse = GetTeamComputerResponses[keyof GetTeamComputerResponses];
 
 export type UndoCancelTeamComputerData = {
     body?: never;

@@ -205,6 +205,58 @@ CREATE INDEX hosted_runtime_host_idx ON hosted_runtime (host_id)
 CREATE UNIQUE INDEX hosted_runtime_harness_idx ON hosted_runtime (harness_id)
     WHERE harness_id IS NOT NULL;
 
+-- A computer's harness belongs to the computer's team, not to whoever bought
+-- it: the team's owner and admins own it, its other members use it, and
+-- leaving the team ends both. Paired machines keep the rule from
+-- 20261104182740_harness_sharing unchanged.
+CREATE OR REPLACE FUNCTION harness_access_level(p_harness uuid, p_user text)
+RETURNS "AccessLevel"
+LANGUAGE sql
+STABLE
+AS $$
+    SELECT CASE
+        WHEN h.computer_id IS NOT NULL THEN (
+            SELECT CASE
+                WHEN t.owner_id = p_user OR tu.team_role IN ('owner', 'admin')
+                    THEN 'owner'::"AccessLevel"
+                WHEN tu.user_id IS NOT NULL THEN 'edit'::"AccessLevel"
+            END
+            FROM hosted_runtime c
+            JOIN team t ON t.id = c.team_id
+            LEFT JOIN team_user tu ON tu.team_id = c.team_id AND tu.user_id = p_user
+            WHERE c.id = h.computer_id
+        )
+        WHEN COALESCE(h.owner_user_id, h.created_by) = p_user THEN 'owner'::"AccessLevel"
+        ELSE (
+            SELECT max(ea.access_level)
+            FROM entity_access ea
+            WHERE ea.entity_id = h.id
+              AND ea.entity_type = 'harness'
+              AND (
+                (
+                    ea.source_type = 'team'
+                    AND ea.source_id IN (
+                        SELECT tu.team_id::text FROM team_user tu WHERE tu.user_id = p_user
+                    )
+                )
+                OR (
+                    ea.source_type = 'user'
+                    AND ea.source_id = p_user
+                    AND EXISTS (
+                        SELECT 1
+                        FROM team_user mine
+                        JOIN team_user theirs ON theirs.team_id = mine.team_id
+                        WHERE mine.user_id = p_user
+                          AND theirs.user_id = COALESCE(h.owner_user_id, h.created_by)
+                    )
+                )
+              )
+        )
+    END
+    FROM harnesses h
+    WHERE h.id = p_harness AND h.deleted_at IS NULL
+$$;
+
 -- The effect outbox. Workers lease rows by `worker` and key idempotency on `id`.
 CREATE TABLE hosted_runtime_effect (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,

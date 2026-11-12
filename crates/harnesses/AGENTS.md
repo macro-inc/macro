@@ -8,8 +8,9 @@ approve, claim), the usable list and teammate directory the UI renders, team
 access, residents, revocation, and the bound-agent listing the daemon reconciles
 its webhook feed from.
 Hosted computers register through trusted `create_hosted_pairing`: it creates
-an approved pairing with the buying administrator as human owner and a User
-(`edit`) grant for the computer's team. Retries before
+an approved pairing with the buyer recorded as `owner` and a User (`edit`)
+grant for the computer's team. The recorded owner confers nothing on a
+computer: see `harness_access_level` below. Retries before
 claim rotate the secret; retries after claim revoke old tokens and re-key the
 same harness. Both preserve owner, grants, agent bindings, and computer identity.
 Claim and re-key serialize on the harness row. `revoke_hosted_harness`,
@@ -47,13 +48,16 @@ before acting"); paired machines keep it off until their owner turns it on.
 - Every harness has one person as owner. Everyone else has a role: No Access
   (sees it exists), Read (`view`, cannot run agents), User (`edit`, can run
   agents), or their agent is a Resident. A team machine is a team grant in
-  `entity_access` that makes every member a User; Macro computers are team
-  machines from birth, and the teammate directory lists them to every member
-  of the computer's team.
+  `entity_access` that makes every member a User. A Macro computer's harness
+  belongs to the computer's team: its owner and admins are Owners, its other
+  members Users, and nobody else, the buyer included once they leave. It takes
+  no team access changes or direct shares (`HarnessError::ComputerHarness`,
+  and `direct_share::facts` returns none), and the teammate directory lists it
+  only to the team's members.
 - The SQL function `harness_access_level` is the one rule for a person's level,
   and `harness_can_run` for running agents on it; check the latter wherever
   something runs. A direct grant counts only while its holder shares a team with
-  the owner.
+  the owner. Never authorize from `Harness.owner` for a computer harness.
 - Opening a machine takes the owner's own session
   (`MacroUserAuthentication::is_human_session`): agents can ask, never grant.
 - A resident is a bound agent with `is_coding` false. There is no move-in or
@@ -72,9 +76,10 @@ before acting"); paired machines keep it off until their owner turns it on.
 - `authorize_harness(caller, harness_id, HarnessPermission::{View, Use, Manage})` is
   the access boundary for other services' routes: View requires effective
   access; Use requires Owner or User; Manage is the owner, or an owner of a
-  team the runtime is shared with (take it out of service). Provider
+  team the runtime is shared with (take it out of service). On a computer
+  harness Manage is Owner access, meaning the computer team's owner and admins. Provider
   accounts (`domain::account_logins`): `provider_accounts` is one account at an
-  `AgentProvider` (only `Claude`; new providers widen the CHECK), keyed by the
+  `AgentProvider` (only `Claude`; new providers add an `agent_provider` enum value), keyed by the
   provider's id (Claude: harnessd's fingerprint of its setup-token
   credential, which names no account), shared by every
   machine signed in to it. `harness_account_logins` is one sign-in on a

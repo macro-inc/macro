@@ -1190,15 +1190,21 @@ export type ClaudeAccountStatus = {
 };
 
 /**
+ * How Claude Code on a Macro computer is paid for: its own Claude account
+ * when it has an active Claude login, otherwise Macro credits.
+ */
+export type ClaudeMode = 'macro_credits' | 'own_account';
+
+/**
  * How Claude Code on a computer is paid for, and its Claude sign-in when it
  * uses its own.
  */
 export type ClaudeModeResponse = {
     account?: null | ClaudeAccountStatus;
     /**
-     * `macro_credits` or `own_account`.
+     * How Claude Code is paid for.
      */
-    mode: string;
+    mode: ClaudeMode;
 };
 
 /**

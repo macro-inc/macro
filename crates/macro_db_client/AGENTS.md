@@ -134,6 +134,5 @@ foreign keys; the broker deletes expired rows.
 
 - `agent_correlation` owns invocation mappings; activity and scheduled-email correlation columns remain nullable for older writers. Build the activity correlation index concurrently, outside a transaction.
 Hosted runtime enrollment generations are additive counters owned by
-`hosted_runtimes`. The forward persona cleanup removes reserved bootstrap keys
-from both persona maps in place without retaining recovery copies.
+`hosted_runtimes`.
 - `activity_events.agent_session_id` is filled only by the `activity_events_agent_session_id` insert trigger from `agent_correlations`; keep it when changing that table or the activity insert.

@@ -1367,6 +1367,11 @@ async fn run() -> anyhow::Result<()> {
     let anthropic_gateway = anthropic_gateway::router(
         anthropic_gateway::GatewayState::new(
             Arc::new(session_repo.clone()),
+            Arc::new(anthropic_gateway::PgBotComputers(pool.clone())),
+            feature_flags
+                .clone()
+                .map(hosted_runtimes::domain::rollout::ComputerRollout::new)
+                .unwrap_or_default(),
             admission.clone(),
             recorder.clone(),
             anthropic_gateway::ANTHROPIC_API_URL,
@@ -1393,7 +1398,7 @@ async fn run() -> anyhow::Result<()> {
             Some(operator) => Arc::new(computers::FleetTransport::new(Arc::clone(operator))),
             None => Arc::new(computers::harnessd::NoFleet),
         },
-        Arc::new(computers::harnessd::PgComputerLocks::new(pool.clone())),
+        Arc::new(computers::harnessd::PgComputerLocks::new(&pool)),
         Arc::new(harnesses::domain::service::HarnessServiceImpl::new(
             PgHarnessRepo::new(pool.clone()),
         )),
@@ -1407,13 +1412,14 @@ async fn run() -> anyhow::Result<()> {
         computers::spawn_loops(
             Arc::clone(operator),
             computers::ClaudeSignInWatch {
-                sign_ins: computers::claude_expiry::PgClaudeSignIns::new(pool.clone()),
+                sign_ins: hosted_runtimes::outbound::pg_sign_ins::PgClaudeSignIns::new(
+                    pool.clone(),
+                ),
                 notices: computers::claude_expiry::IngressClaudeSignInNotices::new(
                     Arc::clone(&notifications),
                     teams::outbound::team_repo::TeamRepositoryImpl::new(pool.clone()),
                 ),
                 harnessd: harnessd.clone(),
-                pool: pool.clone(),
             },
             &computer_tasks,
             service_shutdown.clone(),
