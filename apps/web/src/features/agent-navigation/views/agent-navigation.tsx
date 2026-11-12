@@ -12,7 +12,11 @@ import {
   useOptionalSplitRouter,
 } from '@app/lib/split-router';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { uiClientId } from '@core/agent-session/ui-client';
+import {
+  agentNavigationRunsHere,
+  startUiClientId,
+  uiClientId,
+} from '@core/agent-session/ui-client';
 import { toast } from '@core/component/Toast/Toast';
 import { enableAgentNavigation } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
@@ -26,7 +30,7 @@ import {
   type FromWebsocketMessage,
   parseWebsocketPayload,
 } from '@service-connection/websocket';
-import type { ParentProps } from 'solid-js';
+import { createEffect, on, type ParentProps } from 'solid-js';
 import {
   type AgentArrivals,
   AgentArrivalsProvider,
@@ -41,6 +45,31 @@ import { type ApplyOutcome, applyOpen } from '../primitives/apply-ui-command';
 
 /** Undo stays on offer a little longer than an ordinary notice. */
 const UNDO_TOAST_MS = 8_000;
+
+/**
+ * Undo, traced with its outcome. A leave guard can keep the pane (unsaved
+ * edits); Undo then stays on offer.
+ */
+async function undoOpen(
+  frame: UiCommandFrame,
+  route: string,
+  outcome: Extract<ApplyOutcome, { kind: 'opened' }>
+) {
+  const span = Telemetry.span('ui.command.undo');
+  span.setAttr('ui.command.id', frame.commandId);
+  span.setAttr('ui.route', route);
+  try {
+    const undone = await outcome.undo();
+    span.setAttr('outcome', undone ? 'undone' : 'kept');
+    analytics.track('agent_ui_command_undone', {
+      route,
+      outcome: undone ? 'undone' : 'kept',
+    });
+    if (!undone) offerUndo(frame, route, outcome);
+  } finally {
+    span.end();
+  }
+}
 
 function offerUndo(
   frame: UiCommandFrame,
@@ -60,8 +89,7 @@ function offerUndo(
           icon: ArrowCounterClockwise,
           onClick: () => {
             if (toastId !== undefined) toast.dismiss(toastId);
-            analytics.track('agent_ui_command_undone', { route });
-            fireAndForget(outcome.undo(), 'agent-navigation');
+            fireAndForget(undoOpen(frame, route, outcome), 'agent-navigation');
           },
         },
       ],
@@ -182,6 +210,9 @@ async function apply(
  * the panes an agent opened until the person touches them.
  */
 export function AgentNavigationProvider(props: ParentProps) {
+  // Takes this tab's id as the app starts, or once the page stops reading as
+  // touch-first (device emulation turned off); never on mobile.
+  createEffect(on(agentNavigationRunsHere, startUiClientId));
   const arrivals = createAgentArrivals();
   const router = useOptionalSplitRouter();
   const userId = useUserId();
@@ -190,6 +221,7 @@ export function AgentNavigationProvider(props: ParentProps) {
   createConnectionWebsocketEffect((message) => {
     if (message.type !== UI_COMMAND_MESSAGE) return;
     if (!navigation().enabled) return;
+    if (!agentNavigationRunsHere()) return;
 
     const user = userId();
     if (!router || !user) return;

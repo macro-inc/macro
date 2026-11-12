@@ -5,6 +5,7 @@ use crate::domain::{
     ports::ActorMcpTransport,
 };
 use macro_user_id::user_id::MacroUserIdStr;
+use mcp_client::outbound::guarded_http::{self, AddressPolicy};
 use rmcp::transport::streamable_http_client::StreamableHttpClientTransportConfig;
 use rmcp::{ServiceExt, model::ClientConfig, transport::StreamableHttpClientTransport};
 use serde_json::Value;
@@ -33,20 +34,22 @@ struct AccountSession {
 
 /// A bounded pool isolated by session, selected user, endpoint, and credential.
 pub struct HttpActorMcpTransport {
+    policy: AddressPolicy,
     client: TracedClient,
     sessions: Mutex<lru::LruCache<AccountSession, Connection>>,
 }
 
 impl HttpActorMcpTransport {
-    /// Reuse an HTTP client with bounded requests and no credential-bearing redirects.
-    pub fn new() -> Result<Self, EgressError> {
-        let client = reqwest::Client::builder()
-            .redirect(reqwest::redirect::Policy::none())
+    /// Reuse an HTTP client with bounded requests, no credential-bearing
+    /// redirects, and only the addresses `policy` allows.
+    pub fn new(policy: AddressPolicy) -> Result<Self, EgressError> {
+        let client = guarded_http::client_builder(policy)
             .timeout(std::time::Duration::from_secs(30 * 60))
             .connect_timeout(std::time::Duration::from_secs(15))
             .build()
             .map_err(|error| EgressError::Internal(rootcause::report!(error).into()))?;
         Ok(Self {
+            policy,
             client: TracedClient(client),
             sessions: Mutex::new(lru::LruCache::new(
                 NonZeroUsize::new(128).expect("pool capacity is positive"),
@@ -60,6 +63,8 @@ impl HttpActorMcpTransport {
         actor: MacroUserIdStr<'static>,
         upstream: UpstreamCall,
     ) -> Result<Arc<Client>, EgressError> {
+        guarded_http::check_url(self.policy, upstream.url())
+            .map_err(|error| EgressError::Upstream(rootcause::report!(error).into()))?;
         let mut config = StreamableHttpClientTransportConfig::with_uri(upstream.url().to_string());
         for (name, value) in upstream.scope_headers() {
             config.custom_headers.insert(name.clone(), value.clone());
