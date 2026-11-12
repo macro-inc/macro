@@ -120,8 +120,9 @@ computes a person's busy time from:
 
 - Every calendar they can see through their own or delegated inboxes, until they
   turn its **Busy** switch off in Settings → Calendar.
-- Events on any eligible source where one of their owned email addresses is an
-  attendee, even if that source calendar is otherwise excluded.
+- Meetings on any eligible source where one of their owned email addresses is a
+  guest, or organizes it with other guests on a writable copy, even if that
+  source calendar is otherwise excluded.
 
 Booking links have always counted every calendar, and one switch serves booking,
 team availability and agents, so the default follows booking: turning a
@@ -131,9 +132,9 @@ ownership, so a coworker's calendar the user subscribes to or manages counts
 until they turn it off. (Before November 2026 team availability counted only
 primary calendars by default, behind the `enable-calendar-team-sharing` flag.)
 Delegated addresses do not establish the user's personal attendance. Provider
-`self` flags alone are also insufficient on subscribed calendars, and a
-read-only calendar naming the user's mailbox as organizer, as Microsoft Graph
-does, is no attendance.
+`self` flags alone are also insufficient on subscribed calendars. A solo entry
+naming the user as its organizer, and the mailbox organizer row Microsoft Graph
+puts on every event of a read-only calendar, are not meetings.
 
 Cancelled, transparent, declined, birthday, and working-location entries do not
 block time. Instance cancellation, attendee responses, and transparency override

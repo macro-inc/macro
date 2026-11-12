@@ -324,10 +324,12 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   and one setting must mean the same everywhere. Every SQL reader of
   `calendar_availability_preferences` defaults it with
   `COALESCE(preference.contributes_to_availability, true)`; change them
-  together. With meetings they attend, it is their own schedule for agents,
+  together. With meetings they are in, it is their own schedule for agents,
   for `TeamSourceOccurrence::is_personally_busy` and for booking links'
-  busy time (`calendar_scheduling`'s `MacroCalendars::busy`), and an organizer
-  row on a read-only event is no attendance in any of them. `viewer_can.organize` stays a
+  busy time (`calendar_scheduling`'s `MacroCalendars::busy`); the last two
+  decide "in the meeting" with `labels::attends_meeting`, which counts a
+  guest row, or an organizer row on a writable copy with other guests.
+  `viewer_can.organize` stays a
   capability, since writing a calendar lets the user act as its organizer, so
   `EventRole::of` and the SDK's `eventRole` count it only on such a
   calendar, and `ReadCalendarEvent` reports anything else as

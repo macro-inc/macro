@@ -3,6 +3,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::domain::labels::attends_meeting;
 use crate::domain::models::{
     AttendeeResponseStatus, CalendarAttendee, CalendarEvent, CalendarEventOverride,
     CalendarOccurrence, EventStatus, EventTime, EventTransparency, EventType, EventVisibility,
@@ -146,23 +147,19 @@ impl TeamSourceOccurrence {
 
     /// Whether this person's calendar/attendance makes the occurrence eligible
     /// for availability, before checking its duration or reconciling copies.
-    /// Microsoft Graph names the mailbox owner as organizer on every event of
-    /// a read-only calendar, so that row is no attendance, as in
-    /// [`crate::domain::labels::EventRole::of`].
     pub fn is_personally_busy(&self) -> bool {
         if !self.is_busy() {
             return false;
         }
+        let is_owned = |attendee: &CalendarAttendee| {
+            self.owner_emails
+                .iter()
+                .any(|email| email.eq_ignore_ascii_case(&attendee.email))
+        };
         let owned: Vec<_> = self
             .attendees()
             .iter()
-            .filter(|attendee| {
-                !(attendee.is_organizer && self.event.is_read_only)
-                    && self
-                        .owner_emails
-                        .iter()
-                        .any(|email| email.eq_ignore_ascii_case(&attendee.email))
-            })
+            .filter(|attendee| is_owned(attendee))
             .collect();
         if !owned.is_empty()
             && owned
@@ -171,7 +168,8 @@ impl TeamSourceOccurrence {
         {
             return false;
         }
-        self.contributes_to_availability || !owned.is_empty()
+        self.contributes_to_availability
+            || attends_meeting(self.attendees(), self.event.is_read_only, is_owned)
     }
 }
 

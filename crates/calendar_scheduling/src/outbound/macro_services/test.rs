@@ -66,6 +66,14 @@ fn host_row(status: AttendeeResponseStatus, is_organizer: bool) -> CalendarAtten
     }
 }
 
+fn guest_row(email: &str) -> CalendarAttendee {
+    CalendarAttendee {
+        email: email.to_owned(),
+        is_self: false,
+        ..host_row(AttendeeResponseStatus::Accepted, false)
+    }
+}
+
 fn copy_on(calendar_id: Uuid) -> CalendarEventSourceContent {
     CalendarEventSourceContent {
         calendar_id,
@@ -357,8 +365,37 @@ async fn a_meeting_the_host_attends_blocks_time_on_any_calendar() {
 #[tokio::test]
 async fn a_read_only_calendar_naming_the_host_organizer_is_no_attendance() {
     let mut meeting = listing(COWORKER);
-    meeting.event.attendees = vec![host_row(AttendeeResponseStatus::Accepted, true)];
+    meeting.event.attendees = vec![
+        host_row(AttendeeResponseStatus::Accepted, true),
+        guest_row("guest@example.com"),
+    ];
     assert!(busy_with(false, meeting).await.is_empty());
+}
+
+#[tokio::test]
+async fn a_solo_event_listing_the_host_as_organizer_frees_with_its_calendar() {
+    let mut entry = listing(COWORKER);
+    entry.event.is_read_only = false;
+    entry.event.attendees = vec![host_row(AttendeeResponseStatus::Accepted, true)];
+    assert!(busy_with(false, entry).await.is_empty());
+}
+
+#[tokio::test]
+async fn a_meeting_the_host_organizes_with_guests_blocks_time_on_any_calendar() {
+    let mut meeting = listing(COWORKER);
+    meeting.event.is_read_only = false;
+    meeting.event.attendees = vec![
+        host_row(AttendeeResponseStatus::Accepted, true),
+        guest_row("guest@example.com"),
+    ];
+    assert_eq!(busy_with(false, meeting).await.len(), 1);
+}
+
+#[tokio::test]
+async fn a_declined_meeting_never_blocks_time() {
+    let mut meeting = listing(PRIMARY);
+    meeting.event.attendees = vec![host_row(AttendeeResponseStatus::Declined, false)];
+    assert!(busy_with(true, meeting).await.is_empty());
 }
 
 #[tokio::test]

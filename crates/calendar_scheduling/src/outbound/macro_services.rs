@@ -4,7 +4,7 @@ use crate::domain::{
     ports::{Calendars, Directory},
 };
 use calendar_events::domain::{
-    labels::CalendarLabels,
+    labels::{CalendarLabels, attends_meeting},
     meeting_links::{create_event_with_macro_call, first_macro_call_url},
     models::{
         CalendarAttendeeInput, CalendarEvent, CalendarEventDraft, CalendarSyncStatus,
@@ -448,10 +448,13 @@ where
 
 /// Whether an occurrence takes the host's time: a calendar holding it counts
 /// toward their availability (one such copy is enough, and a calendar the
-/// listing does not know counts), or they organize or attend it, as team
+/// listing does not know counts), or they are in the meeting, as team
 /// availability reads it.
 fn occupies_host(labels: &CalendarLabels, event: &CalendarEvent) -> bool {
-    labels.event_on_schedule(event) != Some(false) || labels.role(event).is_some()
+    labels.event_on_schedule(event) != Some(false)
+        || attends_meeting(&event.attendees, event.is_read_only, |attendee| {
+            attendee.is_self
+        })
 }
 
 fn carries_url(location: Option<&str>, description: Option<&str>, url: &str) -> bool {

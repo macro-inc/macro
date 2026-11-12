@@ -280,7 +280,7 @@ fn subscriptions_do_not_block_owner_but_owned_attendance_does() {
 }
 
 #[test]
-fn an_excluded_read_only_calendar_naming_the_owner_organizer_does_not_block() {
+fn an_excluded_calendar_blocks_only_the_meetings_the_owner_is_in() {
     let mut shared = source(
         "a",
         "outlook-shared",
@@ -290,16 +290,37 @@ fn an_excluded_read_only_calendar_naming_the_owner_organizer_does_not_block() {
     shared.event.is_read_only = true;
     let mut organizer = attendee("a@example.com", AttendeeResponseStatus::Accepted);
     organizer.is_organizer = true;
-    shared.event.attendees = vec![organizer];
+    shared.event.attendees = vec![
+        organizer.clone(),
+        attendee("guest@example.com", AttendeeResponseStatus::Accepted),
+    ];
     let mut invited = shared.clone();
     invited.event.ical_uid = "invited".into();
     invited.event.attendees = vec![attendee("a@example.com", AttendeeResponseStatus::Accepted)];
     invited.occurrence.time = timed("2026-10-07T12:00:00Z", "2026-10-07T13:00:00Z");
-    let result = calculate(window(), inputs(vec![member("a")], vec![shared, invited]));
+    let mut solo = shared.clone();
+    solo.event.ical_uid = "solo".into();
+    solo.event.is_read_only = false;
+    solo.event.attendees = vec![organizer.clone()];
+    solo.occurrence.time = timed("2026-10-07T14:00:00Z", "2026-10-07T15:00:00Z");
+    let mut organized = solo.clone();
+    organized.event.ical_uid = "organized".into();
+    organized.event.attendees = vec![
+        organizer,
+        attendee("guest@example.com", AttendeeResponseStatus::Accepted),
+    ];
+    organized.occurrence.time = timed("2026-10-07T15:00:00Z", "2026-10-07T16:00:00Z");
+    let result = calculate(
+        window(),
+        inputs(vec![member("a")], vec![shared, invited, solo, organized]),
+    );
     assert_eq!(
         result.members[0].busy,
-        vec![span("2026-10-07T12:00:00Z", "2026-10-07T13:00:00Z")],
-        "only the meeting the owner is invited to blocks them"
+        vec![
+            span("2026-10-07T12:00:00Z", "2026-10-07T13:00:00Z"),
+            span("2026-10-07T15:00:00Z", "2026-10-07T16:00:00Z"),
+        ],
+        "only meetings the owner is invited to or organizes with guests block them"
     );
 }
 

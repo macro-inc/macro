@@ -221,3 +221,43 @@ fn a_requester_with_no_inbox_of_their_own_gets_no_role() {
     assert_eq!(labels.calendar_name.as_deref(), Some(INBOX));
     assert_eq!(labels.role, None);
 }
+
+#[test]
+fn a_meeting_is_one_the_user_is_invited_to_or_organizes_with_guests() {
+    let row = |email: &str, is_organizer: bool, response_status| CalendarAttendee {
+        email: email.to_string(),
+        display_name: None,
+        response_status,
+        is_organizer,
+        is_optional: false,
+        is_self: email == INBOX,
+        comment: None,
+    };
+    let own = |attendee: &CalendarAttendee| attendee.is_self;
+    let accepted = AttendeeResponseStatus::Accepted;
+    let invited = [row(COLLEAGUE, true, accepted), row(INBOX, false, accepted)];
+    let organized = [row(INBOX, true, accepted), row(COLLEAGUE, false, accepted)];
+    let solo = [row(INBOX, true, accepted)];
+    let declined = [
+        row(COLLEAGUE, true, accepted),
+        row(INBOX, false, AttendeeResponseStatus::Declined),
+    ];
+
+    assert!(attends_meeting(&invited, false, own));
+    assert!(attends_meeting(&invited, true, own), "a guest row is real");
+    assert!(attends_meeting(&organized, false, own));
+    assert!(
+        !attends_meeting(&organized, true, own),
+        "Graph names the mailbox organizer on a read-only calendar"
+    );
+    assert!(
+        !attends_meeting(&solo, false, own),
+        "an entry with no one else on it is no meeting"
+    );
+    assert!(!attends_meeting(&declined, false, own));
+    assert!(!attends_meeting(
+        &[row(COLLEAGUE, true, accepted)],
+        false,
+        own
+    ));
+}

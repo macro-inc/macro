@@ -227,9 +227,11 @@ user turns Busy off, and one choice governs every reader of busy time: booking
 slots, reschedule slots and the agent's booking tools (`MacroCalendars::busy`),
 team availability, and the agent and SDK `contributesToAvailability` labels.
 An event still blocks time when another copy sits on a Busy calendar, when its
-calendar is unknown, or when the user organizes or attends it (not declined);
-a read-only calendar naming the user's mailbox as organizer, as Outlook does on
-shared calendars, is no attendance. The switch shows once the setting loads,
+calendar is unknown, or when the user is in the meeting and has not declined it
+(`labels::attends_meeting`): invited as a guest, or organizing it with other
+guests on a copy they can change. A solo entry listing the user's inbox as its
+organizer, as Macro writes on a primary calendar, and the mailbox organizer row
+Outlook puts on every event of a read-only calendar are not meetings. The switch shows once the setting loads,
 saves at once and restores itself with a toast when the save fails. Phones reach
 the same rows from the mobile Settings sheet's **Calendar** page; the calendar
 view's own phone settings sheet lists accounts, not calendars.
@@ -328,7 +330,7 @@ Private/confidential events only expose generic time blocks.
 
 Which calendars count toward the user's availability is the **Busy** switch on
 each Connected calendars row (above); the team settings have no list of their
-own. Meetings the user attends also contribute, except declined meetings.
+own. Meetings the user is in also contribute, by the same rule.
 
 Teammates' shared events do not render on the grid; `Team out of office` is the
 only teammate overlay. Replacing a login session clears team data and open
