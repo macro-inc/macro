@@ -457,6 +457,20 @@ export const storageExcluded = [
   'whatsappPairing',
   'whatsappPasskey',
   'whatsappStartLookup',
+  // Slack sign-in, accounts, and the Slack Connect catalogue belong to the
+  // app session; adding a conversation acts as the owner's own Slack session.
+  'slackLinkedAccounts',
+  'slackLinkedCancelLogin',
+  'slackLinkedConversations',
+  'slackLinkedDisconnect',
+  'slackLinkedImportHistory',
+  'slackLinkedLogin',
+  'slackLinkedLoginCaptcha',
+  'slackLinkedLoginCode',
+  'slackLinkedLoginTwoFactor',
+  'slackLinkedLoginWorkspaces',
+  'slackLinkedStartLogin',
+  'slackLinkedSubmitSession',
 ] as const satisfies readonly (keyof StorageSdk)[];
 
 export const storageBacklog = [
