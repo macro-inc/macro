@@ -1138,6 +1138,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   property `interface_language` when the account language loads.
 - When adding or changing a feature flag, follow the `feature-flags` skill.
 - Gate routine template actions, pages, dialogs, and message cards on `enable-routine-sharing`; keep ordinary routines usable while it is off.
+- Gate the Agent pings notification setting and its settings-search entry on `enable-agent-notifications`; the notification service refuses `notifications.send` for a sender under the same key.
 - When adding or changing a view's feature tour, follow the `add-tour` skill.
 - Keep Tasks date ranges on view-owned date-bucket boundaries in `features/tasks-view/core/task-due-date.ts`; send `sort_method=property` with the selected definition and direction, use keyed `date_ranges` grouping, and restart pages when midnight/timezone/resume changes the query key; preserve text-search ordering.
 - Render Tasks due dates in an editable list-property column with a calendar icon for set dates and a slashed calendar for no due date; show only the icon on phones and narrow panes, preserve urgency colors for set dates, keep the current date visible in its dropdown, and limit warning urgency to today and tomorrow.
