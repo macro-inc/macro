@@ -1,4 +1,7 @@
 //! Deferred cleanup preserves bytes referenced by drafts and in-flight revisions.
+/// Deletion of stored attachment files and their database records.
+pub mod sfs_deletion;
+
 use super::draft_attachments::AttachmentError;
 use std::future::Future;
 use uuid::Uuid;

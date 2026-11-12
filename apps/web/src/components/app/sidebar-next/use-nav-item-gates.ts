@@ -6,9 +6,11 @@ import {
   ENABLE_CALLS,
   enableCalendarScheduling,
   enableCrm,
+  enablePasswords,
   enableTasksReviews,
   enableWhatsappLinked,
 } from '@core/constant/featureFlags';
+import { useCurrentTeamQuery } from '@queries/team/teams';
 import { type Accessor, createMemo } from 'solid-js';
 import type { NavItemGates } from './nav-items';
 import { useSidebarPrefs } from './use-sidebar-prefs';
@@ -25,6 +27,8 @@ export function useNavItemGates(): Accessor<NavItemGates> {
   const crm = useFeatureFlag(enableCrm);
   const reviews = useFeatureFlag(enableTasksReviews);
   const activity = useActivityFeedFlag();
+  const passwords = useFeatureFlag(enablePasswords);
+  const team = useCurrentTeamQuery(() => passwords().enabled);
   const external = useFeatureFlag(enableWhatsappLinked);
   const { prefs } = useSidebarPrefs();
 
@@ -36,6 +40,9 @@ export function useNavItemGates(): Accessor<NavItemGates> {
     showCalls: ENABLE_CALLS,
     showReviews: reviews().enabled,
     showActivity: activity(),
+    // Passwords is a team vault: no team, no entry at all.
+    showPasswords:
+      passwords().enabled && team.isSuccess && Boolean(team.data?.team),
     showExternal: external().enabled,
     prefs: prefs(),
   }));

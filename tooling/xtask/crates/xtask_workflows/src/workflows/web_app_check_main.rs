@@ -93,7 +93,8 @@ fn typescript() -> Job {
         ))
         .name("Typecheck")
         .runs_on(mid_web_runner())
-        .add_step(checkout("Checkout Repo", false))
+        // Entity icon permanence checks compare every committed name list.
+        .add_step(checkout("Checkout Repo", true))
         .add_step(steps::mount_web_cache_volume(false))
         .add_step(steps::setup_nix_with_seed())
         .add_step(steps::setup_reqs_web("Setup Prereqs", false))
@@ -110,7 +111,7 @@ fn typescript() -> Job {
 /// installed tree and write nothing, so they run at once: in sequence they took
 /// about 106 s of a 179 s job. `packages/sdk` isn't a workspace member, so the
 /// SDK documentation's dependencies install first, as they did before.
-const TYPECHECKS: [(&str, &str, &str); 11] = [
+const TYPECHECKS: [(&str, &str, &str); 12] = [
     // `type-check` runs the native TypeScript 7 compiler.
     ("Check Types", "apps/web", "bun run type-check"),
     // Type-aware oxlint over all of `apps/web`; `no-floating-promises` is an
@@ -129,6 +130,11 @@ const TYPECHECKS: [(&str, &str, &str); 11] = [
         "Check Collaboration Package Types",
         "packages/collaboration",
         "bun run type-check",
+    ),
+    (
+        "Check Observability Package",
+        "packages/observability",
+        "bun run type-check && bun run test",
     ),
     (
         "Check Lexical Service Types",
@@ -211,7 +217,7 @@ fn typecheck_script(checks: &[(&str, &str, &str)]) -> String {
 
 /// Everything generated from Rust binaries: the OpenAPI clients in `apps/web`
 /// (`gen-api`), the specta wasm wire types, the SDK's specs and generated
-/// layer, and the MCP tool reference in `apps/docs`. They used to be checked by
+/// layer. These used to be checked by
 /// three jobs in three workflows, each compiling the workspace again; one job
 /// on one target dir builds the binaries once. The SDK regeneration reuses the
 /// specs `gen-api` just wrote rather than rerunning it.
@@ -250,12 +256,6 @@ fn generated_code() -> Job {
             "Verify SDK generated code is fresh",
             "packages/sdk",
             "packages/sdk generated code is stale. Run 'just update-generated' in packages/sdk and commit the result.",
-        ))
-        .add_step(regenerate_tool_pages())
-        .add_step(verify_fresh(
-            "Verify docs tool reference is fresh",
-            "apps/docs",
-            "apps/docs tool reference is stale. Run 'bun run generate:tools' in apps/docs and commit the result.",
         ))
         // Last: its `cargo run -p` builds resolve features per package, so
         // running them earlier would make the steps above recompile.
@@ -486,10 +486,11 @@ fn paths_filter() -> Step<Use> {
     // Typecheck stays off for a shell-only tweak. Workflow YAML drift is `check
     // generated workflows`. `i18n_changed` covers what the interface language
     // browser tests render: translations, the menu primitives, and settings
-    // navigation. `database_grid_changed` covers the database grid's browser
-    // tests. `calendar_details_changed` covers what the event details browser
-    // tests render and the query modules their fixture replaces, whose exports
-    // the fixture must keep matching.
+    // navigation. `database_grid_changed` covers the database browser
+    // tests: the grid, and the timeline with the Gantt it draws.
+    // `calendar_details_changed` covers what the event details browser tests
+    // render and the query modules their fixture replaces, whose exports the
+    // fixture must keep matching.
     Step::new("Filter changed paths")
         .uses(
             "dorny",
@@ -500,7 +501,7 @@ fn paths_filter() -> Step<Use> {
         .add_with((
             "filters",
             format!(
-                "should_run:\n{artifact_paths}  - 'services/lexical-service/**'\n  - 'packages/sdk/**'\n  - 'packages/sdk-docs/**'\n  - 'services/ai-editing-worker/**'\n  - 'services/mcp-chatgpt-worker/**'\n  - 'packages/code-mode-sdk/**'\n  - 'crates/agent_code_mode/SKILL.md'\n  - '.github/actions/setup-reqs-web/**'\nweb_artifact_changed:\n{artifact_paths}codegen_inputs:\n  - 'apps/web/scripts/generate-api-schema.ts'\n  - 'apps/web/scripts/services.ts'\n  - 'packages/sdk/**'\n  - 'apps/docs/**'\n  - '.github/actions/setup-reqs-web/**'\ni18n_changed:\n  - 'apps/web/src/lib/i18n/**'\n  - 'apps/web/src/lib/core/component/ContextMenu.tsx'\n  - 'apps/web/src/lib/core/constant/settingsTabsConfig.tsx'\n  - 'apps/web/src/components/ui/components/Dropdown.tsx'\n  - 'apps/web/src/features/settings/**'\ndatabase_grid_changed:\n  - 'apps/web/src/features/database/**'\ncalendar_details_changed:\n  - 'apps/web/src/features/calendar-view/**'\n  - 'apps/web/src/features/calendar/**'\n  - 'apps/web/src/lib/queries/calendar/**'\n"
+                "should_run:\n{artifact_paths}  - 'services/lexical-service/**'\n  - 'packages/sdk/**'\n  - 'packages/sdk-docs/**'\n  - 'services/ai-editing-worker/**'\n  - 'services/mcp-chatgpt-worker/**'\n  - 'packages/code-mode-sdk/**'\n  - 'crates/agent_code_mode/SKILL.md'\n  - '.github/actions/setup-reqs-web/**'\nweb_artifact_changed:\n{artifact_paths}codegen_inputs:\n  - 'apps/web/scripts/generate-api-schema.ts'\n  - 'apps/web/scripts/services.ts'\n  - 'packages/sdk/**'\n  - 'apps/docs/**'\n  - '.github/actions/setup-reqs-web/**'\ni18n_changed:\n  - 'apps/web/src/lib/i18n/**'\n  - 'apps/web/src/lib/core/component/ContextMenu.tsx'\n  - 'apps/web/src/lib/core/constant/settingsTabsConfig.tsx'\n  - 'apps/web/src/components/ui/components/Dropdown.tsx'\n  - 'apps/web/src/features/settings/**'\ndatabase_grid_changed:\n  - 'apps/web/src/features/database/**'\n  - 'apps/web/src/components/gantt/**'\ncalendar_details_changed:\n  - 'apps/web/src/features/calendar-view/**'\n  - 'apps/web/src/features/calendar/**'\n  - 'apps/web/src/lib/queries/calendar/**'\n"
             ),
         ))
 }
@@ -561,14 +562,6 @@ fn regenerate_sdk() -> Step<Run> {
             bun run generate
         "#})
         .working_directory(xtask_paths::repo_dir!("packages/sdk"))
-}
-
-/// Renders `apps/docs/AI/mcp/tools/` from the `gen_tool_schemas` binary, so a
-/// tool's schema or description change cannot leave the docs site behind.
-fn regenerate_tool_pages() -> Step<Run> {
-    Step::new("Regenerate MCP tool pages")
-        .run("bun run generate:tools")
-        .working_directory(xtask_paths::repo_dir!("apps/docs"))
 }
 
 fn verify_fresh(name: &str, dir: &str, stale_message: &str) -> Step<Run> {

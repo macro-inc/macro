@@ -567,6 +567,7 @@ fn harness_with_ports_and_journal(
         journal,
         None,
         None,
+        None,
     )
 }
 
@@ -584,6 +585,7 @@ fn harness_with_journal_and_policy(
     journal: Option<Arc<dyn crate::domain::conversation_turns::ConversationTurnStore>>,
     policy: Option<Arc<dyn crate::domain::conversations::ConversationPolicy>>,
     notifications: Option<Arc<dyn agent_session::domain::notifications::NotificationStore>>,
+    idle_release_flags: Option<feature_flags::outbound::fake::FakeFeatureFlags>,
 ) -> (TestBench, TurnSignals) {
     let repo = InMemoryAgentSessionRepo::new();
     let containers = MockContainerManager::new();
@@ -644,6 +646,7 @@ fn harness_with_journal_and_policy(
         Some(store) => service.with_notifications(store),
         None => service,
     };
+    let service = service.with_idle_release_flags(idle_release_flags);
     let (ended, ended_rx) = mpsc::unbounded_channel();
     turn_observer.bind(SignallingTurnObserver {
         harness: service.clone(),
@@ -1976,6 +1979,7 @@ async fn changing_the_model_persists_it_and_tells_the_running_agent() {
                 action_id: None,
                 actor: Some(sender()),
                 context: None,
+                client: None,
             },
         )
         .await
@@ -2031,6 +2035,7 @@ async fn a_prompt_through_control_reaches_the_agent_without_announcing() {
             action_id: None,
             actor: Some(sender()),
             context: None,
+            client: None,
         },
     );
     let agent = container.agent();
@@ -2078,6 +2083,7 @@ async fn a_non_staff_control_event_cannot_drive_a_sandboxed_coder_session() {
                 action_id: None,
                 actor: Some(sender()),
                 context: None,
+                client: None,
             },
         )
         .await
@@ -2149,6 +2155,7 @@ async fn an_external_bots_permission_request_waits_for_a_users_answer() {
                 action: permission_answer("perm-1", "once"),
                 actor: Some(sender()),
                 context: None,
+                client: None,
             },
         )
         .await
@@ -2184,6 +2191,7 @@ async fn a_harness_principal_cannot_answer_a_permission_request() {
                 action: permission_answer("perm-1", "always"),
                 actor: None,
                 context: None,
+                client: None,
             },
         )
         .await
@@ -2225,6 +2233,7 @@ async fn answering_a_disconnected_session_does_not_wake_its_sandbox() {
                 action: permission_answer("perm-1", "once"),
                 actor: Some(staff_sender()),
                 context: None,
+                client: None,
             },
         )
         .await
@@ -2252,6 +2261,7 @@ async fn an_archived_session_rejects_new_controls() {
                 action_id: None,
                 actor: Some(staff_sender()),
                 context: None,
+                client: None,
             },
         )
         .await
@@ -2287,6 +2297,7 @@ async fn a_staff_control_event_can_drive_a_sandboxed_coder_session() {
                 action_id: None,
                 actor: Some(staff_sender()),
                 context: None,
+                client: None,
             },
         )
         .await
@@ -2339,6 +2350,7 @@ async fn a_prompt_during_a_running_turn_queues_and_dispatches_when_it_ends() {
                 action_id: None,
                 actor: Some(sender()),
                 context: None,
+                client: None,
             },
         )
         .await
@@ -2388,6 +2400,7 @@ async fn a_queued_prompt_survives_a_replica_restart() {
                 action_id: None,
                 actor: Some(sender()),
                 context: None,
+                client: None,
             },
         )
         .await
@@ -2427,6 +2440,7 @@ async fn a_resume_restores_the_persisted_queue() {
             announce: None,
             announced_message_id: None,
             context: None,
+            client: None,
         }],
     )
     .await
@@ -2439,6 +2453,7 @@ async fn a_resume_restores_the_persisted_queue() {
             action_id: None,
             actor: Some(staff_sender()),
             context: None,
+            client: None,
         },
     );
     let drive_resume = async {
@@ -2488,6 +2503,7 @@ async fn archiving_drops_prompts_queued_behind_a_running_turn() {
                 action_id: None,
                 actor: Some(sender()),
                 context: None,
+                client: None,
             },
         )
         .await
@@ -2523,6 +2539,7 @@ async fn a_stop_cancels_the_turn_and_the_queue_keeps_draining() {
                 action_id: None,
                 actor: Some(sender()),
                 context: None,
+                client: None,
             },
         )
         .await
@@ -2541,6 +2558,7 @@ async fn a_stop_cancels_the_turn_and_the_queue_keeps_draining() {
                 action_id: None,
                 actor: Some(sender()),
                 context: None,
+                client: None,
             },
         )
         .await
@@ -2597,6 +2615,7 @@ async fn a_channel_follow_up_stops_the_running_turn_announces_and_flushes() {
                 action_id: None,
                 actor: Some(staff_sender()),
                 context: None,
+                client: None,
             },
         )
         .await
@@ -2721,6 +2740,7 @@ async fn queued_prompts_are_editable_and_removable_until_dispatch() {
         action_id: None,
         actor: Some(sender()),
         context: None,
+        client: None,
     };
     let second = service.control_event(id, prompt("second")).await.unwrap();
     let third = service.control_event(id, prompt("third")).await.unwrap();
@@ -2783,6 +2803,7 @@ async fn steering_a_later_queued_prompt_runs_it_ahead_of_earlier_ones() {
         action_id: None,
         actor: Some(sender()),
         context: None,
+        client: None,
     };
     let first = service
         .control_event(id, prompt("first waiting"))
@@ -2845,6 +2866,7 @@ async fn a_model_change_bypasses_the_running_turn() {
                 action_id: None,
                 actor: Some(sender()),
                 context: None,
+                client: None,
             },
         )
         .await
@@ -2881,6 +2903,7 @@ async fn a_control_event_is_accepted_under_the_callers_own_action_id() {
                 action_id: Some(action_id),
                 actor: Some(sender()),
                 context: None,
+                client: None,
             },
         )
         .await
@@ -2917,6 +2940,7 @@ async fn a_control_event_without_an_action_id_is_given_a_fresh_one() {
         action_id: None,
         actor: Some(sender()),
         context: None,
+        client: None,
     };
     let first = service.control_event(id, unnamed("first")).await.unwrap();
     let second = service.control_event(id, unnamed("second")).await.unwrap();
@@ -2952,6 +2976,7 @@ async fn re_sending_a_waiting_action_id_does_not_queue_it_twice() {
         action_id: Some(action_id),
         actor: Some(sender()),
         context: None,
+        client: None,
     };
     let first = service.control_event(id, retried()).await.unwrap();
     let again = service.control_event(id, retried()).await.unwrap();
@@ -2982,6 +3007,7 @@ async fn compact_through_control_reaches_opencode_as_a_slash_command() {
             action_id: None,
             actor: Some(sender()),
             context: None,
+            client: None,
         },
     );
     let agent = container.agent();
@@ -3013,6 +3039,7 @@ async fn a_prompt_through_control_resumes_a_disconnected_session() {
             action_id: None,
             actor: Some(staff_sender()),
             context: None,
+            client: None,
         },
     );
     let drive_resume = async {
@@ -3387,6 +3414,7 @@ async fn a_managed_session_resumes_its_sandbox_rather_than_a_dialed_in_runtime()
             action_id: None,
             actor: Some(staff_sender()),
             context: None,
+            client: None,
         },
     );
     let drive_resume = async {
@@ -4296,6 +4324,7 @@ mod lifecycle_events {
             action_id: None,
             actor: Some(staff_sender()),
             context: None,
+            client: None,
         };
         service
             .control_event(id, prompt("first"))
@@ -4384,6 +4413,7 @@ mod lifecycle_events {
                     action_id: None,
                     actor: Some(staff_sender()),
                     context: None,
+                    client: None,
                 })),
             )
             .await
@@ -4560,11 +4590,14 @@ async fn codex_named_session_provisions_egress_without_advertising_mcp() {
 
 /// A surface that already shows its first prompt names the id it shows it
 /// under, and the logged prompt carries that id, so the row confirms the
-/// bubble in place rather than adding a second one.
+/// bubble in place rather than adding a second one. The tab it was typed in
+/// is recorded on the first turn, so that turn can show the person things
+/// there.
 #[tokio::test]
 async fn a_managed_open_delivers_its_first_prompt_under_the_callers_id() {
     let (service, repo, containers, _, _) = harness();
     let action_id = AgentActionId::mint();
+    let tab = agent_session::domain::model::UiClientId::from_uuid(Uuid::from_u128(0xc1));
     let open = service.open_managed_session(OpenManagedSession {
         billing: Default::default(),
         origin: trigger_context::TriggerOrigin::Unknown,
@@ -4578,6 +4611,7 @@ async fn a_managed_open_delivers_its_first_prompt_under_the_callers_id() {
             action_id: Some(action_id),
             prompt: "inspect".to_owned(),
             attachments: Vec::new(),
+            client: Some(tab),
         }),
         profile: Some(agent_session::domain::ports::SelectedManagedPersona {
             bot_id: bot_id::CODEX_BOT_ID,
@@ -4608,6 +4642,12 @@ async fn a_managed_open_delivers_its_first_prompt_under_the_callers_id() {
         })
         .collect();
     assert_eq!(prompt_ids, vec![action_id.to_request_id()]);
+    let prompter = repo
+        .turn_prompter(session.id)
+        .await
+        .expect("the prompter is readable")
+        .expect("the first turn recorded its prompter");
+    assert_eq!(prompter.client, Some(tab));
 }
 
 #[tokio::test]
@@ -5136,6 +5176,7 @@ async fn a_non_staff_session_editor_can_approve_a_managed_session_request() {
                 action: permission_answer("editor-approval", "once"),
                 actor: Some(sender()),
                 context: None,
+                client: None,
             },
         )
         .await
@@ -5146,4 +5187,65 @@ async fn a_non_staff_session_editor_can_approve_a_managed_session_request() {
             SelectedPermissionOutcome::new("once")
         ))
     );
+}
+
+/// Spans exported through the real OpenTelemetry layer, as production does,
+/// into memory, for as long as the guard is held.
+///
+/// Other tests run on other threads with no subscriber. A callsite one of
+/// them registers while this one's subscriber is being installed can cache
+/// "never" and drop this test's spans, so a global subscriber that answers
+/// "sometimes" for every callsite is installed first: no callsite is ever
+/// cached as never, and each span asks the thread's own subscriber.
+fn span_exporter() -> (
+    opentelemetry_sdk::trace::InMemorySpanExporter,
+    opentelemetry_sdk::trace::SdkTracerProvider,
+    tracing::subscriber::DefaultGuard,
+) {
+    use opentelemetry::trace::TracerProvider as _;
+    use tracing_subscriber::layer::SubscriberExt as _;
+    static UNDECIDED: std::sync::Once = std::sync::Once::new();
+    UNDECIDED.call_once(|| {
+        tracing::subscriber::set_global_default(Undecided)
+            .expect("no other test installs a global subscriber");
+    });
+    let exporter = opentelemetry_sdk::trace::InMemorySpanExporter::default();
+    let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
+        .with_simple_exporter(exporter.clone())
+        .build();
+    let layer = tracing_opentelemetry::layer().with_tracer(provider.tracer("test"));
+    let guard = tracing::subscriber::set_default(tracing_subscriber::registry().with(layer));
+    tracing::callsite::rebuild_interest_cache();
+    (exporter, provider, guard)
+}
+
+/// The global subscriber [`span_exporter`] installs: records nothing, and
+/// leaves every callsite to be asked again each time.
+struct Undecided;
+
+impl tracing::Subscriber for Undecided {
+    fn register_callsite(
+        &self,
+        _metadata: &'static tracing::Metadata<'static>,
+    ) -> tracing::subscriber::Interest {
+        tracing::subscriber::Interest::sometimes()
+    }
+
+    fn enabled(&self, _metadata: &tracing::Metadata<'_>) -> bool {
+        false
+    }
+
+    fn new_span(&self, _span: &tracing::span::Attributes<'_>) -> tracing::span::Id {
+        tracing::span::Id::from_u64(1)
+    }
+
+    fn record(&self, _span: &tracing::span::Id, _values: &tracing::span::Record<'_>) {}
+
+    fn record_follows_from(&self, _span: &tracing::span::Id, _follows: &tracing::span::Id) {}
+
+    fn event(&self, _event: &tracing::Event<'_>) {}
+
+    fn enter(&self, _span: &tracing::span::Id) {}
+
+    fn exit(&self, _span: &tracing::span::Id) {}
 }

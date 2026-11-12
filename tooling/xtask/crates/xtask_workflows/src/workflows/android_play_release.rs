@@ -18,8 +18,8 @@
 //!
 //! Play is the only artifact store that matters: the bundle and its R8
 //! mapping are also kept as a workflow artifact (90 days), but nothing ties
-//! releases to production release tags any more (the former tag-driven
-//! `release-android.yml` is gone).
+//! Play releases to production release tags. Each production release gets a
+//! sideloadable APK instead, from [`super::android_apk_on_release`].
 //!
 //! Credentials: the signing keystore and Firebase config come from Doppler
 //! (`android-release/prd` via `ANDROID_RELEASE_DOPPLER_TOKEN`).
@@ -29,6 +29,7 @@ use gh_workflow::{
     Step, Use, Workflow,
 };
 
+use crate::workflows::android_build::{self, Artifact};
 use crate::workflows::{steps, vars};
 
 /// Build the workflow.
@@ -72,16 +73,16 @@ fn release_job() -> Job {
         .add_step(checkout_pr_head())
         .add_step(setup_bun())
         .add_step(preconditions())
-        .add_step(install_android_sdk())
+        .add_step(android_build::install_android_sdk())
         .add_step(setup_nix())
         .add_step(setup_prereqs())
         .add_step(prepare_version_and_signing())
-        .add_step(build_bundle())
-        .add_step(preserve_build_log())
+        .add_step(android_build::build(Artifact::Aab))
+        .add_step(android_build::preserve_build_log())
         .add_step(verify_and_collect())
         .add_step(head_guard())
         .add_step(upload_workflow_artifact())
-        .add_step(remove_signing_material())
+        .add_step(android_build::remove_signing_material())
         .add_step(pr_comment())
 }
 
@@ -121,20 +122,6 @@ fn preconditions() -> Step<Run> {
     .add_env(("WAIT_MINUTES", "30"))
 }
 
-fn install_android_sdk() -> Step<Run> {
-    Step::new("Install Android SDK components")
-        .run(indoc::indoc! {r#"
-            set -euo pipefail
-            export JAVA_HOME="$JAVA_HOME_21_X64"
-            export PATH="$JAVA_HOME/bin:$PATH"
-            "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
-              'platforms;android-36' 'build-tools;36.0.0' 'ndk;30.0.16248370'
-            echo "JAVA_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
-            echo "NDK_HOME=$ANDROID_HOME/ndk/30.0.16248370" >> "$GITHUB_ENV"
-        "#})
-        .shell("bash")
-}
-
 fn setup_nix() -> Step<Use> {
     steps::setup_nix()
 }
@@ -161,55 +148,6 @@ fn prepare_version_and_signing() -> Step<Run> {
         .working_directory(xtask_paths::repo_dir!("apps/web"))
         .add_env(("VERSION_CODE", "${{ steps.preconditions.outputs.version_code }}"))
         .add_env(("DOPPLER_TOKEN", vars::ANDROID_RELEASE_DOPPLER_TOKEN))
-}
-
-fn build_bundle() -> Step<Run> {
-    Step::new("Build production App Bundle")
-        .run(indoc::indoc! {r#"
-            set -euo pipefail
-            # The Nix environment is already loaded. Do not reload it in nested
-            # bash processes and re-enable its local-development sccache wrapper.
-            # This ephemeral runner has no compiler cache/server to reuse.
-            unset BASH_ENV
-            export RUSTC_WRAPPER=""
-            cargo tauri --version
-            # Tauri has shipped both switch-only and value-taking APK/AAB flags.
-            # Nix and local installations can differ; build only the AAB with either CLI.
-            android_help=$(cargo tauri android build --help)
-            artifact_args=(--aab)
-            if [[ "$android_help" == *'--apk <APK>'* ]]; then
-              artifact_args=(--apk false --aab true)
-            fi
-            just android-build --firebase-config "$RUNNER_TEMP/android-google-services.json" \
-              "${artifact_args[@]}" --ci --config "$RUNNER_TEMP/android-release.json" \
-              2>&1 | tee "$RUNNER_TEMP/android-build.log"
-        "#})
-        .shell("bash")
-        .working_directory(xtask_paths::repo_dir!("apps/web"))
-        .add_env((
-            "VITE_SEGMENT_WRITE_KEY",
-            "${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}",
-        ))
-        .add_env(("VITE_POSTHOG_API_KEY", vars::POSTHOG_API_KEY))
-        .add_env((
-            "VITE_OTEL_EXPORTER_URL",
-            "https://macro-prox-prod.macroverse.workers.dev/i/otlp/v1/traces",
-        ))
-        .add_env(("VITE_OTEL_ENV", "prod"))
-}
-
-fn preserve_build_log() -> Step<Use> {
-    Step::new("Preserve Android build log")
-        .uses(
-            "actions",
-            "upload-artifact",
-            "ea165f8d65b6e75b540449e92b4886f43607fa02",
-        ) // v4
-        .if_condition(Expression::new("always()"))
-        .add_with(("name", "android-build-log"))
-        .add_with(("path", "${{ runner.temp }}/android-build.log"))
-        .add_with(("if-no-files-found", "ignore"))
-        .add_with(("retention-days", 7))
 }
 
 fn verify_and_collect() -> Step<Run> {
@@ -280,17 +218,6 @@ fn upload_workflow_artifact() -> Step<Use> {
         .add_with(("path", "android-artifacts/"))
         .add_with(("if-no-files-found", "error"))
         .add_with(("retention-days", 90))
-}
-
-fn remove_signing_material() -> Step<Run> {
-    Step::new("Remove signing material")
-        .run(indoc::indoc! {r#"
-            rm -rf "$RUNNER_TEMP/android-signing" "$RUNNER_TEMP/android-release.json" \
-              "$RUNNER_TEMP/android-google-services.json" || true
-            rm -f apps/web/tauri/src-tauri/gen/android/keystore.properties || true
-        "#})
-        .if_condition(Expression::new("always()"))
-        .shell("bash")
 }
 
 fn pr_comment() -> Step<Use> {

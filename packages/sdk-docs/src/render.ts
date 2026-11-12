@@ -30,6 +30,7 @@ const AGENT_TAGS: readonly `@${string}`[] = ['@routing', '@agent'];
  */
 const MCP_MODIFIER_TAGS: readonly `@${string}`[] = [
   '@write',
+  '@send',
   '@destructive',
   '@openworld',
   '@idempotent',

@@ -36,6 +36,10 @@ export const agentHarnessExcluded = [
   'warmAgentSessionHandler',
   // The connect chip's continuation after an app connects is app-internal.
   'reportAgentSessionAppConnected',
+  'claudeSignOut', // Computer account credentials are managed in the app.
+  'completeClaudeSignIn', // Computer account credentials are managed in the app.
+  'getClaudeMode', // Computer account credentials are managed in the app.
+  'startClaudeSignIn', // Computer account credentials are managed in the app.
 ] as const satisfies readonly (keyof AgentHarnessSdk)[];
 
 export const agentHarnessBacklog =
@@ -148,7 +152,18 @@ export const authExcluded = [
   'verifyMergeRequest',
 ];
 
-export const authBacklog = [] as const satisfies readonly (keyof AuthSdk)[];
+export const authBacklog = [
+  'cancelTeamComputer', // Computer billing and lifecycle controls belong to the app.
+  'completeTeamComputerSetup', // The guided computer setup is an app flow.
+  'listTeamComputerOffers', // Computer checkout offers belong to the app.
+  'listTeamComputers', // Computer billing and lifecycle controls belong to the app.
+  'restoreTeamComputer', // Computer billing and lifecycle controls belong to the app.
+  'purchaseTeamComputer', // Computer checkout belongs to the app.
+  'releaseTeamComputer', // Computer billing and lifecycle controls belong to the app.
+  'retryTeamComputer', // Computer provisioning recovery belongs to the app.
+  'setTeamComputerPower', // Computer lifecycle controls belong to the app.
+  'undoCancelTeamComputer', // Computer billing and lifecycle controls belong to the app.
+] as const satisfies readonly (keyof AuthSdk)[];
 
 export const calendarExcluded = [
   // Health probe is infra, not SDK surface.
@@ -222,6 +237,7 @@ export const connectionBacklog =
 
 export const contactsExcluded = [
   'addContact',
+  'getContacts',
 ] as const satisfies readonly (keyof ContactsSdk)[];
 
 export const contactsBacklog =
@@ -304,6 +320,16 @@ export const staticFilesBacklog =
   [] as const satisfies readonly (keyof StaticFilesSdk)[];
 
 export const storageExcluded = [
+  // Superseded in the SDK by createCrmPipelineWithFields, which also takes
+  // stages and fields.
+  'createCrmPipeline',
+  // Chat sidebar section editing and discovery remain app-only navigation.
+  'createChannelSection',
+  'deleteChannelSection',
+  'listChannelSections',
+  'previewChannelSection',
+  'setChannelSection',
+  'updateChannelSection',
   // Opening a host to a team takes its owner's own session: an agent can ask for
   // access but never grant it.
   'setHarnessTeamAccess',
@@ -362,11 +388,18 @@ export const storageExcluded = [
   'getPendingProjectsHandler',
   'getProjectsHandler',
   'getRingStatus',
+  // Status of the web app's own folder upload; uploads aren't an SDK surface.
+  'getUploadExtractStatusHandler',
   'getUserDocumentViewLocation',
   'getViewsHandler',
   // Guest chat uses a live RTC session token, not SDK account credentials.
+  'guestCallChatDeleteMessage',
+  'guestCallChatPatchMessage',
   'guestCallChatPost',
+  'guestCallChatPostMessage',
+  'guestCallChatReactMessage',
   'guestCallChatRead',
+  'guestCallChatReadThread',
   'handler',
   'healthHandler',
   'ingestTranscript',
@@ -384,6 +417,31 @@ export const storageExcluded = [
   'meetingLeave',
   'meetingParticipants',
   'mentionPreviews',
+  // The v1 vault requires a normal human session and item access.
+  // Agent SDK credentials cannot access it.
+  'passwordsActivity',
+  'passwordsCopy',
+  'passwordsCopyUsername',
+  'passwordsCreate',
+  'passwordsCreateFolder',
+  'passwordsDetail',
+  'passwordsFolders',
+  'passwordsGrants',
+  'passwordsHistory',
+  'passwordsList',
+  'passwordsMoveFolder',
+  'passwordsPatch',
+  'passwordsRemove',
+  'passwordsRemoveFolder',
+  'passwordsRemoveTotp',
+  'passwordsRenameFolder',
+  'passwordsReveal',
+  'passwordsSetTotp',
+  'passwordsShare',
+  'passwordsTeams',
+  'passwordsTotp',
+  'passwordsUpdate',
+  'passwordsUsername',
   'patchViewHandler',
   'postItemsSoup',
   'postItemsSoupAstGrouped',

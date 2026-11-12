@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: proxy
+    app.kubernetes.io/name: proxy
+    app.kubernetes.io/part-of: macro
+    macro.com/instance: reference
+    macro.com/tier: app
+    macro.local/managed: "true"
+  name: proxy
+  namespace: macro-kube-reference
+spec:
+  progressDeadlineSeconds: 1800
+  replicas: 1
+  revisionHistoryLimit: 0
+  selector:
+    matchLabels:
+      app: proxy
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+    type: RollingUpdate
+  template:
+    metadata:
+      annotations: {}
+      labels:
+        app: proxy
+        app.kubernetes.io/name: proxy
+        app.kubernetes.io/part-of: macro
+        macro.com/instance: reference
+        macro.com/tier: app
+        macro.local/managed: "true"
+    spec:
+      containers:
+        - args: []
+          command: []
+          env: []
+          envFrom: []
+          image: localhost:32550/macro/frontend:build.ipvcasbxp7iq53npw100gkv9by02dkj3
+          imagePullPolicy: IfNotPresent
+          name: proxy
+          ports:
+            - containerPort: 8443
+              protocol: TCP
+          readinessProbe:
+            failureThreshold: 3
+            periodSeconds: 1
+            tcpSocket:
+              port: 8443
+            timeoutSeconds: 10
+          resources: {}
+          volumeMounts:
+            - mountPath: /tmp
+              name: tmp
+            - mountPath: /tls
+              name: file-tls
+              readOnly: true
+      enableServiceLinks: false
+      initContainers: []
+      securityContext: {}
+      terminationGracePeriodSeconds: 2
+      volumes:
+        - emptyDir: {}
+          name: tmp
+        - name: file-tls
+          secret:
+            secretName: macro-tls

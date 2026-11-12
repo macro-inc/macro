@@ -425,6 +425,8 @@ function uncertainEnqueueResult(op: Operation, error: Error): OperationResult {
 }
 
 export interface NormalizedCacheExchangeOptions {
+  /** Advances after writes made outside GraphQL, fencing older network responses. */
+  externalMutationVersion?: () => number;
   /**
    * Best-effort startup recovery before per-mutation admission. Resolve
    * `false` when it cannot run yet; the next drain asks again.
@@ -467,9 +469,13 @@ export interface NormalizedCacheExchangeOptions {
   /**
    * Decides whether a failed optimistic mutation remains queued. The caller
    * receives a `queued` disposition; `true` retains the optimistic layer for
-   * a later background attempt. Defaults to `false`.
+   * a later background attempt. Defaults to `false`. `mutation` is the claimed
+   * attempt, with the server failures counted before it.
    */
-  shouldRetryMutation?: (error: CombinedError) => boolean | Promise<boolean>;
+  shouldRetryMutation?: (
+    error: CombinedError,
+    mutation?: ClaimedMutation
+  ) => boolean | Promise<boolean>;
   /** Spans, bounded logs, and counters for the durable mutation queue. */
   mutationQueueTelemetry?: MutationQueueTelemetry;
 }
@@ -491,6 +497,8 @@ export function normalizedCacheExchange(
     };
     let cacheGeneration = 0;
     let mutationVersion = 0;
+    const currentMutationVersion = () =>
+      mutationVersion + (options.externalMutationVersion?.() ?? 0);
     host.onMutationSettled((settlement) => {
       // Another tab's durable queue runner can commit into this same cache.
       if (settlement.status !== 'permanently-failed') mutationVersion += 1;
@@ -847,7 +855,7 @@ export function normalizedCacheExchange(
       const atMutationVersion = (op: Operation): Operation =>
         makeOperation('query', op, {
           ...op.context,
-          [QUERY_MUTATION_VERSION_CONTEXT_KEY]: mutationVersion,
+          [QUERY_MUTATION_VERSION_CONTEXT_KEY]: currentMutationVersion(),
           externalCacheWriteVersion: externalWriteVersion(host),
           externalCacheWriteTypes:
             op.context.externalCacheWriteTypes ??
@@ -870,7 +878,9 @@ export function normalizedCacheExchange(
 
       const predatesMutation = (op: Operation): boolean => {
         const version: unknown = op.context[QUERY_MUTATION_VERSION_CONTEXT_KEY];
-        return typeof version === 'number' && version < mutationVersion;
+        return (
+          typeof version === 'number' && version < currentMutationVersion()
+        );
       };
 
       // A response from before an acknowledged write cannot safely replace

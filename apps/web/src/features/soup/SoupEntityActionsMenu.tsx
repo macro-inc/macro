@@ -7,6 +7,7 @@ import type { MarkDoneDelegate } from '@app/features/next-soup/actions/mark-done
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { MenuItem, MenuSeparator } from '@core/component/ContextMenu';
 import type { EntityData } from '@entity';
+import { NotificationMuteMenu } from '@notifications/components/NotificationMuteMenu';
 import { children, For, type JSX, Show } from 'solid-js';
 import {
   createSoupEntityActions,
@@ -36,6 +37,7 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
   const panel = useSplitPanelOrThrow();
   const { buildActionGroups } = createSoupEntityActions({
     markDoneDelegate: () => props.markDoneDelegate?.(),
+    selectedEntities: () => props.entities,
   });
   // Resolved rather than tested as JSX: a host whose items render nothing
   // (label rows behind a flag, say) still passes a truthy element, and
@@ -70,17 +72,27 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
               <MenuSeparator />
             </Show>
             <For each={group.items}>
-              {(action) => (
-                <MenuItem
-                  text={action.label}
-                  icon={action.icon}
-                  hotkeyToken={action.hotkeyToken}
-                  shortcut={action.shortcut}
-                  disabled={action.disabled}
-                  onClick={() => handleAction(action.onClick)}
-                  class={action.destructive ? 'text-failure-ink' : undefined}
-                />
-              )}
+              {(action) => {
+                if (action.muteMenu) {
+                  return (
+                    <NotificationMuteMenu
+                      {...action.muteMenu}
+                      onActionComplete={props.onActionComplete}
+                    />
+                  );
+                }
+                return (
+                  <MenuItem
+                    text={action.label}
+                    icon={action.icon}
+                    hotkeyToken={action.hotkeyToken}
+                    shortcut={action.shortcut}
+                    disabled={action.disabled}
+                    onClick={() => handleAction(action.onClick)}
+                    class={action.destructive ? 'text-failure-ink' : undefined}
+                  />
+                );
+              }}
             </For>
           </>
         )}

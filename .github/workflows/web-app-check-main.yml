@@ -29,6 +29,7 @@ jobs:
             - 'bun.lock'
             - 'apps/web/**'
             - 'packages/**'
+            - 'tooling/icons/**'
             - 'crates/folds/agent_fold/**'
             - 'crates/agent_runtime_protocol/**'
             - 'crates/client/cache-core/**'
@@ -56,6 +57,7 @@ jobs:
             - 'bun.lock'
             - 'apps/web/**'
             - 'packages/**'
+            - 'tooling/icons/**'
             - 'crates/folds/agent_fold/**'
             - 'crates/agent_runtime_protocol/**'
             - 'crates/client/cache-core/**'
@@ -84,6 +86,7 @@ jobs:
             - 'apps/web/src/features/settings/**'
           database_grid_changed:
             - 'apps/web/src/features/database/**'
+            - 'apps/web/src/components/gantt/**'
           calendar_details_changed:
             - 'apps/web/src/features/calendar-view/**'
             - 'apps/web/src/features/calendar/**'
@@ -333,6 +336,8 @@ jobs:
     steps:
     - name: Checkout Repo
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      with:
+        fetch-depth: '0'
     - name: Mount Namespace cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
@@ -365,6 +370,7 @@ jobs:
         check 'Check Floating Promises' '.' 'bun run lint:oxlint --quiet'
         check 'Check Functional Test Types' 'apps/web' 'bun ../../node_modules/typescript-native/bin/tsc --noEmit --skipLibCheck --project tests/functional/tsconfig.json'
         check 'Check Collaboration Package Types' 'packages/collaboration' 'bun run type-check'
+        check 'Check Observability Package' 'packages/observability' 'bun run type-check && bun run test'
         check 'Check Lexical Service Types' 'services/lexical-service' 'bun run check'
         check 'Test Lexical Service Endpoints' 'services/lexical-service' 'bun test src'
         check 'Check SDK Documentation' 'packages/sdk-docs' 'bun run type-check && bun run test'
@@ -534,17 +540,6 @@ jobs:
           echo "packages/sdk generated code is stale. Run 'just update-generated' in packages/sdk and commit the result."
           git status --porcelain -- packages/sdk
           git diff -- packages/sdk | head -200
-          exit 1
-        fi
-    - name: Regenerate MCP tool pages
-      run: bun run generate:tools
-      working-directory: apps/docs
-    - name: Verify docs tool reference is fresh
-      run: |
-        if [ -n "$(git status --porcelain -- apps/docs)" ]; then
-          echo "apps/docs tool reference is stale. Run 'bun run generate:tools' in apps/docs and commit the result."
-          git status --porcelain -- apps/docs
-          git diff -- apps/docs | head -200
           exit 1
         fi
     - name: Check Specta Types
