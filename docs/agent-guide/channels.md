@@ -1661,8 +1661,8 @@ Inset tabs sit in the channel header:
 `Messages` / `Attachments` / `Calls` / `Participants`.
 `Invite` and `Call` actions remain in channel headers, with the
 live-phone-call exceptions described above. `Ask Macro` lives in the channel
-title menu (the `...` after the name, or the split title's menu) on every platform. On narrow desktop panes, the tabs
-collapse from text labels to icons. Standalone mobile channels
+title menu (the `...` after the name, or the split title's menu) on every
+platform. On narrow desktop panes, the tabs collapse from text labels to icons. Standalone mobile channels
 keep view selection in the title menu. In both a single channel and an adjacent
 channel split, the message composer stays fully visible at the bottom. The
 `Calls` tab lists
@@ -1683,8 +1683,8 @@ right-clicking the conversation's rail row: `Open in new split` (when available)
 `Rename`, `Set channel picture`,
 `Remove channel picture` (only when the channel has one),
 `Favorite`/`Unfavorite`, `Mute notifications`/`Unmute notifications`,
-`Remind me`, `Copy Link`, `Copy ID`, then `Ask Macro`. A channel can therefore be favorited or
-given a picture without finding its row, from Chat and from every view that
+`Remind me`, `Copy Link`, `Copy ID`, then `Ask Macro`. A channel can
+therefore be favorited or given a picture without finding its row, from Chat and from every view that
 opens one inline. The menu appears once the conversation itself has loaded,
 reusing a cached conversation without another activation fetch. Opening the
 conversation still refreshes its unread notifications. The split's own title

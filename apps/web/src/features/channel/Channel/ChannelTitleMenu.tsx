@@ -41,7 +41,7 @@ export function ChannelTitleMenu(props: { channelId: string }) {
     return {
       type: 'channel' as const,
       id: props.channelId,
-      name: channelName() ?? 'New Channel',
+      name: channelName() ?? channel()?.name ?? 'New Channel',
       channelType: type,
     };
   };
