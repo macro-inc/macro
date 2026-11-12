@@ -385,12 +385,20 @@ minute.
 
 **Settings → Notifications → Sounds** turns on an in-app sound for incoming
 notifications. It is off by default and saved per person on each device
-(user-scoped localStorage), so a laptop and a phone choose separately. With
-sounds on, it shows a volume slider and one row per type (Messages, Mentions,
-Thread replies, Email, Meetings & reminders, Tasks, AI & agents, Everything
-else), each with its own on/off switch, sound picker, and play button. Picking
-a sound previews it. Email, AI & agents, and Everything else start off.
+(user-scoped localStorage), so a laptop and a phone choose separately. The
+volume slider appears when notification sounds or Call sounds are on. Turning
+notification sounds on reveals one row per type (Messages, Mentions, Thread
+replies, Email, Meetings & reminders, Tasks, AI & agents, Everything else), each
+with its own on/off switch, sound picker, and play button. Picking a sound
+previews it. Email, AI & agents, and Everything else start off.
 Channel join requests use Everything else, alongside sharing and invitations.
+
+**Call sounds** is a separate, default-on toggle with Join and Leave preview
+buttons. Browser calls use fixed ascending/descending cues for deliberate
+participation changes, including your own. They share this volume and quiet
+hours but do not require notification sounds to be on. See
+[join and leave sounds](calls.md#join-and-leave-sounds) for recovery and platform
+limits.
 
 Sounds are synthesized with Web Audio (`features/notification-sounds`); there
 are no audio files. Event types map to rows in `core/categories.ts`; a new
@@ -398,9 +406,11 @@ backend event type stays quiet until it is mapped there. Incoming calls keep
 their own ring and never use these sounds. Only unseen notifications play,
 notifications within 1.5 s of a sound share it, and only the Macro tab the
 person last focused or touched plays, so several tabs ding once. Closing that
-tab hands sound back to the others until one is focused. Browsers keep
-audio suspended until the page has had a gesture; a notification before that
-stays silent rather than playing late.
+tab hands sound back to the others until one is focused. Mouse, touch, Enter,
+and Space activation unlock audio even while sounds are off, so enabling a
+sound setting also unlocks playback. A cue that cannot resume audio within
+250 ms stays silent rather than playing on a later gesture. Notification sounds
+use the system-default output; call cues follow the selected call speaker.
 
 When Macro plays a sound for a notification, its browser or macOS alert is
 sent silent so the person hears one sound. macOS builds older than the

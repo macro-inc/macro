@@ -1,5 +1,6 @@
 //! Conversions from channel domain models into their Soup wire shapes.
 
+use crate::domain::agent_dm::AgentDmProfile;
 use crate::domain::models::{
     ChannelListItem, ChannelMessage, ChannelParticipant, ChannelType, ChannelWithLatest,
     ChannelWithParticipants, CountedReaction, LatestMessage, MessageAttachment, ParticipantRole,
@@ -7,8 +8,8 @@ use crate::domain::models::{
 };
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use soup_types::comms::{
-    self as soup, OrganizationId, SoupChannel, SoupChannelThread, SoupCountedReaction,
-    SoupMessageAttachment, SoupMessageSender, SoupThreadInfo, SoupThreadReply,
+    self as soup, OrganizationId, SoupAgentDmProfile, SoupChannel, SoupChannelThread,
+    SoupCountedReaction, SoupMessageAttachment, SoupMessageSender, SoupThreadInfo, SoupThreadReply,
 };
 
 impl From<ChannelType> for soup::ChannelType {
@@ -43,6 +44,7 @@ impl From<ChannelListItem> for soup::Channel {
                 .and_then(|org_id| u32::try_from(org_id).ok())
                 .map(OrganizationId),
             team_id: channel.team_id,
+            auto_join_team: channel.auto_join_team,
             created_at: channel.created_at,
             updated_at: channel.updated_at,
             owner_id: channel.owner_id,
@@ -105,10 +107,21 @@ impl From<ChannelWithParticipants> for soup::ChannelWithParticipants {
 impl From<ChannelWithLatest> for SoupChannel {
     fn from(channel: ChannelWithLatest) -> Self {
         Self {
+            agent_dm: channel.agent_dm.map(Into::into),
             channel: channel.channel.into(),
             latest_message: channel.latest_message.into(),
             viewed_at: channel.viewed_at,
             interacted_at: channel.interacted_at,
+        }
+    }
+}
+
+impl From<AgentDmProfile> for SoupAgentDmProfile {
+    fn from(profile: AgentDmProfile) -> Self {
+        Self {
+            bot_id: profile.bot_id,
+            name: profile.name,
+            avatar_url: profile.avatar_url,
         }
     }
 }

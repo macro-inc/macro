@@ -1,3 +1,4 @@
+use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -59,6 +60,9 @@ pub struct Channel {
     /// Team id.
     #[serde(default)]
     pub team_id: Option<Uuid>,
+    /// Whether members of the channel's team join it automatically.
+    #[serde(default)]
+    pub auto_join_team: bool,
     /// Creation timestamp.
     pub created_at: chrono::DateTime<chrono::Utc>,
     /// Update timestamp.
@@ -100,10 +104,26 @@ pub struct LatestMessage {
     pub latest_non_thread_message: Option<ChannelMessage>,
 }
 
+/// The persona of a viewer's private conversation with an agent.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct SoupAgentDmProfile {
+    /// Persona id.
+    #[cfg_attr(feature = "schema", schema(value_type = String))]
+    pub bot_id: BotId,
+    /// Persona display name.
+    pub name: String,
+    /// Persona avatar, when supplied.
+    pub avatar_url: Option<String>,
+}
+
 /// A channel as displayed in Soup.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct SoupChannel {
+    /// Persona identity when this is the viewer's private agent DM.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_dm: Option<SoupAgentDmProfile>,
     /// Channel metadata and participants.
     #[serde(flatten)]
     pub channel: ChannelWithParticipants,

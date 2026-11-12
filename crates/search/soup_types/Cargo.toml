@@ -26,3 +26,4 @@ utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../workspace-hack" }
 channel_sender = { workspace = true }
+bot_id = { workspace = true }

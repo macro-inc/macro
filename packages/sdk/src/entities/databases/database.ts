@@ -25,6 +25,8 @@ import type {
 } from '../../../generated/storage/types.gen';
 import { MacroApiError, MacroError, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
+import type { Channel } from '../channels/channel';
+import { shareWithChannel } from '../channels/share';
 import { MacroEntity } from '../entity';
 import type { PropertyDefinition } from '../properties/property-definition';
 import { EntityAccess } from '../sharing/access';
@@ -257,6 +259,18 @@ export class Database extends MacroEntity<DatabaseDetail> {
 
   /** Access requests and direct user grants. */
   readonly access = new EntityAccess(this.client, 'database', this);
+
+  /**
+   * Share this database with a channel's current members, as posting it in the
+   * channel does. The caller must be in the channel and able to share the
+   * database; sharing again changes nothing.
+   *
+   * @write
+   * @idempotent
+   */
+  async shareWithChannel(channel: Channel): Promise<void> {
+    await shareWithChannel(this.client, channel, 'database', this.id);
+  }
 
   protected async fetch(): Promise<DatabaseDetail> {
     return unwrap(

@@ -60,6 +60,7 @@ function Fixture() {
         <NotificationSoundSection
           settings={sounds.settings()}
           onEnabledChange={sounds.setEnabled}
+          onCallSoundsEnabledChange={sounds.setCallSoundsEnabled}
           onVolumeChange={sounds.setVolume}
           onCategoryChange={sounds.setCategory}
           onPreview={(sound) =>
