@@ -539,7 +539,7 @@ impl IngressQueueMessage {
         self.request.uuid_to_write
     }
 
-    /// The notification type this message sends, e.g. `manual`.
+    /// The notification type this message sends, e.g. `ping`.
     pub fn event_type(&self) -> &str {
         self.request.req.notification.tag.as_ref()
     }

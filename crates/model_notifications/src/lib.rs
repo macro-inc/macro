@@ -24,7 +24,11 @@ pub use metadata::{
     GithubPrMentionLocation, GithubPrNotificationCommon, GithubPrReview, GithubPrReviewState,
     GithubPrStatusChanged, GithubReviewRequested, InboxReauthRequiredMetadata,
     InitiativeDiscussionMetadata, InitiativeDiscussionReason, InviteToTeamMetadata, InviteePlan,
-    ItemSharedMetadata, ManualMetadata, ManualNotificationAgent, MentionedInDocumentCommentMetadata, NewEmailMetadata, NotificationDocumentSubType, NotificationTitle, PasswordAccessRequestedMetadata, ReminderMetadata, RepliedToDocumentCommentThreadMetadata, RequestedAccessLevel, RoutineRunFinishedMetadata, RoutineRunOutcome, RuntimeAccessRemovedMetadata, StoppedAgent, TaskAssignedMetadata,
+    ItemSharedMetadata, MentionedInDocumentCommentMetadata, NewEmailMetadata,
+    NotificationDocumentSubType, NotificationTitle, PasswordAccessRequestedMetadata, PingAgent,
+    PingMessage, PingMetadata, ReminderMetadata, RepliedToDocumentCommentThreadMetadata,
+    RequestedAccessLevel, RoutineRunFinishedMetadata, RoutineRunOutcome,
+    RuntimeAccessRemovedMetadata, StoppedAgent, TaskAssignedMetadata,
 };
 pub use unsubscribe::UserUnsubscribe;
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -303,7 +307,7 @@ define_notif_event!(
 
         /// Someone, usually agent code through the SDK, sent the user a
         /// notification they wrote.
-        Manual(ManualMetadata),
+        Ping(PingMetadata),
         /// A runtime's owner removed the user's access to it, and agents of
         /// theirs living there stopped.
         RuntimeAccessRemoved(RuntimeAccessRemovedMetadata),
@@ -381,7 +385,7 @@ impl NotificationTitle for NotifEvent {
             NotifEvent::RoutineRunFinished(m) => m.format_title(sender_id),
             NotifEvent::AgentSignInExpiry(m) => m.format_title(sender_id),
             NotifEvent::ComputerSetup(m) => m.format_title(sender_id),
-            NotifEvent::Manual(m) => m.format_title(sender_id),
+            NotifEvent::Ping(m) => m.format_title(sender_id),
             NotifEvent::RuntimeAccessRemoved(m) => m.format_title(sender_id),
             NotifEvent::AgentSessionWaitingForInput(m) => m.format_title(sender_id),
             NotifEvent::AgentSessionMentioned(m) => m.format_title(sender_id),
@@ -456,7 +460,7 @@ impl NotificationTitle for NotifEvent {
             NotifEvent::RoutineRunFinished(m) => m.format_body(sender_id),
             NotifEvent::AgentSignInExpiry(m) => m.format_body(sender_id),
             NotifEvent::ComputerSetup(m) => m.format_body(sender_id),
-            NotifEvent::Manual(m) => m.format_body(sender_id),
+            NotifEvent::Ping(m) => m.format_body(sender_id),
             NotifEvent::RuntimeAccessRemoved(m) => m.format_body(sender_id),
             NotifEvent::AgentSessionWaitingForInput(m) => m.format_body(sender_id),
             NotifEvent::AgentSessionMentioned(m) => m.format_body(sender_id),
