@@ -14,7 +14,7 @@ All resume branches start from the integration revision that includes this plan.
 | integrate | build | `/Users/t/Projects/macro/wt-integration`, `integration/rox-enterprise` | frontend, mailbox, enterprise-runtimes, review | merge accepted owned paths, conflict resolution, integration commit |
 | verify | verify | fresh detached worktree at integrated HEAD | baseline, integrate | verification handoff and disposable test artifacts only |
 
-Shared interfaces have exactly one writer: mailbox owns migrations, `.sqlx`, `Cargo.lock`, and `packages/sdk`; frontend owns `apps/docs/AI/bring-your-own.mdx`; integration owns generated app service clients and any cross-lane repair after all producers finish. Other lanes consume those files read-only and describe required changes in their handoffs. Hermes' native `delegation.worktree_isolation` supplies each child's actual worktree and `hermes-subagent/*` branch; each child must verify and report its real root and branch.
+Shared interfaces have exactly one writer: mailbox owns migrations, `.sqlx`, `Cargo.lock`, and `packages/sdk`; frontend owns `apps/docs/AI/bring-your-own.mdx`; integration owns generated app service clients and any cross-lane repair after all producers finish. Other lanes consume those files read-only and describe required changes in their handoffs. The native Hermes `delegation.worktree_isolation` setting supplies each child worktree and `hermes-subagent/*` branch; every child must verify and report its real root and branch.
 
 ## Execution rules
 
