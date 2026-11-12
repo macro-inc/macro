@@ -557,6 +557,12 @@ async fn run() -> anyhow::Result<()> {
         connectors = connectors.with_rollout(rollout);
     }
 
+    // Session egress reaches only public addresses, except on a local stack
+    // whose MCP and preview services sit on the compose network.
+    let mcp_address_policy =
+        mcp_client::outbound::guarded_http::AddressPolicy::for_environment(config.environment);
+    let mcp_http = mcp_client::outbound::guarded_http::McpHttp::new(mcp_address_policy)?;
+
     // Every session's MCP servers: Macro's own under the reserved `macro`
     // slug, the owner's custom servers by URL key, then the owner's Pipedream
     // connections. The `macro` credential is signed inline with the same key
@@ -566,6 +572,7 @@ async fn run() -> anyhow::Result<()> {
         WithCustomMcp::new(
             PipedreamMcpCredentials::new(Arc::clone(&mcp_connections), connectors),
             Arc::clone(&mcp_servers),
+            mcp_http.clone(),
         ),
         MacroApiTokenSigner::new(
             pool.clone(),
@@ -614,7 +621,7 @@ async fn run() -> anyhow::Result<()> {
                 PgGithubSyncRepo::new(pool.clone()),
                 GithubSyncClientImpl::default(),
             )),
-            ReqwestForwarder::new()?,
+            ReqwestForwarder::new(mcp_address_policy)?,
         )
         .with_preview_mcp(
             url::Url::parse(&format!(
@@ -625,7 +632,7 @@ async fn run() -> anyhow::Result<()> {
         )?
         .with_owner_approvals(Arc::clone(&tool_approvals))
         .with_actor_mcp(Arc::new(
-            agent_egress::outbound::actor_mcp::HttpActorMcpTransport::new()?,
+            agent_egress::outbound::actor_mcp::HttpActorMcpTransport::new(mcp_address_policy)?,
         )),
     );
 
@@ -653,6 +660,7 @@ async fn run() -> anyhow::Result<()> {
         pool.clone(),
         event_broker_tracker.clone(),
         import_jobs.clone(),
+        mcp_http,
     )
     .await
     .context("failed to compose cognition APIs")?;
@@ -1541,6 +1549,8 @@ async fn run() -> anyhow::Result<()> {
         ))
         .with_conversation_turns(conversation_turns)
         .with_worker_idle_timeout(config.agent_session_idle_timeout()?)
+        // Kill switch for retrying idle releases that kept their session.
+        .with_idle_release_flags(feature_flags.clone())
         .with_admission(admission.clone())
         .with_agent_keys(agent_keys)
         .with_repositories(open_repositories)

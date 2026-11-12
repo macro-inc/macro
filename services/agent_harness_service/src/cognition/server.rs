@@ -96,12 +96,14 @@ impl CognitionRuntime {
 ///
 /// `import_jobs` are the harness's import jobs: this runtime's Notion imports
 /// and the stalled-import sweeper run on them, and the harness hands them
-/// over on shutdown.
+/// over on shutdown. `mcp_http` is the harness's guarded client for users'
+/// own MCP servers.
 pub async fn build(
     config: Config,
     db: sqlx::PgPool,
     event_broker_tracker: TaskTracker,
     import_jobs: ai_tools::ImportJobs,
+    mcp_http: mcp_client::outbound::guarded_http::McpHttp,
 ) -> anyhow::Result<CognitionRuntime> {
     let public_url = macro_service_urls::CognitionPublicUrl::new()?;
     let aws_config = macro_aws_config::get_macro_aws_config().await;
@@ -723,6 +725,7 @@ pub async fn build(
     // The import service's live Slack source shares this selector.
     let mcp_selector: Arc<ai_tools::ToolMcpSelector> = Arc::new(mcp_select::McpToolSelector::new(
         Arc::new(mcp_server_repo.clone()),
+        mcp_http.clone(),
         Arc::new(pipedream_repo.clone()),
         Arc::new(connectors.clone()),
     ));
@@ -1047,6 +1050,7 @@ pub async fn build(
         mcp_server_repo.clone(),
         mcp_oauth_state_store,
         mcp_client_metadata.clone(),
+        mcp_http,
         mcp_pre_registered,
     );
     // Record connector connects and disconnects for product analytics.
