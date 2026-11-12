@@ -83,6 +83,20 @@ describe('registerSplitHotkeys', () => {
     expect(focusAdjacentSplit).toHaveBeenCalledWith('down');
   });
 
+  it('leaves Shift+Arrow to a focused slider', () => {
+    register();
+    document.body.innerHTML =
+      '<div id="thumb" role="slider" tabindex="0"></div>';
+    document.getElementById('thumb')!.focus();
+
+    const shiftDown = new KeyboardEvent('keydown', {
+      key: 'ArrowDown',
+      shiftKey: true,
+    });
+    expect(focusDown()?.(shiftDown)).toBe(false);
+    expect(focusAdjacentSplit).not.toHaveBeenCalled();
+  });
+
   it('moves split focus with Shift+Arrow elsewhere', () => {
     register();
     document.body.innerHTML = '<button id="row"></button>';

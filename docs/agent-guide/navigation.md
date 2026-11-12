@@ -1769,8 +1769,8 @@ restart rules still apply.
   `Shift+Arrow` move focus to the split on that side, by where the splits tile:
   to the one level with the focused split's centre (the upper or left one on a
   tie), or back to the split you came from when it borders that side; past the
-  edge they wrap. In a list `Shift+Up`/`Down` extend the selection instead, and
-  a database grid keeps `Shift+Arrow` for its cell range.
+  edge they wrap. In a list `Shift+Up`/`Down` extend the selection instead;
+  sliders, the database grid, and the slide stage and rail keep `Shift+Arrow`.
 - Desktop app only: `Ctrl/Cmd` with `+`, `-`, and `0` zoom the page and reset it,
   through the same stops a browser uses. The level persists across relaunches,
   and the commands appear in the command menu as Zoom in / Zoom out / Actual

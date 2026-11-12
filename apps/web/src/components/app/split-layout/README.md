@@ -29,8 +29,9 @@ keeps the tiles and their sizes and changes which split shows where.
 Directional focus (`Shift+H/J/K/L`, `Shift+Arrow`) picks its target from the
 tiles, not the pane order: `split-direction.ts` returns to the previously
 active split when it borders that side, else the one level with the focused
-split's centre, wrapping past the edge. A focused control marked
-`data-owns-arrow-keys` (the database grid) keeps `Shift+Arrow`.
+split's centre, wrapping past the edge. A focused slider, or a control marked
+`data-owns-arrow-keys` (the database grid, the slide stage and rail), keeps
+`Shift+Arrow`: app hotkeys see keys before the focused element does.
 
 Opening or closing a split changes its neighbours' widths, and their text
 rewraps under an unchanged scrollTop. WebKit (Safari, iOS) has no CSS scroll

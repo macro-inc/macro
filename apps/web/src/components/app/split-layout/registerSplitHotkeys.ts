@@ -7,13 +7,16 @@ import { focusAdjacentSplit } from './layoutUtils';
 import { canSpotlight } from './utils/canSpotlight';
 
 /**
- * A focused control that moves through its cells with Shift+Arrow, such as a
- * database grid, marks itself `data-owns-arrow-keys` and keeps those keys.
+ * A focused control that uses Shift+Arrow itself keeps those keys: sliders,
+ * and controls marked `data-owns-arrow-keys` (the database grid, the slide
+ * stage and rail). App hotkeys see keys before the focused element does.
  */
 function focusOwnsArrowKeys(event: KeyboardEvent | undefined) {
   if (!event?.key.startsWith('Arrow')) return false;
 
-  return !!document.activeElement?.closest('[data-owns-arrow-keys]');
+  return !!document.activeElement?.closest(
+    '[data-owns-arrow-keys], [role="slider"]'
+  );
 }
 
 export function registerSplitHotkeys(args: {
