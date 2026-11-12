@@ -110,6 +110,8 @@ test('Up edits the next-to-send message; Enter saves, Escape restores, focus ret
   await page.keyboard.press('ArrowUp');
   await composer(page).click();
   await expect(log(page).locator('li')).toHaveCount(1);
+  // Clicking away also closed the row.
+  await expect(editor).toBeHidden();
 });
 
 test('tapping a queued message edits it in place and saves on leaving', async ({
@@ -129,4 +131,9 @@ test('tapping a queued message edits it in place and saves on leaving', async ({
   await page.keyboard.type(' please');
   await composer(page).click();
   await expect(log(page)).toHaveText(`edit queued-1: ${FIRST} please`);
+  // Tapping away closed the row; the preview shows the saved text.
+  await expect(editor).toBeHidden();
+  await expect(
+    queue(page).getByRole('button', { name: `${FIRST} please` })
+  ).toBeVisible();
 });

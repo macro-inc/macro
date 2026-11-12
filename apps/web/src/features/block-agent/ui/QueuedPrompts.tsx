@@ -180,6 +180,7 @@ type QueuedRowProps = {
 function QueuedRow(props: QueuedRowProps) {
   const editorId = createUniqueId();
   const [draft, setDraft] = createSignal<string>();
+  let row: HTMLDivElement | undefined;
   let preview: HTMLButtonElement | undefined;
   let focusBody: (() => void) | undefined;
   const isPrompt = () => props.item.kind === 'prompt';
@@ -210,10 +211,19 @@ function QueuedRow(props: QueuedRowProps) {
   return (
     <Surface class="h-auto shrink-0 rounded-lg" depth={1} solid>
       <div
+        ref={row}
         class="flex gap-2 px-3 py-1"
         classList={{
           'items-center': !props.expanded,
           'items-start': props.expanded,
+        }}
+        // Focus landing somewhere else (the composer, another row) closes
+        // the row; the editor's own focus-out has saved by then. A touch
+        // keyboard has no Escape, so this is how a tapped row closes.
+        onFocusOut={(event) => {
+          const next = event.relatedTarget;
+          if (props.expanded && next instanceof Node && !row?.contains(next))
+            props.onExpandedChange(false);
         }}
         onKeyDown={(event) => {
           if (event.key === 'Escape' && !event.defaultPrevented) {
@@ -397,9 +407,11 @@ function PromptBody(
       props.onClose();
       return true;
     })
-    .onEscape(() => {
+    .onEscape((event) => {
       // A mention or emoji menu takes the first Escape for itself.
       if (editor.controls.isInlineMenuOpen()) return false;
+      // Consumed here, so the row's own Escape handler does not close again.
+      event.preventDefault();
       restore();
       props.onClose();
       return true;

@@ -6,7 +6,7 @@ import { QueuedPrompts } from './QueuedPrompts';
 const editor = vi.hoisted(() => ({
   change: undefined as ((markdown: string) => void) | undefined,
   enter: undefined as (() => boolean) | undefined,
-  escape: undefined as (() => boolean) | undefined,
+  escape: undefined as ((event: KeyboardEvent) => boolean) | undefined,
   markdown: 'Queued request',
   focus: vi.fn(),
   setMarkdown: vi.fn((markdown: string) => {
@@ -39,7 +39,7 @@ vi.mock(
           editor.enter = callback;
           return builder;
         },
-        onEscape: (callback: () => boolean) => {
+        onEscape: (callback: (event: KeyboardEvent) => boolean) => {
           editor.escape = callback;
           return builder;
         },
@@ -181,7 +181,9 @@ describe('queued prompt preview', () => {
 
     editor.markdown = 'Updated request';
     editor.change?.(editor.markdown);
-    expect(editor.escape?.()).toBe(true);
+    expect(
+      editor.escape?.(new KeyboardEvent('keydown', { key: 'Escape' }))
+    ).toBe(true);
     expect(preview.hidden).toBe(false);
     expect(screen.queryByRole('textbox')).toBeNull();
     // Escape restored the saved text, so the preview still shows it.
@@ -254,7 +256,9 @@ describe('queued prompt keys', () => {
     editor.markdown = 'Abandoned edit';
     editor.change?.(editor.markdown);
 
-    expect(editor.escape?.()).toBe(true);
+    expect(
+      editor.escape?.(new KeyboardEvent('keydown', { key: 'Escape' }))
+    ).toBe(true);
     expect(editor.setMarkdown).toHaveBeenCalledExactlyOnceWith(
       'Queued request'
     );
@@ -285,6 +289,38 @@ describe('queued prompt keys', () => {
 
     fireEvent.focusOut(screen.getByRole('textbox'));
     expect(onEdit).toHaveBeenCalledExactlyOnceWith('first', 'Updated request');
+  });
+
+  it('closes when focus lands outside the row and stays open within it', () => {
+    const composer = renderComposer();
+    const onEdit = vi.fn();
+    render(() => (
+      <QueuedPrompts
+        items={[
+          { actionId: 'first', kind: 'prompt', prompt: 'Queued request' },
+        ]}
+        onEdit={onEdit}
+        onRemove={vi.fn()}
+        onSteer={vi.fn()}
+        onNavigateBelow={() => composer.focus()}
+      />
+    ));
+    fireEvent.click(screen.getByRole('button', { name: 'Queued request' }));
+    const textbox = screen.getByRole('textbox');
+    editor.markdown = 'Updated request';
+    editor.change?.(editor.markdown);
+
+    fireEvent.focusOut(textbox, {
+      relatedTarget: screen.getByRole('button', { name: 'Steer' }),
+    });
+    expect(screen.getByRole('textbox')).toBe(textbox);
+
+    fireEvent.focusOut(textbox, { relatedTarget: composer });
+    expect(onEdit).toHaveBeenCalledExactlyOnceWith('first', 'Updated request');
+    expect(screen.queryByRole('textbox')).toBeNull();
+    expect(
+      screen.getByRole('button', { name: 'Updated request' })
+    ).toBeTruthy();
   });
 
   it('falls back to the preview when there is no composer to return to', () => {
@@ -433,11 +469,15 @@ describe('queued prompt access', () => {
     editor.markdown = 'Queued request @bo';
     editor.change?.(editor.markdown);
     editor.inlineMenuOpen = true;
-    expect(editor.escape?.()).toBe(false);
+    expect(
+      editor.escape?.(new KeyboardEvent('keydown', { key: 'Escape' }))
+    ).toBe(false);
     expect(editor.setMarkdown).not.toHaveBeenCalled();
     expect(screen.getByRole('textbox').textContent).toBe('Queued request');
     editor.inlineMenuOpen = false;
-    expect(editor.escape?.()).toBe(true);
+    expect(
+      editor.escape?.(new KeyboardEvent('keydown', { key: 'Escape' }))
+    ).toBe(true);
     expect(editor.setMarkdown).toHaveBeenCalledExactlyOnceWith(
       'Queued request'
     );
@@ -457,7 +497,7 @@ describe('queued prompt access', () => {
     fireEvent.click(screen.getByRole('button', { name: 'See [a](b)' }));
     editor.enter?.();
     fireEvent.click(screen.getByRole('button', { name: 'See [a](b)' }));
-    editor.escape?.();
+    editor.escape?.(new KeyboardEvent('keydown', { key: 'Escape' }));
     fireEvent.click(screen.getByRole('button', { name: 'See [a](b)' }));
     fireEvent.focusOut(screen.getByRole('textbox'));
     expect(onEdit).not.toHaveBeenCalled();

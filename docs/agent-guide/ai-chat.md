@@ -2265,9 +2265,10 @@ must stay hidden; subsequent live messages must still appear.
   Opening another row closes the previous one. The editor scrolls within the
   smaller of 32% of the viewport and 16rem. Enter saves the edit and closes the
   row (Shift+Enter is a newline); Escape throws the typing away, shows the saved
-  text again, and closes the row; both return focus to the composer. Focus leaving
-  the editor any other way (a click elsewhere) saves too; on a touch keyboard
-  Enter is a newline and the edit saves when focus leaves. Escape with a mention
+  text again, and closes the row; both return focus to the composer. Focus landing
+  anywhere outside the row (a click on the composer or another row) saves and
+  closes it too; on a touch keyboard Enter is a newline and that is how a
+  tapped row closes. Escape with a mention
   or emoji menu open closes that menu only. Opening and closing an untouched row
   never sends an edit, and emptying a row brings its saved text back rather than
   saving nothing. Each row shows a `Queued` label (with `by {user}` when someone else
