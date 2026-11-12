@@ -223,6 +223,10 @@ and `google_gmail` identity providers and the services' Google URLs
   so sign in with Google from a browser on this machine.
 - The emulator keeps its state in memory: restarting its container returns it
   to the seed, while Macro's database keeps what it synced.
+- FusionAuth only gets the emulator's identity providers when its database
+  is first filled. A stack created before the emulator existed, or with
+  different Google keys, stops at "Waiting for FusionAuth" and says so:
+  start it once with `--fresh`.
 - Google Calendar is not emulated. Calendar sync for an emulated account
   finds no calendar.
 

@@ -7,7 +7,7 @@ use reqwest::redirect::Policy;
 use url::Url;
 
 use super::*;
-use crate::Route;
+use crate::{Fault, FaultError, Route};
 
 const CLIENT_ID: &str = "macro-client.apps.example.com";
 const REDIRECT_URI: &str = "http://localhost:8080/oauth2/google/callback";
@@ -276,4 +276,35 @@ async fn a_request_google_would_refuse_shows_an_error_instead_of_the_chooser() {
     assert_eq!(page.status().as_u16(), 400);
     let html = page.text().await.unwrap();
     assert!(html.contains("Missing required parameter: redirect_uri"));
+}
+
+#[tokio::test]
+async fn a_code_survives_a_failed_exchange_and_can_be_retried() {
+    let emulator = GmailEmulator::start(Seed::with_mailboxes([ADA]))
+        .await
+        .unwrap();
+    let request = authorization_request(&format!("openid {GMAIL_SCOPE}"));
+    let callback = submit(
+        &emulator,
+        &request,
+        &[("user", ADA), ("granted", GMAIL_SCOPE)],
+    )
+    .await;
+    emulator.inject_fault(Fault {
+        route: Some(Route::OauthToken),
+        error: Some(FaultError::Unavailable),
+        times: Some(1),
+        ..Fault::default()
+    });
+
+    let oauth = oauth_client(&emulator);
+    oauth
+        .exchange_google_code_for_tokens(&callback["code"], REDIRECT_URI)
+        .await
+        .unwrap_err();
+    let tokens = oauth
+        .exchange_google_code_for_tokens(&callback["code"], REDIRECT_URI)
+        .await
+        .unwrap();
+    assert!(tokens.scope.contains(GMAIL_SCOPE));
 }

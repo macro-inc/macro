@@ -109,6 +109,14 @@ a standalone process or as part of a local stack, without Google accounts.
   client id and redirect URI it was issued for.
 - The signing key is generated on first use (a few seconds in a debug build)
   and differs per emulator. Don't commit a key: the secret scan refuses it.
+- State lives in memory. Recreating the process or its container starts
+  again from the seed: delivered mail, grants made on the page and watches
+  are gone, so mailboxes linked before then get no pushes until they watch
+  again.
+- On the routes without a mailbox token (the sign-in page, `/token`), a
+  fault that names no mailbox answers before anything changes, so a failed
+  code exchange can be retried. A fault that names a mailbox answers after
+  the request took effect.
 - Waiting is event driven (`wait_for_push_deliveries`); don't add sleep loops.
 - `q` understands only the operators listed in `src/query.rs`; `OR` and
   parentheses match as plain words.

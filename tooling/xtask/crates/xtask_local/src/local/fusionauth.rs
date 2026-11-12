@@ -70,16 +70,25 @@ pub fn write_kickstart(
 /// existed. The final request is always an identity provider, created at its
 /// own URL.
 pub fn wait_ready(stage: &Stage, instance: &Instance) -> Result<()> {
-    let url = format!(
-        "http://localhost:{}{}",
-        instance.port(Port::FusionAuth),
-        last_kickstart_request(instance)?,
-    );
+    let base = format!("http://localhost:{}", instance.port(Port::FusionAuth));
+    let url = format!("{base}{}", last_kickstart_request(instance)?);
+    let application = format!("{base}/api/application/{}", identity::APPLICATION_ID);
     // Require an actual 200: `curl -f` only fails on 400+, so FusionAuth's
     // maintenance-mode 302 (e.g. after a boot-time DB connect failure) would
     // otherwise pass as ready and every later login would 500.
+    // FusionAuth only runs a kickstart against an empty database. A resumed
+    // stack whose database an older kickstart filled never gets the entity
+    // this one creates last: its application answers but that entity stays
+    // missing. A running kickstart gets from the application to its last
+    // entity in seconds, so say what happened instead of waiting out the
+    // whole timeout.
     let script = format!(
-        "for i in $(seq 1 480); do [ \"$(curl -sS -o /dev/null -w '%{{http_code}}' --max-time 3 -H 'Authorization: {key}' {url} 2>/dev/null)\" = 200 ] && exit 0; sleep 0.5; done; \
+        "code() {{ curl -sS -o /dev/null -w '%{{http_code}}' --max-time 3 -H 'Authorization: {key}' \"$1\" 2>/dev/null; }}; \
+         settled=0; for i in $(seq 1 480); do \
+         [ \"$(code {url})\" = 200 ] && exit 0; \
+         if [ \"$(code {application})\" = 200 ]; then settled=$((settled + 1)); fi; \
+         if [ \"$settled\" -ge 240 ]; then echo 'FusionAuth was initialised by an older kickstart, which did not create {url}. FusionAuth does not rerun a kickstart on a database it has filled: start the stack with --fresh'; exit 1; fi; \
+         sleep 0.5; done; \
          echo 'timed out waiting for the FusionAuth kickstart (a 302 here means maintenance mode: FusionAuth could not reach its db)'; exit 1",
         key = identity::FUSIONAUTH_API_KEY,
     );
