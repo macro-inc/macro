@@ -6,7 +6,7 @@
 //! like a decision.
 
 use http_body_util::{BodyDataStream, BodyExt};
-use reqwest::redirect;
+use mcp_client::outbound::guarded_http::{self, AddressPolicy};
 
 use crate::domain::error::EgressError;
 use crate::domain::model::{BoxError, ProxyRequest, ProxyResponse};
@@ -14,15 +14,19 @@ use crate::domain::ports::Forwarder;
 
 /// Forwards over a shared reqwest client.
 pub struct ReqwestForwarder {
+    policy: AddressPolicy,
     client: reqwest::Client,
 }
 
 impl ReqwestForwarder {
     /// Build the forwarder.
     ///
-    /// Two settings are load-bearing:
+    /// Three settings are load-bearing:
     ///
-    /// - `redirect::Policy::none()`. reqwest follows up to ten redirects by
+    /// - [`guarded_http::client_builder`]: outside local development only
+    ///   public addresses are reached, judged on the address connected to,
+    ///   since a custom server's URL is whatever its owner typed.
+    /// - no redirects. reqwest follows up to ten redirects by
     ///   default, which would replay a request - stamped credential and all -
     ///   at whatever host the response named. A redirect is the upstream's
     ///   answer and belongs to the caller, who can decide about it.
@@ -30,9 +34,8 @@ impl ReqwestForwarder {
     ///   response body, and both bodies here are long-lived by design: an MCP
     ///   event stream stays open for a tool call, a packfile takes as long as
     ///   the repository is big.
-    pub fn new() -> Result<Self, EgressError> {
-        let client = reqwest::Client::builder()
-            .redirect(redirect::Policy::none())
+    pub fn new(policy: AddressPolicy) -> Result<Self, EgressError> {
+        let client = guarded_http::client_builder(policy)
             .build()
             .map_err(|error| {
                 EgressError::Internal(rootcause::report!(
@@ -40,7 +43,7 @@ impl ReqwestForwarder {
                 ))
             })?;
 
-        Ok(Self { client })
+        Ok(Self { policy, client })
     }
 }
 
@@ -60,6 +63,8 @@ impl Forwarder for ReqwestForwarder {
             EgressError::Internal(rootcause::report!("request is not sendable: {error}"))
         })?;
 
+        guarded_http::check_url(self.policy, request.url())
+            .map_err(|error| EgressError::Upstream(rootcause::report!(error).into()))?;
         let response = self.client.execute(request).await.map_err(|error| {
             EgressError::Upstream(rootcause::report!("upstream did not answer: {error}"))
         })?;
@@ -76,3 +81,6 @@ impl Forwarder for ReqwestForwarder {
         }))
     }
 }
+
+#[cfg(test)]
+mod test;
