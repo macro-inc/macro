@@ -347,6 +347,11 @@ registerComponent(
       : undefined
 );
 registerComponent(
+  'connections',
+  () => <AgentsRouteView />,
+  () => composableLayout()
+);
+registerComponent(
   'mail',
   () => <MailRouteView />,
   () => composableLayout()

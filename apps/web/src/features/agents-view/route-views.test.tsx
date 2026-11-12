@@ -144,3 +144,15 @@ it('opens the requested Artifacts or Connections page on the legacy Agents layou
   expect(await screen.findByText('Integrations page')).toBeTruthy();
   expect(screen.queryByText('Artifacts page')).toBeNull();
 });
+
+it('opens a direct Connections route on the legacy Agents layout', async () => {
+  state.flag = () => ({ enabled: false, loading: false });
+  state.routeId = 'connections';
+  state.agentPage = 'new';
+  render(() => (
+    <Suspense fallback={null}>
+      <AgentsRouteView />
+    </Suspense>
+  ));
+  expect(await screen.findByText('Integrations page')).toBeTruthy();
+});

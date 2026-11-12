@@ -401,8 +401,11 @@ the shimmer.
 - Open **Go to Agents** → `/app/component/agents`. With AI agents enabled
   (`enable-chat-v3-agents`), the workspace uses one sidebar for Chat and Code.
   **Agents** in the sidebar opens the same roster as the composer’s
-  **Create agent** action. **Connections** manages MCP integrations (including
-  app authentication and disconnection), also available under Settings → Integrations.
+  **Create agent** action. **Connections** opens `/app/connections` inside the
+  same Agents workspace and manages MCP integrations (including app authentication
+  and disconnection), also available under Settings → Integrations. Copying that
+  URL, reloading, and browser Back/Forward preserve the Connections destination;
+  switching between it and conversations keeps the desktop sidebar mounted.
   Home’s **Connect your tools** and agent replies’ **Connect app** chips open this
   Integrations page. It shows installed tools above the app catalog, with personal Gmail/GitHub account links in a separate section above.
 - The sidebar's tool links read **Agents**, **Routines**, **Artifacts**,

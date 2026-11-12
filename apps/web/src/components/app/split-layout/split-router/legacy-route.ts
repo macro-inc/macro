@@ -232,6 +232,13 @@ export function splitLocationFromContent(
   routes: SplitRoutesManifest,
   content: SplitContent
 ): SplitLocation {
+  if (
+    content.type === 'component' &&
+    content.id === 'agents' &&
+    content.params?.agentPage === 'connections'
+  ) {
+    return { route: paneRoute({ id: 'view-connections', params: {} }) };
+  }
   // Persisted panes can still contain the old block discriminator.
   if (['routine', 'automation'].includes(content.type))
     return routineLocation(content.id);
