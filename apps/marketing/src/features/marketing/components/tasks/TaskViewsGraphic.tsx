@@ -13,23 +13,14 @@ import GroupIcon from '@icon/system/regular/stack.svg';
 import StatusNotStarted from '@icon/system/regular/task-created.svg';
 import StatusInProgress from '@icon/system/regular/task-in-progress.svg';
 import StatusInReview from '@icon/system/regular/task-in-review.svg';
-import {
-  type Component,
-  createSignal,
-  For,
-  type JSX,
-  Match,
-  onCleanup,
-  onMount,
-  Show,
-  Switch,
-} from 'solid-js';
+import { type Component, For, type JSX, Match, Show, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import PriorityHigh from '../../../../assets/icons/wide-priority-high.svg';
 import PriorityMedium from '../../../../assets/icons/wide-priority-medium.svg';
 import gabriel from '../../../../assets/people/gabriel.webp';
 import julia from '../../../../assets/people/julia.webp';
 import teo from '../../../../assets/people/teo.webp';
+import { createViewStepper } from '../../primitives/createViewStepper';
 import './task-views-graphic.css';
 
 type Icon = Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
@@ -71,12 +62,71 @@ type Task = {
 
 /** The same tasks in every view, grouped by priority as the app groups them. */
 const tasks: Task[] = [
-  { title: 'Fix calendar sync for shared inboxes', status: 'in-review', priority: 'Urgent', tag: { label: 'bug', tone: 'red' }, due: 'Nov 5', project: 'Platform', owner: gabriel, start: 0.2, length: 0.34 },
-  { title: 'Fix the checkout bug on the pricing page', status: 'in-progress', priority: 'High', tag: { label: 'bug', tone: 'red' }, due: 'Nov 6', project: 'Q4 launch', owner: teo, start: 0.34, length: 0.26 },
-  { title: 'Update pricing page copy', status: 'in-progress', priority: 'High', tag: { label: 'Q4', tone: 'amber' }, due: 'Nov 6', project: 'Q4 launch', owner: teo, start: 0.4, length: 0.22 },
-  { title: 'Press kit final review', status: 'not-started', priority: 'High', tag: { label: 'Q4', tone: 'amber' }, due: 'Nov 7', project: 'Q4 launch', owner: julia, start: 0.46, length: 0.22 },
-  { title: 'Launch video end card', status: 'in-progress', priority: 'Medium', tag: { label: 'design', tone: 'violet' }, due: 'Nov 10', project: 'Q4 launch', owner: teo, start: 0.52, length: 0.3 },
-  { title: 'Offsite agenda', status: 'not-started', priority: 'Medium', due: 'Nov 12', project: 'Offsite', owner: julia, start: 0.62, length: 0.3 },
+  {
+    title: 'Fix calendar sync for shared inboxes',
+    status: 'in-review',
+    priority: 'Urgent',
+    tag: { label: 'bug', tone: 'red' },
+    due: 'Nov 5',
+    project: 'Platform',
+    owner: gabriel,
+    start: 0.2,
+    length: 0.34,
+  },
+  {
+    title: 'Fix the checkout bug on the pricing page',
+    status: 'in-progress',
+    priority: 'High',
+    tag: { label: 'bug', tone: 'red' },
+    due: 'Nov 6',
+    project: 'Q4 launch',
+    owner: teo,
+    start: 0.34,
+    length: 0.26,
+  },
+  {
+    title: 'Update pricing page copy',
+    status: 'in-progress',
+    priority: 'High',
+    tag: { label: 'Q4', tone: 'amber' },
+    due: 'Nov 6',
+    project: 'Q4 launch',
+    owner: teo,
+    start: 0.4,
+    length: 0.22,
+  },
+  {
+    title: 'Press kit final review',
+    status: 'not-started',
+    priority: 'High',
+    tag: { label: 'Q4', tone: 'amber' },
+    due: 'Nov 7',
+    project: 'Q4 launch',
+    owner: julia,
+    start: 0.46,
+    length: 0.22,
+  },
+  {
+    title: 'Launch video end card',
+    status: 'in-progress',
+    priority: 'Medium',
+    tag: { label: 'design', tone: 'violet' },
+    due: 'Nov 10',
+    project: 'Q4 launch',
+    owner: teo,
+    start: 0.52,
+    length: 0.3,
+  },
+  {
+    title: 'Offsite agenda',
+    status: 'not-started',
+    priority: 'Medium',
+    due: 'Nov 12',
+    project: 'Offsite',
+    owner: julia,
+    start: 0.62,
+    length: 0.3,
+  },
 ];
 
 const priorities: TaskPriority[] = ['Urgent', 'High', 'Medium'];
@@ -124,43 +174,11 @@ function GroupHead(props: { priority: TaskPriority; count: number }) {
  * until someone picks one.
  */
 export function TaskViewsGraphic() {
-  const [view, setView] = createSignal<TaskView>('list');
   let root!: HTMLDivElement;
-  let timer: number | undefined;
-  let chosen = false;
-
-  const stop = () => {
-    window.clearInterval(timer);
-    timer = undefined;
-  };
-
-  onMount(() => {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-
-    // Only step while the graphic is on screen, so it starts from the list.
-    const observer = new IntersectionObserver(([entry]) => {
-      if (!entry.isIntersecting) return stop();
-      if (chosen || timer !== undefined) return;
-
-      timer = window.setInterval(() => {
-        const next = views.findIndex((item) => item.id === view()) + 1;
-        setView(views[next % views.length].id);
-      }, 3200);
-    });
-    observer.observe(root);
-
-    onCleanup(() => {
-      observer.disconnect();
-      stop();
-    });
-  });
-
-  const choose = (next: TaskView) => {
-    // A choice is final: stop stepping and never resume.
-    chosen = true;
-    stop();
-    setView(next);
-  };
+  const { view, choose } = createViewStepper(
+    views.map((item) => item.id),
+    () => root
+  );
 
   return (
     <div ref={root} class="task-views">
@@ -221,7 +239,11 @@ export function TaskViewsGraphic() {
                           <CalendarIcon aria-hidden="true" />
                           {task.due}
                         </span>
-                        <img class="task-views-avatar" src={task.owner} alt="" />
+                        <img
+                          class="task-views-avatar"
+                          src={task.owner}
+                          alt=""
+                        />
                       </div>
                     )}
                   </For>

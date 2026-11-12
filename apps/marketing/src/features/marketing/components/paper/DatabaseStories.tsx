@@ -1,6 +1,6 @@
 import { workspaceFeatures } from '../../core/workspace-features';
 import { FeaturePageSection } from '../FeaturePage';
-import HomepageProductPreview from '../homepage/HomepageProductPreview';
+import { DatabaseViewsGraphic } from './DatabaseViewsGraphic';
 import { NotionImportGraphic } from './NotionImportGraphic';
 import { PaperDatabaseFields } from './PaperDatabaseFields';
 import { PaperDatabaseFieldsMobile } from './PaperDatabaseFieldsMobile';
@@ -29,14 +29,15 @@ export function DatabaseStories() {
         id="databases-detail-1"
         title={sections[0].title}
         description={sections[0].description}
-        demo={{
-          tone: database.tone,
-          message: { person: 'julia', text: database.message },
-        }}
       >
-        <div class="workspace-feature-preview">
-          <HomepageProductPreview kind="databases" />
-        </div>
+        <PaperFeatureGraphic
+          interactive
+          height={400}
+          mobileHeight={400}
+          label="The same database records shown as a table, a board, or a timeline."
+        >
+          <DatabaseViewsGraphic />
+        </PaperFeatureGraphic>
       </FeaturePageSection>
       <FeaturePageSection
         id="databases-detail-2"
