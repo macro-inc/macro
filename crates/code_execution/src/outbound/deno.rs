@@ -153,8 +153,12 @@ impl DenoRunner {
                 destinations.into_iter().collect::<Vec<_>>().join(",")
             )
         };
-        let mut child = self
-            .command(root)
+        let mut command = self.command(root);
+        #[cfg(target_os = "macos")]
+        if let Some(cpu) = job.limits.max_cpu {
+            limit_cpu_on_exec(&mut command, cpu);
+        }
+        let mut child = command
             .args([
                 "run",
                 "--no-prompt",
@@ -254,6 +258,31 @@ impl CodeRunner for DenoRunner {
     }
 }
 
+/// Set the CPU limit in the child before Deno starts on macOS, which has no prlimit.
+#[cfg(target_os = "macos")]
+fn limit_cpu_on_exec(command: &mut Command, cpu: std::time::Duration) {
+    let limit = cpu_rlimit(cpu);
+    // SAFETY: the closure captures only Rlimit. rustix's macOS setrlimit path
+    // performs scalar conversion, libc::setrlimit and errno propagation, with
+    // no allocation, locking or access to other Rust process state after fork.
+    unsafe {
+        command.pre_exec(move || {
+            rustix::process::setrlimit(rustix::process::Resource::Cpu, limit)
+                .map_err(|error| std::io::Error::from_raw_os_error(error.raw_os_error()))
+        });
+    }
+}
+
+fn cpu_rlimit(cpu: std::time::Duration) -> rustix::process::Rlimit {
+    // The soft limit sends SIGXCPU, which stops Deno; the hard limit a
+    // second later is the kernel's SIGKILL backstop.
+    let seconds = cpu.as_secs();
+    rustix::process::Rlimit {
+        current: Some(seconds),
+        maximum: Some(seconds + 1),
+    }
+}
+
 /// Apply the per-process limits to a child that has just started.
 fn limit(child: &Child, limits: &Limits) -> Result<(), ExecutionFailure> {
     let pid = child
@@ -261,19 +290,10 @@ fn limit(child: &Child, limits: &Limits) -> Result<(), ExecutionFailure> {
         .and_then(|id| i32::try_from(id).ok())
         .and_then(rustix::process::Pid::from_raw)
         .ok_or_else(|| internal("child has no pid"))?;
+    #[cfg(not(target_os = "macos"))]
     if let Some(cpu) = limits.max_cpu {
-        // The soft limit sends SIGXCPU, which stops Deno; the hard limit a
-        // second later is the kernel's SIGKILL backstop.
-        let seconds = cpu.as_secs();
-        rustix::process::prlimit(
-            Some(pid),
-            rustix::process::Resource::Cpu,
-            rustix::process::Rlimit {
-                current: Some(seconds),
-                maximum: Some(seconds + 1),
-            },
-        )
-        .map_err(internal)?;
+        rustix::process::prlimit(Some(pid), rustix::process::Resource::Cpu, cpu_rlimit(cpu))
+            .map_err(internal)?;
     }
     if limits.background {
         rustix::process::setpriority_process(Some(pid), BACKGROUND_NICENESS).map_err(internal)?;
