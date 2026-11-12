@@ -16,6 +16,7 @@ import {
   calendarSplitRoute,
   channelDetailRoute,
   channelsSplitRoute,
+  connectionsRoute,
   driveSplitRoute,
   driveTabRoute,
   homeSplitRoute,
@@ -79,8 +80,8 @@ vi.mock('@service-connection/websocket', () => ({
   createConnectionWebsocketEffect: vi.fn(),
 }));
 
-function RememberedView() {
-  useViewRestoration();
+function RememberedView(props: { viewId?: string }) {
+  useViewRestoration(props.viewId);
   const [selection, setSelection] = useEntryState<string[]>('view.selection', {
     default: [],
   });
@@ -89,10 +90,10 @@ function RememberedView() {
   return null;
 }
 
-function AuthenticatedView() {
+function AuthenticatedView(props: { viewId?: string }) {
   return (
     <Show when={mocks.account() && mocks.retaining()}>
-      <RememberedView />
+      <RememberedView viewId={props.viewId} />
     </Show>
   );
 }
@@ -124,6 +125,10 @@ function setup(
             homeSplitRoute,
             { ...agentsRoute, component: AuthenticatedView },
             { ...agentsViewRoute, component: AuthenticatedView },
+            {
+              ...connectionsRoute,
+              component: () => <AuthenticatedView viewId="agents" />,
+            },
             { ...calendarSplitRoute, component: AuthenticatedView },
             {
               ...channelsSplitRoute,
@@ -194,6 +199,23 @@ afterEach(() => {
 });
 
 describe('opt-in view restoration', () => {
+  it('resumes a directly opened Connections page when returning to Agents', async () => {
+    const { router, manager } = setup('/connections');
+    const pane = router.panes()[0]!;
+    const handle = manager.activeSplit()!;
+    await router.settled();
+    await router.navigatePane(pane, '/home');
+    manager.openWithSplit(
+      { type: 'component', id: 'agents' },
+      { handle, resume: true }
+    );
+    await router.settled();
+    expect(router.entry(pane)?.location.route.matches.at(-1)?.id).toBe(
+      'view-connections'
+    );
+    expect(handle.content()).toMatchObject({ id: 'connections' });
+  });
+
   describe.each([
     { view: 'channels', detail: '/channels/channel-one', targetIndex: 0 },
     { view: 'channels', detail: '/channels/channel-one', targetIndex: 1 },

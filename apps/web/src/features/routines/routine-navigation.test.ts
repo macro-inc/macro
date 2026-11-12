@@ -260,6 +260,29 @@ describe('routine navigation', () => {
     expect(pane.content()).toMatchObject({ id: 'connections' });
   });
 
+  it.each([
+    ['view-agents', '/connections'],
+    ['view-routines', '/routines'],
+  ])(
+    'restores a persisted Connections page with %s metadata',
+    (routeId, expected) => {
+      const location = resolveContentLocation(routes, {
+        type: 'component',
+        id: 'agents',
+        params: { agentPage: 'connections' },
+        entryMetadata: {
+          route: {
+            matches: [
+              { id: 'app', params: {} },
+              { id: routeId, params: {} },
+            ],
+          },
+        },
+      });
+      expect(formatPanePath(routes, location.route)).toBe(expected);
+    }
+  );
+
   it('opens a copied Connections URL without an in-memory page selection', () => {
     const { manager, history } = setup('/connections');
     expect(history.read().path).toBe('/connections');
