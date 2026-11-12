@@ -367,10 +367,11 @@ export const base = (
   let relay: Promise<Relayed> | undefined;
   const ownRelay = () => {
     relay ??= Promise.all([addresses(), credentials.get(macroKey)]).then(
-      ([{ hosts }, apiKey]) =>
+      ([{ hosts, egress }, apiKey]) =>
         held(credentials, claudeKeys).then((claude) =>
           startRelay({
             targets: hosts,
+            egress,
             apiKey,
             anthropic: anthropicUpstream(claude),
           })
