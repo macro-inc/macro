@@ -82,7 +82,7 @@ impl SafeFetcher {
             url.scheme = tracing::field::Empty,
             server.address = tracing::field::Empty,
             server.port = tracing::field::Empty,
-            safe_fetch.redirects = 0u8,
+            safe_fetch.redirects = tracing::field::Empty,
             http.response.status_code = tracing::field::Empty,
             safe_fetch.error_kind = tracing::field::Empty,
         )
@@ -95,17 +95,18 @@ impl SafeFetcher {
         result
     }
 
-    async fn fetch(&self, raw_url: &str, headers: HeaderMap) -> Result<SafeResponse, FetchError> {
-        let deadline = Instant::now() + self.policy.total_timeout;
-
-        let first_url = Url::parse(raw_url).map_err(FetchError::InvalidUrl)?;
-        let mut url = self.checked(first_url)?;
-        record_target(&url);
-
+    /// Send `url`, following redirects the policy allows, and return the
+    /// final URL with its response. Counts hops into `redirects` so the
+    /// caller can record the count on every outcome.
+    async fn follow_redirects(
+        &self,
+        mut url: Url,
+        headers: &HeaderMap,
+        deadline: Instant,
+        redirects: &mut u8,
+    ) -> Result<(Url, reqwest::Response), FetchError> {
         let first_origin = url.origin();
-        let mut redirects: u8 = 0;
-
-        let response = loop {
+        loop {
             let hop_headers = if url.origin() == first_origin {
                 headers.clone()
             } else {
@@ -116,19 +117,33 @@ impl SafeFetcher {
             let status = response.status();
 
             if !is_followable_redirect(status) {
-                break response;
+                return Ok((url, response));
             }
 
-            if redirects == self.policy.max_redirects {
+            if *redirects == self.policy.max_redirects {
                 return Err(FetchError::TooManyRedirects {
                     limit: self.policy.max_redirects,
                 });
             }
 
             url = self.checked(redirect_target(&url, &response)?)?;
-            redirects += 1;
-            tracing::Span::current().record("safe_fetch.redirects", redirects);
-        };
+            *redirects += 1;
+        }
+    }
+
+    async fn fetch(&self, raw_url: &str, headers: HeaderMap) -> Result<SafeResponse, FetchError> {
+        let deadline = Instant::now() + self.policy.total_timeout;
+
+        let first_url = Url::parse(raw_url).map_err(FetchError::InvalidUrl)?;
+        let url = self.checked(first_url)?;
+        record_target(&url);
+
+        let mut redirects: u8 = 0;
+        let followed = self
+            .follow_redirects(url, &headers, deadline, &mut redirects)
+            .await;
+        tracing::Span::current().record("safe_fetch.redirects", redirects);
+        let (url, response) = followed?;
 
         let status = response.status();
         tracing::Span::current().record("http.response.status_code", status.as_u16());

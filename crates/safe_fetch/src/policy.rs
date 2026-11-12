@@ -167,6 +167,19 @@ impl AcceptedMediaTypes {
         }
     }
 
+    /// Exactly the listed media types, each a lowercased `type/subtype`. An
+    /// entry that isn't one never matches anything.
+    #[must_use]
+    pub fn only(media_types: &[&str]) -> Self {
+        Self {
+            any_image_except_svg: false,
+            also: media_types
+                .iter()
+                .map(|media_type| MediaType(media_type.to_ascii_lowercase()))
+                .collect(),
+        }
+    }
+
     /// Add one more media type, e.g. `application/octet-stream` for an image
     /// proxy whose upstreams mislabel images (or send no `Content-Type`,
     /// which HTTP defines as octet-stream).

@@ -1,3 +1,5 @@
+use tower::ServiceExt;
+
 use super::*;
 
 #[test]
@@ -18,6 +20,140 @@ fn ua_rejection_symptoms_are_retried_without_a_user_agent() {
     assert!(!ProxyError::Fetch(FetchError::TotalTimeout).is_retryable_without_ua());
 }
 
+fn is_allowed_content_type(content_type: &str) -> bool {
+    MediaType::from_content_type(content_type).is_some_and(|media_type| {
+        AcceptedMediaTypes::only(ALLOWED_MEDIA_TYPES).accepts(&media_type)
+    })
+}
+
+fn text_html_refused() -> ProxyError {
+    ProxyError::Fetch(FetchError::MediaTypeNotAllowed {
+        media_type: MediaType::from_content_type("text/html"),
+    })
+}
+
+#[test]
+fn test_allows_image_content_types() {
+    assert!(is_allowed_content_type("image/png"));
+    assert!(is_allowed_content_type("image/jpeg; charset=utf-8"));
+}
+
+#[test]
+fn test_allows_octet_stream_content_type() {
+    assert!(is_allowed_content_type("application/octet-stream"));
+    assert!(is_allowed_content_type(
+        "application/octet-stream; charset=binary"
+    ));
+    assert!(is_allowed_content_type("APPLICATION/OCTET-STREAM"));
+}
+
+#[test]
+fn test_allows_image_content_types_and_aliases() {
+    for content_type in [
+        "image/x-png",
+        "image/x-ms-bmp",
+        "image/jpg",
+        "image/pjpeg",
+        "image/apng",
+        "image/gif",
+        "image/webp",
+        "image/avif",
+        "image/bmp",
+        "image/tiff",
+        "image/heic",
+        "image/heif",
+        "image/jxl",
+        "image/x-icon",
+        "image/vnd.microsoft.icon",
+        "image/svg+xml",
+        "image/svg+xml; charset=utf-8",
+        "IMAGE/PNG",
+    ] {
+        assert!(is_allowed_content_type(content_type), "{content_type}");
+    }
+}
+
+#[test]
+fn test_rejects_non_image_content_types() {
+    for content_type in [
+        "text/html",
+        "text/html; charset=utf-8",
+        "application/json",
+        "application/xhtml+xml",
+        "text/xml",
+        "image/x-xbitmap",
+        "image/",
+    ] {
+        assert!(!is_allowed_content_type(content_type), "{content_type}");
+    }
+}
+
+#[test]
+fn test_unsupported_media_type_is_415() {
+    let response = text_html_refused().into_response();
+    assert_eq!(response.status(), StatusCode::UNSUPPORTED_MEDIA_TYPE);
+}
+
+const SVG_WITH_SCRIPT: &str =
+    r#"<svg xmlns="http://www.w3.org/2000/svg"><script>alert(document.domain)</script></svg>"#;
+
+async fn send_through_sandbox(response: fn() -> Response) -> Response {
+    let router: Router =
+        with_sandbox_headers(Router::new().route("/", get(move || async move { response() })));
+    router
+        .oneshot(axum::http::Request::get("/").body(Body::empty()).unwrap())
+        .await
+        .unwrap()
+}
+
+fn assert_sandboxed(response: &Response) {
+    let headers = response.headers();
+    assert_eq!(headers["x-content-type-options"], "nosniff");
+    assert_eq!(
+        headers["content-security-policy"],
+        "default-src 'none'; style-src 'unsafe-inline'; sandbox"
+    );
+}
+
+#[tokio::test]
+async fn test_svg_with_script_is_sandboxed_attachment() {
+    let response = send_through_sandbox(|| {
+        image_response("image/svg+xml", Body::from(SVG_WITH_SCRIPT)).unwrap()
+    })
+    .await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_sandboxed(&response);
+    let headers = response.headers();
+    assert_eq!(headers["content-type"], "image/svg+xml");
+    assert_eq!(headers["content-disposition"], "attachment");
+    assert!(
+        headers["content-security-policy"]
+            .to_str()
+            .unwrap()
+            .split(';')
+            .any(|directive| directive.trim() == "sandbox")
+    );
+}
+
+#[tokio::test]
+async fn test_raster_response_is_sandboxed_inline() {
+    let response =
+        send_through_sandbox(|| image_response("image/png", Body::empty()).unwrap()).await;
+
+    assert_sandboxed(&response);
+    assert_eq!(response.headers()["content-type"], "image/png");
+    assert!(response.headers().get("content-disposition").is_none());
+}
+
+#[tokio::test]
+async fn test_error_response_is_sandboxed() {
+    let response = send_through_sandbox(|| text_html_refused().into_response()).await;
+
+    assert_eq!(response.status(), StatusCode::UNSUPPORTED_MEDIA_TYPE);
+    assert_sandboxed(&response);
+}
+
 #[test]
 fn upstream_refusals_are_not_found_and_server_errors_bad_gateway() {
     for status in [
@@ -34,14 +170,4 @@ fn upstream_refusals_are_not_found_and_server_errors_bad_gateway() {
     })
     .into_response();
     assert_eq!(response.status(), StatusCode::BAD_GATEWAY);
-}
-
-#[test]
-fn svg_is_refused_as_unsupported_media() {
-    let response = ProxyError::Fetch(FetchError::MediaTypeNotAllowed {
-        media_type: MediaType::from_content_type("image/svg+xml"),
-    })
-    .into_response();
-
-    assert_eq!(response.status(), StatusCode::UNSUPPORTED_MEDIA_TYPE);
 }

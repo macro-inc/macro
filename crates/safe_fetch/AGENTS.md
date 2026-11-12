@@ -35,7 +35,9 @@ SSRF-safe way to do that; don't hand-roll another resolver or redirect loop.
   leave it empty.
 - Callers re-serving bytes to a browser send the accepted media type with
   `X-Content-Type-Options: nosniff` (octet-stream for `<img>` excepted, see
-  `lib.rs`). Never accept `image/svg+xml` in a re-served policy.
+  `lib.rs`). Accept `image/svg+xml` in a re-served policy only with a
+  sandboxing CSP and `Content-Disposition: attachment`, as
+  `image_proxy_service` does.
 - Never record URL paths, queries, or userinfo in spans; they carry tokens.
 
 ## Related

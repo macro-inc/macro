@@ -1,5 +1,5 @@
+import XIcon from '@icon/system/regular/x.svg';
 import CursorIcon from '@icon/wide-cursor-ide.svg';
-import XIcon from '@phosphor/x.svg';
 import { Button } from '@ui/components/Button';
 import { Dialog } from '@ui/components/Dialog';
 import { Tabs } from '@ui/components/Tabs';

@@ -9,8 +9,9 @@ remote image URLs through an authenticated, SSRF-guarded fetch.
 ## Start here
 
 - `src/api/proxy.rs`: the `/proxy` route — its `safe_fetch::FetchPolicy`
-  (10 MB, any image but SVG, octet-stream, 5 redirects, timeouts) and a
-  browser-like User-Agent to clear strict WAFs.
+  (10 MB, the `ALLOWED_MEDIA_TYPES` image allowlist, 5 redirects, timeouts),
+  sandboxing response headers, and a browser-like User-Agent to clear strict
+  WAFs.
 - `src/api/context.rs`: `ApiContext` / `AuthorizationService`.
 - `src/openapi.rs`, `src/doppler_config.rs`: separate `[[bin]]` targets for
   OpenAPI generation and Doppler config.
@@ -29,9 +30,11 @@ remote image URLs through an authenticated, SSRF-guarded fetch.
 ## Gotchas
 
 - Fetch upstreams only through `safe_fetch::SafeFetcher` — it is the only thing
-  stopping this service from being an SSRF vector into internal infra. Don't
-  add SVG to the accepted media types: an SVG opened from this origin runs
-  script here.
+  stopping this service from being an SSRF vector into internal infra.
+- Serve only image types (`ALLOWED_MEDIA_TYPES`). Every `/proxy` response
+  gets `nosniff` and a sandboxing CSP from `sandbox_headers`, and SVG is also
+  sent as an attachment: an SVG opened from this origin would otherwise run its
+  script here. Never drop those headers or add document types like HTML.
 
 ## Related
 

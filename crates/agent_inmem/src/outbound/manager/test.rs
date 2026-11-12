@@ -1695,3 +1695,159 @@ async fn failed_turn_rebuilds_identically(engine: Arc<dyn TurnEngine>) {
         "the rebuild keeps what the live agent kept, without the failure reply"
     );
 }
+
+/// Starts an ExecuteCode call, says so on `started`, and answers it only once
+/// `proceed` fires: the window code mode presents a view in.
+struct HeldCallEngine {
+    started: std::sync::Mutex<Option<tokio::sync::oneshot::Sender<()>>>,
+    proceed: std::sync::Mutex<Option<tokio::sync::oneshot::Receiver<()>>>,
+}
+
+impl TurnEngine for HeldCallEngine {
+    fn supported_models(&self) -> &[&str] {
+        &["anthropic/claude-sonnet-5-5"]
+    }
+
+    fn run_turn(
+        &self,
+        _request: crate::domain::engine::TurnRequest,
+    ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent::AgentError>> {
+        let (parts, receiver) = tokio::sync::mpsc::channel(4);
+        let started = self.started.lock().expect("unpoisoned").take();
+        let proceed = self.proceed.lock().expect("unpoisoned").take();
+        let execute_code = agent::McpInfo {
+            service: "macro_internal".to_owned(),
+            tool_name: "ExecuteCode".to_owned(),
+            display_name: None,
+        };
+        tokio::spawn(async move {
+            let _ = parts
+                .send(Ok(StreamPart::ToolCall(agent::ToolCall {
+                    id: "call-code".to_owned(),
+                    name: "mcp__macro_internal__ExecuteCode".to_owned(),
+                    json: serde_json::json!({"code": "execution.views.present(view)"}),
+                    mcp: Some(execute_code),
+                })))
+                .await;
+            if let (Some(started), Some(proceed)) = (started, proceed) {
+                let _ = started.send(());
+                let _ = proceed.await;
+            }
+            let _ = parts
+                .send(Ok(StreamPart::ToolResponse(agent::ToolResponse::Json {
+                    id: "call-code".to_owned(),
+                    json: serde_json::json!({"status": "succeeded"}),
+                    name: "mcp__macro_internal__ExecuteCode".to_owned(),
+                })))
+                .await;
+            let _ = parts
+                .send(Ok(StreamPart::Content("Here it is.".to_owned())))
+                .await;
+        });
+        receiver
+    }
+}
+
+/// Code mode presents a view while its ExecuteCode call runs. The session
+/// writes that card into the log; the live agent never sees it. The log must
+/// still rebuild what the live agent holds, or the session never releases.
+#[tokio::test]
+async fn a_view_presented_mid_turn_rebuilds_identically() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let (ended_tx, mut ended) = tokio::sync::mpsc::unbounded_channel();
+    let sessions = AgentSessionServiceImpl::new(
+        repo.clone(),
+        FoldedMessageService::new(repo.clone()),
+        NoOpRealtime,
+        NoOpAgentSessionNameGenerator,
+        Arc::new(TurnEnds(ended_tx)),
+        Arc::new(NoopLifecyclePublisher),
+        ReplicaId::mint(),
+    );
+    let id = AgentSessionId::new();
+    sessions
+        .create_session(CreateAgentSessionParams {
+            billing: Default::default(),
+            origin: trigger_context::TriggerOrigin::Unknown,
+            purpose: agent_session::domain::model::SessionPurpose::Standalone,
+            repo_branch: None,
+            id,
+            owner_id: Owner::User(owner()),
+            bot_id: BotId::TEST_A,
+            thread_id: None,
+            originating_message_id: None,
+            model: "anthropic/claude-sonnet-5-5".to_owned(),
+            harness: "macro-inmem".to_owned(),
+            repo_url: None,
+            workspace: "/workspace".to_owned(),
+            sandbox_size: agent_session::domain::model::SandboxSize::Default,
+            instructions: None,
+            mcp_servers: Default::default(),
+            egress_token_hash: None,
+        })
+        .await
+        .expect("the session row should create");
+    let (started_tx, started) = tokio::sync::oneshot::channel();
+    let (proceed, proceed_rx) = tokio::sync::oneshot::channel();
+    let manager = InMemAgentManager::new(
+        Arc::new(HeldCallEngine {
+            started: std::sync::Mutex::new(Some(started_tx)),
+            proceed: std::sync::Mutex::new(Some(proceed_rx)),
+        }),
+        Arc::new(LogFrameSource::new(repo.clone())),
+        Arc::new(crate::domain::mcp::NoMcpServers),
+        Arc::new(crate::testing::TestModelAccess::paid()),
+    );
+    let transport = manager
+        .attach(facts(id), None)
+        .await
+        .expect("the conversation starts");
+    sessions
+        .attach_session(id, RuntimeAttachment::solo(transport))
+        .await
+        .expect("the transport attaches");
+    sessions
+        .send_action(
+            id,
+            Some(owner()),
+            AgentAction::prompt("show me the cards"),
+            AgentActionId::mint(),
+        )
+        .await
+        .expect("the prompt sends");
+    started.await.expect("the call starts");
+    sessions
+        .present_tool(
+            id,
+            owner(),
+            agent_session::domain::model::SessionToolPresentation {
+                tool_call_id: "view_01".to_owned(),
+                title: "mcp__macro_internal__PresentView".to_owned(),
+                raw_input: serde_json::json!({"view": {"widgets": [{"type": "cards"}]}}),
+                raw_output: serde_json::json!({"view": "presented"}),
+            },
+        )
+        .await
+        .expect("the view is presented");
+    proceed.send(()).expect("the call is waiting");
+    assert_eq!(ended.recv().await, Some(id));
+    assert!(
+        logged_frames(&repo, id)
+            .await
+            .iter()
+            .any(|frame| frame.contains("view_01")),
+        "the view is in the log"
+    );
+
+    let row = sessions.get_session(id).await.expect("the row reads");
+    assert!(
+        manager
+            .rebuilds_identically(&SessionFacts {
+                acp_session_id: row.acp_session_id,
+                ..facts(id)
+            })
+            .await
+            .expect("the log reads"),
+        "a presented view is not part of the model's conversation"
+    );
+}

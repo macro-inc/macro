@@ -35,9 +35,8 @@ const UPSTREAM_USER_AGENT: &str = "Mozilla/5.0 (compatible; MacroImageProxy/1.0)
 /// defences (address checks on the connected address, per-hop redirect
 /// checks, deadlines, streaming size cap); this only states the limits.
 ///
-/// Any port stays allowed, as before. `application/octet-stream` (and no
-/// Content-Type at all) stays accepted because many image hosts send it; SVG
-/// no longer is, since an SVG opened from this origin runs its script here.
+/// Any port stays allowed, as before. Only [`ALLOWED_MEDIA_TYPES`] are
+/// accepted.
 pub(crate) fn build_fetcher() -> Result<SafeFetcher, safe_fetch::BuildError> {
     SafeFetcher::new(FetchPolicy {
         schemes: AllowedSchemes::HttpAndHttps,
@@ -48,7 +47,7 @@ pub(crate) fn build_fetcher() -> Result<SafeFetcher, safe_fetch::BuildError> {
         total_timeout: Duration::from_secs(15),
         body_idle_timeout: Duration::from_secs(10),
         max_body_bytes: MAX_IMAGE_SIZE,
-        media_types: AcceptedMediaTypes::images_except_svg().and(MediaType::octet_stream()),
+        media_types: AcceptedMediaTypes::only(ALLOWED_MEDIA_TYPES),
     })
 }
 
@@ -155,15 +154,7 @@ pub async fn proxy_request_handler(
         .into_stream()
         .map(|chunk| chunk.map_err(axum::Error::new));
 
-    Response::builder()
-        .header("Content-Type", response.media_type.as_str())
-        .header("Cache-Control", "public, max-age=31536000, immutable")
-        .header("Cross-Origin-Resource-Policy", "cross-origin")
-        .body(Body::from_stream(body))
-        .map_err(|e| {
-            tracing::error!(error=?e, "could not stream chunks");
-            ProxyError::ResponseBuild(e)
-        })
+    image_response(response.media_type.as_str(), Body::from_stream(body))
 }
 
 async fn fetch(
@@ -174,8 +165,86 @@ async fn fetch(
     fetcher.get(url, headers).await.map_err(ProxyError::Fetch)
 }
 
+/// Wrap an upstream image body for re-serving from this origin. SVG is also
+/// sent as an attachment, so a client that ignores the CSP sandbox from
+/// [`sandbox_headers`] downloads it instead of rendering it. `<img>` ignores
+/// `Content-Disposition`.
+fn image_response(content_type: &str, body: Body) -> Result<Response, ProxyError> {
+    let mut builder = Response::builder()
+        .header("Content-Type", content_type)
+        .header("Cache-Control", "public, max-age=31536000, immutable")
+        .header("Cross-Origin-Resource-Policy", "cross-origin");
+    let is_svg = MediaType::from_content_type(content_type)
+        .is_some_and(|media_type| media_type.as_str() == SVG_MEDIA_TYPE);
+    if is_svg {
+        builder = builder.header("Content-Disposition", "attachment");
+    }
+    builder.body(body).map_err(|e| {
+        tracing::error!(error=?e, "could not stream chunks");
+        ProxyError::ResponseBuild(e)
+    })
+}
+
+/// Content-Security-Policy on every proxy response. `sandbox` without
+/// `allow-scripts` stops script in a document opened from this origin (an SVG
+/// opened in a tab); inline styles stay allowed so SVGs render as documents.
+const SANDBOX_CSP: &str = "default-src 'none'; style-src 'unsafe-inline'; sandbox";
+
+/// Applied to every proxy response, errors and redirects included, so no
+/// response from this origin is sniffed or runs script.
+async fn sandbox_headers(mut response: Response) -> Response {
+    let headers = response.headers_mut();
+    headers.insert(
+        axum::http::header::X_CONTENT_TYPE_OPTIONS,
+        axum::http::HeaderValue::from_static("nosniff"),
+    );
+    headers.insert(
+        axum::http::header::CONTENT_SECURITY_POLICY,
+        axum::http::HeaderValue::from_static(SANDBOX_CSP),
+    );
+    response
+}
+
+const SVG_MEDIA_TYPE: &str = "image/svg+xml";
+
+/// Image types this proxy serves. SVG is safe here only because of
+/// [`sandbox_headers`] and the attachment disposition in [`image_response`].
+/// `application/octet-stream` stays allowed because many image hosts send it
+/// (or no Content-Type at all); with `nosniff` a browser never renders it as a
+/// document.
+const ALLOWED_MEDIA_TYPES: &[&str] = &[
+    "image/png",
+    "image/x-png",
+    "image/jpeg",
+    "image/jpg",
+    "image/pjpeg",
+    "image/apng",
+    "image/gif",
+    "image/webp",
+    "image/avif",
+    "image/bmp",
+    "image/x-ms-bmp",
+    "image/tiff",
+    "image/heic",
+    "image/heif",
+    "image/jxl",
+    "image/x-icon",
+    "image/vnd.microsoft.icon",
+    SVG_MEDIA_TYPE,
+    "application/octet-stream",
+];
+
 pub fn router() -> Router<crate::api::context::ApiContext> {
-    Router::new().route("/", get(proxy_request_handler))
+    with_sandbox_headers(Router::new().route("/", get(proxy_request_handler)))
+}
+
+fn with_sandbox_headers<State: Clone + Send + Sync + 'static>(
+    router: Router<State>,
+) -> Router<State> {
+    // The fallback keeps unmatched paths under /proxy inside the layer.
+    router
+        .fallback(|| async { StatusCode::NOT_FOUND })
+        .layer(axum::middleware::map_response(sandbox_headers))
 }
 
 #[cfg(test)]

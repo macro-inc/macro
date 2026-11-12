@@ -37,7 +37,7 @@ export default {
   viewItemsWithTag: 'View all items with tag',
   editTag: 'Edit tag',
   removeTag: 'Remove tag',
-  snoozeNotifications: 'Snooze notifications…',
+  snoozeNotifications: 'Snooze notifications',
   muteNotifications: 'Mute notifications',
   unmuteNotifications: 'Unmute notifications',
   remindMe: 'Remind me',
@@ -69,6 +69,10 @@ export default {
   copyBranchNameCommand: 'Copy branch name',
   copyId: 'Copy ID',
   share: 'Share',
+  shareCommand: {
+    one: 'Share',
+    other: 'Share items',
+  },
   downloadDocx: 'Download',
   downloadEml: 'Download .eml',
   downloadEmlFailed: 'Failed to download email. Please try again.',
@@ -302,4 +306,7 @@ export default {
   toastPrConvertToDraftFailed: 'Failed to convert pull request to a draft',
   toastPrClosed: 'Closed {{name}}',
   toastPrCloseFailed: 'Failed to close pull request',
+  // Markdown document layout.
+  turnOnWideMode: 'Turn on wide mode',
+  turnOffWideMode: 'Turn off wide mode',
 };

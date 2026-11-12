@@ -1,9 +1,9 @@
-import Envelope from '@phosphor/envelope.svg';
-import Hash from '@phosphor/hash.svg';
-import PaperPlane from '@phosphor/paper-plane-tilt.svg';
-import X from '@phosphor/x.svg';
+import Envelope from '@icon/system/regular/envelope.svg';
+import Hash from '@icon/system/regular/hash.svg';
+import PaperPlane from '@icon/system/regular/paper-plane-tilt.svg';
+import X from '@icon/system/regular/x.svg';
 import { Button } from '@ui';
-import { createSignal, Show } from 'solid-js';
+import { createSignal, For, Show } from 'solid-js';
 import { meetingEmail, meetingReply } from '../../core/email-demo-story';
 import { homepagePeople } from '../../core/homepage-demo-people';
 import { createDemoPointer } from '../../primitives/createDemoPointer';
@@ -27,7 +27,7 @@ const shareMessage = 'Here’s the email for Thursday.';
 // The Share form's markup/classes come from TopBar/ShareButton.tsx and
 // ForwardToChannel.tsx. The animation changes fixture state only; it never
 // invokes share permissions, sends messages, or mounts a live app context.
-function ShareForm(props: {
+export function ShareForm(props: {
   phase: number;
   query: string;
   message: string;
@@ -127,7 +127,8 @@ function ShareForm(props: {
   );
 }
 
-function ChannelResult(props: {
+export function ChannelResult(props: {
+  staged?: boolean;
   shared: boolean;
   updated: boolean;
   onOpen: () => void;
@@ -135,7 +136,7 @@ function ChannelResult(props: {
   // Solid's For keys by object identity. Keep existing messages stable across phases.
   const question: HomepageMessage = {
     person: 'julia',
-    text: 'What does Valentina need before Thursday?',
+    text: 'What does Austin Barron need before Thursday?',
   };
   const sharedEmail: HomepageMessage = {
     person: 'jacob',
@@ -177,14 +178,37 @@ function ChannelResult(props: {
         </div>
       </header>
       <div class="mail-channel-messages">
-        <HomepageConversation
-          messages={[
-            question,
-            ...(props.shared ? [sharedEmail] : []),
-            ...(props.updated ? [followUp] : []),
-            ...messages(),
-          ]}
-        />
+        <Show
+          when={props.staged}
+          fallback={
+            <HomepageConversation
+              messages={[
+                question,
+                ...(props.shared ? [sharedEmail] : []),
+                ...(props.updated ? [followUp] : []),
+                ...messages(),
+              ]}
+            />
+          }
+        >
+          <div class="mail-staged-messages">
+            <For each={[question, sharedEmail, followUp]}>
+              {(message, index) => (
+                <div
+                  class="mail-message-step"
+                  data-visible={
+                    index() === 0 ||
+                    (index() === 1 ? props.shared : props.updated)
+                  }
+                >
+                  <div>
+                    <HomepageConversation messages={[message]} />
+                  </div>
+                </div>
+              )}
+            </For>
+          </div>
+        </Show>
       </div>
       <div class="mail-channel-composer">
         <ChannelComposer
