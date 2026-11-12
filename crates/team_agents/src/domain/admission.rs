@@ -160,6 +160,32 @@ impl<Accounts: AgentAccounts, Computer: Computers> AgentAdmission<Accounts, Comp
         result
     }
 
+    /// The agent behind an account, admitted to the team its `team_agents`
+    /// row is for; none when the account isn't an admitted agent. For callers
+    /// that know only the account, such as the vault's directory, which
+    /// compares the team itself.
+    pub async fn resolve(
+        &self,
+        agent_user_id: &MacroUserIdStr<'_>,
+    ) -> Result<Option<AdmittedAgent>, AdmissionError> {
+        let account = self
+            .accounts
+            .account_facts(agent_user_id)
+            .await
+            .map_err(|error| {
+                tracing::warn!(error = %error, "agent account facts unavailable");
+                AdmissionError::Unavailable
+            })?;
+        let Some(account) = account else {
+            return Ok(None);
+        };
+        match self.admit(agent_user_id, account.team_id).await {
+            Ok(admitted) => Ok(Some(admitted)),
+            Err(AdmissionError::NotAdmitted(_)) => Ok(None),
+            Err(AdmissionError::Unavailable) => Err(AdmissionError::Unavailable),
+        }
+    }
+
     async fn read_and_decide(
         &self,
         agent_user_id: &MacroUserIdStr<'_>,

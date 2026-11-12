@@ -271,3 +271,48 @@ async fn any_dependency_failing_is_unavailable_never_admitted() {
         ));
     }
 }
+
+#[tokio::test]
+async fn resolving_an_account_admits_it_to_its_own_team_or_finds_no_agent() {
+    let up = |facts: Option<AgentAccountFacts>| FakeAccounts { facts, down: false };
+
+    let resolved = admission(up(Some(facts())), running())
+        .resolve(&agent())
+        .await
+        .unwrap();
+    assert_eq!(
+        resolved,
+        Some(AdmittedAgent {
+            agent_user_id: agent(),
+            team_id: TEAM,
+            responsible_human_user_id: admin(),
+        })
+    );
+
+    assert_eq!(
+        admission(up(None), running())
+            .resolve(&agent())
+            .await
+            .unwrap(),
+        None
+    );
+    assert_eq!(
+        admission(up(Some(facts())), FakeComputers::default())
+            .resolve(&agent())
+            .await
+            .unwrap(),
+        None
+    );
+    assert!(matches!(
+        admission(
+            FakeAccounts {
+                facts: Some(facts()),
+                down: true
+            },
+            running()
+        )
+        .resolve(&agent())
+        .await,
+        Err(AdmissionError::Unavailable)
+    ));
+}
