@@ -1,139 +1,37 @@
 /**
- * A stable summary for a run of calls. Fast bursts stay compact; ongoing work
- * opens a bounded, scrolling window and settles with one delay for the run.
+ * A run of tool calls and thoughts as one row that opens to them. While the
+ * turn is in the run, the row is its live line: the working dots and the
+ * step the agent is on, or the session's own status line over them. Once
+ * the run is over it settles to "Used N tools", with any failures counted.
+ * It opens only when the reader asks, and then lists every call in full.
  *
  * Shaped like `Thought` rather than `ToolCard`: a bare caret row, no surface,
  * because the cards themselves appear once it opens.
  */
 
-import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { CollapseTransition } from '@ui/components/CollapseTransition';
-import {
-  createEffect,
-  createSignal,
-  createUniqueId,
-  type JSX,
-  on,
-  onMount,
-  Show,
-} from 'solid-js';
+import { createSignal, createUniqueId, type JSX, Show } from 'solid-js';
+import { ActivityLine, type ActivityLineStep } from './ActivityLine';
 import { DisclosureCaret } from './DisclosureCaret';
-import { TextShimmer } from './TextShimmer';
 
 export interface ToolGroupProps {
+  /** The steps the run shows when open. */
   count: number;
-  /** A call in the run is still in flight: reads "Using" and shimmers. */
-  active: boolean;
-  /** Child position of the first running call, so later results cannot bury it. */
-  activeIndex?: number;
+  /** How many of them failed; the settled row says so. */
+  failed?: number;
   /**
-   * The session's live one-line status over these calls, shown in place of
-   * the title while the turn is in this run. It is the turn's one working
-   * indicator, so it carries no count.
+   * The turn is in this run: the row is its live line over these steps. A
+   * turn has at most one live run.
    */
+  live?: boolean;
+  steps?: readonly ActivityLineStep[];
+  /** The session's live status line, which stands for the steps it names. */
   summary?: string;
   defaultOpen?: boolean;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
-  /** One element per call/thought, each at least one compact row tall. */
+  /** One element per call or thought, each at least one compact row tall. */
   children: JSX.Element;
-}
-
-/** Five compact tool rows, with history available without growing the transcript. */
-function ToolWindow(props: {
-  children: JSX.Element;
-  follow: boolean;
-  activeIndex?: number;
-  id: string;
-  onInteract: () => void;
-}) {
-  let viewport!: HTMLDivElement;
-  const [content, setContent] = createSignal<HTMLDivElement>();
-  let following = props.follow;
-  let scrolling = false;
-  const atBottom = () =>
-    viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop < 16;
-  const scrollTarget = () => {
-    const row = content()?.children[props.activeIndex ?? -1];
-    if (!row) return viewport.scrollHeight;
-    return Math.max(
-      0,
-      row.getBoundingClientRect().bottom -
-        viewport.getBoundingClientRect().top +
-        viewport.scrollTop -
-        viewport.clientHeight
-    );
-  };
-  const followLatest = () => {
-    if (!following) return;
-    scrolling = true;
-    viewport.scrollTo({
-      top: scrollTarget(),
-      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches
-        ? 'instant'
-        : 'smooth',
-    });
-  };
-  const stopFollowing = () => {
-    following = false;
-    scrolling = false;
-    props.onInteract();
-  };
-
-  createResizeObserver(content, followLatest);
-  createEffect(
-    on(
-      () => props.activeIndex,
-      (index) => {
-        if (index !== undefined) followLatest();
-      },
-      { defer: true }
-    )
-  );
-  onMount(() => {
-    // Follow unfinished work first; reviewing history starts at the top.
-    if (following) viewport.scrollTop = scrollTarget();
-  });
-
-  return (
-    <div
-      id={props.id}
-      ref={viewport}
-      role="region"
-      aria-label="Tool calls"
-      tabIndex={0}
-      class="max-h-40 overflow-y-auto overscroll-contain [overflow-anchor:none]"
-      onWheel={stopFollowing}
-      onTouchMove={stopFollowing}
-      onPointerDown={stopFollowing}
-      onFocusIn={stopFollowing}
-      onKeyDown={(event) => {
-        if (
-          [
-            'ArrowUp',
-            'ArrowDown',
-            'PageUp',
-            'PageDown',
-            'Home',
-            'End',
-            ' ',
-          ].includes(event.key)
-        ) {
-          stopFollowing();
-        }
-      }}
-      onScroll={() => {
-        if (!scrolling) following = atBottom();
-      }}
-      on:scrollend={() => {
-        scrolling = false;
-      }}
-    >
-      <div ref={setContent} class="flex min-w-0 flex-col">
-        {props.children}
-      </div>
-    </div>
-  );
 }
 
 export function ToolGroup(props: ToolGroupProps) {
@@ -146,10 +44,7 @@ export function ToolGroup(props: ToolGroupProps) {
     props.onOpenChange?.(open);
   };
   const contentId = createUniqueId();
-  const title = () => {
-    if (props.active && props.count === 0) return 'Working';
-    return `${props.active ? 'Using' : 'Used'} ${props.count} ${props.count === 1 ? 'tool' : 'tools'}`;
-  };
+  const failed = () => props.failed ?? 0;
 
   return (
     <div class="min-w-0 text-sm leading-6 text-ink-extra-muted">
@@ -157,31 +52,36 @@ export function ToolGroup(props: ToolGroupProps) {
         type="button"
         aria-expanded={expanded()}
         aria-controls={contentId}
-        class="group flex min-h-8 min-w-0 max-w-full items-center gap-2 py-1 text-left text-ink-extra-muted hover:text-ink-muted"
+        class="group flex min-h-8 min-w-0 max-w-full items-center gap-2 py-1 text-left text-ink-extra-muted not-touch:hover:text-ink-muted"
         onClick={() => setExpanded(!expanded())}
       >
         <Show
-          when={props.summary}
-          fallback={<TextShimmer text={title()} active={props.active} />}
-        >
-          {(summary) => (
+          when={props.live}
+          fallback={
             <span class="min-w-0 truncate">
-              <TextShimmer text={summary()} active />
+              {`Used ${props.count} ${props.count === 1 ? 'tool' : 'tools'}`}
+              <Show when={failed() > 0}>
+                <span class="text-failure">{` · ${failed()} failed`}</span>
+              </Show>
             </span>
-          )}
+          }
+        >
+          <ActivityLine
+            class="my-0 shrink"
+            steps={props.steps ?? []}
+            summary={props.summary}
+          />
         </Show>
         <DisclosureCaret open={expanded()} />
       </button>
       <CollapseTransition open={expanded()}>
-        <div>
-          <ToolWindow
-            id={contentId}
-            follow={props.active}
-            activeIndex={props.activeIndex}
-            onInteract={() => setExpanded(true)}
-          >
-            {props.children}
-          </ToolWindow>
+        <div
+          id={contentId}
+          role="region"
+          aria-label="Tool calls"
+          class="flex min-w-0 flex-col"
+        >
+          {props.children}
         </div>
       </CollapseTransition>
     </div>
