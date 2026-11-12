@@ -131,7 +131,7 @@ test('a null-heavy date mention leaves the rest of the document rendering', () =
   );
 });
 
-test('Source DateMention renders a null or missing date without throwing', () => {
+test('the DateMention parser and formatter helpers accept a null or missing date', () => {
   // DateMention reads only `date`, through these helpers: null reads as the
   // epoch (new Date(null)) and undefined as an invalid date, as before.
   expect(parseMentionDate(null).getTime()).toBe(0);
