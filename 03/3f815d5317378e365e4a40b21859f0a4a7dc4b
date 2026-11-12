@@ -1,0 +1,21 @@
+apps/web/src/lib/service-clients/service-cognition/generated/tools/schemas.ts
+  s_8ed9220878e7d0::t_4d7f840ff135ba 20859
+apps/web/src/lib/service-clients/service-cognition/generated/tools/types.ts
+  s_8ed9220878e7d0::t_eddd61e459ac5c 16645-16648
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "033f815d5317378e365e4a40b21859f0a4a7dc4b",
+  "prompts": {},
+  "sessions": {
+    "s_8ed9220878e7d0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5dda552a-4bfe-4fcd-b13b-df5619936437",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
