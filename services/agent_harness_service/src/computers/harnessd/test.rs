@@ -283,17 +283,10 @@ async fn a_sign_in_with_an_implausible_credential_or_expiry_is_not_recorded() {
     }
 }
 
-/// A Postgres pool for the lock tests; advisory locks need no schema.
-async fn lock_pool() -> sqlx::PgPool {
-    sqlx::PgPool::connect(&std::env::var("DATABASE_URL").unwrap())
-        .await
-        .unwrap()
-}
-
-#[tokio::test]
-async fn a_lock_held_elsewhere_is_busy_at_once() {
-    let locks =
-        PgComputerLocks::with_limits(&lock_pool().await, 2, std::time::Duration::from_secs(5));
+// Advisory locks need no schema.
+#[sqlx::test(migrations = false)]
+async fn a_lock_held_elsewhere_is_busy_at_once(pool: sqlx::PgPool) {
+    let locks = PgComputerLocks::with_limits(&pool, 2, std::time::Duration::from_secs(5));
     let id = ComputerId::new_from_uuid(uuid::Uuid::new_v4());
 
     let _held = locks.lock(id).await.unwrap();
@@ -310,10 +303,11 @@ async fn a_lock_held_elsewhere_is_busy_at_once() {
     );
 }
 
-#[tokio::test]
-async fn locks_past_the_dedicated_pool_are_busy_after_the_acquire_timeout() {
+// Advisory locks need no schema.
+#[sqlx::test(migrations = false)]
+async fn locks_past_the_dedicated_pool_are_busy_after_the_acquire_timeout(pool: sqlx::PgPool) {
     let locks = PgComputerLocks::with_limits(
-        &lock_pool().await,
+        &pool,
         1,
         // Long enough to open the first connection on a loaded machine.
         std::time::Duration::from_secs(2),
@@ -334,10 +328,10 @@ async fn locks_past_the_dedicated_pool_are_busy_after_the_acquire_timeout() {
     );
 }
 
-#[tokio::test]
-async fn a_dropped_lock_frees_its_connection_and_the_lock() {
-    let locks =
-        PgComputerLocks::with_limits(&lock_pool().await, 1, std::time::Duration::from_secs(5));
+// Advisory locks need no schema.
+#[sqlx::test(migrations = false)]
+async fn a_dropped_lock_frees_its_connection_and_the_lock(pool: sqlx::PgPool) {
+    let locks = PgComputerLocks::with_limits(&pool, 1, std::time::Duration::from_secs(5));
     let id = ComputerId::new_from_uuid(uuid::Uuid::new_v4());
 
     drop(locks.lock(id).await.unwrap());
