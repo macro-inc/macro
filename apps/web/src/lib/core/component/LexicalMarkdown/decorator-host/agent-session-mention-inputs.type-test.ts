@@ -3,8 +3,8 @@ import type { AgentSessionMentionUIProps } from '../component/decorator/AgentSes
 
 type Assert<T extends true> = T;
 
-export type AgentSessionUiKeepsNullId = Assert<
-  null extends AgentSessionMentionUIProps['id'] ? true : false
+export type AgentSessionUiIdRemainsText = Assert<
+  AgentSessionMentionUIProps['id'] extends string ? true : false
 >;
 export type AgentSessionUiKeepsNullLabel = Assert<
   null extends AgentSessionMentionUIProps['label'] ? true : false

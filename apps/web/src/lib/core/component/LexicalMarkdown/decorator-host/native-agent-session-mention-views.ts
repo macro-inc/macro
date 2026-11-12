@@ -20,9 +20,11 @@ export function createNativeAgentSessionMentionViews<
       AgentSessionMentionNode,
       (node, context) => {
         const { id, label, mentionUuid, expanded } = node.props();
-        // Source passes a stored null or omitted id, label and mention id through.
+        // Source passes a stored null or omitted label and mention id through.
+        // A null or missing id is a recorded gap: Source renders it, but the
+        // preview query and routes it feeds are typed text outside the editor.
         if (
-          (id != null && typeof id !== 'string') ||
+          typeof id !== 'string' ||
           (label != null && typeof label !== 'string') ||
           (mentionUuid != null && typeof mentionUuid !== 'string') ||
           (expanded != null && typeof expanded !== 'boolean')
