@@ -20323,8 +20323,7 @@
             "description": "Pairing ID",
             "required": true,
             "schema": {
-              "type": "string",
-              "format": "uuid"
+              "$ref": "#/components/schemas/PairingId"
             }
           }
         ],
@@ -33863,6 +33862,11 @@
           }
         }
       },
+      "ClaudeMode": {
+        "type": "string",
+        "description": "How Claude Code on a Macro computer is paid for: its own Claude account\nwhen it has an active Claude login, otherwise Macro credits.",
+        "enum": ["macro_credits", "own_account"]
+      },
       "CloudStorageItemType": {
         "type": "string",
         "enum": ["document", "chat", "project"]
@@ -34806,6 +34810,9 @@
           }
         },
         "additionalProperties": false
+      },
+      "ComputerId": {
+        "type": "string"
       },
       "ConferenceProvider": {
         "type": "string",
@@ -36378,8 +36385,7 @@
             "description": "When the pairing expires."
           },
           "pairing_id": {
-            "type": "string",
-            "format": "uuid",
+            "$ref": "#/components/schemas/PairingId",
             "description": "Pairing id used to poll for the claim."
           },
           "poll_interval_seconds": {
@@ -47190,6 +47196,21 @@
             "type": "boolean",
             "description": "Whether agents may bypass ACP permission requests on this harness."
           },
+          "claude_mode": {
+            "$ref": "#/components/schemas/ClaudeMode",
+            "description": "How Claude Code on this machine is paid for, derived from whether\nit has an active Claude login. Only meaningful for Macro computers."
+          },
+          "computer_id": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ComputerId",
+                "description": "The Macro computer (hosted VM) this harness runs on; absent for a\nmachine the user paired themselves."
+              }
+            ]
+          },
           "connected": {
             "type": "boolean",
             "description": "Whether the daemon currently holds a runtime connection."
@@ -51191,6 +51212,9 @@
             "description": "Harness display name the daemon asked for."
           }
         }
+      },
+      "PairingId": {
+        "type": "string"
       },
       "ParaPatch": {
         "type": "object",
