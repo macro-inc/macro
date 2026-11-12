@@ -57,6 +57,7 @@ impl AsyncTool<()> for SearchToolsTest {
         Ok(SearchToolsResponse {
             results,
             additional_matches: Vec::new(),
+            already_available: Vec::new(),
         })
     }
 }

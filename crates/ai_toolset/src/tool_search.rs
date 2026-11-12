@@ -99,7 +99,7 @@ impl std::fmt::Debug for ToolLoader {
 
 /// A tool surfaced by [`SearchTools`] / [`LoadTools`] — just enough for the
 /// model to decide how to call it.
-#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct ToolMatch {
     /// The exact name to call the tool by.
     pub name: String,
@@ -128,6 +128,11 @@ pub struct SearchToolsResponse {
     /// Matches past the auto-load cap, ranked. Not callable yet — pass a name
     /// to `LoadTools` if one of these is the tool you need.
     pub additional_matches: Vec<ToolMatch>,
+    /// Tools matching the query that are already in the tool list, such as
+    /// `ExecuteCode`: they are never in the searchable catalog, so call them
+    /// directly. Names only; their descriptions are already in the tool list.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub already_available: Vec<String>,
 }
 
 /// Response from [`LoadTools`]: which requested tools were loaded, and any names

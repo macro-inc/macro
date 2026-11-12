@@ -26,6 +26,10 @@ mod test;
 /// be loaded explicitly with [`LoadTools`].
 const MAX_AUTO_LOADED_MATCHES: usize = 8;
 
+/// How many already-advertised tools a [`SearchTools`] call names. Long
+/// descriptions match broad queries, so only the best few are worth naming.
+const MAX_ALREADY_AVAILABLE: usize = 8;
+
 /// `SearchTools` discovers tools from connected integrations (MCP servers such
 /// as Slack, Gmail, Linear) that are not listed upfront, and auto-loads the top
 /// matches so they are callable on the next model turn. This keeps the model
@@ -35,7 +39,7 @@ const MAX_AUTO_LOADED_MATCHES: usize = 8;
 #[derive(Debug, Deserialize, JsonSchema)]
 #[schemars(
     title = "SearchTools",
-    description = "Find tools by keyword: Macro tools whose parameters are not loaded yet, and tools from connected integrations (e.g. Slack, Gmail, Linear, GitHub). The top matches are loaded automatically: call them by exact name on your next step. Matches past the auto-load cap come back under `additional_matches` and need `LoadTools` first. Searching is cheap, so cast a wide net."
+    description = "Find tools by keyword: Macro tools whose parameters are not loaded yet, and tools from connected integrations (e.g. Slack, Gmail, Linear, GitHub). The top matches are loaded automatically: call them by exact name on your next step. Matches past the auto-load cap come back under `additional_matches` and need `LoadTools` first. Tools already in your tool list (such as `ExecuteCode`, when you have it) are never loaded by search; matching ones are named under `already_available`, so call them directly. Searching is cheap, so cast a wide net."
 )]
 pub struct SearchTools {
     /// Keywords describing the capability you need (matched against tool names
@@ -62,6 +66,7 @@ impl AsyncTool<ToolServiceContext> for SearchTools {
     ) -> ToolResult<Self::Output> {
         Ok(search_and_stage(
             &request_context.searchable_tools,
+            &request_context.advertised_tools,
             &self.query,
             request_context.tool_loader.as_ref(),
         ))
@@ -120,9 +125,10 @@ fn search<'c>(catalog: &'c [SearchableTool], query: &str) -> Vec<&'c SearchableT
 
 /// Match `query`, auto-load the top [`MAX_AUTO_LOADED_MATCHES`] matches so they
 /// are advertised on the next model turn, and report the loaded/unloaded split
-/// to the model.
+/// to the model, plus which already-advertised tools match.
 fn search_and_stage(
     catalog: &[SearchableTool],
+    advertised: &[ToolMatch],
     query: &str,
     loader: Option<&ToolLoader>,
 ) -> SearchToolsResponse {
@@ -138,6 +144,13 @@ fn search_and_stage(
     SearchToolsResponse {
         results: loaded.iter().copied().map(ToolMatch::of).collect(),
         additional_matches: additional.iter().copied().map(ToolMatch::of).collect(),
+        already_available: ai_toolset::tool_search::rank(advertised, query, |tool| {
+            (&tool.name, &tool.description)
+        })
+        .into_iter()
+        .take(MAX_ALREADY_AVAILABLE)
+        .map(|tool| tool.name.clone())
+        .collect(),
     }
 }
 
