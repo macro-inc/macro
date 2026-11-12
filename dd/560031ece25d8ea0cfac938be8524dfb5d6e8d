@@ -1,0 +1,21 @@
+tooling/xtask/crates/xtask_workflows/src/workflows/scripts/qa_cargo_test_macos.sh
+  s_52c4561d9841c7::t_3c9c63fa6bbae2 16-18
+.github/workflows/desktop_qa_macos.yml
+  s_52c4561d9841c7::t_7ddb76b8599ff3 166-168
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "dd560031ece25d8ea0cfac938be8524dfb5d6e8d",
+  "prompts": {},
+  "sessions": {
+    "s_52c4561d9841c7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "38d2bb22-d81d-4f68-8258-7475843cc20c",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
