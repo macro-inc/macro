@@ -35,37 +35,14 @@
  * logged inside the span, so the log carries its trace.
  */
 import { attributes, line, type Value } from "./attributes.ts";
+import type {
+	Attribute,
+	Attributes,
+	MacroSpan,
+	MacroTelemetry,
+} from "./framework.ts";
 import type { Sink, Spans } from "./index.ts";
 import type { WakeRecord } from "./record.ts";
-
-type Attribute = string | number | boolean | string[];
-type Attributes = Readonly<Record<string, Attribute | undefined>>;
-
-/** The part of a span of `@macro-inc/observability` this uses. */
-export type MacroSpan = {
-	readonly run: <T>(operation: () => T) => T;
-	readonly setAttr: (name: string, value: Attribute) => void;
-	readonly error: (error: unknown) => void;
-	readonly traceparent: () => string | undefined;
-	/** `timestamp` is Unix time in milliseconds. */
-	readonly end: (timestamp?: number) => void;
-};
-
-/** The part of `Telemetry` from `@macro-inc/observability` this uses. The class itself fits. */
-export type MacroTelemetry = {
-	/** `startTime` is Unix time in milliseconds. */
-	readonly span: (
-		name: string,
-		options?: { readonly startTime?: number },
-	) => MacroSpan;
-	readonly remoteContext: (traceparent: string) => {
-		readonly run: <T>(operation: () => T) => T;
-	};
-	readonly info: (message: string, attributes?: Attributes) => void;
-	readonly warn: (message: string, attributes?: Attributes) => void;
-	readonly error: (error: unknown, attributes?: Attributes) => void;
-	readonly flush: () => Promise<void>;
-};
 
 const milliseconds = (iso: string): number =>
 	Temporal.Instant.from(iso).epochMilliseconds;

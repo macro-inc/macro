@@ -61,11 +61,8 @@ export {
 	unclassified,
 } from "./outcome.ts";
 export { attributes, line, namespace } from "./attributes.ts";
-export {
-	type MacroSpan,
-	type MacroTelemetry,
-	macroTelemetry,
-} from "./macro.ts";
+export type { MacroSpan, MacroTelemetry } from "./framework.ts";
+export { macroTelemetry } from "./macro.ts";
 export {
 	type Classified,
 	type Effect,
