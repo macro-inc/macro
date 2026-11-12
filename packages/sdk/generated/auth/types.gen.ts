@@ -4010,6 +4010,7 @@ export type CreateTeamData = {
 export type CreateTeamErrors = {
     400: ErrorResponse;
     403: ErrorResponse;
+    409: ErrorResponse;
     500: ErrorResponse;
 };
 
@@ -4773,6 +4774,10 @@ export type PutProfilePictureData = {
 
 export type PutProfilePictureErrors = {
     401: string;
+    /**
+     * Picture changed less than a second ago
+     */
+    429: ErrorResponse;
     500: ErrorResponse;
 };
 
@@ -4833,6 +4838,10 @@ export type PutProfilePictureFileErrors = {
      * The caller has no such file
      */
     404: ErrorResponse;
+    /**
+     * Picture changed less than a second ago
+     */
+    429: ErrorResponse;
     500: ErrorResponse;
 };
 

@@ -8,6 +8,8 @@
  *
  * Secrets (`wrangler secret put <NAME> --env <env>`):
  *   DD_API_KEY - optional; sent with trace exports to a Datadog intake
+ *   OPENAI_APPS_CHALLENGE - the domain verification token from OpenAI's app
+ *     dashboard, served at /.well-known/openai-apps-challenge
  */
 {
   "$schema": "../../node_modules/wrangler/config-schema.json",
@@ -49,13 +51,12 @@
     },
     "dev": {
       "name": "mcp-chatgpt-worker-dev",
-      "routes": [
-        { "pattern": "mcp-chatgpt.dev.macro.com", "custom_domain": true }
-      ],
+      // macro.com's DNS isn't on Cloudflare, so dev uses the workers.dev host.
+      "workers_dev": true,
       "vars": {
         "ENVIRONMENT": "development",
         "MACRO_ENV": "dev",
-        "RESOURCE_URL": "https://mcp-chatgpt.dev.macro.com/mcp",
+        "RESOURCE_URL": "https://mcp-chatgpt-worker-dev.macroverse.workers.dev/mcp",
         "AUTHORIZATION_SERVER_URL": "https://mcp-server-dev.macro.com",
         "TOOL_GROUPING": "entity",
         "OTEL_EXPORTER_OTLP_ENDPOINT": "https://macro-prox-dev.macroverse.workers.dev/i/otlp/v1/traces"

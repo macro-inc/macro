@@ -43,8 +43,8 @@ and has two services, each with its pair of webhooks declared in `goalert.ts`:
 Paging monitors: the app-down synthetic, ALB non-200 responses and low healthy
 hosts, Lambda error count, web-app source errors, macro-cache memory, RDS high
 CPU, RDS storage, RDS proxy connections, the three SES reputation monitors, the
-GraphQL soup DSS 5xx and DB connections monitors, and macrodb blocked
-connections. `error-logs-overall` notifies without paging because it crosses
+GraphQL soup DSS 5xx and DB connections monitors, macrodb blocked
+connections, and the AI provider account monitor. `error-logs-overall` notifies without paging because it crosses
 its thresholds many times a day.
 
 ## Prod threshold monitors
@@ -291,6 +291,24 @@ These signals do not acknowledge delivery through PostgreSQL NOTIFY or WebSocket
 See [the rollout runbook](../../../docs/runbooks/notification-retention.md) for
 limitations and the post-deploy verification gates.
 
+## AI provider coverage
+
+`monitors/ai-providers.ts` adds **four monitors, one dashboard, two log-based
+metrics and one span-based metric** for Macro's AI provider accounts. Its
+header lists every log and span field it reads; [the
+runbook](../../../docs/runbooks/ai-providers.md) covers each alert.
+
+- A provider refusing Macro's key as suspended or out of credit pages from the
+  Rust services' `ai provider account unavailable` log, and notifies from the
+  AI editing worker's `ai.provider_account_unavailable` span.
+- Month-to-date priced spend, from the `ai usage priced` log, warns at 50% and
+  80% of a provider's monthly cap and alerts at 100%. `MONTHLY_CAPS` lists only
+  documented caps: Fireworks ($30). The spend monitors use a calendar-month
+  cumulative window (`current_1mo`).
+
+Deploy the services that emit those logs and the span before these; until then
+the metrics are empty and the monitors do not alert.
+
 ## Outlook sync coverage
 
 `monitors/outlook-sync.ts` adds **six monitors, one dashboard, six log-based
@@ -333,7 +351,7 @@ onward. There is no baseline yet; the 10% threshold is a starting point.
 
 ## Agent runtime coverage
 
-`monitors/harness-runtimes.ts` adds **three monitors, one dashboard, six
+`monitors/harness-runtimes.ts` adds **four monitors, one dashboard, six
 span-based metrics and one log-based metric** for agent-harness-service
 runtimes. Its header lists every field it reads;
 [the runbook](../../../docs/runbooks/agent-harness-runtimes.md) covers each
@@ -341,7 +359,9 @@ alert. None of them page.
 
 Per runtime, the monitors notify when one dials more than 15 times in
 15 minutes or lists more than 500 sessions to reattach; across the service,
-when it logs more than 1,000 tokio runtime starvation warnings in 15 minutes.
+when it logs more than 1,000 tokio runtime starvation warnings in 15 minutes;
+and per task, when its resident memory passes 75% of its limit over 15
+minutes.
 Over the seven days to 2026-11-10 quiet 15 minutes stayed at or under 12
 dials, 263 sessions and 451 warnings. Every reattach storm crossed the
 sessions or dials threshold and the starvation one; the storm at 17:15Z on

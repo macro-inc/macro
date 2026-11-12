@@ -60,6 +60,7 @@ impl WebhookDeliveryClient for ReqwestWebhookValidationClient {
         let url = match validate_resolved_endpoint_url(
             &webhook.endpoint_url,
             self.endpoint_scheme_policy,
+            self.resolver.as_ref(),
         )
         .await
         {

@@ -894,6 +894,7 @@ async fn run_server() -> anyhow::Result<()> {
         config.posthog_api_key.as_ref().to_owned(),
         // Flag evaluation is on the call-start path; fall back promptly.
         Duration::from_millis(300),
+        config.environment,
     )
     .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))?;
     let call_service_builder = call_service_builder.with_channel_threads(Arc::new(
@@ -969,6 +970,9 @@ async fn run_server() -> anyhow::Result<()> {
         webhook_stream_sender.clone(),
         entity_access_service.clone(),
         webhook_repository.clone(),
+        crate::outbound::stream_contacts::ContactsStreamChecker::new(Arc::new(
+            contacts::outbound::repository::DbContactsRepository::new(db.clone()),
+        )),
     );
     let sse_stream_state = webhook::inbound::stream_router::WebhookStreamRouterState::new(
         sse_stream_service,
@@ -977,6 +981,7 @@ async fn run_server() -> anyhow::Result<()> {
     consumer_tracker.spawn({
         let brokers = config.kafka_brokers.as_ref().to_string();
         let sender = webhook_stream_sender;
+        let workspace_resolver = webhook_repository.clone();
         let cancellation_token = consumer_cancellation_token.clone();
         async move {
             loop {
@@ -986,6 +991,7 @@ async fn run_server() -> anyhow::Result<()> {
                     result = webhook::inbound::kafka_stream_consumer::run_webhook_stream_consumer(
                         &brokers,
                         &sender,
+                        &workspace_resolver,
                     ) => result,
                 };
 
@@ -1421,6 +1427,54 @@ async fn run_server() -> anyhow::Result<()> {
         }
     });
 
+    let user_picture_brokers = config.kafka_brokers.as_ref().to_string();
+    let user_picture_fanout = Arc::new(
+        contacts::domain::service::picture_fanout::UserPictureFanout::new(
+            contacts::outbound::repository::DbContactsRepository::new(db.clone()),
+            contacts::outbound::picture_gateway::ConnectionGatewayPictureNotifier::new(
+                conn_gateway_client.clone(),
+            ),
+        ),
+    );
+    consumer_tracker.spawn({
+        let cancellation_token = consumer_cancellation_token.clone();
+        async move {
+            loop {
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
+                tracing::info!("starting user picture fan-out consumer");
+                let result = contacts::inbound::user_picture_consumer::run_user_picture_consumer(
+                    &user_picture_brokers,
+                    user_picture_fanout.clone(),
+                    cancellation_token.cancelled(),
+                )
+                .await;
+
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
+                match result {
+                    Ok(()) => tracing::error!("user picture fan-out consumer exited unexpectedly"),
+                    Err(error) => {
+                        tracing::error!(
+                            error = ?error,
+                            "user picture fan-out consumer exited unexpectedly"
+                        );
+                    }
+                }
+
+                tokio::select! {
+                    biased;
+                    _ = cancellation_token.cancelled() => break,
+                    _ = tokio::time::sleep(Duration::from_secs(5)) => {}
+                }
+            }
+        }
+    });
+
     // Wire Macro AI to react to mentions with the classic in-channel chat
     // reply. The router posts replies through the channel service we just
     // built and runs the agent loop in-process with the channel-bot toolset:
@@ -1500,7 +1554,7 @@ async fn run_server() -> anyhow::Result<()> {
         admission: admission.clone(),
         recorder: document_ai_usage.clone(),
         // Off when PostHog isn't configured, as for the agents' Canvas tools.
-        artifacts: ai_tools::canvas_artifacts_rollout_from_env()?
+        artifacts: ai_tools::canvas_artifacts_rollout_from_env(config.environment)?
             .unwrap_or_else(|| Arc::new(|_| Box::pin(async { false }))),
         images: Arc::new(crate::outbound::canvas_images::StaticFileCanvasImages(
             static_file_service_client::StaticFileServiceClient::new(
@@ -2373,6 +2427,13 @@ async fn run_server() -> anyhow::Result<()> {
             entity_access_service.clone(),
             authorization_state.clone(),
         ),
+        channel_sections_state: ChannelLabelsRouterState::new(
+            Arc::new(ChannelLabelsServiceImpl::for_sections(
+                PgChannelLabelsRepo::for_sections(db.clone()),
+            )),
+            entity_access_service.clone(),
+            authorization_state.clone(),
+        ),
         account_manager_state: AccountManagerRouterState::new(
             account_manager_service,
             authorization_state.clone(),
@@ -2496,10 +2557,14 @@ async fn run_server() -> anyhow::Result<()> {
             soup_service,
             soup_realtime_service,
             websocket_notification_consumer_service,
-            activity_realtime_service,
+            activity_realtime_service.clone(),
         ),
         agent_session_log_subscriptions: complete_graph::agent_session_log_subscriptions(
             agent_session_log_realtime,
+        ),
+        agent_session_activity_subscriptions: complete_graph::agent_session_activity_subscriptions(
+            activity_realtime_service,
+            db.clone(),
         ),
         graphql_notification_reader,
         // GraphQL reads the activity log through the readonly pool; the

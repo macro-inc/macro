@@ -45,6 +45,7 @@ fn unknown_action_tags_survive_the_wire() {
     // than dropped, mirroring reads from storage.
     let row = ActivityWireRow {
         agent_correlation_id: None,
+        agent_verb: Some("future_verb".to_string()),
         id: Uuid::from_u128(1),
         actor_id: "macro|teo@example.com".to_string(),
         subject_id: "macro|teo@example.com".to_string(),
@@ -56,6 +57,7 @@ fn unknown_action_tags_survive_the_wire() {
     };
 
     let record = row.into_record().expect("unknown tags still decode");
+    assert_eq!(record.agent_verb, None);
     assert_eq!(
         record.action,
         RecordedAction::Unknown {
@@ -69,6 +71,7 @@ fn unknown_action_tags_survive_the_wire() {
 fn corrupt_actor_rows_are_skipped() {
     let row = ActivityWireRow {
         agent_correlation_id: None,
+        agent_verb: None,
         id: Uuid::from_u128(2),
         actor_id: "not-a-principal".to_string(),
         subject_id: "macro|teo@example.com".to_string(),

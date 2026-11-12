@@ -8,7 +8,7 @@ import { FLOAT_REGIONS, FloatRegions } from './float-region-state';
 
 /**
  * The mobile bottom-chrome host: an ordered stack of floating regions
- * (`accessory` above `dock`) anchored to the bottom of the layout root.
+ * (`accessory`, live `call`, then `dock`) anchored to the layout bottom.
  * Positioned `absolute` (not `fixed`) so the --dvh squish from
  * useAppSquishHandlers lifts the whole stack above the virtual keyboard.
  *

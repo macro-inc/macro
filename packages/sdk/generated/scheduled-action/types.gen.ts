@@ -356,6 +356,14 @@ export type CreatedItem = {
 };
 
 /**
+ * A routine a run created, as that run's history names it.
+ */
+export type CreatedRoutine = {
+    id: string;
+    name: string;
+};
+
+/**
  * What AI drafted, or why it couldn't.
  */
 export type Draft = (DraftedRoutine & {
@@ -527,6 +535,16 @@ export type EventFilters = Array<EventFilter>;
  * selectors. Adding a broker variant does not automatically enable routines.
  */
 export type EventName = 'document.created' | 'document.updated' | 'document.deleted' | 'task.created' | 'task.status_changed' | 'task.priority_changed' | 'task.property_changed' | 'email.message_received' | 'channel.created' | 'channel.message_posted' | 'channel.mentioned' | 'channel.message_patched' | 'channel.message_attachment_created' | 'call.started' | 'call.ended' | 'github';
+
+/**
+ * A finished run, with the routines it created.
+ */
+export type ExecutionRecordResponse = ActionExecutionRecord & {
+    /**
+     * The sub-routines this run created that still follow the routine.
+     */
+    created?: Array<CreatedRoutine>;
+};
 
 /**
  * Transcript resource created by a run. Never infer this from current task configuration.
@@ -1037,6 +1055,7 @@ export type ScheduledAction = {
      * Whether the action's runs are listed in Home and the Agents list.
      */
     run_visibility: RunVisibility;
+    sub_routine?: null | SubRoutine;
     /**
      * The routine suggestion it was saved from, if any: a plain pointer
      * that stays after the suggestion is replaced.
@@ -1133,6 +1152,31 @@ export type StepProblem = {
      */
     index: number;
     problems: Array<string>;
+};
+
+/**
+ * How a routine created by a routine's run belongs to that routine.
+ */
+export type SubRoutine = {
+    /**
+     * The run that created it: the id of that run's history record, which
+     * exists once the run ends.
+     */
+    created_by_run_id: string;
+    /**
+     * The name its creating code gave it, when it gave one.
+     */
+    key?: string | null;
+    /**
+     * The top-level routine it follows: pausing that routine pauses it, and
+     * deleting that routine deletes it. A routine a sub-routine's run
+     * creates follows the same top-level routine.
+     */
+    parent_id: string;
+    /**
+     * It is off because its parent was switched off, and resumes with it.
+     */
+    paused_by_parent?: boolean;
 };
 
 /**
@@ -1266,6 +1310,17 @@ export type ListScheduledActionsData = {
          * Backend clients must opt in to event actions; defaults to false (cron-only).
          */
         include_events?: boolean | null;
+        /**
+         * Also list active sub-routines, the routines other routines' runs
+         * created, without finished one-time ones; defaults to false (top-level
+         * routines only).
+         */
+        include_children?: boolean | null;
+        /**
+         * List only this routine's sub-routines: the active ones and its newest
+         * 200 finished one-time ones.
+         */
+        parent?: string | null;
     };
     url: '/scheduled-actions';
 };
@@ -1292,6 +1347,12 @@ export type CreateScheduledActionData = {
          * The routine suggestion it is saved from, recorded on the routine.
          */
         suggestion_id?: string;
+        /**
+         * A name for a routine a routine's run creates: the same key under the
+         * same parent updates that sub-routine instead of adding another.
+         * Rejected outside a routine's run.
+         */
+        key?: string;
     };
     url: '/scheduled-actions';
 };
@@ -1300,12 +1361,20 @@ export type CreateScheduledActionErrors = {
     400: string;
     401: string;
     403: string;
+    /**
+     * The routine already has the most active sub-routines it can
+     */
+    409: string;
     500: string;
 };
 
 export type CreateScheduledActionError = CreateScheduledActionErrors[keyof CreateScheduledActionErrors];
 
 export type CreateScheduledActionResponses = {
+    /**
+     * The sub-routine its key already named, updated
+     */
+    200: ScheduledActionResponse;
     201: ScheduledActionResponse;
 };
 
@@ -1633,6 +1702,36 @@ export type ListScheduledActionCodeUpgradesResponses = {
 
 export type ListScheduledActionCodeUpgradesResponse = ListScheduledActionCodeUpgradesResponses[keyof ListScheduledActionCodeUpgradesResponses];
 
+export type DetachScheduledActionData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the sub-routine
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/{id}/detach';
+};
+
+export type DetachScheduledActionErrors = {
+    /**
+     * Not a sub-routine
+     */
+    400: string;
+    401: string;
+    404: string;
+    500: string;
+};
+
+export type DetachScheduledActionError = DetachScheduledActionErrors[keyof DetachScheduledActionErrors];
+
+export type DetachScheduledActionResponses = {
+    200: ScheduledActionResponse;
+};
+
+export type DetachScheduledActionResponse = DetachScheduledActionResponses[keyof DetachScheduledActionResponses];
+
 export type SetScheduledActionEnabledData = {
     body: SetScheduledActionEnabled;
     path: {
@@ -1724,7 +1823,7 @@ export type ListScheduledActionHistoryErrors = {
 export type ListScheduledActionHistoryError = ListScheduledActionHistoryErrors[keyof ListScheduledActionHistoryErrors];
 
 export type ListScheduledActionHistoryResponses = {
-    200: Array<ActionExecutionRecord>;
+    200: Array<ExecutionRecordResponse>;
 };
 
 export type ListScheduledActionHistoryResponse = ListScheduledActionHistoryResponses[keyof ListScheduledActionHistoryResponses];

@@ -975,11 +975,13 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
 
     async fn set_turn_prompter(&self, id: AgentSessionId, prompter: &TurnPrompter) -> Result<()> {
         sqlx::query!(
-            "UPDATE agent_session SET turn_action_id = $2, turn_prompter = $3, turn_prompter_kind = $4 WHERE id = $1",
+            "UPDATE agent_session SET turn_action_id = $2, turn_prompter = $3, turn_prompter_kind = $4, turn_prompter_client = $5 WHERE id = $1",
             id.as_uuid(),
             prompter.action_id.as_uuid(),
             prompter.user.as_ref().filter(|_| prompter.kind != crate::domain::model::PrompterKind::System).map(|user| user.as_ref()),
             prompter.kind.as_ref(),
+            // A tab only stands beside a person who prompted from it.
+            prompter.client.filter(|_| prompter.acting_user().is_some()).map(crate::domain::model::UiClientId::as_uuid),
         )
         .execute(&self.pool)
         .await
@@ -1006,7 +1008,7 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
     async fn turn_prompter(&self, id: AgentSessionId) -> Result<Option<TurnPrompter>> {
         let row = sqlx::query!(
             r#"
-            SELECT turn_action_id, turn_prompter_kind, turn_prompter AS "turn_prompter: MacroUserIdStr<'static>"
+            SELECT turn_action_id, turn_prompter_kind, turn_prompter AS "turn_prompter: MacroUserIdStr<'static>", turn_prompter_client
             FROM agent_session
             WHERE id = $1
             "#,
@@ -1026,6 +1028,9 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
                     action_id,
                 ),
                 user: row.turn_prompter,
+                client: row
+                    .turn_prompter_client
+                    .map(crate::domain::model::UiClientId::from_uuid),
             })
         }))
     }

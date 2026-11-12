@@ -40,14 +40,14 @@
 .tasks-caption {
   color: var(--c4);
   font-family: 'body';
-  font-weight: 400;
+  font-weight: 370;
   margin: 0;
 }
 
 .tasks-lead,
 .tasks-sub {
   font-family: 'Inter', 'body';
-  font-weight: 400;
+  font-weight: 370;
 }
 
 .tasks-lead {
