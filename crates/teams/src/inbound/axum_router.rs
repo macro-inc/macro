@@ -454,6 +454,12 @@ impl IntoResponse for RemoveUserFromTeamError {
                     message: "user not in team".into(),
                 }),
             ),
+            RemoveUserFromTeamError::AgentTeammate => (
+                StatusCode::CONFLICT,
+                Json(ErrorResponse {
+                    message: "this member is an agent teammate: remove it from the team's agents (DELETE /team_agents/{id})".into(),
+                }),
+            ),
             RemoveUserFromTeamError::CustomerError(_) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {

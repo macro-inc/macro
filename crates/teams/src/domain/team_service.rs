@@ -1769,7 +1769,34 @@ where
             .clone()
             .into_owned();
 
+        // Only agent teammates hold an included seat.
+        if self
+            .team_repository
+            .is_seat_included(&team_id, user_id)
+            .await?
+        {
+            return Err(RemoveUserFromTeamError::AgentTeammate);
+        }
+
         self.remove_member(team_id, user_id, removed_by_id).await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn remove_team_agent(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
+        agent_user_id: &MacroUserIdStr<'_>,
+    ) -> Result<(), RemoveUserFromTeamError> {
+        let team_id =
+            macro_uuid::string_to_uuid(&entity_access_receipt.entity().entity_id).unwrap();
+        let removed_by_id = entity_access_receipt
+            .get_authenticated_user()
+            .map_err(|e| RemoveUserFromTeamError::TeamError(TeamError::AccessError(e)))?
+            .clone()
+            .into_owned();
+
+        self.remove_member(team_id, agent_user_id, removed_by_id)
+            .await
     }
 
     #[tracing::instrument(skip(self), err)]

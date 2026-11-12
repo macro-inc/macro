@@ -10,6 +10,7 @@ use hosted_runtimes::domain::{
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
+use super::admission::AgentAccountFacts;
 use super::models::{
     AgentApiKey, AgentRepo, ComputerId, ComputerPurchase, ComputerState, CreateTeamAgent,
     NewAgentAccount, PersonaSeed, TeamAgent, TeamAgentError, TeamAgentRecord, TeamAgents,
@@ -30,8 +31,17 @@ pub trait TeamAgentRepository: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Delete the account; its `team_agents` row, membership and repo row
-    /// cascade.
+    /// cascade. Only to undo an invite that failed: a removed agent keeps
+    /// its account, see [`Self::remove_seat`].
     fn delete_account(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Delete the agent's `team_agents` row, so nothing admits it as an
+    /// agent any more. Its account and everything it owns stay; nothing
+    /// references the row.
+    fn remove_seat(
         &self,
         user_id: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
@@ -47,6 +57,18 @@ pub trait TeamAgentRepository: Send + Sync + 'static {
         &self,
         team_id: Uuid,
     ) -> impl Future<Output = Result<Vec<TeamAgentRecord>, Self::Err>> + Send;
+}
+
+/// What an agent's own account says about it, for admission.
+pub trait AgentAccounts: Send + Sync + 'static {
+    /// Storage failure.
+    type Err: std::error::Error + Send + Sync + 'static;
+
+    /// The account's facts, or none if it has no `team_agents` row.
+    fn account_facts(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Option<AgentAccountFacts>, Self::Err>> + Send;
 }
 
 /// Team membership through the teams domain.
@@ -75,6 +97,12 @@ pub trait TeamMembership: Send + Sync + 'static {
 
 /// The agent's own Macro API key.
 pub trait AgentApiKeys: Send + Sync + 'static {
+    /// Revoke every key the agent has; it can't call Macro afterwards.
+    fn revoke_all(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<(), TeamAgentError>> + Send;
+
     /// Mint a new key, replacing the agent's previous one.
     fn mint(
         &self,
@@ -175,8 +203,10 @@ pub trait TeamAgentService: Send + Sync + 'static {
         receipt: EntityAccessReceipt<MemberTeamRole>,
     ) -> impl Future<Output = Result<TeamAgents, TeamAgentError>> + Send;
 
-    /// Remove an agent: release its computer, take it off the team, and
-    /// delete its repository and account.
+    /// Remove an agent: release its computer, revoke its keys and repo
+    /// token, take it off the team and delete its seat. Its account and
+    /// everything it owns stay. Not gated by the rollout, so an admin can
+    /// always stop billing.
     fn delete(
         &self,
         receipt: EntityAccessReceipt<AdminTeamRole>,

@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use macro_user_id::user_id::MacroUserIdStr;
-use user_api_key::domain::ports::UserApiKeyService;
+use user_api_key::domain::{models::UserApiKeyError, ports::UserApiKeyService};
 
 use crate::domain::models::{AgentApiKey, TeamAgentError};
 use crate::domain::ports::AgentApiKeys;
@@ -24,6 +24,23 @@ impl<S> UserApiKeys<S> {
 }
 
 impl<S: UserApiKeyService> AgentApiKeys for UserApiKeys<S> {
+    #[tracing::instrument(skip_all, err)]
+    async fn revoke_all(&self, agent_user_id: &MacroUserIdStr<'_>) -> Result<(), TeamAgentError> {
+        let keys = self
+            .service
+            .list_keys(agent_user_id)
+            .await
+            .map_err(TeamAgentError::internal)?;
+        for key in keys {
+            match self.service.delete_key(agent_user_id, key.id).await {
+                // Gone already: revoked by someone else in the meantime.
+                Ok(()) | Err(UserApiKeyError::NotFound) => {}
+                Err(error) => return Err(TeamAgentError::internal(error)),
+            }
+        }
+        Ok(())
+    }
+
     async fn mint(
         &self,
         agent_user_id: &MacroUserIdStr<'_>,

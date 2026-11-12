@@ -1,4 +1,5 @@
 //! Public workspace MCP and OAuth, hosted on the harness's public listener.
+mod agent_keys;
 mod analytics;
 mod macro_api_tokens;
 mod markdown_images;
@@ -64,6 +65,7 @@ pub async fn router(
     background_tasks: tokio_util::task::TaskTracker,
     cancellation: tokio_util::sync::CancellationToken,
     code_mode: Option<PublicCodeMode>,
+    rollout: crate::anthropic_gateway::brain::BrainRollout,
 ) -> anyhow::Result<axum::Router> {
     let public_url = macro_service_urls::McpPublicUrl::new()?;
     let (auth_proxy, backfill) = build_auth_proxy(
@@ -75,9 +77,14 @@ pub async fn router(
         jwt_args.clone(),
     )
     .await?;
-    // Agent teammates' brains authenticate with their own Macro API key.
-    let user_api_keys = Arc::new(macro_authorization::PgUserApiKeyAuthorizer::new(
-        macro_authorization::PgUserApiKeyAuthorizationRepo::new(db.clone()),
+    // Agent teammates' brains authenticate with their own Macro API key; no
+    // one else's user key is accepted here.
+    let user_api_keys = Arc::new(agent_keys::AgentUserApiKeys::new(
+        macro_authorization::PgUserApiKeyAuthorizer::new(
+            macro_authorization::PgUserApiKeyAuthorizationRepo::new(db.clone()),
+        ),
+        db.clone(),
+        rollout,
     ));
     let analytics = build_analytics(config, db);
     let item_base_url = macro_service_urls::AppServiceUrl::new()?.to_string();

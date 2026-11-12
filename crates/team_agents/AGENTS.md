@@ -31,6 +31,15 @@ flag) read and commit it through agent_git; the agent's next call uses it.
 admins behind the same flag; agent_harness_service implements its
 `VoiceProvider` and mounts it at `/voices`.
 
+`domain::admission::AgentAdmission::admit(agent, team)` answers whether an
+account is an agent the vault may admit, from current facts each call: its
+`team_agents` row is for that team, `"User"."isAgent"` is set, it is still a
+`team_user` member, its `created_by` is a human, and a computer that isn't
+released runs it (`Computers::computer_for_agent` + `state`; a purchase still
+confirming doesn't count). It returns the responsible human, a typed
+`NotAdmitted` reason, or `Unavailable` when any dependency fails (fail
+closed). The vault's `AgentDirectory` adapter is a thin impl over it.
+
 An agent's status comes from its computer (`provisioning`, `running`,
 `paused`, `failed`, `released`); nothing about it is stored here.
 
@@ -38,6 +47,7 @@ An agent's status comes from its computer (`provisioning`, `running`,
 
 - `src/domain/service.rs`: invite, list, remove and enrollment issuance.
 - `src/domain/ports.rs`: what the service needs from other crates.
+- `src/domain/admission.rs`: agent admission for the vault.
 
 ## Scope
 

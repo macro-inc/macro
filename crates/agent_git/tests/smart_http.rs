@@ -69,6 +69,21 @@ async fn insert_fixtures(pool: &PgPool) {
 }
 
 /// Serve the router on a random port; returns its base URL.
+/// The agent teammates rollout, on for everyone.
+struct Rollout;
+
+impl feature_flags::FeatureFlags for Rollout {
+    async fn load(
+        &self,
+        _: &MacroUserIdStr<'_>,
+    ) -> Result<feature_flags::FlagSnapshot, rootcause::Report> {
+        Ok(feature_flags::FlagSnapshot::new([(
+            agent_credentials::AGENT_TEAMMATES_FLAG.to_owned(),
+            feature_flags::FlagValue::Boolean(true),
+        )]))
+    }
+}
+
 async fn start_server(pool: PgPool, storage_root: &Path, max_repo_size_bytes: u64) -> String {
     let directories = RepoDirectories::new(storage_root.to_path_buf());
     let service = AgentGitServiceImpl::new(
@@ -80,6 +95,7 @@ async fn start_server(pool: PgPool, storage_root: &Path, max_repo_size_bytes: u6
             )),
             limiter: PgPushRateLimiter::new(pool.clone(), 30),
             backend: GitHttpBackend::new(directories, tokio_util::task::TaskTracker::new()),
+            flags: Some(Rollout),
         },
         RepoLimits {
             max_repo_size_bytes,

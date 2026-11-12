@@ -75,7 +75,7 @@ impl IntoResponse for TeamAgentError {
             Self::UnknownVoice => StatusCode::BAD_REQUEST,
             Self::NotFound | Self::NoVoice => StatusCode::NOT_FOUND,
             Self::NotEnabled => StatusCode::FORBIDDEN,
-            Self::ComputerUnavailable(_) => StatusCode::CONFLICT,
+            Self::ComputerUnavailable(_) | Self::PurchaseConfirming => StatusCode::CONFLICT,
             Self::RepoUnavailable(_) | Self::VoiceUnavailable(_) => StatusCode::BAD_GATEWAY,
             Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };

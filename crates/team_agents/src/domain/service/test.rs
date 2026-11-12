@@ -1,4 +1,7 @@
-use std::sync::{Arc, Mutex};
+use std::sync::{
+    Arc, Mutex,
+    atomic::{AtomicBool, Ordering},
+};
 
 use entity_access::domain::models::EntityType;
 use feature_flags::{FlagSnapshot, FlagValue};
@@ -73,6 +76,15 @@ impl TeamAgentRepository for FakeRepository {
         Ok(())
     }
 
+    async fn remove_seat(&self, user_id: &MacroUserIdStr<'_>) -> Result<(), FakeError> {
+        self.journal.record("seat.remove");
+        self.agents
+            .lock()
+            .unwrap()
+            .retain(|agent| agent.user_id.as_ref() != user_id.as_ref());
+        Ok(())
+    }
+
     async fn delete_account(&self, user_id: &MacroUserIdStr<'_>) -> Result<(), FakeError> {
         self.journal.record("account.delete");
         self.agents
@@ -141,6 +153,11 @@ impl TeamMembership for FakeMembership {
 struct FakeApiKeys(Journal);
 
 impl AgentApiKeys for FakeApiKeys {
+    async fn revoke_all(&self, _: &MacroUserIdStr<'_>) -> Result<(), TeamAgentError> {
+        self.0.record("api_key.revoke_all");
+        Ok(())
+    }
+
     async fn mint(&self, _: &MacroUserIdStr<'_>) -> Result<AgentApiKey, TeamAgentError> {
         self.0.record("api_key.mint");
         Ok(AgentApiKey::parse(
@@ -259,13 +276,21 @@ impl Computers for FakeComputers {
     }
 }
 
-struct Flags(bool);
+/// The rollout, which a test can turn off after an invite.
+#[derive(Clone)]
+struct Flags(Arc<AtomicBool>);
+
+impl Flags {
+    fn set(&self, on: bool) {
+        self.0.store(on, Ordering::SeqCst);
+    }
+}
 
 impl FeatureFlags for Flags {
     async fn load(&self, _: &MacroUserIdStr<'_>) -> Result<FlagSnapshot, Report> {
         Ok(FlagSnapshot::new([(
             AGENT_TEAMMATES_FLAG.to_owned(),
-            FlagValue::Boolean(self.0),
+            FlagValue::Boolean(self.0.load(Ordering::SeqCst)),
         )]))
     }
 }
@@ -291,6 +316,12 @@ type Service = TeamAgentServiceImpl<
 >;
 
 fn service(flag: bool, computers: FakeComputers) -> (Service, Journal) {
+    let (service, journal, _) = service_with_flags(flag, computers);
+    (service, journal)
+}
+
+fn service_with_flags(flag: bool, computers: FakeComputers) -> (Service, Journal, Flags) {
+    let flags = Flags(Arc::new(AtomicBool::new(flag)));
     let journal = computers.journal.clone();
     let repository = FakeRepository {
         journal: journal.clone(),
@@ -302,10 +333,10 @@ fn service(flag: bool, computers: FakeComputers) -> (Service, Journal) {
         FakeApiKeys(journal.clone()),
         FakeRepos(journal.clone()),
         computers,
-        Some(Flags(flag)),
+        Some(flags.clone()),
         Addresses,
     );
-    (service, journal)
+    (service, journal, flags)
 }
 
 #[tokio::test]
@@ -404,7 +435,7 @@ async fn the_list_shows_each_agent_with_its_computers_state() {
 }
 
 #[tokio::test]
-async fn removing_an_agent_releases_its_computer_first() {
+async fn removing_an_agent_deactivates_it_and_keeps_its_account() {
     let (service, journal) = service(true, FakeComputers::default());
     let created = service.create(receipt(), request()).await.unwrap();
 
@@ -413,15 +444,34 @@ async fn removing_an_agent_releases_its_computer_first() {
         .await
         .expect("the agent is removed");
 
+    // The computer goes first, so nothing keeps running as the agent. The
+    // account, and all it owns (docs shared with the team, threads,
+    // routines), stays: only its seat, keys, repo token and membership go.
     assert_eq!(
         journal.entries()[4..],
         [
             "computer.release".to_owned(),
+            "api_key.revoke_all".to_owned(),
+            "repo.create Sam Rivera".to_owned(),
             "team.remove".to_owned(),
-            "repo.delete".to_owned(),
-            "account.delete".to_owned(),
+            "seat.remove".to_owned(),
         ]
     );
+    assert!(service.list(receipt()).await.unwrap().agents.is_empty());
+}
+
+#[tokio::test]
+async fn an_admin_can_remove_an_agent_with_the_rollout_off_so_billing_can_always_stop() {
+    let (service, journal, flags) = service_with_flags(true, FakeComputers::default());
+    let created = service.create(receipt(), request()).await.unwrap();
+    flags.set(false);
+
+    service
+        .delete(receipt(), &created.user_id)
+        .await
+        .expect("removal isn't gated");
+
+    assert!(journal.entries().contains(&"computer.release".to_owned()));
 }
 
 #[tokio::test]
@@ -551,6 +601,26 @@ async fn an_agents_computer_enrolls_with_fresh_credentials_and_its_addresses() {
 }
 
 #[tokio::test]
+async fn with_the_rollout_off_an_agents_computer_enrolls_without_its_credentials() {
+    let (service, journal, flags) = service_with_flags(true, FakeComputers::default());
+    service.create(receipt(), request()).await.unwrap();
+    flags.set(false);
+    let before = journal.entries().len();
+
+    let enrollment = service
+        .issue_enrollment(
+            ComputerId::new_from_uuid(COMPUTER),
+            EnrollmentGeneration::new(1),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(enrollment, None);
+    // Nothing minted: no key, no repo token.
+    assert_eq!(journal.entries().len(), before);
+}
+
+#[tokio::test]
 async fn a_computer_without_an_agent_enrolls_without_one() {
     let (service, journal) = service(true, FakeComputers::default());
 
@@ -575,4 +645,22 @@ fn slugs_are_lowercase_words_joined_by_dashes() {
         slug("a very long agent name that goes on"),
         "a-very-long-agent-name-t"
     );
+}
+
+#[tokio::test]
+async fn with_the_rollout_off_the_list_and_an_agents_voice_are_refused() {
+    let (service, journal, flags) = service_with_flags(true, FakeComputers::default());
+    let created = service.create(receipt(), request()).await.unwrap();
+    flags.set(false);
+    let before = journal.entries().len();
+
+    assert!(matches!(
+        service.list(receipt()).await,
+        Err(TeamAgentError::NotEnabled)
+    ));
+    assert!(matches!(
+        service.voice(receipt(), &created.user_id).await,
+        Err(TeamAgentError::NotEnabled)
+    ));
+    assert_eq!(journal.entries().len(), before);
 }

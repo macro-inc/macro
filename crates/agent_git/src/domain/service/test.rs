@@ -14,6 +14,21 @@ use super::*;
 use crate::domain::models::{AgentRepo, RepoTokenHash};
 use crate::domain::template::{PersonaSeed, RenderedFile, WORKSPACE_TEMPLATE};
 
+/// The agent teammates rollout, on or off for everyone.
+struct Rollout(bool);
+
+impl feature_flags::FeatureFlags for Rollout {
+    async fn load(
+        &self,
+        _: &MacroUserIdStr<'_>,
+    ) -> Result<feature_flags::FlagSnapshot, rootcause::Report> {
+        Ok(feature_flags::FlagSnapshot::new([(
+            agent_credentials::AGENT_TEAMMATES_FLAG.to_owned(),
+            feature_flags::FlagValue::Boolean(self.0),
+        )]))
+    }
+}
+
 #[derive(Clone, Default)]
 struct FakeRepos {
     rows: Arc<Mutex<HashMap<String, AgentRepo>>>,
@@ -63,6 +78,30 @@ impl RepoRepository for FakeRepos {
             locked: self.locked.clone(),
             _guard: guard,
         })
+    }
+
+    async fn try_lock_repo(
+        &self,
+        agent_user_id: &MacroUserIdStr<'_>,
+    ) -> Result<Option<FakeLock>, Infallible> {
+        let agent_user_id = agent_user_id.as_ref().to_owned();
+        let lock = self
+            .locks
+            .lock()
+            .unwrap()
+            .entry(agent_user_id.clone())
+            .or_default()
+            .clone();
+        let Ok(guard) = lock.try_lock_owned() else {
+            return Ok(None);
+        };
+        self.locked.lock().unwrap().push(agent_user_id.clone());
+        self.lock_log.lock().unwrap().push(agent_user_id.clone());
+        Ok(Some(FakeLock {
+            agent_user_id,
+            locked: self.locked.clone(),
+            _guard: guard,
+        }))
     }
 
     async fn find_repo(
@@ -320,6 +359,7 @@ async fn the_agent_token_pushes_and_an_admin_session_only_reads() {
                 remaining: Arc::new(Mutex::new(30)),
             },
             backend: backend.clone(),
+            flags: Some(Rollout(true)),
         },
         RepoLimits {
             max_repo_size_bytes: 500_000_000,
@@ -406,6 +446,7 @@ async fn creating_again_replaces_the_token_and_another_team_is_refused() {
                 remaining: Arc::new(Mutex::new(30)),
             },
             backend: EchoBackend::default(),
+            flags: Some(Rollout(true)),
         },
         RepoLimits {
             max_repo_size_bytes: 500_000_000,
@@ -467,6 +508,7 @@ async fn pushes_stop_at_the_size_cap_and_the_rate_limit() {
                 remaining: Arc::new(Mutex::new(1)),
             },
             backend: EchoBackend::default(),
+            flags: Some(Rollout(true)),
         },
         RepoLimits {
             max_repo_size_bytes: 504,
@@ -524,6 +566,7 @@ async fn a_full_repo_refuses_the_push_advertisement() {
                 remaining: Arc::new(Mutex::new(30)),
             },
             backend: EchoBackend::default(),
+            flags: Some(Rollout(true)),
         },
         RepoLimits {
             max_repo_size_bytes: 500,
@@ -565,6 +608,7 @@ async fn deleting_removes_the_repo_and_the_row() {
                 remaining: Arc::new(Mutex::new(30)),
             },
             backend: EchoBackend::default(),
+            flags: Some(Rollout(true)),
         },
         RepoLimits {
             max_repo_size_bytes: 500,
@@ -604,6 +648,7 @@ async fn voices_are_read_and_committed_only_for_the_repos_team() {
                 remaining: Arc::new(Mutex::new(30)),
             },
             backend: EchoBackend::default(),
+            flags: Some(Rollout(true)),
         },
         RepoLimits {
             max_repo_size_bytes: 500,
@@ -767,6 +812,7 @@ async fn recovery_preserves_live_tokens_and_recreates_missing_resources() {
                 remaining: Arc::new(Mutex::new(30)),
             },
             backend: EchoBackend::default(),
+            flags: Some(Rollout(true)),
         },
         RepoLimits {
             max_repo_size_bytes: 500_000_000,
@@ -894,6 +940,7 @@ async fn deletion_waits_for_recovery_and_removes_its_published_storage() {
                 remaining: Arc::new(Mutex::new(30)),
             },
             backend: EchoBackend::default(),
+            flags: Some(Rollout(true)),
         },
         RepoLimits {
             max_repo_size_bytes: 500_000_000,
@@ -931,6 +978,7 @@ async fn a_push_holds_the_repo_lock_until_its_response_ends_and_management_takes
                 remaining: Arc::new(Mutex::new(30)),
             },
             backend: EchoBackend::default(),
+            flags: Some(Rollout(true)),
         },
         RepoLimits {
             max_repo_size_bytes: 500_000_000,
@@ -974,4 +1022,87 @@ async fn a_push_holds_the_repo_lock_until_its_response_ends_and_management_takes
         vec![AGENT.to_owned(), AGENT.to_owned(), AGENT.to_owned()]
     );
     assert!(repos.locked.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_second_push_while_one_holds_the_repo_is_busy_and_a_rate_limited_one_never_locks() {
+    let repos = FakeRepos::default();
+    let limiter = FakeLimiter {
+        remaining: Arc::new(Mutex::new(2)),
+    };
+    let service = AgentGitServiceImpl::new(
+        AgentGitAdapters {
+            repos: repos.clone(),
+            store: FakeStore::default(),
+            admins: FakeAdmins::default(),
+            limiter: limiter.clone(),
+            backend: EchoBackend::default(),
+            flags: Some(Rollout(true)),
+        },
+        RepoLimits {
+            max_repo_size_bytes: 500_000_000,
+        },
+        WORKSPACE_TEMPLATE,
+    );
+    let agent = MacroUserIdStr::try_from(AGENT.to_owned()).unwrap();
+    let created = service
+        .create_repo(agent.clone(), TEAM, &seed())
+        .await
+        .unwrap();
+    let push = || {
+        service.serve_git(
+            GitCredential::RepoToken(created.token.clone()),
+            &agent,
+            request(GitEndpoint::Rpc(GitService::ReceivePack), b"pack"),
+        )
+    };
+
+    let first = push().await.unwrap();
+    assert!(matches!(push().await, Err(AgentGitError::RepoBusy)));
+    drop(first);
+    let locks_before = repos.lock_log.lock().unwrap().len();
+    // Both window slots are spent; the next push is refused before the lock.
+    assert!(matches!(push().await, Err(AgentGitError::PushRateLimited)));
+    assert_eq!(repos.lock_log.lock().unwrap().len(), locks_before);
+}
+
+#[tokio::test]
+async fn with_the_rollout_off_for_the_agent_its_repo_is_closed_to_every_credential() {
+    let service = AgentGitServiceImpl::new(
+        AgentGitAdapters {
+            repos: FakeRepos::default(),
+            store: FakeStore::default(),
+            admins: FakeAdmins::default(),
+            limiter: FakeLimiter {
+                remaining: Arc::new(Mutex::new(30)),
+            },
+            backend: EchoBackend::default(),
+            flags: Some(Rollout(false)),
+        },
+        RepoLimits {
+            max_repo_size_bytes: 500_000_000,
+        },
+        WORKSPACE_TEMPLATE,
+    );
+    let agent = MacroUserIdStr::try_from(AGENT.to_owned()).unwrap();
+    let created = service
+        .create_repo(agent.clone(), TEAM, &seed())
+        .await
+        .unwrap();
+
+    for endpoint in [
+        GitEndpoint::Rpc(GitService::UploadPack),
+        GitEndpoint::Rpc(GitService::ReceivePack),
+    ] {
+        assert!(matches!(
+            service
+                .serve_git(
+                    GitCredential::RepoToken(created.token.clone()),
+                    &agent,
+                    request(endpoint, b""),
+                )
+                .await,
+            Err(AgentGitError::NotFound)
+        ));
+    }
 }

@@ -25,6 +25,13 @@ pub trait RepoRepository: Send + Sync + 'static {
         agent_user_id: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Self::Lock, Self::Err>> + Send;
 
+    /// The repo's lock if it is free now, without waiting: a push that finds
+    /// it held is answered busy, so git retries and no connection waits.
+    fn try_lock_repo(
+        &self,
+        agent_user_id: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Option<Self::Lock>, Self::Err>> + Send;
+
     /// The agent's repo row.
     fn find_repo(
         &self,

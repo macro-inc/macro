@@ -16,6 +16,7 @@ axum = { workspace = true, optional = true }
 axum-extra = { workspace = true, optional = true, features = ["typed-header"] }
 bytes = { workspace = true }
 chrono = { workspace = true }
+feature_flags = { path = "../feature_flags" }
 futures = { workspace = true }
 hex = { workspace = true }
 lazy-regex = { workspace = true }

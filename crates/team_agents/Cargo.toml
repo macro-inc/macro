@@ -50,3 +50,4 @@ axum = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
 sqlx = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+user_api_key = { path = "../user_api_key", features = ["postgres"] }
