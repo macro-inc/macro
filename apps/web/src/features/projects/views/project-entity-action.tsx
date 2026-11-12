@@ -58,7 +58,10 @@ export function ProjectEntityActionContent(props: {
       </Match>
       <Match when={props.action.kind === 'share' && props.action}>
         {(action) => (
-          <ProjectShareLauncher projectId={action().id} onClose={props.onClose} />
+          <ProjectShareLauncher
+            projectId={action().id}
+            onClose={props.onClose}
+          />
         )}
       </Match>
       <Match when={props.action.kind === 'delete' && props.action}>

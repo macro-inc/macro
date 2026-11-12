@@ -34,9 +34,9 @@ import {
   openEntityInSplitFromUnifiedList,
   restoreSoupFocus,
 } from '@app/features/next-soup/utils';
+import { openProjectEntityAction } from '@app/features/projects/project-entity-actions';
 import { useAllProperties } from '@app/features/property/editor/hooks/useAllProperties';
 import { openPropertyEditor } from '@app/features/property/editor/state/propertyEditor';
-import { openProjectEntityAction } from '@app/features/projects/project-entity-actions';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
@@ -201,8 +201,7 @@ export function createSoupEntityActions(
     const ownsProjects =
       projectIds.length > 0 &&
       entities.every((entity) => entity.ownerId === userId());
-    const singleProject =
-      projectIds.length === 1 ? entities[0] : undefined;
+    const singleProject = projectIds.length === 1 ? entities[0] : undefined;
 
     const handle =
       (

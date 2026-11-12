@@ -62,9 +62,12 @@ function open(
 
 it('renames the project from a list row and closes', async () => {
   const rename = vi.fn(async () => {});
-  const view = open({ kind: 'rename', id: 'launch', name: 'Launch' }, {
-    rename,
-  });
+  const view = open(
+    { kind: 'rename', id: 'launch', name: 'Launch' },
+    {
+      rename,
+    }
+  );
 
   const input = await screen.findByLabelText('Name');
   fireEvent.input(input, { target: { value: 'Launch v2' } });
@@ -86,9 +89,7 @@ it('keeps only the projects that failed to delete for a retry', async () => {
     await screen.findByRole('button', { name: 'Delete 2 projects' })
   );
   expect(
-    await screen.findByText(
-      'Deleted 1 of 2. The rest could not be deleted.'
-    )
+    await screen.findByText('Deleted 1 of 2. The rest could not be deleted.')
   ).toBeTruthy();
   expect(view.shown()).toBe(true);
 
