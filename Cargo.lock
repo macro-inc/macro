@@ -19213,6 +19213,7 @@ dependencies = [
  "rootcause",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "share_permission_db_utils",
  "slack_client",
  "sqlx",

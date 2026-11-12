@@ -46,8 +46,9 @@ talks to Slack. Design: `docs/architecture/slack-linked.md`.
 - Every session-service write takes the account row at the caller's
   `lease_epoch`; `Fenced` means stop the account.
 - Messages store Slack's raw mrkdwn; the web renders it.
-- Files sent from Macro and inbound attachments wait for the attachment
-  pipeline's Slack support.
+- Inbound files: `outbound/pg/media.rs` reserves one attachment per file
+  (locator = Slack file id; the hash is of what arrives). Files sent from
+  Macro are not supported yet.
 
 ## Related
 

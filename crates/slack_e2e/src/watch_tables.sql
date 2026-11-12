@@ -24,3 +24,5 @@ CREATE TRIGGER e2e_changed AFTER INSERT OR UPDATE OR DELETE ON external_chat_rea
     FOR EACH STATEMENT EXECUTE FUNCTION e2e_notify_changed();
 CREATE TRIGGER e2e_changed AFTER INSERT OR UPDATE OR DELETE ON external_chat_read_state
     FOR EACH STATEMENT EXECUTE FUNCTION e2e_notify_changed();
+CREATE TRIGGER e2e_changed AFTER INSERT OR UPDATE OR DELETE ON external_chat_attachment
+    FOR EACH STATEMENT EXECUTE FUNCTION e2e_notify_changed();

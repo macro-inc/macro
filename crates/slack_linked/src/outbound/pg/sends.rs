@@ -542,6 +542,7 @@ pub(super) async fn record_send_outcome(
                             id: send,
                             user_id: &row.user_id,
                         },
+                        account.id,
                     )
                     .await?;
                 }

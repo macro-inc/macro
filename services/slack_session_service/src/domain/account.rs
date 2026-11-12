@@ -6,13 +6,15 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use external_chat::domain::models::MEDIA_LIMIT_BYTES;
 use external_chat::domain::models::{ExternalChatError, Mutation, ReplyContent, SendReply};
 use external_chat::domain::ports::ExternalChatResult;
 use slack_client::models::Message;
 use slack_client::realtime::{Event, RealtimeEvent};
 use slack_client::{ChannelId, InvalidId, MessageTs, SlackError};
 use slack_linked::domain::events::{
-    ClaimedSend, HistoryWork, InboundChange, IngestOrigin, Lease, SendOutcome, SessionScope,
+    ClaimedSend, HistoryWork, InboundChange, IngestOrigin, Lease, MediaFailure, SendOutcome,
+    SessionScope,
 };
 use slack_linked::domain::models::{BACKFILL_MESSAGE_LIMIT, EndedReason};
 use slack_linked::domain::session::{
@@ -332,7 +334,76 @@ impl<Connector: SlackConnector, Keys: Secrets> Running<'_, Connector, Keys> {
             .map_err(from_domain)?;
         self.sends().await?;
         self.read_marks().await?;
-        self.history().await
+        self.history().await?;
+        self.media().await
+    }
+
+    /// Download the files of added chats this account observed.
+    async fn media(&self) -> Result<(), Stop> {
+        let sessions = &self.accounts.sessions;
+        let claimed = sessions
+            .claim_media(self.scope, 4)
+            .await
+            .map_err(from_domain)?;
+        for import in claimed {
+            let span = tracing::info_span!(
+                "slack.media.import",
+                account_id = %self.scope.account_id,
+                chat_id = %import.attachment.chat_id,
+                outcome = tracing::field::Empty,
+            );
+            async {
+                let downloaded = match slack_client::FileId::new(import.file_id.clone()) {
+                    Ok(file) => self.session.download(&file).await,
+                    Err(_) => {
+                        tracing::Span::current().record("outcome", "invalid_file");
+                        return sessions
+                            .fail_media(self.scope, &import.attachment, MediaFailure::Permanent)
+                            .await
+                            .map_err(from_domain);
+                    }
+                };
+                match downloaded {
+                    Ok(bytes) if bytes.len() <= MEDIA_LIMIT_BYTES => {
+                        tracing::Span::current().record("outcome", "downloaded");
+                        sessions
+                            .complete_media(self.scope, &import.attachment, &bytes)
+                            .await
+                            .map_err(from_domain)
+                    }
+                    Ok(_) => {
+                        tracing::Span::current().record("outcome", "too_large");
+                        sessions
+                            .fail_media(self.scope, &import.attachment, MediaFailure::Permanent)
+                            .await
+                            .map_err(from_domain)
+                    }
+                    Err(error) => {
+                        if let Some(reason) = error.code().and_then(ended_reason) {
+                            return Err(Stop::Ended(reason));
+                        }
+                        let permanent = error.code().is_some();
+                        tracing::Span::current()
+                            .record("outcome", if permanent { "failed" } else { "retry" });
+                        sessions
+                            .fail_media(
+                                self.scope,
+                                &import.attachment,
+                                if permanent {
+                                    MediaFailure::Permanent
+                                } else {
+                                    MediaFailure::Retry
+                                },
+                            )
+                            .await
+                            .map_err(from_domain)
+                    }
+                }
+            }
+            .instrument(span)
+            .await?;
+        }
+        Ok(())
     }
 
     #[tracing::instrument(name = "slack.catalogue.refresh", skip_all, fields(account_id = %self.scope.account_id, conversations))]

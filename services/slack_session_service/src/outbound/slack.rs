@@ -337,6 +337,21 @@ impl SlackSession for SlackClient {
         }
     }
 
+    async fn download(&self, file: &slack_client::FileId) -> Result<Vec<u8>, SlackError> {
+        let info = self.file_info(file).await?;
+        let Some(url) = info
+            .url_private_download
+            .or(info.url_private)
+            .and_then(|url| url::Url::parse(&url).ok())
+        else {
+            return Err(SlackError::InvalidRequest {
+                method: slack_client::SlackMethod::FileDownload,
+                reason: "the file has no download URL".to_owned(),
+            });
+        };
+        Ok(self.download_file(&url).await?.body.to_vec())
+    }
+
     async fn sign_out(&self) -> Result<(), SlackError> {
         SlackClient::sign_out(self).await
     }

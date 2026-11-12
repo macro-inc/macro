@@ -120,6 +120,41 @@ impl FakeSlack {
         self.shared.changed();
     }
 
+    /// Adds a file someone else shared (`files.info` shape; needs `id` and
+    /// `name`): its download URLs point at this server. Returns the info as
+    /// a message's `files` entry carries it.
+    pub fn add_file(&self, mut info: Value, bytes: Vec<u8>) -> Value {
+        let id = info
+            .get("id")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_owned();
+        let name = info
+            .get("name")
+            .and_then(Value::as_str)
+            .unwrap_or("file")
+            .to_owned();
+        if let Some(fields) = info.as_object_mut() {
+            fields.insert(
+                "url_private".to_owned(),
+                Value::from(format!("{}files/{id}/{name}", self.base_url())),
+            );
+            fields.insert(
+                "url_private_download".to_owned(),
+                Value::from(format!("{}files/{id}/{name}?download=1", self.base_url())),
+            );
+        }
+        self.shared.lock().files.insert(
+            id,
+            crate::state::StoredFile {
+                info: info.clone(),
+                bytes,
+            },
+        );
+        self.shared.changed();
+        info
+    }
+
     /// Adds a signed-in session for `user_id`: its `xoxc-` token and the
     /// decoded `d` cookie every request must carry.
     pub fn add_session(&self, user_id: &str, token: &str, cookie: &str) {

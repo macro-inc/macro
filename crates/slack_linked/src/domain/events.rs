@@ -340,6 +340,24 @@ pub enum Ingested {
     Deferred,
 }
 
+/// A claimed file download.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MediaImport {
+    /// Which attachment.
+    pub attachment: external_chat::domain::models::AttachmentRef,
+    /// Slack's file id; `files.info` names its download URL.
+    pub file_id: String,
+}
+
+/// Why a download failed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MediaFailure {
+    /// Try again later.
+    Retry,
+    /// It never will work (gone, blocked, too large).
+    Permanent,
+}
+
 /// A claimed send to dispatch.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClaimedSend {

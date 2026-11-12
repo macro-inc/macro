@@ -154,6 +154,12 @@ pub trait SlackSession: Send + Sync + 'static {
         ts: &MessageTs,
     ) -> impl Future<Output = Result<(), SlackError>> + Send;
 
+    /// A file's bytes (`files.info`, then the authenticated download).
+    fn download(
+        &self,
+        file: &slack_client::FileId,
+    ) -> impl Future<Output = Result<Vec<u8>, SlackError>> + Send;
+
     /// Sign the session out at Slack.
     fn sign_out(&self) -> impl Future<Output = Result<(), SlackError>> + Send;
 }

@@ -22,6 +22,7 @@ outbound = [
   "dep:macro_env",
   "dep:model_owner",
   "dep:share_permission_db_utils",
+  "dep:sha2",
   "dep:sqlx",
   "dep:thiserror",
   "dep:zeroize",
@@ -56,6 +57,7 @@ rootcause = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 share_permission_db_utils = { path = "../share_permission_db_utils", optional = true }
+sha2 = { workspace = true, optional = true }
 slack_client = { path = "../slack_client" }
 sqlx = { workspace = true, optional = true }
 strum = { workspace = true }

@@ -382,6 +382,26 @@ pub trait SessionRepository: Send + Sync {
         queued: Uuid,
         change: &super::events::InboundChange,
     ) -> ExternalChatResult<super::events::Ingested>;
+    /// Claim the account's pending file downloads (for five minutes).
+    async fn claim_media(
+        &self,
+        scope: super::events::SessionScope,
+        limit: i64,
+    ) -> ExternalChatResult<Vec<super::events::MediaImport>>;
+    /// A download finished: stage the bytes and signal DSS to import them.
+    async fn complete_media(
+        &self,
+        scope: super::events::SessionScope,
+        attachment: &AttachmentRef,
+        bytes: &[u8],
+    ) -> ExternalChatResult<()>;
+    /// A download failed: retry with backoff, or show it unavailable.
+    async fn fail_media(
+        &self,
+        scope: super::events::SessionScope,
+        attachment: &AttachmentRef,
+        failure: super::events::MediaFailure,
+    ) -> ExternalChatResult<()>;
     /// Claim pending sends of the account, in chat order.
     async fn claim_sends(
         &self,

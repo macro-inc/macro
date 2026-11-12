@@ -142,6 +142,38 @@ impl SessionService {
         Ok(applied)
     }
 
+    /// Claim pending file downloads.
+    pub async fn claim_media(
+        &self,
+        scope: SessionScope,
+        limit: i64,
+    ) -> ExternalChatResult<Vec<MediaImport>> {
+        self.repository.claim_media(scope, limit).await
+    }
+
+    /// Stage a downloaded file.
+    #[tracing::instrument(name = "slack.media.complete", skip_all, err, fields(chat_id = %attachment.chat_id, bytes = bytes.len()))]
+    pub async fn complete_media(
+        &self,
+        scope: SessionScope,
+        attachment: &external_chat::domain::models::AttachmentRef,
+        bytes: &[u8],
+    ) -> ExternalChatResult<()> {
+        self.repository
+            .complete_media(scope, attachment, bytes)
+            .await
+    }
+
+    /// A download failed.
+    pub async fn fail_media(
+        &self,
+        scope: SessionScope,
+        attachment: &external_chat::domain::models::AttachmentRef,
+        failure: MediaFailure,
+    ) -> ExternalChatResult<()> {
+        self.repository.fail_media(scope, attachment, failure).await
+    }
+
     /// Claim pending sends.
     pub async fn claim_sends(
         &self,

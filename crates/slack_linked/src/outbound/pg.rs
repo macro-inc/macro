@@ -18,6 +18,7 @@ mod adoptions;
 mod catalogue;
 mod ingest;
 mod logins;
+mod media;
 mod sends;
 mod session;
 #[cfg(test)]

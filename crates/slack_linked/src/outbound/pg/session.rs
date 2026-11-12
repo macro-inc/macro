@@ -391,6 +391,32 @@ impl SessionRepository for PgSlackRepository {
         Ok(outcome)
     }
 
+    async fn claim_media(
+        &self,
+        scope: SessionScope,
+        limit: i64,
+    ) -> ExternalChatResult<Vec<MediaImport>> {
+        super::media::claim_media(&self.pool, scope, limit).await
+    }
+
+    async fn complete_media(
+        &self,
+        scope: SessionScope,
+        attachment: &AttachmentRef,
+        bytes: &[u8],
+    ) -> ExternalChatResult<()> {
+        super::media::complete_media(&self.pool, scope, attachment, bytes).await
+    }
+
+    async fn fail_media(
+        &self,
+        scope: SessionScope,
+        attachment: &AttachmentRef,
+        failure: MediaFailure,
+    ) -> ExternalChatResult<()> {
+        super::media::fail_media(&self.pool, scope, attachment, failure).await
+    }
+
     async fn claim_sends(
         &self,
         scope: SessionScope,

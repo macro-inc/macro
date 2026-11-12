@@ -176,6 +176,7 @@ pub(super) async fn store_message_in(
     chat: Uuid,
     message: &InboundMessage,
     origin: StoredOrigin<'_>,
+    observer: Uuid,
 ) -> ExternalChatResult<bool> {
     let person = person_in(tx, chat, &message.sender).await?;
     let thread_root = match &message.thread_ts {
@@ -241,6 +242,7 @@ pub(super) async fn store_message_in(
     if row.created {
         notify(tx, external_chat::signals::CHAT_EFFECTS, row.id).await?;
     }
+    super::media::reserve_files_in(tx, chat, person, message, observer).await?;
     Ok(row.created)
 }
 
@@ -285,7 +287,14 @@ pub(super) async fn apply_in(
         InboundChange::Message {
             message, origin, ..
         } => {
-            store_message_in(tx, chat.id, message, StoredOrigin::Slack(*origin)).await?;
+            store_message_in(
+                tx,
+                chat.id,
+                message,
+                StoredOrigin::Slack(*origin),
+                account.id,
+            )
+            .await?;
             sqlx::query!(
                 r#"UPDATE slack_chat_membership SET latest_ts = GREATEST(COALESCE(latest_ts, $3), $3), observed_at = now()
                 WHERE chat_id = $1 AND account_id = $2"#,

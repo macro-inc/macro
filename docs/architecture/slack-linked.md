@@ -397,6 +397,8 @@ alias chosen from `ENVIRONMENT`.
 
 ## Follow-ups
 
-- Attachments: inbound files (`files.info` for Slack Connect, authenticated
-  download into the media pipeline) and files sent from Macro.
+- Files sent from Macro (`files.getUploadURLExternal` + upload +
+  `files.completeUploadExternal`). Inbound files are reserved at ingest, and
+  the observing account's replica downloads them (`files.info`, then the
+  authenticated download) into `external_chat_media_blob` for DSS's import.
 - `rich_text` blocks for messages whose `text` is empty.

@@ -312,6 +312,32 @@ async fn a_slack_connect_channel_syncs_both_ways_until_slack_ends_the_session(po
         json!({"type": "channel_marked", "channel": CHANNEL, "ts": reply_ts}),
     );
 
+    // A partner shares a file: the replica downloads it for import.
+    let file = slack.add_file(
+        json!({"id": "F0PLAN0001", "name": "plan.png", "mimetype": "image/png", "size": 8, "user": PARTNER_SLACK}),
+        b"\x89PNG\r\n\x1a\n".to_vec(),
+    );
+    let file_ts = slack.receive_message(
+        CHANNEL,
+        json!({"type": "message", "subtype": "file_share", "user": PARTNER_SLACK, "text": "", "files": [file]}),
+    );
+    let blob = wait_for_rows(&pool, WAIT, || async {
+        sqlx::query!(
+            r#"SELECT a.state, b.bytes AS "bytes?" FROM external_chat_attachment a
+            LEFT JOIN external_chat_media_blob b ON b.id = a.blob_id
+            WHERE a.chat_id = $1 AND a.source_id = $2"#,
+            chat.id,
+            file_ts
+        )
+        .fetch_optional(&pool)
+        .await
+        .unwrap()
+        .filter(|row| row.state == "downloaded")
+    })
+    .await
+    .expect("the file is downloaded");
+    assert_eq!(blob.bytes.as_deref(), Some(b"\x89PNG\r\n\x1a\n".as_slice()));
+
     // A partner deletes their message: it becomes a tombstone.
     slack.push_event(
         ALICE_SLACK,
