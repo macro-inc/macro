@@ -189,7 +189,10 @@ subject/audience and exact team claim. Its token may read/delete only that team'
 namespace and expires within 60 seconds; the normal values role gains no parent
 privileges. Local bootstrap provisions it idempotently. Hosted deployment must
 provision the same role before deploying this deletion path; missing roles fail
-loudly. Runtime services never receive the bootstrap token. OpenBao DELETE begins
+loudly. Hosted dev provisions the namespace, mounts, policies, and both JWT
+roles with the [hosted provisioning procedure](../../infra/openbao/README.md),
+which shares the local bootstrap's logic. Runtime services never receive the
+bootstrap token. OpenBao DELETE begins
 asynchronous erasure, so the adapter confirms namespace disappearance before
 acknowledging success and removing vault metadata. Closed team identities remain
 fenced against delayed senders.

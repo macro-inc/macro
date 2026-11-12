@@ -84,9 +84,8 @@ pub async fn router(
         .host_str()
         .context("public MCP URL has no host")?
         .to_owned();
-    // The harness's own sessions reach this server through the in-network
-    // service URL (the egress proxy's `macro` upstream), not the public one.
-    let mcp_service_host = url::Url::parse(macro_service_urls::McpServiceUrl::new()?.as_ref())?
+    let service_host = macro_service_urls::McpServiceUrl::new()?
+        .parse_url()?
         .host_str()
         .context("MCP service URL has no host")?
         .to_owned();
@@ -115,13 +114,7 @@ pub async fn router(
             })
         },
         Arc::new(LocalSessionManager::default()),
-        {
-            let mut config = StreamableHttpServerConfig::default()
-                .with_allowed_hosts(allowed_hosts(&mcp_public_host, &mcp_service_host));
-            config.legacy_session_mode = false;
-            config.json_response = true;
-            config
-        },
+        server_config(mcp_public_host, service_host),
     );
 
     background_tasks.spawn(backfill);
@@ -310,21 +303,17 @@ fn build_redirect_uri_policy(config: &Config) -> RedirectUriPolicy {
     }
 }
 
-/// The Host headers the public MCP server accepts: its public host, the
-/// in-network service host the harness's own sessions use, and loopback and
-/// gateway names. Anything else is refused as possible DNS rebinding.
-fn allowed_hosts(public: &str, service: &str) -> Vec<String> {
-    let mut hosts: Vec<String> = [
-        public,
-        service,
-        "localhost",
-        "127.0.0.1",
-        "gateway.macro.com",
-        "dev-gateway.macro.com",
-    ]
-    .into_iter()
-    .map(str::to_owned)
-    .collect();
-    hosts.dedup();
-    hosts
+/// Public and typed service origins share this authenticated MCP transport.
+fn server_config(public_host: String, service_host: String) -> StreamableHttpServerConfig {
+    let mut config = StreamableHttpServerConfig::default().with_allowed_hosts([
+        public_host,
+        service_host,
+        "localhost".into(),
+        "127.0.0.1".into(),
+        "gateway.macro.com".into(),
+        "dev-gateway.macro.com".into(),
+    ]);
+    config.legacy_session_mode = false;
+    config.json_response = true;
+    config
 }
