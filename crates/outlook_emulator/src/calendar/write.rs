@@ -574,15 +574,15 @@ impl Calendars {
         };
         match date {
             Some(date) => {
-                let attendees = answered(&event.fields, &owner, &response);
                 let exception = event.exceptions.entry(date).or_default();
+                let attendees = answered(&event.fields, exception, &owner, &response);
                 exception.overrides.insert("attendees".into(), attendees);
                 exception.response = Some(response);
                 exception.version += 1;
                 exception.modified = Some(now);
             }
             None => {
-                let attendees = answered(&event.fields, &owner, &response);
+                let attendees = answered(&event.fields, &Exception::default(), &owner, &response);
                 event.fields.insert("attendees".into(), attendees);
                 event.response = response;
             }
@@ -615,15 +615,16 @@ impl Calendars {
             response: answer.response().to_string(),
             time: Some(now),
         };
-        let attendees = answered(&event.fields, attendee, &response);
         match date {
             Some(date) => {
                 let exception = event.exceptions.entry(date).or_default();
+                let attendees = answered(&event.fields, exception, attendee, &response);
                 exception.overrides.insert("attendees".into(), attendees);
                 exception.version += 1;
                 exception.modified = Some(now);
             }
             None => {
+                let attendees = answered(&event.fields, &Exception::default(), attendee, &response);
                 event.fields.insert("attendees".into(), attendees);
             }
         }
@@ -632,10 +633,18 @@ impl Calendars {
     }
 }
 
-/// An event's attendees, with one of them having answered.
-fn answered(fields: &Map<String, Value>, address: &str, response: &Response) -> Value {
-    let mut attendees = fields
+/// An event's attendees, with one of them having answered. An occurrence
+/// that already has attendees of its own keeps what they answered.
+fn answered(
+    fields: &Map<String, Value>,
+    exception: &Exception,
+    address: &str,
+    response: &Response,
+) -> Value {
+    let mut attendees = exception
+        .overrides
         .get("attendees")
+        .or_else(|| fields.get("attendees"))
         .and_then(Value::as_array)
         .cloned()
         .unwrap_or_default();
@@ -670,6 +679,21 @@ fn change_occurrence(
     let exception: &Exception = &event.exceptions.get(&date).cloned().unwrap_or_default();
     let mut fields = event.fields.clone();
     fields.extend(exception.overrides.clone());
+    // The series' own times are its first occurrence's: this occurrence is
+    // checked against where it is now.
+    if let Some(occurrence) = event.occurrence_on(date) {
+        for (key, at) in [("start", occurrence.start), ("end", occurrence.end)] {
+            if exception.overrides.contains_key(key) {
+                continue;
+            }
+            if let Some(local) = fields
+                .get(key)
+                .and_then(|series| time::local_time(at, series))
+            {
+                fields.insert(key.into(), local);
+            }
+        }
+    }
     let before = fields.clone();
     let properties = apply(&mut fields, body, writer, &[EXCEPTION_DATE])?;
     check_times(&fields)?;

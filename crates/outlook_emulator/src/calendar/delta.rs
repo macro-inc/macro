@@ -80,9 +80,21 @@ impl Calendars {
         let listed_before = |event: &Event| !first_round && event.created_seq <= cursor.s;
         let default = self.default_calendar().map(|calendar| calendar.id.as_str());
 
-        let mut groups: Vec<(u64, &str, Vec<CalendarEntry<'_>>)> = Vec::new();
+        let mut groups: Vec<(u64, String, Vec<CalendarEntry<'_>>)> = Vec::new();
         for event in self.events.values() {
-            if Some(event.calendar_id.as_str()) != default || !in_round(event.changed_seq) {
+            if Some(event.calendar_id.as_str()) != default {
+                continue;
+            }
+            // A deleted occurrence is a change of its own: a later change to
+            // its series, even in the middle of a round, does not hide it.
+            if listed_before(event) {
+                let deleted = event.cancelled.iter().filter(|(_, seq)| in_round(**seq));
+                groups.extend(deleted.map(|(date, seq)| {
+                    let id = occurrence_id(&event.id, *date);
+                    (*seq, id.clone(), vec![CalendarEntry::Removed(id)])
+                }));
+            }
+            if !in_round(event.changed_seq) {
                 continue;
             }
             let mut entries = Vec::new();
@@ -96,20 +108,12 @@ impl Calendars {
                     entries.push(CalendarEntry::Event(event));
                     entries.extend(occurrences.into_iter().map(CalendarEntry::Occurrence));
                 }
-                if listed_before(event) {
-                    let deleted = event.cancelled.iter().filter(|(_, seq)| in_round(**seq));
-                    entries.extend(
-                        deleted.map(|(date, _)| {
-                            CalendarEntry::Removed(occurrence_id(&event.id, *date))
-                        }),
-                    );
-                }
             } else if event.overlaps(from, to) {
                 entries.push(CalendarEntry::Event(event));
             } else if listed_before(event) {
                 entries.push(CalendarEntry::Removed(event.id.clone()));
             }
-            groups.push((event.changed_seq, event.id.as_str(), entries));
+            groups.push((event.changed_seq, event.id.clone(), entries));
         }
         for removed in &self.removed {
             let event = &removed.event;
@@ -126,22 +130,18 @@ impl Calendars {
                     .into_iter()
                     .map(|occurrence| CalendarEntry::Removed(occurrence.id())),
             );
-            groups.push((removed.seq, event.id.as_str(), entries));
+            groups.push((removed.seq, event.id.clone(), entries));
         }
-        groups.sort_by(|a, b| (a.0, a.1).cmp(&(b.0, b.1)));
+        groups.sort_by(|a, b| (a.0, &a.1).cmp(&(b.0, &b.1)));
 
         let after = cursor.a.clone();
         let mut remaining = groups
             .into_iter()
             .flat_map(|(seq, id, entries)| {
                 let keyed = entries.into_iter().enumerate();
-                keyed.map(move |(index, entry)| ((seq, id, index), entry))
+                keyed.map(move |(index, entry)| ((seq, id.clone(), index), entry))
             })
-            .filter(|(key, _)| {
-                after
-                    .as_ref()
-                    .is_none_or(|(seq, id, index)| *key > (*seq, id.as_str(), *index))
-            })
+            .filter(|(key, _)| after.as_ref().is_none_or(|after| key > after))
             .peekable();
         let mut entries = Vec::new();
         let mut last = None;
@@ -149,7 +149,7 @@ impl Calendars {
             let Some(((seq, id, index), entry)) = remaining.next() else {
                 break;
             };
-            last = Some((seq, id.to_string(), index));
+            last = Some((seq, id, index));
             entries.push(entry);
         }
 

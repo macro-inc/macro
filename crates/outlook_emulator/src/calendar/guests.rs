@@ -88,6 +88,12 @@ impl Calendars {
             return;
         };
         copy.fields = guest_fields(source, Some(&copy.fields));
+        // A series the organizer moved or repeats differently starts over
+        // for the guest too: what either changed on single occurrences goes.
+        if copy.sequence != source.sequence {
+            copy.exceptions.clear();
+            copy.cancelled.clear();
+        }
         copy.sequence = source.sequence;
         let mut exceptions = std::mem::take(&mut copy.exceptions);
         for (date, exception) in &source.exceptions {

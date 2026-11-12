@@ -68,6 +68,16 @@ pub(crate) fn graph_time(at: DateTime<Utc>) -> Value {
     })
 }
 
+/// An instant written as a `dateTimeTimeZone` in the zone another one names.
+pub(crate) fn local_time(at: DateTime<Utc>, like: &Value) -> Option<Value> {
+    let name = like["timeZone"].as_str().unwrap_or("UTC");
+    let local = at.with_timezone(&zone(name)?).naive_local();
+    Some(json!({
+        "dateTime": format!("{}.0000000", local.format("%Y-%m-%dT%H:%M:%S")),
+        "timeZone": name,
+    }))
+}
+
 /// A time as Graph answers `originalStart` and the timestamps of a resource.
 pub(crate) fn stamp(at: DateTime<Utc>) -> String {
     at.format("%Y-%m-%dT%H:%M:%SZ").to_string()

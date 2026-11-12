@@ -3,6 +3,7 @@
 mod control;
 mod faults;
 mod guests;
+mod occurrences;
 mod sync;
 mod write;
 
