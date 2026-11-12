@@ -73,7 +73,10 @@ impl AccessTokenClients {
 /// A registered client name as the label on what the client writes, or
 /// `None` when it fails [`ClientName::parse`].
 pub(crate) fn client_label(client_name: &str) -> Option<String> {
-    ClientName::parse(client_name).ok().flatten().map(String::from)
+    ClientName::parse(client_name)
+        .ok()
+        .flatten()
+        .map(String::from)
 }
 
 fn access_token_digest(access_token: &str) -> String {
