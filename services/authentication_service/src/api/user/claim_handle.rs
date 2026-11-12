@@ -42,7 +42,7 @@ pub struct ClaimHandleResponse {
         (status = 500, body = ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, authorization), err)]
+#[tracing::instrument(skip(ctx, authorization))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
@@ -67,14 +67,14 @@ pub async fn handler(
         ClaimHandleError::InvalidIdentity => (
             StatusCode::BAD_REQUEST,
             Json(ErrorResponse {
-                message: error.to_string(),
+                message: error.to_string().into(),
             }),
         )
             .into_response(),
         ClaimHandleError::Taken | ClaimHandleError::AlreadyClaimed => (
             StatusCode::CONFLICT,
             Json(ErrorResponse {
-                message: error.to_string(),
+                message: error.to_string().into(),
             }),
         )
             .into_response(),

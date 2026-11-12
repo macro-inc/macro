@@ -31,7 +31,7 @@ impl TeamDirectory for EnterpriseTeams {
             .get_user_teams(&user)
             .await
             .map(|teams| teams.into_iter().map(|team| *team.id()).collect())
-            .map_err(|error| EnterpriseError::Storage(anyhow::Error::new(error)))
+            .map_err(|error| EnterpriseError::Storage(error.into()))
     }
 }
 
@@ -44,14 +44,14 @@ impl UserLifecycle for FusionAuthLifecycle {
         self.0
             .deactivate_user(fusion_user_id)
             .await
-            .map_err(|error| EnterpriseError::Storage(anyhow::Error::new(error)))
+            .map_err(|error| EnterpriseError::Storage(error.into()))
     }
 
     async fn reactivate_user(&self, fusion_user_id: &str) -> Result<()> {
         self.0
             .reactivate_user(fusion_user_id)
             .await
-            .map_err(|error| EnterpriseError::Storage(anyhow::Error::new(error)))
+            .map_err(|error| EnterpriseError::Storage(error.into()))
     }
 }
 
@@ -61,16 +61,14 @@ pub struct PgMemberDirectory(PgPool);
 
 impl MemberDirectory for PgMemberDirectory {
     async fn fusion_user_id(&self, user: &MacroUserIdStr<'_>) -> Result<String> {
-        sqlx::query_scalar!(
-            r#"SELECT macro_user_id FROM "User" WHERE id = $1"#,
-            user.as_ref(),
+        let fusion_user_id = sqlx::query_scalar!(
+            r#"SELECT u.id FROM "User" u JOIN macro_user m ON m.id = u.macro_user_id WHERE lower(m.email) = lower($1)"#,
+            user.email_str(),
         )
         .fetch_optional(&self.0)
         .await
-        .map_err(|error| EnterpriseError::Storage(anyhow::Error::new(error)))?
-        .flatten()
-        .map(|id| id.to_string())
-        .ok_or(EnterpriseError::UnknownUser)
+        .map_err(|error| EnterpriseError::Storage(error.into()))?;
+        fusion_user_id.ok_or(EnterpriseError::UnknownUser)
     }
 }
 
@@ -84,7 +82,7 @@ impl HarnessRevoker for ServerHarnessRevocation {
             .0
             .list_directory_harnesses(member.clone().into_owned())
             .await
-            .map_err(|error| EnterpriseError::Storage(anyhow::Error::new(error)))?;
+            .map_err(EnterpriseError::Storage)?;
         let owned: Vec<_> = harnesses
             .into_iter()
             .filter(|harness| {
@@ -101,7 +99,7 @@ impl HarnessRevoker for ServerHarnessRevocation {
                 .0
                 .delete_harness(harness.id)
                 .await
-                .map_err(|error| EnterpriseError::Storage(anyhow::Error::new(error)))?
+                .map_err(EnterpriseError::Storage)?
             {
                 revoked += 1;
             }

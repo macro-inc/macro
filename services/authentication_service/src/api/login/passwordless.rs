@@ -122,18 +122,15 @@ pub async fn handler(
                             signup_forbidden_response()
                         })?;
 
-                    let handle = req
-                        .handle
-                        .as_deref()
-                        .ok_or_else(|| {
-                            (StatusCode::BAD_REQUEST, "handle is required for signup")
-                                .into_response()
-                        })
-                        .and_then(|handle| {
-                            macro_user_id::handle::MailboxHandle::parse(handle).map_err(|_| {
-                                (StatusCode::BAD_REQUEST, "invalid or reserved handle")
-                                    .into_response()
-                            })
+                    // Two steps rather than one `and_then` closure: the closure form
+                    // returned a `Result` whose error is an `axum::response::Response`,
+                    // which clippy flags as a large error variant.
+                    let handle = req.handle.as_deref().ok_or_else(|| {
+                        (StatusCode::BAD_REQUEST, "handle is required for signup").into_response()
+                    })?;
+                    let handle =
+                        macro_user_id::handle::MailboxHandle::parse(handle).map_err(|_| {
+                            (StatusCode::BAD_REQUEST, "invalid or reserved handle").into_response()
                         })?;
                     if macro_db_client::macro_user::check_username_exists(&ctx.db, handle.as_str())
                         .await

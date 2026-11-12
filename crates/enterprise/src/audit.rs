@@ -75,24 +75,22 @@ impl AuditRecord {
 
 /// Insert an audit row inside the committing transaction.
 #[cfg(feature = "outbound")]
-pub fn append<'a>(
-    transaction: &'a mut sqlx::Transaction<'_, sqlx::Postgres>,
-    record: &'a AuditRecord,
-) -> impl Future<Output = Result<(), sqlx::Error>> + Send + 'a {
-    async move {
-        sqlx::query!(
-            r#"
+pub async fn append(
+    transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    record: &AuditRecord,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        r#"
         INSERT INTO enterprise_audit (id, actor_id, action, resource_id, result)
         VALUES ($1, $2, $3, $4, $5)
         "#,
-            record.id,
-            record.actor_id.as_str(),
-            record.action.as_ref(),
-            record.resource_id.as_str(),
-            record.result.as_ref(),
-        )
-        .execute(transaction.as_mut())
-        .await?;
-        Ok(())
-    }
+        record.id,
+        record.actor_id.as_str(),
+        record.action.as_ref(),
+        record.resource_id.as_str(),
+        record.result.as_ref(),
+    )
+    .execute(transaction.as_mut())
+    .await?;
+    Ok(())
 }
