@@ -38,8 +38,9 @@ function ReplyActionButton(props: {
         aria-label={props.ariaLabel}
         disabled={props.disabled}
         class={cn(
-          'flex h-10 shrink-0 items-center justify-center gap-2 rounded-full text-sm font-medium disabled:opacity-45',
-          props.label ? 'px-3' : 'w-10'
+          // Literal px like the dock: chrome must not track the OS text size.
+          'flex h-[40px] shrink-0 items-center justify-center gap-2 rounded-full text-sm font-medium disabled:opacity-50',
+          props.label ? 'px-3' : 'w-[40px]'
         )}
         onClick={props.onClick}
       >
