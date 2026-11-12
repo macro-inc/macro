@@ -61,7 +61,7 @@ consumer talks to.
 
 ## Tool contracts
 
-- `src/inbound/toolset/`: session reads, creation, lifecycle actions, and sharing. Mutations preserve acting-user identity and existing owner/edit receipts; internal controls accept only prompt/stop, never human approvals. `link_task` returns a `mention` chip to paste when naming the task.
+- `src/inbound/toolset/`: session reads, creation, lifecycle actions, and sharing. Mutations preserve acting-user identity and existing owner/edit receipts; internal controls accept only prompt/stop, never human approvals. Only directly authenticated users with edit access may answer permissions or elicitations; agent programs and runtimes cannot answer. `link_task` returns a `mention` chip to paste when naming the task.
 
 `release_session` stops an idle actor silently (`CloseReason::Released`): the
 actor refuses with `SessionRelease::Busy` unless its machine is live with no
