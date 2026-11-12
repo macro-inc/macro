@@ -19,6 +19,7 @@ import markdownEditor from './en/markdown-editor';
 import mobile from './en/mobile';
 import nav from './en/nav';
 import notificationsInbox from './en/notifications-inbox';
+import passwords from './en/passwords';
 import routineSuggestions from './en/routine-suggestions';
 import runtimeSharing from './en/runtime-sharing';
 import settingsLanguage from './en/settings-language';
@@ -56,6 +57,7 @@ export default {
   mobile,
   nav,
   notificationsInbox,
+  passwords,
   routineSuggestions,
   runtimeSharing,
   settingsLanguage,

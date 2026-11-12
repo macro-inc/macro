@@ -1,13 +1,15 @@
-//! Opt-in telemetry for `just run_local`: how long a bring-up, each of its steps,
-//! each build and each service's health wait took, sent to Loki as OTLP logs (the
-//! same design as CI's `service_name="ci-telemetry"` events) and, as spans, to
-//! Tempo.
+//! Local build telemetry for `just run_local` and the stack commands: how long a
+//! bring-up, each of its steps, each build and each service's health wait took,
+//! sent to Loki as OTLP logs (the same design as CI's
+//! `service_name="ci-telemetry"` events) and, as spans, to Tempo.
 //!
-//! Off unless the user's opt-in file exists (see [`config`]); then [`Recorder::start`]
-//! returns `None` and nothing is written or sent. On, every event is appended to a
-//! buffer file first and a background thread sends it, so recording never waits
-//! on the network. A process killed mid-run leaves its file behind, and the next
-//! recording process sends it, closed off as an `interrupted` run.
+//! On by default. Opted out (see [`config`]), [`Recorder::start`] returns `None`
+//! and nothing is written or sent; it does the same while a recent attempt to
+//! provision the token failed (see [`provision`]). On, every event is appended to
+//! a buffer file first and a background thread provisions the token if needed
+//! and sends it, so recording never waits on the network or on Doppler. A
+//! process killed mid-run leaves its file behind, and the next recording process
+//! sends it, closed off as an `interrupted` run.
 
 #![deny(missing_docs)]
 
@@ -25,12 +27,14 @@ use sha2::{Digest, Sha256};
 
 pub mod config;
 mod otlp;
+pub mod provision;
 mod sender;
 
 #[cfg(test)]
 mod test;
 
-pub use config::{ConfigError, Paths};
+pub use config::{ConfigError, Paths, Switch};
+pub use provision::take_hint;
 
 /// One thing that happened: a finished step, a build, a service turning healthy.
 #[derive(Clone, Debug)]
@@ -74,10 +78,10 @@ impl Event {
     }
 }
 
-/// Why telemetry stayed off for this process although the user opted in.
+/// Why telemetry stayed off for this process although it wasn't opted out.
 #[derive(Debug, thiserror::Error)]
 pub enum StartError {
-    /// The opt-in file can't be used.
+    /// The settings file can't be used.
     #[error(transparent)]
     Config(#[from] ConfigError),
     /// The buffer directory or file couldn't be created and locked.
@@ -188,19 +192,31 @@ impl Shared {
 }
 
 impl Recorder {
-    /// Start recording a run that began at `started_at`, if the user opted in.
+    /// Start recording a run that began at `started_at`, unless opted out.
     /// `common` builds the fields every event carries (kind, mode, instance,
-    /// host, ...); it is only called once the user has opted in.
+    /// host, ...); it is only called when recording.
     ///
-    /// `Ok(None)` means opted out: nothing was created, `common` was not called,
-    /// and nothing will be sent.
+    /// `Ok(None)` means off: opted out, or no settings file and no way to get one
+    /// now (no provisioning, or it failed within the hour). Nothing was created,
+    /// `common` was not called, and nothing will be sent.
     pub fn start(
         paths: &Paths,
         started_at: SystemTime,
         common: impl FnOnce() -> BTreeMap<String, Value>,
     ) -> Result<Option<Self>, StartError> {
-        let Some(config) = config::Config::load(&paths.config)? else {
+        if paths.switch == Switch::Off {
             return Ok(None);
+        }
+        let config = match config::Config::load(&paths.config)? {
+            config::Setting::Off => return Ok(None),
+            config::Setting::On(config) => Some(config),
+            // The sender thread provisions it, off the caller's path.
+            config::Setting::Missing => {
+                if paths.provision.is_none() || provision::backing_off(&paths.buffer_dir) {
+                    return Ok(None);
+                }
+                None
+            }
         };
         let buffer_error = |path: &PathBuf| {
             let path = path.clone();
@@ -243,11 +259,11 @@ impl Recorder {
 
         let (done_tx, done) = mpsc::channel();
         let sender_shared = Arc::clone(&shared);
-        let buffer_dir = paths.buffer_dir.clone();
+        let sender_paths = paths.clone();
         std::thread::Builder::new()
             .name("local-telemetry".to_owned())
             .spawn(move || {
-                sender::run(&config, &buffer_dir, &sender_shared);
+                sender::run(config, &sender_paths, &sender_shared);
                 let _ = done_tx.send(());
             })
             .map_err(buffer_error(&paths.buffer_dir))?;
