@@ -194,7 +194,9 @@ fn insert_text_at(
         }
         remaining -= size;
     }
-    Err(Error::Invariant("group-c.ai-op insert offset inside the block found no run"))
+    Err(Error::Invariant(
+        "group-c.ai-op insert offset inside the block found no run",
+    ))
 }
 
 /// Source `removeText`: `len` units from `at`, across the block's text nodes.

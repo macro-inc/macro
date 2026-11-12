@@ -248,7 +248,9 @@ fn a_huge_remove_length_is_refused_without_overflow() {
     assert_eq!(export(&native), before);
     assert_eq!(
         refusals(&commit),
-        vec![serde_json::json!({"cause":"invalidNumber","field":"len","problem":"aboveMaxSafeInteger"})]
+        vec![
+            serde_json::json!({"cause":"invalidNumber","field":"len","problem":"aboveMaxSafeInteger"})
+        ]
     );
 
     // Each bound is safe, but the range end is not.
@@ -257,7 +259,10 @@ fn a_huge_remove_length_is_refused_without_overflow() {
     let (handled, commit) = native.dispatch(&op_command(&op, false)).expect("no panic");
     assert_eq!(handled, Handled::No);
     assert_eq!(export(&native), before);
-    assert_eq!(refusals(&commit), vec![serde_json::json!({"cause":"rangeTooLarge"})]);
+    assert_eq!(
+        refusals(&commit),
+        vec![serde_json::json!({"cause":"rangeTooLarge"})]
+    );
 
     // Control: a safe range past the end clamps like Source slice.
     let op = serde_json::json!({"kind":"removeText","node":"para0001","at":1,"len":9_007_199_254_740_990_u64});
@@ -348,7 +353,13 @@ fn a_refused_op_keeps_the_selection_and_adds_no_merge_tag() {
     let text = native
         .state()
         .view()
-        .first_child(native.state().view().first_child(NodeKey::ROOT).expect("paragraph"))
+        .first_child(
+            native
+                .state()
+                .view()
+                .first_child(NodeKey::ROOT)
+                .expect("paragraph"),
+        )
         .expect("text");
     native
         .update(|tx| {
@@ -370,7 +381,10 @@ fn a_refused_op_keeps_the_selection_and_adds_no_merge_tag() {
     assert_eq!(native.state().selection().cloned(), selection);
     assert!(!commit.selection_changed);
     assert!(!commit.tags.contains(&UpdateTag::HistoryMerge));
-    assert_eq!(refusals(&commit), vec![serde_json::json!({"cause":"unknownNode"})]);
+    assert_eq!(
+        refusals(&commit),
+        vec![serde_json::json!({"cause":"unknownNode"})]
+    );
 
     // Control: the same envelope with a real target clears and tags.
     let op = serde_json::json!({"kind":"setText","node":"text0001","text":"x"});
@@ -400,7 +414,10 @@ fn a_container_target_is_the_wrong_target() {
     let (handled, commit) = native.dispatch(&op_command(&op, false)).expect("dispatch");
     assert_eq!(handled, Handled::No);
     assert_eq!(export(&native), before);
-    assert_eq!(refusals(&commit), vec![serde_json::json!({"cause":"wrongTarget"})]);
+    assert_eq!(
+        refusals(&commit),
+        vec![serde_json::json!({"cause":"wrongTarget"})]
+    );
 }
 
 #[test]
@@ -412,7 +429,10 @@ fn a_missed_find_is_refused() {
     let (handled, commit) = native.dispatch(&op_command(&op, false)).expect("dispatch");
     assert_eq!(handled, Handled::No);
     assert_eq!(export(&native), before);
-    assert_eq!(refusals(&commit), vec![serde_json::json!({"cause":"findMissed"})]);
+    assert_eq!(
+        refusals(&commit),
+        vec![serde_json::json!({"cause":"findMissed"})]
+    );
 }
 
 #[test]
@@ -422,10 +442,15 @@ fn a_malformed_op_is_a_decode_error() {
     assert!(decode(serde_json::json!({"op":{"kind":"setText","node":"text0001"}})).is_err());
     // A string where a number belongs.
     assert!(
-        decode(serde_json::json!({"op":{"kind":"insertText","node":"text0001","at":"1","text":"x"}}))
-            .is_err()
+        decode(
+            serde_json::json!({"op":{"kind":"insertText","node":"text0001","at":"1","text":"x"}})
+        )
+        .is_err()
     );
     assert!(decode(serde_json::json!({"op":"setText"})).is_err());
     assert!(decode(serde_json::json!({"op":{"node":"text0001"}})).is_err());
-    assert!(decode(serde_json::json!({"op":{"kind":"setText","node":"text0001","text":"x"},"merge":1})).is_err());
+    assert!(
+        decode(serde_json::json!({"op":{"kind":"setText","node":"text0001","text":"x"},"merge":1}))
+            .is_err()
+    );
 }
