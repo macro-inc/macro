@@ -20,6 +20,8 @@ import { prDisplayName } from '@block-pr/util/prKey';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { githubLabelColor } from '@entity/components/GithubLabelPill';
+import type { GithubPullRequestLabel } from '@entity/types/entity';
 import SplitIcon from '@icon/system/regular/columns.svg';
 import EyeIcon from '@icon/system/regular/eye.svg';
 import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
@@ -36,6 +38,7 @@ import {
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import { makePersisted } from '@solid-primitives/storage';
 import { useQueries } from '@tanstack/solid-query';
+import { TagDot } from '@ui';
 import { type Component, createMemo, createSignal, For, Show } from 'solid-js';
 import {
   REVIEWS_SCOPES,
@@ -165,8 +168,56 @@ function ReviewFavorites(props: {
 }
 
 /**
+ * GitHub labels among the visible pull requests, drawn like the email Tags
+ * section. A row is a destination: choosing a label shows it alone, and
+ * choosing the active label clears it.
+ */
+function ReviewLabels(props: {
+  labels: GithubPullRequestLabel[];
+  activeLabels: readonly string[];
+  onActiveLabelsChange: (labels: string[]) => void;
+}) {
+  const [open, setOpen] = makePersisted(createSignal(true), {
+    name: 'reviews-labels-open',
+  });
+
+  return (
+    <Show when={props.labels.length > 0}>
+      <CollapsibleSection.Root open={open()} onOpenChange={setOpen}>
+        <CollapsibleSection.Trigger>
+          <span class="min-w-0 truncate">Labels</span>
+          <CollapsibleSection.Indicator />
+        </CollapsibleSection.Trigger>
+        <CollapsibleSection.Content>
+          <ViewSidebar.Nav aria-label="Pull request labels">
+            <For each={props.labels}>
+              {(label) => (
+                <ViewSidebar.Item
+                  title={label.name}
+                  active={props.activeLabels.includes(label.name)}
+                  onClick={() =>
+                    props.onActiveLabelsChange(
+                      selectSidebarTag(props.activeLabels, label.name)
+                    )
+                  }
+                >
+                  <ViewSidebar.Icon>
+                    <TagDot fill={githubLabelColor(label.color)} />
+                  </ViewSidebar.Icon>
+                  <span class="truncate">{label.name}</span>
+                </ViewSidebar.Item>
+              )}
+            </For>
+          </ViewSidebar.Nav>
+        </CollapsibleSection.Content>
+      </CollapsibleSection.Root>
+    </Show>
+  );
+}
+
+/**
  * The tools the visible pull requests were started from, such as Claude or
- * Codex. Choosing one shows it alone, and choosing it again clears it.
+ * Codex. Like Labels, choosing one shows it alone and choosing it again clears it.
  */
 function ReviewAgents(props: {
   tools: readonly PrOriginTool[];
@@ -223,6 +274,9 @@ export function ReviewsSidebar(props: {
   };
   scope: ReviewsScope;
   onScopeChange: (scope: ReviewsScope) => void;
+  labels: GithubPullRequestLabel[];
+  activeLabels: readonly string[];
+  onActiveLabelsChange: (labels: string[]) => void;
   /** Tools the visible pull requests were started from, in display order. */
   agents: readonly PrOriginTool[];
   activeAgents: readonly string[];
@@ -313,6 +367,11 @@ export function ReviewsSidebar(props: {
           tools={props.agents}
           activeTools={props.activeAgents}
           onActiveToolsChange={props.onActiveAgentsChange}
+        />
+        <ReviewLabels
+          labels={props.labels}
+          activeLabels={props.activeLabels}
+          onActiveLabelsChange={props.onActiveLabelsChange}
         />
         <RepositoriesPromotion class="mt-auto" />
       </ViewSidebar.Content>

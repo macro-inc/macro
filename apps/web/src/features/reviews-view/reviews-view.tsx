@@ -319,6 +319,10 @@ function ReviewsRoot() {
     setFilters((current) => ({ ...current, origin: tools }));
     if (!listVisible()) openList();
   };
+  const selectLabels = (labels: string[]) => {
+    setFilters((current) => ({ ...current, label: labels }));
+    if (!listVisible()) openList();
+  };
   const controls = () => ({
     sort: sort(),
     onSortChange: setSort,
@@ -543,6 +547,9 @@ function ReviewsRoot() {
                 onSearchChange={setSearch}
                 scope={scope()}
                 onScopeChange={selectScope}
+                labels={facets.labels()}
+                activeLabels={filters().label}
+                onActiveLabelsChange={selectLabels}
                 agents={agents()}
                 activeAgents={filters().origin}
                 onActiveAgentsChange={selectAgents}

@@ -703,11 +703,12 @@ Sort offers Priority, Recently updated, Least recently updated, Newest, and Olde
 Priority orders the loaded rows most urgent first and keeps recency within a
 priority. Date sorts group rows under the same headings as email (Today,
 Yesterday, Last 7 days, Earlier this month, Last month, Older) by the sorted
-date; Priority sorts and searches list rows flat. GitHub labels are available
-in the desktop filter menu and mobile filter drawer, not the sidebar. An
-**Agents** section below Favorites lists the tools the loaded PRs were started
-from (Claude, Codex, Cursor, and so on, with their marks); choosing one shows
-only PRs started from it, using the same
+date; Priority sorts and searches list rows flat. When visible PRs have GitHub
+labels, a **Labels** section below Favorites lists them with a colored dot and
+the name. These are GitHub labels, not Macro tags. Choosing a label shows only
+PRs with it, and choosing it again clears it. Above it, an **Agents** section
+lists the tools the loaded PRs were started from (Claude, Codex, Cursor, and so
+on, with their marks); choosing one shows only PRs started from it, using the same
 **Started from** filter as the filter menu. PR rows use the shared entity layout with selection checkboxes,
 author avatars and names, and a context menu. The current user's Macro display
 name appears when their linked GitHub identity matches the PR author; other
@@ -803,7 +804,7 @@ The Agent sessions side-panel section distinguishes loading PR details, loading
 sessions, failed requests, and an empty result. Failed session requests offer Retry.
 Hover a truncated session name to see its full name.
 
-Check all five tab URLs, the Label filter, author avatars and display names, row selection and
+Check all five tab URLs, the Labels section, author avatars and display names, row selection and
 context menu, favorites add/remove and collapse/empty visibility, filters, sort,
 illustrated empty states, loading, errors, and pagination after filtering. Use
 Open in new split from a PR row's context menu; verify the Reviews list stays in
