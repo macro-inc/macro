@@ -9,6 +9,7 @@ mod toolset;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
+use model_entity::EntityType;
 use models_permissions::share_permission::channel_share_permission::{
     ChannelSharePermission, UpdateChannelSharePermission, UpdateOperation,
 };
@@ -817,5 +818,145 @@ async fn delete_leaves_no_initiative_rows(pool: PgPool) -> anyhow::Result<()> {
         repo.delete(created.id).await,
         Err(InitiativeError::NotFound)
     ));
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn appearance_survives_identity_reads_without_touching_timestamps(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    insert_user(&pool, OWNER).await?;
+    let repo = repo(pool);
+    let created = repo
+        .create(
+            create_args(OWNER, "Appearance", &[]),
+            share_off(),
+            TeamShareCreation::Unshared,
+        )
+        .await?;
+    let appearance = model_entity::EntityAppearance {
+        icon: Some(model_entity::AppearanceIcon::Emoji {
+            value: "🌱".into()
+        }),
+        color: Some(model_entity::AppearanceColor::Green),
+    };
+    let update = activity::AppearanceUpdate {
+        appearance: appearance.clone(),
+        attribution: None,
+        event_id: Uuid::now_v7(),
+        occurred_at: chrono::Utc::now(),
+    };
+    assert_eq!(
+        repo.set_appearance(created.id, &update).await?,
+        Some(model_entity::EntityAppearance::default())
+    );
+    assert_eq!(repo.set_appearance(created.id, &update).await?, None);
+    let updated = repo.get_detail(created.id).await?.unwrap();
+    assert_eq!(updated.appearance, Some(appearance.clone()));
+    assert_eq!(updated.updated_at, created.updated_at);
+    assert_eq!(
+        repo.get_basic(created.id).await?.unwrap().appearance,
+        Some(appearance.clone())
+    );
+    assert_eq!(
+        repo.list_accessible(&user(OWNER)).await?.initiatives[0].appearance,
+        Some(appearance)
+    );
+    repo.set_appearance(
+        created.id,
+        &activity::AppearanceUpdate {
+            appearance: model_entity::EntityAppearance::default(),
+            ..update
+        },
+    )
+    .await?;
+    assert!(
+        repo.get_detail(created.id)
+            .await?
+            .unwrap()
+            .appearance
+            .unwrap()
+            .is_default()
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn appearance_history_failure_rolls_back_and_retry_is_idempotent(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    use activity::domain::ports::EntityActivityReads;
+    insert_user(&pool, OWNER).await?;
+    let repo = repo(pool.clone());
+    let created = repo
+        .create(
+            create_args(OWNER, "Appearance rollback", &[]),
+            share_off(),
+            TeamShareCreation::Unshared,
+        )
+        .await?;
+    let appearance = model_entity::EntityAppearance {
+        icon: None,
+        color: Some(model_entity::AppearanceColor::Blue),
+    };
+    let update = activity::AppearanceUpdate {
+        appearance: appearance.clone(),
+        attribution: Some(activity::Attribution::new(
+            activity::Actor::new_from_user(user(OWNER)),
+            None,
+        )),
+        event_id: Uuid::now_v7(),
+        occurred_at: chrono::Utc::now(),
+    };
+    sqlx::query!("ALTER TABLE activity_events ADD CONSTRAINT refuse_appearance_test CHECK (action <> 'appearance_changed')")
+        .execute(&pool).await?;
+    assert!(repo.set_appearance(created.id, &update).await.is_err());
+    assert!(
+        repo.get_detail(created.id)
+            .await?
+            .unwrap()
+            .appearance
+            .unwrap_or_default()
+            .is_default()
+    );
+    let history = activity::outbound::pg_activity_repo::PgActivityRepo::new(pool.clone());
+    assert!(
+        history
+            .entity_feed(
+                EntityType::Initiative,
+                &created.id.to_string(),
+                None,
+                std::num::NonZeroU32::new(10).unwrap()
+            )
+            .await?
+            .records
+            .is_empty()
+    );
+    sqlx::query!("ALTER TABLE activity_events DROP CONSTRAINT IF EXISTS refuse_appearance_test")
+        .execute(&pool)
+        .await?;
+    assert_eq!(
+        repo.set_appearance(created.id, &update).await?,
+        Some(model_entity::EntityAppearance::default())
+    );
+    assert_eq!(repo.set_appearance(created.id, &update).await?, None);
+    let page = activity::outbound::pg_activity_repo::PgActivityRepo::new(pool)
+        .entity_feed(
+            EntityType::Initiative,
+            &created.id.to_string(),
+            None,
+            std::num::NonZeroU32::new(10).unwrap(),
+        )
+        .await?;
+    assert_eq!(page.records.len(), 1);
+    assert_eq!(
+        page.records[0].id,
+        activity::activity_id(update.event_id, 0)
+    );
+    assert_eq!(
+        page.records[0].occurred_at.timestamp_micros(),
+        update.occurred_at.timestamp_micros()
+    );
+    assert_eq!(page.records[0].subject_id, OWNER);
     Ok(())
 }

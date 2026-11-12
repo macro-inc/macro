@@ -8,6 +8,7 @@ use crate::domain::models::{Action, ActionTag, Actor, CommonAction, PropertyChan
 use crate::domain::ports::EntityActivityReads;
 
 mod teammate_feed;
+mod transaction;
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn sdk_verb_survives_activity_storage_and_read(pool: PgPool) {
@@ -441,6 +442,42 @@ async fn entity_activity_batches_with_a_per_entity_limit(pool: PgPool) {
         !by_entity.contains_key(&keys[2]),
         "entities with no activity are absent"
     );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn appearance_changes_remain_in_entity_history_but_not_personal_feeds(pool: PgPool) {
+    let repo = PgActivityRepo::new(pool);
+    let change = crate::AppearanceChange {
+        from: None,
+        to: Some(model_entity::EntityAppearance {
+            icon: None,
+            color: Some(model_entity::AppearanceColor::Blue),
+        }),
+    };
+    repo.insert_activities(&[seed(
+        41,
+        CommonAction::AppearanceChanged(change.clone()),
+        "doc-appearance",
+    )])
+    .await
+    .unwrap();
+
+    let keys = [(EntityType::Document, "doc-appearance".to_string())];
+    let activity = repo.entity_activity(&keys, 10).await.unwrap();
+    assert_eq!(
+        activity[&keys[0]][0].action,
+        RecordedAction::Known(Action::AppearanceChanged(change))
+    );
+    let history = repo
+        .entity_feed(EntityType::Document, "doc-appearance", None, nz(10))
+        .await
+        .unwrap();
+    assert_eq!(history.records.len(), 1);
+    let feed = repo
+        .subject_feed("macro|actor@example.com", None, nz(10))
+        .await
+        .unwrap();
+    assert!(feed.records.is_empty());
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

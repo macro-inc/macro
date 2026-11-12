@@ -22,6 +22,7 @@ fn timestamp(micros: u32) -> chrono::DateTime<Utc> {
 
 fn document(id: Uuid, sub_type: Option<SoupDocumentSubType>) -> SoupDocument<()> {
     SoupDocument {
+        appearance: None,
         id,
         document_version_id: 3,
         owner_id: owner(),

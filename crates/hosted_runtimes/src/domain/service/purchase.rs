@@ -126,7 +126,7 @@ impl<
                 span.record("outcome", "purchased");
                 return Ok(Purchase::Ready(record.id()));
             }
-            Err(ReserveError::SoldOut) => return Err(ComputerError::SoldOut),
+            Err(ReserveError::SoldOut) => return Err(ComputerError::SoldOut(request.size)),
             Err(ReserveError::Storage(error)) => return Err(internal(error)),
         };
         span.record("computer_id", tracing::field::display(reservation.id));
