@@ -6,7 +6,10 @@ import {
 } from '@macro-inc/collaboration/session/abi.generated';
 import type * as Native from '@macro-inc/collaboration/session/wasm';
 import type { ViewCommandPriority } from './commands';
-import { installNativeSessionReceiverGuard } from './native-session-guard';
+import {
+  assertNativeSessionReceiverAdmission,
+  installNativeSessionReceiverGuard,
+} from './native-session-guard';
 
 /** Supply the actual generated ordinary module, never a capability-shaped shim. */
 export type NativeEnterModule = Pick<
@@ -99,12 +102,14 @@ export class NativeEnterDispatcher {
     bigint,
     Map<NativeCommandKey, OwnerListeners>
   >();
+  private pureObservationDepth = 0;
   private nextCallback = 1n;
   private teardowns: (() => void)[] = [];
   readonly guard;
   readonly supportsEscape: boolean;
 
-  private readonly active = () => this.scopes.length !== 0;
+  private readonly active = () =>
+    this.scopes.length !== 0 || this.pureObservationDepth !== 0;
   private readonly afterReturn = () => {
     for (const id of this.retiredCallbacks) this.callbacks.delete(id);
     this.retiredCallbacks.clear();
@@ -214,6 +219,31 @@ export class NativeEnterDispatcher {
   assertRootAdmission(): void {
     if (this.active())
       throw new Error('Ordinary native admission during scoped callback');
+  }
+
+  /** Synchronous pure JS listener phase; it issues no native callback scope.
+   * The caller must copy/release its real receipt first. This helper supplies
+   * no receipt evidence and does not fence async listeners or continuations. */
+  withPureInputCommitObserver(
+    session: Native.EditorSession,
+    notify: () => void
+  ): void {
+    this.assertRootAdmission();
+    assertNativeSessionReceiverAdmission(session);
+    const owner = this.sessions.get(session);
+    if (owner === undefined || this.owners.get(owner) !== session)
+      throw new Error('Native observation requires its actual session binding');
+    this.pureObservationDepth++;
+    try {
+      notify();
+    } finally {
+      this.pureObservationDepth--;
+    }
+  }
+
+  /** Lifecycle metadata only; never an issued Rust scope or native authority. */
+  pureInputCommitObserverActive(): boolean {
+    return this.pureObservationDepth !== 0;
   }
 
   current(owner: bigint): NativeEnterScope | undefined {
@@ -377,7 +407,10 @@ export class NativeEnterDispatcher {
     };
     return () => {
       const active = this.activeScope();
-      if (active && active.owner !== owner) {
+      if (
+        (active && active.owner !== owner) ||
+        this.pureInputCommitObserverActive()
+      ) {
         if (!queued) {
           const request = {};
           queued = request;

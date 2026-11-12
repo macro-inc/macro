@@ -338,8 +338,9 @@ export function mountSessionView(
           );
         };
         const active = commands?.dispatcher.activeScope();
-        if (commands && active) {
-          if (active.owner === commands.owner) {
+        const observing = commands?.dispatcher.pureInputCommitObserverActive();
+        if (commands && (active || observing)) {
+          if (active && active.owner === commands.owner) {
             try {
               commands.dispatcher.requestRetirement(commands.owner);
               attached = undefined;
