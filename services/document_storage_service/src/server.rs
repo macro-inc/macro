@@ -1504,6 +1504,19 @@ async fn run_server() -> anyhow::Result<()> {
                 ),
             ),
         )),
+        email::outbound::GmailSenderProvider::new(
+            gmail_client::GmailClient::without_watch(),
+            email::outbound::GmailTokenProviderImpl::lazy(
+                redis_client.clone(),
+                Arc::new(authentication_service_client::AuthServiceClient::new(
+                    config
+                        .authentication_service_secret_key
+                        .as_ref()
+                        .to_string(),
+                    macro_service_urls::AuthServiceUrl::new()?.to_string(),
+                )),
+            ),
+        ),
     )
     .await
     .context("failed to build Macro agent tool context")?;
