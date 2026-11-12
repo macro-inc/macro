@@ -12,15 +12,13 @@ import { scheduledActionKeys } from './keys';
 /** What the scheduler pushes as a background draft moves along. */
 const DRAFT_UPDATE = 'routine_draft_update';
 
-// Only the fields used here; progress is applied as the server words it.
+// Only the fields used here. Progress is applied as the server words it, so
+// a stage a newer server adds still moves the job on. Progress it can't read
+// leaves a removal as it is, and has the list read again otherwise.
 const updateSchema = z.object({
   draftId: z.string().min(1),
   state: z.enum(['drafting', 'ready', 'failed', 'removed']),
-  progress: z.object({
-    stage: z.enum(['started', 'found', 'writing', 'checked', 'fixing']),
-    found: z.number().nullish(),
-    check: z.unknown().nullish(),
-  }),
+  progress: z.looseObject({ stage: z.string() }).optional().catch(undefined),
 });
 
 /**
@@ -79,7 +77,13 @@ export function applyDraftUpdate(data: unknown): void {
   // Nobody here reads drafts yet.
   if (!jobs) return;
   const job = jobs.find((each) => each.id === update.draftId);
-  if (update.state !== 'drafting' || !job || job.state !== 'drafting') {
+  const progress = update.progress as DraftJob['progress'] | undefined;
+  if (
+    update.state !== 'drafting' ||
+    !progress ||
+    !job ||
+    job.state !== 'drafting'
+  ) {
     // Finished, or started elsewhere (another tab, another device).
     refetchDraftJobs();
     return;
@@ -87,9 +91,7 @@ export function applyDraftUpdate(data: unknown): void {
   queryClient.setQueryData(
     scheduledActionKeys.draftJobs.queryKey,
     jobs.map((each) =>
-      each.id === update.draftId
-        ? { ...each, progress: update.progress as DraftJob['progress'] }
-        : each
+      each.id === update.draftId ? { ...each, progress } : each
     )
   );
 }
