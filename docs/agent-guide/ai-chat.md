@@ -1307,8 +1307,8 @@ tools, `AskUser`, connector discovery, tool loading for connected apps,
 and explicit provider code execution retain their direct lifecycle. Connected
 third-party MCP tools remain available.
 
-Sessions without a user owner, or whose turn lacks the code-mode MCP tools,
-keep the standard toolset. Summary/compaction calls advertise no tools. The mode
+Sessions without a user owner can't run in-process turns at all.
+Summary/compaction calls advertise no tools. The mode
 controls presentation, not authorization; SDK requests retain normal user
 permissions, and issuing the run credential requires execution approval.
 External coding harnesses keep their own tool selection. A runner that fails

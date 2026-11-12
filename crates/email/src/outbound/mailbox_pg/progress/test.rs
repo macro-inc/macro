@@ -577,6 +577,7 @@ fn changed(ids: &[&str]) -> Result<MailboxChangePage, EmailApiError> {
         changed: ids.iter().map(|id| ProviderId::new(*id).unwrap()).collect(),
         removed: Vec::new(),
         position: StreamPosition::Checkpoint(StreamToken::new("checkpoint".into())),
+        reader_revision: 1,
     })
 }
 
