@@ -80,7 +80,7 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
   databases: {
     tutorial: 'databases',
     product: 'Databases',
-    title: 'Notion-like databases, linked to everything else.',
+    title: 'Dear Notion, meet big data.',
     tone: 'documents',
     description:
       'Edit records together with your team and agents. Switch between tables, boards, and timelines.',
