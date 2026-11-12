@@ -68,7 +68,9 @@ listener. The isolated native browser check in
 state. Focus a checklist label and press Cmd/Ctrl+Enter; its checked styling
 must follow the model, and undo/redo must restore the exact pre/post-toggle
 state. Edit only a checklist label, then toggle its marker; compare focus behavior
-and raw list classes and attributes against Source. The fixture clears seed
+and raw list classes and attributes against Source. After a descendant-only text
+edit, compare the checkbox item's `tabindex="-1"` with Source; also check nested
+items and confirm their list-wrapper item has no checkbox attributes. The fixture clears seed
 history before testing user edits. Component
 checks do not prove persistence; document checks must wait for the actual server
 acknowledgement. Click below the editor after leaving it: an empty terminal paragraph is

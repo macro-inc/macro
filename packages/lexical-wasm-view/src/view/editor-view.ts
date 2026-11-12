@@ -446,8 +446,9 @@ export class EditorView implements ViewSink {
         },
       };
     this.lastOps = 0;
-    // The DOM originated this edit. Only mirror observers run; no renderer,
-    // selection API, layout read or mutation-observer reconnection occurs.
+    // The DOM originated this text edit; refresh only dirty list item ancestors,
+    // without selection writes or mutation-observer reconnection.
+    this.updateListItemAncestors(diff);
     this.notify(diff, false);
   }
   apply(

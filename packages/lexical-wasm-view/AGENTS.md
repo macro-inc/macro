@@ -21,7 +21,7 @@ tests are separate from Rust-backed production compatibility acceptance.
 
 - Gate native root events on current view editability except copy and click, matching Source; recheck editability after lazy clipboard preparation before admission. Repair outside text mutations from the maintained mirror through the canonical text leaf while readonly; do not submit TextFromView.
 
-- Reuse ListItem NodeView updates for dirty ancestors after descendant-only changes; keep mutation callbacks tied to actual Diff mutations so the checkbox guard preserves Source ordering.
+- Reuse ListItem NodeView updates for dirty ancestors after descendant-only changes, including accepted text echoes; keep mutation callbacks tied to actual Diff mutations so the checkbox guard preserves Source ordering.
 
 - Use the native fixed vertical role for application block stops, with pending native target authority and fresh DOM rectangles; cancel an issued plan after failed measurement or teardown, preserving the original cause. Keep Up/Down in the actual synchronous keyboard admission and dispose both registrations with the view.
 
