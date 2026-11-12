@@ -47,8 +47,9 @@ They share no HTTP: only MacroDB rows and `NOTIFY` (`external_chat`'s
   (`whatsapp_profile_picture` with a `static_file_id`). A group's or direct
   chat's own picture (`pictures`) is the row under its `remote_id`; a direct
   chat's peer is tracked only there, so its other person shows that one.
-  Never read the session's LID store for this. DSS stores staged pictures as static files
-  (`src/domain/pictures.rs`, woken by `whatsapp_picture_staged`). Poll votes are
+  Never read the session's LID store for this. DSS stores staged pictures
+  as static files (`src/domain/pictures.rs`, woken by
+  `whatsapp_picture_staged`), after its other work. Poll votes are
   stored per voter in `external_chat_poll_vote` through the reaction path of
   `reserve_in`. A re-ingested message fills in `rich`/`mentions`/`forwarded`
   an earlier copy lacked (re-importing history upgrades old placeholders).
