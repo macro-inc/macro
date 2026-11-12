@@ -861,6 +861,54 @@
         }
       }
     },
+    "/scheduled-actions/{id}/appearance": {
+      "put": {
+        "tags": ["scheduled actions"],
+        "operationId": "set_scheduled_action_appearance",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the scheduled action",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EntityAppearance"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntityAppearance"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": ""
+          },
+          "401": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/scheduled-actions/{id}/code-upgrades": {
       "get": {
         "tags": ["scheduled actions"],
@@ -2285,6 +2333,59 @@
           }
         }
       },
+      "AppearanceColor": {
+        "type": "string",
+        "description": "Named tint keys from the shared tag color palette.",
+        "enum": [
+          "gray",
+          "red",
+          "tomato",
+          "orange",
+          "amber",
+          "yellow",
+          "green",
+          "teal",
+          "blue",
+          "indigo",
+          "purple",
+          "pink"
+        ]
+      },
+      "AppearanceIcon": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A stable name from Macro's original, distinct icon catalog.",
+            "required": ["name", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["macro"]
+              },
+              "name": {
+                "type": "string",
+                "description": "Catalog name without the SVG extension."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A single native emoji, including skin-tone and joined sequences.",
+            "required": ["value", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["emoji"]
+              },
+              "value": {
+                "type": "string",
+                "description": "Unicode emoji text, not markup or a URL."
+              }
+            }
+          }
+        ],
+        "description": "The source of an entity's custom icon."
+      },
       "CatalogEntry": {
         "type": "object",
         "description": "One of Macro's routines, ready to start a new routine from.",
@@ -2918,6 +3019,35 @@
         "type": "string",
         "description": "What an entity suggestion suggests doing about its items.",
         "enum": ["reply", "review", "follow_up"]
+      },
+      "EntityAppearance": {
+        "type": "object",
+        "description": "An entity's optional icon and tint overrides; absent values retain type defaults.",
+        "properties": {
+          "color": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AppearanceColor",
+                "description": "A shared tag-palette key. Native emoji retain their own colors."
+              }
+            ]
+          },
+          "icon": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AppearanceIcon",
+                "description": "A custom Macro glyph or a native emoji."
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
       },
       "EntityType": {
         "type": "string",
@@ -3774,6 +3904,7 @@
           "trigger",
           "task",
           "variables",
+          "appearance",
           "active_count",
           "created_at",
           "updated_at"
@@ -3784,6 +3915,9 @@
             "format": "int32",
             "description": "Routines activated from this template, including stopped ones.",
             "minimum": 0
+          },
+          "appearance": {
+            "$ref": "#/components/schemas/EntityAppearance"
           },
           "author": {
             "type": "string",
@@ -4000,6 +4134,10 @@
           "run_visibility"
         ],
         "properties": {
+          "appearance": {
+            "$ref": "#/components/schemas/EntityAppearance",
+            "description": "Optional presentation overrides; absent values use routine defaults."
+          },
           "claimed": {
             "type": ["string", "null"],
             "format": "date-time"
