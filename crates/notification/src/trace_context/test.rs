@@ -17,7 +17,7 @@ fn the_worker_span_links_to_the_sending_span() {
         .with(tracing_opentelemetry::layer().with_tracer(provider.tracer("test")));
     let _guard = tracing::subscriber::set_default(subscriber);
 
-    let send = tracing::info_span!(parent: None, "notification.send_manual");
+    let send = tracing::info_span!(parent: None, "notification.send_ping");
     let sent_from = send.context().span().span_context().clone();
     let carrier = send.in_scope(current);
     assert!(carrier.contains_key("traceparent"));

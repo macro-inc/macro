@@ -339,7 +339,8 @@ impl From<rootcause::Report> for FeedError {
 }
 
 /// Whether a notification makes its entry unread. Channel events other than
-/// messages, mentions and reactions (invites, calls) never do.
+/// messages, mentions, reactions and pings (invites, calls)
+/// never do.
 pub fn counts_as_unseen(notification: &UserNotificationRow<NotifEvent>) -> bool {
     if notification.state != NotificationState::Unseen {
         return false;
@@ -354,6 +355,7 @@ pub fn counts_as_unseen(notification: &UserNotificationRow<NotifEvent>) -> bool 
             | NotifEvent::ChannelMessageReaction(_)
             | NotifEvent::ChannelMessageReply(_)
             | NotifEvent::DocumentMention(_)
+            | NotifEvent::Ping(_)
     )
 }
 

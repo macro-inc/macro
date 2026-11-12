@@ -33,10 +33,10 @@ use model_notifications::{
     GithubPrCheckRunState, GithubPrComment, GithubPrCommentKind, GithubPrEventAction,
     GithubPrEventStatus, GithubPrMention, GithubPrMentionLocation, GithubPrNotificationCommon,
     GithubPrReview, GithubPrReviewState, GithubPrStatusChanged, GithubReviewRequested,
-    InboxReauthRequiredMetadata, InviteToTeamMetadata, ManualMetadata,
-    MentionedInDocumentCommentMetadata, NewEmailMetadata, NotifEvent, NotificationDocumentSubType,
-    ReminderMetadata, RepliedToDocumentCommentThreadMetadata, RoutineRunFinishedMetadata,
-    RoutineRunOutcome, RuntimeAccessRemovedMetadata, StoppedAgent, TaskAssignedMetadata,
+    InboxReauthRequiredMetadata, InviteToTeamMetadata, MentionedInDocumentCommentMetadata,
+    NewEmailMetadata, NotifEvent, NotificationDocumentSubType, PingMetadata, ReminderMetadata,
+    RepliedToDocumentCommentThreadMetadata, RoutineRunFinishedMetadata, RoutineRunOutcome,
+    RuntimeAccessRemovedMetadata, StoppedAgent, TaskAssignedMetadata,
 };
 
 /// GraphQL channel type used by notification metadata.
@@ -891,12 +891,12 @@ impl GraphqlComputerSetupMetadata {
     }
 }
 
-/// GraphQL wrapper for manual notification metadata.
-pub struct GraphqlManualMetadata(ManualMetadata);
+/// GraphQL wrapper for ping metadata.
+pub struct GraphqlPingMetadata(PingMetadata);
 
 /// Metadata for a notification its sender wrote.
 #[Object]
-impl GraphqlManualMetadata {
+impl GraphqlPingMetadata {
     /// The headline, as the sender wrote it.
     async fn title(&self) -> &str {
         &self.0.title
@@ -923,6 +923,22 @@ impl GraphqlManualMetadata {
             .agent
             .as_ref()
             .and_then(|agent| agent.avatar_url.as_deref())
+    }
+
+    /// The channel message it opens at, when the sender linked one.
+    async fn message_id(&self) -> Option<ID> {
+        self.0
+            .message
+            .map(|message| ID(message.message_id.to_string()))
+    }
+
+    /// The top-level message the linked message replies to, when it is a
+    /// reply.
+    async fn thread_id(&self) -> Option<ID> {
+        self.0
+            .message
+            .and_then(|message| message.thread_id)
+            .map(|thread| ID(thread.to_string()))
     }
 }
 
@@ -1533,8 +1549,8 @@ pub enum GraphqlNotifEvent {
     AgentSignInExpiry(GraphqlAgentSignInExpiryMetadata),
     /// Computer setup metadata.
     ComputerSetup(GraphqlComputerSetupMetadata),
-    /// Manual notification metadata.
-    Manual(GraphqlManualMetadata),
+    /// Ping metadata.
+    Ping(GraphqlPingMetadata),
     /// Schema-only stub for released clients. Never returned.
     WhatsappGroupMessage(GraphqlWhatsappGroupMessageMetadata),
     /// Removed runtime access that stopped the recipient's agents.
@@ -1605,7 +1621,7 @@ impl From<NotifEvent> for GraphqlNotifEvent {
             NotifEvent::ComputerSetup(metadata) => {
                 Self::ComputerSetup(GraphqlComputerSetupMetadata(metadata))
             }
-            NotifEvent::Manual(metadata) => Self::Manual(GraphqlManualMetadata(metadata)),
+            NotifEvent::Ping(metadata) => Self::Ping(GraphqlPingMetadata(metadata)),
             NotifEvent::RuntimeAccessRemoved(metadata) => {
                 Self::RuntimeAccessRemoved(GraphqlRuntimeAccessRemovedMetadata(metadata))
             }

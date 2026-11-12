@@ -3,7 +3,7 @@ mod agent_sign_in;
 mod calendar_join_request;
 mod channel_push;
 mod computer_setup;
-mod manual;
+mod ping;
 pub use access_request::{
     ChannelAccessRequestedMetadata, EntityAccessGrantedMetadata, EntityAccessRequestedMetadata,
     RequestedAccessLevel, RuntimeAccessRemovedMetadata, StoppedAgent,
@@ -18,7 +18,6 @@ pub use invite_email::{
 };
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::{email::ReadEmailParts, user_id::MacroUserIdStr};
-pub use manual::{ManualMetadata, ManualNotificationAgent};
 use mention_utils::parse::{ParsedXmlText, PlainTextFormatter, XmlFormatter};
 use model_entity::Entity;
 use model_entity::EntityType;
@@ -30,6 +29,7 @@ use notification::domain::models::{
         APNSPushNotification, Alert, AlertDictionary, Aps, InterruptionLevel, PushNotificationData,
     },
 };
+pub use ping::{PingAgent, PingMessage, PingMetadata};
 use rootcause::Report;
 use rootcause::report;
 use serde::{Deserialize, Serialize};
