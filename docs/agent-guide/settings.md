@@ -838,7 +838,7 @@ on touch) for the rest. The line is the size and the resources recorded at
 purchase (`Standard · 4 vCPU · 8 GB · 100 GB`), then one state: setup progress
 (`Setting up · Starting up (2 of 3)`, or **Waiting for space on the
 host**), **Starting…** while a power-on runs, **Powered off**, a fault, or how
-Claude is paid for (`Claude: Macro credits`, `Claude: your account · <email>`,
+Claude is paid for (`Claude: Macro credits`, `Signed in with Claude`,
 `Claude: not signed in`; a shimmer while the mode loads). A purchase whose
 charge is still being confirmed (`purchasing`) reads `Setting up · Creating the
 computer (1 of 3)`. Then the billing state: `Payment past due` while the team

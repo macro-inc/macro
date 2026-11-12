@@ -1398,8 +1398,8 @@ See the [download walkthrough](../../docs/agent-guide/files.md#downloading-files
 
 ### Claude access
 
-Computer rows show the Claude mode and the active login's account (email, plan,
-signer) from `claude-mode` for managers, and the harness list's derived
+Computer rows show the Claude mode (`Signed in with Claude` on the computer's
+own account, never its email) from `claude-mode` for managers, and the harness list's derived
 `claude_mode` for other members. Sign-in is a dialog
 (`claude-sign-in-flow.tsx`) that starts the sign-in on open, so its Open
 claude.ai control stays a plain `target="_blank"` link; never open it after an
