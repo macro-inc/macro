@@ -86,6 +86,8 @@ export function createQueryPersistenceScopes(
             buster,
             shouldPersist: shouldPersistCalendarQuery,
             shouldRestore: hasLoginCookie,
+            // Range keys move with the date: no later session asks again.
+            outlivesQuery: true,
           } satisfies PersistScope,
           {
             store: createPerQueryIDBStore({
