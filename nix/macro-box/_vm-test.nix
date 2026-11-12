@@ -108,6 +108,8 @@ pkgs.testers.runNixOSTest {
       inherit macrod;
       agentMode = true;
       dataDisk = null;
+      # Prints the environment the `claude` wrapper hands it.
+      claudeCode = pkgs.writeShellScriptBin "claude" "env";
     };
     virtualisation.memorySize = 4096;
     virtualisation.cores = 4;
@@ -259,6 +261,27 @@ pkgs.testers.runNixOSTest {
           agent.fail(f"tr '\\0' '\\n' < /proc/{pid}/environ | grep -F MACRO_API_KEY")
           agent.succeed(f"tr '\\0' '\\n' < /proc/{pid}/environ | grep -Fx MUPPET_CREDENTIALS_FILE=/run/credentials/macro-agent.service/agent.env")
           agent.succeed(f"nsenter -t {pid} -m -- test -r /run/credentials/macro-agent.service/agent.env")
+
+      with subtest("claude in the agent's unit uses harnessd's sign-in when there is one"):
+          sign_in = "${nodes.agent.macro.box.harnessd.stateDirectory}/claude"
+          agent.succeed(f"tr '\\0' '\\n' < /proc/{pid}/environ | grep -Fx HARNESSD_STATE_DIRECTORY={sign_in}")
+          # As the runtime starts it: as macro, in the unit's view of the files.
+          as_agent = f"nsenter -t {pid} -m -- setpriv --reuid=macro --regid=macro --init-groups"
+          claude = f"{as_agent} env ANTHROPIC_BASE_URL=http://gateway.invalid /run/current-system/sw/bin/claude"
+          # No sign-in: the gateway environment passes through.
+          env = agent.succeed(claude)
+          assert "ANTHROPIC_BASE_URL=http://gateway.invalid" in env, env
+          assert "CLAUDE_CODE_OAUTH_TOKEN" not in env, env
+          # The directory the unit binds is harnessd's: it (as macro) writes
+          # the sign-in there, atomically.
+          agent.succeed(f"[ \"$(stat -c '%U:%G %a' {sign_in})\" = 'macro:macro 700' ]")
+          agent.succeed(f"su macro -s /bin/sh -c 'umask 077 && echo {{\\\"token\\\":\\\"test-oauth-token\\\"}} > {sign_in}/.credential.json.tmp && mv {sign_in}/.credential.json.tmp {sign_in}/credential.json'")
+          env = agent.succeed(claude)
+          assert "CLAUDE_CODE_OAUTH_TOKEN=test-oauth-token" in env, env
+          assert "ANTHROPIC_BASE_URL" not in env, env
+          # Bound read-only: the agent can't replace the sign-in.
+          agent.fail(f"{as_agent} touch {sign_in}/credential.json")
+          agent.succeed(f"rm {sign_in}/credential.json")
 
       with subtest("repeated failed boots roll the workspace back to last-good"):
           good = agent.succeed(f"{git} rev-parse HEAD").strip()
