@@ -69,7 +69,7 @@ test('contact additions and company links invalidate detail only after success',
 });
 
 test('contact addresses and the company link use their own routes', async () => {
-  const writes: { method: string; path: string }[] = [];
+  const writes: { method: string; path: string; body: unknown }[] = [];
   let emails = ['first@example.com'];
   let companyId: string | null = 'company-1';
   globalThis.fetch = Object.assign(
@@ -77,11 +77,13 @@ test('contact addresses and the company link use their own routes', async () => 
       const request = input instanceof Request ? input : new Request(input);
       const path = new URL(request.url).pathname;
       if (request.method !== 'GET') {
-        writes.push({ method: request.method, path });
-        const address = decodeURIComponent(path.split('/emails/')[1] ?? '');
-        if (request.method === 'PUT' && address) emails = [...emails, address];
-        if (request.method === 'DELETE' && address)
-          emails = emails.filter((email) => email !== address);
+        const text = await request.text();
+        const body = text ? JSON.parse(text) : undefined;
+        writes.push({ method: request.method, path, body });
+        if (request.method === 'PUT' && path.endsWith('/emails'))
+          emails = [...emails, body.email];
+        if (request.method === 'DELETE' && path.endsWith('/emails'))
+          emails = emails.filter((email) => email !== body.email);
         if (request.method === 'DELETE' && path.endsWith('/company'))
           companyId = null;
       }
@@ -119,15 +121,22 @@ test('contact addresses and the company link use their own routes', async () => 
   expect(await contact.company()).toBeUndefined();
   expect(await contact.companyDomain()).toBe(false);
 
+  // An address goes in the body, never the path.
   expect(writes).toEqual([
     {
       method: 'PUT',
-      path: '/crm/contacts/contact-1/emails/second%2Btag%40example.com',
+      path: '/crm/contacts/contact-1/emails',
+      body: { email: 'second+tag@example.com' },
     },
     {
       method: 'DELETE',
-      path: '/crm/contacts/contact-1/emails/first%40example.com',
+      path: '/crm/contacts/contact-1/emails',
+      body: { email: 'first@example.com' },
     },
-    { method: 'DELETE', path: '/crm/contacts/contact-1/company' },
+    {
+      method: 'DELETE',
+      path: '/crm/contacts/contact-1/company',
+      body: undefined,
+    },
   ]);
 });

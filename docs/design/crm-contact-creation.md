@@ -60,7 +60,8 @@ sync and teardown, email scope prechecks, thread access, call linking, lookup
 by email) read that table; the team-wide activity scope still reads the primary.
 
 The contact API then writes further addresses: `PUT` and `DELETE
-/crm/contacts/{id}/emails/{email}` add and remove one, `PUT
+/crm/contacts/{id}/emails` add and remove the address in the request body
+(never the path, which request telemetry records), `PUT
 /crm/contacts/{id}/email` chooses the primary (adding the address when the
 contact does not hold it), and `DELETE /crm/contacts/{id}/company` unlinks.
 Contact responses list `emails` (primary first, then oldest first) and

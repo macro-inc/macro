@@ -852,7 +852,7 @@ async fn contact_mutation_http_contract_covers_addresses_and_company_links(
                 axum::routing::put(set_contact_email::handler),
             )
             .route(
-                "/contacts/{contact_id}/emails/{email}",
+                "/contacts/{contact_id}/emails",
                 axum::routing::put(contact_emails::add_handler)
                     .delete(contact_emails::remove_handler),
             )
@@ -925,30 +925,27 @@ async fn contact_mutation_http_contract_covers_addresses_and_company_links(
             StatusCode::OK
         );
     }
-    // Addresses travel percent-encoded in the path. Adding needs edit
-    // access like every other contact setter.
+    // Addresses travel in the body, so request telemetry never records one.
+    // Adding needs edit access like every other contact setter.
     let address = |method: Method, id: Uuid, email: &str| {
         Request::builder()
             .method(method)
-            .uri(format!("/contacts/{id}/emails/{email}"))
+            .uri(format!("/contacts/{id}/emails"))
             .header(header::AUTHORIZATION, format!("Bearer {VALID_TOKEN}"))
-            .body(Body::empty())
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(json!({ "email": email }).to_string()))
             .unwrap()
     };
     assert_eq!(
         router(AccessLevel::View)
-            .oneshot(address(Method::PUT, contact.id, "second%40example.com"))
+            .oneshot(address(Method::PUT, contact.id, "second@example.com"))
             .await?
             .status(),
         StatusCode::UNAUTHORIZED
     );
     let response = edit
         .clone()
-        .oneshot(address(
-            Method::PUT,
-            contact.id,
-            "Second%2Btag%40Example.com",
-        ))
+        .oneshot(address(Method::PUT, contact.id, "Second+tag@Example.com"))
         .await?;
     assert_eq!(response.status(), StatusCode::OK);
     let body: Value = serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await?)?;
@@ -971,7 +968,7 @@ async fn contact_mutation_http_contract_covers_addresses_and_company_links(
         .oneshot(address(
             Method::DELETE,
             contact.id,
-            "second%2Btag%40example.com",
+            "second+tag@example.com",
         ))
         .await?;
     assert_eq!(response.status(), StatusCode::OK);
@@ -979,7 +976,7 @@ async fn contact_mutation_http_contract_covers_addresses_and_company_links(
     assert_eq!(body["emails"], json!(["contact@example.com"]));
     assert_eq!(
         router(AccessLevel::View)
-            .oneshot(address(Method::DELETE, contact.id, "contact%40example.com"))
+            .oneshot(address(Method::DELETE, contact.id, "contact@example.com"))
             .await?
             .status(),
         StatusCode::UNAUTHORIZED

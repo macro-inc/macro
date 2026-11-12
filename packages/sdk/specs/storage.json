@@ -9335,7 +9335,7 @@
         }
       }
     },
-    "/crm/contacts/{contact_id}/emails/{email}": {
+    "/crm/contacts/{contact_id}/emails": {
       "put": {
         "tags": ["crm::inbound::axum_router::contact_emails"],
         "summary": "Add an address to a contact. It must not belong to another contact in the\nteam, and becomes the primary only when the contact has none. Idempotent.",
@@ -9350,17 +9350,18 @@
               "type": "string",
               "format": "uuid"
             }
-          },
-          {
-            "name": "email",
-            "in": "path",
-            "description": "The address to add",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContactEmailRequest"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "description": "",
@@ -9448,17 +9449,18 @@
               "type": "string",
               "format": "uuid"
             }
-          },
-          {
-            "name": "email",
-            "in": "path",
-            "description": "The address to remove",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContactEmailRequest"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "description": "",
@@ -35114,6 +35116,17 @@
         "type": "string",
         "description": "How a group's conditions combine.",
         "enum": ["and", "or"]
+      },
+      "ContactEmailRequest": {
+        "type": "object",
+        "description": "One of a contact's addresses. It travels in the body, never the path, so\nrequest telemetry does not record it.",
+        "required": ["email"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "The address to add or remove. An identical retry is accepted."
+          }
+        }
       },
       "ConversationId": {
         "type": "string",
