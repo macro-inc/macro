@@ -78,6 +78,17 @@ export async function loadLocalChannelTimelinePage(
       signal: read.signal,
     });
     if (loaded === 'unsupported' || loaded === 'not-ready') return undefined;
+    if (!anchored && loaded.source === 'device') {
+      // Opening from the device counts as use, which eviction goes by; a
+      // server page records it with its coverage.
+      fireAndForget(
+        host.channelTimelineCommit({
+          channelId: read.channelId,
+          touchedAtMs: Date.now(),
+        }),
+        SYNC_SURFACE
+      );
+    }
     const behind =
       loaded.serverSeq !== undefined &&
       loaded.storedSeq !== null &&
