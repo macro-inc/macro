@@ -265,9 +265,11 @@ searching): **Invite your team** with its icon and label in a soft pink-to-indig
 hidden for members when the team limits invites to admins) or, with no team,
 **Create a team** (opens the create-team dialog), then the grouped section
 pills. Above 720px, **Hide navigation** beside the title collapses the sidebar;
-**Show navigation** restores it. Below 720px the sidebar becomes an overlay
-that starts closed. Touch pages place **Show navigation** before the filter
-pills; `Cmd .` also toggles navigation. Escape closes a
+**Show navigation** restores it. Wide touch panes always dock the sidebar left
+of the page, with no collapse control and no section pills. Below 720px the
+sidebar becomes an overlay that starts closed; narrow touch panes switch
+sections from pills at the top, led by **Show navigation**. `Cmd .` also
+toggles navigation. Escape closes a
 settings split that shares the layout, or steps back to the previous view when
 it is the only split (Home when there is none). Leave settings by picking any
 other rail item; there is no separate back or fullscreen control.

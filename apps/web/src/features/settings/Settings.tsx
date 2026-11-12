@@ -9,6 +9,7 @@ import {
   useParams,
   useNavigate as useSplitNavigate,
 } from '@app/lib/split-router';
+import { MobileTopEdgeFade } from '@components/app/mobile/MobileEdgeFade';
 import { PillTabs } from '@components/app/mobile/PillTabs';
 import { SplitPanel } from '@components/app/split-panel';
 import { enableEmailSignatures } from '@core/constant/featureFlags';
@@ -32,8 +33,11 @@ import {
   createMemo,
   createRenderEffect,
   createSignal,
+  type JSX,
+  Match,
   onMount,
   Show,
+  Switch,
   untrack,
 } from 'solid-js';
 import { SettingsSearchTarget } from './components/settings-search-target';
@@ -216,6 +220,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
         <SplitPanel.Body>
           <ViewShell.Root
             asidePreferenceKey="settings"
+            asidePinned={isTouchDevice()}
             resizable
             aside={{ preserveDuringResize: false }}
             main={{ preferredWidth: 960 }}
@@ -240,40 +245,75 @@ export function SettingsPanel(props: SettingsPanelProps) {
                 action={<TeamSidebarAction />}
               />
             </ViewShell.Aside>
-            <ViewShell.Main
-              class="relative"
-              style={
-                isTouchDevice()
-                  ? {
-                      '--mobile-content-inset-top':
-                        'calc(var(--safe-top, 0px) + 3.75rem)',
-                    }
-                  : undefined
-              }
-            >
-              <Show when={isTouchDevice()} fallback={<SettingsNavigationBar />}>
-                <header class="pointer-events-none absolute inset-x-0 top-0 z-split-panel-chrome flex min-w-0 pt-[calc(var(--safe-top,0px)+0.5rem)]">
-                  <PillTabs
-                    scrollable
-                    class="w-full"
-                    contentClass="px-(--mobile-chrome-gutter)"
-                    leading={
-                      <ViewSidebar.Toggle action="expand" presentation="pill" />
-                    }
-                    items={tabItems()}
-                    value={activeNavigationTab()}
-                    onChange={handleTabChange}
-                  />
-                </header>
-              </Show>
-              <div class="relative min-h-0 flex-1 overflow-hidden">
+            <ViewShell.Main class="relative">
+              <SettingsMainContent
+                tabs={tabItems()}
+                value={activeNavigationTab()}
+                onTabChange={handleTabChange}
+              >
                 {content()}
-              </div>
+              </SettingsMainContent>
             </ViewShell.Main>
           </ViewShell.Root>
         </SplitPanel.Body>
       </SplitPanel.Root>
     </div>
+  );
+}
+
+type SettingsMainContentProps = {
+  tabs: { value: string; label: string }[];
+  value: string | undefined;
+  onTabChange: (value: string) => void;
+  children: JSX.Element;
+};
+
+/**
+ * Wide touch panes keep the sidebar docked beside the page, like desktop;
+ * narrow touch panes switch pages from pills and open the sidebar as an overlay.
+ */
+function SettingsMainContent(props: SettingsMainContentProps) {
+  const shell = useViewShell();
+  const showPills = () => isTouchDevice() && !!shell.breakpoints.narrow?.();
+  return (
+    <>
+      <Switch>
+        <Match when={!isTouchDevice()}>
+          <SettingsNavigationBar />
+        </Match>
+        <Match when={showPills()}>
+          <header class="pointer-events-none absolute inset-x-0 top-0 z-split-panel-chrome flex min-w-0 pt-[calc(var(--safe-top,0px)+0.5rem)]">
+            <PillTabs
+              scrollable
+              class="w-full"
+              contentClass="px-(--mobile-chrome-gutter)"
+              leading={
+                <ViewSidebar.Toggle action="expand" presentation="pill" />
+              }
+              items={props.tabs}
+              value={props.value}
+              onChange={props.onTabChange}
+            />
+          </header>
+        </Match>
+      </Switch>
+      <div
+        class="relative min-h-0 flex-1 overflow-hidden"
+        style={
+          showPills()
+            ? {
+                '--mobile-content-inset-top':
+                  'calc(var(--safe-top, 0px) + 3.75rem)',
+              }
+            : undefined
+        }
+      >
+        {props.children}
+        <Show when={isTouchDevice()}>
+          <MobileTopEdgeFade />
+        </Show>
+      </div>
+    </>
   );
 }
 

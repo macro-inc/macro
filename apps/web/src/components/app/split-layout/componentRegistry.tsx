@@ -475,7 +475,7 @@ registerComponent(
 registerComponent(
   'settings',
   () => <SettingsRouteView />,
-  () => composableLayout()
+  () => composableLayout(true)
 );
 registerComponent(
   'booking-links',
