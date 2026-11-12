@@ -15,6 +15,8 @@ mod public_http;
 pub(crate) use public_http::RefusedImageUrl;
 
 pub(crate) const MAX_IMAGE_SIZE_BYTES: usize = 10 * 1024 * 1024; // 10 MB
+/// Images one email fetches at once.
+const MAX_CONCURRENT_IMAGE_FETCHES: usize = 4;
 
 /// Where [`rehost_html_images`] reads an image's bytes from.
 pub trait ImageSource: Sync {
@@ -233,19 +235,20 @@ async fn cache_images(
         .collect();
 
     if !new_urls.is_empty() {
-        // fetch and upload each image to sfs concurrently
-        let mut futures = Vec::new();
-        for source_url in new_urls {
-            let sfs_client = sfs_client.clone();
-            futures.push(async move {
-                // In a real scenario, pass base_url and email_mime_parts here
-                let image_data = images.fetch(&source_url).await.ok().flatten()?;
-                let sfs_url = upload_to_sfs(sfs_client, image_data).await.ok()?;
-                Some((source_url, sfs_url))
-            });
-        }
-
-        let results = futures::future::join_all(futures).await;
+        // Fetch and upload a few images at a time: each can hold up to
+        // MAX_IMAGE_SIZE_BYTES, and an email may reference thousands.
+        let results: Vec<_> = stream::iter(new_urls)
+            .map(|source_url| {
+                let sfs_client = sfs_client.clone();
+                async move {
+                    let image_data = images.fetch(&source_url).await.ok().flatten()?;
+                    let sfs_url = upload_to_sfs(sfs_client, image_data).await.ok()?;
+                    Some((source_url, sfs_url))
+                }
+            })
+            .buffer_unordered(MAX_CONCURRENT_IMAGE_FETCHES)
+            .collect()
+            .await;
         for (source_url, sfs_url) in results.into_iter().flatten() {
             url_map.insert(source_url, sfs_url);
         }
