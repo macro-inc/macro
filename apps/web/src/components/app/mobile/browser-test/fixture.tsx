@@ -3,8 +3,10 @@ import '../../../../index.css';
 import { ComposerAddDrawer } from '@app/features/channel/Input/ComposerAddMenu';
 import { MobileSettingsSheet } from '@app/features/settings/MobileSettingsSheet';
 import { SettingsPage, SettingsRow } from '@app/features/settings/primitives';
+import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
+import { ShareDrawer } from '@core/component/TopBar/ShareDrawer';
 import type { SettingsTab } from '@core/constant/SettingsState';
 import { SETTINGS_TAB_GROUPS } from '@core/constant/settingsTabsConfig';
 import { EmailProviderDialog } from '@core/email-link/ProviderDialog';
@@ -243,6 +245,18 @@ function DirtyComposerScenario() {
   );
 }
 
+/** The Share drawer closes on pointerdown, so its whole tap follows the unmount. */
+function ShareScenario() {
+  const [open, setOpen] = createSignal(true);
+  return (
+    <Show when={open()}>
+      <ShareDrawer open onOpenChange={setOpen}>
+        <div class="h-40 px-3">To</div>
+      </ShareDrawer>
+    </Show>
+  );
+}
+
 /** A confirmation mid-request refuses every close until the request settles. */
 function PendingConfirmScenario() {
   return (
@@ -359,7 +373,10 @@ function PersistentPromptScenario() {
   onMount(() => {
     toast.custom(
       {
-        title: 'Enable Browser Notifications',
+        title: 'Enable notifications',
+        dismissLabel: t('common.notNow'),
+        content: () =>
+          'Get notified about new messages, mentions, comments, and emails.',
         actions: [{ label: 'Enable', onClick: () => press('Enable') }],
       },
       { persistent: true, region: 'mobile-prompt-region' }
@@ -516,6 +533,9 @@ function Fixture() {
         </Match>
         <Match when={scenario === 'search'}>
           <SearchScenario />
+        </Match>
+        <Match when={scenario === 'share'}>
+          <ShareScenario />
         </Match>
       </Switch>
       <ImperativeDialogHost />

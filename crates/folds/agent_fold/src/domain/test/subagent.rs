@@ -232,49 +232,6 @@ fn the_inmem_agents_subagent_tool_folds_to_a_subagent_not_a_macro_tool() {
     );
 }
 
-/// The in-process agent's `Subagent` call names its work in a short
-/// `description` beside the brief: the row is titled by it, and the brief
-/// stays whole as the prompt.
-#[test]
-fn the_inmem_agents_subagent_is_titled_by_its_description() {
-    let log = r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"p","method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"list my open prs"}]}}}
-{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"_meta":{"macro":{"toolName":"Subagent","subagent":true}},"toolCallId":"a","sessionUpdate":"tool_call","rawInput":{"description":"List open pull requests","task":"Use the GitHub search tool (mcp__github__github-search-issues-and-pull-requests; load it via SearchTools \"github search\") to list every open pull request the user authored, with its labels."},"status":"in_progress","title":"Subagent","kind":"other"}}}}
-{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"toolCallId":"a","sessionUpdate":"tool_call_update","status":"completed","rawOutput":{"result":"Three open pull requests."}}}}}
-{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"p","result":{"stopReason":"end_turn"}}}"#;
-    let (messages, warnings) = capturing_warnings(|| fold(parse_log(log)));
-    assert_eq!(warnings, vec![]);
-    let agent = agent_message(&messages);
-    let [part] = subagent_parts(agent)[..] else {
-        panic!("exactly one subagent: {:#?}", agent.parts);
-    };
-    let MessagePart::ToolUse {
-        detail:
-            ToolDetail::Subagent {
-                title,
-                description,
-                prompt,
-                result,
-                ..
-            },
-        ..
-    } = part
-    else {
-        unreachable!()
-    };
-    assert_eq!(title, "List open pull requests");
-    assert_eq!(description.as_deref(), Some("List open pull requests"));
-    assert!(
-        prompt
-            .as_deref()
-            .unwrap()
-            .starts_with("Use the GitHub search tool")
-    );
-    assert_eq!(
-        result.as_deref().and_then(|result| result.text.as_deref()),
-        Some("Three open pull requests.")
-    );
-}
-
 /// Any other harness reaches the same tool over Macro's MCP server, with the
 /// response inside MCP's envelope; it is a delegation there too.
 #[test]

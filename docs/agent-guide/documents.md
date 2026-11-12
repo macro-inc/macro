@@ -309,12 +309,44 @@ Click a tick or press Enter to jump immediately to its heading without closing i
 or collapsing the expanded ticks. Scrolling, resizing, and
 editor updates refresh the visible-section highlights.
 
+## Markdown wide mode
+
+The document's title menu has **Turn on wide mode** (desktop and tablet only;
+phones already use the whole screen). It lifts the 768px reading column so the
+text, tables and code blocks fill the pane. The side margins grow with the pane
+up to 64px, keeping the outline rail visible, so the column never narrows as a
+pane widens and matches the standard column below 896px. It is the viewer's own
+setting, saved in this browser, and applies to every Markdown document they
+open, including documents open side by side; it changes nothing for
+collaborators. Images keep their own size. With margin comments showing, the
+comments stay in their own column beside the text. Toggling keeps the reader's
+place in the document. Version history keeps the standard column. The menu item
+then reads **Turn off wide mode**. The
+backend-free desktop/phone regression mounts the real document view:
+`bunx playwright test --config src/features/block-md/browser-test/playwright.config.ts`.
+
 On a local HTTPS stack, document and image downloads use `/local-storage/`
 on the app's HTTPS origin. A request to HTTP localhost indicates a stale
 storage URL or stack configuration; hard-refresh after updating the stack.
 Markdown also needs a successful `/sync/document/.../connect` WebSocket upgrade.
 A 403 there indicates the sync origin check, which the local proxy handles for
 HTTPS machine hostnames; verify the proxy configuration before retrying.
+
+## Collapsible sections
+
+Any top-level heading with content under it folds that content away, up to the
+next heading of the same or a higher level. Hover the heading to show a chevron
+in the left gutter (the drag handle steps one column further left, or, in a
+gutter too narrow for both, is not shown on that heading); the chevron
+stays while the section is folded and is always shown on touch. Mod+Enter in a
+heading toggles it. Folding is per person and per device (localStorage, keyed by
+the headings' node ids): it changes no document content, collaborators never see
+it, and it survives a reload. Hidden blocks carry the `md-folded` class, which
+applies only on screen, so copy, export, and print include them. Find, outline
+clicks, node and location links, and a caret moving into a folded section unfold
+it; folding the section holding the caret moves the caret to the heading. Code:
+`LexicalMarkdown/plugins/heading-folds`, controls in
+`component/misc/HeadingFoldControls.tsx`.
 
 ## Databases in documents
 
@@ -334,7 +366,9 @@ The **Filter** and **Sort** icons open their panels. The pickers support keyboar
 navigation and mark the selected table. Rows added or edited elsewhere, including
 by AI, appear through the database's gateway subscription. The editor catches up after
 reconnecting or returning to the tab after a long absence.
-Edits write to the original database. **Open** opens the full database.
+Edits write to the original database. **Open** opens the full database; opening
+a row (its row-number button, a board card or a timeline bar) opens the full
+database at that row.
 **Collapse** converts the editor to a small mention; **Expand** brings it back.
 Removing either reference leaves the database and its rows intact.
 
@@ -898,6 +932,14 @@ creation/rename/duplication/deletion.
 `{ "format": "date", "numberFormat": "mmm yyyy" }`.
 Edits require a revision from a fresh read; a concurrent change rejects the entire
 batch so the AI can reread. Tool rows expand to show the actual results and warnings.
+In code mode these tools are hidden: programs use the SDK's
+`macro.documents.spreadsheet(document)` handle (`read`, `calculate`, and
+`applyEdits(operations, { expectedRevision })`, over DSS
+`POST /documents/{id}/spreadsheet/read|calculate|edits`), which runs the same
+engine, and `macro.documents.createSpreadsheet()` creates a blank workbook.
+`sheet.edit(instructions)` (`POST /documents/{id}/spreadsheet/ai-edit`) hands a
+described change to the editing worker's writer model, which saves one batch;
+it is billed as an AI edit, and the result lists the changes and warnings.
 
 Verify with a saved workbook: select B4:E9, click Ask Macro, check the adjacent
 chat's mention and trailing space, and ask for a total or a what-if calculation.
@@ -2431,7 +2473,8 @@ Markdown auto-format works while typing (`#` heading, `[]` checklist, `>` quote,
 Pasting multiple paragraphs inside a quote keeps those paragraphs quoted;
 see [block formatting](channels.md#block-formatting) for verification.
 Imported Markdown recognizes bare URLs with the same shared matcher as messages;
-code and escaped URLs remain literal. Remove link persists through Markdown and
+code and escaped URLs remain literal, except that escaped `*`, `_`, `` ` `` or `~`
+alone still link. Remove link persists through Markdown and
 editor-state saves. See [message links](channels.md#message-links) for verification.
 
 Every top-level checklist shows a completed count and progress meter on a thin
@@ -2440,6 +2483,10 @@ an actual task mention additionally get a filter menu (status, priority,
 assignee, due date) that reveals on hover and stays while filters are active;
 filters dim unmatched items in place and persist with the document. Plain
 checkbox lists have no filter, and removing the last task mention removes it.
+Assignee labels resolve only identities referenced by the document's loaded tasks,
+in bounded lookup batches. They do not load the personal directory. Missing names
+stay Unknown; changing references releases old label data without erasing persisted
+filter identities.
 On Android, use the software keyboard to check `:` emoji, `/` commands, `;`
 snippets, and `#` tags where enabled. Each should open once and filter as you
 type. Tapping an emoji or command applies it; a second `#` closes the tags menu
@@ -2488,7 +2535,10 @@ composer. Companies and contacts appear together under **Contacts & Companies**;
 **People** holds Macro users and groups only. Selecting a CRM contact inserts
 its record link, including when its email matches a Macro user. User-only pickers
 exclude CRM records. On mobile, the single list includes both CRM record types, while only
-Macro people and groups are pinned. With
+Macro people and groups are pinned. The PostHog `disable-crm-contact-search`
+kill switch removes contact results and disables their search while leaving
+companies and Macro users available; existing contact mentions still work.
+Override locally with `VITE_DISABLE_CRM_CONTACT_SEARCH=true`. With
 `ENABLE_GRAPHQL_SOUP` enabled, results include cached companies even if they are
 absent from the first 500 companies in the REST Quick Access feed; the REST feed
 remains a fallback. Cache search covers synchronized companies, not the entire CRM.
@@ -2874,10 +2924,14 @@ the card opened leave the body expanded. In that card, Open session is the
 icon-only button from a narrow agent card, so the label does not take a line
 of its own. Channels keep the labeled chip. Short comments, the phone drawer,
 the bottom Discussion, and channels always show the full text. Markdown and Word margin cards stack without overlapping: a tall or expanded card
-pushes the cards below it down (past the end of a short document if needed),
-and no card starts above the top of the document. Check this with a long
+pushes the cards below it down (past the end of a short document if needed).
+In Markdown the selected card stays beside its highlighted text, as in Google
+Docs: the cards above it move up, past the top of the document when they do
+not fit, and with nothing selected the stack starts at the first comment. A
+Word card never starts above the top of the document. Check this with a long
 thread active near the bottom of a short document that has another thread
-above and below it.
+above and below it, and by selecting the last of a dozen comments on
+consecutive lines.
 Removing the last marked text moves its retained conversation to Discussion,
 where it remains after reload. Removing only part of a marked range keeps the
 conversation anchored to the remaining text. On phones, the active Markdown
@@ -3113,6 +3167,7 @@ AI can create a native workbook without an open editor using `CreateDocument`
 with `fileExtension: "spreadsheet"`, empty `fileContent`, and `isTask: false`.
 Read the returned document with `ReadSpreadsheet`, then populate it with
 `EditSpreadsheet`; do not create a CSV as a substitute for a native workbook.
+In code mode, `macro.documents.createSpreadsheet({ name })` does the same.
 Spreadsheet reads and edits run against server state even when no tab is open.
 An edit uses the revision from a fresh read and atomically applies a CRDT delta
 that is broadcast to connected collaborators. A stale revision is rejected:

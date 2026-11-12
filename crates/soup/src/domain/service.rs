@@ -25,7 +25,7 @@ use crm::domain::{
 };
 use either::Either;
 use email::domain::{
-    models::{GetEmailsRequest, PreviewView, PreviewViewStandardLabel},
+    models::{EmailErr, GetEmailsRequest, PreviewView, PreviewViewStandardLabel},
     ports::EmailPreviewServiceReadOnly,
 };
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
@@ -1061,12 +1061,13 @@ where
         let mut crm_contact_ids = Vec::new();
         for entity in entities {
             match entity.entity_type {
-                // Calendar events and agent sessions ride the main by-ids
-                // query in both soup types.
+                // Calendar events, agent sessions and runtimes ride the main
+                // by-ids query in both soup types.
                 EntityType::Document
                 | EntityType::Chat
                 | EntityType::CalendarEvent
                 | EntityType::AgentSession
+                | EntityType::Harness
                 | EntityType::Initiative => main_entities.push(entity.copied()),
                 // Same split as the touched feed: the expanded by-ids query
                 // omits project rows, so they hydrate unexpanded separately.
@@ -1299,7 +1300,18 @@ where
             return Ok(Either::Left(None.into_iter()));
         };
 
-        let email_response = self.email_service.get_email_thread_previews(req).await?;
+        let email_response = match self.email_service.get_email_thread_previews(req).await {
+            Ok(response) => response,
+            // An archived company, or one whose domains have left the team's
+            // CRM, still opens with its email list. Email authorizes only
+            // the team-wide widening, so its threads are left out of the page
+            // and every other source keeps its results.
+            Err(err @ (EmailErr::CrmDomainNotFound(_) | EmailErr::CrmDomainNotPermitted(_))) => {
+                tracing::warn!(error = %err, "CRM domain scope rejected; omitting email threads");
+                return Ok(Either::Left(None.into_iter()));
+            }
+            Err(err) => return Err(err.into()),
+        };
 
         let mut frecency_scores: Vec<Option<AggregateFrecency>> =
             Vec::with_capacity(email_response.items.len());

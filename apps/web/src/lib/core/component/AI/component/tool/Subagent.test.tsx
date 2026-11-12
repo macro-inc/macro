@@ -1,4 +1,3 @@
-import { deserializeToolCall } from '@service-cognition/generated/tools/tool';
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import type { Component, JSX, ParentProps } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -48,22 +47,13 @@ function subagent(data: unknown, result?: string) {
   ));
 }
 
-it('titles the row with the short description, not the instructions', () => {
-  subagent({ description: 'List open pull requests', task });
-  expect(screen.getByText('List open pull requests')).toBeTruthy();
-  expect(screen.queryByText(task, { exact: false })).toBeNull();
+it('titles the row with the first line of the instructions', () => {
+  subagent({ task });
+  expect(screen.getByText(task.split('\n')[0])).toBeTruthy();
+  expect(
+    screen.queryByText('Group them by label.', { exact: false })
+  ).toBeNull();
   expect(screen.getByText('Running')).toBeTruthy();
-});
-
-it('parses calls with and without a description, so saved calls still render', () => {
-  for (const json of [
-    { task },
-    { description: 'List open pull requests', task },
-  ]) {
-    const parsed = deserializeToolCall({ id: 'call', name: 'Subagent', json });
-    expect(parsed.isOk()).toBe(true);
-    expect(parsed._unsafeUnwrap().data).toEqual(json);
-  }
 });
 
 it('names the disclosure of a failed call, so assistive technology can open its instructions', () => {

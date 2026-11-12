@@ -21,6 +21,7 @@ import AgentIcon from '@icon/system/regular/sparkle.svg';
 import SwatchesIcon from '@icon/system/regular/swatches.svg';
 import TagIcon from '@icon/system/regular/tag-simple.svg';
 import UserIconPhosphor from '@icon/system/regular/user.svg';
+import UserGearIcon from '@icon/system/regular/user-gear.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
 import UsersThreeIcon from '@icon/system/regular/users-three.svg';
 import { type Component, createMemo } from 'solid-js';
@@ -249,7 +250,15 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
       tabItem('tabRuntimes', {
         tab: 'Harness',
         icon: HardDrivesIcon,
-        keywords: ['cursor', 'harness', 'runtime', 'credential', 'api key'],
+        keywords: [
+          'cursor',
+          'harness',
+          'runtime',
+          'machine',
+          'computer',
+          'credential',
+          'api key',
+        ],
       }),
       tabItem('tabMcpServer', {
         tab: 'Agent',
@@ -260,6 +269,11 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
         tab: 'API Keys',
         icon: KeyIcon,
         keywords: ['api', 'key', 'token', 'authentication'],
+      }),
+      tabItem('tabAccountManagers', {
+        tab: 'Account Managers',
+        icon: UserGearIcon,
+        keywords: ['agent', 'manager', 'token', 'revoke', 'access'],
       }),
       tabItem('tabBots', {
         tab: 'Bots',
@@ -285,6 +299,7 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
 const SETTINGS_TAB_SLUGS: Record<SettingsTab, string> = {
   Account: 'account',
   'API Keys': 'api-keys',
+  'Account Managers': 'account-managers',
   Notifications: 'notifications',
   Usage: 'usage',
   Billing: 'billing',
@@ -366,6 +381,9 @@ export const useSettingsTabAvailable = () => {
       // good place for a one-time secret.
       case 'API Keys':
         return !isMobile();
+      // Cutting off a manager can't wait for a desktop.
+      case 'Account Managers':
+        return true;
       case 'Team':
       case 'Team Members':
       case 'Tags':

@@ -35,7 +35,7 @@ import { canEditCell, titleColumn } from '../../database/core/table';
 import type { RecordCreation } from '../../database/primitives/record-actions';
 import { CompanySelect } from '../components/company-select';
 import { RecordSearch } from '../components/record-search';
-import type { Pipeline } from '../core/pipeline';
+import type { PipelineRecordType, TrackedPipeline } from '../core/pipeline';
 import {
   contactCompany,
   type DomainCompany,
@@ -63,6 +63,7 @@ type CellRenderers = Pick<
   GridCellProps,
   | 'renderTextEditor'
   | 'renderTextValue'
+  | 'renderLinkValue'
   | 'renderMentionPicker'
   | 'renderMentionValue'
 >;
@@ -70,7 +71,7 @@ type CellRenderers = Pick<
 /** A form for a whole pipeline row: its company or contact, then every field the pipeline has. */
 export function AddPipelineRecordDialog(
   props: CellRenderers & {
-    pipeline: Pick<Pipeline, 'name' | 'recordType'>;
+    pipeline: Pick<TrackedPipeline, 'name' | 'recordType'>;
     columns: DatabaseViewColumn[];
     requirements?: StageRequirement[];
     requirementsLoading?: boolean;
@@ -454,6 +455,7 @@ export function AddPipelineRecordDialog(
       canEdit={!pending()}
       renderTextEditor={props.renderTextEditor}
       renderTextValue={props.renderTextValue}
+      renderLinkValue={props.renderLinkValue}
       renderMentionPicker={props.renderMentionPicker}
       renderMentionValue={props.renderMentionValue}
       popupMount={dialog()}
@@ -615,7 +617,7 @@ function StackedField(props: {
 }
 
 function PickedRecord(props: {
-  recordType: Pipeline['recordType'];
+  recordType: PipelineRecordType;
   record: RecordOption;
   disabled: boolean;
   onChange: () => void;

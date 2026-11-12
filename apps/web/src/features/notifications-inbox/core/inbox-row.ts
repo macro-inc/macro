@@ -13,7 +13,8 @@ export type InboxRowType =
   | 'calendar_event'
   | 'calendar_join_request'
   | 'access_requested'
-  | 'access_granted';
+  | 'access_granted'
+  | 'access_removed';
 
 /** Who a row is from, per its newest notification. */
 export type InboxActor =
@@ -137,6 +138,33 @@ export function withSeenRows<Content>(
       ? { ...row, unseen: false }
       : row
   );
+}
+
+/**
+ * The rows without the notifications marked done one at a time: a stack
+ * shows one less and counts one less. A row whose shown notifications are
+ * all marked keeps them, since completing its last one completes the row.
+ */
+export function withoutDoneNotifications<
+  Content extends { notifications: readonly { id: string }[] },
+>(
+  rows: readonly InboxRow<Content>[],
+  doneIds: readonly string[]
+): InboxRow<Content>[] {
+  if (doneIds.length === 0) return [...rows];
+  const done = new Set(doneIds);
+  return rows.map((row) => {
+    const shown = row.content.notifications.filter(
+      (notification) => !done.has(notification.id)
+    );
+    const removed = row.content.notifications.length - shown.length;
+    if (removed === 0 || shown.length === 0) return row;
+    return {
+      ...row,
+      count: row.count - removed,
+      content: { ...row.content, notifications: shown },
+    };
+  });
 }
 
 /** Mark rows at the revision each acknowledged. */

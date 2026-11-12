@@ -75,6 +75,7 @@ type CommandMenuItem =
   | CreateProjectCommandItem;
 
 export type PaginationControls = {
+  windowKey?: Accessor<string | undefined>;
   hasMore: Accessor<boolean>;
   isLoadingMore: Accessor<boolean>;
   loadMore: () => Promise<void>;
@@ -83,6 +84,8 @@ export type PaginationControls = {
 /** CRM contacts matching a typed query, beyond those Quick Access holds. */
 export type CommandContactSource = PaginationControls & {
   contacts: Accessor<CrmContactEntity[]>;
+  /** Exact personal-contact resolution for this bounded CRM window. */
+  users?: Accessor<UserItem[]>;
   isLoading: Accessor<boolean>;
   error: Accessor<Error | undefined>;
 };

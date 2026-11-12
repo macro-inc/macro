@@ -418,6 +418,10 @@ impl RecordedAction {
 /// construction invariants to seal; the row already exists.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ActivityRecord {
+    /// Originating code-mode invocation; absent for non-agent and historical activity.
+    pub agent_correlation_id: Option<Uuid>,
+    /// SDK display verb, absent for non-agent and historical activity.
+    pub agent_verb: Option<agent_correlation::AgentVerb>,
     /// The stored activity id.
     pub id: Uuid,
     /// Who mechanically acted.
@@ -491,6 +495,10 @@ pub enum Ingest {
 #[readonly::make]
 #[derive(Debug, Clone, PartialEq)]
 pub struct Activity {
+    /// Originating code-mode invocation; absent for non-agent and historical activity.
+    pub agent_correlation_id: Option<Uuid>,
+    /// SDK display verb, absent for non-agent and historical activity.
+    pub agent_verb: Option<agent_correlation::AgentVerb>,
     /// Deterministic id: uuidv5 over (source event id, ordinal), so replays
     /// of the same broker event re-derive the same activity ids.
     pub id: Uuid,
@@ -510,6 +518,16 @@ pub struct Activity {
 }
 
 impl Activity {
+    /// Retain a specific editor's invocation when one event contains multiple editors.
+    /// A different invocation cannot inherit the event's display verb.
+    pub fn with_agent_correlation(mut self, id: Option<Uuid>) -> Self {
+        if self.agent_correlation_id != id {
+            self.agent_verb = None;
+        }
+        self.agent_correlation_id = id;
+        self
+    }
+
     /// Builds an activity for a [`CommonAction`] from a resolved
     /// [`Attribution`].
     pub fn attributed(
@@ -597,6 +615,8 @@ impl Activity {
             .unwrap_or_else(|| actor.as_ref().to_owned());
         Self {
             id: activity_id(source_event_id, ordinal),
+            agent_correlation_id: agent_correlation::context::current(),
+            agent_verb: agent_correlation::context::current_verb(),
             actor,
             subject_id,
             entity_type,

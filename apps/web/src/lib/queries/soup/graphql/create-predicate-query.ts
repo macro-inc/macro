@@ -18,6 +18,7 @@ import {
   type EntityFilterCacheArgs,
   parseCacheRevision,
 } from '../../../graphql-cache/protocol';
+import { createHiddenDeferral } from '../../visible-refresh';
 import { soupCacheTelemetry } from './cache-activity-telemetry';
 
 /** A declared source and generated fragment; no mutation-specific query updates. */
@@ -242,10 +243,13 @@ export function createPredicateQuery<T extends object>(options: {
         if (!running) runPromise = run();
       };
       requestRefresh = refresh;
+      // Every open tab shares one cache engine. A hidden tab keeps a dirty bit
+      // instead of reading on each revision; initial and explicit reads still run.
+      const deferral = createHiddenDeferral(refresh);
       const unsubscribeChanges = host.onCacheChanged(
         (revision) => {
           latest = revision;
-          refresh();
+          deferral.request();
         },
         { includeHydration: true }
       );
@@ -258,11 +262,12 @@ export function createPredicateQuery<T extends object>(options: {
           setData(undefined);
           setStatus('loading');
         });
-        refresh();
+        deferral.request();
       });
       refresh();
       onCleanup(() => {
         active = false;
+        deferral.dispose();
         unsubscribeChanges();
         unsubscribeGeneration();
         // Serialize release after any pending read, so disposal cannot recreate

@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT o.team_id, o.user_id, o.traceparent FROM crm_email_backfill_outbox o\n               ORDER BY o.requested_at, o.team_id, o.user_id\n               FOR UPDATE OF o SKIP LOCKED LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "team_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "traceparent",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "8db0c57cdfac5f57d9d593b678035ac6b5cfd5b44b669f902f0277144fda5467"
+}

@@ -85,22 +85,32 @@ export const AddToPipelineResponse = z.object({
   added: z.array(
     z.object({
       entryId: z.string().uuid(),
-      record: z.object({
-        id: z.string().uuid(),
-        name: z.union([z.string(), z.null()]).optional(),
-        detail: z.union([z.string(), z.null()]).optional(),
-      }),
+      record: z
+        .union([
+          z.object({
+            id: z.string().uuid(),
+            name: z.union([z.string(), z.null()]).optional(),
+            detail: z.union([z.string(), z.null()]).optional(),
+          }),
+          z.null(),
+        ])
+        .optional(),
       fields: z.record(z.any()),
     })
   ),
   alreadyPresent: z.array(
     z.object({
       entryId: z.string().uuid(),
-      record: z.object({
-        id: z.string().uuid(),
-        name: z.union([z.string(), z.null()]).optional(),
-        detail: z.union([z.string(), z.null()]).optional(),
-      }),
+      record: z
+        .union([
+          z.object({
+            id: z.string().uuid(),
+            name: z.union([z.string(), z.null()]).optional(),
+            detail: z.union([z.string(), z.null()]).optional(),
+          }),
+          z.null(),
+        ])
+        .optional(),
       fields: z.record(z.any()),
     })
   ),
@@ -292,7 +302,17 @@ export const CalculateSpreadsheet = z.object({
           .object({
             sheetId: z.string(),
             cells: z.array(
-              z.object({ address: z.string(), value: z.string() }).strict()
+              z
+                .object({
+                  address: z.string(),
+                  value: z.union([
+                    z.boolean(),
+                    z.number(),
+                    z.string(),
+                    z.null(),
+                  ]),
+                })
+                .strict()
             ),
           })
           .strict()
@@ -5247,7 +5267,7 @@ export const ProjectDetails = z.object({
 
 export const CreatePipeline = z.object({
   name: z.string(),
-  tracks: z.enum(['company', 'contact']),
+  tracks: z.union([z.enum(['company', 'contact']), z.null()]).optional(),
   sharedWithTeam: z.union([z.boolean(), z.null()]).optional(),
   stages: z.array(z.string()).optional(),
   fields: z
@@ -5275,7 +5295,7 @@ export const CreatePipelineResponse = z.object({
   pipeline: z.object({
     id: z.string().uuid(),
     name: z.string(),
-    tracks: z.enum(['company', 'contact']),
+    tracks: z.union([z.enum(['company', 'contact']), z.null()]).optional(),
     access: z.any().superRefine((x, ctx) => {
       const schemas = [
         z.literal('view'),
@@ -5359,59 +5379,83 @@ export const CreateProjectResponse = z.object({
 export const CreateRoutine = z.object({
   configuration: z.object({
     name: z.string(),
-    instructions: z.string(),
-    target: z.any().superRefine((x, ctx) => {
-      const schemas = [
-        z.object({ model: z.string(), type: z.literal('model') }),
-        z.object({ agentId: z.string().uuid(), type: z.literal('agent') }),
-      ];
-      const errors = schemas.reduce<z.ZodError[]>(
-        (errors, schema) =>
-          ((result) => (result.error ? [...errors, result.error] : errors))(
-            schema.safeParse(x)
-          ),
-        []
-      );
-      if (schemas.length - errors.length !== 1) {
-        ctx.addIssue({
-          path: ctx.path,
-          code: 'invalid_union',
-          unionErrors: errors,
-          message: 'Invalid input: Should pass single schema',
-        });
-      }
-    }),
-    schedule: z.any().superRefine((x, ctx) => {
-      const schemas = [
-        z.object({
-          at: z.string().datetime({ offset: true }),
-          type: z.literal('once'),
-        }),
-        z.object({
-          expression: z.string(),
-          timezone: z.string(),
-          type: z.literal('cron'),
-        }),
-      ];
-      const errors = schemas.reduce<z.ZodError[]>(
-        (errors, schema) =>
-          ((result) => (result.error ? [...errors, result.error] : errors))(
-            schema.safeParse(x)
-          ),
-        []
-      );
-      if (schemas.length - errors.length !== 1) {
-        ctx.addIssue({
-          path: ctx.path,
-          code: 'invalid_union',
-          unionErrors: errors,
-          message: 'Invalid input: Should pass single schema',
-        });
-      }
-    }),
+    triggers: z.array(
+      z.any().superRefine((x, ctx) => {
+        const schemas = [
+          z.object({
+            at: z.string().datetime({ offset: true }),
+            type: z.literal('once'),
+          }),
+          z.object({
+            expression: z.string(),
+            timezone: z.string(),
+            type: z.literal('cron'),
+          }),
+          z.object({
+            events: z.array(
+              z.any().superRefine((x, ctx) => {
+                const schemas = [
+                  z.literal('email.message_received'),
+                  z.literal('task.created'),
+                  z.literal('task.status_changed'),
+                  z.literal('task.priority_changed'),
+                  z.literal('task.property_changed'),
+                  z.literal('document.created'),
+                  z.literal('document.deleted'),
+                  z.literal('channel.created'),
+                  z.literal('channel.message_posted'),
+                  z.literal('channel.mentioned'),
+                  z.literal('call.started'),
+                  z.literal('call.ended'),
+                ];
+                const errors = schemas.reduce<z.ZodError[]>(
+                  (errors, schema) =>
+                    ((result) =>
+                      result.error ? [...errors, result.error] : errors)(
+                      schema.safeParse(x)
+                    ),
+                  []
+                );
+                if (schemas.length - errors.length !== 1) {
+                  ctx.addIssue({
+                    path: ctx.path,
+                    code: 'invalid_union',
+                    unionErrors: errors,
+                    message: 'Invalid input: Should pass single schema',
+                  });
+                }
+              })
+            ),
+            ids: z.union([z.array(z.string().uuid()), z.null()]).optional(),
+            condition: z.union([z.string(), z.null()]).optional(),
+            type: z.literal('event'),
+          }),
+        ];
+        const errors = schemas.reduce<z.ZodError[]>(
+          (errors, schema) =>
+            ((result) => (result.error ? [...errors, result.error] : errors))(
+              schema.safeParse(x)
+            ),
+          []
+        );
+        if (schemas.length - errors.length !== 1) {
+          ctx.addIssue({
+            path: ctx.path,
+            code: 'invalid_union',
+            unionErrors: errors,
+            message: 'Invalid input: Should pass single schema',
+          });
+        }
+      })
+    ),
+    steps: z.string(),
     requiredApps: z
-      .array(z.object({ appSlug: z.string(), name: z.string() }))
+      .union([
+        z.array(z.object({ appSlug: z.string(), name: z.string() })),
+        z.null(),
+      ])
       .optional(),
+    dangerouslyOperateAsUser: z.union([z.boolean(), z.null()]).optional(),
   }),
 });
 
@@ -5419,8 +5463,93 @@ export const RoutineInfo = z.object({
   id: z.string().uuid(),
   name: z.string(),
   enabled: z.boolean(),
-  trigger: z.any(),
-  task: z.any(),
+  configuration: z
+    .union([
+      z.object({
+        name: z.string(),
+        triggers: z.array(
+          z.any().superRefine((x, ctx) => {
+            const schemas = [
+              z.object({
+                at: z.string().datetime({ offset: true }),
+                type: z.literal('once'),
+              }),
+              z.object({
+                expression: z.string(),
+                timezone: z.string(),
+                type: z.literal('cron'),
+              }),
+              z.object({
+                events: z.array(
+                  z.any().superRefine((x, ctx) => {
+                    const schemas = [
+                      z.literal('email.message_received'),
+                      z.literal('task.created'),
+                      z.literal('task.status_changed'),
+                      z.literal('task.priority_changed'),
+                      z.literal('task.property_changed'),
+                      z.literal('document.created'),
+                      z.literal('document.deleted'),
+                      z.literal('channel.created'),
+                      z.literal('channel.message_posted'),
+                      z.literal('channel.mentioned'),
+                      z.literal('call.started'),
+                      z.literal('call.ended'),
+                    ];
+                    const errors = schemas.reduce<z.ZodError[]>(
+                      (errors, schema) =>
+                        ((result) =>
+                          result.error ? [...errors, result.error] : errors)(
+                          schema.safeParse(x)
+                        ),
+                      []
+                    );
+                    if (schemas.length - errors.length !== 1) {
+                      ctx.addIssue({
+                        path: ctx.path,
+                        code: 'invalid_union',
+                        unionErrors: errors,
+                        message: 'Invalid input: Should pass single schema',
+                      });
+                    }
+                  })
+                ),
+                ids: z.union([z.array(z.string().uuid()), z.null()]).optional(),
+                condition: z.union([z.string(), z.null()]).optional(),
+                type: z.literal('event'),
+              }),
+            ];
+            const errors = schemas.reduce<z.ZodError[]>(
+              (errors, schema) =>
+                ((result) =>
+                  result.error ? [...errors, result.error] : errors)(
+                  schema.safeParse(x)
+                ),
+              []
+            );
+            if (schemas.length - errors.length !== 1) {
+              ctx.addIssue({
+                path: ctx.path,
+                code: 'invalid_union',
+                unionErrors: errors,
+                message: 'Invalid input: Should pass single schema',
+              });
+            }
+          })
+        ),
+        steps: z.string(),
+        requiredApps: z
+          .union([
+            z.array(z.object({ appSlug: z.string(), name: z.string() })),
+            z.null(),
+          ])
+          .optional(),
+        dangerouslyOperateAsUser: z.union([z.boolean(), z.null()]).optional(),
+      }),
+      z.null(),
+    ])
+    .optional(),
+  notEditableHere: z.union([z.string(), z.null()]).optional(),
   nextRunAt: z
     .union([z.string().datetime({ offset: true }), z.null()])
     .optional(),
@@ -7835,7 +7964,7 @@ export const EditPipelineResponse = z.object({
   pipeline: z.object({
     id: z.string().uuid(),
     name: z.string(),
-    tracks: z.enum(['company', 'contact']),
+    tracks: z.union([z.enum(['company', 'contact']), z.null()]).optional(),
     access: z.any().superRefine((x, ctx) => {
       const schemas = [
         z.literal('view'),
@@ -9943,7 +10072,17 @@ export const EditSpreadsheet = z.object({
           .object({
             sheetId: z.string(),
             cells: z.array(
-              z.object({ address: z.string(), value: z.string() }).strict()
+              z
+                .object({
+                  address: z.string(),
+                  value: z.union([
+                    z.boolean(),
+                    z.number(),
+                    z.string(),
+                    z.null(),
+                  ]),
+                })
+                .strict()
             ),
             type: z.literal('set_cells'),
           })
@@ -10587,11 +10726,16 @@ export const FindPipelineEntriesResponse = z.object({
       entries: z.array(
         z.object({
           entryId: z.string().uuid(),
-          record: z.object({
-            id: z.string().uuid(),
-            name: z.union([z.string(), z.null()]).optional(),
-            detail: z.union([z.string(), z.null()]).optional(),
-          }),
+          record: z
+            .union([
+              z.object({
+                id: z.string().uuid(),
+                name: z.union([z.string(), z.null()]).optional(),
+                detail: z.union([z.string(), z.null()]).optional(),
+              }),
+              z.null(),
+            ])
+            .optional(),
           fields: z.record(z.any()),
         })
       ),
@@ -11991,6 +12135,8 @@ export const ListCalendarEventsResponse = z.object({
       title: z.string(),
       start: z.string(),
       end: z.string(),
+      startLocal: z.string(),
+      endLocal: z.string(),
       isAllDay: z.boolean(),
       timeZone: z.union([z.string(), z.null()]).optional(),
       location: z.union([z.string(), z.null()]).optional(),
@@ -13110,7 +13256,7 @@ export const ListPipelinesResponse = z.object({
     z.object({
       id: z.string().uuid(),
       name: z.string(),
-      tracks: z.enum(['company', 'contact']),
+      tracks: z.union([z.enum(['company', 'contact']), z.null()]).optional(),
       access: z.any().superRefine((x, ctx) => {
         const schemas = [
           z.literal('view'),
@@ -13194,8 +13340,97 @@ export const RoutineList = z.object({
       id: z.string().uuid(),
       name: z.string(),
       enabled: z.boolean(),
-      trigger: z.any(),
-      task: z.any(),
+      configuration: z
+        .union([
+          z.object({
+            name: z.string(),
+            triggers: z.array(
+              z.any().superRefine((x, ctx) => {
+                const schemas = [
+                  z.object({
+                    at: z.string().datetime({ offset: true }),
+                    type: z.literal('once'),
+                  }),
+                  z.object({
+                    expression: z.string(),
+                    timezone: z.string(),
+                    type: z.literal('cron'),
+                  }),
+                  z.object({
+                    events: z.array(
+                      z.any().superRefine((x, ctx) => {
+                        const schemas = [
+                          z.literal('email.message_received'),
+                          z.literal('task.created'),
+                          z.literal('task.status_changed'),
+                          z.literal('task.priority_changed'),
+                          z.literal('task.property_changed'),
+                          z.literal('document.created'),
+                          z.literal('document.deleted'),
+                          z.literal('channel.created'),
+                          z.literal('channel.message_posted'),
+                          z.literal('channel.mentioned'),
+                          z.literal('call.started'),
+                          z.literal('call.ended'),
+                        ];
+                        const errors = schemas.reduce<z.ZodError[]>(
+                          (errors, schema) =>
+                            ((result) =>
+                              result.error
+                                ? [...errors, result.error]
+                                : errors)(schema.safeParse(x)),
+                          []
+                        );
+                        if (schemas.length - errors.length !== 1) {
+                          ctx.addIssue({
+                            path: ctx.path,
+                            code: 'invalid_union',
+                            unionErrors: errors,
+                            message: 'Invalid input: Should pass single schema',
+                          });
+                        }
+                      })
+                    ),
+                    ids: z
+                      .union([z.array(z.string().uuid()), z.null()])
+                      .optional(),
+                    condition: z.union([z.string(), z.null()]).optional(),
+                    type: z.literal('event'),
+                  }),
+                ];
+                const errors = schemas.reduce<z.ZodError[]>(
+                  (errors, schema) =>
+                    ((result) =>
+                      result.error ? [...errors, result.error] : errors)(
+                      schema.safeParse(x)
+                    ),
+                  []
+                );
+                if (schemas.length - errors.length !== 1) {
+                  ctx.addIssue({
+                    path: ctx.path,
+                    code: 'invalid_union',
+                    unionErrors: errors,
+                    message: 'Invalid input: Should pass single schema',
+                  });
+                }
+              })
+            ),
+            steps: z.string(),
+            requiredApps: z
+              .union([
+                z.array(z.object({ appSlug: z.string(), name: z.string() })),
+                z.null(),
+              ])
+              .optional(),
+            dangerouslyOperateAsUser: z
+              .union([z.boolean(), z.null()])
+              .optional(),
+          }),
+          z.null(),
+        ])
+        .optional(),
+      notEditableHere: z.union([z.string(), z.null()]).optional(),
       nextRunAt: z
         .union([z.string().datetime({ offset: true }), z.null()])
         .optional(),
@@ -14112,6 +14347,7 @@ export const SessionConversation = z.object({
   harness: z.string(),
   model: z.string(),
   status: z.string(),
+  origin: z.any(),
   messages: z.array(
     z.object({
       turn: z.number().int().gte(0),
@@ -14302,6 +14538,8 @@ export const ReadCalendarEventResponse = z.object({
   title: z.string(),
   start: z.string(),
   end: z.string(),
+  startLocal: z.string(),
+  endLocal: z.string(),
   isAllDay: z.boolean(),
   timeZone: z.union([z.string(), z.null()]).optional(),
   isRecurring: z.boolean(),
@@ -17723,8 +17961,95 @@ export const RoutineDetails = z.object({
     id: z.string().uuid(),
     name: z.string(),
     enabled: z.boolean(),
-    trigger: z.any(),
-    task: z.any(),
+    configuration: z
+      .union([
+        z.object({
+          name: z.string(),
+          triggers: z.array(
+            z.any().superRefine((x, ctx) => {
+              const schemas = [
+                z.object({
+                  at: z.string().datetime({ offset: true }),
+                  type: z.literal('once'),
+                }),
+                z.object({
+                  expression: z.string(),
+                  timezone: z.string(),
+                  type: z.literal('cron'),
+                }),
+                z.object({
+                  events: z.array(
+                    z.any().superRefine((x, ctx) => {
+                      const schemas = [
+                        z.literal('email.message_received'),
+                        z.literal('task.created'),
+                        z.literal('task.status_changed'),
+                        z.literal('task.priority_changed'),
+                        z.literal('task.property_changed'),
+                        z.literal('document.created'),
+                        z.literal('document.deleted'),
+                        z.literal('channel.created'),
+                        z.literal('channel.message_posted'),
+                        z.literal('channel.mentioned'),
+                        z.literal('call.started'),
+                        z.literal('call.ended'),
+                      ];
+                      const errors = schemas.reduce<z.ZodError[]>(
+                        (errors, schema) =>
+                          ((result) =>
+                            result.error ? [...errors, result.error] : errors)(
+                            schema.safeParse(x)
+                          ),
+                        []
+                      );
+                      if (schemas.length - errors.length !== 1) {
+                        ctx.addIssue({
+                          path: ctx.path,
+                          code: 'invalid_union',
+                          unionErrors: errors,
+                          message: 'Invalid input: Should pass single schema',
+                        });
+                      }
+                    })
+                  ),
+                  ids: z
+                    .union([z.array(z.string().uuid()), z.null()])
+                    .optional(),
+                  condition: z.union([z.string(), z.null()]).optional(),
+                  type: z.literal('event'),
+                }),
+              ];
+              const errors = schemas.reduce<z.ZodError[]>(
+                (errors, schema) =>
+                  ((result) =>
+                    result.error ? [...errors, result.error] : errors)(
+                    schema.safeParse(x)
+                  ),
+                []
+              );
+              if (schemas.length - errors.length !== 1) {
+                ctx.addIssue({
+                  path: ctx.path,
+                  code: 'invalid_union',
+                  unionErrors: errors,
+                  message: 'Invalid input: Should pass single schema',
+                });
+              }
+            })
+          ),
+          steps: z.string(),
+          requiredApps: z
+            .union([
+              z.array(z.object({ appSlug: z.string(), name: z.string() })),
+              z.null(),
+            ])
+            .optional(),
+          dangerouslyOperateAsUser: z.union([z.boolean(), z.null()]).optional(),
+        }),
+        z.null(),
+      ])
+      .optional(),
+    notEditableHere: z.union([z.string(), z.null()]).optional(),
     nextRunAt: z
       .union([z.string().datetime({ offset: true }), z.null()])
       .optional(),
@@ -17763,11 +18088,16 @@ export const RemoveFromPipelineResponse = z.object({
   removed: z.array(
     z.object({
       entryId: z.string().uuid(),
-      record: z.object({
-        id: z.string().uuid(),
-        name: z.union([z.string(), z.null()]).optional(),
-        detail: z.union([z.string(), z.null()]).optional(),
-      }),
+      record: z
+        .union([
+          z.object({
+            id: z.string().uuid(),
+            name: z.union([z.string(), z.null()]).optional(),
+            detail: z.union([z.string(), z.null()]).optional(),
+          }),
+          z.null(),
+        ])
+        .optional(),
       fields: z.record(z.any()),
     })
   ),
@@ -18397,6 +18727,7 @@ export const SearchToolsResponse = z.object({
   additional_matches: z.array(
     z.object({ name: z.string(), description: z.string() })
   ),
+  already_available: z.array(z.string()).optional(),
 });
 
 export const SelfKnowledge = z.record(z.any());
@@ -18981,13 +19312,6 @@ export const ShareWithChannelResponse = z.object({
   }),
   summary: z.string(),
 });
-
-export const Subagent = z.object({
-  description: z.union([z.string(), z.null()]).optional(),
-  task: z.string(),
-});
-
-export const SubagentResponse = z.object({ result: z.string() });
 
 export const TextEditorCodeExecution = z.object({ input: z.string() });
 
@@ -19694,11 +20018,16 @@ export const UpdatePipelineEntriesResponse = z.object({
   updated: z.array(
     z.object({
       entryId: z.string().uuid(),
-      record: z.object({
-        id: z.string().uuid(),
-        name: z.union([z.string(), z.null()]).optional(),
-        detail: z.union([z.string(), z.null()]).optional(),
-      }),
+      record: z
+        .union([
+          z.object({
+            id: z.string().uuid(),
+            name: z.union([z.string(), z.null()]).optional(),
+            detail: z.union([z.string(), z.null()]).optional(),
+          }),
+          z.null(),
+        ])
+        .optional(),
       changes: z.array(
         z.object({ field: z.string(), before: z.any(), after: z.any() })
       ),
@@ -19716,64 +20045,86 @@ export const UpdateRoutine = z.object({
       z.object({
         configuration: z.object({
           name: z.string(),
-          instructions: z.string(),
-          target: z.any().superRefine((x, ctx) => {
-            const schemas = [
-              z.object({ model: z.string(), type: z.literal('model') }),
-              z.object({
-                agentId: z.string().uuid(),
-                type: z.literal('agent'),
-              }),
-            ];
-            const errors = schemas.reduce<z.ZodError[]>(
-              (errors, schema) =>
-                ((result) =>
-                  result.error ? [...errors, result.error] : errors)(
-                  schema.safeParse(x)
-                ),
-              []
-            );
-            if (schemas.length - errors.length !== 1) {
-              ctx.addIssue({
-                path: ctx.path,
-                code: 'invalid_union',
-                unionErrors: errors,
-                message: 'Invalid input: Should pass single schema',
-              });
-            }
-          }),
-          schedule: z.any().superRefine((x, ctx) => {
-            const schemas = [
-              z.object({
-                at: z.string().datetime({ offset: true }),
-                type: z.literal('once'),
-              }),
-              z.object({
-                expression: z.string(),
-                timezone: z.string(),
-                type: z.literal('cron'),
-              }),
-            ];
-            const errors = schemas.reduce<z.ZodError[]>(
-              (errors, schema) =>
-                ((result) =>
-                  result.error ? [...errors, result.error] : errors)(
-                  schema.safeParse(x)
-                ),
-              []
-            );
-            if (schemas.length - errors.length !== 1) {
-              ctx.addIssue({
-                path: ctx.path,
-                code: 'invalid_union',
-                unionErrors: errors,
-                message: 'Invalid input: Should pass single schema',
-              });
-            }
-          }),
+          triggers: z.array(
+            z.any().superRefine((x, ctx) => {
+              const schemas = [
+                z.object({
+                  at: z.string().datetime({ offset: true }),
+                  type: z.literal('once'),
+                }),
+                z.object({
+                  expression: z.string(),
+                  timezone: z.string(),
+                  type: z.literal('cron'),
+                }),
+                z.object({
+                  events: z.array(
+                    z.any().superRefine((x, ctx) => {
+                      const schemas = [
+                        z.literal('email.message_received'),
+                        z.literal('task.created'),
+                        z.literal('task.status_changed'),
+                        z.literal('task.priority_changed'),
+                        z.literal('task.property_changed'),
+                        z.literal('document.created'),
+                        z.literal('document.deleted'),
+                        z.literal('channel.created'),
+                        z.literal('channel.message_posted'),
+                        z.literal('channel.mentioned'),
+                        z.literal('call.started'),
+                        z.literal('call.ended'),
+                      ];
+                      const errors = schemas.reduce<z.ZodError[]>(
+                        (errors, schema) =>
+                          ((result) =>
+                            result.error ? [...errors, result.error] : errors)(
+                            schema.safeParse(x)
+                          ),
+                        []
+                      );
+                      if (schemas.length - errors.length !== 1) {
+                        ctx.addIssue({
+                          path: ctx.path,
+                          code: 'invalid_union',
+                          unionErrors: errors,
+                          message: 'Invalid input: Should pass single schema',
+                        });
+                      }
+                    })
+                  ),
+                  ids: z
+                    .union([z.array(z.string().uuid()), z.null()])
+                    .optional(),
+                  condition: z.union([z.string(), z.null()]).optional(),
+                  type: z.literal('event'),
+                }),
+              ];
+              const errors = schemas.reduce<z.ZodError[]>(
+                (errors, schema) =>
+                  ((result) =>
+                    result.error ? [...errors, result.error] : errors)(
+                    schema.safeParse(x)
+                  ),
+                []
+              );
+              if (schemas.length - errors.length !== 1) {
+                ctx.addIssue({
+                  path: ctx.path,
+                  code: 'invalid_union',
+                  unionErrors: errors,
+                  message: 'Invalid input: Should pass single schema',
+                });
+              }
+            })
+          ),
+          steps: z.string(),
           requiredApps: z
-            .array(z.object({ appSlug: z.string(), name: z.string() }))
+            .union([
+              z.array(z.object({ appSlug: z.string(), name: z.string() })),
+              z.null(),
+            ])
             .optional(),
+          dangerouslyOperateAsUser: z.union([z.boolean(), z.null()]).optional(),
         }),
         type: z.literal('configuration'),
       }),
@@ -19968,7 +20319,8 @@ export const UpdateSharingResponse = z.object({
 
 export const UpdateThreadLabels = z.object({
   thread_id: z.string().uuid(),
-  label_id: z.string().uuid(),
+  label_id: z.union([z.string().uuid(), z.null()]).optional(),
+  label: z.union([z.string(), z.null()]).optional(),
   add: z.boolean(),
 });
 
@@ -20332,3 +20684,7 @@ export const ReadResponse = z.object({
     }
   }),
 });
+
+export const Subagent = z.object({ task: z.string() });
+
+export const SubagentResponse = z.object({ result: z.string() });

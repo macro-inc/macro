@@ -45,9 +45,18 @@ synchronously via HTTP or asynchronously via SQS.
   (`loadComponentFromURL returned an empty reference`, `Failed to save
   document`) next to `No space left on device`; check
   `ecs.fargate.ephemeral_storage.utilized` before debugging LibreOffice.
+- Any `tracing::error!` inside `process_message` errors its span and counts
+  toward the internal span error monitor; log expected outcomes (such as a
+  job folder that is already gone) below `error`, and let the returned error
+  mark real failures.
 - The convert queue's visibility timeout (`infra/stacks/convert-service`)
   must stay above `conversion_timeout`; failed messages go to the DLQ after
   their second receive.
+- DOCX conversions report `Completed`/`Failed` to the job update Lambda
+  (`WEB_SOCKET_RESPONSE_LAMBDA`) only when the message's `notify_job` is set
+  (`job_update` in `src/process/convert.rs`). The Lambda fails on job ids it
+  doesn't track, and async invocation retries each failure twice, so a
+  producer that mints its own `job_id` must send `notify_job: false`.
 
 ## Related
 

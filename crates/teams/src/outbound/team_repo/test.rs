@@ -207,6 +207,66 @@ async fn test_create_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("teams"))
 )]
+async fn test_create_team_rejects_a_user_already_on_a_team(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool.clone());
+
+    let team1_user = |role: &'static str| {
+        sqlx::query_scalar::<_, String>(
+            r#"
+            SELECT user_id FROM team_user
+            WHERE team_id = '11111111-1111-1111-1111-111111111111' AND team_role = $1::team_role
+            "#,
+        )
+        .bind(role)
+        .fetch_one(&pool)
+    };
+
+    // A member of team1 who owns no team.
+    let member_id = team1_user("member").await?;
+    let member = MacroUserIdStr::parse_from_str(&member_id)?;
+    let error = team_repo
+        .create_team(
+            &member,
+            "Second Team",
+            "SECOND_TEAM",
+            None,
+            SeatPlan::Premium,
+            None,
+        )
+        .await
+        .expect_err("a team member cannot create another team");
+    assert!(matches!(error, CreateTeamError::AlreadyOnTeam));
+
+    let owner_id = team1_user("owner").await?;
+    let owner = MacroUserIdStr::parse_from_str(&owner_id)?;
+    let error = team_repo
+        .create_team(
+            &owner,
+            "Second Team",
+            "SECOND_TEAM",
+            None,
+            SeatPlan::Premium,
+            None,
+        )
+        .await
+        .expect_err("a team owner cannot create another team");
+    assert!(matches!(error, CreateTeamError::AlreadyOnTeam));
+
+    let second_team_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM team WHERE name = 'Second Team'")
+            .fetch_one(&pool)
+            .await?;
+    assert_eq!(second_team_count, 0);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
 async fn test_move_github_app_installation_to_team_moves_existing_user_rows(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
@@ -1874,26 +1934,35 @@ const TEAM_1: &str = "11111111-1111-1111-1111-111111111111";
 
 /// Sets the fixture invite to `invite@macro.com` as `days_old` days old, last
 /// emailed `last_sent_days_ago` days ago, with `reminders_sent` reminders.
+///
+/// `last_sent_at` is `TIMESTAMP(3)`, which rounds to the nearest millisecond,
+/// so it is truncated first. Rounded up, an invite aged to exactly its due
+/// time is still up to 0.5ms short of it if the claim's `NOW()` comes that soon.
 async fn age_invite(
     pool: &Pool<Postgres>,
     days_old: i32,
     last_sent_days_ago: i32,
     reminders_sent: i16,
 ) -> anyhow::Result<()> {
-    sqlx::query(
+    let aged_exactly: bool = sqlx::query_scalar(
         r#"
         UPDATE team_invite
         SET created_at = NOW() - make_interval(days => $1),
-            last_sent_at = NOW() - make_interval(days => $2),
+            last_sent_at = date_trunc('milliseconds', NOW() - make_interval(days => $2)),
             reminders_sent = $3
         WHERE email = 'invite@macro.com'
+        RETURNING last_sent_at <= NOW() - make_interval(days => $2)
         "#,
     )
     .bind(days_old)
     .bind(last_sent_days_ago)
     .bind(reminders_sent)
-    .execute(pool)
+    .fetch_one(pool)
     .await?;
+    assert!(
+        aged_exactly,
+        "last_sent_at must not round past its due time"
+    );
     Ok(())
 }
 
@@ -2135,6 +2204,56 @@ async fn agent_invites_are_visible_to_the_invitee(pool: Pool<Postgres>) -> anyho
     let pending = team_repo.get_user_team_invites(&invitee).await?;
     assert_eq!(pending.len(), 1);
     assert!(pending[0].is_agent);
+
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn get_user_display_name_joins_the_set_name_parts(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    for statement in [
+        r#"INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES
+            ('b1111111-1111-1111-1111-111111111111', 'full@example.com', 'full@example.com', 'cus_full'),
+            ('b2222222-2222-2222-2222-222222222222', 'first@example.com', 'first@example.com', 'cus_first'),
+            ('b3333333-3333-3333-3333-333333333333', 'unset@example.com', 'unset@example.com', 'cus_unset'),
+            ('b4444444-4444-4444-4444-444444444444', 'none@example.com', 'none@example.com', 'cus_none')"#,
+        r#"INSERT INTO "User" (id, email, macro_user_id) VALUES
+            ('macro|full@example.com', 'full@example.com', 'b1111111-1111-1111-1111-111111111111'),
+            ('macro|first@example.com', 'first@example.com', 'b2222222-2222-2222-2222-222222222222'),
+            ('macro|unset@example.com', 'unset@example.com', 'b3333333-3333-3333-3333-333333333333'),
+            ('macro|none@example.com', 'none@example.com', 'b4444444-4444-4444-4444-444444444444')"#,
+        r#"INSERT INTO macro_user_info (macro_user_id, first_name, last_name) VALUES
+            ('b1111111-1111-1111-1111-111111111111', 'Ada', 'Lovelace'),
+            ('b2222222-2222-2222-2222-222222222222', 'Grace', 'N/A'),
+            ('b3333333-3333-3333-3333-333333333333', 'N/A', NULL)"#,
+    ] {
+        sqlx::query(statement).execute(&pool).await?;
+    }
+    let team_repo = TeamRepositoryImpl::new(pool);
+
+    let mut names = Vec::new();
+    for user in [
+        "macro|full@example.com",
+        "macro|first@example.com",
+        "macro|unset@example.com",
+        "macro|none@example.com",
+        "macro|missing@example.com",
+    ] {
+        let user = MacroUserIdStr::parse_from_str(user)?;
+        names.push(team_repo.get_user_display_name(&user).await?);
+    }
+
+    assert_eq!(
+        names,
+        [
+            Some("Ada Lovelace".to_string()),
+            Some("Grace".to_string()),
+            None,
+            None,
+            None,
+        ]
+    );
 
     Ok(())
 }

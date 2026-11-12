@@ -11,6 +11,16 @@ const NotificationsInbox = lazy(async () => ({
   default: (await import('./notifications-inbox')).NotificationsInbox,
 }));
 
+const NotificationsCalendarPane = lazy(async () => ({
+  default: (await import('./views/notifications-calendar-pane'))
+    .NotificationsCalendarPane,
+}));
+
+/** A calendar notification's event, in the view's content area. */
+export function NotificationsCalendarRouteView() {
+  return <NotificationsCalendarPane />;
+}
+
 function TrackedNotificationsInbox() {
   usePageViewTracking('notifications');
   return <NotificationsInbox />;

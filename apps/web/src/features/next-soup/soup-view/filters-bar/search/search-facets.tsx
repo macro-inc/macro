@@ -1,22 +1,32 @@
 import { useCalendarSearchUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
+import { NO_ASSIGNEE } from '@app/features/next-soup/filters';
 import type {
   CallStatus,
   PropertyFilter,
   TagFilterMode,
 } from '@app/features/next-soup/filters/filter-store/types';
+import {
+  AssigneePickerStatus,
+  useAssigneePicker,
+} from '@app/features/soup/assignee-picker';
 import { usePosthog } from '@app/lib/analytics/posthog';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import { useQuickAccess } from '@core/context/quickAccess';
 import { useUserId } from '@core/context/user';
+import { macroIdToEmail, tryMacroId } from '@core/user/macroId';
+import { useContactFilterOptions } from '@core/user/use-contact-filter-options';
 import { EntityIcon as EntityIconWithAvatar } from '@entity/extractors/entity-icon';
 import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
+import { createContactResolution } from '@queries/contacts/lookup-query';
+import { useContactDirectoryScope } from '@queries/contacts/use-directory';
 import { type Accessor, createEffect, createMemo, type JSX } from 'solid-js';
 import {
   TASK_PRIORITY_OPTIONS,
   TASK_STATUS_OPTIONS,
 } from '../../../core/search-options';
 import { useInboxPicker } from '../inbox-picker';
+import type { SearchableOptionSourceFactory } from '../option-source';
 import type { SearchableOption } from '../searchable-multi-select';
 import { useTagOptions } from '../tag-filter';
 import type { TagFilter } from '../tag-filter-state';
@@ -128,12 +138,15 @@ export type SearchFacetVM = FacetBase &
     | {
         kind: 'multi';
         options: Accessor<SearchableOption[]>;
+        createSource?: SearchableOptionSourceFactory;
         activeIds: Accessor<string[]>;
         onChange: (ids: string[]) => void;
         placeholder: string;
         preserveOrder?: boolean;
         onOnly?: (id: string) => void;
         mode?: FacetModeVM;
+        footer?: () => JSX.Element;
+        onPickerOpenChange?: (open: boolean) => void;
       }
   );
 
@@ -168,28 +181,37 @@ function useChannelPicker(): Accessor<SearchableOption[]> {
  * Picker for the "From" chip (people). Used by channel-message sender
  * filter and call-record speaker filter.
  */
-function usePersonPicker(): Accessor<SearchableOption[]> {
-  const { useList } = useQuickAccess();
+function usePersonPicker(
+  selected: Accessor<string[]>
+): Accessor<SearchableOption[]> {
   const currentUserId = useUserId();
-  const people = useList('person').items;
-
+  const resolution = createContactResolution(
+    useContactDirectoryScope(),
+    () => ({ kind: 'ids', values: selected() }),
+    () => selected().length > 0
+  );
   return createMemo(() => {
-    const uid = currentUserId();
-    let me: SearchableOption | undefined;
-    const others: SearchableOption[] = [];
-    for (const s of people()) {
-      const opt: SearchableOption = {
-        id: s.id,
-        label:
-          s.id === uid ? `${s.data.name || 'Me'} (me)` : s.data.name || s.id,
+    const known = new Map(
+      resolution.data()?.users.map((user) => [user.id, user])
+    );
+    return selected().map((id) => {
+      const user = known.get(id.toLowerCase());
+      const macroId = tryMacroId(id);
+      const name = user?.name || (macroId ? macroIdToEmail(macroId) : id);
+      return {
+        id,
+        label: id === currentUserId() ? `${name} (me)` : name,
         icon: () => (
-          <UserIcon id={s.id} size="sm" suppressClick showTooltip={false} />
+          <UserIcon
+            id={id}
+            name={name}
+            size="sm"
+            suppressClick
+            showTooltip={false}
+          />
         ),
       };
-      if (s.id === uid) me = opt;
-      else others.push(opt);
-    }
-    return [...(me ? [me] : []), ...others];
+    });
   });
 }
 
@@ -224,6 +246,7 @@ function multiFacet(args: {
   neutralLabel: string;
   placeholder: string;
   options: Accessor<SearchableOption[]>;
+  createSource?: SearchableOptionSourceFactory;
   activeIds: Accessor<string[]>;
   onChange: (ids: string[]) => void;
 }): Extract<SearchFacetVM, { kind: 'multi' }> {
@@ -232,6 +255,7 @@ function multiFacet(args: {
     id: args.id,
     label: args.label,
     options: args.options,
+    createSource: args.createSource,
     activeIds: args.activeIds,
     onChange: args.onChange,
     placeholder: args.placeholder,
@@ -259,7 +283,11 @@ export function useSearchFacets(
   tagOptions?: Pick<TagFilter, 'hasTags' | 'options' | 'defByOption'>
 ): Accessor<SearchFacetVM[]> {
   const channelOptions = useChannelPicker();
-  const personOptions = usePersonPicker();
+
+  const assigneePicker = useAssigneePicker(
+    controller.taskAssignees,
+    () => controller.type() === 'task'
+  );
   const inboxPicker = useInboxPicker({
     selectedIds: controller.emailInbox,
     setSelectedIds: controller.setEmailInbox,
@@ -363,7 +391,8 @@ export function useSearchFacets(
     label: 'From',
     neutralLabel: 'Anyone',
     placeholder: 'Search senders...',
-    options: personOptions,
+    options: usePersonPicker(controller.channelFrom),
+    createSource: useContactFilterOptions,
     activeIds: controller.channelFrom,
     onChange: controller.setChannelFrom,
   });
@@ -383,7 +412,8 @@ export function useSearchFacets(
     label: 'From',
     neutralLabel: 'Anyone',
     placeholder: 'Search speakers...',
-    options: personOptions,
+    options: usePersonPicker(controller.callFrom),
+    createSource: useContactFilterOptions,
     activeIds: controller.callFrom,
     onChange: controller.setCallFrom,
   });
@@ -432,22 +462,32 @@ export function useSearchFacets(
     onChange: controller.setTaskPriority,
   });
 
-  const taskAssignee = multiFacet({
-    id: 'task-assignee',
-    label: 'Assignee',
-    neutralLabel: 'Anyone',
-    placeholder: 'Search assignees...',
-    options: personOptions,
-    activeIds: controller.taskAssignees,
-    onChange: controller.setTaskAssignees,
-  });
+  const taskAssignee: SearchFacetVM = {
+    ...multiFacet({
+      id: 'task-assignee',
+      label: 'Assignee',
+      neutralLabel: 'Anyone',
+      placeholder: 'Search assignees...',
+      options: () =>
+        assigneePicker.options().filter((option) => option.id !== NO_ASSIGNEE),
+      activeIds: controller.taskAssignees,
+      onChange: controller.setTaskAssignees,
+    }),
+    options: () =>
+      assigneePicker.options().filter((option) => option.id !== NO_ASSIGNEE),
+    get placeholder() {
+      return assigneePicker.placeholder();
+    },
+    footer: () => <AssigneePickerStatus picker={assigneePicker} />,
+  };
 
   const taskCreatedBy = multiFacet({
     id: 'task-created-by',
     label: 'Created by',
     neutralLabel: 'Anyone',
     placeholder: 'Search creators...',
-    options: personOptions,
+    options: usePersonPicker(controller.taskCreatedBy),
+    createSource: useContactFilterOptions,
     activeIds: controller.taskCreatedBy,
     onChange: controller.setTaskCreatedBy,
   });

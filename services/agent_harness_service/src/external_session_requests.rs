@@ -49,6 +49,7 @@ where
             repo_url: request.repo_url,
             session_id,
             owner: request.owner.as_ref().to_owned(),
+            origin: request.origin,
             // The requester's prompt follows through the session's control
             // endpoint, from the app; nothing composes it with this event.
             context: None,
@@ -93,7 +94,7 @@ where
                             "no runtime created the requested session in time"
                         );
                         return Err(AgentSessionError::RuntimeUnavailable(
-                            "this agent's runtime did not open the session; make sure macrod is running and up to date",
+                            "this agent's machine did not open the session; make sure macrod is running and up to date",
                         ));
                     }
                 }

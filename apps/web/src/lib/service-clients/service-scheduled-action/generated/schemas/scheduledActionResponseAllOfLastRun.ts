@@ -5,6 +5,6 @@
  * API for managing scheduled actions
  * OpenAPI spec version: 0.1.0
  */
-import type { LastRun } from './lastRun';
+import type { ActionExecutionRecord } from './actionExecutionRecord';
 
-export type ScheduledActionResponseAllOfLastRun = null | LastRun;
+export type ScheduledActionResponseAllOfLastRun = null | ActionExecutionRecord;

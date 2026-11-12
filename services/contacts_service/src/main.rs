@@ -111,7 +111,7 @@ async fn main() -> anyhow::Result<()> {
     )
     .await?;
     let authorization_service = MacroAuthorizationServiceImpl::new(
-        MacroAuthJwtValidator::new(jwt_args),
+        MacroAuthJwtValidator::new(jwt_args.clone()),
         InternalAuthConfig {
             api_key: config.internal_api_key.to_string(),
             default_user_id: None,
@@ -133,6 +133,7 @@ async fn main() -> anyhow::Result<()> {
     let cors = macro_cors::cors_layer();
     let port = config.port;
 
+    let correlation = agent_correlation::inbound::CorrelationState::new(db.clone(), jwt_args);
     let app = mount_at_root_and_prefix(
         contacts_router(ContactsRouterState {
             contacts_service: service,
@@ -147,6 +148,10 @@ async fn main() -> anyhow::Result<()> {
         SwaggerUi::new("/contacts/docs").url("/contacts/api-doc/openapi.json", ApiDoc::openapi()),
     );
 
+    let app = app.layer(axum::middleware::from_fn_with_state(
+        correlation,
+        agent_correlation::inbound::propagate,
+    ));
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port))
         .await
         .unwrap();

@@ -8,21 +8,13 @@ import { BaseTool } from './BaseTool';
 import { Tool } from './Tool';
 import { createToolRenderer, useToolError } from './ToolRenderer';
 
-/**
- * What to call the delegated work: the call's short description, else the
- * first line of its instructions.
- */
-function subagentTitle(data: {
-  description?: string | null;
-  task: string;
-}): string {
+/** What to call the delegated work: the first line of its instructions. */
+function subagentTitle(task: string): string {
   return (
-    data.description?.trim() ||
-    data.task
+    task
       .split('\n')
       .map((line) => line.trim())
-      .find((line) => line.length > 0) ||
-    'Subagent'
+      .find((line) => line.length > 0) || 'Subagent'
   );
 }
 
@@ -87,12 +79,14 @@ const handler = createToolRenderer({
       >
         <div class="flex min-w-0 flex-1 items-center justify-between gap-3 overflow-hidden">
           <Tooltip
-            label={subagentTitle(ctx.tool.data)}
+            label={subagentTitle(ctx.tool.data.task)}
             as="span"
             class="min-w-0 flex-1"
           >
             {/* The trigger is a flex box, whose own text never ellipsizes. */}
-            <span class="min-w-0 truncate">{subagentTitle(ctx.tool.data)}</span>
+            <span class="min-w-0 truncate">
+              {subagentTitle(ctx.tool.data.task)}
+            </span>
           </Tooltip>
           <Tool.ResultToggle
             expanded={isExpanded()}

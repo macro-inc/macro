@@ -8,7 +8,10 @@ use crate::domain::meetings::{
     Meeting, MeetingInvitePermissions, MeetingToken, MeetingsResponse, UpdateMeetingRequest,
 };
 use axum::RequestPartsExt;
-use axum::extract::{FromRequestParts, Path};
+use axum::body::{Body, Bytes};
+use axum::extract::{FromRequest, FromRequestParts, Path, Request};
+use axum::http::request::Parts;
+use axum::response::Response;
 use ip_extractor::ClientIp;
 use rate_limit::{
     RateLimitConfig, RateLimitKey, RateLimitService,
@@ -268,22 +271,69 @@ pub async fn share<S: CallService, Svc: EntityAccessService, Auth: MacroAuthoriz
 /// Handle `POST /call/meetings/join/{token}` through the call domain service.
 #[utoipa::path(post, operation_id = "meeting_join", path = "/call/meetings/join/{token}",
     params(("token" = String, Path)),
+    request_body(content = ref("#/components/schemas/JoinCallRequest"), content_type = "application/json"),
     responses((status = 200, body = CallTokenResponse), (status = 400, body = ErrorResponse), (status = 401, body = ErrorResponse), (status = 403, body = ErrorResponse), (status = 404, body = ErrorResponse))) ]
 #[tracing::instrument(err, skip_all)]
 pub async fn join<S: CallService, Svc: EntityAccessService, Auth: MacroAuthorizationService>(
     State(state): State<CallRouterState<S, Svc, Auth>>,
     Path(token): Path<String>,
     actor: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    headers: HeaderMap,
+    MeetingJoinBody(request): MeetingJoinBody,
 ) -> Result<Json<CallTokenResponse>, CallError> {
+    refuse_code_execution_token(&headers)?;
+    // Only SDK callers send options. The app and shipped native builds send no
+    // body and keep today's behavior: they switch calls, reclaim their identity
+    // after a reconnect, and are never treated as programs.
+    let (request, is_program) = match request {
+        Some(body)
+            if state
+                .service
+                .programmatic_calls_enabled(actor.authorization.user.macro_user_id.clone())
+                .await =>
+        {
+            (
+                body.0,
+                credential_is_program(&actor.authorization.user.origin),
+            )
+        }
+        _ => (JoinCallRequest::for_app(), false),
+    };
     Ok(Json(
         state
             .service
-            .join_meeting(
+            .join_meeting_with_options(
                 MeetingToken::try_from(token)?,
                 actor.authorization.user.macro_user_id.clone(),
+                request,
+                is_program,
+                actor.authorization.user.agent_id.is_some(),
             )
             .await?,
     ))
+}
+
+/// Optional SDK settings; shipped app requests send an empty JSON body.
+pub struct MeetingJoinBody(Option<Json<JoinCallRequest>>);
+
+impl<S: Send + Sync> FromRequest<S> for MeetingJoinBody {
+    type Rejection = Response;
+
+    async fn from_request(request: Request, state: &S) -> Result<Self, Self::Rejection> {
+        // Read through Axum's extractor so the configured body limit still applies.
+        let (parts, body) = <(Parts, Bytes)>::from_request(request, state).await?;
+        if body.is_empty() {
+            return Ok(Self(None));
+        }
+
+        // Only an actually empty body is absent. Nonempty requests still need
+        // the JSON content type, valid JSON syntax, and valid join settings.
+        let request = Request::from_parts(parts, Body::from(body));
+        Json::<JoinCallRequest>::from_request(request, state)
+            .await
+            .map(|body| Self(Some(body)))
+            .map_err(IntoResponse::into_response)
+    }
 }
 
 /// Handle `GET /call/join/{token}` through the call domain service.
@@ -312,8 +362,10 @@ pub async fn lookup<S: CallService>(
 pub async fn guest_join<S: CallService>(
     State(state): State<WebhookRouterState<S>>,
     Path(token): Path<String>,
+    headers: HeaderMap,
     Json(request): Json<GuestJoinRequest>,
 ) -> Result<Json<CallTokenResponse>, CallError> {
+    refuse_code_execution_token(&headers)?;
     Ok(Json(
         state
             .service

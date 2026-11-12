@@ -57,6 +57,47 @@ fn merge(
 }
 
 impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
+    /// Turn call roots into call entries, reading every call on the page at once.
+    pub(super) async fn with_call_entries(
+        &self,
+        mut page: MessageTimelinePage,
+    ) -> Result<MessageTimelinePage, MessageError> {
+        let call_ids: Vec<Uuid> = page
+            .entries
+            .iter()
+            .filter_map(|entry| match entry {
+                MessageTimelineEntry::Message { message }
+                    if message.message.kind == MessageKind::CallRoot =>
+                {
+                    Some(message.message.id)
+                }
+                _ => None,
+            })
+            .collect();
+        if call_ids.is_empty() {
+            return Ok(page);
+        }
+
+        let statuses = self.repo.call_entry_statuses(&call_ids).await?;
+        page.entries = page
+            .entries
+            .into_iter()
+            .map(|entry| match entry {
+                MessageTimelineEntry::Message { message }
+                    if message.message.kind == MessageKind::CallRoot =>
+                {
+                    let status = statuses
+                        .get(&message.message.id)
+                        .copied()
+                        .unwrap_or(CallEntryStatus::RecordDeleted);
+                    MessageTimelineEntry::Call { message, status }
+                }
+                entry => entry,
+            })
+            .collect();
+        Ok(page)
+    }
+
     pub(super) async fn activity_timeline(
         &self,
         parent: &MessageParent,
