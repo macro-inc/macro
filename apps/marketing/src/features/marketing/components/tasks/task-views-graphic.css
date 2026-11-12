@@ -1,0 +1,83 @@
+.paper-feature-graphic .task-views {
+  margin: 24px;
+  padding: 16px 18px 18px;
+  box-sizing: border-box;
+  border-radius: 18px;
+  color: var(--color-ui-content-primary);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 18px;
+}
+.task-views [data-tone=red] { --tone: var(--color-ui-red-ink, oklch(75% 0.2 25.3)); }
+.task-views [data-tone=violet] { --tone: var(--color-ui-violet-ink); }
+.task-views [data-tone=green] { --tone: var(--color-ui-green-ink); }
+.task-views [data-tone=yellow] { --tone: oklch(80% 0.16 86); }
+
+.task-views-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 14px; border-bottom: 1px solid var(--color-ui-border-secondary); }
+.task-views-bar strong { font-size: 15px; font-weight: 600; }
+.task-views-toggle { display: flex; padding: 2px; border-radius: 999px; background: var(--color-ui-button-secondary-bg); }
+.task-views-toggle button {
+  display: flex; align-items: center; gap: 6px; padding: 5px 11px; border: 0; border-radius: 999px;
+  background: none; color: var(--color-ui-content-tertiary); font: 500 12px/18px var(--font-sans);
+  transition: background-color 160ms ease, color 160ms ease;
+}
+.task-views-toggle button[aria-pressed=true] { background: var(--color-ui-button-secondary-pressed); color: var(--color-ui-content-primary); }
+.task-views-toggle button:focus-visible { outline: 2px solid var(--color-ui-content-tertiary); outline-offset: 1px; }
+.task-views-toggle svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+
+/* A fixed height, so switching views never moves the page. */
+.task-views-body { height: 252px; padding-top: 10px; overflow: hidden; }
+
+.task-views-status { flex: none; width: 16px; height: 16px; fill: none; stroke: var(--color-ui-content-tertiary); stroke-width: 1.5; }
+.task-views-status[data-status=progress] { stroke: oklch(78% 0.17 70); }
+.task-views-status[data-status=done] { stroke: var(--color-ui-accent); }
+.task-views-status-fill { fill: oklch(78% 0.17 70); stroke: none; }
+.task-views-status-check { stroke-linecap: round; stroke-linejoin: round; }
+.task-views-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.task-views-tag { display: inline-flex; flex: none; align-items: center; gap: 6px; padding: 2px 9px 2px 7px; border-radius: 999px; box-shadow: inset 0 0 0 1px var(--color-ui-border-secondary); color: var(--color-ui-content-secondary); font-size: 11.5px; }
+.task-views-tag::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--tone); }
+.task-views-owner { display: grid; flex: none; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--color-ui-avatar-bg); color: var(--color-ui-avatar-content); font-size: 10.5px; font-weight: 600; }
+.task-views-due { flex: none; width: 46px; color: var(--color-ui-content-tertiary); font-size: 12px; text-align: right; }
+
+.task-views-row { display: flex; align-items: center; gap: 12px; height: 48px; border-bottom: 1px solid var(--color-ui-divider); }
+.task-views-row:last-child { border-bottom: 0; }
+
+.task-views-body[data-view=board] { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.task-views-column { display: flex; flex-direction: column; gap: 8px; padding: 10px 8px; border-radius: 12px; background: var(--color-ui-surface-muted); }
+.task-views-column-head { display: flex; align-items: center; gap: 7px; padding: 0 2px 2px; color: var(--color-ui-content-secondary); font-size: 12px; font-weight: 500; }
+.task-views-card { display: flex; flex-direction: column; gap: 10px; padding: 10px; border-radius: 9px; background: var(--color-ui-surface-floating); box-shadow: inset 0 0 0 1px var(--color-ui-floating-edge); font-size: 12.5px; line-height: 17px; }
+.task-views-card > div { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+
+.task-views-days, .task-views-lane { display: grid; grid-template-columns: 178px minmax(0, 1fr); align-items: center; }
+.task-views-days { grid-template-columns: 178px repeat(10, minmax(0, 1fr)); padding-bottom: 6px; color: var(--color-ui-content-tertiary); font-size: 11px; text-align: center; }
+.task-views-days span:first-child { text-align: left; }
+.task-views-lane { height: 44px; border-top: 1px solid var(--color-ui-divider); }
+.task-views-lane .task-views-title { padding-right: 12px; }
+.task-views-track {
+  position: relative; align-self: stretch;
+  background: repeating-linear-gradient(to right, var(--color-ui-divider) 0 1px, transparent 1px 10%);
+}
+.task-views-bar-span {
+  position: absolute; top: 12px; bottom: 12px;
+  left: calc(var(--start) * 10% + 3px); width: calc(var(--days) * 10% - 5px);
+  border-radius: 6px; background: color-mix(in srgb, var(--tone) 55%, transparent);
+}
+.task-views-bar-span[data-status=done] { background: color-mix(in srgb, var(--tone) 24%, transparent); }
+
+/* Phone artboard: tighter card, no tags in the list, and a narrower label column. */
+.paper-feature-art[data-compact=true] .task-views { margin: 8px; padding: 14px 12px; }
+.paper-feature-art[data-compact=true] .task-views-toggle button { gap: 4px; padding: 5px 8px; font-size: 11.5px; }
+.paper-feature-art[data-compact=true] .task-views-toggle svg { display: none; }
+.paper-feature-art[data-compact=true] .task-views-body { height: 286px; }
+.paper-feature-art[data-compact=true] .task-views-row { gap: 9px; }
+.paper-feature-art[data-compact=true] .task-views-row .task-views-tag { display: none; }
+.paper-feature-art[data-compact=true] .task-views-body[data-view=board] { gap: 6px; }
+.paper-feature-art[data-compact=true] .task-views-column { padding: 8px 5px; }
+.paper-feature-art[data-compact=true] .task-views-column-head { font-size: 11px; gap: 5px; }
+.paper-feature-art[data-compact=true] .task-views-card { padding: 8px 7px; font-size: 11.5px; line-height: 15px; }
+.paper-feature-art[data-compact=true] .task-views-card .task-views-tag { display: none; }
+.paper-feature-art[data-compact=true] .task-views-card > div { justify-content: flex-end; }
+.paper-feature-art[data-compact=true] .task-views-days,
+.paper-feature-art[data-compact=true] .task-views-lane { grid-template-columns: 124px minmax(0, 1fr); }
+.paper-feature-art[data-compact=true] .task-views-days { grid-template-columns: 124px repeat(10, minmax(0, 1fr)); font-size: 10px; }
+.paper-feature-art[data-compact=true] .task-views-lane { height: 48px; font-size: 12px; }
