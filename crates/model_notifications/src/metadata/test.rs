@@ -1499,3 +1499,88 @@ fn routine_run_finished_names_the_routine_and_its_outcome() {
     .unwrap();
     assert!(matches!(event, NotifEvent::RoutineRunFinished(_)));
 }
+
+#[test]
+fn agent_sign_in_expiry_serializes_with_the_agent_and_the_computer() {
+    let expiring = AgentSignInExpiryMetadata {
+        agent: AgentProvider::Claude,
+        harness_id: Uuid::nil(),
+        computer_name: "Build box".to_string(),
+        stage: AgentSignInExpiryStage::ExpiresSoon,
+        expires_at: Some(utc_datetime("2026-11-20T12:00:00Z")),
+    };
+
+    assert_eq!(
+        serde_json::to_value(&expiring).unwrap(),
+        serde_json::json!({
+            "agent": "claude",
+            "harnessId": "00000000-0000-0000-0000-000000000000",
+            "computerName": "Build box",
+            "stage": "expires_soon",
+            "expiresAt": "2026-11-20T12:00:00Z",
+        })
+    );
+
+    let event: NotifEvent = serde_json::from_value(serde_json::json!({
+        "tag": "agent_sign_in_expiry",
+        "content": {
+            "agent": "claude",
+            "harnessId": "00000000-0000-0000-0000-000000000000",
+            "computerName": "Build box",
+            "stage": "expired",
+            "expiresAt": null,
+        },
+    }))
+    .unwrap();
+    let NotifEvent::AgentSignInExpiry(metadata) = event else {
+        panic!("expected an agent sign-in expiry, got {event:?}");
+    };
+    assert_eq!(
+        metadata,
+        AgentSignInExpiryMetadata {
+            agent: AgentProvider::Claude,
+            harness_id: Uuid::nil(),
+            computer_name: "Build box".to_string(),
+            stage: AgentSignInExpiryStage::Expired,
+            expires_at: None,
+        }
+    );
+}
+
+#[test]
+fn agent_sign_in_expiry_titles_name_the_agent_the_computer_and_the_stage() {
+    let expires_soon = AgentSignInExpiryMetadata {
+        agent: AgentProvider::Claude,
+        harness_id: Uuid::nil(),
+        computer_name: "Build box".to_string(),
+        stage: AgentSignInExpiryStage::ExpiresSoon,
+        expires_at: Some(utc_datetime("2026-11-20T12:00:00Z")),
+    };
+    let expires_today = AgentSignInExpiryMetadata {
+        agent: AgentProvider::Claude,
+        harness_id: Uuid::nil(),
+        computer_name: "Build box".to_string(),
+        stage: AgentSignInExpiryStage::ExpiresToday,
+        expires_at: Some(utc_datetime("2026-11-20T12:00:00Z")),
+    };
+    let expired = AgentSignInExpiryMetadata {
+        agent: AgentProvider::Claude,
+        harness_id: Uuid::nil(),
+        computer_name: "Build box".to_string(),
+        stage: AgentSignInExpiryStage::Expired,
+        expires_at: None,
+    };
+
+    assert_eq!(
+        expires_soon.format_title(None).unwrap(),
+        "Claude sign-in on Build box expires soon"
+    );
+    assert_eq!(
+        expires_today.format_title(None).unwrap(),
+        "Claude sign-in on Build box expires today"
+    );
+    assert_eq!(
+        expired.format_title(None).unwrap(),
+        "Claude sign-in on Build box expired"
+    );
+}

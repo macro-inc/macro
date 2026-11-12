@@ -10,7 +10,7 @@ import {
   ProductPage,
 } from '../../features/marketing/components/product/ProductPage';
 import { GithubConversationDemo } from '../../features/marketing/components/reviews/GithubWorkflow';
-import { TaskContextDemo } from '../../features/marketing/components/tasks/TaskContextDemo';
+import { EmailTaskDemo } from '../../features/marketing/components/tasks/EmailTaskDemo';
 import { TaskPaperGraphic } from '../../features/marketing/components/tasks/TaskPaperGraphic';
 import {
   TaskAgentChannelDemo,
@@ -132,7 +132,7 @@ export function RouteTasks() {
         >
           <DemoInteractionBoundary
             class="feature-page-visual"
-            render={() => <TaskContextDemo />}
+            render={() => <EmailTaskDemo />}
           />
         </FeaturePageSection>
         <FeaturePageSection

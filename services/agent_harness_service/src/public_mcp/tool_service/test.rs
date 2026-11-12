@@ -590,16 +590,28 @@ mod code_mode {
                 .is_some_and(|message| message.contains("not found")),
             "{response}"
         );
+    }
 
-        let other = rpc_as(
-            app(Arc::new(Runs::default())),
-            USER,
-            mcp_client("Claude"),
-            "tools/call",
-            serde_json::json!({"name": "ManageAgentSession", "arguments": {}}),
-        )
-        .await;
-        assert!(other.get("error").is_none(), "{other}");
+    #[tokio::test]
+    async fn chatgpt_calls_native_tools_directly() {
+        for caller in [
+            mcp_client("ChatGPT"),
+            Some(ToolCaller::McpClient { name: None }),
+        ] {
+            let response = rpc_as(
+                app(Arc::new(Runs::default())),
+                USER,
+                caller,
+                "tools/call",
+                serde_json::json!({"name": "NameSearch", "arguments": {}}),
+            )
+            .await;
+            assert_eq!(
+                response["result"]["structuredContent"],
+                serde_json::json!({"ok": true}),
+                "{response}"
+            );
+        }
     }
 
     #[tokio::test]
@@ -763,18 +775,67 @@ mod code_mode {
     }
 
     #[tokio::test]
-    async fn hidden_native_tools_remain_callable_in_code_mode() {
-        let app = app(Arc::new(Runs::default()));
-        let result = rpc(
+    async fn unlisted_native_tools_are_refused_in_code_mode() {
+        for (caller, name) in [
+            (Some(ToolCaller::ApiKey), "NameSearch"),
+            (mcp_client("Claude"), "NameSearch"),
+            (mcp_client("Claude"), "ManageAgentSession"),
+            (mcp_client("Claude"), "NoSuchTool"),
+            (Some(ToolCaller::Agent(BotId::TEST_A)), "NameSearch"),
+        ] {
+            let response = rpc_as(
+                app(Arc::new(Runs::default())),
+                USER,
+                caller,
+                "tools/call",
+                serde_json::json!({"name": name, "arguments": {}}),
+            )
+            .await;
+            assert!(
+                response["error"]["message"]
+                    .as_str()
+                    .is_some_and(|message| message.contains("not available in code mode")),
+                "{name}: {response}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn native_tools_are_callable_without_a_code_runner() {
+        let service = StreamableHttpService::new(
+            || Ok(catalog_service()),
+            Arc::new(LocalSessionManager::default()),
+            {
+                let mut config = StreamableHttpServerConfig::default()
+                    .with_allowed_hosts(["localhost".to_owned()]);
+                config.legacy_session_mode = false;
+                config.json_response = true;
+                config
+            },
+        );
+        let app =
+            axum::Router::new()
+                .nest_service("/mcp", service)
+                .layer(axum::middleware::from_fn(
+                    |mut request: axum::extract::Request, next: axum::middleware::Next| async move {
+                        request
+                            .extensions_mut()
+                            .insert(MacroUserIdStr::try_from_email(USER).unwrap());
+                        next.run(request).await
+                    },
+                ));
+        let response = rpc_as(
             app,
             USER,
+            mcp_client("Claude"),
             "tools/call",
             serde_json::json!({"name": "NameSearch", "arguments": {}}),
         )
         .await;
         assert_eq!(
-            result["result"]["structuredContent"],
-            serde_json::json!({"ok": true})
+            response["result"]["structuredContent"],
+            serde_json::json!({"ok": true}),
+            "{response}"
         );
     }
 

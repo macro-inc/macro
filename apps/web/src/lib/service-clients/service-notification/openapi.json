@@ -1165,6 +1165,11 @@
   },
   "components": {
     "schemas": {
+      "AgentProvider": {
+        "type": "string",
+        "description": "Whose account an agent signs in to: the Postgres `agent_provider` enum of\n`provider_accounts.provider` and `harness_account_logins.provider`. New\nproviders add a value there.",
+        "enum": ["claude"]
+      },
       "AgentSessionMentionedMetadata": {
         "allOf": [
           {
@@ -1308,6 +1313,40 @@
           }
         ],
         "description": "An agent is blocked on a question only the session's owner can answer."
+      },
+      "AgentSignInExpiryMetadata": {
+        "type": "object",
+        "description": "The account a team's Macro computer signed an agent in to is about to\nstop working, or has. Sent to whoever signed it in and to the team's\nadmins and owner, who can sign it in again from Settings → Machines.",
+        "required": ["agent", "harnessId", "computerName", "stage"],
+        "properties": {
+          "agent": {
+            "$ref": "#/components/schemas/AgentProvider",
+            "description": "The agent whose sign-in is running out."
+          },
+          "computerName": {
+            "type": "string",
+            "description": "The computer's name when the notice was sent."
+          },
+          "expiresAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the sign-in expires or expired; absent when the agent rejected it."
+          },
+          "harnessId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The computer's harness, whose runtime row holds the sign-in."
+          },
+          "stage": {
+            "$ref": "#/components/schemas/AgentSignInExpiryStage",
+            "description": "How close the sign-in is to no longer working."
+          }
+        }
+      },
+      "AgentSignInExpiryStage": {
+        "type": "string",
+        "description": "How close a computer's agent sign-in is to no longer working.",
+        "enum": ["expires_soon", "expires_today", "expired"]
       },
       "AiResponseMetadata": {
         "type": "object",
@@ -3253,6 +3292,21 @@
               "tag": {
                 "type": "string",
                 "enum": ["routine_run_finished"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An agent's sign-in on one of the team's Macro computers is about\nto expire, expired, or was rejected.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/AgentSignInExpiryMetadata",
+                "description": "An agent's sign-in on one of the team's Macro computers is about\nto expire, expired, or was rejected."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["agent_sign_in_expiry"]
               }
             }
           },
