@@ -52,22 +52,27 @@ request gives every request its own TCP and TLS handshake, which on a slow
 mobile network is most of the time the request takes.
 
 Keep the plugin's `gzip` feature on: the services compress a response only for
-a client that asks.
+a client that asks. The feature belongs to `reqwest`, so it also applies to the
+app's other native clients (the bundle updater, the desktop updater, uploads).
+A decoded response has no `Content-Length`, which is the one thing a web bundle
+can see of this.
 
 A connection kept from before a mobile app was suspended can be dead without
 either end knowing, and a request sent on it hangs. The mobile resume handler in
 `src/lib.rs` therefore calls `Http::reset_connections`; call it from any new
-path that learns the network changed. Nothing reports a network change today
-(the network status plugin reports only online and offline), so a connection
-that dies silently in the foreground is noticed by the plugin's HTTP/2 probe: a
-request that hears nothing for five seconds probes, and the connection is
-dropped after ten more without an answer. These need a native app release and
-change nothing a web bundle sees.
+path that learns the network changed. Nothing does that for a network change or
+for a desktop machine waking from sleep today (the network status plugin
+reports only online and offline). A connection that dies silently is then
+noticed by the plugin's HTTP/2 probe: a request that hears nothing for five
+seconds probes, and the connection is dropped after ten more without an answer.
+An HTTP/1.1 connection, such as one to file storage, has no probe and waits for
+TCP to give up. All of this needs a native app release.
 
 Requests on a shared connection share its flow control, so a response body the
-page neither reads nor cancels holds data against the others. The plugin gives
-a connection a window far larger than its requests can fill, so abandoned
-bodies cannot stall it; still, read or cancel every body you fetch.
+page neither reads nor cancels holds data against the others until it is read
+or released. The plugin gives a connection a window far larger than a few
+abandoned bodies can fill, but not an unlimited one; read or cancel every body
+you fetch.
 
 ## OTA bundle storage
 
