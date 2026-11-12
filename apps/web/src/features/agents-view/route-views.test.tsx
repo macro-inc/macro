@@ -12,6 +12,9 @@ const state = vi.hoisted(() => ({
   agentPage: 'connections',
   redirect: vi.fn(),
   updateMeta: vi.fn(),
+=======
+  restore: vi.fn(),
+>>>>>>> c95a8422df (fix(agents): retain connections under the agents workspace)
   touch: false,
 }));
 
@@ -35,7 +38,7 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
   }),
 }));
 vi.mock('@components/app/split-layout/view-restoration', () => ({
-  useViewRestoration: () => {},
+  useViewRestoration: (key?: string) => state.restore(key),
 }));
 vi.mock('@components/app/split-layout/split-router/app-route-shell', () => ({
   withAuth: (view: unknown) => view,
@@ -72,6 +75,7 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
+<<<<<<< HEAD
 it('updates Agents layout metadata after the remote flag loads and changes', () => {
   const [flag, setFlag] = createSignal({ enabled: false, loading: true });
   state.flag = flag;
@@ -106,6 +110,16 @@ it('uses the new Agents layout on touch devices when enabled', () => {
   expect(state.updateMeta).toHaveBeenCalledWith({
     splitPanelLayout: 'composable',
   });
+});
+
+it('remembers a directly opened Connections page as part of the Agents workspace', () => {
+  state.routeId = 'connections';
+  render(() => (
+    <Suspense>
+      <AgentsRouteView />
+    </Suspense>
+  ));
+  expect(state.restore).toHaveBeenCalledWith('agents');
 });
 
 it('replaces the mobile conversation alias instead of trapping Back in a redirect', () => {
