@@ -389,8 +389,9 @@ control primitives.
 The desktop main pane displays the selected view's bookmark icon before its name
 and its unframed ghost overflow button immediately after it, plus the normal Task
 controls.
-Provide matching sidebar context/overflow and selected-view overflow menus with
-Edit, Duplicate, Copy link, and confirmed Delete.
+Provide matching Task and Project sidebar context/overflow and selected-view
+menus with Rename, Duplicate, and confirmed Delete. Their row overflow trigger
+is a 24px ghost circle; set its dropdown size and variant explicitly.
 Wrap menu items in the existing padded groups. Non-owners get only actions they
 can perform; backend enforcement remains authoritative. Edit updates the name
 and sharing together, preserving temporary filters, layout, grouping, and sort without saving

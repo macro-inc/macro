@@ -1016,11 +1016,19 @@ end loads more projects; `Load more projects` also continues the list.
 Keyboard movement changes focus; Enter opens the focused project and
 Shift-selection opens it in a new split. Folders remain separate in Files.
 
-The Projects list's Tasks column shows a borderless progress pill: `3 of 8 done`,
-`All done`, or `No tasks`. Its 12px neutral ring fills clockwise in the accent
-color and stays empty when there are no tasks. Counts come from the
-permission-aware project summary in the list response, not by loading every
-task; they describe the project rather than the current task-list filters.
+The Projects list shows a 14px progress ring immediately after each project name,
+inside a 22px tooltip target. Counts describe the permission-aware, unfiltered
+project summary rather than the current task filters. The ring is empty when
+there are no tasks; Status, Priority, Assignees, Due date, and Updated remain
+separate desktop columns.
+
+An empty Projects collection uses the same centered EmptyStatePanel: “No projects
+yet”, “Group related tasks into a project to track them together.”, New project,
+and the book-icon Documentation action. When filters or the selected scope hide
+all projects, show “No projects in this view” with the standard filtered copy and
+Clear Filters when editable filters or search are active. Clearing removes those
+filters and search, not the selected built-in scope; scope-only empty views do not
+show a no-op Clear Filters action.
 
 On desktop, **Project layout** offers **List** and **Gantt**. Gantt shows one
 bar per visible project from Created at to Due date, using the same search,
@@ -1091,10 +1099,10 @@ tabs in that top bar; below 600px they collapse to icons, with tooltips on
 desktop, and the project name truncates instead. In Tasks, an outlined
 circular search button expands into a focused `Search in <project name>` field.
 Close or Escape clears the query and restores focus to the button. The desktop
-task toolbar stays the same height in narrow splits and keeps its combined
-New task split button accessible. Its primary action creates a task; the caret
-menu offers New task and Add existing tasks. On phones this becomes the bottom
-floating add menu. Opening an associated task extends the breadcrumb trail;
+task toolbar keeps one 32px Add task dropdown with New task (C) and Add existing
+tasks; opening the menu alone never creates a task. On phones, the floating Task
+control uses the standard stacked MobileCreateMenu, not a bottom drawer.
+Opening an associated task extends the breadcrumb trail;
 choose the project breadcrumb to return, or Projects to restore the collection.
 Project URLs retain identity and section:
 `/app/tasks/projects/<project-id>/overview` (or `tasks`). Share, and Copy Link
@@ -1177,20 +1185,29 @@ Layout, sort direction, and grouping use `projectTasks.layout`, `projectTasks.so
 `projectTasks.sortReversed`, and `projectTasks.groupBy` URL parameters, independent
 of the main Tasks view's controls. Saved project entry state remains the fallback
 when URL parameters are absent. Use
-`New task` to create a task in the project: the composer opens with its Project
-set to this project (change or clear it like any property), and the create
-request carries it, so there is no separate assignment step. The new row appears
-once the task is created. Verify this with GraphQL Soup both enabled and
-disabled. Desktop section tabs use the same control as Channels; phones switch sections from the title island. Editors choose
-`Add existing tasks` from the New task caret menu on desktop. On phones, the floating Task control stays visible, offering New and Add existing; the latter opens the existing-task picker directly. It opens the existing task selector: search, select several, and
-confirm `Add N tasks`. Next options/PageDown appends later loaded task pages to
-the visible options. Escape or Cancel dismisses without assigning tasks. Tasks
-already in this project are excluded. Adding a task moves it from its previous
-project. A partial failure keeps only
-failed tasks selected for retry, and a request failure preserves the selection.
-When the project has no tasks, an empty state with the tasks illustration offers
-New task and Add existing without an explanatory paragraph. The desktop state keeps its subtle border; the phone keeps the floating Task control. Filter-empty
-results do not show this project-empty state. Read-only projects omit add actions.
+`Add task` → `New task` to create a task in the project: the composer opens with
+its Project set to this project (change or clear it like any property), and the
+create request carries it, so there is no separate assignment step. The new row
+appears once the task is created. Verify this with GraphQL Soup both enabled and
+disabled. Desktop section tabs stay unchanged. On phones, tap the project title
+island to open the standard file-actions drawer. The drawer contains actions
+only; the existing Overview/Tasks tabs remain outside it on phones.
+
+Choose `Add existing tasks` from Add task on desktop, or from the floating Task
+control's stacked menu on phones. Search, select several, and confirm `Add N tasks`.
+Next options/PageDown appends later loaded task pages. Escape or Cancel dismisses
+without assigning tasks. Tasks already in this project are excluded. Adding a task
+moves it from its previous project. Partial failures retain only failed tasks for
+retry; request failures retain the full selection.
+
+When the authorized project has no task IDs, all layouts show the centered,
+borderless tasks empty state immediately, even while a filtered layout query is
+pending. It says “No tasks yet” and “Add tasks to plan and track this project's
+work.” Editors get a filled Add task menu; everyone gets Documentation with a
+book icon, opening https://docs.macro.com/product/projects in a new tab. The phone
+floating Task control remains available. If linked tasks exist but search, filters,
+or hidden completed tasks remove them from the view, keep the filtered-empty
+message instead; no project-empty illustration is shown.
 
 ### Saved project views
 

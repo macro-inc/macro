@@ -19,7 +19,7 @@ Reusable named view definitions. Consumers are main Tasks, Projects, and Email; 
 - Keep Task filters, navigation, and configuration decoding in `features/tasks-view`, Project definitions in `features/projects`, and Email definitions in `features/email-view`.
 - Order is personal and server-owned (`reorderSavedViews`); consumers show a pending move locally only until the list itself changes, never by splicing the cache.
 - Readers re-read on focus, after a gateway reconnect, and on a `saved_views_changed` push for their kind (`queries/saved-view-changes.ts`), which is how writes made outside the page, such as an agent's, appear; the push carries no definition.
-- Consumers pass the list's accessible label, row status (`trailing` plus `statusLabel`), drag wiring, and Move up/Move down handlers (Email passes them only where rows can't be dragged); rows never create drag items themselves, since only a desktop list mounts the drag provider. Pass `onCopyLink` only when a link can open the view for someone else (Tasks shares with teams; Email views are private).
+- Consumers pass the list's accessible label, row status (`trailing` plus `statusLabel`), drag wiring, and Move up/Move down handlers (Email passes them only where rows can't be dragged); rows never create drag items themselves, since only a desktop list mounts the drag provider. Tasks and Projects use Rename, Duplicate, and Delete menus; Email keeps its existing management labels.
 - A consumer that edits definitions in the dialog passes `fields`, `invalid`, and a replacement `config`; edit without `config` keeps renaming and sharing only. `hint` renders the consumer's note under the name (Email uses it on create).
 - Do not migrate CRM's legacy personal views or team settings into this consumer.
 - Share definitions, not access to their matching entities; the backend owns authorization.
@@ -34,6 +34,7 @@ Reusable named view definitions. Consumers are main Tasks, Projects, and Email; 
 - Use the optional icon and hidden-title picker props only for the Projects title island and sheet; keep Tasks picker presentation unchanged. Use mobile list composition for grouped cards and 48px rows without changing desktop list menus.
 - Compose unsaved list entries with the draft row; keep draft lifecycle and confirmed-record reconciliation in the consumer.
 - Keep header creation consumer-owned and forward its control ref so the host can isolate its keyboard scope.
+- Set variant="ghost" and size="icon-xs" explicitly when Dropdown.Trigger renders ViewSidebar.Control so dropdown text-button defaults cannot stretch the 24px circle.
 - Bind deferred picker actions to the opening account and discard them after an account change.
 - Validate the response viewer before exposing cached reads after an account change.
 - Keep list and detail hooks independent; pass mutation dialogs a refresh callback, not an aggregate read source.
