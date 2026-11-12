@@ -135,11 +135,18 @@ impl SessionCreations for ActivityCreations {
             )
             .await
             .map_err(|error| anyhow::anyhow!("could not read a session's programs: {error}"))?;
-        Ok(records.len() > usize::from(DRAFT_EXECUTIONS)
-            || records
-                .iter()
-                .any(agent_code_mode::domain::ExecutionRecord::may_have_written))
+        Ok(programs_may_have_written(&records))
     }
+}
+
+/// Whether programs whose newest records, read `DRAFT_EXECUTIONS + 1` at
+/// most, are `records` may have written: one of them may have, or there were
+/// more than a draft reads.
+fn programs_may_have_written(records: &[agent_code_mode::domain::ExecutionRecord]) -> bool {
+    records.len() > usize::from(DRAFT_EXECUTIONS)
+        || records
+            .iter()
+            .any(agent_code_mode::domain::ExecutionRecord::may_have_written)
 }
 
 /// The agent session behind a code-mode request, from the invocation its

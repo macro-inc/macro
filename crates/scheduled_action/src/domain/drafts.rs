@@ -70,8 +70,9 @@ const READ_TOOLS: [&str; 8] = [
     "ContentSearch",
     "ListEntities",
 ];
-/// How the Macro agent names its code-mode tools when it reaches them over
-/// MCP.
+/// The prefix the code-mode tools carry when a sandboxed harness reaches
+/// them through its `macro_internal` MCP server; the in-process agent calls
+/// them by their own names.
 const CODE_MODE_SERVER: &str = "mcp__macro_internal__";
 /// Turn reads that may fail in a row before the draft gives up.
 const MAX_STATUS_FAILURES: u8 = 5;
@@ -298,6 +299,21 @@ enum Ending {
     Failed,
 }
 
+/// Why a stopped draft waits for its session's activity, or that it doesn't.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::IntoStaticStr)]
+#[strum(serialize_all = "snake_case")]
+enum Settle {
+    /// Every tool it called reads, and every program it ran finished having
+    /// only read: nothing is on its way.
+    Skipped,
+    /// It called a tool that can write.
+    Tool,
+    /// A program it ran may have written.
+    Program,
+    /// The session or its programs couldn't say.
+    Unknown,
+}
+
 impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDraftService
     for RoutineDrafts<Code, Sessions>
 {
@@ -314,7 +330,7 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDraftService
         routine.draft.tool_calls = tracing::field::Empty,
         routine.draft.turns = tracing::field::Empty,
         routine.draft.status_reads = tracing::field::Empty,
-        routine.draft.settled = tracing::field::Empty,
+        routine.draft.settle = tracing::field::Empty,
         routine.draft.ended = tracing::field::Empty,
         routine.draft.code_failing = tracing::field::Empty,
         routine.draft.steps = tracing::field::Empty,
@@ -421,9 +437,9 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
         }
         // Activity is recorded asynchronously: a session that may have
         // written waits for its last writes' activity.
-        let wrote = self.may_have_written(session, activity.as_ref()).await;
-        span.record("routine.draft.settled", wrote);
-        if wrote {
+        let settle = self.settle(session, activity.as_ref()).await;
+        span.record("routine.draft.settle", <&str>::from(settle));
+        if settle != Settle::Skipped {
             tokio::time::sleep(ACTIVITY_SETTLE).await;
         }
         let recorded = self
@@ -543,30 +559,28 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
     }
 
     /// Whether a stopped draft's session may have written anything, so its
-    /// activity may still be on its way: unless every tool it called only
-    /// reads and every program it ran finished having only read. A session
-    /// that can't say may have.
-    async fn may_have_written(
-        &self,
-        session: AgentSessionId,
-        activity: Option<&RoutineActivity>,
-    ) -> bool {
+    /// activity may still be on its way, and why: it may have unless every
+    /// tool it called only reads and every program it ran finished having
+    /// only read. A session that can't say may have.
+    async fn settle(&self, session: AgentSessionId, activity: Option<&RoutineActivity>) -> Settle {
         let Some(tools) = activity.and_then(|activity| activity.tools.as_ref()) else {
-            return true;
+            return Settle::Unknown;
         };
         let reads = |tool: &String| {
             let tool = tool.strip_prefix(CODE_MODE_SERVER).unwrap_or(tool);
             READ_TOOLS.contains(&tool)
         };
-        !tools.iter().all(reads)
-            || self
-                .creations
-                .may_have_written(session.as_uuid())
-                .await
-                .inspect_err(|error| {
-                    tracing::warn!(error = ?error, "could not read whether a draft wrote");
-                })
-                .unwrap_or(true)
+        if !tools.iter().all(reads) {
+            return Settle::Tool;
+        }
+        match self.creations.may_have_written(session.as_uuid()).await {
+            Ok(false) => Settle::Skipped,
+            Ok(true) => Settle::Program,
+            Err(error) => {
+                tracing::warn!(error = ?error, "could not read whether a draft wrote");
+                Settle::Unknown
+            }
+        }
     }
 
     /// Whether the session has handed back a routine that passes its check.

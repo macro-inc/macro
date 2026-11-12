@@ -57,7 +57,9 @@ each run.
   read once the turn stops; since activity is written asynchronously, a
   session that may have written waits `ACTIVITY_SETTLE` first: one that
   called a tool outside `READ_TOOLS`, ran a program that called anything
-  but reads or hadn't finished, or can't say which tools it called), each
+  but reads, hadn't finished or whose activity may be incomplete, ran more
+  programs than the host reads (32), or can't say which tools it called or
+  what its programs did), each
   marked `used` when the routine references it, so the
   review can show items made for nothing or the routine's work done early. A check from a draft's
   session, found from the request's code-mode invocation (`RequestSessions`),
@@ -73,8 +75,9 @@ each run.
   `RoutineDrafts::sweep` (every minute in the harness) cleans up drafts
   older than `STALE_DRAFT`, from the rows alone. Saving checks every id
   again. The `routine.draft` span records the session id, checks, items
-  created, the session's tool calls and turns, whether it waited for
-  activity (`settled`), status reads and outcome
+  created, the session's tool calls and turns, why it waited for activity
+  or that it didn't (`settle`: `skipped`, `tool`, `program`, `unknown`),
+  status reads and outcome
   (`timeout` included), never the words; `routine.check` records
   whether a check passed and kept a draft's answer. `DraftContext` still
   accepts and ignores the `workspace` older web clients send. `bench/`

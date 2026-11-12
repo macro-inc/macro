@@ -207,7 +207,10 @@ impl RoutineSessions for Sessions {
         &self,
         _: RoutineSessionAction,
     ) -> Result<RoutineActivity, RoutineSessionError> {
-        let tools = self.tools.clone().ok_or(RoutineSessionError::OperationFailed)?;
+        let tools = self
+            .tools
+            .clone()
+            .ok_or(RoutineSessionError::OperationFailed)?;
         Ok(RoutineActivity {
             tool_calls: u32::try_from(tools.len()).unwrap(),
             turns: 1,
@@ -649,27 +652,52 @@ async fn a_draft_stops_its_session_once_a_check_passes() {
     assert_eq!(sessions.cancelled.lock().unwrap().len(), 1);
 }
 
+/// Answers whether a session's programs may have written, and nothing else.
+struct Programs(Option<bool>);
+
+#[async_trait::async_trait]
+impl SessionCreations for Programs {
+    async fn created_by(&self, _session: Uuid) -> Result<Vec<CreatedItem>> {
+        Ok(Vec::new())
+    }
+
+    async fn may_have_written(&self, _session: Uuid) -> Result<bool> {
+        self.0.ok_or_else(|| anyhow::anyhow!("activity unreadable"))
+    }
+}
+
 /// A session whose tools and programs only read wrote no activity to wait
 /// for, so its draft answers as soon as the check passes.
 #[tokio::test(start_paused = true)]
 async fn a_draft_whose_session_only_read_does_not_wait_for_activity() {
-    let elapsed = time_to_draft(Some(&["mcp__macro_internal__ReadCodeDocs", "ExecuteCode"])).await;
+    let read = Some(&["mcp__macro_internal__ReadCodeDocs", "ExecuteCode"][..]);
+    let elapsed = time_to_draft(read, Programs(Some(false))).await;
     assert!(elapsed < ACTIVITY_SETTLE, "{elapsed:?}");
 }
 
-/// A session that called a tool that writes, or can't say which it called,
-/// may have activity on its way, so its draft waits for it.
+/// A session that called a tool that writes, ran a program that may have
+/// written, or can't say either, may have activity on its way, so its draft
+/// waits for it.
 #[tokio::test(start_paused = true)]
 async fn a_draft_whose_session_may_have_written_waits_for_activity() {
-    let elapsed = time_to_draft(Some(&["ExecuteCode", "CreateDocument"])).await;
-    assert!(elapsed >= ACTIVITY_SETTLE, "{elapsed:?}");
-    let elapsed = time_to_draft(None).await;
-    assert!(elapsed >= ACTIVITY_SETTLE, "{elapsed:?}");
+    let code = Some(&["ExecuteCode"][..]);
+    for (tools, programs) in [
+        (Some(&["ExecuteCode", "CreateDocument"][..]), Some(false)),
+        (None, Some(false)),
+        (code, Some(true)),
+        (code, None),
+    ] {
+        let elapsed = time_to_draft(tools, Programs(programs)).await;
+        assert!(
+            elapsed >= ACTIVITY_SETTLE,
+            "{tools:?} {programs:?}: {elapsed:?}"
+        );
+    }
 }
 
-/// How long a draft whose session reports calling `tools` takes, its check
-/// passing at once.
-async fn time_to_draft(tools: Option<&[&str]>) -> Duration {
+/// How long a draft whose session reports calling `tools`, and whose
+/// programs answer as `programs` do, takes, its check passing at once.
+async fn time_to_draft(tools: Option<&[&str]>, programs: Programs) -> Duration {
     let rows = Arc::new(Rows::default());
     let mut sessions = Sessions::new(
         &rows,
@@ -684,8 +712,9 @@ async fn time_to_draft(tools: Option<&[&str]>) -> Duration {
     sessions.hangs = true;
     sessions.tools = tools.map(|tools| tools.iter().map(|tool| (*tool).to_owned()).collect());
     let sessions = Arc::new(sessions);
+    let drafts = drafts(&rows, &sessions).with_session_creations(Arc::new(programs));
     let started = tokio::time::Instant::now();
-    drafted_routine(draft(&drafts(&rows, &sessions), routine(BUG_REPORTS)).await);
+    drafted_routine(draft(&drafts, routine(BUG_REPORTS)).await);
     started.elapsed()
 }
 
