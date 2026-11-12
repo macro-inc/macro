@@ -896,7 +896,7 @@ export class Sdk extends HeyApiClient {
 
     /**
      * Mark the guided setup after buying the computer finished. Idempotent;
-     * allowed to the computer's buyer and the team owner.
+     * allowed to the team's owner and admins, like Claude sign-in.
      */
     public completeTeamComputerSetup<ThrowOnError extends boolean = false>(options: Options<CompleteTeamComputerSetupData, ThrowOnError>): RequestResult<CompleteTeamComputerSetupResponses, CompleteTeamComputerSetupErrors, ThrowOnError> {
         return (options.client ?? this.client).post<CompleteTeamComputerSetupResponses, CompleteTeamComputerSetupErrors, ThrowOnError>({ url: '/team/computers/{computer_id}/setup-complete', ...options });

@@ -360,8 +360,8 @@ export type ComputerStatus = {
      */
     poweredOn: boolean;
     /**
-     * The Macro user who bought it; with the team owner, the one who may
-     * finish its setup and manage its Claude account.
+     * The Macro user who bought it. The team's owner and admins, not the
+     * buyer, finish its setup and manage its Claude account.
      */
     purchasedBy: string;
     /**
@@ -376,7 +376,7 @@ export type ComputerStatus = {
     /**
      * Purchased catalog size.
      */
-    size: string;
+    size: ComputerSize;
     /**
      * Observed guest status.
      */

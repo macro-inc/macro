@@ -4,6 +4,8 @@
  * authentication_service
  * OpenAPI spec version: 0.1.0
  */
+
+import type { ComputerSize } from './computerSize';
 import type { ComputerStatusBilling } from './computerStatusBilling';
 import type { ComputerStatusCancelsAt } from './computerStatusCancelsAt';
 import type { ComputerStatusCompReason } from './computerStatusCompReason';
@@ -56,8 +58,8 @@ first connects. It can name an agent the team since deleted. */
   pastDueSince?: ComputerStatusPastDueSince;
   /** Whether validated state requests power on; false for quarantined records. */
   poweredOn: boolean;
-  /** The Macro user who bought it; with the team owner, the one who may
-finish its setup and manage its Claude account. */
+  /** The Macro user who bought it. The team's owner and admins, not the
+buyer, finish its setup and manage its Claude account. */
   purchasedBy: string;
   /** When the disk is destroyed, for a computer whose billing ended. */
   retainedUntil?: ComputerStatusRetainedUntil;
@@ -65,7 +67,7 @@ finish its setup and manage its Claude account. */
   /** When the team finished the guided setup; null while it is unfinished. */
   setupCompletedAt?: ComputerStatusSetupCompletedAt;
   /** Purchased catalog size. */
-  size: string;
+  size: ComputerSize;
   /** Observed guest status. */
   status: ComputerStatusKind;
   /** Virtual CPU count. */
