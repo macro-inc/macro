@@ -4,8 +4,8 @@ import UserIcon from '@phosphor/user.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
 import { Button, Tooltip } from '@ui';
 import { For, Match, Show, Switch } from 'solid-js';
-import type { ChatSummary } from '../../external-chat/core/chat';
 import { ProviderPicture } from '../../external-chat/components/provider-picture';
+import type { ChatSummary } from '../../external-chat/core/chat';
 import { providerIdentity } from '../../external-chat/providers/identity';
 import { ConversationSectionList } from '../../whatsapp-linked/components/conversation-sections';
 import {

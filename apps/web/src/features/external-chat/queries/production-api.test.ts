@@ -1,9 +1,9 @@
+import { staticFileIdEndpoint } from '@core/constant/servers';
 import type {
   ExternalChatDetail,
   ExternalChatMessage,
   ExternalChatMessages,
 } from '@service-storage/generated/schemas';
-import { staticFileIdEndpoint } from '@core/constant/servers';
 import { err, ok } from 'neverthrow';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { externalChatApi } from './production-api';
