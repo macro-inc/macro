@@ -1,7 +1,7 @@
 //! Outbound adapters for channel bot dependencies.
 
 mod agent_loop_responder;
-/// Code-mode replies behind the per-user rollout flag.
+/// Code-mode tools for mention replies.
 pub mod code_mode;
 /// Current parent capabilities for built-in agent replies.
 pub mod conversation;

@@ -228,9 +228,10 @@ pub enum AiHost {
     /// waits on, never a pending composer. It presents views with the
     /// harness's `execution.views.present` instead of `DisplayResults`.
     AgentSession,
-    /// The channel-mention bot: no composer, so `CreateCalendarEvent`
-    /// executes directly in the agent loop and `SendEmail` is omitted. Replies
-    /// contain text only, so this host also omits `DisplayResults`.
+    /// The channel-mention bot: no composer, so `SendEmail` is omitted and
+    /// replies contain text only (no `DisplayResults`). It runs code mode
+    /// ([`tools_for_channel_bot_code_mode`]), which drops `CreateCalendarEvent`
+    /// for the SDK's `calendar.createConfirmed`.
     ChannelBot,
     /// The MCP server: like [`AiHost::ChannelBot`] for user tools — MCP
     /// clients apply their own confirmation policy from tool annotations —
