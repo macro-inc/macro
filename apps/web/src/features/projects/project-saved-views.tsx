@@ -165,7 +165,7 @@ export function createProjectSavedViews(props: {
       if (view.kind === 'loading' || view.kind === 'unavailable') return false;
       return view.kind !== 'saved' || view.issues.length === 0;
     },
-    settings: state.settings,
+    settings: () => state.settings,
     persistentSettings: () => {
       if (!selectedId() && !state.creating) return state.settings;
       return draft.confirmed()?.config.settings ?? DEFAULT_PROJECT_SETTINGS;

@@ -174,8 +174,12 @@ function ProjectsCollectionHost(props: ProjectsTabProps) {
   const entryLayout = collection.layout();
   createEffect(
     on(
-      () => search.layout,
-      (layout) => collection.setLayout(layout ?? entryLayout)
+      () => [search.layout, savedViews?.selectedId()] as const,
+      ([layout, savedViewId]) => {
+        // A saved definition owns its raw layout, including the phone List fallback.
+        if (savedViewId) return;
+        collection.setLayout(layout ?? entryLayout);
+      }
     )
   );
   const displayCollection = {

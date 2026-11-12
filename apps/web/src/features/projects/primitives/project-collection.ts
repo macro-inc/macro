@@ -65,7 +65,7 @@ export function createProjectCollection(capabilities: {
   captureState?: (read: Accessor<ProjectCollectionSnapshot>) => void;
   search?: { value: Accessor<string>; onChange: (value: string) => void };
   settings?: {
-    value: ProjectCollectionSettings;
+    value: Accessor<ProjectCollectionSettings>;
     update: (patch: Partial<ProjectCollectionSettings>) => void;
   };
 }) {
@@ -84,9 +84,9 @@ export function createProjectCollection(capabilities: {
         groupBy: initial.groupBy,
       }),
     });
-  const settings = capabilities.settings?.value ?? localSettings;
+  const settings = capabilities.settings?.value ?? (() => localSettings);
   const updateSettings = capabilities.settings?.update ?? setLocalSettings;
-  const layout = () => settings.layout;
+  const layout = () => settings().layout;
   const setLayout = (layout: ProjectCollectionSettings['layout']) => {
     updateSettings({ layout });
     return layout;
@@ -95,20 +95,20 @@ export function createProjectCollection(capabilities: {
   const search = capabilities.search?.value ?? localSearch;
   const setSearch = capabilities.search?.onChange ?? setLocalSearch;
   const query = debouncedDependent(search, 150);
-  const status = () => settings.status;
+  const status = () => settings().status;
   const setStatus = (status: string) => updateSettings({ status });
-  const priority = () => settings.priority;
+  const priority = () => settings().priority;
   const setPriority = (priority: string) => updateSettings({ priority });
-  const dueBefore = () => settings.dueBefore;
+  const dueBefore = () => settings().dueBefore;
   const setDueBefore = (dueBefore: string) => updateSettings({ dueBefore });
-  const dueAfter = () => settings.dueAfter;
+  const dueAfter = () => settings().dueAfter;
   const setDueAfter = (dueAfter: string) => updateSettings({ dueAfter });
-  const mine = () => settings.mine;
+  const mine = () => settings().mine;
   const setMine = (mine: boolean) => updateSettings({ mine });
-  const sort = () => settings.sort;
+  const sort = () => settings().sort;
   const setSort = (sort: ProjectCollectionSettings['sort']) =>
     updateSettings({ sort });
-  const groupBy = () => settings.groupBy;
+  const groupBy = () => settings().groupBy;
   const setGroupBy = (groupBy: ProjectListGroupBy) =>
     updateSettings({ groupBy });
   const [scrollOffset, setScrollOffset] = createSignal(

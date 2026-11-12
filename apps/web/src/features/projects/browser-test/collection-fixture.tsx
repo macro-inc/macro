@@ -128,7 +128,7 @@ export function CollectionFixture() {
         (view.kind !== 'saved' || view.issues.length === 0)
       );
     },
-    settings: state.settings,
+    settings: () => state.settings,
     persistentSettings: () => state.settings,
     updateSettings: (patch: Partial<typeof DEFAULT_PROJECT_SETTINGS>) =>
       setState('settings', patch),
@@ -204,7 +204,7 @@ export function CollectionFixture() {
   const collection = createProjectCollection({
     createSource: context.createCollectionSource,
     userId: context.userId,
-    settings: { value: state.settings, update: views.updateSettings },
+    settings: { value: views.settings, update: views.updateSettings },
     scope: views.scope,
     enabled: views.ready,
     onOpen: setOpened,
