@@ -6,6 +6,8 @@
  */
 
 export type PasswordItemMetadataAllOf = {
+  /** Whether this caller may edit item fields or verification-code enrollment now. */
+  canEdit: boolean;
   /** Whether this caller may change grants or delete the team item now. */
   canManage: boolean;
   /** Whether the team has an explicit grant, independent of direct recipients. */

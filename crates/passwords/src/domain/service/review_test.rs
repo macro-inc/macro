@@ -282,9 +282,11 @@ async fn team_default_private_admin_and_departure_preserve_creator_and_values() 
             .unwrap();
         assert_eq!(item.shared_with_team, !private);
         assert!(item.can_manage);
+        assert!(item.can_edit);
         let stored =
             serde_json::to_value(repository.records.lock().unwrap()[&item.id.0].clone()).unwrap();
         assert!(stored["metadata"].get("canManage").is_none());
+        assert!(stored["metadata"].get("canEdit").is_none());
         assert!(stored["metadata"].get("sharedWithTeam").is_none());
         if private {
             assert!(matches!(
@@ -300,7 +302,9 @@ async fn team_default_private_admin_and_departure_preserve_creator_and_values() 
                     .can_manage
             );
         }
-        assert!(service.get(&admin, team, item.id).await.unwrap().can_manage);
+        let admin_view = service.get(&admin, team, item.id).await.unwrap();
+        assert!(admin_view.can_manage);
+        assert!(admin_view.can_edit);
         assert!(
             service
                 .list(&admin, team, "")
@@ -514,4 +518,128 @@ async fn omitted_private_choice_defaults_to_team_edit_sharing() {
     assert!(matches!(grants[0].kind, GranteeKind::Team));
     assert_eq!(grants[0].id, team.0.to_string());
     assert_eq!(grants[0].permission, Permission::Edit);
+}
+
+#[tokio::test]
+async fn can_edit_reflects_current_grants_without_grant_management() {
+    let repository = Arc::new(FakeRepository::new());
+    let service = PasswordService {
+        repository: repository.clone(),
+        provider: Arc::new(FakeProvider::new()),
+        availability: Arc::new(FakeAvailability),
+    };
+    let creator = Actor {
+        user_id: MacroUserIdStr::parse_from_str("macro|creator@example.com")
+            .unwrap()
+            .into_owned(),
+    };
+    let recipient = Actor {
+        user_id: MacroUserIdStr::parse_from_str("macro|recipient@example.com")
+            .unwrap()
+            .into_owned(),
+    };
+    let team = TeamId(Uuid::now_v7());
+    for actor in [&creator, &recipient] {
+        repository
+            .memberships
+            .lock()
+            .unwrap()
+            .insert(actor.user_id.to_string(), vec![team]);
+    }
+    let item = service
+        .create(
+            &creator,
+            team,
+            WriteItem {
+                private: true,
+                operation_id: Uuid::now_v7(),
+                name: "Credential".into(),
+                kind: ItemKind::Login,
+                url: None,
+                folder_id: None,
+                favorite: false,
+                expected_version: None,
+                values: SecretValues {
+                    username: SecretString("account".into()),
+                    password: SecretString("synthetic".into()),
+                    notes: SecretString(String::new()),
+                    fields: vec![],
+                },
+            },
+        )
+        .await
+        .unwrap();
+    assert!(item.can_edit);
+
+    for kind in [GranteeKind::User, GranteeKind::Team] {
+        // The final view grant also checks that downgrading edit access changes the response.
+        for permission in [Permission::View, Permission::Edit, Permission::View] {
+            service
+                .share(
+                    &creator,
+                    team,
+                    item.id,
+                    vec![Grant {
+                        id: match kind {
+                            GranteeKind::User => recipient.user_id.to_string(),
+                            GranteeKind::Team => team.0.to_string(),
+                        },
+                        kind: kind.clone(),
+                        permission,
+                    }],
+                )
+                .await
+                .unwrap();
+            let editable = permission == Permission::Edit;
+            let detail = service.get(&recipient, team, item.id).await.unwrap();
+            assert_eq!(detail.can_edit, editable);
+            assert!(!detail.can_manage);
+            let listed = service.list(&recipient, team, "").await.unwrap();
+            assert_eq!(listed[0].can_edit, editable);
+            service
+                .reveal(&recipient, team, item.id, None, false)
+                .await
+                .unwrap();
+            service.copy(&recipient, team, item.id, None).await.unwrap();
+
+            let patch = service
+                .patch(
+                    &recipient,
+                    team,
+                    item.id,
+                    PatchItem {
+                        name: "Edited".into(),
+                        kind: ItemKind::Login,
+                        url: None,
+                        folder_id: None,
+                        favorite: false,
+                        expected_version: item.version,
+                    },
+                )
+                .await;
+            let enrollment = service
+                .configure_totp(
+                    &recipient,
+                    team,
+                    item.id,
+                    Some(SecretString("JBSWY3DPEHPK3PXP".into())),
+                )
+                .await;
+            if editable {
+                patch.unwrap();
+                enrollment.unwrap();
+                assert!(matches!(
+                    service.share(&recipient, team, item.id, vec![]).await,
+                    Err(Error::Forbidden)
+                ));
+                assert!(matches!(
+                    service.delete(&recipient, team, item.id).await,
+                    Err(Error::Forbidden)
+                ));
+            } else {
+                assert!(matches!(patch, Err(Error::NotFound)));
+                assert!(matches!(enrollment, Err(Error::NotFound)));
+            }
+        }
+    }
 }

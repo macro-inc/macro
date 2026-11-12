@@ -425,7 +425,11 @@ export function ItemDetailBody(props: {
           </Show>
         </FieldRow>
       </Show>
-      <Show when={!props.item.hasTotp && layout().totp !== 'none'}>
+      <Show
+        when={
+          props.item.canEdit && !props.item.hasTotp && layout().totp !== 'none'
+        }
+      >
         <Show
           when={addingTotp() || layout().totp === 'required'}
           fallback={

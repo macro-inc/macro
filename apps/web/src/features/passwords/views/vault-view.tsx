@@ -172,13 +172,15 @@ function ItemPane(props: {
                   }
                 />
               </Show>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => fireAndForget(props.vault.edit(), 'passwords')}
-              >
-                {t('passwords.edit')}
-              </Button>
+              <Show when={props.item.canEdit}>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => fireAndForget(props.vault.edit(), 'passwords')}
+                >
+                  {t('passwords.edit')}
+                </Button>
+              </Show>
               <Dropdown placement="bottom-end">
                 <Dropdown.Trigger
                   variant="ghost"
@@ -493,6 +495,8 @@ export function VaultView(props: {
     setEditingFolder(next);
   };
   const editing = editingFolder;
+  /** A name field chosen in the header menu, opened when the menu closes. */
+  let headerEditor: FolderEditing | undefined;
   const [mobileFolders, setMobileFolders] = createSignal(false);
   const [leave, setLeave] = createSignal<(allow: boolean) => void>();
   const [now, setNow] = createSignal(Date.now());
@@ -657,17 +661,28 @@ export function VaultView(props: {
                       >
                         <DotsThreeIcon class="size-4" />
                       </Dropdown.Trigger>
-                      <Dropdown.Content class="min-w-48 max-w-[calc(100vw-2rem)]">
+                      <Dropdown.Content
+                        class="min-w-48 max-w-[calc(100vw-2rem)]"
+                        onCloseAutoFocus={(event) => {
+                          // A name field opens only once the menu's focus trap
+                          // has gone, so it keeps the focus it takes on mount.
+                          const editor = headerEditor;
+                          headerEditor = undefined;
+                          if (!editor) return;
+                          event.preventDefault();
+                          setEditing(editor);
+                        }}
+                      >
                         <FolderActionItems
-                          onSubfolder={() =>
-                            setEditing({
+                          onSubfolder={() => {
+                            headerEditor = {
                               kind: 'create',
                               parentId: folder().id,
-                            })
-                          }
-                          onRename={() =>
-                            setEditing({ kind: 'rename', id: folder().id })
-                          }
+                            };
+                          }}
+                          onRename={() => {
+                            headerEditor = { kind: 'rename', id: folder().id };
+                          }}
                           onMove={() =>
                             setEditing({ kind: 'move', id: folder().id })
                           }

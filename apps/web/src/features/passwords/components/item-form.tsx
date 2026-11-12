@@ -7,7 +7,7 @@ import XIcon from '@icon/system/regular/x.svg';
 import { Button, Checkbox, Dropdown, Input } from '@ui';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import { match } from 'ts-pattern';
-import { KIND_LAYOUTS, type PasswordSlot } from '../core/kinds';
+import { isSecretField, KIND_LAYOUTS, type PasswordSlot } from '../core/kinds';
 import {
   folderPath,
   type PasswordDraft,
@@ -198,7 +198,13 @@ export function ItemForm(props: {
               </Button>
             </div>
             <Input
-              type="password"
+              type={
+                isSecretField(props.draft.kind, field.label, (template) =>
+                  t(`passwords.field_${template}`)
+                )
+                  ? 'password'
+                  : 'text'
+              }
               autocomplete="off"
               aria-label={field.label || t('passwords.fieldValue')}
               value={field.value}

@@ -26,6 +26,7 @@ impl PasswordService {
         record.metadata.shared = record.metadata.share_count > 0;
         ItemView {
             can_manage: record.user_id == actor.user_id || admin,
+            can_edit: admin || Self::permission(actor, record.metadata.team_id, &record, true),
             shared_with_team: record.grants.iter().any(|grant| {
                 matches!(grant.kind, GranteeKind::Team)
                     && grant.id == record.metadata.team_id.0.to_string()

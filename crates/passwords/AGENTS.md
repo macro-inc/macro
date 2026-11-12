@@ -42,8 +42,10 @@ Do not add plaintext values to any metadata record, errors or tracing fields.
 - Keep `Record.user_id` as immutable creator. New items get a team Edit grant
   unless `private=true`; updates preserve grants. Current human team administrators
   can access and manage private items after creator departure.
-- Derive `canManage` and `sharedWithTeam` only in `ItemView` responses; never
+- Derive `canManage`, `canEdit` and `sharedWithTeam` only in `ItemView` responses; never
   persist actor-specific capabilities in metadata or write intents.
+  `canEdit` uses current edit grants or administrator access; management remains
+  creator/administrator-only, and view grants still permit reveal and copy.
 - Mutations require `X-Macro-Passwords: 1`; responses use `private, no-store`.
 - Username GET and audited username-copy POST resolve only the current committed
   identifier with normal human view authorization. Recheck access and revision after

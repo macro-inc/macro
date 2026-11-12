@@ -169,6 +169,44 @@ for (const viewport of VIEWPORTS) {
   });
 }
 
+test.describe('desktop view-only', () => {
+  test('a view-only item reveals but offers no edit, share, delete or code changes', async ({
+    page,
+  }) => {
+    const viewport = VIEWPORTS[0];
+    await page.setViewportSize(viewport);
+    test.setTimeout(360_000);
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    await page.goto('/src/features/passwords/browser-test/vault.html', {
+      timeout: 240_000,
+    });
+    await press(page, viewport, /View-only login/);
+    await expect(
+      page.getByRole('heading', { name: 'View-only login' })
+    ).toBeVisible();
+    await press(page, viewport, 'Reveal Password');
+    await expect(
+      page.getByText('view-only-secret', { exact: true })
+    ).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Edit', exact: true })
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole('button', { name: 'Share', exact: true })
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole('button', { name: 'Add verification code' })
+    ).toHaveCount(0);
+    await press(page, viewport, 'More item actions');
+    await expect(
+      page.getByRole('menuitem', { name: 'Delete item' })
+    ).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    expect(errors).toEqual([]);
+  });
+});
+
 test.describe('desktop folders', () => {
   test('creates, nests, renames and deletes folders; items move to All items', async ({
     page,
@@ -192,6 +230,7 @@ test.describe('desktop folders', () => {
     await page
       .getByRole('menuitem', { name: 'New subfolder', exact: true })
       .click();
+    await expect(page.getByLabel('Folder name', { exact: true })).toBeFocused();
     await page.getByLabel('Folder name', { exact: true }).fill('Production');
     await page.getByLabel('Folder name', { exact: true }).press('Enter');
 
@@ -200,10 +239,11 @@ test.describe('desktop folders', () => {
     await press(page, viewport, 'Save');
     await expect(page.getByText('Engineering / Login')).toBeVisible();
 
-    await tree.getByRole('button', { name: 'Production', exact: true }).click({
-      button: 'right',
-    });
+    // The header "…" menu hands focus to the inline field it opens.
+    await tree.getByRole('button', { name: 'Production', exact: true }).click();
+    await press(page, viewport, 'Folder actions for Production');
     await page.getByRole('menuitem', { name: 'Rename', exact: true }).click();
+    await expect(page.getByLabel('Rename', { exact: true })).toBeFocused();
     await page.getByLabel('Rename', { exact: true }).fill('Prod');
     await page.getByLabel('Rename', { exact: true }).press('Enter');
     await expect(

@@ -699,3 +699,36 @@ it('opens an in-place edit with the revealed values and keeps it while selecting
   vault.select(saved.value);
   expect(vault.activeDraft()?.itemId).toBe(saved.value.id);
 });
+
+it('never opens an edit on an item the viewer may only view', async () => {
+  const item: PasswordItem = {
+    id: '019a0000-0000-7000-8000-000000000041',
+    teamId: 'fixture-team',
+    name: 'Viewed',
+    kind: 'login',
+    url: null,
+    folderId: null,
+    favorite: false,
+    version: 1,
+    hasTotp: false,
+    shared: true,
+    shareCount: 1,
+    sharedWithTeam: false,
+    canManage: false,
+    canEdit: false,
+    createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z',
+    lastUsedAt: null,
+  };
+  const source = createFakePasswordSource([{ item, values: LOGIN.values }]);
+  const reveal = vi.spyOn(source, 'reveal');
+  const vault = mountVault(source);
+  await waitFor(() => expect(vault.loadedItems()).toHaveLength(1));
+  vault.select(item);
+  await vault.edit();
+  expect(vault.activeDraft()).toBeUndefined();
+  expect(reveal).not.toHaveBeenCalled();
+  // Viewing stays available: the value still reveals on request.
+  await vault.reveal();
+  expect(vault.values()?.password).toBe('private-value');
+});

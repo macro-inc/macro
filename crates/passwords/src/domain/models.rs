@@ -130,6 +130,8 @@ pub struct ItemView {
     pub metadata: ItemMetadata,
     /// Whether this caller may change grants or delete the team item now.
     pub can_manage: bool,
+    /// Whether this caller may edit item fields or verification-code enrollment now.
+    pub can_edit: bool,
     /// Whether the team has an explicit grant, independent of direct recipients.
     pub shared_with_team: bool,
 }

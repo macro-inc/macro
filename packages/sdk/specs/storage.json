@@ -51561,8 +51561,12 @@
           },
           {
             "type": "object",
-            "required": ["canManage", "sharedWithTeam"],
+            "required": ["canManage", "canEdit", "sharedWithTeam"],
             "properties": {
+              "canEdit": {
+                "type": "boolean",
+                "description": "Whether this caller may edit item fields or verification-code enrollment now."
+              },
               "canManage": {
                 "type": "boolean",
                 "description": "Whether this caller may change grants or delete the team item now."

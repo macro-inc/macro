@@ -72571,6 +72571,11 @@ export const passwordsListResponseItem = zod
   .describe('Searchable display fields, without any credential values.')
   .and(
     zod.object({
+      canEdit: zod
+        .boolean()
+        .describe(
+          'Whether this caller may edit item fields or verification-code enrollment now.'
+        ),
       canManage: zod
         .boolean()
         .describe(
@@ -72739,6 +72744,11 @@ export const passwordsCreateResponse = zod
   .describe('Searchable display fields, without any credential values.')
   .and(
     zod.object({
+      canEdit: zod
+        .boolean()
+        .describe(
+          'Whether this caller may edit item fields or verification-code enrollment now.'
+        ),
       canManage: zod
         .boolean()
         .describe(
@@ -72819,6 +72829,11 @@ export const passwordsDetailResponse = zod
   .describe('Searchable display fields, without any credential values.')
   .and(
     zod.object({
+      canEdit: zod
+        .boolean()
+        .describe(
+          'Whether this caller may edit item fields or verification-code enrollment now.'
+        ),
       canManage: zod
         .boolean()
         .describe(
@@ -72987,6 +73002,11 @@ export const passwordsUpdateResponse = zod
   .describe('Searchable display fields, without any credential values.')
   .and(
     zod.object({
+      canEdit: zod
+        .boolean()
+        .describe(
+          'Whether this caller may edit item fields or verification-code enrollment now.'
+        ),
       canManage: zod
         .boolean()
         .describe(
@@ -73116,6 +73136,11 @@ export const passwordsPatchResponse = zod
   .describe('Searchable display fields, without any credential values.')
   .and(
     zod.object({
+      canEdit: zod
+        .boolean()
+        .describe(
+          'Whether this caller may edit item fields or verification-code enrollment now.'
+        ),
       canManage: zod
         .boolean()
         .describe(

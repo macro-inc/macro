@@ -115,3 +115,19 @@ export const KIND_LAYOUTS: Record<PasswordKind, PasswordKindLayout> = {
 export function kindHasSlot(kind: PasswordKind, slot: PasswordSlot) {
   return KIND_LAYOUTS[kind].slots.some((entry) => entry.slot === slot);
 }
+
+/**
+ * Whether a custom field's value is masked while typing. Only a field still
+ * carrying a non-secret template label of its kind (Email, Expires) types in
+ * the clear; every other field, including ones the person adds, stays masked.
+ * `labelOf` gives a template field's display label, as the draft seeded it.
+ */
+export function isSecretField(
+  kind: PasswordKind,
+  label: string,
+  labelOf: (field: PasswordTemplateField) => string
+) {
+  return !KIND_LAYOUTS[kind].template.some(
+    (entry) => !entry.secret && labelOf(entry.field) === label
+  );
+}

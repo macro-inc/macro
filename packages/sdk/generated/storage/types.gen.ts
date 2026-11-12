@@ -15281,6 +15281,10 @@ export type PasswordItemKind = 'login' | 'card' | 'note' | 'identity' | 'api' | 
  */
 export type PasswordItemMetadata = PasswordItemFields & {
     /**
+     * Whether this caller may edit item fields or verification-code enrollment now.
+     */
+    canEdit: boolean;
+    /**
      * Whether this caller may change grants or delete the team item now.
      */
     canManage: boolean;
