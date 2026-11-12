@@ -1,4 +1,8 @@
 use super::*;
+// Load the adapter regressions through the existing test-only module.
+#[path = "../test.rs"]
+mod adapters;
+
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 const NOT_NULL_VIOLATION: &str = "23502";
 const CHECK_VIOLATION: &str = "23514";

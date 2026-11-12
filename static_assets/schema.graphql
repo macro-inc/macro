@@ -549,6 +549,11 @@ type CompleteSubscriptionRoot {
 	"""
 	agentSessionLogAppended(sessionId: ID!): [GraphqlAgentSessionLogEntry!]!
 	"""
+	Recorded activity from any invocation associated with this accessible session.
+	The stream errors when rows were missed; clients must refetch its REST page.
+	"""
+	agentSessionActivityAppended(sessionId: ID!): [GraphqlActivityEvent!]!
+	"""
 	Subscribe to realtime notifications for the authenticated user.
 	"""
 	notificationUpdates: GraphqlNotificationPatch!
@@ -1691,6 +1696,14 @@ type GraphqlActivityEvent {
 	"""
 	subjectId: String!
 	"""
+	Originating code-mode invocation, when present.
+	"""
+	agentCorrelationId: ID
+	"""
+	Display verb supplied by a validated code-mode invocation.
+	"""
+	agentVerb: String
+	"""
 	The kind of entity acted on.
 	"""
 	entityType: GraphqlEntityType!
@@ -1702,6 +1715,10 @@ type GraphqlActivityEvent {
 	What the principal did.
 	"""
 	action: GraphqlActivityAction!
+	"""
+	The stored action tag, for clients that do not need its typed payload.
+	"""
+	actionTag: String!
 	"""
 	When it happened, in RFC 3339 format.
 	"""
