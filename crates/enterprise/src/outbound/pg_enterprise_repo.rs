@@ -155,7 +155,7 @@ impl EnterpriseRepository for PgEnterpriseRepository {
 
     async fn runtime_allowlist(&self, team_id: Uuid) -> Result<Option<RuntimePresetAllowlist>> {
         let row = sqlx::query!(
-            "SELECT preset_ids FROM team_runtime_preset_allowlist WHERE team_id = $1",
+            r#"SELECT preset_ids as "preset_ids: Vec<String>" FROM team_runtime_preset_allowlist WHERE team_id = $1"#,
             team_id,
         )
         .fetch_optional(&self.pool)
@@ -166,7 +166,7 @@ impl EnterpriseRepository for PgEnterpriseRepository {
                 .into_iter()
                 .map(|id| {
                     RuntimePreset::from_str(&id)
-                        .map_err(|_| EnterpriseError::UnknownStoredPreset(id))
+                        .map_err(|_| EnterpriseError::UnknownStoredPreset(id.to_string()))
                 })
                 .collect::<Result<Vec<_>>>()
                 .map(|preset_ids| RuntimePresetAllowlist { preset_ids })

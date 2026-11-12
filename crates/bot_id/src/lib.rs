@@ -90,7 +90,7 @@ pub const MACRO_SYSTEM_BOT_ID: BotId =
     BotId::new_from_uuid(Uuid::from_u128(0x0000_0000_0000_0000_0000_0000_0000_5759));
 
 /// Display name for the autonomous Rox platform principal.
-pub const MACRO_SYSTEM_NAME: &str = concat!(PRODUCT_DISPLAY_NAME, " System");
+pub const MACRO_SYSTEM_NAME: &str = "Rox System";
 
 /// Stable [`BotId`] for the "Macro Coder" system bot, our coding-agent harness.
 ///
@@ -104,7 +104,7 @@ pub const MACRO_CODER_BOT_ID: BotId =
 pub const MACRO_CODER_HANDLE: &str = "coder";
 
 /// Display name for the Rox coding bot.
-pub const MACRO_CODER_NAME: &str = concat!(PRODUCT_DISPLAY_NAME, " Coder");
+pub const MACRO_CODER_NAME: &str = "Rox Coder";
 
 /// Stable [`BotId`] for the "Cursor" system bot.
 ///
