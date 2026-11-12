@@ -320,7 +320,8 @@ HTTPS machine hostnames; verify the proxy configuration before retrying.
 
 Any top-level heading with content under it folds that content away, up to the
 next heading of the same or a higher level. Hover the heading to show a chevron
-in the left gutter (the drag handle steps one column further left); the chevron
+in the left gutter (the drag handle steps one column further left, or, in a
+gutter too narrow for both, is not shown on that heading); the chevron
 stays while the section is folded and is always shown on touch. Mod+Enter in a
 heading toggles it. Folding is per person and per device (localStorage, keyed by
 the headings' node ids): it changes no document content, collaborators never see
