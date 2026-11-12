@@ -66,6 +66,12 @@ execution, display) that don't belong to a single domain.
   existing import — no change needed here unless it's cross-domain.
 - Add a cross-domain tool: new module in `src/` → register in
   `src/lib.rs`'s toolset assembly → regenerate schemas (see Checks).
+- Delete a tool whose calls appear in saved conversations: keep its input and
+  output types and add a `PhantomTool` under its name to `RetiredTools`
+  (`src/frontend_compat.rs`), so its generated TypeScript and web card keep
+  rendering while no host offers it. Move any type `frontend_compat/types.rs`
+  registers out of the tool's module before deleting the module. A saved
+  call of a tool with no schema at all renders as a generic row by name.
 
 Canvas tools come from the Documents subtoolset and inherit its worker client,
 admission and usage recorder in every host. ApplyCanvasEdits uses the same
