@@ -17,7 +17,7 @@ use std::sync::Arc;
 use super::{
     client_kind::classify,
     client_name::ClientName,
-    models::RefreshTokenBinding,
+    models::{RefreshTokenBinding, RegisteredClient},
     ports::{ClientRegistrationStore, RefreshTokenBindingStore},
 };
 
@@ -69,22 +69,19 @@ impl AccessTokenClients {
             .clients
             .find_client(&binding.client_id)
             .await?
-            .and_then(|client| {
-                Some(McpClientLabel {
-                    kind: classify(&client.client_name, &client.redirect_uris),
-                    name: client_label(&client.client_name)?,
-                })
-            }))
+            .and_then(|client| client_label(&client)))
     }
 }
 
-/// A registered client name as the label on what the client writes, or
-/// `None` when it fails [`ClientName::parse`].
-pub(crate) fn client_label(client_name: &str) -> Option<String> {
-    ClientName::parse(client_name)
-        .ok()
-        .flatten()
-        .map(String::from)
+/// The label on what a registered client writes: its name, and the product
+/// its registration is consistent with. `None` when the name fails
+/// [`ClientName::parse`].
+pub(crate) fn client_label(client: &RegisteredClient) -> Option<McpClientLabel> {
+    let name = ClientName::parse(&client.client_name).ok().flatten()?;
+    Some(McpClientLabel {
+        kind: classify(&client.client_name, &client.redirect_uris),
+        name: String::from(name),
+    })
 }
 
 fn access_token_digest(access_token: &str) -> String {

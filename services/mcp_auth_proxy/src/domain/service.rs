@@ -344,7 +344,7 @@ where
 
     /// The access token `resource` is given for an upstream one, and the
     /// seconds it is valid for: the upstream token itself, or a Macro API
-    /// token signed with the client's name, which may expire sooner.
+    /// token signed with the client's label, which may expire sooner.
     async fn access_token_for(
         &self,
         resource: McpResource,
@@ -355,20 +355,16 @@ where
         match resource {
             McpResource::Harness => Ok((upstream, expires_in)),
             McpResource::Chatgpt => {
-                let client_name = self
+                let client = self
                     .client_registrations
                     .find_client(client_id)
                     .await
                     .map_err(TokenExchangeError::ClientRegistrationStore)?
-                    .and_then(|client| client_label(&client.client_name));
+                    .and_then(|client| client_label(&client));
 
                 let minted = self
                     .macro_api_tokens
-                    .mint(
-                        &upstream,
-                        client_name.as_deref(),
-                        Duration::from_secs(expires_in),
-                    )
+                    .mint(&upstream, client.as_ref(), Duration::from_secs(expires_in))
                     .await
                     .map_err(TokenExchangeError::MintAccessToken)?;
                 Ok((minted.token, minted.lifetime.as_secs()))

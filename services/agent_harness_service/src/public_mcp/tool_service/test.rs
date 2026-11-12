@@ -596,7 +596,7 @@ mod code_mode {
     async fn chatgpt_calls_native_tools_directly() {
         for caller in [
             mcp_client("ChatGPT"),
-            Some(ToolCaller::McpClient { name: None }),
+            Some(ToolCaller::McpClient { client: None }),
         ] {
             let response = rpc_as(
                 app(Arc::new(Runs::default())),
