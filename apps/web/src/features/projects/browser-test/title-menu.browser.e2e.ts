@@ -123,3 +123,39 @@ test('late property definitions and access changes update title actions', async 
     menu.getByRole(role, { name: 'Set priority', exact: true })
   ).toHaveCount(0);
 });
+
+test('open rename and delete dialogs recheck permission before writing', async ({
+  page,
+}, info) => {
+  const phone = info.project.name === 'phone';
+  const role = phone ? 'button' : 'menuitem';
+  await open(page);
+  let menu = await openMenu(page, phone);
+  await menu.getByRole(role, { name: 'Rename', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Name' }).fill('Blocked rename');
+  await page
+    .getByTestId('revoke-project-access')
+    .evaluate((button) =>
+      button.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    );
+  await page.getByRole('button', { name: 'Save name' }).click();
+  await expect(page.getByRole('alert')).toContainText(
+    'Could not rename project'
+  );
+  await expect(page.getByTestId('name')).toHaveText('Launch');
+
+  await open(page);
+  menu = await openMenu(page, phone);
+  await menu.getByRole(role, { name: 'Delete', exact: true }).click();
+  await page
+    .getByTestId('revoke-project-access')
+    .evaluate((button) =>
+      button.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    );
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: /Delete/ })
+    .click();
+  await expect(page.getByRole('alert')).toContainText('Only the project owner');
+  await expect(page.getByTestId('deletes')).toHaveText('0');
+});

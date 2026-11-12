@@ -146,7 +146,12 @@ function Fixture() {
           <button onClick={() => setDefinitionsLoaded(true)}>
             Load definitions
           </button>
-          <button onClick={() => setAccess('view')}>Revoke edit access</button>
+          <button
+            data-testid="revoke-project-access"
+            onClick={() => setAccess('view')}
+          >
+            Revoke edit access
+          </button>
           <FloatRegionHost />
         </main>
       </SplitPanelContext.Provider>

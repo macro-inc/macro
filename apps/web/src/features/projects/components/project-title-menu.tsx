@@ -85,7 +85,16 @@ export function ProjectTitleMenu(props: {
       toast.failure(`Could not update ${property.displayName.toLowerCase()}`);
     }
   };
+  const renameProject = async (name: string) => {
+    if (!canEditProject(props.project))
+      throw new Error('Project is read-only.');
+    await props.commands.rename(props.project.id, name);
+  };
   const deleteProject = async () => {
+    if (!canDeleteProject(props.project)) {
+      setError('Only the project owner can delete it.');
+      return;
+    }
     const projectId = props.project.id;
     setError(undefined);
     try {
@@ -226,7 +235,7 @@ export function ProjectTitleMenu(props: {
         <RenameProjectDialog
           name={props.project.name}
           onOpenChange={setRenaming}
-          onRename={(name) => props.commands.rename(props.project.id, name)}
+          onRename={renameProject}
         />
       </Show>
       <Show when={deleting()}>
