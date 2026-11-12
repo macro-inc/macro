@@ -207,13 +207,10 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
   // A composer request's draft seeds the composer once. Its entry keeps the
   // request, so Back, Forward and resuming this view deliver it again; the
   // entry records the seeded request so a sent draft does not come back.
-  const [seededRequest, setSeededRequest] = useEntryState<string | undefined>(
+  const [, setSeededRequest] = useEntryState<string | undefined>(
     SEEDED_COMPOSER_REQUEST,
     { default: undefined }
   );
-  const wasSeeded = (request: string) =>
-    request === seededRequest() ||
-    request === panel.handle.currentEntryState()?.[SEEDED_COMPOSER_REQUEST];
   // A launcher navigation can target this already-mounted workspace.
   createEffect(
     on(
@@ -223,17 +220,27 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
           ? content.params?.focusComposer
           : undefined;
       },
-      (request) => {
-        if (typeof request !== 'string' || !request) return;
+      (request, previous) => {
+        if (typeof request !== 'string' || !request || request === previous)
+          return;
         const content = panel.handle.content();
-        if (
-          !wasSeeded(request) &&
-          content.type === 'component' &&
-          typeof content.params?.draft === 'string' &&
-          content.params.draft.length > 0
-        )
-          persistedDraft.setDraft(content.params.draft);
+        const draft =
+          content.type === 'component' ? content.params?.draft : undefined;
+        const seeded =
+          panel.handle.currentEntryState()?.[SEEDED_COMPOSER_REQUEST];
+        // The workspace stays mounted across entries, so the captured slice
+        // must follow the request of the entry now shown.
         setSeededRequest(request);
+        if (
+          request !== seeded &&
+          typeof draft === 'string' &&
+          draft.length > 0
+        ) {
+          persistedDraft.setDraft(draft);
+          // Record it now: a stacked phone pane can unmount without leaving
+          // this entry, which is when entry state is otherwise captured.
+          panel.handle.captureEntryState();
+        }
         showComposer();
       }
     )

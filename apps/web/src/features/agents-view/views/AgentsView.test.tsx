@@ -21,6 +21,14 @@ const state = vi.hoisted(() => ({
   contentId: { current: 'agents' },
   entry: { current: undefined as (() => FakeEntry) | undefined },
   captors: new Map<string, () => unknown>(),
+  /** Captures the view's entry state into `entry`, as the split does before leaving it. */
+  capture(entry: FakeEntry | undefined) {
+    if (!entry) return;
+    const captured = Object.fromEntries(
+      Array.from(this.captors, ([key, read]) => [key, read()])
+    );
+    entry.state = { ...entry.state, ...captured };
+  },
   draft: { read: (): string => '', write: (_draft: string) => {} },
   navigate: { current: (_id: string) => {} },
   loads: new Map<string, (name: string) => void>(),
@@ -77,6 +85,7 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
           id: state.contentId.current,
         },
       currentEntryState: () => state.entry.current?.().state,
+      captureEntryState: () => state.capture(state.entry.current?.()),
       registerEntryStateCaptor: (key: string, read: () => unknown) => {
         state.captors.set(key, read);
         return () => state.captors.delete(key);
@@ -218,14 +227,6 @@ function composerEntry(request: string, draft: string): FakeEntry {
   };
 }
 
-/** Captures the view's entry state into `entry`, as the split does before leaving it. */
-function leave(entry: FakeEntry) {
-  const captured = Object.fromEntries(
-    Array.from(state.captors, ([key, read]) => [key, read()])
-  );
-  entry.state = { ...entry.state, ...captured };
-}
-
 function composer() {
   return screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Message' });
 }
@@ -312,7 +313,7 @@ it('does not restore a sent Ask Macro draft when Back mounts the composer again'
   expect(composer().value).toBe('@message ');
 
   send();
-  leave(asked);
+  state.capture(asked);
   cleanup();
   // Back delivers the entry again with its params, as resuming the view does.
   render(() => <AgentsView />);
@@ -336,9 +337,9 @@ it('does not restore a sent Ask Macro draft when Back returns to the mounted com
   render(() => <AgentsView />);
 
   send();
-  leave(asked);
+  state.capture(asked);
   setCurrent(session);
-  leave(session);
+  state.capture(session);
   setCurrent(asked);
 
   expect(composer().value).toBe('');
@@ -350,15 +351,34 @@ it('seeds a new Ask Macro draft but not an earlier one reached by Back', () => {
   state.entry.current = current;
   render(() => <AgentsView />);
   send();
-  leave(first);
+  state.capture(first);
 
   const second = composerEntry('request-2', '@second ');
   setCurrent(second);
   expect(composer().value).toBe('@second ');
 
   send();
-  leave(second);
+  state.capture(second);
   setCurrent(first);
+  expect(composer().value).toBe('');
+
+  // Forward and Back again: leaving the first entry keeps its own request.
+  state.capture(first);
+  setCurrent(second);
+  state.capture(second);
+  setCurrent(first);
+
+  expect(composer().value).toBe('');
+});
+
+it('does not restore a sent Ask Macro draft when a stacked pane remounts without leaving its entry', () => {
+  const asked = composerEntry('request-1', '@message ');
+  state.entry.current = () => asked;
+  render(() => <AgentsView />);
+
+  send();
+  cleanup();
+  render(() => <AgentsView />);
 
   expect(composer().value).toBe('');
 });
