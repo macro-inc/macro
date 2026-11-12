@@ -26,6 +26,7 @@ import {
 } from '@macro-inc/lexical-core/node-list';
 import {
   $createRangeSelection,
+  $createTextNode,
   $getRoot,
   $getSelection,
   $isTextNode,
@@ -212,10 +213,12 @@ type Capture = {
 async function capture(
   name: string,
   markdown: string,
-  build: (ids: string[]) => DocumentOp[]
+  build: (ids: string[]) => DocumentOp[],
+  install?: (editor: LexicalEditor) => void
 ): Promise<Capture> {
   const r = await rig(markdown);
   selectAlpha(r.editor);
+  install?.(r.editor);
   r.commits.length = 0;
   r.mutations.length = 0;
   const before = lineage(r.editor);
@@ -299,5 +302,39 @@ describe('Source applyAiOps controls', () => {
     expect(mid?.threw).not.toBeNull();
     expect(mid?.textAfter).toContain('Omega');
     expect(mid?.textAfter).not.toContain('never applied');
+  });
+
+  it('records a listener edit made between AI ops', async () => {
+    // An update listener that, after the first AI op commits, edits the
+    // second block itself: does it run between ops, and does undo keep it apart?
+    let fired = false;
+    const result = await capture(
+      'listener edit between ops',
+      SEED,
+      ([a]) => [
+        { kind: 'setText', node: a, text: 'Omega' },
+        { kind: 'appendText', node: a, text: ' (AI)' },
+      ],
+      (editor) => {
+        editor.registerUpdateListener(({ editorState }) => {
+          if (fired) return;
+          const text = editorState.read(() => $getRoot().getTextContent());
+          if (!text.startsWith('Omega')) return;
+          fired = true;
+          editor.update(() => {
+            const last = $getRoot().getLastChild();
+            if (last && 'append' in last)
+              (last as ParagraphNode).append($createTextNode(' [listener]'));
+          });
+        });
+      }
+    );
+    const out = process.env.AI_EDIT_SOURCE_LISTENER_OUT;
+    if (out) {
+      const { writeFileSync } = await import('node:fs');
+      writeFileSync(out, `${JSON.stringify(result, null, 2)}\n`);
+    }
+    expect(fired).toBe(true);
+    expect(result.threw).toBeNull();
   });
 });
