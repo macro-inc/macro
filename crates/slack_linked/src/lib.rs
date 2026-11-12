@@ -10,5 +10,8 @@
 
 /// Models, ports and use cases.
 pub mod domain;
+/// Postgres and KMS adapters.
+#[cfg(feature = "outbound")]
+pub mod outbound;
 /// `NOTIFY` channels between DSS and the session service.
 pub mod signals;

@@ -22,6 +22,8 @@ outbound = [
   "dep:model_owner",
   "dep:share_permission_db_utils",
   "dep:sqlx",
+  "dep:thiserror",
+  "dep:zeroize",
   "external_chat/outbound",
   "ports",
 ]
@@ -55,10 +57,12 @@ share_permission_db_utils = { path = "../share_permission_db_utils", optional = 
 slack_client = { path = "../slack_client" }
 sqlx = { workspace = true, optional = true }
 strum = { workspace = true }
+thiserror = { workspace = true, optional = true }
 tracing = { workspace = true }
 utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+zeroize = { workspace = true, optional = true }
 
 [dev-dependencies]
 kms_envelope = { path = "../kms_envelope", features = ["fake"] }
