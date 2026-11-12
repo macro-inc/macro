@@ -1,0 +1,22 @@
+apps/web/src/lib/core/hotkey/types.ts
+  s_eb8632c7585030::t_ba259cbf433d72 29-31
+apps/web/src/lib/core/hotkey/hotkeys.ts
+  s_eb8632c7585030::t_1e74b2230ee969 179-180,182-184
+  s_eb8632c7585030::t_2ad122de66d8f8 238
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "566cb0110fcb5db01ffa2f00258e03982ce4112e",
+  "prompts": {},
+  "sessions": {
+    "s_eb8632c7585030": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "441012c4-33ec-49a8-9e62-3bd7e9584589",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
