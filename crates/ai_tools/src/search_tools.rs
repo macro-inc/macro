@@ -39,7 +39,7 @@ const MAX_ALREADY_AVAILABLE: usize = 8;
 #[derive(Debug, Deserialize, JsonSchema)]
 #[schemars(
     title = "SearchTools",
-    description = "Find tools by keyword: Macro tools whose parameters are not loaded yet, and tools from connected integrations (e.g. Slack, Gmail, Linear, GitHub). The top matches are loaded automatically: call them by exact name on your next step. Matches past the auto-load cap come back under `additional_matches` and need `LoadTools` first. Tools already in your tool list (such as `ExecuteCode`, when you have it) are never loaded by search; matching ones are named under `already_available`, so call them directly. Searching is cheap, so cast a wide net."
+    description = "Find tools by keyword: Macro tools whose parameters are not loaded yet, and tools from connected integrations (e.g. Slack, Gmail, Linear, GitHub). The top matches are loaded automatically: call them by exact name on your next step. Matches past the auto-load cap come back under `additional_matches` and need `LoadTools` first. Tools sent with every request (such as `ExecuteCode`, when you have it) are never loaded by search; matching ones are named under `already_available`, so call them directly. Searching is cheap, so cast a wide net."
 )]
 pub struct SearchTools {
     /// Keywords describing the capability you need (matched against tool names
@@ -144,13 +144,17 @@ fn search_and_stage(
     SearchToolsResponse {
         results: loaded.iter().copied().map(ToolMatch::of).collect(),
         additional_matches: additional.iter().copied().map(ToolMatch::of).collect(),
-        already_available: ai_toolset::tool_search::rank(advertised, query, |tool| {
-            (&tool.name, &tool.description)
-        })
-        .into_iter()
-        .take(MAX_ALREADY_AVAILABLE)
-        .map(|tool| tool.name.clone())
-        .collect(),
+        // `rank` returns everything for a blank query; naming arbitrary tools
+        // would only mislead.
+        already_available: if query.trim().is_empty() {
+            Vec::new()
+        } else {
+            ai_toolset::tool_search::rank(advertised, query, |tool| (&tool.name, &tool.description))
+                .into_iter()
+                .take(MAX_ALREADY_AVAILABLE)
+                .map(|tool| tool.name.clone())
+                .collect()
+        },
     }
 }
 

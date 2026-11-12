@@ -26,8 +26,9 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 /// Stand-in for `ai_tools::SearchTools`: returns all tools and stages them so
-/// they are callable on the next model turn. (The real tool auto-loads only
-/// the top-ranked matches; with this test catalog everything fits the cap.)
+/// they are callable on the next model turn, and names every advertised tool.
+/// (The real tool ranks both against the query; with this test catalog
+/// everything fits the cap.)
 #[derive(Deserialize, JsonSchema)]
 #[schemars(
     title = "SearchTools",
@@ -57,7 +58,11 @@ impl AsyncTool<()> for SearchToolsTest {
         Ok(SearchToolsResponse {
             results,
             additional_matches: Vec::new(),
-            already_available: Vec::new(),
+            already_available: request_context
+                .advertised_tools
+                .iter()
+                .map(|tool| tool.name.clone())
+                .collect(),
         })
     }
 }
@@ -244,6 +249,20 @@ async fn search_stages_tools_from_multiple_providers_for_the_next_turn() {
         "stream ended with error: {:?}",
         result.error
     );
+    // The loop hands SearchTools the tools it advertises.
+    let search = result
+        .tool_responses()
+        .into_iter()
+        .find(|r| matches!(r, ToolResponse::Json { name, .. } if name == SEARCH_TOOLS));
+    match search {
+        Some(ToolResponse::Json { json, .. }) => {
+            let mut names: Vec<String> =
+                serde_json::from_value(json["already_available"].clone()).unwrap();
+            names.sort();
+            assert_eq!(names, vec![LOAD_TOOLS, SEARCH_TOOLS]);
+        }
+        other => panic!("expected a SearchTools response, got {other:?}"),
+    }
     expect_json_ok(&result, "mcp__a__t1");
     expect_json_ok(&result, "mcp__b__t2");
 }

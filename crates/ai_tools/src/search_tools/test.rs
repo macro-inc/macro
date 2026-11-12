@@ -173,14 +173,31 @@ fn search_names_a_matching_tool_that_is_already_advertised() {
     assert_eq!(response.already_available, vec!["ExecuteCode".to_string()]);
     assert!(loaded.lock().unwrap().is_empty());
     let json = serde_json::to_value(&response).unwrap();
-    assert_eq!(json["already_available"], serde_json::json!(["ExecuteCode"]));
+    assert_eq!(
+        json["already_available"],
+        serde_json::json!(["ExecuteCode"])
+    );
 }
 
 #[test]
 fn search_omits_already_available_when_nothing_advertised_matches() {
-    let response = search_and_stage(&catalog(), &[], "linear", None);
+    let advertised = [ToolMatch {
+        name: "ExecuteCode".to_string(),
+        description: "Run JavaScript against the Macro SDK".to_string(),
+    }];
+    let response = search_and_stage(&catalog(), &advertised, "linear", None);
     let json = serde_json::to_value(&response).unwrap();
     assert!(json.get("already_available").is_none());
+}
+
+#[test]
+fn blank_search_names_no_already_available_tools() {
+    let advertised = [ToolMatch {
+        name: "ExecuteCode".to_string(),
+        description: "Run JavaScript against the Macro SDK".to_string(),
+    }];
+    let response = search_and_stage(&catalog(), &advertised, "  ", None);
+    assert!(response.already_available.is_empty());
 }
 
 // --- load (registers named tools via the loader) ---

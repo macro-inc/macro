@@ -395,13 +395,12 @@ impl AgentLoop {
             catalog: catalog.clone(),
             loads: ToolLoads::default(),
         };
-        let advertised = toolset
-            .request_schemas()
-            .unwrap_or_default()
-            .into_iter()
+        let schemas = toolset.request_schemas().unwrap_or_default();
+        let advertised = schemas
+            .iter()
             .map(|schema| ToolMatch {
-                name: schema.name,
-                description: schema.description,
+                name: schema.name.clone(),
+                description: schema.description.clone(),
             })
             .collect();
         let request_context = RequestContext::new(usage_ctx.user.clone())
@@ -418,7 +417,8 @@ impl AgentLoop {
         let routing: ToolRouter =
             Arc::new(move |name: &str| routing_toolset.routing_description(name));
 
-        let adapters = DynToolSetAdapter::from_toolset(
+        let adapters = DynToolSetAdapter::from_schemas(
+            schemas,
             toolset.clone(),
             context.clone(),
             request_context_rw.clone(),

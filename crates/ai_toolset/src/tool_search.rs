@@ -99,7 +99,7 @@ impl std::fmt::Debug for ToolLoader {
 
 /// A tool surfaced by [`SearchTools`] / [`LoadTools`] — just enough for the
 /// model to decide how to call it.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct ToolMatch {
     /// The exact name to call the tool by.
     pub name: String,

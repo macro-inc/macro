@@ -200,12 +200,11 @@ impl ToolsetToolAdapter {
 pub struct DynToolSetAdapter;
 
 impl DynToolSetAdapter {
-    /// Create one [`DynamicTool`] per tool in `toolset`.
-    ///
-    /// Tool names and schemas are read from
-    /// [`AiToolSet::request_schemas`]. Calls are dispatched through the
-    /// shared `toolset`.
-    pub fn from_toolset<Context>(
+    /// Create one [`DynamicTool`] per schema in `schemas`, which come from
+    /// `toolset`'s [`AiToolSet::request_schemas`]. Calls are dispatched
+    /// through the shared `toolset`.
+    pub fn from_schemas<Context>(
+        schemas: Vec<RequestSchema>,
         toolset: Arc<dyn AiToolSet<Context> + Send + Sync>,
         context: Arc<Context>,
         request_context: Arc<RwLock<RequestContext>>,
@@ -213,7 +212,6 @@ impl DynToolSetAdapter {
     where
         Context: Clone + Send + Sync + 'static,
     {
-        let schemas = toolset.request_schemas().unwrap_or_default();
         schemas
             .into_iter()
             .map(
@@ -241,7 +239,7 @@ impl DynToolSetAdapter {
     /// Used to register a `SearchTools`-discovered tool with the live tool
     /// server mid-session so it becomes advertised and callable on the next
     /// turn. Calls dispatch through the shared `toolset` by name, exactly like
-    /// [`Self::from_toolset`].
+    /// [`Self::from_schemas`].
     pub fn loaded<Context>(
         name: String,
         description: String,
