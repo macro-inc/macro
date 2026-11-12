@@ -87,9 +87,12 @@ where
                 }
                 Err(error) => {
                     if tokio::time::Instant::now() >= deadline {
-                        tracing::info!(
+                        // Warn: the caller has waited the whole timeout and
+                        // gets an error, and nothing else records why.
+                        tracing::warn!(
                             %session_id,
                             bot_id = %request.bot_id,
+                            waited_secs = RUNTIME_ANSWER_TIMEOUT.as_secs(),
                             last_error = %error,
                             "no runtime created the requested session in time"
                         );
