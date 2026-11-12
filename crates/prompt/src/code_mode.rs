@@ -26,7 +26,8 @@ static INSTRUCTIONS: &str = concat!(
 /// Hosts without `execution.views` (the channel-mention bot) answer in their reply.
 static REPLY_INSTRUCTIONS: &str = concat!(
     shared_instructions!(),
-    "- Answer in your reply: name what you found or changed with its link.\n"
+    "- Answer in your reply: name what you found or changed with its link.\n",
+    "- You cannot send, forward or schedule email here, even with the user's approval: write the email out in your reply and tell the user to send it from Macro.\n"
 );
 
 static INTENT: &str = "The model does Macro work in as few ExecuteCode programs as possible \

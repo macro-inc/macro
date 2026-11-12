@@ -13,8 +13,8 @@ use agent_code_mode::domain::{
 use agent_code_mode::inbound::toolset::UserCodeModeToolContext;
 use ai_tools::{AiToolSet, ToolServiceContext};
 use ai_toolset::{
-    AsyncToolCollection, RequestContext, RequestSchema, SearchableTool, ToolCallFuture, ToolCaller,
-    ToolInfo, ToolSet,
+    AsyncToolCollection, RequestContext, RequestSchema, SearchableTool, ToolCallError,
+    ToolCallFuture, ToolCaller, ToolInfo, ToolSet,
 };
 use async_trait::async_trait;
 use code_execution::domain::ExecuteRequest;
