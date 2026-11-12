@@ -22,6 +22,8 @@ import type {
 } from '../../../generated/storage/types.gen';
 import { MacroError, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
+import type { Channel } from '../channels/channel';
+import { shareWithChannel } from '../channels/share';
 import type { DatabaseColumn } from '../databases/column';
 import { Database } from '../databases/database';
 import { DatabaseRow } from '../databases/row';
@@ -278,6 +280,18 @@ export class Form extends MacroEntity<FormDetail> {
   );
   /** The caller's access level. */
   readonly access = this.field('access');
+
+  /**
+   * Share this form with a channel's current members, as posting it in the
+   * channel does. The caller must be in the channel and able to share the
+   * form; sharing again changes nothing.
+   *
+   * @write
+   * @idempotent
+   */
+  async shareWithChannel(channel: Channel): Promise<void> {
+    await shareWithChannel(this.client, channel, 'form', this.id);
+  }
 
   /**
    * Sections in display order.

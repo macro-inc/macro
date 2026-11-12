@@ -204,14 +204,17 @@ tags and only tint Macro icons; native emoji keep their own colors.
 
 ### Sharing permissions
 Documents, projects, calls and chats change their link and channel sharing with
-`updateSharePermissions`; omitted fields are left as they are. A calendar event
-is shared with a channel's members through `shareWithChannel`:
+`updateSharePermissions`; omitted fields are left as they are. Any item a
+channel message can carry (a document or task, project, database, form, call,
+email thread, agent session, external chat or calendar event) is shared with a
+channel's current members, as posting it there does, through `shareWithChannel`:
 
 ```ts
 await project.updateSharePermissions({
   linkShareAccessLevel: 'view',
   channelSharePermissions: [{ channel, accessLevel: 'comment', operation: 'add' }],
 });
+await doc.shareWithChannel(channel);
 await event.shareWithChannel(channel);
 ```
 

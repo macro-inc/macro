@@ -29,6 +29,8 @@ import {
 import type { MacroClient } from '../../utils/client';
 import { rejectUnknownOptions } from '../../utils/options';
 import { Canvas } from '../canvases/canvas';
+import type { Channel } from '../channels/channel';
+import { shareWithChannel } from '../channels/share';
 import { PropertiedEntity } from '../entity';
 import {
   MessageThread,
@@ -391,6 +393,18 @@ export class Document
 
   /** Favorites identify documents as `document`. */
   readonly entityType = 'document';
+
+  /**
+   * Share this document with a channel's current members, as posting it in the
+   * channel does. The caller must be in the channel and able to share the
+   * document; sharing again changes nothing.
+   *
+   * @write
+   * @idempotent
+   */
+  async shareWithChannel(channel: Channel): Promise<void> {
+    await shareWithChannel(this.client, channel, 'document', this.id);
+  }
 
   /** The properties service identifies documents as `DOCUMENT`. */
   protected readonly propertyEntityType: PropertyEntityType = 'DOCUMENT';
