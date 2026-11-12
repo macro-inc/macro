@@ -1,6 +1,6 @@
-import ArrowUp from '@phosphor/arrow-up.svg';
-import Paperclip from '@phosphor/paperclip.svg';
-import TextAa from '@phosphor/text-aa.svg';
+import ArrowUp from '@icon/system/bold/arrow-up-bold.svg';
+import Paperclip from '@icon/system/regular/paperclip.svg';
+import TextAa from '@icon/system/regular/text-aa.svg';
 import { Button, ComposerSurface, SendButton } from '@ui';
 import { createSignal, For, type JSX, onCleanup, Show } from 'solid-js';
 import { Dynamic, render } from 'solid-js/web';
@@ -17,6 +17,8 @@ export default function HomepageEmailCompose(
   props: {
     appChrome?: boolean;
     readOnly?: boolean;
+    /** Show the finished sample immediately in a cropped feature preview. */
+    animate?: boolean;
     /** Optional rich body for a prefilled local draft. */
     bodyContent?: JSX.Element;
     draft?: {
@@ -55,7 +57,7 @@ export default function HomepageEmailCompose(
   let body: HTMLDivElement | undefined;
   let fileInput: HTMLInputElement | undefined;
   const [to, setTo] = createSignal(
-    props.draft?.to ?? 'Valentina <valentina@coparse.com>'
+    props.draft?.to ?? 'Austin Barron <austin@example.com>'
   );
   const [cc, setCc] = createSignal(
     props.draft?.cc ?? 'Julia <julia@macro.com>'
@@ -99,7 +101,7 @@ export default function HomepageEmailCompose(
                 description={
                   item.kind === 'pdf'
                     ? 'Macro product overview and pricing, shared after the demo.'
-                    : 'The setup steps and owners for Valentina’s team.'
+                    : 'The setup steps and owners for Austin Barron’s team.'
                 }
                 href={
                   item.kind === 'md' ? '/demo?document=rollout' : '/documents'
@@ -114,7 +116,8 @@ export default function HomepageEmailCompose(
   }
   const generation = createEmailDemoGeneration(
     () => (props.draft ? undefined : root),
-    append
+    append,
+    props.animate !== false
   );
   const generating = () => !props.draft && generation.phase() !== 'complete';
   const send = () => {

@@ -3386,6 +3386,35 @@ async fn expired_warm_sessions_cannot_be_claimed(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_warm_session_whose_runtime_answered_expires(pool: PgPool) {
+    use crate::domain::warm::WarmSessionLifecycle as _;
+    let bot = create_test_bot(&pool).await;
+    let repo = test_repo(&pool);
+    let mut params = new_session(bot, None, None);
+    params.purpose = crate::domain::model::SessionPurpose::Warm;
+    let session = AgentSessionRepo::create(&repo, params).await.unwrap();
+    // A warm session is only ready once its runtime answered the handshake,
+    // so every one the reaper meets is in this status.
+    append_system_event(&repo, session.id, SystemEvent::AcpReady).await;
+    sqlx::query!(
+        "UPDATE agent_session SET created_at = NOW() - INTERVAL '11 minutes' WHERE id = $1",
+        session.id.as_uuid()
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(repo.expire().await.unwrap(), vec![session.id]);
+    assert!(matches!(
+        AgentSessionRepo::get(&repo, session.id)
+            .await
+            .unwrap()
+            .status,
+        SessionStatus::Disconnected
+    ));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn active_execution_turn_excludes_stopped_archived_and_deleted_sessions(pool: PgPool) {
     use crate::domain::ports::ActiveSessionTurn;
     let repo = test_repo(&pool);

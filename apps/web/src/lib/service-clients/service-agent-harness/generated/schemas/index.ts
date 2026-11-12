@@ -206,6 +206,7 @@ export * from './createAgentSessionRequestModel';
 export * from './createAgentSessionRequestOwner';
 export * from './createAgentSessionRequestPrompt';
 export * from './createAgentSessionRequestPromptActionId';
+export * from './createAgentSessionRequestPromptClientId';
 export * from './createAgentSessionRequestRepoBranch';
 export * from './createAgentSessionRequestRepoUrl';
 export * from './createAgentSessionRequestThread';

@@ -1,8 +1,8 @@
-import CaretDown from '@phosphor/caret-down.svg';
-import CaretLeft from '@phosphor/caret-left.svg';
-import CaretRight from '@phosphor/caret-right.svg';
-import Gear from '@phosphor/gear.svg';
-import Plus from '@phosphor/plus.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import CaretLeft from '@icon/system/regular/caret-left.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
+import Gear from '@icon/system/regular/gear.svg';
+import Plus from '@icon/system/regular/plus.svg';
 import { Button } from '@ui';
 import { createSignal, For } from 'solid-js';
 import { ViewShell } from './DemoWorkspaceChrome';
