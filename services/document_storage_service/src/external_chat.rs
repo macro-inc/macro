@@ -206,19 +206,6 @@ async fn listen(
 async fn drain(effects: &EffectsService, imports: &Imports, whatsapp: &WhatsAppService) {
     let media = &imports.media;
     loop {
-        match imports.pictures.import_staged().await {
-            Ok(0) => break,
-            Ok(_) => {}
-            Err(error) => {
-                tracing::warn!(
-                    code = error.current_context().code(),
-                    "WhatsApp profile picture import will retry"
-                );
-                break;
-            }
-        }
-    }
-    loop {
         match media.import_pending().await {
             Ok(0) => break,
             Ok(_) => {}
@@ -264,6 +251,20 @@ async fn drain(effects: &EffectsService, imports: &Imports, whatsapp: &WhatsAppS
                 tracing::warn!(
                     code = error.current_context().code(),
                     "WhatsApp notification/import will retry"
+                );
+                break;
+            }
+        }
+    }
+    // Last: pictures are cosmetic, and a group's backlog never delays pushes.
+    loop {
+        match imports.pictures.import_staged().await {
+            Ok(0) => break,
+            Ok(_) => {}
+            Err(error) => {
+                tracing::warn!(
+                    code = error.current_context().code(),
+                    "Storing WhatsApp profile pictures will retry"
                 );
                 break;
             }
@@ -499,9 +500,10 @@ impl FileStore for StaticFiles {
         bytes: Vec<u8>,
     ) -> ExternalChatResult<Uuid> {
         let filename = match mime {
+            "image/jpeg" => "profile-picture.jpg",
             "image/png" => "profile-picture.png",
             "image/webp" => "profile-picture.webp",
-            _ => "profile-picture.jpg",
+            _ => "profile-picture",
         };
         let stored = self
             .0

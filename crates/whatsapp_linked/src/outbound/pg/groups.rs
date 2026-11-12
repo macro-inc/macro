@@ -618,13 +618,13 @@ impl GroupRepository for PgWhatsAppRepository {
         .fetch_all(&self.pool)
         .await
         .map_err(failure)?;
+        let pictures: std::collections::HashMap<Uuid, Uuid> = rows
+            .into_iter()
+            .map(|row| (row.id, row.static_file_id))
+            .collect();
         Ok(chats
             .iter()
-            .map(|chat| {
-                rows.iter()
-                    .find(|row| row.id == chat.id)
-                    .map(|row| row.static_file_id)
-            })
+            .map(|chat| pictures.get(&chat.id).copied())
             .collect())
     }
 

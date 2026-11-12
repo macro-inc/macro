@@ -151,7 +151,8 @@ pub trait GroupRepository: Send + Sync {
         chats: &[ChatRef],
     ) -> ExternalChatResult<Vec<Option<CommunityReference>>>;
     /// Each chat's picture as its owner's account sees it, in order: the
-    /// group's, or the direct chat's person's under any of their JIDs.
+    /// one stored under the chat's remote id (the group, or the direct
+    /// chat's person).
     async fn pictures(&self, chats: &[ChatRef]) -> ExternalChatResult<Vec<Option<Uuid>>>;
     /// Names for WhatsApp ids and stored people in a chat
     /// ([`super::people::ChatNames`]).
