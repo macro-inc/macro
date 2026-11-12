@@ -20,12 +20,15 @@ import {
   enableAgentNavigation,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
-import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { z } from 'zod';
 
 const STORAGE_KEY = 'macro.ui-client-id';
 const CHANNEL = 'macro.ui-client';
+
+/** A phone screen's short side is narrower than this, in CSS pixels. */
+const PHONE_SHORT_SIDE_PX = 640;
 
 const storedId = z.uuid();
 
@@ -140,13 +143,18 @@ export function uiClientId(): string {
 
 /**
  * Whether agent navigation runs in this tab. It never runs on mobile: the
- * native iOS and Android apps (iPad included, where panes stack) and
- * phone-size touch browsers. There the tab names itself to no one and applies
+ * native iOS and Android apps (iPad included, where panes stack) and touch
+ * browsers on a phone. It asks the device, not the window, so a phone held
+ * sideways is still a phone. There the tab names itself to no one and applies
  * no `ui_command`, so an agent's open answers `no_client` and the agent links
  * the item in its reply instead.
  */
 export function agentNavigationRunsHere(): boolean {
-  return !isNativeMobilePlatform() && !isMobile();
+  if (isNativeMobilePlatform()) return false;
+
+  const phoneScreen =
+    Math.min(screen.width, screen.height) < PHONE_SHORT_SIDE_PX;
+  return !(isTouchDevice() && phoneScreen);
 }
 
 /**

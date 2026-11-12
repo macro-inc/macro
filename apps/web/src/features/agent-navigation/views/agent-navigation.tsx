@@ -210,8 +210,8 @@ async function apply(
  * the panes an agent opened until the person touches them.
  */
 export function AgentNavigationProvider(props: ParentProps) {
-  // Takes this tab's id as the app starts, or once a window leaves the phone
-  // layout; never on mobile.
+  // Takes this tab's id as the app starts, or once the page stops reading as a
+  // phone (device emulation turned off); never on mobile.
   createEffect(on(agentNavigationRunsHere, startUiClientId));
   const arrivals = createAgentArrivals();
   const router = useOptionalSplitRouter();

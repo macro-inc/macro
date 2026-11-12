@@ -38,12 +38,12 @@ vi.mock('@core/constant/featureFlags', async (importOriginal) => {
       flag === actual.enableAgentNavigation && flags.agentNavigation,
   };
 });
-const device = vi.hoisted(() => ({ nativeApp: false, phoneBrowser: false }));
+const device = vi.hoisted(() => ({ nativeApp: false, touch: false }));
 vi.mock('@core/mobile/isNativeMobilePlatform', () => ({
   isNativeMobilePlatform: () => device.nativeApp,
 }));
-vi.mock('@core/mobile/isMobile', () => ({
-  isMobile: () => device.phoneBrowser,
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: () => device.touch,
 }));
 const logSource = vi.hoisted(() => {
   class Unavailable extends Error {
@@ -183,6 +183,7 @@ import {
 } from './AgentSession';
 import { forgetSessionCreated, markSessionCreated } from './recently-created';
 import { resetSessionTurns, sessionTurn } from './session-turn';
+import { holdMobile, MOBILE_DEVICES } from './tests/device';
 
 const SESSION = '01a0abed-279f-724c-9f49-60dbedc79b6e';
 
@@ -350,14 +351,13 @@ describe('AgentSession', () => {
     live.release();
   });
 
-  it.each(['nativeApp', 'phoneBrowser'] as const)(
-    'sends no tab with a prompt typed on mobile (%s)',
-    async (kind) => {
+  it.each(MOBILE_DEVICES)(
+    'sends no tab with a prompt typed on $on',
+    async (mobile) => {
       flags.agentNavigation = true;
-      device[kind] = true;
+      holdMobile(device, mobile);
       onTestFinished(() => {
         flags.agentNavigation = false;
-        device[kind] = false;
       });
       const live = AgentSession.acquire(SESSION);
       await live.load();

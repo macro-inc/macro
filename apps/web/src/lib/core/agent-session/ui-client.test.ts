@@ -17,13 +17,15 @@ import {
   it,
   vi,
 } from 'vitest';
+import { holdMobile, holdScreen, MOBILE_DEVICES } from './tests/device';
+import { agentNavigationRunsHere } from './ui-client';
 
-const device = vi.hoisted(() => ({ nativeApp: false, phoneBrowser: false }));
+const device = vi.hoisted(() => ({ nativeApp: false, touch: false }));
 vi.mock('@core/mobile/isNativeMobilePlatform', () => ({
   isNativeMobilePlatform: () => device.nativeApp,
 }));
-vi.mock('@core/mobile/isMobile', () => ({
-  isMobile: () => device.phoneBrowser,
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: () => device.touch,
 }));
 vi.mock('@core/constant/featureFlags', async (importOriginal) => {
   const actual =
@@ -188,14 +190,37 @@ describe('uiClientId', () => {
   });
 });
 
+describe('agentNavigationRunsHere', () => {
+  afterEach(() => {
+    device.nativeApp = false;
+    device.touch = false;
+  });
+
+  it.each([
+    { on: 'a phone held upright', touch: true, size: [390, 844], runs: false },
+    { on: 'a phone held sideways', touch: true, size: [844, 390], runs: false },
+    { on: 'a touch tablet', touch: true, size: [820, 1180], runs: true },
+    { on: 'a desktop', touch: false, size: [1512, 982], runs: true },
+  ] as const)('on $on: $runs', ({ touch, size: [width, height], runs }) => {
+    device.touch = touch;
+    holdScreen(width, height);
+
+    expect(agentNavigationRunsHere()).toBe(runs);
+  });
+
+  it('never runs in the native apps, iPad included', () => {
+    device.nativeApp = true;
+    device.touch = true;
+    holdScreen(1024, 1366);
+
+    expect(agentNavigationRunsHere()).toBe(false);
+  });
+});
+
 describe('startUiClientId', () => {
   // The page's own listeners stay off the shared window.
   beforeEach(() => {
     vi.spyOn(window, 'addEventListener').mockImplementation(() => {});
-  });
-  afterEach(() => {
-    device.nativeApp = false;
-    device.phoneBrowser = false;
   });
 
   it('takes the id and joins the channel as the app starts', async () => {
@@ -210,10 +235,10 @@ describe('startUiClientId', () => {
     expect(typedInClientId()).toBe(stored);
   });
 
-  it.each(['nativeApp', 'phoneBrowser'] as const)(
-    'starts neither the id nor its channel on mobile (%s), nor sends one',
-    async (kind) => {
-      device[kind] = true;
+  it.each(MOBILE_DEVICES)(
+    'starts neither the id nor its channel on $on, nor sends one',
+    async (mobile) => {
+      holdMobile(device, mobile);
       vi.resetModules();
       const { startUiClientId, typedInClientId } = await import('./ui-client');
 

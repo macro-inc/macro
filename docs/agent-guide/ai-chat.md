@@ -245,9 +245,10 @@ it. Only prompts typed in the agent composer carry the tab, including the first
 prompt that starts a conversation: channel and DM
 mentions, routines and triggers answer `no_client`, and the agent links the
 item in its reply instead. Agents never open anything on mobile, flag or not:
-in the iOS and Android apps (iPad included) and in a phone-size touch browser
-a prompt carries no tab, so the agent links the item, and the tab ignores any
-`ui_command` frame. Routes are closed to agents unless they opt in
+in the iOS and Android apps (iPad included) and in a touch browser on a phone,
+held either way, a prompt carries no tab, so the agent links the item, and the
+tab ignores any `ui_command` frame. A phone is a touch screen whose short side
+is under 640px, so a phone turned sideways stays off. Routes are closed to agents unless they opt in
 (`OPEN_TO_AGENTS` in `apps/web/src/routes/routes.ts`), so settings, calls,
 composing mail and debug views are refused on the server and again in the tab.
 

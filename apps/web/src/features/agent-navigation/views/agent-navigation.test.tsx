@@ -2,9 +2,10 @@
  * @vitest-environment jsdom
  *
  * The app shell hands a `ui_command` frame addressed to this tab to the open,
- * and on mobile (the native apps and phone-size touch browsers) hands it none.
+ * and on mobile (the native apps and touch browsers on a phone) hands it none.
  */
 
+import { holdMobile, MOBILE_DEVICES } from '@core/agent-session/tests/device';
 import type { FromWebsocketMessage } from '@service-connection/websocket';
 import { cleanup, render } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -18,7 +19,7 @@ const DOC = '0198a4cc-e138-7670-a308-a6b766602799';
 const socket = vi.hoisted(() => ({
   deliver: undefined as ((message: FromWebsocketMessage) => void) | undefined,
 }));
-const device = vi.hoisted(() => ({ nativeApp: false, phoneBrowser: false }));
+const device = vi.hoisted(() => ({ nativeApp: false, touch: false }));
 const applyOpen = vi.hoisted(() => vi.fn(async () => ({ kind: 'shown' })));
 
 vi.mock('@service-connection/websocket', async (importOriginal) => ({
@@ -48,8 +49,8 @@ vi.mock('../primitives/apply-ui-command', () => ({ applyOpen }));
 vi.mock('@core/mobile/isNativeMobilePlatform', () => ({
   isNativeMobilePlatform: () => device.nativeApp,
 }));
-vi.mock('@core/mobile/isMobile', () => ({
-  isMobile: () => device.phoneBrowser,
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: () => device.touch,
 }));
 
 const router = { routes: appRoutesManifest(), settled: async () => {} };
@@ -75,8 +76,6 @@ const FRAME_FOR_THIS_TAB: FromWebsocketMessage = {
 afterEach(() => {
   cleanup();
   applyOpen.mockClear();
-  device.nativeApp = false;
-  device.phoneBrowser = false;
 });
 
 describe('AgentNavigationProvider', () => {
@@ -91,10 +90,10 @@ describe('AgentNavigationProvider', () => {
     );
   });
 
-  it.each(['nativeApp', 'phoneBrowser'] as const)(
-    'opens nothing on mobile (%s), even for a frame addressed to this tab',
-    (kind) => {
-      device[kind] = true;
+  it.each(MOBILE_DEVICES)(
+    'opens nothing on $on, even for a frame addressed to this tab',
+    (mobile) => {
+      holdMobile(device, mobile);
       render(() => <AgentNavigationProvider />);
 
       socket.deliver?.(FRAME_FOR_THIS_TAB);

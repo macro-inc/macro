@@ -1,6 +1,7 @@
 /** @vitest-environment jsdom */
 
 import type { FoldInput } from '@core/agent-fold/client';
+import { holdMobile, MOBILE_DEVICES } from '@core/agent-session/tests/device';
 import type { FoldedStreamEvent } from '@service-agent-fold/generated/types';
 import type {
   AgentSessionLogEntryDto,
@@ -40,12 +41,12 @@ vi.mock('@core/constant/featureFlags', async (importOriginal) => {
     },
   };
 });
-const device = vi.hoisted(() => ({ nativeApp: false, phoneBrowser: false }));
+const device = vi.hoisted(() => ({ nativeApp: false, touch: false }));
 vi.mock('@core/mobile/isNativeMobilePlatform', () => ({
   isNativeMobilePlatform: () => device.nativeApp,
 }));
-vi.mock('@core/mobile/isMobile', () => ({
-  isMobile: () => device.phoneBrowser,
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: () => device.touch,
 }));
 vi.mock('@service-agent-harness/client', () => ({
   agentHarnessServiceClient: harness,
@@ -133,8 +134,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   flags.firstPromptOnCreate = true;
   flags.agentNavigation = false;
-  device.nativeApp = false;
-  device.phoneBrowser = false;
   fold.pushSession.mockResolvedValue([]);
   fold.readSession.mockResolvedValue({
     messages: [],
@@ -508,11 +507,11 @@ describe('first prompt on the create', () => {
     );
   });
 
-  it.each(['nativeApp', 'phoneBrowser'] as const)(
-    'names no tab for a first prompt typed on mobile (%s)',
-    async (kind) => {
+  it.each(MOBILE_DEVICES)(
+    'names no tab for a first prompt typed on $on',
+    async (mobile) => {
       flags.agentNavigation = true;
-      device[kind] = true;
+      holdMobile(device, mobile);
       startPendingSession({ prompt: 'Open the plan', userId: 'me' });
       await settle();
 
