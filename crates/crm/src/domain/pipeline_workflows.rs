@@ -912,38 +912,41 @@ where
         if input.stages.is_empty() && input.fields.is_empty() {
             return Ok(overview);
         }
-        let mut ops = Vec::new();
-        if !input.stages.is_empty() && input.record_type.is_none() {
-            ops.push(add_field(
-                &overview,
-                &NewField {
-                    name: STAGE_FIELD.to_owned(),
-                    kind: NewFieldKind::Select,
-                    options: input.stages.clone(),
-                },
-            )?);
-        } else if !input.stages.is_empty() {
-            let stage = overview.field(STAGE_FIELD)?;
-            ops.extend(stage.options.iter().map(|(option, _)| DatabaseOp::Column {
-                table: overview.pipeline.pipeline.table_id,
-                column: stage.id,
-                change: ColumnChange::DeleteOption { option: *option },
-            }));
-            ops.push(add_options(&overview, stage, &input.stages));
-        }
-        for field in &input.fields {
-            ops.push(add_field(&overview, field)?);
-        }
-        let receipt = self.receipt::<EditAccessLevel>(viewer, id).await?;
-        self.apply(receipt, viewer, OpBatch::from(ops))
-            .await
-            .map_err(|error| {
-                WorkflowError::Invalid(format!(
-                    "Created pipeline \"{}\" ({id}) with the default stages and fields, but \
-                     could not set its stages and fields: {error}. Edit the pipeline to change them.",
-                    overview.pipeline.pipeline.name
-                ))
-            })?;
+        // The pipeline exists from here on, so every failure says so: a caller
+        // that retries a bare error would create a duplicate.
+        let schema = async {
+            let mut ops = Vec::new();
+            if !input.stages.is_empty() && input.record_type.is_none() {
+                ops.push(add_field(
+                    &overview,
+                    &NewField {
+                        name: STAGE_FIELD.to_owned(),
+                        kind: NewFieldKind::Select,
+                        options: input.stages.clone(),
+                    },
+                )?);
+            } else if !input.stages.is_empty() {
+                let stage = overview.field(STAGE_FIELD)?;
+                ops.extend(stage.options.iter().map(|(option, _)| DatabaseOp::Column {
+                    table: overview.pipeline.pipeline.table_id,
+                    column: stage.id,
+                    change: ColumnChange::DeleteOption { option: *option },
+                }));
+                ops.push(add_options(&overview, stage, &input.stages));
+            }
+            for field in &input.fields {
+                ops.push(add_field(&overview, field)?);
+            }
+            let receipt = self.receipt::<EditAccessLevel>(viewer, id).await?;
+            self.apply(receipt, viewer, OpBatch::from(ops)).await
+        };
+        schema.await.map_err(|error| {
+            WorkflowError::Invalid(format!(
+                "Created pipeline \"{}\" ({id}) with the default stages and fields, but \
+                 could not set its stages and fields: {error}. Edit the pipeline to change them.",
+                overview.pipeline.pipeline.name
+            ))
+        })?;
         self.overview(&view).await
     }
 
