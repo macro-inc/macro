@@ -12135,6 +12135,8 @@ export const ListCalendarEventsResponse = z.object({
       title: z.string(),
       start: z.string(),
       end: z.string(),
+      startLocal: z.string(),
+      endLocal: z.string(),
       isAllDay: z.boolean(),
       timeZone: z.union([z.string(), z.null()]).optional(),
       location: z.union([z.string(), z.null()]).optional(),
@@ -14536,6 +14538,8 @@ export const ReadCalendarEventResponse = z.object({
   title: z.string(),
   start: z.string(),
   end: z.string(),
+  startLocal: z.string(),
+  endLocal: z.string(),
   isAllDay: z.boolean(),
   timeZone: z.union([z.string(), z.null()]).optional(),
   isRecurring: z.boolean(),
@@ -18723,6 +18727,7 @@ export const SearchToolsResponse = z.object({
   additional_matches: z.array(
     z.object({ name: z.string(), description: z.string() })
   ),
+  already_available: z.array(z.string()).optional(),
 });
 
 export const SelfKnowledge = z.record(z.any());
@@ -19307,10 +19312,6 @@ export const ShareWithChannelResponse = z.object({
   }),
   summary: z.string(),
 });
-
-export const Subagent = z.object({ task: z.string() });
-
-export const SubagentResponse = z.object({ result: z.string() });
 
 export const TextEditorCodeExecution = z.object({ input: z.string() });
 
@@ -20684,3 +20685,7 @@ export const ReadResponse = z.object({
     }
   }),
 });
+
+export const Subagent = z.object({ task: z.string() });
+
+export const SubagentResponse = z.object({ result: z.string() });

@@ -21,6 +21,7 @@ export function ConversationsCreateMenu(props: {
 }) {
   const sections = useFeatureFlag(enableChatSidebarSections);
   const label = () => t('channelSections.createChannelOrDirectMessage');
+  let creatingSection = false;
 
   return (
     <Dropdown
@@ -52,7 +53,11 @@ export function ConversationsCreateMenu(props: {
       <Dropdown.Content
         class="min-w-48"
         onCloseAutoFocus={(event) => {
-          if (document.querySelector('[role="dialog"]')) {
+          if (creatingSection) {
+            creatingSection = false;
+            props.onCreateSection?.();
+            event.preventDefault();
+          } else if (document.querySelector('[role="dialog"]')) {
             event.preventDefault();
           }
         }}
@@ -71,7 +76,9 @@ export function ConversationsCreateMenu(props: {
           <Dropdown.Group>
             <Dropdown.Item
               disabledReason={props.sectionDisabledReason}
-              onSelect={() => props.onCreateSection?.()}
+              onSelect={() => {
+                creatingSection = true;
+              }}
             >
               {t('channelSections.newSection')}
             </Dropdown.Item>

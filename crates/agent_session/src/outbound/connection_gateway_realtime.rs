@@ -42,8 +42,8 @@
 
 use crate::domain::model::QueuedActionDto;
 use crate::domain::model::{
-    AgentSessionId, AgentSessionLog, AgentSessionRenamed, LogAppended, Message,
-    StoredAgentSessionLog,
+    AgentSessionActivitySummarized, AgentSessionId, AgentSessionLog, AgentSessionRenamed,
+    LogAppended, Message, StoredAgentSessionLog,
 };
 use crate::domain::ports::{AgentSessionQueueChanged, AgentSessionRealtime};
 use connection_gateway_client::ConnectionGatewayClient;
@@ -61,6 +61,11 @@ pub const AGENT_SESSION_LOG: &str = "agent_session_log";
 
 /// The realtime message type carrying a persisted session-name change.
 pub const AGENT_SESSION_RENAMED: &str = "agent_session_renamed";
+
+/// The realtime message type carrying a running session's newest one-line
+/// activity summary. Ephemeral: a viewer that missed it keeps its own label
+/// until the next one.
+pub const AGENT_SESSION_ACTIVITY: &str = "agent_session_activity";
 
 /// The realtime message type carrying a session's whole queue after a change.
 ///
@@ -130,6 +135,25 @@ impl From<AgentSessionRenamed> for AgentSessionRenamedEvent {
         Self {
             agent_session_id: event.agent_session_id.as_uuid(),
             name: event.name,
+        }
+    }
+}
+
+/// The body of an [`AGENT_SESSION_ACTIVITY`] message.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionActivityEvent {
+    /// The running session.
+    pub agent_session_id: Uuid,
+    /// The status line; `null` once the turn that had one has ended.
+    pub text: Option<String>,
+}
+
+impl From<AgentSessionActivitySummarized> for AgentSessionActivityEvent {
+    fn from(event: AgentSessionActivitySummarized) -> Self {
+        Self {
+            agent_session_id: event.agent_session_id.as_uuid(),
+            text: event.text,
         }
     }
 }
@@ -342,6 +366,31 @@ where
         self.client
             .batch_send_message(
                 AGENT_SESSION_CHANGES.to_owned(),
+                payload,
+                recipients
+                    .iter()
+                    .map(|user| GatewayEntityType::User.with_entity_str(user.as_ref()))
+                    .collect(),
+            )
+            .await
+            .map_err(|error| rootcause::report!(error))?;
+        Ok(())
+    }
+
+    async fn publish_activity_summarized(
+        &self,
+        event: AgentSessionActivitySummarized,
+    ) -> Result<(), rootcause::Report> {
+        let recipients = self.participants.viewers(event.agent_session_id).await?;
+        if recipients.is_empty() {
+            return Ok(());
+        }
+
+        let payload = serde_json::to_value(AgentSessionActivityEvent::from(event))
+            .map_err(|error| rootcause::report!(error))?;
+        self.client
+            .batch_send_message(
+                AGENT_SESSION_ACTIVITY.to_owned(),
                 payload,
                 recipients
                     .iter()

@@ -1,0 +1,58 @@
+.documentation-page { width: min(640px, 100%); margin: 150px auto 100px; color: var(--doc-copy-color, var(--color-ink-muted, var(--c2))); font-family: 'Inter Variable', Inter, sans-serif; font-size: 17.5px; font-weight: 370; line-height: 1.8; overflow-wrap: anywhere; }
+.documentation-heading { margin-bottom: 40px; }
+.documentation-heading > a { font-size: 13px; text-decoration: none; color: var(--color-ink-muted, var(--c2)); }
+.documentation-heading h1 { color: var(--color-ink, var(--c0)); font-family: 'Roboto Slab Variable', display, serif; font-size: 40px; font-weight: calc(320 + var(--cream-slab-weight-increase, 0)); line-height: 1.2; letter-spacing: -.035em; margin: 0 0 20px; }
+.documentation-heading p { color: inherit; font-size: inherit; line-height: 1.8; }
+.documentation-body :is(h2,h3,h4):not(.guide-graphic *, .tutorial-video-embed *) { scroll-margin-top: 110px; color: var(--color-ink, var(--c0)); font-family: 'Roboto Slab Variable', display, serif; font-weight: calc(320 + var(--cream-slab-weight-increase, 0)); letter-spacing: -.02em; line-height: 1.4; margin: 48px 0 16px; }
+.documentation-body h2:not(.guide-graphic *, .tutorial-video-embed *) { font-size: 40px; line-height: 1.2; letter-spacing: -.035em; }
+.documentation-body h3:not(.guide-graphic *, .tutorial-video-embed *) { font-size: 28px; }
+.documentation-body h4:not(.guide-graphic *, .tutorial-video-embed *) { font-size: 22px; }
+.documentation-body p:not(.guide-graphic *, .tutorial-video-embed *) { margin: 16px 0; }
+.documentation-body a, .documentation-help a { color: inherit; text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 35%, transparent); text-underline-offset: 4px; }
+.documentation-body :is(ul,ol):not(.guide-graphic *, .tutorial-video-embed *) { padding-left: 24px; margin: 20px 0; }
+.documentation-body li:not(.guide-graphic *, .tutorial-video-embed *) { padding-left: 4px; margin: 6px 0; }
+.documentation-body :is(img,video,iframe):not(.guide-graphic *, .tutorial-video-embed *) { display: block; width: 100%; max-width: 100%; border-radius: 10px; border: 0; }
+.documentation-body iframe:not(.guide-graphic *, .tutorial-video-embed *) { aspect-ratio: 16/9; }
+.documentation-body img:not(.guide-graphic *, .tutorial-video-embed *) { height: auto; }
+.doc-frame { margin: 28px 0; }
+.doc-frame figcaption { color: var(--color-ink-muted, var(--c2)); font-size: 13px; text-align: center; margin: 10px 0; }
+.documentation-body blockquote:not(.guide-graphic *, .tutorial-video-embed *) { border-left: 2px solid color-mix(in srgb, currentColor 20%, transparent); margin: 24px 0; padding-left: 20px; color: var(--color-ink-muted, var(--c2)); }
+.documentation-body pre:not(.guide-graphic *, .tutorial-video-embed *) { overflow-x: auto; padding: 20px; margin: 24px 0; background: color-mix(in srgb, currentColor 5%, transparent); border: 1px solid color-mix(in srgb, currentColor 10%, transparent); border-radius: 8px; line-height: 1.6; font-size: 13px; }
+.documentation-body :is(code,kbd):not(.guide-graphic *, .tutorial-video-embed *) { font-family: ui-monospace, monospace; font-size: .86em; }
+.documentation-body p code, .documentation-body li code, .documentation-body kbd { padding: 2px 5px; border-radius: 4px; background: color-mix(in srgb, currentColor 7%, transparent); }
+.doc-cards { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; margin: 28px 0; }
+.documentation-body .doc-card { display: block; text-decoration: none; padding: 20px; margin: 16px 0; border: 1px solid color-mix(in srgb,currentColor 12%, transparent); border-radius: 10px; font-size: 14px; }
+.doc-cards .doc-card { margin: 0; }
+.doc-card strong { font-size: 15px; font-weight: 550; }
+.doc-card p { margin-bottom: 0; color: var(--color-ink-muted, var(--c2)); }
+.doc-card[href]:hover { background: color-mix(in srgb,currentColor 4%,transparent); }
+.doc-callout { margin: 28px 0; padding: 6px 20px; border-left: 2px solid color-mix(in srgb, currentColor 30%, transparent); background: color-mix(in srgb, currentColor 3%, transparent); }
+.doc-callout > strong { display: block; font-size: 13px; margin-top: 10px; }
+.doc-callout-Warning { border-color: #ca9242; }
+.doc-accordion { border-bottom: 1px solid color-mix(in srgb,currentColor 12%,transparent); padding: 16px 0; }
+.doc-accordion summary { cursor: pointer; font-weight: 500; }
+.doc-accordion > div { color: var(--color-ink-muted,var(--c2)); }
+.doc-step { padding-left: 24px; border-left: 1px solid color-mix(in srgb,currentColor 18%,transparent); }
+.doc-update { border-bottom: 1px solid color-mix(in srgb,currentColor 12%,transparent); padding-bottom: 24px; }
+.doc-platform { margin: 20px 0; }
+.doc-platform summary { cursor: pointer; font-weight: 550; }
+.doc-table-scroll { max-width: 100%; overflow-x: auto; margin: 28px 0; }
+.documentation-body table:not(.guide-graphic *, .tutorial-video-embed *) { width: 100%; border-collapse: collapse; font-size: 14px; line-height: 1.5; }
+.documentation-body :is(th,td):not(.guide-graphic *, .tutorial-video-embed *) { padding: 10px 12px; text-align: left; vertical-align: top; border-bottom: 1px solid color-mix(in srgb,currentColor 10%,transparent); }
+.documentation-body :is(th,td):first-child { padding-left: 0; }
+.documentation-body th:not(.guide-graphic *, .tutorial-video-embed *) { font-weight: 550; white-space: nowrap; }
+.documentation-body td:not(.guide-graphic *, .tutorial-video-embed *) { min-width: 80px; }
+.documentation-body hr:not(.guide-graphic *, .tutorial-video-embed *) { border: 0; border-top: 1px solid color-mix(in srgb,currentColor 10%,transparent); margin: 40px 0; }
+.documentation-pagination { display: flex; justify-content: space-between; gap: 24px; border-top: 1px solid color-mix(in srgb,currentColor 12%,transparent); margin-top: 64px; padding-top: 24px; }
+.documentation-pagination a { max-width: 48%; color: inherit; text-decoration: none; font-size: 14px; }
+.documentation-pagination a:last-child { margin-left: auto; text-align: right; }
+.documentation-pagination small { display: block; font-size: 12px; color: var(--color-ink-muted,var(--c2)); }
+.documentation-help { margin-top: 40px; font-size: 13px; color: var(--color-ink-muted,var(--c2)); }
+@media (max-width:699px) { .documentation-page { width: calc(100% - 40px); margin-top: 120px; } .documentation-heading h1, .documentation-body h2:not(.guide-graphic *, .tutorial-video-embed *) { font-size: 28px; } .documentation-body h3:not(.guide-graphic *, .tutorial-video-embed *) { font-size: 24px; } .doc-cards { grid-template-columns: 1fr; } }
+
+html:not([data-palette='cream']) .documentation-page { --doc-copy-color: #a8a8a8; }
+.documentation-body pre code { font-size: inherit; }
+
+.documentation-body :is(h2,h3,h4) :is(strong,b) { font-weight: inherit; }
+
+.documentation-body .tutorial-video-embed { width: 100%; margin: 32px 0; }

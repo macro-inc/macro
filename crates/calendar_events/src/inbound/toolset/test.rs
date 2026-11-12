@@ -388,7 +388,7 @@ impl CalendarOccurrenceService for MockOccurrences {
         &self,
         _requester_id: &str,
     ) -> Result<Option<String>, rootcause::Report> {
-        unreachable!("no calendar tool resolves the primary time zone")
+        Ok(Some("America/New_York".to_string()))
     }
 
     async fn meeting_copies(
@@ -1451,9 +1451,61 @@ async fn list_events_maps_occurrences_and_skips_cancelled_ones() {
     assert_eq!(item.my_response.as_deref(), Some("accepted"));
     assert_eq!(item.attendee_count, 2);
     assert!(!item.is_all_day);
+    assert!(item.start_local.ends_with(" America/New_York"));
     assert_eq!(response.sync_status, "syncing");
     assert!(response.summary.contains("still syncing"));
     assert!(!response.truncated);
+}
+
+#[test]
+fn local_times_prefer_the_users_zone_then_the_events_then_utc() {
+    let time = EventTime::Timed {
+        starts_at: Utc.with_ymd_and_hms(2026, 11, 10, 3, 0, 0).unwrap(),
+        ends_at: Utc.with_ymd_and_hms(2026, 11, 10, 5, 0, 0).unwrap(),
+        time_zone: Some("Asia/Tokyo".to_string()),
+    };
+
+    assert_eq!(
+        local_time_fields(&time, Some("America/New_York")),
+        (
+            "Monday, November 9, 2026, 10:00 PM America/New_York".to_string(),
+            "Tuesday, November 10, 2026, 12:00 AM America/New_York".to_string(),
+        )
+    );
+    assert_eq!(
+        local_time_fields(&time, Some("Not/AZone")).0,
+        "Tuesday, November 10, 2026, 12:00 PM Asia/Tokyo"
+    );
+    assert_eq!(
+        local_time_fields(&time, None).0,
+        "Tuesday, November 10, 2026, 12:00 PM Asia/Tokyo"
+    );
+
+    let time_without_zone = EventTime::Timed {
+        starts_at: Utc.with_ymd_and_hms(2026, 11, 10, 3, 0, 0).unwrap(),
+        ends_at: Utc.with_ymd_and_hms(2026, 11, 10, 5, 0, 0).unwrap(),
+        time_zone: None,
+    };
+    assert_eq!(
+        local_time_fields(&time_without_zone, None).0,
+        "Tuesday, November 10, 2026, 3:00 AM UTC"
+    );
+}
+
+#[test]
+fn all_day_local_times_keep_their_dates_in_any_zone() {
+    let time = EventTime::AllDay {
+        start_date: NaiveDate::from_ymd_opt(2026, 11, 5).unwrap(),
+        end_date: NaiveDate::from_ymd_opt(2026, 11, 10).unwrap(),
+    };
+
+    assert_eq!(
+        local_time_fields(&time, Some("Pacific/Auckland")),
+        (
+            "Thursday, November 5, 2026".to_string(),
+            "Tuesday, November 10, 2026".to_string(),
+        )
+    );
 }
 
 #[tokio::test]
