@@ -80,7 +80,8 @@ pub async fn listen_logins(
             };
             let request = match received {
                 Ok(Some(notification)) => {
-                    let Some(payload) = external_chat::signals::Signal::parse(notification.payload())
+                    let Some(payload) =
+                        external_chat::signals::Signal::parse(notification.payload())
                     else {
                         continue;
                     };

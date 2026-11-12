@@ -3,13 +3,16 @@
 
 use std::collections::BTreeSet;
 
-use slack_client::api::{HistoryRequest, RepliesRequest, UsersConversationsRequest, ConversationType, validate_session};
+use slack_client::api::{
+    ConversationType, HistoryRequest, RepliesRequest, UsersConversationsRequest, validate_session,
+};
 use slack_client::api::{PostMessage, UpdateMessage};
 use slack_client::login::{EmailLogin, LoginError, LoginInput, LoginState, LoginStep};
 use slack_client::models::{Team as SlackTeam, User};
 use slack_client::realtime::RealtimeConfig;
 use slack_client::{
-    ChannelId, MessageTs, SessionCredentials, SlackClient, SlackEndpoints, SlackError, TeamId, UserId,
+    ChannelId, MessageTs, SessionCredentials, SlackClient, SlackEndpoints, SlackError, TeamId,
+    UserId,
 };
 use slack_linked::domain::events::{BootFacts, Catalogue, UserFacts};
 use slack_linked::domain::models::Team;
@@ -18,7 +21,9 @@ use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 use uuid::Uuid;
 
-use crate::domain::ports::{Connected, MessagePage, SlackConnector, SlackSession, ValidatedSession};
+use crate::domain::ports::{
+    Connected, MessagePage, SlackConnector, SlackSession, ValidatedSession,
+};
 
 /// Conversations asked for per `users.conversations` page.
 const CONVERSATION_PAGE: u16 = 200;
@@ -42,9 +47,11 @@ impl SlackApi {
 }
 
 fn team_icon(team: &SlackTeam) -> Option<String> {
-    team.icon
-        .as_ref()
-        .and_then(|icon| icon.image_88.clone().or_else(|| icon.image_original.clone()))
+    team.icon.as_ref().and_then(|icon| {
+        icon.image_88
+            .clone()
+            .or_else(|| icon.image_original.clone())
+    })
 }
 
 impl SlackConnector for SlackApi {
@@ -78,9 +85,16 @@ impl SlackConnector for SlackApi {
         })
     }
 
-    async fn validate(&self, credentials: &SessionCredentials) -> Result<ValidatedSession, SlackError> {
+    async fn validate(
+        &self,
+        credentials: &SessionCredentials,
+    ) -> Result<ValidatedSession, SlackError> {
         let auth = validate_session(credentials, &self.endpoints).await?;
-        let client = SlackClient::new(credentials.clone(), auth.workspace(), self.endpoints.clone())?;
+        let client = SlackClient::new(
+            credentials.clone(),
+            auth.workspace(),
+            self.endpoints.clone(),
+        )?;
         let team = client.team_info(None).await?;
         Ok(ValidatedSession {
             team_id: auth.team_id.to_string(),
@@ -92,17 +106,13 @@ impl SlackConnector for SlackApi {
         })
     }
 
-    async fn login_step(&self, state: LoginState, input: LoginInput) -> Result<LoginStep, LoginError> {
+    async fn login_step(
+        &self,
+        state: LoginState,
+        input: LoginInput,
+    ) -> Result<LoginStep, LoginError> {
         self.login.step(state, input).await
     }
-}
-
-fn channel(conversation: &str) -> Result<ChannelId, SlackError> {
-    ChannelId::new(conversation).map_err(SlackError::invalid_input)
-}
-
-fn ts(value: &str) -> Result<MessageTs, SlackError> {
-    MessageTs::new(value).map_err(SlackError::invalid_input)
 }
 
 fn user_facts(user: &User) -> UserFacts {
@@ -138,7 +148,11 @@ impl SlackSession for SlackClient {
                 })
                 .await?;
             conversations.extend(page.channels);
-            match page.response_metadata.next_cursor.filter(|next| !next.is_empty()) {
+            match page
+                .response_metadata
+                .next_cursor
+                .filter(|next| !next.is_empty())
+            {
                 Some(next) => cursor = Some(next),
                 None => break,
             }
@@ -172,7 +186,9 @@ impl SlackSession for SlackClient {
             .flat_map(|conversation| conversation.connected_team_ids.iter().cloned())
             .collect::<BTreeSet<String>>()
         {
-            let Ok(id) = TeamId::new(team.clone()) else { continue };
+            let Ok(id) = TeamId::new(team.clone()) else {
+                continue;
+            };
             match self.team_info(Some(&id)).await {
                 Ok(info) => teams.push(Team {
                     team_id: team,
@@ -201,17 +217,17 @@ impl SlackSession for SlackClient {
 
     async fn history(
         &self,
-        conversation: &str,
-        oldest: Option<&str>,
-        latest: Option<&str>,
+        conversation: &ChannelId,
+        oldest: Option<&MessageTs>,
+        latest: Option<&MessageTs>,
         limit: u16,
     ) -> Result<MessagePage, SlackError> {
         let page = SlackClient::history(
             self,
             &HistoryRequest {
-                channel: channel(conversation)?,
-                latest: latest.map(ts).transpose()?,
-                oldest: oldest.map(ts).transpose()?,
+                channel: conversation.clone(),
+                latest: latest.cloned(),
+                oldest: oldest.cloned(),
                 inclusive: false,
                 limit,
                 cursor: None,
@@ -226,14 +242,14 @@ impl SlackSession for SlackClient {
 
     async fn replies(
         &self,
-        conversation: &str,
-        thread_ts: &str,
+        conversation: &ChannelId,
+        thread_ts: &MessageTs,
     ) -> Result<Vec<slack_client::models::Message>, SlackError> {
-        let root = ts(thread_ts)?;
+        let root = thread_ts.clone();
         let page = SlackClient::replies(
             self,
             &RepliesRequest {
-                channel: channel(conversation)?,
+                channel: conversation.clone(),
                 thread_ts: root.clone(),
                 oldest: None,
                 latest: None,
@@ -252,17 +268,17 @@ impl SlackSession for SlackClient {
 
     async fn post(
         &self,
-        conversation: &str,
+        conversation: &ChannelId,
         text: &str,
-        thread_ts: Option<&str>,
+        thread_ts: Option<&MessageTs>,
         client_msg_id: Uuid,
     ) -> Result<String, SlackError> {
         let posted = self
             .post_message(&PostMessage {
-                channel: channel(conversation)?,
+                channel: conversation.clone(),
                 text: text.to_owned(),
                 blocks: vec![],
-                thread_ts: thread_ts.map(ts).transpose()?,
+                thread_ts: thread_ts.cloned(),
                 reply_broadcast: false,
                 client_msg_id,
             })
@@ -270,38 +286,54 @@ impl SlackSession for SlackClient {
         Ok(posted.ts.to_string())
     }
 
-    async fn update(&self, conversation: &str, target: &str, text: &str) -> Result<String, SlackError> {
+    async fn update(
+        &self,
+        conversation: &ChannelId,
+        target: &MessageTs,
+        text: &str,
+    ) -> Result<String, SlackError> {
         self.update_message(&UpdateMessage {
-            channel: channel(conversation)?,
-            ts: ts(target)?,
+            channel: conversation.clone(),
+            ts: target.clone(),
             text: text.to_owned(),
             blocks: vec![],
         })
         .await?;
         let now = chrono::Utc::now();
-        Ok(format!("{}.{:06}", now.timestamp(), now.timestamp_subsec_micros()))
+        Ok(format!(
+            "{}.{:06}",
+            now.timestamp(),
+            now.timestamp_subsec_micros()
+        ))
     }
 
-    async fn delete(&self, conversation: &str, target: &str) -> Result<(), SlackError> {
-        self.delete_message(&channel(conversation)?, &ts(target)?)
-            .await
-            .map(|_| ())
+    async fn delete(&self, conversation: &ChannelId, target: &MessageTs) -> Result<(), SlackError> {
+        self.delete_message(conversation, target).await.map(|_| ())
     }
 
-    async fn react(&self, conversation: &str, target: &str, name: &str, add: bool) -> Result<(), SlackError> {
-        let (conversation, target) = (channel(conversation)?, ts(target)?);
+    async fn react(
+        &self,
+        conversation: &ChannelId,
+        target: &MessageTs,
+        name: &str,
+        add: bool,
+    ) -> Result<(), SlackError> {
         if add {
-            self.add_reaction(&conversation, &target, name).await
+            self.add_reaction(conversation, target, name).await
         } else {
-            self.remove_reaction(&conversation, &target, name).await
+            self.remove_reaction(conversation, target, name).await
         }
     }
 
-    async fn mark(&self, conversation: &str, thread_ts: Option<&str>, read: &str) -> Result<(), SlackError> {
-        let conversation = channel(conversation)?;
+    async fn mark(
+        &self,
+        conversation: &ChannelId,
+        thread_ts: Option<&MessageTs>,
+        read: &MessageTs,
+    ) -> Result<(), SlackError> {
         match thread_ts {
-            Some(thread) => self.mark_thread_read(&conversation, &ts(thread)?, &ts(read)?).await,
-            None => self.mark_read(&conversation, &ts(read)?).await,
+            Some(thread) => self.mark_thread_read(conversation, thread, read).await,
+            None => self.mark_read(conversation, read).await,
         }
     }
 

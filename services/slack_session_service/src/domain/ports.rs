@@ -7,7 +7,7 @@ use std::future::Future;
 use slack_client::login::{LoginError, LoginInput, LoginState, LoginStep};
 use slack_client::models::Message;
 use slack_client::realtime::RealtimeEvent;
-use slack_client::{SessionCredentials, SlackError};
+use slack_client::{ChannelId, MessageTs, SessionCredentials, SlackError};
 use slack_linked::domain::events::{BootFacts, Catalogue, StoredSecret};
 use tokio::sync::mpsc;
 use uuid::Uuid;
@@ -100,48 +100,48 @@ pub trait SlackSession: Send + Sync + 'static {
     /// Messages of a conversation after `oldest` and before `latest`.
     fn history(
         &self,
-        conversation: &str,
-        oldest: Option<&str>,
-        latest: Option<&str>,
+        conversation: &ChannelId,
+        oldest: Option<&MessageTs>,
+        latest: Option<&MessageTs>,
         limit: u16,
     ) -> impl Future<Output = Result<MessagePage, SlackError>> + Send;
 
     /// A thread's replies, without its root.
     fn replies(
         &self,
-        conversation: &str,
-        thread_ts: &str,
+        conversation: &ChannelId,
+        thread_ts: &MessageTs,
     ) -> impl Future<Output = Result<Vec<Message>, SlackError>> + Send;
 
     /// Post a message; returns its `ts`.
     fn post(
         &self,
-        conversation: &str,
+        conversation: &ChannelId,
         text: &str,
-        thread_ts: Option<&str>,
+        thread_ts: Option<&MessageTs>,
         client_msg_id: Uuid,
     ) -> impl Future<Output = Result<String, SlackError>> + Send;
 
     /// Edit one of the person's messages; returns the edit's `ts`.
     fn update(
         &self,
-        conversation: &str,
-        ts: &str,
+        conversation: &ChannelId,
+        ts: &MessageTs,
         text: &str,
     ) -> impl Future<Output = Result<String, SlackError>> + Send;
 
     /// Delete one of the person's messages.
     fn delete(
         &self,
-        conversation: &str,
-        ts: &str,
+        conversation: &ChannelId,
+        ts: &MessageTs,
     ) -> impl Future<Output = Result<(), SlackError>> + Send;
 
     /// Add (or remove) the person's reaction.
     fn react(
         &self,
-        conversation: &str,
-        ts: &str,
+        conversation: &ChannelId,
+        ts: &MessageTs,
         name: &str,
         add: bool,
     ) -> impl Future<Output = Result<(), SlackError>> + Send;
@@ -149,9 +149,9 @@ pub trait SlackSession: Send + Sync + 'static {
     /// Move the person's read position in a conversation or thread.
     fn mark(
         &self,
-        conversation: &str,
-        thread_ts: Option<&str>,
-        ts: &str,
+        conversation: &ChannelId,
+        thread_ts: Option<&MessageTs>,
+        ts: &MessageTs,
     ) -> impl Future<Output = Result<(), SlackError>> + Send;
 
     /// Sign the session out at Slack.

@@ -13,8 +13,10 @@ use slack_session_service::replica::{self, ReplicaDeps, Timings};
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use tokio_util::sync::CancellationToken;
 
-/// Test-only: point every client at a fake Slack (its base URL).
+/// Test-only: point every client at a fake Slack (its HTTP base URL)...
 const SLACK_URL_OVERRIDE: &str = "OVERRIDE_SLACK_BASE_URL";
+/// ...and its websocket URL.
+const SLACK_WEBSOCKET_OVERRIDE: &str = "OVERRIDE_SLACK_WEBSOCKET_URL";
 const PORT: u16 = 8080;
 /// Most accounts one replica runs.
 const MAX_ACCOUNTS: u32 = 500;
@@ -40,9 +42,26 @@ async fn run() -> Result<(), rootcause::Report> {
         .connect(config.database_url.as_ref())
         .await?;
     let lock_options: PgConnectOptions = config.database_url.as_ref().parse()?;
-    let endpoints = match macro_service_urls::read_override_env(SLACK_URL_OVERRIDE)? {
-        Some(url) => SlackEndpoints::fake(url.parse()?),
-        None => SlackEndpoints::production(),
+    let endpoints = match (
+        macro_service_urls::read_override_env(SLACK_URL_OVERRIDE)?,
+        macro_service_urls::read_override_env(SLACK_WEBSOCKET_OVERRIDE)?,
+    ) {
+        (Some(base), Some(websocket)) => {
+            let base: url::Url = base.parse()?;
+            SlackEndpoints {
+                slack: base.clone(),
+                app: base.clone(),
+                edge_api: base,
+                websocket: websocket.parse()?,
+                user_agent: SlackEndpoints::production().user_agent,
+            }
+        }
+        (None, None) => SlackEndpoints::production(),
+        _ => {
+            return Err(rootcause::report!(
+                "set both {SLACK_URL_OVERRIDE} and {SLACK_WEBSOCKET_OVERRIDE}, or neither"
+            ));
+        }
     };
     let kms = AwsKms::new(
         aws_sdk_kms::Client::new(&macro_aws_config::get_macro_aws_config().await),

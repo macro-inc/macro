@@ -8,9 +8,9 @@ use std::time::Duration;
 
 use external_chat::domain::models::{ExternalChatError, Mutation, ReplyContent, SendReply};
 use external_chat::domain::ports::ExternalChatResult;
-use slack_client::SlackError;
 use slack_client::models::Message;
 use slack_client::realtime::{Event, RealtimeEvent};
+use slack_client::{ChannelId, InvalidId, MessageTs, SlackError};
 use slack_linked::domain::events::{
     ClaimedSend, HistoryWork, InboundChange, IngestOrigin, Lease, SendOutcome, SessionScope,
 };
@@ -80,6 +80,14 @@ fn from_domain(report: rootcause::Report<ExternalChatError>) -> Stop {
     }
 }
 
+/// A stored Slack id that doesn't parse: the row is corrupt.
+fn stored<Id>(parsed: Result<Id, InvalidId>) -> Result<Id, Stop> {
+    parsed.map_err(|error| {
+        tracing::error!(error = %error, "A stored Slack id is invalid");
+        Stop::Exit(AccountExit::Failed)
+    })
+}
+
 fn from_slack(error: SlackError) -> Stop {
     match error.code().and_then(ended_reason) {
         Some(reason) => Stop::Ended(reason),
@@ -100,7 +108,12 @@ impl<Connector: SlackConnector, Keys: Secrets> AccountRunner for SlackAccounts<C
             outcome = tracing::field::Empty,
         );
         span.follows_from(control.cause.id());
-        let lease = match self.sessions.begin_lease(account).instrument(span.clone()).await {
+        let lease = match self
+            .sessions
+            .begin_lease(account)
+            .instrument(span.clone())
+            .await
+        {
             Ok(lease) => lease,
             Err(report) => {
                 return match from_domain(report) {
@@ -110,7 +123,10 @@ impl<Connector: SlackConnector, Keys: Secrets> AccountRunner for SlackAccounts<C
             }
         };
         let scope = lease.scope;
-        let outcome = self.open(&lease, control.stop.clone()).instrument(span.clone()).await;
+        let outcome = self
+            .open(&lease, control.stop.clone())
+            .instrument(span.clone())
+            .await;
         let connected = match outcome {
             Ok(Some(connected)) => connected,
             Ok(None) => {
@@ -159,7 +175,10 @@ impl<Connector: SlackConnector, Keys: Secrets> SlackAccounts<Connector, Keys> {
         if !lease.state.is_active() {
             // Disconnected with "sign out of Slack": sign out, then forget.
             let session_stop = CancellationToken::new();
-            let connected = self.connector.connect(credentials, session_stop.clone()).await;
+            let connected = self
+                .connector
+                .connect(credentials, session_stop.clone())
+                .await;
             session_stop.cancel();
             if let Ok(connected) = connected
                 && let Err(error) = connected.session.sign_out().await
@@ -298,7 +317,10 @@ impl<Connector: SlackConnector, Keys: Secrets> Running<'_, Connector, Keys> {
                 .await
                 .map_err(from_domain)?;
         }
-        sessions.ingest_queued(self.scope).await.map_err(from_domain)?;
+        sessions
+            .ingest_queued(self.scope)
+            .await
+            .map_err(from_domain)?;
         Ok(())
     }
 
@@ -341,9 +363,11 @@ impl<Connector: SlackConnector, Keys: Secrets> Running<'_, Connector, Keys> {
             let Some(latest) = chat.latest_ts.as_deref() else {
                 continue;
             };
+            let conversation = stored(ChannelId::new(chat.conversation_id.clone()))?;
+            let latest = stored(MessageTs::new(latest))?;
             let page = self
                 .session
-                .history(&chat.conversation_id, Some(latest), None, PAGE_SIZE)
+                .history(&conversation, Some(&latest), None, PAGE_SIZE)
                 .await
                 .map_err(from_slack)?;
             count += page.messages.len();
@@ -364,10 +388,11 @@ impl<Connector: SlackConnector, Keys: Secrets> Running<'_, Connector, Keys> {
         origin: IngestOrigin,
     ) -> Result<Vec<InboundChange>, Stop> {
         messages.sort_by(|a, b| a.ts.cmp(&b.ts));
+        let channel = stored(ChannelId::new(conversation))?;
         let mut changes = Vec::with_capacity(messages.len());
         for message in messages {
             let thread = message.reply_count.unwrap_or(0) > 0 && !message.is_thread_reply();
-            let ts = message.ts.to_string();
+            let ts = message.ts.clone();
             changes.push(InboundChange::Message {
                 conversation_id: conversation.to_owned(),
                 message: inbound_message(&message),
@@ -376,7 +401,7 @@ impl<Connector: SlackConnector, Keys: Secrets> Running<'_, Connector, Keys> {
             if thread {
                 for reply in self
                     .session
-                    .replies(conversation, &ts)
+                    .replies(&channel, &ts)
                     .await
                     .map_err(from_slack)?
                 {
@@ -406,9 +431,14 @@ impl<Connector: SlackConnector, Keys: Secrets> Running<'_, Connector, Keys> {
 
     #[tracing::instrument(name = "slack.history.page", skip_all, fields(account_id = %self.scope.account_id, chat_id = %work.chat_id, messages, exhausted))]
     async fn history_page(&self, work: HistoryWork) -> Result<(), Stop> {
+        let conversation = stored(ChannelId::new(work.conversation_id.clone()))?;
+        let before = match work.before_ts.clone() {
+            Some(before) => Some(stored(MessageTs::new(before))?),
+            None => None,
+        };
         let page = self
             .session
-            .history(&work.conversation_id, None, work.before_ts.as_deref(), PAGE_SIZE)
+            .history(&conversation, None, before.as_ref(), PAGE_SIZE)
             .await
             .map_err(from_slack)?;
         let messages: Vec<Message> = page
@@ -481,28 +511,67 @@ impl<Connector: SlackConnector, Keys: Secrets> Running<'_, Connector, Keys> {
             Ok(request) => request,
             Err(_) => {
                 return self
-                    .record(send.id, SendOutcome::Failed { code: "invalid_payload".to_owned() })
+                    .record(
+                        send.id,
+                        SendOutcome::Failed {
+                            code: "invalid_payload".to_owned(),
+                        },
+                    )
                     .await;
             }
         };
-        let conversation = send.conversation_id.as_str();
-        let result: Result<String, SlackError> = match (&request.message, send.target_ts.as_deref()) {
+        let (Ok(conversation), Ok(thread_ts), Ok(target_ts)) = (
+            ChannelId::new(send.conversation_id.clone()),
+            send.thread_ts.clone().map(MessageTs::new).transpose(),
+            send.target_ts.clone().map(MessageTs::new).transpose(),
+        ) else {
+            return self
+                .record(
+                    send.id,
+                    SendOutcome::Failed {
+                        code: "invalid_target".to_owned(),
+                    },
+                )
+                .await;
+        };
+        let conversation = &conversation;
+        let result: Result<String, SlackError> = match (&request.message, target_ts.as_ref()) {
             (ReplyContent::Text { text, .. }, _) => {
                 self.session
-                    .post(conversation, text, send.thread_ts.as_deref(), client_msg_id)
+                    .post(conversation, text, thread_ts.as_ref(), client_msg_id)
                     .await
             }
-            (ReplyContent::Mutation { operation: Mutation::Edit, text, .. }, Some(target)) => {
+            (
+                ReplyContent::Mutation {
+                    operation: Mutation::Edit,
+                    text,
+                    ..
+                },
+                Some(target),
+            ) => {
                 self.session
                     .update(conversation, target, text.as_deref().unwrap_or_default())
                     .await
             }
-            (ReplyContent::Mutation { operation: Mutation::Delete, .. }, Some(target)) => self
+            (
+                ReplyContent::Mutation {
+                    operation: Mutation::Delete,
+                    ..
+                },
+                Some(target),
+            ) => self
                 .session
                 .delete(conversation, target)
                 .await
-                .map(|()| target.to_owned()),
-            (ReplyContent::Mutation { operation: Mutation::Reaction, text, .. }, Some(target)) => {
+                .map(|()| target.to_string()),
+            (
+                ReplyContent::Mutation {
+                    operation: Mutation::Reaction,
+                    text,
+                    ..
+                },
+                Some(target),
+            ) => {
                 let name = text.as_deref().unwrap_or_default().trim_matches(':');
                 self.session
                     .react(conversation, target, name, !name.is_empty())
@@ -511,7 +580,12 @@ impl<Connector: SlackConnector, Keys: Secrets> Running<'_, Connector, Keys> {
             }
             (ReplyContent::Mutation { .. }, None) | (ReplyContent::Media { .. }, _) => {
                 return self
-                    .record(send.id, SendOutcome::Failed { code: "target_unavailable".to_owned() })
+                    .record(
+                        send.id,
+                        SendOutcome::Failed {
+                            code: "target_unavailable".to_owned(),
+                        },
+                    )
                     .await;
             }
         };
@@ -523,7 +597,9 @@ impl<Connector: SlackConnector, Keys: Secrets> Running<'_, Connector, Keys> {
                     return Err(Stop::Ended(reason));
                 }
                 match error.code() {
-                    Some(code) => SendOutcome::Failed { code: code.as_str().to_owned() },
+                    Some(code) => SendOutcome::Failed {
+                        code: code.as_str().to_owned(),
+                    },
                     // Cut off without an answer: never resent.
                     None => SendOutcome::Unknown,
                 }
@@ -539,7 +615,11 @@ impl<Connector: SlackConnector, Keys: Secrets> Running<'_, Connector, Keys> {
             SendOutcome::Unknown => "unknown",
         };
         tracing::Span::current().record("outcome", label);
-        tracing::info!(telemetry_event = "slack_send_outcome", outcome = label, "Slack send finished");
+        tracing::info!(
+            telemetry_event = "slack_send_outcome",
+            outcome = label,
+            "Slack send finished"
+        );
         self.accounts
             .sessions
             .record_send_outcome(self.scope, send, &outcome)
@@ -555,9 +635,15 @@ impl<Connector: SlackConnector, Keys: Secrets> Running<'_, Connector, Keys> {
             .await
             .map_err(from_domain)?;
         for mark in marks {
+            let conversation = stored(ChannelId::new(mark.conversation_id.clone()))?;
+            let thread = match mark.thread_ts.clone() {
+                Some(thread) => Some(stored(MessageTs::new(thread))?),
+                None => None,
+            };
+            let read = stored(MessageTs::new(mark.ts.clone()))?;
             if let Err(error) = self
                 .session
-                .mark(&mark.conversation_id, mark.thread_ts.as_deref(), &mark.ts)
+                .mark(&conversation, thread.as_ref(), &read)
                 .await
             {
                 if let Some(reason) = error.code().and_then(ended_reason) {

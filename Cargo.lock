@@ -19204,6 +19204,42 @@ dependencies = [
 ]
 
 [[package]]
+name = "slack_session_service"
+version = "0.1.0"
+dependencies = [
+ "aws-sdk-kms",
+ "axum",
+ "chrono",
+ "database_env_vars",
+ "doppler-config",
+ "external_chat",
+ "kms_envelope",
+ "macro_aws_config",
+ "macro_config",
+ "macro_db_migrator",
+ "macro_entrypoint",
+ "macro_env",
+ "macro_service_urls",
+ "rootcause",
+ "rustls",
+ "serde",
+ "serde_json",
+ "session_fleet",
+ "slack_client",
+ "slack_fake_server",
+ "slack_linked",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "url",
+ "uuid",
+ "workspace-hack",
+ "zeroize",
+]
+
+[[package]]
 name = "smallvec"
 version = "1.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

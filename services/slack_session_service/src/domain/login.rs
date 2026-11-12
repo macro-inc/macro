@@ -5,7 +5,10 @@
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
-use slack_client::login::{LoginErrorKind, LoginInput as SlackInput, LoginState, LoginStep as SlackStep, LoginWorkspace as SlackWorkspace};
+use slack_client::login::{
+    LoginErrorKind, LoginInput as SlackInput, LoginState, LoginStep as SlackStep,
+    LoginWorkspace as SlackWorkspace,
+};
 use slack_client::{CookieToken, Secret, SessionCredentials, SessionToken, TeamId};
 use slack_linked::domain::events::{LoginAdvance, LoginWork, SignedInWorkspace};
 use slack_linked::domain::models::{
@@ -162,7 +165,11 @@ impl<Connector: SlackConnector, Keys: Secrets> Logins<Connector, Keys> {
     }
 
     /// Sign in to the next chosen team, or finish.
-    async fn next_workspace(&self, work: &LoginWork, mut progress: Progress) -> Option<LoginAdvance> {
+    async fn next_workspace(
+        &self,
+        work: &LoginWork,
+        mut progress: Progress,
+    ) -> Option<LoginAdvance> {
         let Some(team) = progress.remaining.first().cloned() else {
             if progress.done.is_empty() && progress.skipped.len() == 1 {
                 let team = progress.skipped.remove(0);
@@ -222,10 +229,18 @@ impl<Connector: SlackConnector, Keys: Secrets> Logins<Connector, Keys> {
                     LoginErrorKind::UnknownWorkspace if choosing => {
                         Box::pin(self.next_workspace(work, progress)).await
                     }
-                    LoginErrorKind::InvalidEmail => Some(LoginAdvance::Failed(LoginFailure::InvalidEmail)),
-                    LoginErrorKind::CodeExpired => Some(LoginAdvance::Failed(LoginFailure::CodeExpired)),
-                    LoginErrorKind::NoWorkspaces => Some(LoginAdvance::Failed(LoginFailure::NoWorkspaces)),
-                    LoginErrorKind::RateLimited { .. } => Some(LoginAdvance::Failed(LoginFailure::RateLimited)),
+                    LoginErrorKind::InvalidEmail => {
+                        Some(LoginAdvance::Failed(LoginFailure::InvalidEmail))
+                    }
+                    LoginErrorKind::CodeExpired => {
+                        Some(LoginAdvance::Failed(LoginFailure::CodeExpired))
+                    }
+                    LoginErrorKind::NoWorkspaces => {
+                        Some(LoginAdvance::Failed(LoginFailure::NoWorkspaces))
+                    }
+                    LoginErrorKind::RateLimited { .. } => {
+                        Some(LoginAdvance::Failed(LoginFailure::RateLimited))
+                    }
                     LoginErrorKind::WrongInput
                     | LoginErrorKind::UnknownWorkspace
                     | LoginErrorKind::SessionIncomplete
@@ -238,9 +253,16 @@ impl<Connector: SlackConnector, Keys: Secrets> Logins<Connector, Keys> {
     }
 
     /// Wait for the person in the step the state names, sealing it.
-    async fn wait(&self, work: &LoginWork, progress: Progress, retry: bool) -> Option<LoginAdvance> {
+    async fn wait(
+        &self,
+        work: &LoginWork,
+        progress: Progress,
+        retry: bool,
+    ) -> Option<LoginAdvance> {
         let step = match &progress.login {
-            LoginState::AwaitingEmail => return Some(LoginAdvance::Failed(LoginFailure::SlackUnavailable)),
+            LoginState::AwaitingEmail => {
+                return Some(LoginAdvance::Failed(LoginFailure::SlackUnavailable));
+            }
             LoginState::AwaitingCaptcha { site_key, .. } => LoginStep::Captcha {
                 site_key: site_key.clone(),
                 page_url: SIGN_IN_PAGE.to_owned(),

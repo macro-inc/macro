@@ -34,9 +34,15 @@ impl<Kms: EnvelopeKms + 'static> Secrets for KmsSecrets<Kms> {
         account: Uuid,
         secret: &StoredSecret,
     ) -> Result<SessionCredentials, OpenFailure> {
-        let bytes = open(&self.kms, SecretPurpose::SlackSession, user_id, account, secret)
-            .await
-            .map_err(failure)?;
+        let bytes = open(
+            &self.kms,
+            SecretPurpose::SlackSession,
+            user_id,
+            account,
+            secret,
+        )
+        .await
+        .map_err(failure)?;
         serde_json::from_slice(&bytes).map_err(|_| OpenFailure::Unreadable)
     }
 
@@ -49,9 +55,15 @@ impl<Kms: EnvelopeKms + 'static> Secrets for KmsSecrets<Kms> {
         let bytes = zeroize::Zeroizing::new(
             serde_json::to_vec(credentials).map_err(|_| OpenFailure::Unreadable)?,
         );
-        seal(&self.kms, SecretPurpose::SlackSession, user_id, account, &bytes)
-            .await
-            .map_err(|_| OpenFailure::Unavailable)
+        seal(
+            &self.kms,
+            SecretPurpose::SlackSession,
+            user_id,
+            account,
+            &bytes,
+        )
+        .await
+        .map_err(|_| OpenFailure::Unavailable)
     }
 
     async fn open_login_input(
@@ -60,10 +72,16 @@ impl<Kms: EnvelopeKms + 'static> Secrets for KmsSecrets<Kms> {
         attempt: Uuid,
         secret: &StoredSecret,
     ) -> Result<Vec<u8>, OpenFailure> {
-        open(&self.kms, SecretPurpose::SlackLoginInput, user_id, attempt, secret)
-            .await
-            .map(|bytes| bytes.to_vec())
-            .map_err(failure)
+        open(
+            &self.kms,
+            SecretPurpose::SlackLoginInput,
+            user_id,
+            attempt,
+            secret,
+        )
+        .await
+        .map(|bytes| bytes.to_vec())
+        .map_err(failure)
     }
 
     async fn open_login_state(
@@ -72,10 +90,16 @@ impl<Kms: EnvelopeKms + 'static> Secrets for KmsSecrets<Kms> {
         attempt: Uuid,
         secret: &StoredSecret,
     ) -> Result<Vec<u8>, OpenFailure> {
-        open(&self.kms, SecretPurpose::SlackLogin, user_id, attempt, secret)
-            .await
-            .map(|bytes| bytes.to_vec())
-            .map_err(failure)
+        open(
+            &self.kms,
+            SecretPurpose::SlackLogin,
+            user_id,
+            attempt,
+            secret,
+        )
+        .await
+        .map(|bytes| bytes.to_vec())
+        .map_err(failure)
     }
 
     async fn seal_login_state(
@@ -84,8 +108,14 @@ impl<Kms: EnvelopeKms + 'static> Secrets for KmsSecrets<Kms> {
         attempt: Uuid,
         state: &[u8],
     ) -> Result<StoredSecret, OpenFailure> {
-        seal(&self.kms, SecretPurpose::SlackLogin, user_id, attempt, state)
-            .await
-            .map_err(|_| OpenFailure::Unavailable)
+        seal(
+            &self.kms,
+            SecretPurpose::SlackLogin,
+            user_id,
+            attempt,
+            state,
+        )
+        .await
+        .map_err(|_| OpenFailure::Unavailable)
     }
 }

@@ -17,7 +17,7 @@ pub struct SessionScope {
 }
 
 /// A sealed blob and its wrapped data key, as stored.
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StoredSecret {
     /// `kms_envelope` blob.
     pub ciphertext: Vec<u8>,
@@ -424,7 +424,7 @@ pub struct LoginWork {
 }
 
 /// A workspace session a sign-in produced, sealed for its account.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SignedInWorkspace {
     /// The account id the credentials were sealed for (new, or the person's
     /// existing account for the team).

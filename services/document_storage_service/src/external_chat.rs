@@ -27,17 +27,17 @@ use external_chat::{
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use notification::domain::{models::SendNotificationRequestBuilder, service::NotificationIngress};
+use slack_linked::{
+    domain::{provider::SlackProvider, service::SlackService},
+    inbound::router::SlackRouterState,
+    outbound::{kms::SlackLoginInputSealer, pg::PgSlackRepository},
+};
 use sqlx::PgPool;
 use static_file_service_client::StaticFileServiceClient;
 use std::{collections::HashSet, sync::Arc, time::Duration};
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use tracing::Instrument as _;
 use uuid::Uuid;
-use slack_linked::{
-    domain::{provider::SlackProvider, service::SlackService},
-    inbound::router::SlackRouterState,
-    outbound::{kms::SlackLoginInputSealer, pg::PgSlackRepository},
-};
 use whatsapp_linked::{
     domain::{provider::WhatsAppProvider, service::WhatsAppService},
     inbound::router::WhatsAppRouterState,
@@ -92,6 +92,10 @@ pub(crate) fn build(dependencies: Dependencies) -> State {
     ));
     let whatsapp_repository = Arc::new(PgWhatsAppRepository::new(pool.clone()));
     let repository = Arc::new(PgExternalChatRepository::new(pool.clone()));
+    let ended = AccountEndedNotifier {
+        slack: slack.clone(),
+        notifications: notifications.clone(),
+    };
     let publisher = Arc::new(DssChatPublisher {
         audience: repository.clone(),
         access: access.clone(),
@@ -125,6 +129,7 @@ pub(crate) fn build(dependencies: Dependencies) -> State {
         EffectsService::new(repository, publisher),
         media,
         whatsapp.clone(),
+        ended,
         cancellation,
     ));
     State {
@@ -151,11 +156,16 @@ async fn publish(
     effects: EffectsService,
     media: MediaService,
     whatsapp: Arc<WhatsAppService>,
+    ended: AccountEndedNotifier,
     cancellation: CancellationToken,
 ) {
     let Some(mut listener) = listen(
         &pool,
-        &[signals::CHAT_EFFECTS, signals::MEDIA_READY],
+        &[
+            signals::CHAT_EFFECTS,
+            signals::MEDIA_READY,
+            slack_linked::signals::ACCOUNT_ENDED,
+        ],
         &cancellation,
     )
     .await
@@ -181,7 +191,12 @@ async fn publish(
         };
         let span = tracing::info_span!("external_chat.drain");
         trace_context::adopt(&span, traceparent.as_deref());
-        drain(&effects, &media, &whatsapp).instrument(span).await;
+        async {
+            drain(&effects, &media, &whatsapp).await;
+            ended.drain().await;
+        }
+        .instrument(span)
+        .await;
     }
 }
 
@@ -466,6 +481,75 @@ impl ChatPublisher for DssChatPublisher {
             .await
             .map_err(unavailable)?;
         Ok(())
+    }
+}
+
+/// Tells owners their Slack session ended, once per ended generation.
+struct AccountEndedNotifier {
+    slack: Arc<SlackService>,
+    notifications: Arc<NotificationIngressType>,
+}
+
+impl AccountEndedNotifier {
+    async fn drain(&self) {
+        let ended = match self.slack.ended_accounts(50).await {
+            Ok(ended) => ended,
+            Err(report) => {
+                tracing::warn!(error = %report, "Listing ended Slack accounts failed");
+                return;
+            }
+        };
+        for account in ended {
+            if let Err(report) = self.notify(&account).await {
+                tracing::warn!(error = %report, account_id = %account.account_id, "Telling an owner their Slack session ended failed");
+            }
+        }
+    }
+
+    #[tracing::instrument(name = "external_chat.account_ended.notify", skip_all, err, fields(account_id = %account.account_id))]
+    async fn notify(
+        &self,
+        account: &slack_linked::domain::ports::EndedAccount,
+    ) -> ExternalChatResult<()> {
+        use model_notifications::ExternalChatAccountEndedReason as Reason;
+        use slack_linked::domain::models::EndedReason;
+        let reason = match account.reason {
+            EndedReason::Revoked
+            | EndedReason::Expired
+            | EndedReason::AccountInactive
+            | EndedReason::TeamDisabled
+            | EndedReason::RemovedFromTeam => Reason::SessionEnded,
+            EndedReason::EnterpriseRestricted => Reason::Restricted,
+            EndedReason::Unreadable => Reason::Unreadable,
+        };
+        let owner = MacroUserIdStr::try_from(account.user_id.clone()).map_err(unavailable)?;
+        // One notice per ended generation: the id is stable for it.
+        let id = Uuid::new_v5(
+            &account.account_id,
+            account.generation.to_string().as_bytes(),
+        );
+        let request = SendNotificationRequestBuilder {
+            notification_entity: EntityType::User.with_entity_string(account.user_id.clone()),
+            secondary_notification_entity: None,
+            notification: model_notifications::ExternalChatAccountEndedMetadata {
+                provider: model_entity::ExternalChatProvider::Slack,
+                account_id: account.account_id,
+                account_name: account.team_name.clone(),
+                reason,
+            },
+            sender_id: None,
+            recipient_ids: HashSet::from([owner]),
+        }
+        .into_request_with_id(id)
+        .with_apns()
+        .with_conn_gateway();
+        self.notifications
+            .send_notification(request)
+            .await
+            .map_err(unavailable)?;
+        self.slack
+            .ended_notified(account.account_id, account.generation)
+            .await
     }
 }
 
