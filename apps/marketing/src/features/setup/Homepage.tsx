@@ -35,11 +35,11 @@ export function Homepage(props: { embedded?: boolean } = {}) {
   });
   return (
     <div class="macro-homepage">
+      <FeatureUiStyles scope=".macro-homepage" />
       <Show
         when={mobile()}
         fallback={
           <>
-            <FeatureUiStyles scope=".macro-homepage" />
             <Show when={!props.embedded}>
               <SiteHeader currentPath="/" />
             </Show>
