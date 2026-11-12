@@ -103,6 +103,8 @@ Assert direct child types when testing rich insertion into code, since nested bl
 
 ## Checks
 
+- Set `NATIVE_SESSION_GUARD_PROFILE=preview` only for matched dev-probes test artifacts; leave it unset or use `production` for no-dev artifacts so the production export guard runs.
+
 - Prepare both test artifacts from a coherent native source/seal before package typechecks/tests; never use an incoherent held facade branch. After project build authorization, `just --justfile apps/web/justfile build-document-session-wasm build-document-session-compat-wasm` produces the canonical outputs; this recipe reference does not grant Cargo permission. The metadata-only compatibility test imports `wasm-compat`. Set `NATIVE_SESSION_GUARD_JS` and `NATIVE_SESSION_GUARD_WASM` to the ordinary output for guard fixtures. Verified paired artifacts may be copied into those same owned build outputs without changing tracked compatibility declarations.
 
 - Preserve the previous model selection when projecting non-range selections: clear only an owned DOM range after a non-null model selection, retaining readonly, nested-editor and captured-input selections.

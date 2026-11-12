@@ -15,6 +15,14 @@ import {
   nativeSurface,
 } from '../test/native-surface';
 
+const nativeArtifactProfile =
+  process.env.NATIVE_SESSION_GUARD_PROFILE ?? 'production';
+if (
+  nativeArtifactProfile !== 'production' &&
+  nativeArtifactProfile !== 'preview'
+)
+  throw new Error('Unknown native session artifact profile');
+
 beforeAll(() => {
   initializeNativeSurfaceTests();
   otherSurface = nativeSurface(Access.Edit);
@@ -383,18 +391,21 @@ test('a provider without a profile is rejected at construction', () => {
   ).toThrow();
 });
 
-test('the production artifact ships no dev-probes registry export', async () => {
-  const { readFileSync } = await import('node:fs');
-  const { resolve } = await import('node:path');
-  const glue = readFileSync(
-    resolve(
-      import.meta.dirname,
-      '../../../../../apps/web/src/lib/core/document-session/wasm/document_session_wasm.js'
-    ),
-    'utf8'
-  );
-  expect(glue).not.toContain('debugCodeTokenProviders');
-});
+test.runIf(nativeArtifactProfile === 'production')(
+  'the production artifact ships no dev-probes registry export',
+  async () => {
+    const { readFileSync } = await import('node:fs');
+    const { resolve } = await import('node:path');
+    const glue = readFileSync(
+      resolve(
+        import.meta.dirname,
+        '../../../../../apps/web/src/lib/core/document-session/wasm/document_session_wasm.js'
+      ),
+      'utf8'
+    );
+    expect(glue).not.toContain('debugCodeTokenProviders');
+  }
+);
 
 test.each([
   ['an Error', new Error(SENTINEL)],
@@ -645,3 +656,4 @@ test('the view error for an unrelated tokenizer failure has no cause', () => {
     fixture.close();
   }
 });
+
