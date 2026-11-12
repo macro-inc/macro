@@ -4,7 +4,6 @@ export default {
   purchaseConfirming:
     'Confirming your payment. Setup starts once it goes through.',
   purchaseFailed: "Couldn't buy the computer. Please try again.",
-  notifyFailed: "Couldn't save your request.",
   powerOnFailed: "Couldn't turn the computer on.",
   powerOffFailed: "Couldn't turn it off.",
   cancelFailed: "Couldn't cancel the computer.",
@@ -54,9 +53,8 @@ export default {
   completeSignIn: 'Complete sign-in',
   claudeLoadFailed: 'Could not load Claude access.',
   claudeOwnAccount: 'Claude: your account',
-  claudeOwnAccountAs: 'Claude: your account · {{account}}',
+  claudeSignedIn: 'Signed in with Claude',
   claudeNotSignedIn: 'Claude: not signed in',
-  claudeConnectedAs: 'Connected as {{account}}',
   claudeSharedAccount:
     'Everyone on the team uses this Claude account on this computer.',
   claudeCredits: 'Claude: Macro credits',
@@ -107,7 +105,7 @@ export default {
   switchToCredits: 'Switch to Macro credits',
   switchToCreditsTitle: 'Switch {{name}} to Macro credits?',
   switchToCreditsBody:
-    "Claude Code on this computer signs out of {{account}} and runs on your team's Macro credits. This applies to everyone on the team who uses it.",
+    "Claude Code on this computer signs out of Claude and runs on your team's Macro credits. This applies to everyone on the team who uses it.",
   switchToAccountTitle: 'Sign {{name}} in with Claude?',
   switchToAccountBody:
     'Claude Code on this computer will use the Claude account you sign in with instead of Macro credits. This applies to everyone on the team who uses it.',

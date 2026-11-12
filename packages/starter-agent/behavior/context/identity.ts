@@ -34,7 +34,9 @@ export const noIdentity: Environment = {
  * The environment that makes git and gh act as the agent, so its commits,
  * pushes and PRs are its own and not the machine user's. Its identity lives
  * only here, never in any git config, which every session on the machine
- * shares. Without its token it fails closed.
+ * shares. Git always commits as the agent; pushes authenticate through the
+ * launcher's credential helper for its Macro repository. gh gets a login
+ * only from the agent's own GitHub token, and fails closed without one.
  */
 export const agentEnvironment = async ({
   config,
@@ -44,7 +46,13 @@ export const agentEnvironment = async ({
   readonly credentials: Pick<Credentials, 'get'>;
 }): Promise<Environment> => {
   const token = await credentials.get(githubToken).catch(() => undefined);
-  if (token === undefined) return noIdentity;
+  const identity = {
+    GIT_AUTHOR_NAME: config.identity.name,
+    GIT_AUTHOR_EMAIL: config.identity.email,
+    GIT_COMMITTER_NAME: config.identity.name,
+    GIT_COMMITTER_EMAIL: config.identity.email,
+  };
+  if (token === undefined) return { ...noIdentity, ...identity };
   return {
     [sessionMarker]: '1',
     GH_TOKEN: token,
@@ -52,9 +60,6 @@ export const agentEnvironment = async ({
     GH_CONFIG_DIR: undefined,
     GIT_SSH_COMMAND: undefined,
     GIT_TERMINAL_PROMPT: '0',
-    GIT_AUTHOR_NAME: config.identity.name,
-    GIT_AUTHOR_EMAIL: config.identity.email,
-    GIT_COMMITTER_NAME: config.identity.name,
-    GIT_COMMITTER_EMAIL: config.identity.email,
+    ...identity,
   };
 };

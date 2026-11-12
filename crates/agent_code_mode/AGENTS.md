@@ -57,8 +57,9 @@ stacks. Process isolation belongs to
 - `src/domain/ui_commands.rs`: a running execution's `macro.ui.open`.
   `POST /agent-sessions/{id}/ui-commands` admits the same way connected apps
   do, then sends only for a turn a person prompted from an app tab
-  (`TurnPrompter.client`); system turns, routines, triggers and channel
-  mentions answer `no_client`. The path must match `navigable_routes.json`,
+  (`TurnPrompter.client`); system turns, routines, triggers, channel
+  mentions and prompts typed on mobile (the web app sends no tab there)
+  answer `no_client`. The path must match `navigable_routes.json`,
   generated from the web route table by
   `apps/web/src/features/agent-navigation/core/navigable-routes.test.tsx`
   (`UPDATE_AGENT_ROUTE_TABLE=1` rewrites it; never edit it by hand). The

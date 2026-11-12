@@ -7,6 +7,8 @@ import type { Agent } from '@macro-inc/muppet/core/agent';
 import { behavior, type ContextOf } from '@macro-inc/muppet/core/behavior';
 import type { Script as ScriptOf } from '@macro-inc/muppet/core/code';
 import { fileStore, scheduling } from '@macro-inc/muppet/utilities/schedules';
+import { browserContext } from './capabilities/browser/context.ts';
+import { browserCapabilities } from './capabilities/browser/index.ts';
 import { callsContext } from './capabilities/calls/context.ts';
 import { callsCapabilities } from './capabilities/calls/index.ts';
 import { chatContext } from './capabilities/chat/context.ts';
@@ -16,13 +18,10 @@ import { heartbeatCapabilities } from './capabilities/heartbeat/index.ts';
 import { identityCapabilities } from './capabilities/identity/index.ts';
 import { laterContext } from './capabilities/later/context.ts';
 import { laterCapabilities } from './capabilities/later/index.ts';
-import { mailContext } from './capabilities/mail/context.ts';
-import { mailCapabilities } from './capabilities/mail/index.ts';
-import { mailPruneRules } from './capabilities/mail/prune.ts';
 import { peopleContext } from './capabilities/people/context.ts';
 import { peopleCapabilities } from './capabilities/people/index.ts';
-import { screenContext } from './capabilities/screen/context.ts';
-import { screenCapabilities } from './capabilities/screen/index.ts';
+import { secretsContext } from './capabilities/secrets/context.ts';
+import { secretsCapabilities } from './capabilities/secrets/index.ts';
 import { toolsContext } from './capabilities/tools/context.ts';
 import { toolsCapabilities } from './capabilities/tools/index.ts';
 import type { Base } from './context/index.ts';
@@ -32,21 +31,23 @@ import { failureHandlers } from './events/handlers/failures.ts';
 import { heartbeatHandlers } from './events/handlers/heartbeat.ts';
 import { identityHandlers } from './events/handlers/identity.ts';
 import { laterHandlers } from './events/handlers/later.ts';
-import { mailHandlers } from './events/handlers/mail.ts';
 import { peopleHandlers } from './events/handlers/people.ts';
+import { secretsHandlers } from './events/handlers/secrets.ts';
 import { callsSources } from './events/sources/calls.ts';
 import { chatSources } from './events/sources/chat.ts';
-import { mailSources } from './events/sources/mail.ts';
 
 /** The owner of the schedules' state. */
 const schedulesOwner = 'schedules';
 const schedulesFile = 'schedules.json';
 
-export const assistant = (base: Base, agent: Agent) => {
+export const assistant = (
+  base: Base,
+  agent: Agent,
+  /** Restarts the agent onto code that landed; none outside a supervisor. */
+  restart?: () => Promise<void>
+) => {
   const chat = chatContext(base);
   const chatEvents = chatSources(chat.decorations);
-  const mail = mailContext(base);
-  const mailEvents = mailSources({ ...base, ...mail.decorations });
   const scheduled = scheduling({
     store: fileStore({
       file: base.join(base.state.memory(schedulesOwner), schedulesFile),
@@ -58,7 +59,8 @@ export const assistant = (base: Base, agent: Agent) => {
   // Other areas hand the heartbeat their snapshot sections and prune rules here.
   const heartbeat = heartbeatContext(base, {
     sections: [],
-    prune: [...mailPruneRules(base)],
+    prune: [],
+    restart,
   });
   // A task handed over from a reply or a call is a wake of its own, later.
   const later = laterContext(base, scheduled.decorations.schedules);
@@ -70,7 +72,8 @@ export const assistant = (base: Base, agent: Agent) => {
   });
   const callsEvents = callsSources({ ...base, ...calls.decorations });
   const tools = toolsContext(base);
-  const screen = screenContext(base);
+  const browser = browserContext(base);
+  const secrets = secretsContext(base, scheduled.decorations.schedules);
   return behavior()
     .decorate(base)
     .decorate({ agent })
@@ -91,18 +94,17 @@ export const assistant = (base: Base, agent: Agent) => {
     .use(heartbeat)
     .use(heartbeatCapabilities)
     .use(heartbeatHandlers(scheduled))
-    .use(mail)
-    .use(mailEvents)
-    .use(mailCapabilities)
-    .use(mailHandlers(mailEvents, scheduled))
     .use(tools)
     .use(toolsCapabilities)
     .use(calls)
     .use(callsEvents)
     .use(callsCapabilities)
     .use(callsHandlers(callsEvents))
-    .use(screen)
-    .use(screenCapabilities);
+    .use(browser)
+    .use(browserCapabilities)
+    .use(secrets)
+    .use(secretsCapabilities)
+    .use(secretsHandlers(scheduled));
 };
 
 export type Assistant = ReturnType<typeof assistant>;

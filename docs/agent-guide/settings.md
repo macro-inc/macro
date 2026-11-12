@@ -104,6 +104,12 @@ editing resumes without a conversion prompt.
 With Gmail and Outlook inboxes connected, confirm only Gmail offers import
 (including Gmail accounts on a custom domain), while both support HTML and Rich
 text editing. Empty Outlook signatures must not suggest Gmail import.
+Gmail keeps images pasted into its signature editor from a message as
+`mail.google.com` URLs only that mailbox's session can load; import reads them
+from the inbox's own mailbox (the message, or for sent mail its thread) through
+the Gmail API and rehosts them. An image the mailbox doesn't hold still shows
+the image import error; a rate-limited or transient Gmail read failure shows
+the generic "try again" error instead.
 Type an unsaved Rich text draft and clear it, both with and without an existing
 saved signature. Reopen settings and confirm the editor stays empty and the
 composer no longer includes a signature. A delayed clear must preserve a newer
@@ -144,10 +150,11 @@ under **Muted items**, with **Snooze instead** to replace one with a timed pause
 The Chat detail pane also supplies these commands for its current channel or DM;
 focus the conversation before opening the command menu.
 
-To snooze an entity, right-click its row (long-press on mobile) and choose
-**Snooze notifications…**, or select/open the entity and search for that command
-in Cmd/Ctrl+K. Multi-selection applies the chosen deadline to all selected items.
-Use arrow keys and Enter, click a preset, or type a future date/time such as
+To mute an entity, right-click its row (long-press on mobile) and choose
+**Mute notifications**. Select **Until I turn it off**, a timed preset, or
+**Custom…** to open the searchable time picker. Multi-selection applies the choice
+to all selected items. Cmd/Ctrl+K retains **Snooze notifications** as a direct
+shortcut to that picker. Use arrow keys and Enter, click a preset, or type a future date/time such as
 `2h` or `tomorrow 10am`. The next morning means the next local 9 AM; the weekend
 preset resumes on Monday at 9 AM. The picker displays the exact local date and
 time before saving. Escape closes the picker; before choosing a time, it makes
@@ -162,9 +169,10 @@ save appears in notification settings.
 If only some selected items save, the picker shows the saved count and retries
 only the remaining items. Closing it keeps any snoozes already saved.
 
-On phones, long-press opens the entity actions drawer. The snooze time picker
-uses the same responsive `Dialog`, width, and `CommandMenuShell` as Cmd/Ctrl+K,
-with larger touch targets and tap instructions. Swipe the preset list when the
+On phones, long-press opens the entity actions drawer. Mute opens the same
+choices in a drill-in page; Back returns without changing notifications.
+The custom time picker uses the same responsive `Dialog`, width, and
+`CommandMenuShell` as Cmd/Ctrl+K, with larger touch targets and tap instructions. Swipe the preset list when the
 viewport is short. In **More views → Settings → Notifications**, item names and
 deadlines sit above **Change time** and **Resume**. Saving or cancelling a picker
 returns to the settings sheet. Start new snoozes from an entity's actions or
@@ -893,8 +901,8 @@ To buy one as a team admin:
 2. **Get a computer** opens guided setup: one modal (a sheet on phones) with a
    step header, **Computer · Agent · Claude · Ready**, that stays open from Buy
    to Try it. The Computer step has the size radios (**Standard**, **Large**,
-   **XL**) with price per interval, sold-out sizes offering **Notify me**;
-   **Name**, prefilled "<first name>'s Agent Box" (**Agent Box** without a first
+   **XL**) with price per interval, a sold-out size disabled and marked
+   **Sold out**; **Name**, prefilled "<first name>'s Agent Box" (**Agent Box** without a first
    name); the price breakdown; and under **Buy** the heads-up "Next you'll name
    your agent and sign in to Claude (Pro or Max) — have claude.ai handy."
 3. **Buy · <price>/month** (or **Buy** for an included offer) adds it. Each
@@ -948,8 +956,9 @@ running the real Claude Code on the computer), and press **Complete
 sign-in**; **Use Macro credits instead**
 switches to credits. A rejected code shows "That code didn't work. Try again to
 get a new one." with **Try again**; an expired sign-in shows **Start over**.
-Success closes the dialog with "Connected as <account>". Everyone on the team
-uses that Claude account on the computer.
+Success closes the dialog with "Signed in with Claude", and the row reads
+**Signed in with Claude**: the computer holds a one-year Claude credential
+(no email or plan to show). Everyone on the team uses it on the computer.
 
 In **Settings → Agents**, agents on a computer read `On a Macro computer ·
 <name>`. The editor's **Where it runs** has its own **On a Macro computer**
@@ -969,7 +978,7 @@ no itemized billing.
 Whoever completed the sign-in, and the team's owner and admins, get a
 **Claude sign-in expires soon** notification three days before the sign-in
 expires, **… expires today** within its last day, and **… expired** once it
-passes or as soon as macrod reports Claude signed out; the notification list
+passes; the notification list
 row uses the same titles. Each goes out once per sign-in, a later stage
 replacing the earlier ones it overtook, and none arrive after switching to
 Macro credits. Opening one lands on this section, where **Sign in with Claude**

@@ -15,8 +15,12 @@ import { type RepositoryState, type Sources, snapshot } from './collect.ts';
 import { commit } from './commit.ts';
 import { limits, logs, settings } from './config.ts';
 import type { HeartbeatContext } from './context.ts';
-import { guardTick } from './guard.ts';
-import { type CheckRun, ciVerdict, type LandDeps } from './land.ts';
+import {
+  type CheckRun,
+  ciVerdict,
+  type LandDeps,
+  worktreeCheck,
+} from './land.ts';
 import { tickRequest } from './prompt.ts';
 import { prune, type Rule } from './prune.ts';
 import { githubRepo, type Repository } from './repository.ts';
@@ -55,10 +59,9 @@ export const needsGithub = (what: string): Error =>
 
 export const repositoryOf = (context: Needs): Repository => {
   const { config, heartbeat, disk, clock, log, chat } = context;
-  const run = asAgent(context);
   // Commits are the agent's own whether or not it has a GitHub account: its
-  // name and email come from its settings, so its memory has history from
-  // the start, and only pushing waits for a token.
+  // name and email come from its settings. The remote authenticates through
+  // the credential helper its supervisor set up, never a token here.
   const git: Repository['git'] = async (args, { cwd } = {}) =>
     context.shell.run([settings.git, '-C', cwd ?? config.root, ...args], {
       env: {
@@ -69,63 +72,32 @@ export const repositoryOf = (context: Needs): Repository => {
         GIT_COMMITTER_EMAIL: config.identity.email,
       },
     });
-  // Without a token there is nothing to push with: the repository is local
-  // only, so a push isn't tried and failed on every commit.
-  const pushUrl = async (): Promise<string | undefined> => {
-    if (!(await hasGithub(context))) return undefined;
-    const url = await git(['remote', 'get-url', '--push', settings.remote]);
-    return url.code === 0 ? url.stdout.trim() : undefined;
-  };
   return {
     git,
     remote: settings.remote,
     main: settings.main,
-    hasRemote: async () => (await pushUrl()) !== undefined,
-    // The commit list, on purpose: a single commit's endpoint carries file
-    // patches, and the content stays out.
-    remoteMain: async () => {
-      const repo = githubRepo((await pushUrl()) ?? '');
-      if (repo === undefined) return undefined;
-      const read = await run(
-        [
-          settings.gh,
-          'api',
-          `repos/${repo}/commits?sha=${settings.main}&per_page=1`,
-          '--jq',
-          '.[0] | {sha, author: (.author.login // .commit.author.name)}',
-        ],
-        { timeoutMs: limits.gh }
-      );
-      if (read.code !== 0) return undefined;
-      const main = z
-        .object({ sha: z.string().min(1), author: z.string().nullish() })
-        .safeParse(JSON.parse(read.stdout));
-      return main.success
-        ? { sha: main.data.sha, author: main.data.author ?? '' }
-        : undefined;
-    },
+    hasRemote: async () =>
+      (await git(['remote', 'get-url', '--push', settings.remote])).code === 0,
     dm: async (text) => {
       await chat.dm(config.owner, text);
     },
     marker: {
       read: async () =>
-        (await disk.read(heartbeat.paths.mainAlarm))?.trim() || undefined,
-      write: (sha) => disk.write(heartbeat.paths.mainAlarm, `${sha}\n`),
-      clear: () => disk.remove(heartbeat.paths.mainAlarm),
+        (await disk.read(heartbeat.paths.conflict))?.trim() || undefined,
+      write: (sha) => disk.write(heartbeat.paths.conflict, `${sha}\n`),
+      clear: () => disk.remove(heartbeat.paths.conflict),
     },
     hold: (waitMs) => heartbeat.lock(heartbeat.paths.gitLock, waitMs),
     clock,
     log: (line) => log.event(logs.heartbeat, { line }),
-    staleReads: limits.staleReads,
-    rereadMs: limits.reread,
   };
 };
 
-/** What is wrong with the agent's repository: the alarm, and files git keeps that it shouldn't. */
+/** What is wrong with the agent's repository: a pull that conflicts, and files git keeps that it shouldn't. */
 export const repositoryStateOf = async (
   context: Needs
 ): Promise<RepositoryState> => ({
-  alarm: await repositoryOf(context).marker.read(),
+  conflict: await repositoryOf(context).marker.read(),
   misplaced: await misplacedNow(context),
 });
 
@@ -202,17 +174,37 @@ const PrList = z.array(
   z.object({ number: z.number(), title: z.string(), baseRefName: z.string() })
 );
 
-/** What a landing needs, for the repository as it is now: GitHub's PR and CI if there is a remote, the repository's own check if not. */
+/**
+ * The GitHub repository a landing goes through, or undefined for the
+ * repository's own check. Only a self-hosted agent with its own GitHub token
+ * and a GitHub remote lands through a PR and CI; a hosted agent (its remote is
+ * Macro's agent git server, and it has no token) never does.
+ */
+export const githubLanding = ({
+  token,
+  pushUrl,
+}: {
+  readonly token: boolean;
+  readonly pushUrl: string | undefined;
+}): string | undefined =>
+  token && pushUrl !== undefined ? githubRepo(pushUrl) : undefined;
+
+/** What a landing needs, for the repository as it is now: the repository's own check, or GitHub's PR and CI with a GitHub remote and the agent's token. */
 export const landDepsOf = async (
   context: Needs,
   repository: Repository
 ): Promise<LandDeps> => {
-  const { config, heartbeat, disk, log, shell } = context;
+  const { heartbeat, disk, log, shell } = context;
   const run = asAgent(context);
-  const url = (await repository.hasRemote())
-    ? await repository.git(['remote', 'get-url', '--push', settings.remote])
-    : undefined;
-  const repo = url?.code === 0 ? githubRepo(url.stdout) : undefined;
+  const tokened = await hasGithub(context);
+  const url =
+    tokened && (await repository.hasRemote())
+      ? await repository.git(['remote', 'get-url', '--push', settings.remote])
+      : undefined;
+  const repo = githubLanding({
+    token: tokened,
+    pushUrl: url?.code === 0 ? url.stdout : undefined,
+  });
   const gh = async (args: readonly string[]): Promise<unknown> =>
     JSON.parse(
       await output(shell, [settings.gh, ...args], {
@@ -220,38 +212,17 @@ export const landDepsOf = async (
         timeoutMs: limits.gh,
       })
     );
-  /** With no remote, green is the repository's own check passing in a fresh checkout of exactly this SHA. */
-  const localCheck = async (sha: string) => {
-    const checkout = await heartbeat.scratch.make();
-    try {
-      const added = await repository.git([
-        'worktree',
-        'add',
-        '-q',
-        '--detach',
-        checkout,
-        sha,
-      ]);
-      if (added.code !== 0) return 'red';
-      await run([settings.bun, 'install', '--frozen-lockfile'], {
-        cwd: checkout,
-        timeoutMs: limits.install,
-      });
-      const checked = await run([settings.bun, 'run', settings.checkScript], {
-        cwd: checkout,
-        timeoutMs: limits.ciTimeout,
-      });
-      if (checked.code !== 0)
-        await log.event(logs.heartbeat, {
-          line: `land: the check failed on ${sha.slice(0, 12)}`,
-          output: `${checked.stdout}\n${checked.stderr}`.trim().slice(-2000),
-        });
-      return checked.code === 0 ? 'green' : 'red';
-    } finally {
-      await repository.git(['worktree', 'remove', '--force', checkout]);
-      await heartbeat.scratch.remove(checkout);
-    }
-  };
+  const localCheck = worktreeCheck({
+    repository,
+    checkouts: heartbeat.scratch,
+    run: (argv, { cwd }) => run(argv, { cwd, timeoutMs: limits.ciTimeout }),
+    check: [settings.bun, 'run', settings.checkScript],
+    failed: (sha, text) =>
+      log.event(logs.heartbeat, {
+        line: `land: the check failed on ${sha.slice(0, 12)}`,
+        output: text.trim().slice(-2000),
+      }),
+  });
   return {
     github:
       repo === undefined
@@ -305,14 +276,9 @@ export const landDepsOf = async (
               sha,
               settings.checkJob
             ),
-    install: () =>
-      run([settings.bun, 'install', '--frozen-lockfile'], {
-        cwd: config.root,
-        timeoutMs: limits.install,
-      }),
-    manifests: settings.manifests,
     scratch: heartbeat.scratch,
     appendMerge: (row) => disk.append(heartbeat.paths.merges, `${row}\n`),
+    restart: heartbeat.restart,
     pollMs: limits.ciPoll,
     ciTimeoutMs: limits.ciTimeout,
     lockWaitMs: limits.landLockWait,
@@ -365,7 +331,6 @@ export const beatOf = (
     now: clock.now,
     digest: heartbeat.digest,
     commit: (message) => commit(repository, message, limits.commitLockWait),
-    guard: () => guardTick(repository, limits.guardLockWait),
     collect: () => collectNow(context),
     cursor: {
       read: () => readJson(disk, heartbeat.paths.cursor, Cursor),

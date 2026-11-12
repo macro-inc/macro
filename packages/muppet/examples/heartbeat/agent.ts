@@ -22,7 +22,7 @@ const standIn = (): Agent => {
       console.log(`\n--- ${request}`);
       console.log(systemPrompt.slice(systemPrompt.lastIndexOf('# Pulse')));
       console.log(
-        'ExecuteCode:',
+        'RunCapabilityScript:',
         await state.code.execute(`
 import type { Script } from ${JSON.stringify(behaviorFile)};
 import { listSchedules } from ${JSON.stringify(scheduleControl.file)};

@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import {
   type Catalog,
   describe,
@@ -54,7 +55,16 @@ export type Executed =
  * Runs an agent-written module exporting `async main({ context, log })`
  * with the agent's context, and returns what `main` returned.
  */
-export type Execute = (source: string) => Promise<Executed>;
+/** What a run knows about the wake it belongs to, if any. */
+export type ExecuteOptions = {
+  /** The wake's id, which the script's calls carry for attribution. */
+  readonly wakeId?: string;
+};
+
+export type Execute = (
+  source: string,
+  options?: ExecuteOptions
+) => Promise<Executed>;
 
 /** A script's module, or the type errors that kept it from being loaded. */
 export type Loaded =
@@ -125,6 +135,97 @@ export const execute =
     }
   };
 
+/**
+ * Marks the line a script's process prints its result on, so the rest of
+ * what it printed can be told apart from it.
+ */
+const resultMarker = '\u0000muppet-result\u0000';
+
+const ExecutedSchema = z.union([
+  z.object({
+    kind: z.literal('succeeded'),
+    output: z.unknown(),
+    logs: z.string(),
+  }),
+  z.object({ kind: z.literal('failed'), error: z.string(), logs: z.string() }),
+]);
+
+/** The line a script's process prints its result on, for `inSubprocess` to read. */
+export const resultLine = (executed: Executed): string =>
+  `${resultMarker}${JSON.stringify(executed)}\n`;
+
+/** How a script's process ended. */
+export type Exited =
+  | {
+      readonly kind: 'exited';
+      readonly code: number;
+      readonly stdout: string;
+      readonly stderr: string;
+    }
+  | {
+      readonly kind: 'timedOut';
+      readonly stdout: string;
+      readonly stderr: string;
+    };
+
+const tail = (text: string): string => text.trim().slice(-500);
+
+/**
+ * Runs each script in a process of its own, so a script holds nothing the
+ * agent's process does but what it is given: e.g. no credential. `run`
+ * starts that process with the source on its stdin (an agent's `exec`
+ * command), and stops it at `timeoutMs`; the process prints its result with
+ * `resultLine`. Whatever else it prints is added to the script's logs.
+ */
+export const inSubprocess =
+  ({
+    run,
+    timeoutMs,
+  }: {
+    readonly run: (
+      source: string,
+      options: { readonly timeoutMs: number } & ExecuteOptions
+    ) => Promise<Exited>;
+    readonly timeoutMs: number;
+  }): Execute =>
+  async (source, options = {}) => {
+    const exited = await run(source, { timeoutMs, ...options });
+    const at = exited.stdout.lastIndexOf(resultMarker);
+    const stray = (
+      at === -1 ? exited.stdout : exited.stdout.slice(0, at)
+    ).trim();
+    if (exited.kind === 'timedOut')
+      return {
+        kind: 'failed',
+        error: `the script was stopped after ${timeoutMs}ms`,
+        logs: stray,
+      };
+    const parsed =
+      at === -1
+        ? undefined
+        : ExecutedSchema.safeParse(
+            (() => {
+              try {
+                return JSON.parse(
+                  exited.stdout.slice(at + resultMarker.length)
+                );
+              } catch {
+                return undefined;
+              }
+            })()
+          );
+    if (parsed === undefined || !parsed.success)
+      return {
+        kind: 'failed',
+        error: `the script process exited ${exited.code} without a result: ${tail(exited.stderr)}`,
+        logs: stray,
+      };
+    const logs = [parsed.data.logs, stray]
+      .filter((text) => text !== '')
+      .join('\n');
+    return { ...parsed.data, logs };
+  };
+
 export const codeMode = <Context>(
   catalog: Catalog,
   context: Context,
@@ -132,14 +233,17 @@ export const codeMode = <Context>(
     load,
     signatures,
     script,
+    run,
   }: {
     readonly load: Load;
     readonly signatures: Signatures;
     readonly script: Exported;
+    /** How scripts are run; in this process, with `context`, unless given. */
+    readonly run?: Execute;
   }
 ): CodeMode => ({
   catalog: summarize(catalog),
   script,
   describe: (names) => describe(catalog, names, signatures),
-  execute: execute(context, load),
+  execute: run ?? execute(context, load),
 });

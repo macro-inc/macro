@@ -553,6 +553,7 @@ async fn run() -> anyhow::Result<()> {
     if let Some(rollout) = ai_tools::macro_connect_rollout(
         config.posthog_api_key.value(),
         config.posthog_host.value(),
+        config.environment,
     )? {
         connectors = connectors.with_rollout(rollout);
     }
@@ -765,6 +766,7 @@ async fn run() -> anyhow::Result<()> {
                 config.posthog_host.value().unwrap_or(DEFAULT_POSTHOG_HOST),
                 key.to_owned(),
                 std::time::Duration::from_secs(3),
+                config.environment,
             )
             .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))
         })
@@ -1386,7 +1388,22 @@ async fn run() -> anyhow::Result<()> {
         )),
         live_sessions,
     );
+    let harnessd: computers::HostedHarnessd = computers::harnessd::Harnessd::new(
+        match &computer_operator {
+            Some(operator) => Arc::new(computers::FleetTransport::new(Arc::clone(operator))),
+            None => Arc::new(computers::harnessd::NoFleet),
+        },
+        Arc::new(computers::harnessd::PgComputerLocks::new(pool.clone())),
+        Arc::new(harnesses::domain::service::HarnessServiceImpl::new(
+            PgHarnessRepo::new(pool.clone()),
+        )),
+    );
     if let Some(operator) = &computer_operator {
+        // Only fails if set twice, which this one startup never does.
+        let _ = sign_in_ahead.set(Arc::new(computers::sign_in_ahead::SignInAhead {
+            harnessd: harnessd.clone(),
+            operator: Arc::clone(operator),
+        }));
         computers::spawn_loops(
             Arc::clone(operator),
             computers::ClaudeSignInWatch {
@@ -1395,6 +1412,8 @@ async fn run() -> anyhow::Result<()> {
                     Arc::clone(&notifications),
                     teams::outbound::team_repo::TeamRepositoryImpl::new(pool.clone()),
                 ),
+                harnessd: harnessd.clone(),
+                pool: pool.clone(),
             },
             &computer_tasks,
             service_shutdown.clone(),
@@ -1795,24 +1814,11 @@ async fn run() -> anyhow::Result<()> {
         session_repo.clone(),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
-    let computer_control = computers::control::ComputerControl::start(
-        Arc::clone(&runtimes),
-        redis.clone(),
-        &computer_tasks,
-        service_shutdown.clone(),
-    );
-    if let Some(operator) = &computer_operator {
-        // Only fails if set twice, which this one startup never does.
-        let _ = sign_in_ahead.set(Arc::new(computers::sign_in_ahead::SignInAhead {
-            control: computer_control.clone(),
-            harnesses: PgHarnessRepo::new(pool.clone()),
-            operator: Arc::clone(operator),
-        }));
-    }
     let computer_claude = computers::claude::router(
-        computer_control,
-        redis.clone(),
-        harnesses::domain::service::HarnessServiceImpl::new(PgHarnessRepo::new(pool.clone())),
+        harnessd.clone(),
+        Arc::new(harnesses::domain::service::HarnessServiceImpl::new(
+            PgHarnessRepo::new(pool.clone()),
+        )),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
         feature_flags
             .clone()
@@ -1848,6 +1854,7 @@ async fn run() -> anyhow::Result<()> {
                 config.posthog_host.value().unwrap_or(DEFAULT_POSTHOG_HOST),
                 key.to_owned(),
                 std::time::Duration::from_secs(3),
+                config.environment,
             )
         })
         .transpose()

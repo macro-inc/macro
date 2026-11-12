@@ -21,7 +21,6 @@ const OFFERS = [
     memoryGb: 8,
     diskGb: 100,
     soldOut: false,
-    notifyRequested: false,
     quote: {
       size: 'standard',
       amount: 4000,
@@ -36,7 +35,6 @@ const OFFERS = [
     memoryGb: 16,
     diskGb: 200,
     soldOut: false,
-    notifyRequested: false,
     quote: {
       size: 'large',
       amount: 8000,
@@ -51,7 +49,6 @@ const OFFERS = [
     memoryGb: 32,
     diskGb: 400,
     soldOut: true,
-    notifyRequested: false,
     quote: {
       size: 'xl',
       amount: 16000,

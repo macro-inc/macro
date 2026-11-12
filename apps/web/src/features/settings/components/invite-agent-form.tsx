@@ -37,9 +37,6 @@ export function InviteAgentForm(props: {
   offers: readonly SizeOffer[] | undefined;
   offersFailed: boolean;
   onRetryOffers: () => void;
-  /** The size a Notify me request is in flight for. */
-  notifyPending?: ComputerSize;
-  onNotify: (size: ComputerSize) => void;
   /** Stores the picture and resolves to its URL. */
   uploadPicture: (file: File) => Promise<string>;
   pending: boolean;
@@ -264,9 +261,7 @@ export function InviteAgentForm(props: {
                 <ComputerSizePicker
                   offers={offers()}
                   selected={size()}
-                  notifyPending={props.notifyPending}
                   onSelect={setChosenSize}
-                  onNotify={props.onNotify}
                 />
               )}
             </Show>

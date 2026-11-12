@@ -152,6 +152,7 @@ const harness = (
   const cards: unknown[] = [];
   const humans: string[] = [];
   const counts = { left: 0, closed: 0, interrupted: 0, disposed: 0 };
+  const spans: { name: string; fields: Record<string, unknown> }[] = [];
   const captured: {
     handlers?: RoomHandlers;
     brain?: BrainNeeds;
@@ -164,6 +165,16 @@ const harness = (
   });
   const ports: JoinPorts = {
     name: 'Agent',
+    trace: (name, run) => {
+      const fields: Record<string, unknown> = {};
+      spans.push({ name, fields });
+      return run({
+        set: (key, value) => {
+          fields[key] = value;
+        },
+        traceparent: () => undefined,
+      });
+    },
     api: {
       join: (request) => {
         requests.push(request);
@@ -289,6 +300,7 @@ const harness = (
     cards,
     humans,
     counts,
+    spans,
     captured,
     settle,
     run: (input: Partial<JoinInput> = {}) =>
@@ -336,6 +348,16 @@ test('a join: events from t=0, the pid, the call id on stdout, the greeting, and
   });
   expect(h.counts).toEqual({ left: 1, closed: 1, interrupted: 0, disposed: 1 });
   expect(h.types().slice(-2)).toEqual(['call.leave', 'call.end']);
+  expect(h.spans).toEqual([
+    {
+      name: 'calls.leave',
+      fields: {
+        'call.id': 'call-1',
+        'call.leave_reason': 'SIGTERM',
+        'call.human_joined': false,
+      },
+    },
+  ]);
 });
 
 test("Macro's refusal exits with its own code, and an ended call is a clean exit", async () => {

@@ -1,12 +1,11 @@
 /**
  * Commits whatever the agent changed (notes, prompts, its charter, its code)
- * so its memory and self-edits have history, then pushes if there is a
- * remote. Code only flows out: nothing is ever pulled. A rejected push means
- * someone else pushed: no merge, no retrying against it, one alarm, and
- * commits stay local until the remote is back at what was last pushed.
+ * so its memory and self-edits have history, then brings main level with the
+ * remote: pull --rebase, then push. A pull that conflicts is aborted, the
+ * commits stay local, the owner hears once, and the next commit tries again.
  */
-import { checkMain } from './guard.ts';
-import { pushedRef, type Repository } from './repository.ts';
+import { conflicted, settled } from './guard.ts';
+import { type Repository, upstreamRef } from './repository.ts';
 
 export type CommitResult =
   /** Nothing to commit and nothing to push. */
@@ -16,19 +15,60 @@ export type CommitResult =
   | 'pushed'
   /** Not committed, e.g. no identity. The change stays staged for the next commit. */
   | 'commit-failed'
-  /** The push failed for a reason that isn't someone else's push, e.g. the network. The next commit retries. */
+  /** The pull failed for a reason that isn't a conflict, e.g. the network. The next commit retries. */
+  | 'pull-failed'
+  /** The remote's main and the agent's commits conflict. The rebase was aborted, commits stay local, and the next commit retries. */
+  | 'rebase-conflict'
+  /** The push failed, e.g. someone pushed since the pull. The next commit pulls and retries. */
   | 'push-failed'
-  /** Someone else pushed. Commits stay local until that is settled. */
-  | 'push-blocked'
   /** The git lock stayed busy. The change stays in the tree for the next commit. */
   | 'locked';
 
-const rejection = /\[rejected\]|non-fast-forward|fetch first/;
+const noRemoteMain = /couldn't find remote ref/;
+const firstLine = (text: string): string =>
+  text.trim().split('\n')[0]?.slice(0, 300) ?? '';
+
+/** Rebases local main onto the remote's. The git lock must be held, and the checkout on main with nothing staged. */
+export const pullMain = async (
+  repository: Repository
+): Promise<'pulled' | 'pull-failed' | 'rebase-conflict'> => {
+  const { git, remote, main } = repository;
+  const pulled = await git([
+    '-c',
+    'commit.gpgsign=false',
+    '-c',
+    'rebase.autoStash=false',
+    'pull',
+    '--rebase',
+    '-q',
+    remote,
+    main,
+  ]);
+  if (pulled.code === 0) {
+    await settled(repository);
+    return 'pulled';
+  }
+  // A remote with no main yet has nothing to pull: the push makes it.
+  if (noRemoteMain.test(pulled.stderr)) return 'pulled';
+  // Only a rebase that started and stopped can be aborted; anything else failed before it.
+  if ((await git(['rebase', '--abort'])).code !== 0) {
+    await repository.log('commit: pull failed; will retry');
+    return 'pull-failed';
+  }
+  const theirs = (
+    await git(['rev-parse', '--verify', '-q', upstreamRef(repository)])
+  ).stdout.trim();
+  await repository.log(
+    `commit: pulling ${theirs.slice(0, 12)} conflicts; aborted, staying local: ${firstLine(pulled.stdout || pulled.stderr)}`
+  );
+  await conflicted(repository, theirs);
+  return 'rebase-conflict';
+};
 
 /** Pushes main. The git lock must be held. */
 export const pushMain = async (
   repository: Repository
-): Promise<'pushed' | 'push-failed' | 'push-blocked'> => {
+): Promise<'pushed' | 'push-failed'> => {
   const pushed = await repository.git([
     'push',
     '-q',
@@ -36,18 +76,29 @@ export const pushMain = async (
     `HEAD:${repository.main}`,
   ]);
   if (pushed.code === 0) return 'pushed';
-  if (!rejection.test(pushed.stderr)) {
-    await repository.log('commit: push failed; will retry');
-    return 'push-failed';
-  }
   await repository.log(
-    'commit: push rejected, someone else pushed; staying local'
+    `commit: push failed; will retry: ${firstLine(pushed.stderr)}`
   );
-  await checkMain(repository, { rejected: true }).catch(() => undefined);
-  return 'push-blocked';
+  return 'push-failed';
 };
 
-/** add, commit, push. The git lock must be held. */
+/** Pulls main with --rebase, then pushes what is left to push. The git lock must be held. */
+export const syncMain = async (
+  repository: Repository,
+  local: 'clean' | 'committed'
+): Promise<Exclude<CommitResult, 'locked' | 'commit-failed'>> => {
+  const pulled = await pullMain(repository);
+  if (pulled !== 'pulled') return pulled;
+  const ahead = await repository.git([
+    'rev-list',
+    '--count',
+    `${upstreamRef(repository)}..HEAD`,
+  ]);
+  if (ahead.code === 0 && ahead.stdout.trim() === '0') return local;
+  return pushMain(repository);
+};
+
+/** add, commit, pull --rebase, push. The git lock must be held. */
 export const commitLocked = async (
   repository: Repository,
   message: string
@@ -73,17 +124,10 @@ export const commitLocked = async (
   }
   const local = staged ? 'committed' : 'clean';
   if (!(await repository.hasRemote())) return local;
-  // Only main is ever pushed from here; a branch is pushed by whoever opens its PR.
+  // Only main is synced from here; a branch comes in through land.
   const head = (await git(['symbolic-ref', '--short', '-q', 'HEAD'])).stdout;
   if (head.trim() !== repository.main) return local;
-  const ahead = await git([
-    'rev-list',
-    '--count',
-    `${pushedRef(repository)}..HEAD`,
-  ]);
-  if (ahead.code === 0 && ahead.stdout.trim() === '0') return 'clean';
-  if ((await repository.marker.read()) !== undefined) return 'push-blocked';
-  return pushMain(repository);
+  return syncMain(repository, local);
 };
 
 export const commit = async (

@@ -167,7 +167,13 @@ impl From<sqlx::Error> for TeamError {
 
 impl From<sqlx::Error> for CreateTeamError {
     fn from(e: sqlx::Error) -> Self {
-        Self::StorageLayerError(e.into())
+        // One team per user: an owner trips `team_owner_id_unique` on the
+        // team insert, a member trips `team_user_user_id_unique` on the
+        // membership insert.
+        match e.as_database_error().and_then(|db| db.constraint()) {
+            Some("team_owner_id_unique" | "team_user_user_id_unique") => Self::AlreadyOnTeam,
+            _ => Self::StorageLayerError(e.into()),
+        }
     }
 }
 

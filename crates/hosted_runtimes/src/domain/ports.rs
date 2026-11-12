@@ -2,11 +2,10 @@
 
 pub use crate::domain::lifecycle::InstanceStatus;
 
-use macro_user_id::user_id::MacroUserIdStr;
-
 use bot_id::BotId;
 use harness_id::HarnessId;
 use std::collections::HashMap;
+use std::pin::Pin;
 
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
@@ -338,21 +337,6 @@ pub trait ComputerRepo: Send + Sync + 'static {
         catalog: &[crate::domain::size::CatalogEntry],
         now: DateTime<Utc>,
     ) -> impl Future<Output = Result<Vec<ComputerSize>, Self::Err>> + Send;
-
-    /// Ask to hear when `size` can be bought again.
-    fn request_notify(
-        &self,
-        team_id: Uuid,
-        user_id: MacroUserIdStr<'static>,
-        size: ComputerSize,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
-
-    /// List sizes the caller asked to be notified about.
-    fn notify_requests(
-        &self,
-        team_id: Uuid,
-        user_id: MacroUserIdStr<'static>,
-    ) -> impl Future<Output = Result<Vec<ComputerSize>, Self::Err>> + Send;
 }
 
 /// Errors from billing a team.
@@ -548,6 +532,73 @@ pub trait Fleet: Send + Sync + 'static {
 
     /// The host this fleet drives, for registration.
     fn host(&self) -> impl Future<Output = Result<HostRegistration, Self::Err>> + Send;
+
+    /// Run `argv` in the guest as its [`GUEST_USER`], without a TTY. Resolves
+    /// once the program started; a missing guest is [`FleetError::is_missing`].
+    fn exec(
+        &self,
+        computer_id: ComputerId,
+        argv: &[&str],
+    ) -> impl Future<Output = Result<GuestProcess<Self::Err>, Self::Err>> + Send;
+}
+
+/// The guest account [`Fleet::exec`] runs programs as.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GuestUser {
+    /// Numeric user id.
+    pub uid: u32,
+    /// Numeric group id.
+    pub gid: u32,
+    /// `HOME`, also the working directory.
+    pub home: &'static str,
+    /// `PATH`: setuid wrappers, then the system profile.
+    pub path: &'static str,
+}
+
+/// The image's `macro` user.
+pub const GUEST_USER: GuestUser = GuestUser {
+    uid: 1000,
+    gid: 1000,
+    home: "/home/macro",
+    path: "/run/wrappers/bin:/run/current-system/sw/bin",
+};
+
+/// A program running in a guest as [`GUEST_USER`], without a TTY.
+///
+/// Stderr is not streamed: the adapter keeps a bounded tail and logs it at
+/// debug on a non-zero exit. Read `stdout` while awaiting `exit`; a full
+/// stdout blocks the program like a full pipe. Dropping the process kills or
+/// detaches it.
+pub struct GuestProcess<Err> {
+    /// The program's stdin; dropping it closes the program's stdin.
+    pub stdin: Pin<Box<dyn tokio::io::AsyncWrite + Send>>,
+    /// The program's stdout.
+    pub stdout: Pin<Box<dyn tokio::io::AsyncRead + Send>>,
+    /// The exit code, once the program ended and stdout is drained.
+    pub exit: Pin<Box<dyn Future<Output = Result<i32, Err>> + Send>>,
+}
+
+impl<Err: 'static> GuestProcess<Err> {
+    /// The same process, its exit failure converted with `map`.
+    pub fn map_err<Other>(
+        self,
+        map: impl FnOnce(Err) -> Other + Send + 'static,
+    ) -> GuestProcess<Other> {
+        let exit = self.exit;
+        GuestProcess {
+            stdin: self.stdin,
+            stdout: self.stdout,
+            exit: Box::pin(async move { exit.await.map_err(map) }),
+        }
+    }
+}
+
+impl<Err> std::fmt::Debug for GuestProcess<Err> {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("GuestProcess")
+            .finish_non_exhaustive()
+    }
 }
 
 /// Ownership and age observed on the guest, independent of the computer row.

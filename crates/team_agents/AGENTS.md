@@ -53,4 +53,4 @@ An agent's status comes from its computer (`provisioning`, `running`,
 
 ## Related
 
-- Rules: `.agents/rules/rust/architecture.md` · Docs: `docs/design/agent-brains.md`
+- Rules: `.agents/rules/rust/architecture.md` · Docs: `docs/design/agent-teammates.md`

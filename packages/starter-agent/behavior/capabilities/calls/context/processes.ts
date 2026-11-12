@@ -2,9 +2,11 @@
  * The processes a watcher deals with: finding the agent's joins among everything
  * running, signalling one, and starting one.
  */
+
 import type { Config } from '../../../context/config.ts';
 import type { Disk } from '../../../context/disk.ts';
 import type { Shell, Started } from '../../../context/shell.ts';
+import { telemetryEnvironment } from '../../../context/telemetry.ts';
 import { type CallsPaths, joinCapability } from '../config.ts';
 import type { JoinInput } from '../join.ts';
 import type { LeaveSignal } from '../watch.ts';
@@ -95,8 +97,14 @@ export const startJoin =
     config,
     paths,
     join,
+    relayed,
+    sandbox,
   }: {
     readonly shell: Pick<Shell, 'start'>;
+    /** What the join runs under, its brain's Claude Code and all: `Base.sandbox`. */
+    readonly sandbox: readonly string[];
+    /** What makes the join's process the agent's, reaching Macro through its relay. */
+    readonly relayed: () => Promise<Readonly<Record<string, string>>>;
     readonly disk: Pick<Disk, 'makeDirectory'>;
     readonly config: Pick<Config, 'root'>;
     readonly paths: Pick<CallsPaths, 'call' | 'joinLog' | 'joinErrors'>;
@@ -107,19 +115,26 @@ export const startJoin =
     // The logs' directory must exist before bash opens them.
     await disk.makeDirectory(paths.call(id));
     return shell.start(
-      withLogs(
-        [
-          join(config.root, binDirectory, agentProgram),
-          joinCapability,
-          JSON.stringify(input),
-        ],
-        paths.joinLog(id),
-        paths.joinErrors(id)
-      ),
+      [
+        ...sandbox,
+        ...withLogs(
+          [
+            join(config.root, binDirectory, agentProgram),
+            joinCapability,
+            JSON.stringify(input),
+          ],
+          paths.joinLog(id),
+          paths.joinErrors(id)
+        ),
+      ],
       {
         cwd: config.root,
         // rtc-node logs debug lines to stdout otherwise.
-        env: { NODE_ENV: 'production' },
+        env: {
+          ...(await relayed()),
+          ...telemetryEnvironment(process.env),
+          NODE_ENV: 'production',
+        },
         detached: true,
       }
     );

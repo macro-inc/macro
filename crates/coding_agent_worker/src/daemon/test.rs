@@ -23,9 +23,7 @@ fn a_fresh_dial_is_not_a_held_connection_until_it_has_lasted() {
 async fn stop_does_not_wait_for_in_flight_work() {
     let cancel = CancellationToken::new();
     let daemon = Daemon {
-        _cancel_on_drop: cancel.clone().drop_guard(),
         cancel,
-        background: TaskTracker::new(),
         task: tokio::spawn(std::future::pending()),
         turns: ActiveTurns::default(),
         handoff: crate::harness::Handoffs::channel().1,

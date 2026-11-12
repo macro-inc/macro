@@ -7,7 +7,12 @@ import type {
 } from '../core/agent.ts';
 import type { Accept, Behavior, Event, WakeFor } from '../core/behavior.ts';
 import type { Signatures } from '../core/capability.ts';
-import { codeMode, type Exported, type Load } from '../core/code.ts';
+import {
+  codeMode,
+  type Execute,
+  type Exported,
+  type Load,
+} from '../core/code.ts';
 import { describeError } from '../core/error.ts';
 import type { Lifecycle } from '../core/hook.ts';
 import { framework } from '../core/prompt.ts';
@@ -23,10 +28,12 @@ export type Options = {
   readonly signatures: Signatures;
   /** The agent's `Script` type: `Script<Context>` of its own context, which `load` holds every script to. */
   readonly script: Exported;
+  /** How scripts are run, e.g. `inSubprocess`; in the agent's own process, with its context, if not given. */
+  readonly run?: Execute;
 };
 
 /** What code mode needs beyond the behavior: how scripts load, and how modules are described. */
-export type Scripts = Pick<Options, 'load' | 'signatures' | 'script'>;
+export type Scripts = Pick<Options, 'load' | 'signatures' | 'script' | 'run'>;
 
 /** What the agent works with while awake: its capabilities, through code mode. */
 export const agentState = <Needs, Provided extends Needs, Sources, Failures>(

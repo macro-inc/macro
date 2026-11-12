@@ -431,3 +431,23 @@ fn only_a_conflict_means_the_data_volume_already_exists() {
         message: "Storage pool not found".to_owned(),
     }));
 }
+
+#[test]
+fn exec_runs_as_the_macro_user_from_its_home() {
+    assert_eq!(
+        exec_command(&["harnessd"]),
+        ExecCommand {
+            command: vec!["harnessd".to_owned()],
+            environment: BTreeMap::from([
+                ("HOME".to_owned(), "/home/macro".to_owned()),
+                (
+                    "PATH".to_owned(),
+                    "/run/wrappers/bin:/run/current-system/sw/bin".to_owned()
+                ),
+            ]),
+            user: 1000,
+            group: 1000,
+            cwd: "/home/macro".to_owned(),
+        }
+    );
+}

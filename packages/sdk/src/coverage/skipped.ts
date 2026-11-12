@@ -162,7 +162,6 @@ export const authBacklog = [
   'getTeamComputer', // Computer billing and lifecycle controls belong to the app.
   'listTeamComputerOffers', // Computer checkout offers belong to the app.
   'listTeamComputers', // Computer billing and lifecycle controls belong to the app.
-  'notifyTeamComputerAvailable', // Computer availability notifications belong to the app.
   'restoreTeamComputer', // Computer billing and lifecycle controls belong to the app.
   'purchaseTeamComputer', // Computer checkout belongs to the app.
   'quoteTeamComputer', // Computer checkout belongs to the app.
@@ -326,6 +325,13 @@ export const staticFilesBacklog =
   [] as const satisfies readonly (keyof StaticFilesSdk)[];
 
 export const storageExcluded = [
+  // Chat sidebar section editing and discovery remain app-only navigation.
+  'createChannelSection',
+  'deleteChannelSection',
+  'listChannelSections',
+  'previewChannelSection',
+  'setChannelSection',
+  'updateChannelSection',
   // Opening a host to a team takes its owner's own session: an agent can ask for
   // access but never grant it.
   'setHarnessTeamAccess',
@@ -431,7 +437,6 @@ export const storageExcluded = [
   'whatsappPairing',
   'whatsappPasskey',
   'whatsappStartLookup',
-  'putSelfHarnessCapabilities', // Daemon capability reports are internal runtime registration plumbing.
 ] as const satisfies readonly (keyof StorageSdk)[];
 
 export const storageBacklog = [

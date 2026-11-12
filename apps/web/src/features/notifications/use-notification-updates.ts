@@ -181,7 +181,7 @@ export function handleNotificationUpdate(notification: UnifiedNotification) {
       });
     })
     // The computer's row in Runtimes shows its Claude account.
-    .with({ tag: 'claude_sign_in_expiry' }, () => {
+    .with({ tag: 'agent_sign_in_expiry' }, () => {
       queryClient.invalidateQueries({ queryKey: harnessKeys.list.queryKey });
     })
     .with({ tag: 'invite_to_team' }, () => {

@@ -17,7 +17,6 @@ import {
   selfEditMessage,
 } from './commit.ts';
 import { limits, type logs } from './config.ts';
-import { type GuardResult, guardTick } from './guard.ts';
 import { land as landBranch, mergeRow } from './land.ts';
 import {
   collectNow,
@@ -36,8 +35,8 @@ import { Cursor, snapshotHash, wakeReason } from './tick.ts';
  * Whether your next heartbeat tick would wake you, and why, with the
  * snapshot it would wake you on.
  *
- * Every 30 minutes your heartbeat commits your repository, checks its
- * remote, prunes, and builds a snapshot: what is wrong with your repository,
+ * Every 30 minutes your heartbeat commits your repository, pulls and pushes
+ * it, prunes, and builds a snapshot: what is wrong with your repository,
  * and what the other areas of you watch. It wakes you when the snapshot
  * changed and has something in it. This is a dry run of that decision:
  * nothing is recorded and you aren't woken. `lastRun` is when a tick last
@@ -89,19 +88,20 @@ const filled = (value: string, what: string): string => {
 };
 
 /**
- * Commit everything changed in your own repository, and push it if it has a
- * remote.
+ * Commit everything changed in your own repository, then pull its remote's
+ * main with --rebase and push.
  *
  * This happens by itself after every wake and on every heartbeat tick, so you
  * rarely need it: use it when a change must be in history before something
- * else reads it. Only main is pushed, and nothing is ever pulled. Results:
- * clean (nothing to do), committed (local only: no remote, or not on main),
- * pushed, commit-failed (it stays staged), push-failed (retried by the next
- * commit), push-blocked (someone else pushed to the remote; your owner has
- * the alarm and commits stay local until it's settled), locked (a landing
- * holds the lock; the change waits for the next commit). Without the
- * AGENT_GITHUB_TOKEN credential nothing is pushed: commits stay local. Never `git pull`, fetch or
- * merge from the remote in this repository. `message` mustn't be blank.
+ * else reads it, or to take in what your owner pushed. Only main is pulled
+ * and pushed. Results: clean (nothing to commit or push), committed (local
+ * only: no remote, or not on main), pushed, commit-failed (it stays staged),
+ * pull-failed and push-failed (retried by the next commit), rebase-conflict
+ * (your commits and the remote's conflict: the rebase was aborted, your
+ * commits stay local, your owner has one alarm, and the next commit tries
+ * again), locked (a landing holds the lock; the change waits for the next
+ * commit). Never pull, rebase or reset main in this checkout yourself.
+ * `message` mustn't be blank.
  */
 export const commit = async (
   context: Needs,
@@ -162,22 +162,20 @@ export const commitSelfEdit = async (
  * Land a green branch on your repository's main. The only way code gets into
  * it.
  *
- * Branch from local main, commit, then land the branch. Under the git lock it
- * commits what's pending on main, rebases the branch on local main if main
- * moved, waits for the check to be green on that exact commit, fast-forwards
- * local main (the live tree changes only in the branch's files), and writes a
- * row in the merge log; `what` is that row's note on what the branch did.
+ * Branch from local main in a worktree under `.worktrees/`, commit, then land
+ * the branch. Under the git lock it commits what's pending on main and pulls
+ * the remote's, rebases the branch on local main if main moved, runs `bun run
+ * check` in a fresh worktree of that exact commit, fast-forwards local main
+ * (the live tree changes only in the branch's files), writes a row in the
+ * merge log, and pushes. Then, when you are supervised, you restart onto the
+ * new code (`restarting`): this run ends there.
  *
- * With a remote on GitHub and the AGENT_GITHUB_TOKEN credential, the branch
- * needs an open PR against main: the branch is
- * force-pushed, CI's `check` job must pass on GitHub, main is pushed, and
- * GitHub marks the PR merged by itself. Never merge a PR on GitHub: that
- * would mean pulling the result, and nothing is ever pulled. Otherwise the
- * check is `bun run check` in a fresh checkout of the commit, and nothing is
- * pushed.
+ * Only with a GitHub remote and the AGENT_GITHUB_TOKEN credential is green
+ * instead CI's `check` job on the branch's open PR against main, which GitHub
+ * marks merged by itself once main is pushed. Never merge a PR on GitHub.
  *
- * Run it from the live checkout (the one on main). A refusal says why and
- * leaves main where it was. `branch` mustn't be blank.
+ * Run it from the live checkout (the one on main). A refusal, a red check
+ * included, says why and leaves main where it was. `branch` mustn't be blank.
  */
 export const land = async (
   context: Needs,
@@ -188,6 +186,7 @@ export const land = async (
       readonly sha: string;
       readonly pr?: number;
       readonly merged: boolean;
+      readonly restarting: boolean;
     }
   | { readonly status: 'refused'; readonly reason: string }
 > => {
@@ -204,24 +203,6 @@ export const land = async (
   const { pr, ...rest } = landed;
   return pr === undefined ? rest : { ...rest, pr };
 };
-
-/**
- * Compare the remote's main of your repository with what you last pushed, and
- * alarm your owner if it moved.
- *
- * Your heartbeat does this on every tick. Results: same; alarmed (it moved
- * without you: your owner got one line with the SHA and author, and commits stay
- * local until the remote is back at what you pushed); already (alarmed
- * before); unknown (the remote can't be read); none (the repository has no
- * remote, or no AGENT_GITHUB_TOKEN to reach it with); busy (a commit or a
- * landing holds the lock). Only the SHA and the
- * author are read: nothing comes in.
- */
-export const checkMain = async (
-  context: Needs
-): Promise<{ readonly result: GuardResult | 'busy' }> => ({
-  result: await guardTick(repositoryOf(context), limits.guardLockWait),
-});
 
 const ownerAndName = /^[\w.-]+\/[\w.-]+$/;
 
@@ -417,7 +398,6 @@ export const heartbeatModule = module({
     commit,
     commitSelfEdit,
     land,
-    checkMain,
     logMerge,
     stateWhere,
     stateCheck,

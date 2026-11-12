@@ -13,7 +13,7 @@
 //! disk alone. A marker at least as new as the enrollment, or no enrollment
 //! (the control plane removes it once macrod connects), means enrolled.
 
-use std::os::unix::fs::{MetadataExt as _, OpenOptionsExt as _, PermissionsExt as _};
+use std::os::unix::fs::MetadataExt as _;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::{Duration, Instant};
@@ -21,7 +21,7 @@ use std::time::{Duration, Instant};
 use hosted_runtimes::domain::enrollment::{Enrollment, EnrollmentGeneration, INCUS_ENROLLMENT_KEY};
 use rootcause::prelude::ResultExt as _;
 
-use crate::capabilities::ENROLLED_MARKER;
+use crate::computer::ENROLLED_MARKER;
 use crate::config::{Config, HarnessCredentials};
 use crate::outbound::pairing::{ClaimStatus, PairingClient};
 use crate::service::ServiceOptions;
@@ -157,7 +157,7 @@ async fn run_enroll_with_host(options: EnrollOptions, host: &impl Host) -> rootc
         otel.status_code = tracing::field::Empty
     );
     hosted_runtimes::domain::telemetry::attach(&span, enrollment.traceparent.as_deref());
-    enroll(&options, host, &paths, &marker, &enrollment)
+    enroll(&options, host, &marker, &enrollment)
         .instrument(span.clone())
         .await
         .inspect_err(|_| {
@@ -168,7 +168,6 @@ async fn run_enroll_with_host(options: EnrollOptions, host: &impl Host) -> rootc
 async fn enroll(
     options: &EnrollOptions,
     host: &impl Host,
-    paths: &SystemPaths,
     marker: &Path,
     enrollment: &Enrollment,
 ) -> rootcause::Result<()> {
@@ -193,13 +192,6 @@ async fn enroll(
     if let Some(parent) = marker.parent() {
         std::fs::create_dir_all(parent)
             .context(format!("could not create {}", parent.display()))?;
-    }
-    if let Some(parent) = &enrollment.traceparent {
-        write_file(
-            &paths.at(crate::telemetry::PROVISION_PARENT_PATH),
-            parent,
-            0o644,
-        )?;
     }
     std::fs::write(
         marker,
@@ -451,26 +443,4 @@ fn own_like_parent(path: &Path, host: &impl Host) -> rootcause::Result<()> {
             gid: metadata.gid(),
         },
     )
-}
-
-fn write_file(path: &Path, contents: &str, mode: u32) -> rootcause::Result<()> {
-    use std::io::Write as _;
-
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)
-            .context(format!("could not create {}", parent.display()))?;
-    }
-    let mut file = std::fs::OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .mode(mode)
-        .open(path)
-        .context(format!("could not open {}", path.display()))?;
-    // `mode` applies only to new files; a retry tightens an existing one.
-    std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode))
-        .context(format!("could not set the mode of {}", path.display()))?;
-    file.write_all(contents.as_bytes())
-        .context(format!("could not write {}", path.display()))?;
-    Ok(())
 }

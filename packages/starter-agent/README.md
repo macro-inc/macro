@@ -36,12 +36,12 @@ to `state/memory/identity/identity.md`.
 | `chat`      | Read and post in Macro channels, threads and DMs; answer when spoken to | nothing                             |
 | `identity`  | Know who it is, from what its owner told it                             | nothing                             |
 | `later`     | Hand itself longer tasks to do in a run of their own                    | nothing                             |
-| `people`    | Remember the people it talks with, on this machine only                 | nothing                             |
+| `people`    | Remember the people it talks with, in its private state                 | nothing                             |
 | `heartbeat` | Schedules, its own clock, and changing its own code (`commit`, `land`)  | nothing                             |
 | `tools`     | Its credentials, by name                                                | nothing                             |
-| `calls`     | Join, place and leave Macro calls with a voice; post in a call's chat   | speech credentials (see below)      |
-| `screen`    | Show a browser on a call                                                | the screen service running          |
-| `mail`      | An inbox of its own, screened before it reaches it                      | a Gmail account's OAuth credentials |
+| `secrets`   | The team's vault: search, copy a field or TOTP code to the clipboard, create and update, request access; never a value | the `enable-agent-vault` flag on the team; `xclip` and `timeout` on the computer |
+| `calls`     | Join, place and leave Macro calls with a voice; post in a call's chat   | nothing (speech is Macro's gateway) |
+| `browser`   | Its own browser on its screen: open, read, click, type, paste a vault secret into a login form, screenshot | `chromium` on the computer, `DISPLAY` |
 
 An area whose credentials are missing stays quiet: nothing fails, and the
 agent says which credential to add when asked to use it. "Credentials" below
@@ -49,29 +49,39 @@ lists them.
 
 ## Credentials
 
-The agent's credentials are in `secrets.enc.json`, encrypted with SOPS to this
-machine's age key. They are used by name and never printed.
+A hosted agent's credentials are its enrollment's `agent.env` (`KEY=value`
+lines, given as a systemd credential at `MUPPET_CREDENTIALS_FILE`): its Macro
+key and where Macro is (`MACRO_GATEWAY` and the `OVERRIDE_*` service URLs),
+its repository's, and, in Macro-credits mode, `ANTHROPIC_BASE_URL`,
+`ANTHROPIC_AUTH_TOKEN` and `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`, the
+only ones Claude Code is given. They are read once, only read, used by name
+and never printed: `setCredential` refuses. A self-hosted agent sets
+`MUPPET_CREDENTIALS=sops` instead, and keeps them in `secrets.enc.json`,
+encrypted with SOPS to its machine's age key, where `setCredential` adds one
+(value on stdin, never as an argument).
 
     bin/agent listCredentials
-    bin/agent describe setCredential
 
-`setCredential` takes the value on stdin, never as an argument; its docs give
-the exact input. The agent can also be told, in chat, to add one.
+Scripts the agent writes, and Claude Code itself, never hold a credential:
+each script runs in a process of its own, with a cleared environment, and
+reaches Macro through a loopback relay in the agent's process, which adds
+the key. There `listCredentials` still lists the names; reading a value
+fails.
 
 | Credential                                                   | What it turns on                                                     |
 | ------------------------------------------------------------ | -------------------------------------------------------------------- |
-| `MACRO_API_KEY`                                              | The agent itself: chat, schedules, memory. Set by `bin/setup`.       |
-| `DEEPGRAM_API_KEY`                                           | Calls: hearing, and the default voice. Without it no call is joined. |
-| `INWORLD_API_KEY`                                            | Only if the agent's voice is changed to an Inworld one.              |
-| `MAIL_CLIENT_ID`, `MAIL_CLIENT_SECRET`, `MAIL_REFRESH_TOKEN` | Mail: a Gmail account's OAuth client and refresh token.              |
-| `AGENT_GITHUB_TOKEN`                                         | Pushing its repository to a remote, and landing through a PR and CI. |
+| `MACRO_API_KEY`, `MACRO_GATEWAY`                             | The agent itself: chat, schedules, memory. Set by enrollment.        |
+| `AGENT_GITHUB_TOKEN`                                         | Only with a GitHub remote: landing through a PR and CI.              |
 
-Calls and mail check for their credentials again every few minutes, so
-adding one turns the feature on without a restart.
 
 ## How it runs
 
-One process, `bin/agent run`, under the computer's agent service. It builds
+One process, `bin/agent run`, under the computer's agent service, which sets
+`AGENT_WORKSPACE` (this repository), `MUPPET_CREDENTIALS_FILE`,
+`MUPPET_LAST_GOOD_FILE`, `MUPPET_RESTART_FILE` and, for stdio MCP servers
+every wake gets (e.g. computer use), `MUPPET_MCP_SERVERS_JSON`. None has a
+default: a missing or invalid one exits 78, which the service retries without
+rolling back. It runs Claude Code as the `claude` on PATH. It builds
 the behavior in `behavior/`, shows the agent online in Macro, and waits on its
 event sources. A handler decides cheaply what each event needs, and wakes the
 agent (Claude Code, with `AGENT.md` and who it is as its system prompt) only
@@ -79,7 +89,12 @@ when it is needed.
 
 A run that answers a message only talks. Anything longer the agent hands to
 itself (`doLater`) and is woken for on its own. Every wake ends with a commit
-of this repository.
+of this repository, a pull of its remote's `main` with `--rebase`, and a push.
+
+What a run may spend is capped, per run and per day of its owner, by
+`budgetUsdPerRun` and `budgetUsdPerDay` in `agent.json` (5 and 50 USD unless
+set). Once a day's runs reach the daily cap nothing wakes until the next day,
+and the owner is told once.
 
 Each call the agent is on is a process of its own (`bin/agent joinCall`), so
 a call outlives a restart of the agent.
@@ -111,6 +126,36 @@ the same messages.
       capabilities/<area>/         what it can do, its prompts, and all of the area's logic
     state/
       memory/<owner>/              committed: what it knows
-      private/<owner>/             never committed: people, their messages, mail
+      private/<owner>/             committed: people, their messages
       run/<owner>/                 never committed: queues, cursors, locks
       log/<owner>/                 never committed: logs and recordings
+
+## The runtime contract (with the computer's image)
+
+The image's launcher clones this repository into `AGENT_WORKSPACE`, places
+`@macro-inc/muppet`, `@macro-inc/sdk`, `@macro-inc/observability` and the
+packages `bun.lock` locks in `node_modules`, and runs `bun cli.ts run` as the
+agent's service.
+
+| Variable | Required | What it is |
+| --- | --- | --- |
+| `AGENT_WORKSPACE` | yes | This repository. |
+| `MUPPET_CREDENTIALS_FILE` | yes (hosted) | The enrollment's `agent.env`, a systemd credential: `KEY="value"` lines. |
+| `MUPPET_CREDENTIALS` | no | `sops` for a self-hosted agent, which keeps `secrets.enc.json` instead. |
+| `MUPPET_LAST_GOOD_FILE` | yes (`run`) | Written with HEAD after a healthy boot. |
+| `MUPPET_RESTART_FILE` | yes (`run`) | Touched after a land; the image restarts the service. |
+| `MUPPET_MCP_SERVERS_JSON` | no | Stdio MCP servers for every wake (`{name: {command, args?, env?}}`). |
+| `CREDENTIALS_DIRECTORY` | set by systemd | Hidden from Claude Code and scripts with bubblewrap (`bwrap` on PATH). |
+| `HARNESSD_STATE_DIRECTORY` | yes (with systemd credentials) | harnessd's Claude sign-in, read-only inside the sandbox; the `claude` wrapper on PATH reads it. |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | no | Where spans go; none means none are exported. |
+
+`agent.env` holds `MACRO_API_KEY`, `MACRO_GATEWAY`, the `OVERRIDE_*` service
+addresses, `MACRO_REPO_URL` and `MACRO_REPO_TOKEN`, and, in Macro-credits
+mode, `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN` and
+`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`, which only Claude Code gets.
+Without them, Claude Code uses the computer's Claude login (harnessd).
+
+Exit codes of `run`: `0` stopped; `78` a setting or credential is missing or
+invalid (not the code's fault: the launcher retries and doesn't roll back);
+anything else, or a crash before the healthy-boot marker moves, is a failed
+boot, and three in a row roll the workspace back to the last good HEAD.

@@ -19,7 +19,8 @@ fails isn't run.
 - `DESIGN.md`: the layout an agent's repository follows, and why.
 - `core/behavior.ts`: the behavior builder and `serve`.
 - `core/capability.ts`, `core/code.ts`: capabilities as modules
-  of typed functions, and how scripts run.
+  of typed functions, and how scripts run (in the agent's process, or each in
+  its own with `inSubprocess`).
 - `utilities/scripts/index.ts`: the type checker and loader for
   scripts.
 - `examples/`: two small agents that run without credentials.
@@ -28,7 +29,7 @@ fails isn't run.
 
 - Owns: the behavior, event, hook, capability and runtime mechanisms; the
   Claude Code agent; utilities any agent can use (schedules, jobs,
-  credentials, browser, Macro chat and screen share, failures, time).
+  credentials, browser (a running Chromium's tab over CDP), Macro chat, failures, time).
 - Not here: any particular agent's prompts, memory or product logic →
   the agent's own repository, started from `../starter-agent`.
 
@@ -66,5 +67,11 @@ in `packages/sdk`:
 - A capability is a module of ordinary typed functions: the context first,
   then one input object. There are no input or output schemas; zod is only
   for data another program produced.
+- Credentials: `sopsCredentials` (self-hosted), `envFileCredentials` over
+  `parseEnvFile` (a hosted agent's enrollment file, read-only), and
+  `withheldCredentials` (names only, for a script's own process).
+- The Claude Code tools are `RunCapabilityScript` and `DescribeCapabilities`:
+  never Macro's own MCP tool names (`ExecuteCode`, `DescribeCodeTools`,
+  `ReadCodeDocs`), which an agent may also be given.
 - Agents import this library from source and restart to pick up a change, so
   a change to an exported function is a breaking change for every agent.

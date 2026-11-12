@@ -398,7 +398,6 @@ use utoipa::OpenApi;
         harnesses::inbound::axum_router::get_self_harness_handler,
         harnesses::inbound::axum_router::delete_self_harness_handler,
         harnesses::inbound::axum_router::list_harness_sessions_handler,
-        harnesses::inbound::axum_router::put_self_capabilities_handler,
 
         // bots
         bots::inbound::axum_router::create_agent_handler,
@@ -506,6 +505,14 @@ use utoipa::OpenApi;
         channel_labels::inbound::axum_router::rename_channel_label_handler,
         channel_labels::inbound::axum_router::delete_channel_label_handler,
         channel_labels::inbound::axum_router::set_channel_label_handler,
+
+        // channel sections
+        channel_labels::inbound::axum_router::list_channel_sections_handler,
+        channel_labels::inbound::axum_router::preview_channel_section_handler,
+        channel_labels::inbound::axum_router::create_channel_section_handler,
+        channel_labels::inbound::axum_router::update_channel_section_handler,
+        channel_labels::inbound::axum_router::delete_channel_section_handler,
+        channel_labels::inbound::axum_router::set_channel_section_handler,
 
         // user api keys
         account_manager::inbound::axum_router::request_account_manager_handler,
@@ -1054,7 +1061,6 @@ use utoipa::OpenApi;
             // Harnesses
             harnesses::domain::models::Harness,
             harnesses::domain::models::HarnessOwner,
-            harnesses::domain::models::HarnessCapabilities,
             harnesses::domain::models::HarnessAccess,
             harnesses::domain::models::HarnessResident,
             harnesses::domain::models::SetHarnessTeamAccessRequest,

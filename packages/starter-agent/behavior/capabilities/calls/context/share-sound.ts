@@ -1,6 +1,6 @@
 /**
- * The clean browser's sound in a call: `parec` records the share browser's
- * sink, and its PCM goes into a LiveKit source published as the agent's
+ * The desktop's sound in a call: `parec` records the sound server's default
+ * sink, which the agent's browser plays into, and its PCM goes into a LiveKit source published as the agent's
  * screen-share audio. Its voice is another track, and a participant never
  * hears its own, so this never reaches its ears. Loaded only on a call: it brings in
  * LiveKit's native library.
@@ -13,9 +13,8 @@ import {
   TrackPublishOptions,
   TrackSource,
 } from '@livekit/rtc-node';
-import type { ScreenConfig } from '../../screen/config.ts';
-import { cleanEnv, cutFrames, recordArgv } from '../../screen/screen.ts';
 import type { Sounding } from '../share.ts';
+import { captureEnv, cutFrames, type Desktop, recordArgv } from './desktop.ts';
 
 const trackName = 'screen-share-audio';
 /** What parec buffers before it writes. Lower costs wakeups, higher costs lip sync. */
@@ -27,15 +26,15 @@ const queueMs = 200;
 const bytesPerSample = 2;
 
 export const recordSound =
-  (screen: ScreenConfig) =>
+  (screen: Desktop) =>
   async (room: Room): Promise<Sounding> => {
     if (room.localParticipant === undefined)
       throw new Error("the room isn't connected");
-    const { rate, channels } = screen.sound;
+    const { rate, channels } = screen;
     const perChannel = rate / framesPerSecond;
     // The recorder first: one that can't start must not leave a silent track in the room.
     const recorder = Bun.spawn([...recordArgv(screen, latencyMs)], {
-      env: cleanEnv(process.env, screen.display),
+      env: captureEnv(process.env),
       stdin: 'ignore',
       stdout: 'pipe',
       stderr: 'ignore',

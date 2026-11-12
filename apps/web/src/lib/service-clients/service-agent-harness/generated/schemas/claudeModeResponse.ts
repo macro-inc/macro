@@ -7,8 +7,8 @@
 import type { ClaudeModeResponseAccount } from './claudeModeResponseAccount';
 
 /**
- * How Claude Code on a computer is paid for, and the Claude account it is
-signed in to when it uses its own.
+ * How Claude Code on a computer is paid for, and its Claude sign-in when it
+uses its own.
  */
 export interface ClaudeModeResponse {
   account?: ClaudeModeResponseAccount;

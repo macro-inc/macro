@@ -1,10 +1,5 @@
 import { expect, test } from 'bun:test';
-import {
-  agentEnvironment,
-  githubToken,
-  noIdentity,
-  sessionMarker,
-} from '../identity.ts';
+import { agentEnvironment, githubToken, sessionMarker } from '../identity.ts';
 
 const config = { identity: { name: 'Ada', email: 'agent@example.com' } };
 const credentials = (stored: Readonly<Record<string, string>>) => ({
@@ -31,13 +26,20 @@ test('with its token, git and gh act as the agent, under its configured name', a
   expect(environment.GH_CONFIG_DIR).toBeUndefined();
 });
 
-test("without its token it acts as nobody, quietly, and is still marked as the agent's", async () => {
+test('without a GitHub token git still commits as the agent, and gh has no login', async () => {
   const environment = await agentEnvironment({
     config,
     credentials: credentials({}),
   });
-  expect(environment).toEqual(noIdentity);
-  expect(environment[sessionMarker]).toBe('1');
+  expect(environment).toMatchObject({
+    [sessionMarker]: '1',
+    GIT_AUTHOR_NAME: 'Ada',
+    GIT_AUTHOR_EMAIL: 'agent@example.com',
+    GIT_COMMITTER_NAME: 'Ada',
+    GIT_COMMITTER_EMAIL: 'agent@example.com',
+    GH_CONFIG_DIR: '/nonexistent',
+    GIT_TERMINAL_PROMPT: '0',
+  });
   expect(environment.GH_TOKEN).toBeUndefined();
-  expect(environment.GIT_AUTHOR_NAME).toBe('');
+  expect(environment.GITHUB_TOKEN).toBeUndefined();
 });

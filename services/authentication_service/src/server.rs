@@ -256,6 +256,7 @@ async fn run_server() -> anyhow::Result<()> {
                 config.posthog_host.value().unwrap_or(DEFAULT_POSTHOG_HOST),
                 key.to_owned(),
                 Duration::from_secs(3),
+                config.environment,
             )
         })
         .transpose()
@@ -603,7 +604,6 @@ async fn run_server() -> anyhow::Result<()> {
             teams_repo_impl.clone(),
             hosted_runtimes::outbound::pg::PgComputerRepo::new(db.clone(), computer_policy),
             stripe_prices.seat_prices()?,
-            config.computer_prices()?,
         ),
     );
     let subscription_plan = Arc::new(crate::service::subscription_plan::PlanService::new(

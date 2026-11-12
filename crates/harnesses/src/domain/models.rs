@@ -100,9 +100,6 @@ pub struct Harness {
     pub connected: bool,
     /// When the daemon last attached a runtime connection.
     pub last_connected_at: Option<DateTime<Utc>>,
-    /// What the harness's machine can do, as macrod last reported it.
-    #[serde(default)]
-    pub capabilities: HarnessCapabilities,
     /// The Macro computer (hosted VM) this harness runs on; absent for a
     /// machine the user paired themselves.
     #[serde(default)]
@@ -157,46 +154,6 @@ pub enum HarnessPermission {
     Use,
     /// Change runtime settings or revoke it.
     Manage,
-}
-
-/// What a harness's machine can do beyond running agents.
-///
-/// macrod reports this after it connects; every field defaults to off, so
-/// harnesses that never report stay plain.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
-#[serde(default)]
-pub struct HarnessCapabilities {
-    /// A display Macro can stream (Xvnc on `127.0.0.1:5900`).
-    pub screen: bool,
-    /// The Claude account Claude Code on a Macro computer is signed in to;
-    /// absent where macrod does not manage Claude.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub claude: Option<ClaudeAccount>,
-}
-
-/// Claude Code's sign-in on a Macro computer, as `claude auth status` reports it.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
-#[serde(tag = "status", rename_all = "snake_case")]
-pub enum ClaudeAccount {
-    /// No Claude account; sessions run on Macro credits.
-    SignedOut,
-    /// Signed in to a Claude account.
-    SignedIn {
-        /// The account's id at Anthropic (`oauthAccount.accountUuid`).
-        account_id: String,
-        /// The account's email address, when Claude reports one.
-        account: Option<String>,
-        /// The account's organization, when Claude reports one.
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        organization: Option<String>,
-        /// The account's plan (`subscriptionType`), e.g. `max`.
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        plan: Option<String>,
-        /// When the sign-in stops refreshing and must be repeated.
-        expires_at: Option<DateTime<Utc>>,
-    },
 }
 
 /// A pre-approved pairing for a Macro computer, minted by the control plane.

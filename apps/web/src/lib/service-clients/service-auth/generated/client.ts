@@ -69,7 +69,6 @@ import type {
   MacroApiTokenResponse,
   MergeGithubPullRequestRequest,
   MergeGithubPullRequestResponse,
-  NotifyBody,
   PasswordlessCallbackParams,
   PasswordlessRequest,
   PasswordlessStartedResponse,
@@ -4548,6 +4547,11 @@ export type createTeamResponse403 = {
   status: 403;
 };
 
+export type createTeamResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
 export type createTeamResponse500 = {
   data: ErrorResponse;
   status: 500;
@@ -4559,6 +4563,7 @@ export type createTeamResponseSuccess = createTeamResponse200 & {
 export type createTeamResponseError = (
   | createTeamResponse400
   | createTeamResponse403
+  | createTeamResponse409
   | createTeamResponse500
 ) & {
   headers: Headers;
@@ -4930,49 +4935,6 @@ export const purchaseTeamComputer = async (
     status: res.status,
     headers: res.headers,
   } as purchaseTeamComputerResponse;
-};
-
-/**
- * @summary Ask to hear when a sold-out size is back.
- */
-export type notifyTeamComputerAvailableResponse204 = {
-  data: void;
-  status: 204;
-};
-
-export type notifyTeamComputerAvailableResponseSuccess =
-  notifyTeamComputerAvailableResponse204 & {
-    headers: Headers;
-  };
-
-export type notifyTeamComputerAvailableResponse =
-  notifyTeamComputerAvailableResponseSuccess;
-
-export const getNotifyTeamComputerAvailableUrl = () => {
-  return `/team/computers/notify`;
-};
-
-export const notifyTeamComputerAvailable = async (
-  notifyBody: NotifyBody,
-  options?: RequestInit
-): Promise<notifyTeamComputerAvailableResponse> => {
-  const res = await fetch(getNotifyTeamComputerAvailableUrl(), {
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(notifyBody),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: notifyTeamComputerAvailableResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as notifyTeamComputerAvailableResponse;
 };
 
 /**

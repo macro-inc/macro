@@ -16,19 +16,19 @@ index.ts                       builds the real context, the agent and the behavi
 cli.ts, bin/agent              run the agent, or call any function from a shell
 agent.json                     who it is in Macro, who owns it, the name it commits under
 AGENT.md                       the charter: every run's system prompt
-secrets.enc.json, .sops.yaml   credentials, encrypted with SOPS (age)
+secrets.enc.json, .sops.yaml   a self-hosted agent's credentials (SOPS, age); hosted ones come from enrollment
 behavior/
   index.ts                     the whole behavior, composed from the areas
-  context/                     the one place IO happens: disk, clock, shell, credentials, Macro
+  context/                     the one place IO happens: disk, clock, shell, credentials, Macro, the relay
   agent/                       the agent as Claude Code (Agent SDK), its limits per event, its guards
   events/sources/<area>.ts     where events come from
   events/handlers/<area>.ts    what happens when one fires
   capabilities/<area>/     what the agent can do, and all of the area's logic
 state/
   memory/<owner>/              committed: what the agent knows, and its durable records
-  private/<owner>/             never committed: people, their messages, mail, screenshots
+  private/<owner>/             committed: people, their messages, screenshots
   run/<owner>/                 never committed: queues, cursors, locks, per-run records
-  log/<owner>/                 never committed: logs and recordings
+  log/<owner>/                 never committed: logs and recordings (telemetry keeps the record)
 ```
 
 `chat` is the worked example of an area. Read these before writing another:
@@ -63,15 +63,19 @@ in `behavior/index.ts`:
 
 A handler decides cheaply and wakes the agent (`context.wake(request)`) only when
 it is needed. The agent then acts through code mode: it writes a script that
-imports the functions it needs and calls them with `context`, inside this
-process. Anything outside the process (a call's brain, a person at a shell) calls the same functions with `bin/agent <name> '<json>'`,
+imports the functions it needs and calls them with `context`, in a process
+of its own (`bin/agent exec`), which builds the same context with no
+credential values: Macro is reached through the running agent's loopback
+relay (`behavior/context/relay.ts`), which holds the key. So nothing a
+script keeps in memory outlives it, and areas share state through disk,
+not a script's memory. Anything outside the process (a call's brain, a person at a shell) calls the same functions with `bin/agent <name> '<json>'`,
 or runs a script with `bin/agent exec`. So **anything the agent can be asked to do is
 a function of a capability**: it can be run by hand, read in a log, and
 scheduled.
 
 **Every script is type-checked before it runs**, against this repository's
-own code, by a TypeScript language service kept for the life of the process
-(`index.ts`). One that doesn't type-check is never written or run; the
+own code, by a TypeScript language service (`index.ts`), in the process that
+runs it. One that doesn't type-check is never written or run; the
 compiler's errors come back instead. `bin/agent <name> '<json>'` is a one-line
 script with the JSON written into it, so it is checked the same way: a
 mistyped flag, or input the function doesn't take, never reaches the
@@ -133,8 +137,10 @@ restart can find them.
   arithmetic, no comparing ISO strings.
 - **Secrets come from `credentials.get(name)`** and go no further: never
   printed, logged, written to state, or put in a process's arguments. A child
-  process gets one through `env`. New secrets are stored with
-  `credentials.set`.
+  process gets one through `env`, by name: children start from a cleared
+  environment (`behavior/context/children.ts`), never this process's. Only
+  the agent's own process can read one; in a script's process `get` refuses.
+  A hosted agent's credentials are its enrollment's and can't be `set`.
 - **State by bucket.** Choose the bucket by what the data is; anything about
   a person or from a person is `private`. One writer per file. Whole-file
   writes go through `disk.write` (atomic).

@@ -198,7 +198,6 @@ pub(crate) fn assert_no_http_work(service: &RouterService) {
     assert_eq!(service.repo.computers.lock().unwrap().len(), 1);
     assert_eq!(*service.repo.reserve_calls.lock().unwrap(), 0);
     assert_eq!(*service.billing.sales_checks.lock().unwrap(), 0);
-    assert_eq!(*service.repo.notify_writes.lock().unwrap(), 0);
     assert!(service.repo.events.lock().unwrap().is_empty());
     assert!(service.repo.effects.lock().unwrap().is_empty());
     assert!(service.billing.calls.lock().unwrap().is_empty());

@@ -1,22 +1,24 @@
 /**
- * How code gets into the agent's repository: local main fast-forwards to a local
- * branch that is green, and the remote is told afterwards. Merging on GitHub
- * would mean pulling the result; only a status ever comes back from GitHub,
- * never code.
+ * How code gets into the agent's repository: local main fast-forwards to a
+ * local branch that is green, main is pulled and pushed like any commit, and
+ * the agent restarts onto the new code.
  *
- * The git lock is held from the first rebase to the last push, the CI wait
- * included. A fast-forward onto the exact SHA CI tested needs main to stand
- * still, and state is committed to main at any moment; without the lock
- * every state commit would send the branch back for another CI run. CI is
- * under a minute, a commit waits 60s and then leaves its change in the tree
- * for the next commit, so nothing is lost.
+ * Green is the repository's own check (`bun run check`) passing in a fresh
+ * worktree of exactly that SHA, under `.worktrees/` so it resolves the
+ * packages the live checkout has. A red check refuses and main doesn't move.
+ * Only with a GitHub remote and the agent's GitHub token is green instead
+ * CI's check job on a PR; GitHub is told afterwards, and never merges.
  *
- * While the repository has no remote there is no PR and no CI: green is the
- * repository's own check passing on the exact SHA, and nothing is pushed.
+ * The git lock is held from the first rebase to the last push, the check
+ * included. A fast-forward onto the exact SHA that was checked needs main to
+ * stand still, and state is committed to main at any moment; without the lock
+ * every state commit would send the branch back for another check. A commit
+ * waits 60s and then leaves its change in the tree for the next commit, so
+ * nothing is lost.
  */
 import { isoText } from '@macro-inc/muppet/utilities/time';
-import { commitLocked, pushMain } from './commit.ts';
-import { checkMain } from './guard.ts';
+import type { Ran } from '../../context/shell.ts';
+import { commitLocked, syncMain } from './commit.ts';
 import { branchRef, type Repository } from './repository.ts';
 
 export type CheckRun = {
@@ -26,7 +28,46 @@ export type CheckRun = {
   readonly head_sha: string;
   readonly app: string | null;
 };
-export type CiState = 'green' | 'red' | 'pending';
+/** `dependencies`: the SHA changes what packages the agent runs on, which only a new image can bring. */
+export type CiState = 'green' | 'red' | 'pending' | 'dependencies';
+
+/** What the agent is told when a branch changes its packages. */
+export const needsImage = 'dependency changes need a new image';
+
+const lockfile = 'bun.lock';
+const manifest = 'package.json';
+const dependencyFields = [
+  'dependencies',
+  'devDependencies',
+  'optionalDependencies',
+  'peerDependencies',
+] as const;
+
+const parsedManifest = (text: string): unknown => {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+};
+
+/** A manifest's dependency fields, as comparable text; unreadable text compares as itself. */
+const dependenciesOf = (text: string | undefined): string => {
+  // No package.json declares no dependencies.
+  const parsed = parsedManifest(text ?? '{}');
+  if (typeof parsed !== 'object' || parsed === null) return text ?? '';
+  return JSON.stringify(
+    dependencyFields.map((field) =>
+      field in parsed ? Reflect.get(parsed, field) : undefined
+    )
+  );
+};
+
+/** Whether going from `before` to `after` (package.json texts) changes a dependency. */
+export const changesDependencies = (
+  before: string | undefined,
+  after: string | undefined
+): boolean => dependenciesOf(before) !== dependenciesOf(after);
 export type Pr = {
   readonly number: number;
   readonly title: string;
@@ -67,7 +108,7 @@ export const mergeRow = (
 ): string =>
   `| ${pr.mergedAt === null ? 'null' : pr.mergedAt.slice(0, 16)} | ${repo.replace(/^[^/]*\//, '')}#${number} | ${pr.title} | ${what} |`;
 
-/** The row for a landing with no PR, while there is no remote. */
+/** The row for a landing with no PR. */
 export const localRow = (
   branch: string,
   sha: string,
@@ -77,7 +118,7 @@ export const localRow = (
   `| ${at.slice(0, 16)} | local@${sha.slice(0, 12)} | ${branch} | ${what} |`;
 
 export type LandDeps = {
-  /** The GitHub side, or undefined while the repository has no remote. */
+  /** The GitHub side: only with a GitHub remote and the agent's GitHub token. */
   readonly github:
     | undefined
     | {
@@ -87,17 +128,20 @@ export type LandDeps = {
         readonly pr: (branch: string) => Promise<Pr | undefined>;
         readonly merged: (number: number) => Promise<boolean>;
       };
-  /** Whether the SHA is green: CI on GitHub, or the repository's own check with no remote. */
+  /** Whether the SHA is green: the repository's own check (`worktreeCheck`), or CI on GitHub. */
   readonly ci: (sha: string) => Promise<CiState>;
-  /** Installs dependencies. Only called when a manifest changed. */
-  readonly install: () => Promise<unknown>;
-  readonly manifests: readonly string[];
   /** A fresh empty directory outside the repository, and its removal. */
   readonly scratch: {
     readonly make: () => Promise<string>;
     readonly remove: (path: string) => Promise<void>;
   };
   readonly appendMerge: (row: string) => Promise<void>;
+  /**
+   * Restarts the agent onto what landed, after it is pushed: the supervisor's
+   * restart marker, then the restart exit. Undefined where nothing supervises
+   * the agent; its new code then takes effect when it is next started.
+   */
+  readonly restart: (() => Promise<void>) | undefined;
   readonly pollMs: number;
   readonly ciTimeoutMs: number;
   readonly lockWaitMs: number;
@@ -109,10 +153,12 @@ export type Landed =
   | {
       readonly status: 'landed';
       readonly sha: string;
-      /** The PR that landed, or undefined with no remote. */
+      /** The PR that landed, or undefined without GitHub. */
       readonly pr: number | undefined;
       /** Whether GitHub marked the PR merged. */
       readonly merged: boolean;
+      /** Whether the agent is restarting onto it. */
+      readonly restarting: boolean;
     }
   | { readonly status: 'refused'; readonly reason: string };
 
@@ -180,10 +226,85 @@ const rebaseOnMain = async (
   }
 };
 
-const tampered = (where: string): string =>
-  `${where} (the owner has the alarm). Nothing lands until that's settled.`;
+/**
+ * The repository's own check as `ci`: `check` run in a fresh worktree of
+ * exactly the SHA, made by `checkouts` under `.worktrees/` so it resolves the
+ * live checkout's packages, which are the image's. A SHA that changes them
+ * (bun.lock, or a dependency in package.json) is refused before the check:
+ * the image has no others, so it would fail to boot.
+ */
+export const worktreeCheck =
+  ({
+    repository: { git, main },
+    checkouts,
+    run,
+    check,
+    failed,
+  }: {
+    readonly repository: Pick<Repository, 'git' | 'main'>;
+    readonly checkouts: LandDeps['scratch'];
+    /** Runs a program as the agent, in `cwd`. */
+    readonly run: (
+      argv: readonly string[],
+      options: { readonly cwd: string }
+    ) => Promise<Ran>;
+    readonly check: readonly string[];
+    /** Told the check's output when it fails. */
+    readonly failed: (sha: string, output: string) => Promise<void>;
+  }) =>
+  async (sha: string): Promise<CiState> => {
+    const checkout = await checkouts.make();
+    try {
+      const added = await git([
+        'worktree',
+        'add',
+        '-q',
+        '--detach',
+        checkout,
+        sha,
+      ]);
+      if (added.code !== 0) {
+        await failed(sha, added.stderr);
+        return 'red';
+      }
+      const changed = (
+        await git(['diff', '--name-only', main, sha])
+      ).stdout.split('\n');
+      const shown = async (ref: string): Promise<string | undefined> => {
+        const read = await git(['show', `${ref}:${manifest}`]);
+        return read.code === 0 ? read.stdout : undefined;
+      };
+      if (
+        changed.includes(lockfile) ||
+        (changed.includes(manifest) &&
+          changesDependencies(await shown(main), await shown(sha)))
+      ) {
+        await failed(sha, needsImage);
+        return 'dependencies';
+      }
+      const checked = await run(check, { cwd: checkout });
+      if (checked.code === 0) return 'green';
+      await failed(sha, `${checked.stdout}\n${checked.stderr}`);
+      return 'red';
+    } finally {
+      await git(['worktree', 'remove', '--force', checkout]);
+      await checkouts.remove(checkout);
+    }
+  };
 
+/** Lands the branch, then restarts the agent onto it once the git lock is free again. */
 export const land = async (
+  repository: Repository,
+  branch: string,
+  what: string,
+  deps: LandDeps
+): Promise<Landed> => {
+  const landed = await landHeld(repository, branch, what, deps);
+  if (landed.status === 'landed') await deps.restart?.();
+  return landed;
+};
+
+const landHeld = async (
   repository: Repository,
   branch: string,
   what: string,
@@ -216,18 +337,10 @@ export const land = async (
   if (held === undefined) return refuse('the git lock stayed busy; rerun.');
   try {
     for (let attempt = 1; attempt <= attempts; attempt += 1) {
-      // Anything uncommitted goes on main first, so the branch lands on top of it.
-      const flushed = await commitLocked(
-        repository,
-        `land: state before ${branch}`
-      );
-      if (flushed === 'push-blocked')
-        return refuse(tampered("someone else pushed to GitHub's main"));
-      const guard = await checkMain(repository);
-      if (guard === 'alarmed' || guard === 'already')
-        return refuse(tampered("GitHub's main isn't what I last pushed"));
-      if (guard === 'unknown' && github !== undefined)
-        return refuse("can't read GitHub's main; rerun.");
+      // Anything uncommitted goes on main first, and main takes in the
+      // remote's, so the branch lands on top of both. A pull that conflicts
+      // leaves main local: a branch that settles the conflict lands all the same.
+      await commitLocked(repository, `land: state before ${branch}`);
 
       const onMain = await git([
         'merge-base',
@@ -265,12 +378,15 @@ export const land = async (
         return refuse(
           `the check failed on ${short(sha)}; ${main} didn't move.`
         );
+      if (ci === 'dependencies')
+        return refuse(
+          `${needsImage}: ${short(sha)} changes bun.lock or a dependency in package.json; ${main} didn't move. Keep to the packages you have.`
+        );
       if (ci === 'pending')
         return refuse(
           `the check didn't finish on ${short(sha)} in time; ${main} didn't move. Rerun.`
         );
 
-      const before = (await git(['rev-parse', main])).stdout.trim();
       // Touches only the files the branch changed; refuses rather than overwrite someone's uncommitted edit.
       const forwarded = await git(['merge', '-q', '--ff-only', sha]);
       if (forwarded.code !== 0) {
@@ -279,29 +395,27 @@ export const land = async (
         );
         continue;
       }
-      const changed = (
-        await git(['diff', '--name-only', before, sha])
-      ).stdout.split('\n');
-      if (deps.manifests.some((manifest) => changed.includes(manifest)))
-        await deps.install();
 
       const at = isoText(repository.clock.now());
+      const restarting = deps.restart !== undefined;
       if (github === undefined || pr === undefined) {
         await deps.appendMerge(
           localRow(branch, sha, at, what || `landed ${short(sha)}`)
         );
         await commitLocked(repository, `merge log: ${branch}`);
-        return { status: 'landed', sha, pr: undefined, merged: false };
+        return {
+          status: 'landed',
+          sha,
+          pr: undefined,
+          merged: false,
+          restarting,
+        };
       }
 
-      const pushed = await pushMain(repository);
-      if (pushed === 'push-blocked')
-        return refuse(
-          `${short(sha)} is on local ${main}, but GitHub rejected the push: someone else pushed (the owner has the alarm).`
-        );
-      if (pushed === 'push-failed')
+      const pushed = await syncMain(repository, 'clean');
+      if (pushed !== 'pushed' && pushed !== 'clean')
         await repository.log(
-          `land: ${short(sha)} is on local ${main}; the push failed and the next commit retries it.`
+          `land: ${short(sha)} is on local ${main}; it isn't pushed (${pushed}) and the next commit retries it.`
         );
       const merged =
         pushed === 'pushed' &&
@@ -326,7 +440,7 @@ export const land = async (
         )
       );
       await commitLocked(repository, `merge log: #${pr.number}`);
-      return { status: 'landed', sha, pr: pr.number, merged };
+      return { status: 'landed', sha, pr: pr.number, merged, restarting };
     }
     return refuse(
       `the live checkout kept refusing the fast-forward; ${branch} and ${main} are unchanged. Look at its uncommitted changes.`

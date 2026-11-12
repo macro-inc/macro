@@ -58,7 +58,15 @@ export const callsContext = (
       paths,
       disk,
       joins: () => liveJoins(running({ disk, join }), cliPath(config, join)),
-      start: startJoin({ shell, disk, config, paths, join }),
+      start: startJoin({
+        shell,
+        disk,
+        config,
+        paths,
+        join,
+        relayed: base.relayed,
+        sandbox: base.sandbox,
+      }),
       signal,
       post: async (to, text) => {
         await ('channel' in to

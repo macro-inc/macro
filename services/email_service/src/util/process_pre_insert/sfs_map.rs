@@ -9,13 +9,36 @@ use sqlx::PgPool;
 use static_file_service_client::StaticFileServiceClient;
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
-use std::time::Duration;
 use url::Url;
 
-const MAX_IMAGE_SIZE_BYTES: usize = 10 * 1024 * 1024; // 10 MB
-const REQUEST_TIMEOUT_SECONDS: u64 = 15;
-const CONNECT_TIMEOUT_SECONDS: u64 = 5;
-const MAX_REDIRECTS: usize = 5;
+mod public_http;
+pub(crate) use public_http::RefusedImageUrl;
+
+pub(crate) const MAX_IMAGE_SIZE_BYTES: usize = 10 * 1024 * 1024; // 10 MB
+/// Images one email fetches at once.
+const MAX_CONCURRENT_IMAGE_FETCHES: usize = 4;
+
+/// Where [`rehost_html_images`] reads an image's bytes from.
+pub trait ImageSource: Sync {
+    /// Returns the image at `url`, or `None` when this source can't read it.
+    fn fetch(&self, url: &str) -> impl Future<Output = anyhow::Result<Option<Bytes>>> + Send;
+
+    /// Whether anyone can load `url`. Only those images' SFS copies go into
+    /// the shared mapping table, which answers whoever presents the same URL;
+    /// an image read with an account's credentials is copied per request.
+    fn is_public(&self, _url: &str) -> bool {
+        true
+    }
+}
+
+/// Unauthenticated HTTP GETs: only what a recipient's mail client could load.
+pub struct PublicImages;
+
+impl ImageSource for PublicImages {
+    async fn fetch(&self, url: &str) -> anyhow::Result<Option<Bytes>> {
+        fetch_image(url).await
+    }
+}
 
 // concurrently calls store_messages_images for each message in each passed thread
 pub async fn store_threads_images(
@@ -82,7 +105,7 @@ pub async fn store_message_images(
 
     if !urls.is_empty() {
         // cache the images in SFS and return the new links
-        let sfs_map = cache_images(db, sfs_client, urls.clone())
+        let sfs_map = cache_images(db, sfs_client, urls.clone(), &PublicImages)
             .await
             .context("failed to cache images")?;
 
@@ -97,21 +120,24 @@ pub async fn store_message_images(
     Ok(())
 }
 
-/// Rehosts every publicly-fetchable `<img>` in an HTML fragment onto SFS and
-/// rewrites the markup to the stable URLs. Returns the rewritten HTML and the
-/// number of remote images that could NOT be fetched (e.g. auth-gated
-/// webmail-embedded URLs like Gmail's `disp=emb`) so the caller can warn the
-/// user to re-add them.
+/// Rehosts every `<img>` in an HTML fragment that `images` can read onto SFS
+/// and rewrites the markup to the stable URLs. Returns the rewritten HTML and
+/// the number of remote images that could NOT be read (e.g. auth-gated
+/// webmail-embedded URLs like Gmail's `disp=emb`, under [`PublicImages`]) so
+/// the caller can warn the user to re-add them.
 ///
-/// Provider-agnostic on purpose: it only does unauthenticated HTTP GETs, so
-/// anything requiring a provider session simply lands in the unresolved count
-/// instead of needing per-provider (Gmail/Outlook/…) resolution. Already-SFS
-/// images are skipped so re-saving a signature doesn't re-upload them.
-#[tracing::instrument(skip(db, sfs_client, html), err)]
+/// Already-SFS images are skipped so re-saving a signature doesn't re-upload
+/// them.
+#[tracing::instrument(
+    skip(db, sfs_client, html, images),
+    fields(image_count = tracing::field::Empty, unresolved_count = tracing::field::Empty),
+    err
+)]
 pub async fn rehost_html_images(
     db: &PgPool,
     sfs_client: &StaticFileServiceClient,
     html: &str,
+    images: &impl ImageSource,
 ) -> anyhow::Result<(String, usize)> {
     if cfg!(not(feature = "sfs_map")) {
         return Ok((html.to_string(), 0));
@@ -132,7 +158,7 @@ pub async fn rehost_html_images(
         return Ok((html.to_string(), 0));
     }
 
-    let sfs_map = cache_images(db, sfs_client, urls.clone()).await?;
+    let sfs_map = cache_images(db, sfs_client, urls.clone(), images).await?;
 
     // Remote images we couldn't move to SFS stay as-is and are counted so the
     // caller can tell the user which ones won't render for recipients.
@@ -140,6 +166,9 @@ pub async fn rehost_html_images(
         .iter()
         .filter(|url| !sfs_map.contains_key(*url))
         .count();
+    let span = tracing::Span::current();
+    span.record("image_count", urls.len() as i64);
+    span.record("unresolved_count", unresolved as i64);
 
     let new_html = if sfs_map.is_empty() {
         html.to_string()
@@ -181,14 +210,20 @@ fn extract_all_image_urls(html_content: &str) -> anyhow::Result<HashSet<String>>
 }
 
 // wrapper function for fetching and caching images in parallel
-#[tracing::instrument(skip(db, sfs_client, source_urls), err)]
+#[tracing::instrument(skip(db, sfs_client, source_urls, images), err)]
 async fn cache_images(
     db: &PgPool,
     sfs_client: &StaticFileServiceClient,
     source_urls: HashSet<String>,
+    images: &impl ImageSource,
 ) -> anyhow::Result<HashMap<String, String>> {
     // filter out values that already exist in db or are already sfs urls
-    let mut url_map = email_db_client::sfs_mappings::fetch_sfs_mappings(db, &source_urls).await?;
+    let public_urls: HashSet<String> = source_urls
+        .iter()
+        .filter(|url| images.is_public(url))
+        .cloned()
+        .collect();
+    let mut url_map = email_db_client::sfs_mappings::fetch_sfs_mappings(db, &public_urls).await?;
 
     let new_urls: HashSet<_> = source_urls
         .into_iter()
@@ -200,27 +235,30 @@ async fn cache_images(
         .collect();
 
     if !new_urls.is_empty() {
-        // fetch and upload each image to sfs concurrently
-        let mut futures = Vec::new();
-        for source_url in new_urls {
-            let url_to_process = source_url.clone();
-            let sfs_client = sfs_client.clone();
-            futures.push(async move {
-                // In a real scenario, pass base_url and email_mime_parts here
-                match fetch_and_upload_to_sfs(sfs_client, &url_to_process).await {
-                    Ok(Some(sfs_url)) => Some(sfs_url),
-                    Ok(None) => None,
-                    Err(_) => None,
+        // Fetch and upload a few images at a time: each can hold up to
+        // MAX_IMAGE_SIZE_BYTES, and an email may reference thousands.
+        let results: Vec<_> = stream::iter(new_urls)
+            .map(|source_url| {
+                let sfs_client = sfs_client.clone();
+                async move {
+                    let image_data = images.fetch(&source_url).await.ok().flatten()?;
+                    let sfs_url = upload_to_sfs(sfs_client, image_data).await.ok()?;
+                    Some((source_url, sfs_url))
                 }
-            });
-        }
-
-        let results = futures::future::join_all(futures).await;
+            })
+            .buffer_unordered(MAX_CONCURRENT_IMAGE_FETCHES)
+            .collect()
+            .await;
         for (source_url, sfs_url) in results.into_iter().flatten() {
             url_map.insert(source_url, sfs_url);
         }
 
-        if let Err(e) = email_db_client::sfs_mappings::insert_sfs_mappings(db, &url_map).await {
+        let shared_map: HashMap<String, String> = url_map
+            .iter()
+            .filter(|(url, _)| public_urls.contains(*url))
+            .map(|(url, sfs_url)| (url.clone(), sfs_url.clone()))
+            .collect();
+        if let Err(e) = email_db_client::sfs_mappings::insert_sfs_mappings(db, &shared_map).await {
             tracing::warn!(error = ?e, "Failed to asynchronously insert SFS mappings into database");
         }
     }
@@ -239,66 +277,51 @@ pub async fn fetch_and_upload_to_sfs(
         None => return Ok(None),
     };
 
-    let sfs_url = upload_to_sfs(sfs_client, original_url_str, image_data).await?;
+    let sfs_url = upload_to_sfs(sfs_client, image_data).await?;
 
     Ok(Some((original_url_str.to_string(), sfs_url)))
 }
 
-// fetches image data from the given URL, returning None for non-HTTP(S) or unparseable URLs
-#[tracing::instrument(skip(original_url_str))]
+// fetches image data from the given URL, returning None for unparseable URLs
+#[tracing::instrument(
+    skip(original_url_str),
+    fields(host = tracing::field::Empty),
+    err(level = "warn")
+)]
 async fn fetch_image(original_url_str: &str) -> anyhow::Result<Option<Bytes>> {
-    let url_to_fetch = match Url::parse(original_url_str) {
-        Ok(mut url) => {
-            if url.scheme() != "http" && url.scheme() != "https" {
-                tracing::warn!("Skipping URL with non-HTTP(S) scheme: {}", original_url_str);
-                return Ok(None);
-            }
-            url.set_fragment(None); // normalizing
-            url
-        }
-        Err(_) => {
-            tracing::warn!("Skipping non-URL for SFS storage: {}", original_url_str);
-            return Ok(None);
-        }
+    let Ok(mut url_to_fetch) = Url::parse(original_url_str) else {
+        tracing::warn!("Skipping non-URL for SFS storage");
+        return Ok(None);
     };
+    url_to_fetch.set_fragment(None); // normalizing
 
-    // use safe defaults to prevent timeouts/redirect trolling
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(REQUEST_TIMEOUT_SECONDS))
-        .connect_timeout(Duration::from_secs(CONNECT_TIMEOUT_SECONDS))
-        .redirect(reqwest::redirect::Policy::limited(MAX_REDIRECTS))
-        .build()
-        .context("failed to build reqwest client")?;
+    // Logs and errors name only the host: query strings can carry secrets.
+    let host = url_to_fetch.host_str().unwrap_or_default().to_string();
+    tracing::Span::current().record("host", host.as_str());
 
+    if !public_http::is_fetchable(&url_to_fetch) {
+        return Err(RefusedImageUrl { host }.into());
+    }
+
+    let client = public_http::public_image_client()?;
     let response = match client.get(url_to_fetch.as_str()).send().await {
         Ok(response) => response,
         Err(e) => {
+            // reqwest errors print the full URL; keep only the host.
+            let e = e.without_url();
             let error_chain = build_error_chain(&e);
             if e.is_timeout() {
-                anyhow::bail!(
-                    "Timeout fetching URL: {} - Full error: {}",
-                    original_url_str,
-                    error_chain
-                );
+                bail!("Timeout fetching image from {host} - Full error: {error_chain}");
             } else if e.is_connect() {
-                anyhow::bail!(
-                    "Connection error for URL: {} - Full error: {}",
-                    original_url_str,
-                    error_chain
-                );
+                bail!("Connection error for image from {host} - Full error: {error_chain}");
             }
-            anyhow::bail!(
-                "Network error fetching URL: {} - Full error: {}",
-                original_url_str,
-                error_chain
-            );
+            bail!("Network error fetching image from {host} - Full error: {error_chain}");
         }
     };
 
     if !response.status().is_success() {
         bail!(
-            "Remote server returned error for {}: HTTP {}",
-            original_url_str,
+            "Remote server returned error for image from {host}: HTTP {}",
             response.status()
         );
     }
@@ -306,23 +329,19 @@ async fn fetch_image(original_url_str: &str) -> anyhow::Result<Option<Bytes>> {
     if let Some(content_length) = response.content_length()
         && content_length > MAX_IMAGE_SIZE_BYTES as u64
     {
-        bail!(
-            "Image at {} is too large (Content-Length: {} bytes)",
-            original_url_str,
-            content_length
-        );
+        bail!("Image from {host} is too large (Content-Length: {content_length} bytes)");
     }
 
     // Stream response data with a hard cap
     let mut image_data_stream = response.bytes_stream();
     let mut image_data_bytes = BytesMut::new();
     while let Some(chunk_result) = image_data_stream.next().await {
-        let chunk = chunk_result.context("Failed to read chunk from image stream")?;
+        let chunk = chunk_result
+            .map_err(reqwest::Error::without_url)
+            .context("Failed to read chunk from image stream")?;
         if (image_data_bytes.len() + chunk.len()) > MAX_IMAGE_SIZE_BYTES {
             bail!(
-                "Image at {} is too large (exceeded {} bytes during streaming)",
-                original_url_str,
-                MAX_IMAGE_SIZE_BYTES
+                "Image from {host} is too large (exceeded {MAX_IMAGE_SIZE_BYTES} bytes during streaming)"
             );
         }
         image_data_bytes.extend_from_slice(&chunk);
@@ -330,33 +349,28 @@ async fn fetch_image(original_url_str: &str) -> anyhow::Result<Option<Bytes>> {
     let image_data = image_data_bytes.freeze();
 
     if image_data.is_empty() {
-        bail!("Fetched empty image data from {}", original_url_str);
+        bail!("Fetched empty image data from {host}");
     }
 
     Ok(Some(image_data))
 }
 
 // validates image data and uploads it to SFS, returning the new SFS URL
-#[tracing::instrument(skip(sfs_client, original_url_str, image_data))]
+#[tracing::instrument(skip(sfs_client, image_data))]
 async fn upload_to_sfs(
     sfs_client: StaticFileServiceClient,
-    original_url_str: &str,
     image_data: Bytes,
 ) -> anyhow::Result<String> {
     let inferred_type = match infer::get(&image_data) {
         Some(t) => t,
         None => {
-            bail!("Could not determine image type for {}", original_url_str);
+            bail!("Could not determine image type");
         }
     };
 
     let validated_content_type = inferred_type.mime_type();
     if !validated_content_type.starts_with("image/") {
-        bail!(
-            "Image type '{}' from {} is not allowed.",
-            validated_content_type,
-            original_url_str
-        );
+        bail!("Image type '{validated_content_type}' is not allowed.");
     }
 
     let sfs_info = sfs_client
@@ -379,11 +393,15 @@ fn build_error_chain(err: &reqwest::Error) -> String {
     error_chain
 }
 
+/// `url_map` is keyed by decoded URLs, as `extract_all_image_urls` returns
+/// them, but lol_html hands attribute values over with their entities intact
+/// (`&amp;`), so each value is decoded before the lookup.
 #[tracing::instrument(skip(original_html, url_map), err)]
 fn rewrite_html_image_links(
     original_html: &str,
     url_map: &HashMap<String, String>,
 ) -> anyhow::Result<String> {
+    let lookup = |raw_url: &str| url_map.get(html_escape::decode_html_entities(raw_url).as_ref());
     let mut output = Vec::new();
     let mut rewriter = HtmlRewriter::new(
         Settings {
@@ -392,7 +410,7 @@ fn rewrite_html_image_links(
                 element!("img[src]", |el: &mut Element| {
                     if let Some(original_src) = el.get_attribute("src") {
                         let trimmed_original_src = original_src.trim();
-                        if let Some(new_src) = url_map.get(trimmed_original_src)
+                        if let Some(new_src) = lookup(trimmed_original_src)
                             && let Err(e) = el.set_attribute("src", new_src)
                         {
                             tracing::warn!("Failed to set src attribute: {}", e);
@@ -409,7 +427,7 @@ fn rewrite_html_image_links(
                             let mut components = trimmed_part.split_whitespace();
                             if let Some(url_candidate) = components.next() {
                                 let descriptor = components.collect::<Vec<&str>>().join(" ");
-                                if let Some(new_url) = url_map.get(url_candidate) {
+                                if let Some(new_url) = lookup(url_candidate) {
                                     new_srcset_parts.push(
                                         format!("{} {}", new_url, descriptor)
                                             .trim_end()
@@ -452,6 +470,9 @@ fn rewrite_html_image_links(
 
     String::from_utf8(output).context("Rewritten HTML output is not valid UTF-8")
 }
+
+#[cfg(test)]
+mod test;
 
 #[cfg(test)]
 mod tests {
@@ -1051,6 +1072,28 @@ mod tests {
         ));
         assert!(result.contains("&amp; entity"));
         assert!(result.contains("&quot;quotes&quot;"));
+    }
+
+    #[test]
+    fn test_rewrite_html_image_links_matches_entity_encoded_query_urls() {
+        // `extract_all_image_urls` decodes attribute entities, while the
+        // rewriter sees them raw; sanitized HTML always writes `&` as `&amp;`.
+        let html = r#"<p>Hi</p><img src="https://example.com/logo.png?a=1&amp;b=2" srcset="https://example.com/logo.png?a=1&amp;b=2 2x">"#;
+        let urls = extract_all_image_urls(html).unwrap();
+        assert_eq!(
+            urls,
+            HashSet::from(["https://example.com/logo.png?a=1&b=2".to_string()])
+        );
+
+        let url_map = HashMap::from([(
+            "https://example.com/logo.png?a=1&b=2".to_string(),
+            "https://static-file-service.macro.com/file/logo".to_string(),
+        )]);
+        let result = rewrite_html_image_links(html, &url_map).unwrap();
+
+        assert!(result.contains(r#"src="https://static-file-service.macro.com/file/logo""#));
+        assert!(result.contains(r#"srcset="https://static-file-service.macro.com/file/logo 2x""#));
+        assert!(!result.contains("example.com"));
     }
 
     #[test]

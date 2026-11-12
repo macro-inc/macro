@@ -20,7 +20,6 @@ const mocks = vi.hoisted(() => ({
   confirm: vi.fn(),
   toastFailure: vi.fn(),
   purchase: vi.fn(),
-  notify: vi.fn(),
   toastSuccess: vi.fn(),
 }));
 
@@ -43,11 +42,6 @@ vi.mock('@queries/computers/computers', () => ({
   usePurchaseComputerMutation: () => ({
     mutateAsync: mocks.purchase,
     isPending: false,
-  }),
-  useNotifyComputerSizeMutation: () => ({
-    mutateAsync: mocks.notify,
-    isPending: false,
-    variables: undefined,
   }),
   useSetComputerPowerMutation: () => ({ isPending: false }),
   useCancelComputerMutation: () => ({ isPending: false }),
@@ -166,7 +160,6 @@ beforeEach(() => {
         interval: 'month',
       },
       soldOut: false,
-      notifyRequested: false,
     },
     {
       size: 'large',
@@ -181,7 +174,6 @@ beforeEach(() => {
         interval: 'month',
       },
       soldOut: false,
-      notifyRequested: false,
     },
     {
       size: 'xl',
@@ -196,7 +188,6 @@ beforeEach(() => {
         interval: 'month',
       },
       soldOut: true,
-      notifyRequested: false,
     },
   ];
 });
@@ -212,7 +203,6 @@ it('buys the chosen size after confirming its price, and keeps sold-out sizes ou
       ])
     )
     .mockResolvedValueOnce({ computerId: 'computer-1', state: 'confirming' });
-  mocks.notify.mockResolvedValue({});
 
   render(() => <MacroComputers harnesses={[]} onSharingChange={() => {}} />);
 
@@ -223,8 +213,7 @@ it('buys the chosen size after confirming its price, and keeps sold-out sizes ou
     true
   );
 
-  fireEvent.click(screen.getByRole('button', { name: 'Notify me' }));
-  await waitFor(() => expect(mocks.notify).toHaveBeenCalledWith('xl'));
+  expect(screen.getByText('Sold out')).toBeTruthy();
 
   fireEvent.click(screen.getByRole('radio', { name: 'Large' }));
   const buyButton = screen.getByRole('button', { name: 'Buy · $80.00/month' });
@@ -366,7 +355,7 @@ it('keeps a zero-price offer included through review and purchase', async () => 
   );
 });
 
-it('offers Finish setup before Claude sign-in, and nothing once both are done', () => {
+it('offers Finish setup until setup is done, and nothing once Claude is signed in', () => {
   const harness = {
     id: 'harness-build',
     name: 'Build machine',
@@ -382,7 +371,6 @@ it('offers Finish setup before Claude sign-in, and nothing once both are done', 
     allow_permission_bypass: true,
     computer_id: 'computer-1',
     claude_mode: 'own_account' as const,
-    capabilities: { claude: { status: 'signed_out' as const } },
   };
   const computer: ComputerStatus = {
     id: 'computer-1',
@@ -417,9 +405,11 @@ it('offers Finish setup before Claude sign-in, and nothing once both are done', 
   const second = render(() => (
     <MacroComputers harnesses={[harness]} onSharingChange={() => {}} />
   ));
+  // Signed in with Claude and not expired: nothing to do.
   expect(
-    screen.getByRole('button', { name: 'Sign in with Claude' })
-  ).toBeTruthy();
+    screen.queryByRole('button', { name: 'Sign in with Claude' })
+  ).toBeNull();
+  expect(screen.getByText(/Signed in with Claude/)).toBeTruthy();
   second.unmount();
 
   render(() => (

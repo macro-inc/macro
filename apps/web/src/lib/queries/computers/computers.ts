@@ -7,12 +7,10 @@ import {
   useHarnessesQuery,
 } from '@queries/harnesses/harnesses';
 import {
-  type ComputerSize,
   type ComputerStatus,
   type ComputerStatusKind,
   computersClient,
   type PurchaseComputerRequest,
-  type SizeOffer,
   TEAM_ON_TRIAL,
 } from '@service-auth/computers';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
@@ -156,23 +154,6 @@ export function usePurchaseComputerMutation() {
           queryKey: computerKeys.offers.queryKey,
         }),
       ]);
-    },
-  }));
-}
-
-export function useNotifyComputerSizeMutation() {
-  return useMutation(() => ({
-    gcTime: 0,
-    mutationFn: (size: ComputerSize) =>
-      throwOnErr(() => computersClient.notify(size)),
-    onSuccess: (_data, size) => {
-      queryClient.setQueryData<SizeOffer[]>(
-        computerKeys.offers.queryKey,
-        (current = []) =>
-          current.map((offer) =>
-            offer.size === size ? { ...offer, notifyRequested: true } : offer
-          )
-      );
     },
   }));
 }

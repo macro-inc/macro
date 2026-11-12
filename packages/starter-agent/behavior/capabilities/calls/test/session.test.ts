@@ -286,7 +286,10 @@ test('the silent marker never reaches the voice, whole or split, even after "Bye
   expect(withoutSilent('Bye.(si')).toEqual({ say: 'Bye.', hold: '(si' });
 });
 
-test('talking over the agent cancels the reply and interrupts the brain', async () => {
+// AgentSession owns barge-in: when someone talks over the agent it cancels
+// the reply stream (and clears its own playout). This is our side of that
+// contract: a cancelled reply says nothing more, and the brain stops too.
+test('talking over the agent cancels the reply, nothing more is spoken, and the brain is interrupted', async () => {
   let interrupted = 0;
   const events: string[] = [];
   const reader = replyStream({
@@ -298,7 +301,9 @@ test('talking over the agent cancels the reply and interrupts the brain', async 
   }).getReader();
   expect((await reader.read()).value).toBe('One. ');
   await reader.cancel();
+  expect((await reader.read()).done).toBe(true);
   expect(interrupted).toBe(1);
+  expect(events.some((event) => event.includes('Two.'))).toBe(false);
   expect(events).toContain('turn.interrupt:{"turn":7}');
   expect(events).toContain('brain.text:{"turn":7,"text":"One."}');
 });

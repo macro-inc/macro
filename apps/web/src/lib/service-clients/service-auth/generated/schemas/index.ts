@@ -185,7 +185,6 @@ export * from './mergeGithubPullRequestRequest';
 export * from './mergeGithubPullRequestRequestMergeMethod';
 export * from './mergeGithubPullRequestResponse';
 export * from './mergeGithubPullRequestResponsePullRequest';
-export * from './notifyBody';
 export * from './passwordlessCallbackParams';
 export * from './passwordlessRequest';
 export * from './passwordlessRequestReferralCode';

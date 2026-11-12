@@ -527,8 +527,6 @@ pub struct SizeOffer {
     pub quote: Quote,
     /// Whether no host can currently sell this size.
     pub sold_out: bool,
-    /// The caller asked to hear when this size is back.
-    pub notify_requested: bool,
 }
 
 /// A fleet host, counted in resource units.

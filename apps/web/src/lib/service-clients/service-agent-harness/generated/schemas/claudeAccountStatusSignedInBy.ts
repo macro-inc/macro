@@ -6,6 +6,7 @@
  */
 
 /**
- * Who signed it in through Macro; absent once that user is deleted.
+ * Who signed it in through Macro; absent once that user is deleted or
+when it was signed in on the computer itself.
  */
 export type ClaudeAccountStatusSignedInBy = string | null;

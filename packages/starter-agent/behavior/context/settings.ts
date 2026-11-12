@@ -18,6 +18,10 @@ export const Settings = z.object({
   timeZone: z.string().min(1),
   /** The model every run is pinned to. */
   model: z.string().min(1),
+  /** The most one run may spend, in USD; 5 if unset (`behavior/agent/budget.ts`). */
+  budgetUsdPerRun: z.number().positive().optional(),
+  /** The most the owner's day may spend, in USD; no wake starts past it until the next day. 50 if unset. */
+  budgetUsdPerDay: z.number().positive().optional(),
 });
 export type Settings = z.infer<typeof Settings>;
 

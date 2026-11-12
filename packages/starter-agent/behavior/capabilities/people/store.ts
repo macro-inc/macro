@@ -77,7 +77,7 @@ export const store = ({
   restrict,
   clock,
 }: {
-  /** Where the records are kept. People's details: never committed. */
+  /** Where the records are kept. People's details: the private bucket. */
   readonly directory: string;
   readonly join: (...parts: readonly string[]) => string;
   readonly disk: Pick<

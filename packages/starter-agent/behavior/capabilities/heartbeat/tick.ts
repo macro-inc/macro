@@ -1,5 +1,5 @@
 /**
- * One heartbeat tick: commit and check the agent's repository, prune, and
+ * One heartbeat tick: commit and sync the agent's repository, prune, and
  * snapshot what the agent watches; wake it when the snapshot changed and has
  * something in it. Otherwise nothing happens. The decision is pure; `beat` is
  * given everything it touches, so a whole tick runs in a test.
@@ -122,10 +122,8 @@ export type Beat = {
   readonly now: () => Temporal.Instant;
   /** sha256 of a text, as hex. */
   readonly digest: (text: string) => string;
-  /** Commits whatever changed, with this message. */
+  /** Commits whatever changed, with this message, then pulls and pushes main. */
   readonly commit: (message: string) => Promise<unknown>;
-  /** The tamper alarm: the remote's main against what the agent last pushed. Every tick, awake or not. */
-  readonly guard: () => Promise<unknown>;
   readonly collect: () => Promise<string>;
   readonly cursor: {
     readonly read: () => Promise<Cursor | undefined>;
@@ -158,7 +156,7 @@ export const syncMessage = 'sync: changes made outside a run';
 
 /** One tick. It returns as soon as the agent is woken; `finished` is the rest. */
 export const beat = async (deps: Beat): Promise<Beaten> => {
-  // Whatever a tick does first must not stop it: a failed commit or check is logged and the tick goes on.
+  // Whatever a tick does first must not stop it: a failed commit or prune is logged and the tick goes on.
   const attempt = async (
     step: string,
     run: () => Promise<unknown>
@@ -168,8 +166,6 @@ export const beat = async (deps: Beat): Promise<Beaten> => {
     );
   };
   await attempt('sync commit', () => deps.commit(syncMessage));
-  await attempt('main check', deps.guard);
-
   await attempt('prune', deps.prune);
 
   const started = deps.now();

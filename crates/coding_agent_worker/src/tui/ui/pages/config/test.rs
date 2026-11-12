@@ -1,5 +1,5 @@
 use harness_id::HarnessId;
-use harnesses::domain::models::{ClaudeMode, Harness, HarnessCapabilities, HarnessOwner};
+use harnesses::domain::models::{ClaudeMode, Harness, HarnessOwner};
 use ratatui::{Terminal, backend::TestBackend};
 
 use crate::tui::app::{App, Tab};
@@ -30,7 +30,6 @@ fn short_config_keeps_selected_settings_and_web_owned_values_visible() {
     app.config.harness.args = vec!["herdr-acp".to_owned()];
     app.snapshot.harness = Some(Harness {
         allow_permission_bypass: true,
-        capabilities: HarnessCapabilities::default(),
         computer_id: None,
         claude_mode: ClaudeMode::MacroCredits,
         id: HarnessId::TEST_A,

@@ -14,18 +14,26 @@ options in `voices.ts`.
 
 ## What a call needs
 
-| Credential         | For                                                                        |
-| ------------------ | -------------------------------------------------------------------------- |
-| `MACRO_API_KEY`    | Everything: the calls list, the seat, the room, chat, `ai.decide`.         |
-| `DEEPGRAM_API_KEY` | Hearing (Nova-3) and the default voice (Aura-2). Calls are off without it. |
-| `INWORLD_API_KEY`  | Only if `voiceSpec` in `voices.ts` names an Inworld voice.                 |
+Only the agent's `MACRO_API_KEY`, and a call's process never holds it: it is
+started with the relay's environment (`base.relayed()`), and everything,
+speech included, goes through the agent's relay, which adds the key. On a
+computer it also runs under the agent's sandbox (`base.sandbox`), so neither
+it nor its brain's Claude Code (the image's `claude` wrapper) can read the
+enrollment's secrets.
 
-Without `DEEPGRAM_API_KEY` the watcher reads nothing and joins nothing: it
-logs `calls: off` once to the `calls` log and looks for the key again every
-minute, so `setCredential` turns calls on without a restart. `placeCall`,
-`askOntoCall` and `joinCall` throw one sentence naming the key. The join
-judgment and the switch judgment run `claude -p`, which the agent has
-anyway; screen sharing needs the screen area's browser to be up.
+- **Speech is LiveKit Inference through Macro** (`context/speech.ts`):
+  Deepgram Nova-3 to hear, Aura-2 to speak, over
+  `agent-harness /brain/inference/{stt,tts}`, which holds the project's keys
+  and bills the team's credits. The relay carries exactly those two sockets.
+  LiveKit's inference classes are used as they are, with only `connectWs`
+  replaced, so the socket opens on the relay.
+- **The voice** is `config/voice.json` in the agent's repository,
+  `{ "model": "aura-2-<voice>-<language>" }`, which Macro's agent settings
+  commit; Thalia until one is chosen (`parseVoice` in `voices.ts`). A file
+  that names no Aura-2 voice fails the join.
+
+The join judgment and the switch judgment run `claude -p`, which the agent
+has anyway; screen sharing needs the screen area's browser to be up.
 
 ## Shape
 
@@ -54,9 +62,9 @@ is built, `capabilities/<name>.ts` holds the capabilities, and
 | `asks.ts`                     | Someone asking the agent to come: the ledger, and the model that weighs a switch (below).                                                                             |
 | `place.ts`                    | Placing a call: who asked, the outbound ledger (below).                                                                                                               |
 | `report.ts`, `replay.ts`      | A call's timeline from its event log; a recording through the real session with a stub brain.                                                                         |
-| `share.ts`, `share-policy.ts` | Showing a browser in a call (below). The browser itself is the screen area's.                                                                                         |
+| `share.ts`                    | Showing the agent's screen in a call (below).                                                                                                                         |
 | `context.ts`, `index.ts`      | The area's context, built once (`callsContext`), and its capabilities.                                                                                                |
-| `context/`                    | The real ports: `voice.ts` and `voiceLive.ts` (LiveKit, loaded only when a call needs it), `disk.ts` and `disk-worker.ts`, `ledgers.ts`, `processes.ts`, `share*.ts`. |
+| `context/`                    | The real ports: `voice.ts`, `voiceLive.ts` and `speech.ts` (LiveKit, loaded only when a call needs it), `disk.ts` and `disk-worker.ts`, `ledgers.ts`, `processes.ts`, `desktop.ts`, `share*.ts`. |
 
 **Capabilities.** Each is `bin/agent <name> '<json>'` from a shell, and an
 imported function in a script; `bin/agent describe <name>` has its docs.
@@ -345,28 +353,22 @@ A write that blocks the call's one JS thread is silence at the far end.
 - **The opening is `session.say`, not the brain:** the reason is already
   written. 800 ms after they join, so their client hears the first word.
 
-## Showing a browser
+## Showing the screen
 
-`share.ts`, `share-policy.ts` (every rule, pure), and a frame worker. Tools:
-`share_screen`, `drive_screen`, `stop_share`.
+`share.ts` and a capture worker. Tools: `share_screen` (`url?`) and `stop_share`.
 
-- **Always clean:** a new browser context on the screen area's browser per
-  share, disposed after. Nothing persists, nothing is signed in.
-- **The blocklist has no override:** mail, secret stores, billing, login and
-  key pages, and anything private by scheme, literal, or what the name
-  resolves to.
-- **At the wire:** `Fetch.enable` on Document requests. A blocked page or a
-  redirect into one is failed before it renders, and the share stops. If the
-  check can't run, the share stops.
-- **Said by code, not the model:** "I'm sharing my screen: \<host\>." and
-  "Stopped sharing." The host only: a page's title is untrusted.
-- Refused when the agent joined uninvited, and stops with the call. Page text
-  reaches the brain wrapped as data, but the brain has the agent's tools, so
-  a page telling it what to do is the one risk here that's only as good as
-  the model.
-- **Screencast, not screen grabbing**: it is the one tab by construction. It
-  sends only on damage, so the worker re-sends the newest frame at the target
-  fps to keep the track alive.
+- **One display, one share path:** the agent's own desktop (`DISPLAY`, Xvnc `:1`, 1920x1080),
+  where its browser and computer use are, captured with `ffmpeg-x11grab` and scaled to 720p at
+  10 fps, in a worker (`context/share-frames.ts`) so the call's thread never reads frames.
+- **With a URL** the page opens in the agent's browser (the browser area), in front and full
+  screen, before the capture starts. Without one, the desktop is shown as it is. The brain drives
+  the browser while sharing with the browser area's capabilities.
+- **What it is signed in to is on screen.** The agent chooses to share; passwords are pasted,
+  never typed or shown. Only `http`/`https` pages are opened by a share.
+- **Said by code, not the model:** "I'm sharing my screen." and "Stopped sharing."
+- Refused when the agent joined uninvited, and stops with the call.
+- **Sound:** `parec` on the sound server's default sink monitor, which the browser plays into,
+  published as screen-share audio: its own track, never the agent's hearing.
 
 ## Decisions
 
@@ -400,3 +402,6 @@ A write that blocks the call's one JS thread is silence at the far end.
 - **Voice with no words gets silence**, not "didn't catch that".
 - The owner saying "go to Bo's call" out loud on a call has no tool; only
   chat orders count.
+- **A page on a shared screen can try to steer the brain**, e.g. to open a signed-in mail page
+  while everyone watches. Nothing in code stops it; the authority rule does (only the owner gives
+  orders, and text the agent reads is never one), in the call rules and the charter.

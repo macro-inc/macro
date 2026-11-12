@@ -172,6 +172,16 @@ export const enableCanvasArtifacts = defineFlag({
   default: onInDev,
 });
 
+/**
+ * Agents open items for the person who prompted them, in the tab they typed
+ * in (`macro.ui.open`). The harness reads the same PostHog key.
+ */
+export const enableAgentNavigation = defineFlag({
+  key: 'enable-agent-navigation',
+  env: 'ENABLE_AGENT_NAVIGATION',
+  default: onInDev,
+});
+
 /** Browser-style tabs in the macOS desktop title bar; each tab holds a split layout. */
 export const enableDesktopTabs = defineFlag({
   key: 'enable-desktop-tabs',
@@ -850,12 +860,19 @@ export const enableTagTeamSharing = defineFlag({
   default: onInDev,
 });
 
-// Redesigned Chat sidebar sections. On in development;
+// Redesigned desktop Chat sections and phone section tabs. On in development;
 // deployed environments defer to PostHog. Override with VITE_ENABLE_CHAT_SIDEBAR_SECTIONS.
 export const enableChatSidebarSections = defineFlag({
   key: 'enable-chat-sidebar-sections',
   env: 'ENABLE_CHAT_SIDEBAR_SECTIONS',
   default: onInDev,
+});
+
+// Opt-in vertical resizing for desktop Chat sections. Keep it off in development
+// too so sections use their natural height unless PostHog or a local override enables it.
+export const enableChatSidebarSectionResize = defineFlag({
+  key: 'enable-chat-sidebar-section-resize',
+  env: 'ENABLE_CHAT_SIDEBAR_SECTION_RESIZE',
 });
 
 // Manual and smart channel labels, including their queries and drag/drop UI.

@@ -8,16 +8,8 @@ import type { State } from '../../context/state.ts';
 /** The owner of calls' state directories. */
 export const owner = 'calls';
 
-/**
- * The credentials of what the agent hears and speaks with. Deepgram is both
- * its ears and its voice, so calls need it and nothing more; Inworld, when
- * its key is there, is the voice, with Deepgram as the fallback.
- */
-export const deepgramKey = 'DEEPGRAM_API_KEY';
-export const inworldKey = 'INWORLD_API_KEY';
-
-/** Calls stay off until this is set: said by every part that refuses for it. */
-export const noVoice = `Calls need a speech key: add ${deepgramKey} with setCredential.`;
+/** The agent's voice, in its repository: `{ "model": "aura-2-<voice>-<language>" }`, which Macro's agent settings write. */
+export const voiceFile = 'config/voice.json';
 
 /** A placed call is seated under this prefix and its ledger id, because its call id doesn't exist until it rings. */
 export const placePrefix = 'place-';

@@ -53,17 +53,6 @@ impl ComputerPrices {
     ) -> Option<&stripe::PriceId> {
         self.of(size).price_id(interval)
     }
-
-    /// Recognize an unlinked legacy computer charge without inferring its size.
-    pub fn contains_legacy_price(&self, price_id: &stripe::PriceId) -> bool {
-        ComputerSize::ALL.into_iter().any(|size| {
-            let prices = self.of(size);
-            [prices.monthly.as_ref(), prices.yearly.as_ref()]
-                .into_iter()
-                .flatten()
-                .any(|configured| configured == price_id)
-        })
-    }
 }
 
 /// Receives a complete team subscription snapshot after every team

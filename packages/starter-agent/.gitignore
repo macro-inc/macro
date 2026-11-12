@@ -3,10 +3,9 @@ node_modules/
 .direnv/
 .scripts*/
 
-# State is kept by bucket (behavior/context/state.ts): only what the agent knows is
-# committed. People, their messages, mail, logs and anything volatile stay on
-# this machine.
-state/private/
+# State is kept by bucket (behavior/context/state.ts): memory and private are
+# committed to the agent's one repository; volatile state and logs (which go
+# to telemetry) stay on this machine.
 state/run/
 state/log/
 

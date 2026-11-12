@@ -4257,16 +4257,22 @@ export const listChannelLabelsResponse = zod
             channelCount: zod
               .number()
               .describe(
-                'All assignments for a manual label; visible matches for a smart tag.'
+                'Legacy assignments or smart matches; visible effective channels for sections.'
               ),
             channelIds: zod
               .array(zod.uuid())
               .describe(
-                'Channels in this label that the requesting user participates in.'
+                'Effective channels visible to the viewer in this label or section.'
               ),
             createdAt: zod.iso
               .datetime({})
               .describe('When the label was created.'),
+            explicitChannelIds: zod
+              .array(zod.uuid())
+              .nullish()
+              .describe(
+                'Explicit picks visible to the viewer (section responses only).'
+              ),
             id: zod.uuid().describe('Stable label id.'),
             name: zod
               .string()
@@ -4307,7 +4313,7 @@ export const listChannelLabelsResponse = zod
               ),
           })
           .describe(
-            'A shared or account-private label grouping chat channels in the sidebar.\n\n`channel_ids` is viewer-relative: it lists only the labelled channels the\nrequesting user participates in. `channel_count` counts every channel in\nthe label so clients can warn accurately before a delete.'
+            'A shared or account-private label grouping chat channels in the sidebar.\n\n`channel_ids` is viewer-relative: legacy labels include joined channels;\nsections also include viewable unjoined channels in the verified team.\nLegacy manual counts include every assignment; section counts reflect\neffective channels visible to the viewer.'
           )
       )
       .describe(
@@ -4372,14 +4378,20 @@ export const createChannelLabelResponse = zod
     channelCount: zod
       .number()
       .describe(
-        'All assignments for a manual label; visible matches for a smart tag.'
+        'Legacy assignments or smart matches; visible effective channels for sections.'
       ),
     channelIds: zod
       .array(zod.uuid())
       .describe(
-        'Channels in this label that the requesting user participates in.'
+        'Effective channels visible to the viewer in this label or section.'
       ),
     createdAt: zod.iso.datetime({}).describe('When the label was created.'),
+    explicitChannelIds: zod
+      .array(zod.uuid())
+      .nullish()
+      .describe(
+        'Explicit picks visible to the viewer (section responses only).'
+      ),
     id: zod.uuid().describe('Stable label id.'),
     name: zod
       .string()
@@ -4414,7 +4426,7 @@ export const createChannelLabelResponse = zod
       .describe("When the label's name, rule, scope, or order last changed."),
   })
   .describe(
-    'A shared or account-private label grouping chat channels in the sidebar.\n\n`channel_ids` is viewer-relative: it lists only the labelled channels the\nrequesting user participates in. `channel_count` counts every channel in\nthe label so clients can warn accurately before a delete.'
+    'A shared or account-private label grouping chat channels in the sidebar.\n\n`channel_ids` is viewer-relative: legacy labels include joined channels;\nsections also include viewable unjoined channels in the verified team.\nLegacy manual counts include every assignment; section counts reflect\neffective channels visible to the viewer.'
   );
 
 /**
@@ -4473,6 +4485,12 @@ export const previewSmartTagResponse = zod
         zod
           .object({
             id: zod.uuid().describe('Channel id.'),
+            isParticipant: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Whether the viewer actively participates in this channel (section previews only).'
+              ),
             name: zod.string().describe('Channel display name.'),
           })
           .describe(
@@ -4483,7 +4501,7 @@ export const previewSmartTagResponse = zod
     totalCount: zod
       .number()
       .describe(
-        'Number of matching channels the caller participates in, including overflow.'
+        'Number of visible matches, including overflow; legacy previews count participants.'
       ),
   })
   .describe(
@@ -4563,14 +4581,20 @@ export const renameChannelLabelResponse = zod
     channelCount: zod
       .number()
       .describe(
-        'All assignments for a manual label; visible matches for a smart tag.'
+        'Legacy assignments or smart matches; visible effective channels for sections.'
       ),
     channelIds: zod
       .array(zod.uuid())
       .describe(
-        'Channels in this label that the requesting user participates in.'
+        'Effective channels visible to the viewer in this label or section.'
       ),
     createdAt: zod.iso.datetime({}).describe('When the label was created.'),
+    explicitChannelIds: zod
+      .array(zod.uuid())
+      .nullish()
+      .describe(
+        'Explicit picks visible to the viewer (section responses only).'
+      ),
     id: zod.uuid().describe('Stable label id.'),
     name: zod
       .string()
@@ -4605,7 +4629,403 @@ export const renameChannelLabelResponse = zod
       .describe("When the label's name, rule, scope, or order last changed."),
   })
   .describe(
-    'A shared or account-private label grouping chat channels in the sidebar.\n\n`channel_ids` is viewer-relative: it lists only the labelled channels the\nrequesting user participates in. `channel_count` counts every channel in\nthe label so clients can warn accurately before a delete.'
+    'A shared or account-private label grouping chat channels in the sidebar.\n\n`channel_ids` is viewer-relative: legacy labels include joined channels;\nsections also include viewable unjoined channels in the verified team.\nLegacy manual counts include every assignment; section counts reflect\neffective channels visible to the viewer.'
+  );
+
+/**
+ * @summary List the caller's shared or private labels.
+ */
+export const listChannelSectionsQueryParams = zod.object({
+  scope: zod
+    .enum(['personal', 'team'])
+    .optional()
+    .describe(
+      '`personal` selects private labels; `team` requires team membership.'
+    ),
+});
+
+export const listChannelSectionsResponse = zod
+  .object({
+    labels: zod
+      .array(
+        zod
+          .object({
+            channelCount: zod
+              .number()
+              .describe(
+                'Legacy assignments or smart matches; visible effective channels for sections.'
+              ),
+            channelIds: zod
+              .array(zod.uuid())
+              .describe(
+                'Effective channels visible to the viewer in this label or section.'
+              ),
+            createdAt: zod.iso
+              .datetime({})
+              .describe('When the label was created.'),
+            explicitChannelIds: zod
+              .array(zod.uuid())
+              .nullish()
+              .describe(
+                'Explicit picks visible to the viewer (section responses only).'
+              ),
+            id: zod.uuid().describe('Stable label id.'),
+            name: zod
+              .string()
+              .describe(
+                'Display name, unique within the scope (case-insensitive).'
+              ),
+            rule: zod
+              .union([
+                zod.null(),
+                zod
+                  .object({
+                    attribute: zod.enum(['name']),
+                    contains: zod
+                      .string()
+                      .describe('The substring to find anywhere in the name.'),
+                  })
+                  .describe(
+                    'Case-insensitive, literal substring matching on the channel name.'
+                  )
+                  .describe(
+                    'An attribute rule that automatically groups matching channels.'
+                  ),
+              ])
+              .optional(),
+            sortOrder: zod
+              .number()
+              .describe(
+                'Manual ordering value within the scope; lower sorts first.'
+              ),
+            teamId: zod
+              .uuid()
+              .nullish()
+              .describe('Owning team, or `None` for account-private labels.'),
+            updatedAt: zod.iso
+              .datetime({})
+              .describe(
+                "When the label's name, rule, scope, or order last changed."
+              ),
+          })
+          .describe(
+            'A shared or account-private label grouping chat channels in the sidebar.\n\n`channel_ids` is viewer-relative: legacy labels include joined channels;\nsections also include viewable unjoined channels in the verified team.\nLegacy manual counts include every assignment; section counts reflect\neffective channels visible to the viewer.'
+          )
+      )
+      .describe(
+        'Every label of the scope, whether or not the caller sees channels in it.'
+      ),
+    scope: zod
+      .enum(['personal', 'team'])
+      .describe(
+        'Requested label namespace. Omission retains the deployed automatic selection.'
+      ),
+    teamId: zod
+      .uuid()
+      .nullish()
+      .describe('Team scope, or `None` for private labels.'),
+  })
+  .describe("The authorized scope's labels in manual order.");
+
+/**
+ * @summary Create a label for the caller's authorized scope.
+ */
+export const createChannelSectionQueryParams = zod.object({
+  scope: zod
+    .enum(['personal', 'team'])
+    .optional()
+    .describe(
+      '`personal` selects private labels; `team` requires team membership.'
+    ),
+});
+
+export const createChannelSectionBody = zod
+  .object({
+    channelIds: zod
+      .array(zod.uuid())
+      .optional()
+      .describe('Channels to move into the new label.'),
+    name: zod
+      .string()
+      .describe('Display name; unique within the scope, case-insensitively.'),
+    rule: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            attribute: zod.enum(['name']),
+            contains: zod
+              .string()
+              .describe('The substring to find anywhere in the name.'),
+          })
+          .describe(
+            'Case-insensitive, literal substring matching on the channel name.'
+          )
+          .describe(
+            'An attribute rule that automatically groups matching channels.'
+          ),
+      ])
+      .optional(),
+  })
+  .describe('Request body for creating a label.');
+
+export const createChannelSectionResponse = zod
+  .object({
+    channelCount: zod
+      .number()
+      .describe(
+        'Legacy assignments or smart matches; visible effective channels for sections.'
+      ),
+    channelIds: zod
+      .array(zod.uuid())
+      .describe(
+        'Effective channels visible to the viewer in this label or section.'
+      ),
+    createdAt: zod.iso.datetime({}).describe('When the label was created.'),
+    explicitChannelIds: zod
+      .array(zod.uuid())
+      .nullish()
+      .describe(
+        'Explicit picks visible to the viewer (section responses only).'
+      ),
+    id: zod.uuid().describe('Stable label id.'),
+    name: zod
+      .string()
+      .describe('Display name, unique within the scope (case-insensitive).'),
+    rule: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            attribute: zod.enum(['name']),
+            contains: zod
+              .string()
+              .describe('The substring to find anywhere in the name.'),
+          })
+          .describe(
+            'Case-insensitive, literal substring matching on the channel name.'
+          )
+          .describe(
+            'An attribute rule that automatically groups matching channels.'
+          ),
+      ])
+      .optional(),
+    sortOrder: zod
+      .number()
+      .describe('Manual ordering value within the scope; lower sorts first.'),
+    teamId: zod
+      .uuid()
+      .nullish()
+      .describe('Owning team, or `None` for account-private labels.'),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe("When the label's name, rule, scope, or order last changed."),
+  })
+  .describe(
+    'A shared or account-private label grouping chat channels in the sidebar.\n\n`channel_ids` is viewer-relative: legacy labels include joined channels;\nsections also include viewable unjoined channels in the verified team.\nLegacy manual counts include every assignment; section counts reflect\neffective channels visible to the viewer.'
+  );
+
+/**
+ * @summary Move a channel into a label of the caller's authorized scope, or out of any label.
+ */
+export const setChannelSectionParams = zod.object({
+  channel_id: zod.uuid().describe('The channel id.'),
+});
+
+export const setChannelSectionQueryParams = zod.object({
+  scope: zod
+    .enum(['personal', 'team'])
+    .optional()
+    .describe(
+      '`personal` selects private labels; `team` requires team membership.'
+    ),
+});
+
+export const setChannelSectionBody = zod
+  .object({
+    labelId: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'The label to put the channel in, or `null` to remove it from its label.'
+      ),
+  })
+  .describe('Request body for moving a channel between labels.');
+
+/**
+ * @summary Preview visible channels matched by a smart tag, without creating it.
+ */
+export const previewChannelSectionQueryParams = zod.object({
+  scope: zod
+    .enum(['personal', 'team'])
+    .optional()
+    .describe(
+      '`personal` selects private labels; `team` requires team membership.'
+    ),
+});
+
+export const previewChannelSectionBody = zod
+  .object({
+    attribute: zod.enum(['name']),
+    contains: zod
+      .string()
+      .describe('The substring to find anywhere in the name.'),
+  })
+  .describe('Case-insensitive, literal substring matching on the channel name.')
+  .describe('An attribute rule that automatically groups matching channels.');
+
+export const previewChannelSectionResponse = zod
+  .object({
+    channels: zod
+      .array(
+        zod
+          .object({
+            id: zod.uuid().describe('Channel id.'),
+            isParticipant: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Whether the viewer actively participates in this channel (section previews only).'
+              ),
+            name: zod.string().describe('Channel display name.'),
+          })
+          .describe(
+            'A channel visible to the caller that matches a smart tag rule.'
+          )
+      )
+      .describe('First matches, in alphabetical order.'),
+    totalCount: zod
+      .number()
+      .describe(
+        'Number of visible matches, including overflow; legacy previews count participants.'
+      ),
+  })
+  .describe(
+    'A bounded preview and the total number of visible channels matching a rule.'
+  );
+
+/**
+ * @summary Delete a label of the caller's authorized scope. Its channels return to the plain list.
+ */
+export const deleteChannelSectionParams = zod.object({
+  label_id: zod.uuid().describe('The label id.'),
+});
+
+export const deleteChannelSectionQueryParams = zod.object({
+  scope: zod
+    .enum(['personal', 'team'])
+    .optional()
+    .describe(
+      '`personal` selects private labels; `team` requires team membership.'
+    ),
+});
+
+/**
+ * @summary Update a label, optionally moving it to another authorized scope.
+ */
+export const updateChannelSectionParams = zod.object({
+  label_id: zod.uuid().describe('The label id.'),
+});
+
+export const updateChannelSectionQueryParams = zod.object({
+  scope: zod
+    .enum(['personal', 'team'])
+    .optional()
+    .describe(
+      '`personal` selects private labels; `team` requires team membership.'
+    ),
+});
+
+export const updateChannelSectionBody = zod
+  .object({
+    name: zod.string().describe('New display name.'),
+    rule: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            attribute: zod.enum(['name']),
+            contains: zod
+              .string()
+              .describe('The substring to find anywhere in the name.'),
+          })
+          .describe(
+            'Case-insensitive, literal substring matching on the channel name.'
+          )
+          .describe(
+            'An attribute rule that automatically groups matching channels.'
+          ),
+      ])
+      .optional(),
+    targetScope: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['personal', 'team'])
+          .describe(
+            'Requested label namespace. Omission retains the deployed automatic selection.'
+          ),
+      ])
+      .optional(),
+  })
+  .describe(
+    "Request body for updating a label's name, smart rule, or sharing scope."
+  );
+
+export const updateChannelSectionResponse = zod
+  .object({
+    channelCount: zod
+      .number()
+      .describe(
+        'Legacy assignments or smart matches; visible effective channels for sections.'
+      ),
+    channelIds: zod
+      .array(zod.uuid())
+      .describe(
+        'Effective channels visible to the viewer in this label or section.'
+      ),
+    createdAt: zod.iso.datetime({}).describe('When the label was created.'),
+    explicitChannelIds: zod
+      .array(zod.uuid())
+      .nullish()
+      .describe(
+        'Explicit picks visible to the viewer (section responses only).'
+      ),
+    id: zod.uuid().describe('Stable label id.'),
+    name: zod
+      .string()
+      .describe('Display name, unique within the scope (case-insensitive).'),
+    rule: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            attribute: zod.enum(['name']),
+            contains: zod
+              .string()
+              .describe('The substring to find anywhere in the name.'),
+          })
+          .describe(
+            'Case-insensitive, literal substring matching on the channel name.'
+          )
+          .describe(
+            'An attribute rule that automatically groups matching channels.'
+          ),
+      ])
+      .optional(),
+    sortOrder: zod
+      .number()
+      .describe('Manual ordering value within the scope; lower sorts first.'),
+    teamId: zod
+      .uuid()
+      .nullish()
+      .describe('Owning team, or `None` for account-private labels.'),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe("When the label's name, rule, scope, or order last changed."),
+  })
+  .describe(
+    'A shared or account-private label grouping chat channels in the sidebar.\n\n`channel_ids` is viewer-relative: legacy labels include joined channels;\nsections also include viewable unjoined channels in the verified team.\nLegacy manual counts include every assignment; section counts reflect\neffective channels visible to the viewer.'
   );
 
 /**
@@ -43328,9 +43748,6 @@ export const approveHarnessPairingBody = zod
   })
   .describe('Request to approve a pairing and register the harness.');
 
-export const approveHarnessPairingResponseCapabilitiesClaudeDefault = null;
-export const approveHarnessPairingResponseCapabilitiesScreenDefault = false;
-
 export const approveHarnessPairingResponse = zod
   .object({
     access: zod
@@ -43342,69 +43759,6 @@ export const approveHarnessPairingResponse = zod
       .optional()
       .describe(
         'Whether agents may bypass ACP permission requests on this harness.'
-      ),
-    capabilities: zod
-      .object({
-        claude: zod
-          .union([
-            zod.null(),
-            zod
-              .union([
-                zod
-                  .object({
-                    status: zod.enum(['signed_out']),
-                  })
-                  .describe(
-                    'No Claude account; sessions run on Macro credits.'
-                  ),
-                zod
-                  .object({
-                    account: zod
-                      .string()
-                      .nullish()
-                      .describe(
-                        "The account's email address, when Claude reports one."
-                      ),
-                    account_id: zod
-                      .string()
-                      .describe(
-                        "The account's id at Anthropic (`oauthAccount.accountUuid`)."
-                      ),
-                    expires_at: zod.iso
-                      .datetime({})
-                      .nullish()
-                      .describe(
-                        'When the sign-in stops refreshing and must be repeated.'
-                      ),
-                    organization: zod
-                      .string()
-                      .nullish()
-                      .describe(
-                        "The account's organization, when Claude reports one."
-                      ),
-                    plan: zod
-                      .string()
-                      .nullish()
-                      .describe(
-                        "The account's plan (`subscriptionType`), e.g. `max`."
-                      ),
-                    status: zod.enum(['signed_in']),
-                  })
-                  .describe('Signed in to a Claude account.'),
-              ])
-              .describe(
-                "Claude Code's sign-in on a Macro computer, as `claude auth status` reports it."
-              ),
-          ])
-          .optional(),
-        screen: zod
-          .boolean()
-          .optional()
-          .describe('A display Macro can stream (Xvnc on `127.0.0.1:5900`).'),
-      })
-      .optional()
-      .describe(
-        "What a harness's machine can do beyond running agents.\n\nmacrod reports this after it connects; every field defaults to off, so\nharnesses that never report stay plain."
       ),
     claude_mode: zod
       .enum(['macro_credits', 'own_account'])
@@ -43466,9 +43820,6 @@ export const claimHarnessPairingBody = zod
     "Request to claim an approved pairing's credential.\n\nThe daemon serializes this, so both derives are used."
   );
 
-export const claimHarnessPairingResponseHarnessCapabilitiesClaudeDefault = null;
-export const claimHarnessPairingResponseHarnessCapabilitiesScreenDefault = false;
-
 export const claimHarnessPairingResponse = zod
   .object({
     harness: zod
@@ -43482,71 +43833,6 @@ export const claimHarnessPairingResponse = zod
           .optional()
           .describe(
             'Whether agents may bypass ACP permission requests on this harness.'
-          ),
-        capabilities: zod
-          .object({
-            claude: zod
-              .union([
-                zod.null(),
-                zod
-                  .union([
-                    zod
-                      .object({
-                        status: zod.enum(['signed_out']),
-                      })
-                      .describe(
-                        'No Claude account; sessions run on Macro credits.'
-                      ),
-                    zod
-                      .object({
-                        account: zod
-                          .string()
-                          .nullish()
-                          .describe(
-                            "The account's email address, when Claude reports one."
-                          ),
-                        account_id: zod
-                          .string()
-                          .describe(
-                            "The account's id at Anthropic (`oauthAccount.accountUuid`)."
-                          ),
-                        expires_at: zod.iso
-                          .datetime({})
-                          .nullish()
-                          .describe(
-                            'When the sign-in stops refreshing and must be repeated.'
-                          ),
-                        organization: zod
-                          .string()
-                          .nullish()
-                          .describe(
-                            "The account's organization, when Claude reports one."
-                          ),
-                        plan: zod
-                          .string()
-                          .nullish()
-                          .describe(
-                            "The account's plan (`subscriptionType`), e.g. `max`."
-                          ),
-                        status: zod.enum(['signed_in']),
-                      })
-                      .describe('Signed in to a Claude account.'),
-                  ])
-                  .describe(
-                    "Claude Code's sign-in on a Macro computer, as `claude auth status` reports it."
-                  ),
-              ])
-              .optional(),
-            screen: zod
-              .boolean()
-              .optional()
-              .describe(
-                'A display Macro can stream (Xvnc on `127.0.0.1:5900`).'
-              ),
-          })
-          .optional()
-          .describe(
-            "What a harness's machine can do beyond running agents.\n\nmacrod reports this after it connects; every field defaults to off, so\nharnesses that never report stay plain."
           ),
         claude_mode: zod
           .enum(['macro_credits', 'own_account'])
@@ -43598,9 +43884,6 @@ export const claimHarnessPairingResponse = zod
 /**
  * @summary Handler for `GET /harnesses`.
  */
-export const listHarnessesResponseCapabilitiesClaudeDefault = null;
-export const listHarnessesResponseCapabilitiesScreenDefault = false;
-
 export const listHarnessesResponseItem = zod
   .object({
     access: zod
@@ -43612,69 +43895,6 @@ export const listHarnessesResponseItem = zod
       .optional()
       .describe(
         'Whether agents may bypass ACP permission requests on this harness.'
-      ),
-    capabilities: zod
-      .object({
-        claude: zod
-          .union([
-            zod.null(),
-            zod
-              .union([
-                zod
-                  .object({
-                    status: zod.enum(['signed_out']),
-                  })
-                  .describe(
-                    'No Claude account; sessions run on Macro credits.'
-                  ),
-                zod
-                  .object({
-                    account: zod
-                      .string()
-                      .nullish()
-                      .describe(
-                        "The account's email address, when Claude reports one."
-                      ),
-                    account_id: zod
-                      .string()
-                      .describe(
-                        "The account's id at Anthropic (`oauthAccount.accountUuid`)."
-                      ),
-                    expires_at: zod.iso
-                      .datetime({})
-                      .nullish()
-                      .describe(
-                        'When the sign-in stops refreshing and must be repeated.'
-                      ),
-                    organization: zod
-                      .string()
-                      .nullish()
-                      .describe(
-                        "The account's organization, when Claude reports one."
-                      ),
-                    plan: zod
-                      .string()
-                      .nullish()
-                      .describe(
-                        "The account's plan (`subscriptionType`), e.g. `max`."
-                      ),
-                    status: zod.enum(['signed_in']),
-                  })
-                  .describe('Signed in to a Claude account.'),
-              ])
-              .describe(
-                "Claude Code's sign-in on a Macro computer, as `claude auth status` reports it."
-              ),
-          ])
-          .optional(),
-        screen: zod
-          .boolean()
-          .optional()
-          .describe('A display Macro can stream (Xvnc on `127.0.0.1:5900`).'),
-      })
-      .optional()
-      .describe(
-        "What a harness's machine can do beyond running agents.\n\nmacrod reports this after it connects; every field defaults to off, so\nharnesses that never report stay plain."
       ),
     claude_mode: zod
       .enum(['macro_credits', 'own_account'])
@@ -43720,9 +43940,6 @@ export const listHarnessesResponse = zod.array(listHarnessesResponseItem);
 /**
  * @summary Handler for `GET /harnesses/directory`.
  */
-export const listHarnessDirectoryResponseCapabilitiesClaudeDefault = null;
-export const listHarnessDirectoryResponseCapabilitiesScreenDefault = false;
-
 export const listHarnessDirectoryResponseItem = zod
   .object({
     access: zod
@@ -43734,69 +43951,6 @@ export const listHarnessDirectoryResponseItem = zod
       .optional()
       .describe(
         'Whether agents may bypass ACP permission requests on this harness.'
-      ),
-    capabilities: zod
-      .object({
-        claude: zod
-          .union([
-            zod.null(),
-            zod
-              .union([
-                zod
-                  .object({
-                    status: zod.enum(['signed_out']),
-                  })
-                  .describe(
-                    'No Claude account; sessions run on Macro credits.'
-                  ),
-                zod
-                  .object({
-                    account: zod
-                      .string()
-                      .nullish()
-                      .describe(
-                        "The account's email address, when Claude reports one."
-                      ),
-                    account_id: zod
-                      .string()
-                      .describe(
-                        "The account's id at Anthropic (`oauthAccount.accountUuid`)."
-                      ),
-                    expires_at: zod.iso
-                      .datetime({})
-                      .nullish()
-                      .describe(
-                        'When the sign-in stops refreshing and must be repeated.'
-                      ),
-                    organization: zod
-                      .string()
-                      .nullish()
-                      .describe(
-                        "The account's organization, when Claude reports one."
-                      ),
-                    plan: zod
-                      .string()
-                      .nullish()
-                      .describe(
-                        "The account's plan (`subscriptionType`), e.g. `max`."
-                      ),
-                    status: zod.enum(['signed_in']),
-                  })
-                  .describe('Signed in to a Claude account.'),
-              ])
-              .describe(
-                "Claude Code's sign-in on a Macro computer, as `claude auth status` reports it."
-              ),
-          ])
-          .optional(),
-        screen: zod
-          .boolean()
-          .optional()
-          .describe('A display Macro can stream (Xvnc on `127.0.0.1:5900`).'),
-      })
-      .optional()
-      .describe(
-        "What a harness's machine can do beyond running agents.\n\nmacrod reports this after it connects; every field defaults to off, so\nharnesses that never report stay plain."
       ),
     claude_mode: zod
       .enum(['macro_credits', 'own_account'])
@@ -43844,9 +43998,6 @@ export const listHarnessDirectoryResponse = zod.array(
 /**
  * @summary Handler for `GET /harnesses/me`.
  */
-export const getSelfHarnessResponseCapabilitiesClaudeDefault = null;
-export const getSelfHarnessResponseCapabilitiesScreenDefault = false;
-
 export const getSelfHarnessResponse = zod
   .object({
     access: zod
@@ -43858,69 +44009,6 @@ export const getSelfHarnessResponse = zod
       .optional()
       .describe(
         'Whether agents may bypass ACP permission requests on this harness.'
-      ),
-    capabilities: zod
-      .object({
-        claude: zod
-          .union([
-            zod.null(),
-            zod
-              .union([
-                zod
-                  .object({
-                    status: zod.enum(['signed_out']),
-                  })
-                  .describe(
-                    'No Claude account; sessions run on Macro credits.'
-                  ),
-                zod
-                  .object({
-                    account: zod
-                      .string()
-                      .nullish()
-                      .describe(
-                        "The account's email address, when Claude reports one."
-                      ),
-                    account_id: zod
-                      .string()
-                      .describe(
-                        "The account's id at Anthropic (`oauthAccount.accountUuid`)."
-                      ),
-                    expires_at: zod.iso
-                      .datetime({})
-                      .nullish()
-                      .describe(
-                        'When the sign-in stops refreshing and must be repeated.'
-                      ),
-                    organization: zod
-                      .string()
-                      .nullish()
-                      .describe(
-                        "The account's organization, when Claude reports one."
-                      ),
-                    plan: zod
-                      .string()
-                      .nullish()
-                      .describe(
-                        "The account's plan (`subscriptionType`), e.g. `max`."
-                      ),
-                    status: zod.enum(['signed_in']),
-                  })
-                  .describe('Signed in to a Claude account.'),
-              ])
-              .describe(
-                "Claude Code's sign-in on a Macro computer, as `claude auth status` reports it."
-              ),
-          ])
-          .optional(),
-        screen: zod
-          .boolean()
-          .optional()
-          .describe('A display Macro can stream (Xvnc on `127.0.0.1:5900`).'),
-      })
-      .optional()
-      .describe(
-        "What a harness's machine can do beyond running agents.\n\nmacrod reports this after it connects; every field defaults to off, so\nharnesses that never report stay plain."
       ),
     claude_mode: zod
       .enum(['macro_credits', 'own_account'])
@@ -43977,75 +44065,6 @@ export const listHarnessAgentsResponse = zod.array(
 );
 
 /**
- * macrod reports what its machine can do after it connects; the body
-replaces the previous report.
- * @summary Handler for `PUT /harnesses/me/capabilities`.
- */
-export const putSelfHarnessCapabilitiesBodyClaudeDefault = null;
-export const putSelfHarnessCapabilitiesBodyScreenDefault = false;
-
-export const putSelfHarnessCapabilitiesBody = zod
-  .object({
-    claude: zod
-      .union([
-        zod.null(),
-        zod
-          .union([
-            zod
-              .object({
-                status: zod.enum(['signed_out']),
-              })
-              .describe('No Claude account; sessions run on Macro credits.'),
-            zod
-              .object({
-                account: zod
-                  .string()
-                  .nullish()
-                  .describe(
-                    "The account's email address, when Claude reports one."
-                  ),
-                account_id: zod
-                  .string()
-                  .describe(
-                    "The account's id at Anthropic (`oauthAccount.accountUuid`)."
-                  ),
-                expires_at: zod.iso
-                  .datetime({})
-                  .nullish()
-                  .describe(
-                    'When the sign-in stops refreshing and must be repeated.'
-                  ),
-                organization: zod
-                  .string()
-                  .nullish()
-                  .describe(
-                    "The account's organization, when Claude reports one."
-                  ),
-                plan: zod
-                  .string()
-                  .nullish()
-                  .describe(
-                    "The account's plan (`subscriptionType`), e.g. `max`."
-                  ),
-                status: zod.enum(['signed_in']),
-              })
-              .describe('Signed in to a Claude account.'),
-          ])
-          .describe(
-            "Claude Code's sign-in on a Macro computer, as `claude auth status` reports it."
-          ),
-      ])
-      .optional(),
-    screen: zod
-      .boolean()
-      .optional()
-      .describe('A display Macro can stream (Xvnc on `127.0.0.1:5900`).'),
-  })
-  .describe(
-    "What a harness's machine can do beyond running agents.\n\nmacrod reports this after it connects; every field defaults to off, so\nharnesses that never report stay plain."
-  );
-
-/**
  * @summary Handler for `GET /harnesses/me/sessions`.
  */
 export const listHarnessSessionsResponseItem = zod
@@ -44098,9 +44117,6 @@ export const patchHarnessBody = zod
     'Request to change a registered harness. Omitted fields stay as they are.'
   );
 
-export const patchHarnessResponseCapabilitiesClaudeDefault = null;
-export const patchHarnessResponseCapabilitiesScreenDefault = false;
-
 export const patchHarnessResponse = zod
   .object({
     access: zod
@@ -44112,69 +44128,6 @@ export const patchHarnessResponse = zod
       .optional()
       .describe(
         'Whether agents may bypass ACP permission requests on this harness.'
-      ),
-    capabilities: zod
-      .object({
-        claude: zod
-          .union([
-            zod.null(),
-            zod
-              .union([
-                zod
-                  .object({
-                    status: zod.enum(['signed_out']),
-                  })
-                  .describe(
-                    'No Claude account; sessions run on Macro credits.'
-                  ),
-                zod
-                  .object({
-                    account: zod
-                      .string()
-                      .nullish()
-                      .describe(
-                        "The account's email address, when Claude reports one."
-                      ),
-                    account_id: zod
-                      .string()
-                      .describe(
-                        "The account's id at Anthropic (`oauthAccount.accountUuid`)."
-                      ),
-                    expires_at: zod.iso
-                      .datetime({})
-                      .nullish()
-                      .describe(
-                        'When the sign-in stops refreshing and must be repeated.'
-                      ),
-                    organization: zod
-                      .string()
-                      .nullish()
-                      .describe(
-                        "The account's organization, when Claude reports one."
-                      ),
-                    plan: zod
-                      .string()
-                      .nullish()
-                      .describe(
-                        "The account's plan (`subscriptionType`), e.g. `max`."
-                      ),
-                    status: zod.enum(['signed_in']),
-                  })
-                  .describe('Signed in to a Claude account.'),
-              ])
-              .describe(
-                "Claude Code's sign-in on a Macro computer, as `claude auth status` reports it."
-              ),
-          ])
-          .optional(),
-        screen: zod
-          .boolean()
-          .optional()
-          .describe('A display Macro can stream (Xvnc on `127.0.0.1:5900`).'),
-      })
-      .optional()
-      .describe(
-        "What a harness's machine can do beyond running agents.\n\nmacrod reports this after it connects; every field defaults to off, so\nharnesses that never report stay plain."
       ),
     claude_mode: zod
       .enum(['macro_credits', 'own_account'])

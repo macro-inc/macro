@@ -7,13 +7,12 @@
 
 import { dlopen, FFIType } from 'bun:ffi';
 import { closeSync, mkdirSync, openSync } from 'node:fs';
-import { mkdtemp, readdir, rm, stat } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, mkdtemp, readdir, rm, stat } from 'node:fs/promises';
 import { dirname, join as joinPath } from 'node:path';
 import { behavior, type ContextOf } from '@macro-inc/muppet/core/behavior';
 import type { Base } from '../../context/index.ts';
 import type { Bucket } from '../../context/state.ts';
-import { limits, owner, paths } from './config.ts';
+import { limits, owner, paths, settings } from './config.ts';
 import type { Entry, Rule, Tree } from './prune.ts';
 import type { Held } from './repository.ts';
 
@@ -27,6 +26,12 @@ export type Extras = {
   readonly sections?: readonly (() => Promise<string>)[];
   /** What else to prune: an area with per-run files or histories of its own adds a rule for them. */
   readonly prune?: readonly Rule[];
+  /**
+   * Restarts the agent onto code that landed (`restarter` in `restart.ts`).
+   * Only a supervised agent has one; without it, landed code takes effect
+   * when the agent is next started.
+   */
+  readonly restart?: () => Promise<void>;
 };
 
 /** A lock that other processes respect, and that the system drops if its holder dies. */
@@ -94,7 +99,8 @@ const tree: Tree = {
 };
 
 export const heartbeatContext = (base: Base, extras: Extras = {}) => {
-  const { state, clock, join } = base;
+  const { state, clock, join, config } = base;
+  const worktrees = join(config.root, settings.worktrees);
   const memory = dirname(state.memory(owner));
   const buckets: Readonly<Record<Bucket, string>> = {
     memory,
@@ -113,12 +119,17 @@ export const heartbeatContext = (base: Base, extras: Extras = {}) => {
       /** sha256 of a text, as hex. */
       digest: (text: string): string =>
         new Bun.CryptoHasher('sha256').update(text).digest('hex'),
+      /** A fresh empty directory under `.worktrees/`, for a worktree to check or rebase in. */
       scratch: {
-        make: () => mkdtemp(joinPath(tmpdir(), scratchPrefix)),
+        make: async () => {
+          await mkdir(worktrees, { recursive: true });
+          return mkdtemp(joinPath(worktrees, scratchPrefix));
+        },
         remove: (path: string) => rm(path, { recursive: true, force: true }),
       },
       sections: extras.sections ?? [],
       prune: extras.prune ?? [],
+      restart: extras.restart,
       /** Why the tick that is running now woke the agent. Undefined between ticks. */
       awake: new Map<'reason', string>(),
     },

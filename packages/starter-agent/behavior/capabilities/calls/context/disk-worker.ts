@@ -7,9 +7,8 @@ import {
   writeSync,
 } from 'node:fs';
 import { dirname } from 'node:path';
+import { parentPort } from 'node:worker_threads';
 import { type Job, jobsSlot, linesSlot, recordingSlot } from './disk.ts';
-
-declare const self: Worker;
 
 const descriptors = new Map<number, number>();
 let state: Int32Array | undefined;
@@ -39,7 +38,7 @@ const run = (job: Exclude<Job, { readonly op: 'init' }>): void => {
   }
 };
 
-self.onmessage = ({ data: job }: MessageEvent<Job>) => {
+parentPort?.on('message', (job: Job) => {
   if (job.op === 'init') {
     state = job.state;
     return;
@@ -55,4 +54,4 @@ self.onmessage = ({ data: job }: MessageEvent<Job>) => {
   if (job.op === 'at') Atomics.sub(state, recordingSlot, job.bytes.length);
   Atomics.sub(state, jobsSlot, 1);
   Atomics.notify(state, jobsSlot);
-};
+});

@@ -1170,38 +1170,28 @@ export type ClassifyInputResponse = {
 };
 
 /**
- * A computer's active Claude login.
+ * A computer's active Claude sign-in. Claude's long-lived credential names
+ * no account, so there is no email or plan to show.
  */
 export type ClaudeAccountStatus = {
     /**
-     * The account's email address, when Claude reports one.
-     */
-    email?: string | null;
-    /**
-     * When the sign-in stops refreshing, as the computer last reported it.
+     * When the credential stops working, as the computer last reported it.
      */
     expiresAt?: string | null;
-    /**
-     * The account's organization, when Claude reports one.
-     */
-    organization?: string | null;
-    /**
-     * The account's plan, e.g. `max`.
-     */
-    plan?: string | null;
     /**
      * When it was signed in.
      */
     signedInAt: string;
     /**
-     * Who signed it in through Macro; absent once that user is deleted.
+     * Who signed it in through Macro; absent once that user is deleted or
+     * when it was signed in on the computer itself.
      */
     signedInBy?: string | null;
 };
 
 /**
- * How Claude Code on a computer is paid for, and the Claude account it is
- * signed in to when it uses its own.
+ * How Claude Code on a computer is paid for, and its Claude sign-in when it
+ * uses its own.
  */
 export type ClaudeModeResponse = {
     account?: null | ClaudeAccountStatus;
@@ -1235,10 +1225,6 @@ export type ClaudeSignInStarted = {
  * `POST /harnesses/{harness_id}/claude-sign-in/complete` answer.
  */
 export type ClaudeSignedIn = {
-    /**
-     * The Claude account's email address, when Claude reports one.
-     */
-    account?: string | null;
     /**
      * Always `true`.
      */
@@ -1581,6 +1567,14 @@ export type CreateAgentSessionRequest = {
      * Requires `prompt`.
      */
     promptAttachments?: Array<PromptAttachment>;
+    /**
+     * The app tab the person typed `prompt` in, as `clientId` on a control
+     * request, so what the first turn opens in the app reaches that tab
+     * only. Requires `prompt`. Only a person's own request may send it; a
+     * runtime's is refused, and a program using a person's credential has
+     * it dropped.
+     */
+    promptClientId?: string | null;
     /**
      * Starting branch for a managed coding session's selected repository.
      * Omitted, the session starts on the repository's default branch.

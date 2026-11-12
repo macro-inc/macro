@@ -15,7 +15,6 @@
 //! `agent_trigger.new` delivery opens a session and forwards the first prompt;
 //! `agent_trigger.existing` deliveries forward follow-up messages.
 
-mod capabilities;
 mod computer;
 mod config;
 mod daemon;

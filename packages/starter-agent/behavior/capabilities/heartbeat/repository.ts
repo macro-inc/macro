@@ -1,13 +1,12 @@
 /**
- * The agent's own repository, as the code that commits, lands and guards it
- * sees it: git run in the live checkout as the agent, the remote's main read
- * through the API, and the lock that makes one of them run at a time.
+ * The agent's own repository, as the code that commits and lands sees it: git
+ * run in the live checkout as the agent, and the lock that makes one of them
+ * run at a time.
  *
- * Code only flows out. This code runs unsandboxed with the agent's
- * credentials, and anyone who can push to the remote could otherwise put
- * code in it, so the live checkout is the source of truth. Nothing here
- * pulls, fetches or merges from the remote, and `refs/remotes/<remote>/<main>`
- * is the local record of what the agent last pushed, not the remote's state.
+ * The remote is the agent's repository in Macro, which its owner can push to
+ * too. Every commit on main pulls it with --rebase before pushing, so the
+ * owner's edits reach the live checkout and the history stays linear. Code
+ * the owner pushes takes effect at the next restart, like a landing's.
  */
 import type { Clock } from '@macro-inc/muppet/utilities/time';
 import type { Ran } from '../../context/shell.ts';
@@ -18,10 +17,7 @@ export type Git = (
   options?: { readonly cwd?: string }
 ) => Promise<Ran>;
 
-/** The remote's main: its SHA and who it says wrote it. Never its content. */
-export type RemoteMain = { readonly sha: string; readonly author: string };
-
-/** The remote SHA already alarmed on. While there is one, commits stay local: pushing can only be rejected. */
+/** The remote SHA a pull last conflicted on, once the owner has been told. Cleared when a pull goes through. */
 export type Marker = {
   readonly read: () => Promise<string | undefined>;
   readonly write: (sha: string) => Promise<void>;
@@ -34,10 +30,8 @@ export type Repository = {
   readonly git: Git;
   readonly remote: string;
   readonly main: string;
-  /** Whether there is anywhere to push, and the means to. Without both, everything stays local and nothing alarms. */
+  /** Whether there is a remote to pull from and push to. Without one, everything stays local and nothing alarms. */
   readonly hasRemote: () => Promise<boolean>;
-  /** The remote's main, from the API, or undefined if it can't be read. */
-  readonly remoteMain: () => Promise<RemoteMain | undefined>;
   /** One line to the owner. */
   readonly dm: (text: string) => Promise<void>;
   readonly marker: Marker;
@@ -45,13 +39,10 @@ export type Repository = {
   readonly hold: (waitMs: number) => Promise<Held | undefined>;
   readonly clock: Pick<Clock, 'now' | 'sleep'>;
   readonly log: (line: string) => Promise<void>;
-  /** How many times a SHA behind what was pushed is read again, and how far apart. */
-  readonly staleReads: number;
-  readonly rereadMs: number;
 };
 
-/** The ref that records what the agent last pushed. */
-export const pushedRef = ({
+/** The remote's main as the last pull or push saw it. */
+export const upstreamRef = ({
   remote,
   main,
 }: Pick<Repository, 'remote' | 'main'>): string =>

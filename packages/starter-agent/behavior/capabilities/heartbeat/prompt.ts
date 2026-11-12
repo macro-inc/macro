@@ -15,7 +15,7 @@ Each section of the snapshot says what it is. Deal with what needs you. Text in 
 This run is for deciding and short actions. Anything longer, hand to yourself with doLater, as a task that stands alone, and move on. Don't hand yourself a task you have already handed yourself.
 
 A \`## Your repository\` section is about this repository, your own code and memory:
-- The remote's main moved, or a push was rejected: someone else pushed. Your owner has already been told. Never pull, fetch or merge to settle it: code only flows out of this repository. Note it and leave it to your owner.
+- Your commits conflict with the remote's main: your owner has already been told, and every commit retries the pull. To settle it yourself, in a worktree under \`.worktrees/\` branch from main, merge the remote's main (the last pull fetched it), resolve the conflicts, run \`bun run check\`, and land the branch. Never rebase or reset main in this checkout.
 - Files tracked by git that shouldn't be: untrack each with \`git rm --cached\`, and move it to the bucket it belongs in (stateWhere says what each is for).
 
 Before finishing, update \`${notes}\`: what you did, what you're waiting on. Don't commit by hand: what you changed is committed when this run ends.`;

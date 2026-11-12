@@ -37,7 +37,7 @@ function actionFor(
 ): string {
   const metadata = notification?.notification_metadata;
   if (isEntityDiscussionEvent(metadata)) return entityDiscussionVerb(metadata);
-  if (notification && metadata?.tag === 'claude_sign_in_expiry')
+  if (notification && metadata?.tag === 'agent_sign_in_expiry')
     return getNotificationAction(notification);
   return getActionVerb(type);
 }

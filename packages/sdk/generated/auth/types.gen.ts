@@ -1478,16 +1478,6 @@ export type MergeGithubPullRequestResponse = {
     sha: string;
 };
 
-/**
- * Body of a notify-me request.
- */
-export type NotifyBody = {
-    /**
-     * Purchased catalog size.
-     */
-    size: ComputerSize;
-};
-
 export type PasswordRequest = {
     /**
      * The email to login with
@@ -2086,10 +2076,6 @@ export type SizeOffer = {
      * Memory in GiB.
      */
     memoryGb: number;
-    /**
-     * The caller asked to hear when this size is back.
-     */
-    notifyRequested: boolean;
     /**
      * Price for one computer.
      */
@@ -4481,6 +4467,7 @@ export type CreateTeamData = {
 export type CreateTeamErrors = {
     400: ErrorResponse;
     403: ErrorResponse;
+    409: ErrorResponse;
     500: ErrorResponse;
 };
 
@@ -4556,19 +4543,6 @@ export type PurchaseTeamComputerResponses = {
 };
 
 export type PurchaseTeamComputerResponse = PurchaseTeamComputerResponses[keyof PurchaseTeamComputerResponses];
-
-export type NotifyTeamComputerAvailableData = {
-    body: NotifyBody;
-    path?: never;
-    query?: never;
-    url: '/team/computers/notify';
-};
-
-export type NotifyTeamComputerAvailableResponses = {
-    204: void;
-};
-
-export type NotifyTeamComputerAvailableResponse = NotifyTeamComputerAvailableResponses[keyof NotifyTeamComputerAvailableResponses];
 
 export type ListTeamComputerOffersData = {
     body?: never;

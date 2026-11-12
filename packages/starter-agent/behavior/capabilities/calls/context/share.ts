@@ -1,35 +1,39 @@
 /**
- * Sharing's real ports: the browsers a share can show, the frame feed, and
- * the resolver its checks ask. Built once; every call's sharing is made
+ * Sharing's real ports: the desktop's capture and sound, and the agent's
+ * browser to put a page in front. Built once; every call's sharing is made
  * from them.
  */
-import { lookup } from 'node:dns/promises';
 import type { Base } from '../../../context/index.ts';
-import { screenConfig } from '../../screen/config.ts';
+import { browserPorts } from '../../browser/context.ts';
 import { makeShare, type SharePorts } from '../share.ts';
-import { safeUrl } from '../share-policy.ts';
 import type { MakeShare } from '../types.ts';
-import { openBrowser } from './share-browser.ts';
+import { desktop } from './desktop.ts';
 import { workerFrames } from './share-feed.ts';
 
-export const sharePorts = ({ state, join }: Base): SharePorts => {
-  const screen = screenConfig({ state, join });
-  const safe = safeUrl(async (host) =>
-    (await lookup(host, { all: true, verbatim: true })).map(
-      ({ address }) => address
-    )
-  );
+/** The display a share captures: the agent's own. */
+const displayVariable = 'DISPLAY';
+
+export const sharePorts = (base: Base): SharePorts => {
+  const display = process.env[displayVariable] ?? '';
+  const browser = browserPorts(base);
   return {
-    open: () => openBrowser({ port: screen.cdpPort, safe }),
-    frames: () => workerFrames(),
-    safe,
+    show: (url) =>
+      browser.withTab(async (tab) => {
+        await tab.goto(url);
+        await tab.fullscreen();
+      }),
+    frames: () => {
+      if (display === '') throw new Error('no DISPLAY to share');
+      return workerFrames(display);
+    },
     // LiveKit's native library loads with the first share, never in the agent's main process.
     sound: async (room) =>
-      (await import('./share-sound.ts')).recordSound(screen)(room),
+      (await import('./share-sound.ts')).recordSound(desktop(display))(room),
+    trace: base.trace,
   };
 };
 
-/** Sharing for a call, over the real browsers: what a call's process is handed. */
+/** Sharing for a call, over the real desktop: what a call's process is handed. */
 export const realShare = (base: Base): MakeShare => makeShare(sharePorts(base));
 
 /** What the `share` key of the context holds. */

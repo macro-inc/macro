@@ -6,15 +6,11 @@ SET LOCAL lock_timeout = '5s';
 -- Existing tables: additive, metadata-only changes (nullable columns or
 -- constant defaults; no rewrite).
 
--- What a harness's machine can do, reported by macrod after it connects,
--- e.g. {"screen": true}. `computer_id` is the Macro computer it runs on; null
--- for a machine the user paired. No foreign key: computers outlive
--- soft-deleted harness rows. `capabilities_reported_at` is when macrod last
--- reported, so a report older than a sign-in is not taken for its outcome.
+-- `computer_id` is the Macro computer a harness runs on; null for a machine
+-- the user paired. No foreign key: computers outlive soft-deleted harness
+-- rows.
 ALTER TABLE public.harnesses
-    ADD COLUMN capabilities jsonb NOT NULL DEFAULT '{}'::jsonb,
-    ADD COLUMN computer_id uuid,
-    ADD COLUMN capabilities_reported_at timestamptz;
+    ADD COLUMN computer_id uuid;
 
 -- Deleting a Macro computer's harness does not unbind its agents: the
 -- computer's release deletes them right after, finding them by that binding,
@@ -55,16 +51,13 @@ CREATE TYPE computer_timer_kind AS ENUM (
 -- New tables.
 
 -- An account at an agent's provider (e.g. a Claude account), shared by every
--- machine it is signed in on. `external_account_id` is the provider's own id
--- (Claude: oauthAccount.accountUuid); the display columns are what the
--- provider last reported.
+-- machine it is signed in on. `external_account_id` identifies it at the
+-- provider (Claude: harnessd's fingerprint of its setup-token credential,
+-- which names no account).
 CREATE TABLE provider_accounts (
     id UUID PRIMARY KEY,
     provider agent_provider NOT NULL,
     external_account_id TEXT NOT NULL,
-    display_email TEXT,
-    display_org TEXT,
-    plan TEXT,
     first_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (provider, external_account_id),
@@ -75,9 +68,12 @@ CREATE TABLE provider_accounts (
 -- One sign-in of a provider account on a machine. A new sign-in inserts a row
 -- and signs the previous one out, so history stays as signed-out rows. A
 -- machine uses its own account at a provider while it has an active row
--- (otherwise Macro credits). `expires_at` moves as the machine reports
--- refreshes; the notice columns are the last expiry notice sent for this
--- sign-in and the expiry it warned about.
+-- (otherwise Macro credits). The control plane writes these from harnessd's
+-- status on the machine, after each sign-in command and on a timer, holding
+-- a per-computer lock from the command to the write so an older status
+-- never overwrites a newer outcome. `expires_at` is the credential's expiry
+-- as harnessd last reported it; the notice columns are the last expiry
+-- notice sent for this sign-in and the expiry it warned about.
 CREATE TABLE harness_account_logins (
     id UUID PRIMARY KEY,
     harness_id UUID NOT NULL REFERENCES harnesses (id) ON DELETE CASCADE,
@@ -237,14 +233,3 @@ CREATE TABLE hosted_runtime_timer (
 );
 
 CREATE INDEX hosted_runtime_timer_due_idx ON hosted_runtime_timer (fire_at);
-
--- "Notify me" requests for sold-out sizes.
-CREATE TABLE hosted_runtime_waitlist (
-    team_id UUID NOT NULL REFERENCES team (id) ON DELETE CASCADE,
-    user_id TEXT NOT NULL REFERENCES "User" (id) ON DELETE CASCADE,
-    size computer_size NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    PRIMARY KEY (team_id, user_id, size)
-);
-
-CREATE INDEX hosted_runtime_waitlist_user_idx ON hosted_runtime_waitlist (user_id);

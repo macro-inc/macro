@@ -6,7 +6,8 @@ import type { StatePaths } from '@macro-inc/muppet/core/state';
  * a path says whether it survives, so nothing new is committed by accident.
  *
  * - memory: committed. What the agent knows, and its own durable records.
- * - private: never committed. People, their messages, mail, screenshots.
+ * - private: committed, beside memory: people, their messages, screenshots.
+ *   Kept apart so it can move to another store later.
  * - run: never committed, volatile. Queues, cursors, locks, per-run records.
  * - log: never committed. Logs and recordings, pruned.
  *
@@ -25,7 +26,7 @@ export type State = StatePaths & {
 
 export const buckets = {
   memory: { committed: true },
-  private: { committed: false },
+  private: { committed: true },
   run: { committed: false },
   log: { committed: false },
 } as const;
