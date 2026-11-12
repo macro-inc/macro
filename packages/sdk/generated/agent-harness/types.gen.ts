@@ -1170,6 +1170,74 @@ export type ClassifyInputResponse = {
 };
 
 /**
+ * A computer's active Claude sign-in. Claude's long-lived credential names
+ * no account, so there is no email or plan to show.
+ */
+export type ClaudeAccountStatus = {
+    /**
+     * When the credential stops working, as the computer last reported it.
+     */
+    expiresAt?: string | null;
+    /**
+     * When it was signed in.
+     */
+    signedInAt: string;
+    /**
+     * Who signed it in through Macro; absent once that user is deleted or
+     * when it was signed in on the computer itself.
+     */
+    signedInBy?: string | null;
+};
+
+/**
+ * How Claude Code on a Macro computer is paid for: its own Claude account
+ * when it has an active Claude login, otherwise Macro credits.
+ */
+export type ClaudeMode = 'macro_credits' | 'own_account';
+
+/**
+ * How Claude Code on a computer is paid for, and its Claude sign-in when it
+ * uses its own.
+ */
+export type ClaudeModeResponse = {
+    account?: null | ClaudeAccountStatus;
+    /**
+     * How Claude Code is paid for.
+     */
+    mode: ClaudeMode;
+};
+
+/**
+ * `POST /harnesses/{harness_id}/claude-sign-in/complete` body.
+ */
+export type ClaudeSignInComplete = {
+    /**
+     * The code Claude showed after the user signed in.
+     */
+    code: string;
+};
+
+/**
+ * `POST /harnesses/{harness_id}/claude-sign-in` answer.
+ */
+export type ClaudeSignInStarted = {
+    /**
+     * Where the user signs in to Claude, in their own browser.
+     */
+    url: string;
+};
+
+/**
+ * `POST /harnesses/{harness_id}/claude-sign-in/complete` answer.
+ */
+export type ClaudeSignedIn = {
+    /**
+     * Always `true`.
+     */
+    signedIn: boolean;
+};
+
+/**
  * Information used to choose a coding persona for a task.
  */
 export type CodingAgent = {
@@ -2128,6 +2196,11 @@ export type LoadAgentModelsRequest = {
  * Successful model-discovery response.
  */
 export type LoadAgentModelsResponse = {
+    /**
+     * When a paired runtime that is off or unreachable last reported this
+     * catalog; null when it was probed live.
+     */
+    cachedAt?: string | null;
     /**
      * Current provider model, if model selection is available.
      */
@@ -4883,6 +4956,113 @@ export type ListCodingAgentsResponses = {
 };
 
 export type ListCodingAgentsResponse = ListCodingAgentsResponses[keyof ListCodingAgentsResponses];
+
+export type GetClaudeModeData = {
+    body?: never;
+    path: {
+        /**
+         * Harness ID
+         */
+        harness_id: string;
+    };
+    query?: never;
+    url: '/harnesses/{harness_id}/claude-mode';
+};
+
+export type GetClaudeModeErrors = {
+    403: unknown;
+    404: unknown;
+    503: unknown;
+};
+
+export type GetClaudeModeResponses = {
+    200: ClaudeModeResponse;
+};
+
+export type GetClaudeModeResponse = GetClaudeModeResponses[keyof GetClaudeModeResponses];
+
+export type StartClaudeSignInData = {
+    body?: never;
+    path: {
+        /**
+         * Harness ID
+         */
+        harness_id: string;
+    };
+    query?: never;
+    url: '/harnesses/{harness_id}/claude-sign-in';
+};
+
+export type StartClaudeSignInErrors = {
+    400: unknown;
+    403: unknown;
+    404: unknown;
+    409: unknown;
+    422: unknown;
+    503: unknown;
+    504: unknown;
+};
+
+export type StartClaudeSignInResponses = {
+    200: ClaudeSignInStarted;
+};
+
+export type StartClaudeSignInResponse = StartClaudeSignInResponses[keyof StartClaudeSignInResponses];
+
+export type CompleteClaudeSignInData = {
+    body: ClaudeSignInComplete;
+    path: {
+        /**
+         * Harness ID
+         */
+        harness_id: string;
+    };
+    query?: never;
+    url: '/harnesses/{harness_id}/claude-sign-in/complete';
+};
+
+export type CompleteClaudeSignInErrors = {
+    400: unknown;
+    403: unknown;
+    404: unknown;
+    409: unknown;
+    422: unknown;
+    503: unknown;
+    504: unknown;
+};
+
+export type CompleteClaudeSignInResponses = {
+    200: ClaudeSignedIn;
+};
+
+export type CompleteClaudeSignInResponse = CompleteClaudeSignInResponses[keyof CompleteClaudeSignInResponses];
+
+export type ClaudeSignOutData = {
+    body?: never;
+    path: {
+        /**
+         * Harness ID
+         */
+        harness_id: string;
+    };
+    query?: never;
+    url: '/harnesses/{harness_id}/claude-sign-out';
+};
+
+export type ClaudeSignOutErrors = {
+    403: unknown;
+    404: unknown;
+    409: unknown;
+    422: unknown;
+    503: unknown;
+    504: unknown;
+};
+
+export type ClaudeSignOutResponses = {
+    200: ClaudeModeResponse;
+};
+
+export type ClaudeSignOutResponse = ClaudeSignOutResponses[keyof ClaudeSignOutResponses];
 
 export type ClassifyData = {
     body: ClassifyInputRequest;

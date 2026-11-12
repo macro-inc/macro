@@ -86,18 +86,19 @@ connects the same way, through its `--connect 127.0.0.1:18443` option. Use the
 tunnel for provisioning and any other administration. The plain
 port-forward to 8200 in step 3 is only for the one-time init.
 
-## Provisioning (follow-up, not in this stack yet)
+## Provisioning
 
-Hosted provisioning of team namespaces, mounts, JWT roles, and the lifecycle
-role is a follow-up that lands after Passwords. Until it does, no team can use
-the vault. It will reuse the local bootstrap's policy and role logic and accept
-only this exact HTTPS origin. Its JWT roles allow no clock leeway, so DSS and
-the vault must keep synchronized clocks (Fargate uses Amazon Time Sync).
+`infra/openbao/provision.py` provisions a team's namespace, mounts, policies,
+and JWT roles through the operator tunnel, with the same logic as the local
+bootstrap; [its README](../../openbao/README.md) has the procedure. Only
+explicitly provisioned teams work, because creating a team does not create its
+namespace: each new team needs its own run. Its JWT roles allow no clock
+leeway, so DSS and the vault must keep synchronized clocks (Fargate uses Amazon
+Time Sync).
 
-At provisioning time, the document storage service's dev Doppler config gets
-`OPENBAO_ADDRESS`, `PASSWORDS_JWT_ISSUER`, and `PASSWORDS_JWT_SIGNING_KEY`
-together; it refuses a partial set. Only explicitly provisioned teams work,
-because creating a team does not create its namespace.
+The document storage service's dev Doppler config holds `OPENBAO_ADDRESS`,
+`PASSWORDS_JWT_ISSUER`, and `PASSWORDS_JWT_SIGNING_KEY` together; it refuses a
+partial set.
 
 ## Backups
 
@@ -148,6 +149,8 @@ Not built. A separate design decides:
   config; the root token revoked after provisioning; recovery keys split across
   operators; a scoped provisioner identity; automatic namespace provisioning on
   team creation.
+- **Key rotation:** roles that trust the old and new signing keys together
+  (`jwt_validation_pubkeys` takes a list), so rotation needs no outage.
 - **Service URL:** `OPENBAO_ADDRESS` becomes a typed `macro_service_urls` entry.
 - **Monitoring:** telemetry to Grafana/Datadog; seal, leader, and Raft-commit
   alerts; audit logs retained in immutable storage.

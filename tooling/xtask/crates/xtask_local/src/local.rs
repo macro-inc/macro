@@ -19,6 +19,7 @@ pub mod arch;
 pub mod build;
 pub mod cf_tunnel;
 pub mod cli;
+pub mod computers;
 pub mod content_key;
 pub mod db;
 pub mod docker;
@@ -226,6 +227,8 @@ pub(crate) struct BringUp {
     /// Stop after infra and init: no app services, proxy, or frontend.
     pub infra_only: bool,
     pub start: Start,
+    /// The computers fleet this stack runs.
+    pub computers: computers::Fleet,
 }
 
 /// What a finished [`bring_up`] leaves for its caller.
@@ -235,6 +238,8 @@ pub(crate) struct StackUp {
     /// Dropping these closes the tunnels, so they live as long as the stack does.
     pub tunnels: Vec<cf_tunnel::QuickTunnel>,
     pub shared_app_url: Option<String>,
+    /// The computers setup on the instance's final port window.
+    pub computers: computers::Computers,
 }
 
 /// The one bring-up every flow shares (`run_local` attached and detached, `run_dev`,
@@ -251,9 +256,7 @@ pub(crate) fn bring_up(
     if !stage.is_dry_run() {
         stack::clear_state(instance)?;
     }
-    if let Some(job) = stage.job() {
-        job.bring_up(mode, plan);
-    }
+    stage.record_bring_up(mode, plan);
 
     // Before `prepare` (which resolves env and reads the OTLP port to decide
     // whether to wire `OTEL_EXPORTER_OTLP_ENDPOINT`), so a `--traces` run gets
@@ -405,6 +408,7 @@ pub(crate) fn bring_up(
             egress: egress_url.as_deref(),
             preview_ssh: preview_ssh_tunnel_host.as_deref(),
         },
+        plan.computers,
         pinned_base,
     )?;
 
@@ -481,6 +485,7 @@ pub(crate) fn bring_up(
             target,
             tunnels,
             shared_app_url,
+            computers: computers::Computers::new(mode, plan.computers, instance),
         });
     }
 
@@ -539,11 +544,13 @@ pub(crate) fn bring_up(
         target,
         tunnels,
         shared_app_url,
+        computers: computers::Computers::new(mode, plan.computers, instance),
     })
 }
 
 /// Print the ready summary for a finished [`bring_up`].
 pub(crate) fn print_stack_summary(
+    stage: &Stage,
     mode: Mode,
     instance: &Instance,
     up: &StackUp,
@@ -572,6 +579,7 @@ pub(crate) fn print_stack_summary(
         &mailpit_url,
         up.shared_app_url.as_deref(),
     );
+    up.computers.print_hint(stage);
     Ok(())
 }
 
@@ -642,7 +650,7 @@ fn run_attached(mut stage: Stage, mode: Mode, run: &cli::RunLocalArgs) -> Result
             None
         };
         stage.print_timings("bring-up");
-        print_stack_summary(mode, &instance, &up, &plan)?;
+        print_stack_summary(stage, mode, &instance, &up, &plan)?;
         Ok((up, frontend))
     })();
     let (up, frontend) = match &attached_run {
@@ -936,18 +944,25 @@ fn prepare(
     pull_app_images: bool,
     infra_only: bool,
     tunnels: local_env::Tunnels<'_>,
+    computers: &computers::Computers,
 ) -> Result<(env_layer::ResolvedEnv, arch::Target)> {
     let env = env_layer::resolve(
         mode,
         instance,
-        args.env.no_doppler,
-        args.env.env_file.as_deref(),
-        static_frontend,
-        tunnels,
-        args.traces.enabled(),
+        env_layer::ResolveOptions {
+            no_doppler: args.env.no_doppler,
+            env_file: args.env.env_file.as_deref(),
+            static_frontend,
+            tunnels,
+            wire_otel: args.traces.enabled(),
+            computers,
+        },
     )?;
     stage.note(&format!("env: {}", env_layer::summarize(&env.merged)));
     sandbox_image::ensure(stage, &env.merged, args.build.no_build)?;
+    if !infra_only {
+        computers.ensure_image(stage, args.build.no_build)?;
+    }
 
     // Build the runtime image (idempotent) and the service binaries.
     let target = arch::detect()?;
@@ -984,7 +999,14 @@ fn prepare(
         .merged
         .get("GMAIL_FORWARDER_SA_KEY")
         .is_some_and(|key| !key.trim().is_empty());
-    gen_compose::generate(mode, instance, &binaries, static_frontend, gmail_forwarder)?;
+    gen_compose::generate(
+        mode,
+        instance,
+        &binaries,
+        static_frontend,
+        gmail_forwarder,
+        computers,
+    )?;
     proxy::write_caddyfile(instance, mode, static_frontend)?;
     if mode == Mode::Local {
         portmap::write(instance)?;
@@ -1021,6 +1043,7 @@ fn prepare_on_free_window(
     pull_app_images: bool,
     infra_only: bool,
     tunnels: local_env::Tunnels<'_>,
+    fleet: computers::Fleet,
     pinned_base: Option<u16>,
 ) -> Result<(env_layer::ResolvedEnv, arch::Target)> {
     loop {
@@ -1033,6 +1056,7 @@ fn prepare_on_free_window(
             pull_app_images,
             infra_only,
             tunnels,
+            &computers::Computers::new(mode, fleet, instance),
         )?;
         let current = allocator::allocate(stage, mode, Some(instance.name()), pinned_base)?;
         if current.port_base() == instance.port_base() {
@@ -1563,10 +1587,8 @@ fn reload_services(
     stage.run(&format!("Reloading {names}"), &mut up)
 }
 
-/// Every Docker volume an instance owns: the app DB/cache/search/Kafka plus the
-/// FusionAuth DB/config. The single list `teardown`, `ensure_external_resources`,
-/// and `destroy` share.
-fn instance_volumes(instance: &Instance) -> [String; 6] {
+/// Volumes created explicitly before Compose starts the instance.
+fn external_volumes(instance: &Instance) -> [String; 6] {
     [
         instance.volume_postgres(),
         instance.volume_redis(),
@@ -1575,6 +1597,13 @@ fn instance_volumes(instance: &Instance) -> [String; 6] {
         instance.volume_fusionauth_db(),
         instance.volume_fusionauth_config(),
     ]
+}
+
+/// Every owned volume removed by intentional full-stack teardown.
+fn instance_volumes(instance: &Instance) -> impl Iterator<Item = String> {
+    external_volumes(instance)
+        .into_iter()
+        .chain([format!("{}_openbao_data", instance.project_name())])
 }
 
 /// Whether the instance already has any data volume, which a bring-up must not
@@ -1591,14 +1620,14 @@ pub(crate) fn instance_has_volumes(instance: &Instance) -> Result<bool> {
 /// The docker teardown work: stop + remove the instance's stack and ALL its
 /// stateful volumes — the basis of `run_local`'s full-delete/full-create
 /// idempotency, the quit hotkey, and `destroy-local`. Containers come down with
-/// `down -v`; the data volumes and a named instance's networks are then removed
-/// explicitly, because they are declared `external`, which `down -v` leaves
-/// behind. A stack that's gone must not keep holding subnets. The default
-/// instance's networks are shared with the base compose files, so they stay.
-/// Output is captured (this is best-effort and noisy) so callers surface it as a
-/// single line; absent containers/volumes are ignored.
+/// `down -v`; owned data volumes and a named instance's networks are removed
+/// explicitly. External volumes survive `down -v`, and the generated OpenBao
+/// volume is absent from this command's Compose file set. The default networks
+/// are shared with the base Compose files, so they stay. Output is captured
+/// (best-effort and noisy); absent containers and volumes are ignored.
 fn teardown_commands(instance: &Instance) {
     sdk_webhook::stop(instance);
+    computers::remove_containers(instance);
     // Detach the global trace collector first or `down` can't remove the
     // instance's `services` network (foreign container = active endpoint).
     disconnect_tracing_network(instance);
@@ -1686,7 +1715,7 @@ impl Drop for BackgroundTeardown {
 /// reference (idempotent — replaces the old `just create_networks`).
 fn ensure_external_resources(stage: &Stage, instance: &Instance) -> Result<()> {
     let networks = instance.networks();
-    let volumes = instance_volumes(instance);
+    let volumes = external_volumes(instance);
     stage.run_step("Ensuring networks & volumes", || {
         for (name, subnet) in &networks {
             docker::ensure_network(name, subnet.as_deref())?;
@@ -1725,19 +1754,28 @@ fn wait_localstack(url: &str, compose_done: &std::sync::mpsc::Receiver<()>) -> R
 
 /// `cargo x build-services`.
 pub fn build_services_only() -> Result<()> {
-    let stage = Stage::from_env();
-    let target = arch::detect()?;
-    let binaries = build::resolve(
-        &stage,
-        target,
-        &build::BuildOptions {
-            no_build: false,
-            binaries_dir: None,
-            only: None,
-        },
-    )?;
-    stage.note(&format!("binaries at {}", binaries.host_dir().display()));
-    Ok(())
+    let (stage, telemetry) = telemetry::RunTelemetry::attach(
+        Stage::from_env(),
+        None,
+        telemetry::RunKind::BuildServices,
+        std::time::SystemTime::now(),
+    );
+    let result = (|| -> Result<()> {
+        let target = arch::detect()?;
+        let binaries = build::resolve(
+            &stage,
+            target,
+            &build::BuildOptions {
+                no_build: false,
+                binaries_dir: None,
+                only: None,
+            },
+        )?;
+        stage.note(&format!("binaries at {}", binaries.host_dir().display()));
+        Ok(())
+    })();
+    telemetry::RunTelemetry::close(telemetry, &result);
+    result
 }
 
 /// `cargo x runtime-image`.
@@ -1747,11 +1785,16 @@ pub fn runtime_image_only(force: bool) -> Result<()> {
 }
 
 /// `cargo x gen-compose`.
-pub fn gen_compose_only(args: &cli::InstanceArgs) -> Result<()> {
-    let instance = Instance::resolve(args.instance.as_deref(), args.port_base)?;
+pub fn gen_compose_only(args: &cli::ComposeArgs) -> Result<()> {
+    let instance = Instance::resolve(args.instance.instance.as_deref(), args.instance.port_base)?;
+    let computers = computers::Computers::new(
+        Mode::Local,
+        args.computers.fleet(computers::Fleet::Docker),
+        &instance,
+    );
     let target = arch::detect()?;
     let binaries = build::BinariesDir::TargetDir(workspace_root().join(target.debug_dir()));
-    let path = gen_compose::generate(Mode::Local, &instance, &binaries, false, false)?;
+    let path = gen_compose::generate(Mode::Local, &instance, &binaries, false, false, &computers)?;
     println!("{}", path.display());
     Ok(())
 }

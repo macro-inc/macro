@@ -15,7 +15,10 @@ use models_soup::{
     calendar_event::SoupCalendarEvent,
     call_record::{SoupCallRecord, SoupCallRecordGuest, SoupCallRecordParticipant},
     chat::SoupChat,
-    comms::{ChannelMessage, ChannelParticipant, ChannelType, SoupChannel, SoupChannelThread},
+    comms::{
+        ChannelMessage, ChannelParticipant, ChannelType, SoupAgentDmProfile, SoupChannel,
+        SoupChannelThread,
+    },
     crm_company::SoupCrmCompany,
     database_row::SoupDatabaseRow,
     document::{SoupDocument, SoupDocumentSubType},
@@ -2013,6 +2016,33 @@ impl GraphqlSoupChannelMessagePreview {
     }
 }
 
+/// Persona of the viewer's DM with an agent, embedded in its channel.
+///
+/// It has no `id`: `botId` refers to the persona rather than identifying this
+/// value, and a viewer has at most one DM per persona.
+pub struct GraphqlSoupChannelAgentDm(SoupAgentDmProfile);
+
+/// The persona an agent DM shows, as the channel list reads it. Embedded in its
+/// channel, with no `id`. The name is "Unavailable agent" when the persona has no
+/// profile.
+#[Object]
+impl GraphqlSoupChannelAgentDm {
+    /// The persona's bot identifier.
+    async fn bot_id(&self) -> ID {
+        ID(self.0.bot_id.to_string())
+    }
+
+    /// The persona's display name.
+    async fn name(&self) -> &str {
+        &self.0.name
+    }
+
+    /// The persona's avatar URL, when it has one.
+    async fn avatar_url(&self) -> Option<&str> {
+        self.0.avatar_url.as_deref()
+    }
+}
+
 /// GraphQL channel entity.
 pub struct GraphqlSoupChannel<E: SoupEntityEdges>(SoupChannel, E, Option<f64>);
 
@@ -2072,7 +2102,9 @@ where
         }
     }
 
-    /// The name.
+    /// The name the viewer sees: the stored name, or for an unnamed channel
+    /// one derived for the viewer (a DM shows the other participant, a group
+    /// its other participants). An agent DM shows its persona's name.
     async fn name(&self) -> Option<&str> {
         self.0.channel.channel.name.as_deref()
     }
@@ -2100,6 +2132,17 @@ where
     /// The identifier of the team.
     async fn team_id(&self) -> Option<ID> {
         self.0.channel.channel.team_id.map(|id| ID(id.to_string()))
+    }
+
+    /// Whether members of the channel's team join it automatically.
+    async fn auto_join_team(&self) -> bool {
+        self.0.channel.channel.auto_join_team
+    }
+
+    /// The persona, when this is the viewer's private conversation with an
+    /// agent; null for every other channel.
+    async fn agent_dm(&self) -> Option<GraphqlSoupChannelAgentDm> {
+        self.0.agent_dm.clone().map(GraphqlSoupChannelAgentDm)
     }
 
     /// The created timestamp in RFC 3339 format.
