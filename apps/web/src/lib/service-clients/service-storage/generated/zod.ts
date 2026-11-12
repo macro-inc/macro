@@ -397,6 +397,14 @@ export const listAgentsResponseItem = zod
       .describe(
         "Which Pipedream MCP servers an agent's sessions are handed.\n\nOne value for the whole choice, so a selection can never travel without\nits scope or a scope without its selection. Serialized with a `scope` tag,\nwhich the generated TypeScript sees as a discriminated union."
       ),
+    stopped_reason: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['no_runtime_access'])
+          .describe('Why an agent cannot run right now.'),
+      ])
+      .optional(),
   })
   .describe('A persisted user- or team-owned AI agent.');
 export const listAgentsResponse = zod.array(listAgentsResponseItem);
@@ -714,6 +722,14 @@ export const updateAgentResponse = zod
       .describe(
         "Which Pipedream MCP servers an agent's sessions are handed.\n\nOne value for the whole choice, so a selection can never travel without\nits scope or a scope without its selection. Serialized with a `scope` tag,\nwhich the generated TypeScript sees as a discriminated union."
       ),
+    stopped_reason: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['no_runtime_access'])
+          .describe('Why an agent cannot run right now.'),
+      ])
+      .optional(),
   })
   .describe('A persisted user- or team-owned AI agent.');
 
@@ -951,6 +967,14 @@ export const patchAgentResponse = zod
       .describe(
         "Which Pipedream MCP servers an agent's sessions are handed.\n\nOne value for the whole choice, so a selection can never travel without\nits scope or a scope without its selection. Serialized with a `scope` tag,\nwhich the generated TypeScript sees as a discriminated union."
       ),
+    stopped_reason: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['no_runtime_access'])
+          .describe('Why an agent cannot run right now.'),
+      ])
+      .optional(),
   })
   .describe('A persisted user- or team-owned AI agent.');
 
@@ -4267,16 +4291,22 @@ export const listChannelLabelsResponse = zod
             channelCount: zod
               .number()
               .describe(
-                'All assignments for a manual label; visible matches for a smart tag.'
+                'Legacy assignments or smart matches; visible effective channels for sections.'
               ),
             channelIds: zod
               .array(zod.uuid())
               .describe(
-                'Channels in this label that the requesting user participates in.'
+                'Effective channels visible to the viewer in this label or section.'
               ),
             createdAt: zod.iso
               .datetime({})
               .describe('When the label was created.'),
+            explicitChannelIds: zod
+              .array(zod.uuid())
+              .nullish()
+              .describe(
+                'Explicit picks visible to the viewer (section responses only).'
+              ),
             id: zod.uuid().describe('Stable label id.'),
             name: zod
               .string()
@@ -4317,7 +4347,7 @@ export const listChannelLabelsResponse = zod
               ),
           })
           .describe(
-            'A shared or account-private label grouping chat channels in the sidebar.\n\n`channel_ids` is viewer-relative: it lists only the labelled channels the\nrequesting user participates in. `channel_count` counts every channel in\nthe label so clients can warn accurately before a delete.'
+            'A shared or account-private label grouping chat channels in the sidebar.\n\n`channel_ids` is viewer-relative: legacy labels include joined channels;\nsections also include viewable unjoined channels in the verified team.\nLegacy manual counts include every assignment; section counts reflect\neffective channels visible to the viewer.'
           )
       )
       .describe(
@@ -4382,14 +4412,20 @@ export const createChannelLabelResponse = zod
     channelCount: zod
       .number()
       .describe(
-        'All assignments for a manual label; visible matches for a smart tag.'
+        'Legacy assignments or smart matches; visible effective channels for sections.'
       ),
     channelIds: zod
       .array(zod.uuid())
       .describe(
-        'Channels in this label that the requesting user participates in.'
+        'Effective channels visible to the viewer in this label or section.'
       ),
     createdAt: zod.iso.datetime({}).describe('When the label was created.'),
+    explicitChannelIds: zod
+      .array(zod.uuid())
+      .nullish()
+      .describe(
+        'Explicit picks visible to the viewer (section responses only).'
+      ),
     id: zod.uuid().describe('Stable label id.'),
     name: zod
       .string()
@@ -4424,7 +4460,7 @@ export const createChannelLabelResponse = zod
       .describe("When the label's name, rule, scope, or order last changed."),
   })
   .describe(
-    'A shared or account-private label grouping chat channels in the sidebar.\n\n`channel_ids` is viewer-relative: it lists only the labelled channels the\nrequesting user participates in. `channel_count` counts every channel in\nthe label so clients can warn accurately before a delete.'
+    'A shared or account-private label grouping chat channels in the sidebar.\n\n`channel_ids` is viewer-relative: legacy labels include joined channels;\nsections also include viewable unjoined channels in the verified team.\nLegacy manual counts include every assignment; section counts reflect\neffective channels visible to the viewer.'
   );
 
 /**
@@ -4483,6 +4519,12 @@ export const previewSmartTagResponse = zod
         zod
           .object({
             id: zod.uuid().describe('Channel id.'),
+            isParticipant: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Whether the viewer actively participates in this channel (section previews only).'
+              ),
             name: zod.string().describe('Channel display name.'),
           })
           .describe(
@@ -4493,7 +4535,7 @@ export const previewSmartTagResponse = zod
     totalCount: zod
       .number()
       .describe(
-        'Number of matching channels the caller participates in, including overflow.'
+        'Number of visible matches, including overflow; legacy previews count participants.'
       ),
   })
   .describe(
@@ -4573,14 +4615,20 @@ export const renameChannelLabelResponse = zod
     channelCount: zod
       .number()
       .describe(
-        'All assignments for a manual label; visible matches for a smart tag.'
+        'Legacy assignments or smart matches; visible effective channels for sections.'
       ),
     channelIds: zod
       .array(zod.uuid())
       .describe(
-        'Channels in this label that the requesting user participates in.'
+        'Effective channels visible to the viewer in this label or section.'
       ),
     createdAt: zod.iso.datetime({}).describe('When the label was created.'),
+    explicitChannelIds: zod
+      .array(zod.uuid())
+      .nullish()
+      .describe(
+        'Explicit picks visible to the viewer (section responses only).'
+      ),
     id: zod.uuid().describe('Stable label id.'),
     name: zod
       .string()
@@ -4615,7 +4663,403 @@ export const renameChannelLabelResponse = zod
       .describe("When the label's name, rule, scope, or order last changed."),
   })
   .describe(
-    'A shared or account-private label grouping chat channels in the sidebar.\n\n`channel_ids` is viewer-relative: it lists only the labelled channels the\nrequesting user participates in. `channel_count` counts every channel in\nthe label so clients can warn accurately before a delete.'
+    'A shared or account-private label grouping chat channels in the sidebar.\n\n`channel_ids` is viewer-relative: legacy labels include joined channels;\nsections also include viewable unjoined channels in the verified team.\nLegacy manual counts include every assignment; section counts reflect\neffective channels visible to the viewer.'
+  );
+
+/**
+ * @summary List the caller's shared or private labels.
+ */
+export const listChannelSectionsQueryParams = zod.object({
+  scope: zod
+    .enum(['personal', 'team'])
+    .optional()
+    .describe(
+      '`personal` selects private labels; `team` requires team membership.'
+    ),
+});
+
+export const listChannelSectionsResponse = zod
+  .object({
+    labels: zod
+      .array(
+        zod
+          .object({
+            channelCount: zod
+              .number()
+              .describe(
+                'Legacy assignments or smart matches; visible effective channels for sections.'
+              ),
+            channelIds: zod
+              .array(zod.uuid())
+              .describe(
+                'Effective channels visible to the viewer in this label or section.'
+              ),
+            createdAt: zod.iso
+              .datetime({})
+              .describe('When the label was created.'),
+            explicitChannelIds: zod
+              .array(zod.uuid())
+              .nullish()
+              .describe(
+                'Explicit picks visible to the viewer (section responses only).'
+              ),
+            id: zod.uuid().describe('Stable label id.'),
+            name: zod
+              .string()
+              .describe(
+                'Display name, unique within the scope (case-insensitive).'
+              ),
+            rule: zod
+              .union([
+                zod.null(),
+                zod
+                  .object({
+                    attribute: zod.enum(['name']),
+                    contains: zod
+                      .string()
+                      .describe('The substring to find anywhere in the name.'),
+                  })
+                  .describe(
+                    'Case-insensitive, literal substring matching on the channel name.'
+                  )
+                  .describe(
+                    'An attribute rule that automatically groups matching channels.'
+                  ),
+              ])
+              .optional(),
+            sortOrder: zod
+              .number()
+              .describe(
+                'Manual ordering value within the scope; lower sorts first.'
+              ),
+            teamId: zod
+              .uuid()
+              .nullish()
+              .describe('Owning team, or `None` for account-private labels.'),
+            updatedAt: zod.iso
+              .datetime({})
+              .describe(
+                "When the label's name, rule, scope, or order last changed."
+              ),
+          })
+          .describe(
+            'A shared or account-private label grouping chat channels in the sidebar.\n\n`channel_ids` is viewer-relative: legacy labels include joined channels;\nsections also include viewable unjoined channels in the verified team.\nLegacy manual counts include every assignment; section counts reflect\neffective channels visible to the viewer.'
+          )
+      )
+      .describe(
+        'Every label of the scope, whether or not the caller sees channels in it.'
+      ),
+    scope: zod
+      .enum(['personal', 'team'])
+      .describe(
+        'Requested label namespace. Omission retains the deployed automatic selection.'
+      ),
+    teamId: zod
+      .uuid()
+      .nullish()
+      .describe('Team scope, or `None` for private labels.'),
+  })
+  .describe("The authorized scope's labels in manual order.");
+
+/**
+ * @summary Create a label for the caller's authorized scope.
+ */
+export const createChannelSectionQueryParams = zod.object({
+  scope: zod
+    .enum(['personal', 'team'])
+    .optional()
+    .describe(
+      '`personal` selects private labels; `team` requires team membership.'
+    ),
+});
+
+export const createChannelSectionBody = zod
+  .object({
+    channelIds: zod
+      .array(zod.uuid())
+      .optional()
+      .describe('Channels to move into the new label.'),
+    name: zod
+      .string()
+      .describe('Display name; unique within the scope, case-insensitively.'),
+    rule: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            attribute: zod.enum(['name']),
+            contains: zod
+              .string()
+              .describe('The substring to find anywhere in the name.'),
+          })
+          .describe(
+            'Case-insensitive, literal substring matching on the channel name.'
+          )
+          .describe(
+            'An attribute rule that automatically groups matching channels.'
+          ),
+      ])
+      .optional(),
+  })
+  .describe('Request body for creating a label.');
+
+export const createChannelSectionResponse = zod
+  .object({
+    channelCount: zod
+      .number()
+      .describe(
+        'Legacy assignments or smart matches; visible effective channels for sections.'
+      ),
+    channelIds: zod
+      .array(zod.uuid())
+      .describe(
+        'Effective channels visible to the viewer in this label or section.'
+      ),
+    createdAt: zod.iso.datetime({}).describe('When the label was created.'),
+    explicitChannelIds: zod
+      .array(zod.uuid())
+      .nullish()
+      .describe(
+        'Explicit picks visible to the viewer (section responses only).'
+      ),
+    id: zod.uuid().describe('Stable label id.'),
+    name: zod
+      .string()
+      .describe('Display name, unique within the scope (case-insensitive).'),
+    rule: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            attribute: zod.enum(['name']),
+            contains: zod
+              .string()
+              .describe('The substring to find anywhere in the name.'),
+          })
+          .describe(
+            'Case-insensitive, literal substring matching on the channel name.'
+          )
+          .describe(
+            'An attribute rule that automatically groups matching channels.'
+          ),
+      ])
+      .optional(),
+    sortOrder: zod
+      .number()
+      .describe('Manual ordering value within the scope; lower sorts first.'),
+    teamId: zod
+      .uuid()
+      .nullish()
+      .describe('Owning team, or `None` for account-private labels.'),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe("When the label's name, rule, scope, or order last changed."),
+  })
+  .describe(
+    'A shared or account-private label grouping chat channels in the sidebar.\n\n`channel_ids` is viewer-relative: legacy labels include joined channels;\nsections also include viewable unjoined channels in the verified team.\nLegacy manual counts include every assignment; section counts reflect\neffective channels visible to the viewer.'
+  );
+
+/**
+ * @summary Move a channel into a label of the caller's authorized scope, or out of any label.
+ */
+export const setChannelSectionParams = zod.object({
+  channel_id: zod.uuid().describe('The channel id.'),
+});
+
+export const setChannelSectionQueryParams = zod.object({
+  scope: zod
+    .enum(['personal', 'team'])
+    .optional()
+    .describe(
+      '`personal` selects private labels; `team` requires team membership.'
+    ),
+});
+
+export const setChannelSectionBody = zod
+  .object({
+    labelId: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'The label to put the channel in, or `null` to remove it from its label.'
+      ),
+  })
+  .describe('Request body for moving a channel between labels.');
+
+/**
+ * @summary Preview visible channels matched by a smart tag, without creating it.
+ */
+export const previewChannelSectionQueryParams = zod.object({
+  scope: zod
+    .enum(['personal', 'team'])
+    .optional()
+    .describe(
+      '`personal` selects private labels; `team` requires team membership.'
+    ),
+});
+
+export const previewChannelSectionBody = zod
+  .object({
+    attribute: zod.enum(['name']),
+    contains: zod
+      .string()
+      .describe('The substring to find anywhere in the name.'),
+  })
+  .describe('Case-insensitive, literal substring matching on the channel name.')
+  .describe('An attribute rule that automatically groups matching channels.');
+
+export const previewChannelSectionResponse = zod
+  .object({
+    channels: zod
+      .array(
+        zod
+          .object({
+            id: zod.uuid().describe('Channel id.'),
+            isParticipant: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Whether the viewer actively participates in this channel (section previews only).'
+              ),
+            name: zod.string().describe('Channel display name.'),
+          })
+          .describe(
+            'A channel visible to the caller that matches a smart tag rule.'
+          )
+      )
+      .describe('First matches, in alphabetical order.'),
+    totalCount: zod
+      .number()
+      .describe(
+        'Number of visible matches, including overflow; legacy previews count participants.'
+      ),
+  })
+  .describe(
+    'A bounded preview and the total number of visible channels matching a rule.'
+  );
+
+/**
+ * @summary Delete a label of the caller's authorized scope. Its channels return to the plain list.
+ */
+export const deleteChannelSectionParams = zod.object({
+  label_id: zod.uuid().describe('The label id.'),
+});
+
+export const deleteChannelSectionQueryParams = zod.object({
+  scope: zod
+    .enum(['personal', 'team'])
+    .optional()
+    .describe(
+      '`personal` selects private labels; `team` requires team membership.'
+    ),
+});
+
+/**
+ * @summary Update a label, optionally moving it to another authorized scope.
+ */
+export const updateChannelSectionParams = zod.object({
+  label_id: zod.uuid().describe('The label id.'),
+});
+
+export const updateChannelSectionQueryParams = zod.object({
+  scope: zod
+    .enum(['personal', 'team'])
+    .optional()
+    .describe(
+      '`personal` selects private labels; `team` requires team membership.'
+    ),
+});
+
+export const updateChannelSectionBody = zod
+  .object({
+    name: zod.string().describe('New display name.'),
+    rule: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            attribute: zod.enum(['name']),
+            contains: zod
+              .string()
+              .describe('The substring to find anywhere in the name.'),
+          })
+          .describe(
+            'Case-insensitive, literal substring matching on the channel name.'
+          )
+          .describe(
+            'An attribute rule that automatically groups matching channels.'
+          ),
+      ])
+      .optional(),
+    targetScope: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['personal', 'team'])
+          .describe(
+            'Requested label namespace. Omission retains the deployed automatic selection.'
+          ),
+      ])
+      .optional(),
+  })
+  .describe(
+    "Request body for updating a label's name, smart rule, or sharing scope."
+  );
+
+export const updateChannelSectionResponse = zod
+  .object({
+    channelCount: zod
+      .number()
+      .describe(
+        'Legacy assignments or smart matches; visible effective channels for sections.'
+      ),
+    channelIds: zod
+      .array(zod.uuid())
+      .describe(
+        'Effective channels visible to the viewer in this label or section.'
+      ),
+    createdAt: zod.iso.datetime({}).describe('When the label was created.'),
+    explicitChannelIds: zod
+      .array(zod.uuid())
+      .nullish()
+      .describe(
+        'Explicit picks visible to the viewer (section responses only).'
+      ),
+    id: zod.uuid().describe('Stable label id.'),
+    name: zod
+      .string()
+      .describe('Display name, unique within the scope (case-insensitive).'),
+    rule: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            attribute: zod.enum(['name']),
+            contains: zod
+              .string()
+              .describe('The substring to find anywhere in the name.'),
+          })
+          .describe(
+            'Case-insensitive, literal substring matching on the channel name.'
+          )
+          .describe(
+            'An attribute rule that automatically groups matching channels.'
+          ),
+      ])
+      .optional(),
+    sortOrder: zod
+      .number()
+      .describe('Manual ordering value within the scope; lower sorts first.'),
+    teamId: zod
+      .uuid()
+      .nullish()
+      .describe('Owning team, or `None` for account-private labels.'),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe("When the label's name, rule, scope, or order last changed."),
+  })
+  .describe(
+    'A shared or account-private label grouping chat channels in the sidebar.\n\n`channel_ids` is viewer-relative: legacy labels include joined channels;\nsections also include viewable unjoined channels in the verified team.\nLegacy manual counts include every assignment; section counts reflect\neffective channels visible to the viewer.'
   );
 
 /**
@@ -5549,6 +5993,7 @@ export const getCollabSurfaceResponse = zod
         'crm_contact',
         'crm_pipeline',
         'reminder',
+        'harness',
         'skill',
         'agent_session',
         'scheduled_action',
@@ -5606,6 +6051,7 @@ export const ensureCollabSurfaceBody = zod
         'crm_contact',
         'crm_pipeline',
         'reminder',
+        'harness',
         'skill',
         'agent_session',
         'scheduled_action',
@@ -5644,6 +6090,7 @@ export const ensureCollabSurfaceResponse = zod
         'crm_contact',
         'crm_pipeline',
         'reminder',
+        'harness',
         'skill',
         'agent_session',
         'scheduled_action',
@@ -9552,6 +9999,12 @@ export const applyCrmPipelineOpsBody = zod
                   .union([
                     zod
                       .object({
+                        ids: zod
+                          .array(zod.uuid())
+                          .optional()
+                          .describe(
+                            "The new rows' ids, minted by the client (UUIDv7), one per row in\norder, so later ops of the request and a retry can name them;\nleft out, the server mints them."
+                          ),
                         kind: zod.enum(['insert']),
                         rows: zod
                           .array(
@@ -16291,6 +16744,12 @@ export const applyDatabaseOpsBody = zod
                   .union([
                     zod
                       .object({
+                        ids: zod
+                          .array(zod.uuid())
+                          .optional()
+                          .describe(
+                            "The new rows' ids, minted by the client (UUIDv7), one per row in\norder, so later ops of the request and a retry can name them;\nleft out, the server mints them."
+                          ),
                         kind: zod.enum(['insert']),
                         rows: zod
                           .array(
@@ -35664,6 +36123,7 @@ export const accessRequestsStateParams = zod.object({
     'email_thread',
     'agent_session',
     'external_chat',
+    'harness',
   ]),
   entity_id: zod.uuid(),
 });
@@ -35716,6 +36176,12 @@ export const accessRequestsStateResponse = zod
             id: zod
               .uuid()
               .describe('Stable request identity across revisions.'),
+            requestedByAgent: zod
+              .uuid()
+              .nullish()
+              .describe(
+                "The agent that asked on the requester's behalf, when one did."
+              ),
             requestedLevel: zod
               .enum(['view', 'comment', 'edit', 'owner'])
               .describe('Ordered from least to most access top -> bottom'),
@@ -35773,6 +36239,12 @@ export const accessRequestsStateResponse = zod
             id: zod
               .uuid()
               .describe('Stable request identity across revisions.'),
+            requestedByAgent: zod
+              .uuid()
+              .nullish()
+              .describe(
+                "The agent that asked on the requester's behalf, when one did."
+              ),
             requestedLevel: zod
               .enum(['view', 'comment', 'edit', 'owner'])
               .describe('Ordered from least to most access top -> bottom'),
@@ -35822,6 +36294,7 @@ export const accessRequestsSubmitParams = zod.object({
     'email_thread',
     'agent_session',
     'external_chat',
+    'harness',
   ]),
   entity_id: zod.uuid(),
 });
@@ -35852,6 +36325,12 @@ export const accessRequestsSubmitResponse = zod
       ])
       .optional(),
     id: zod.uuid().describe('Stable request identity across revisions.'),
+    requestedByAgent: zod
+      .uuid()
+      .nullish()
+      .describe(
+        "The agent that asked on the requester's behalf, when one did."
+      ),
     requestedLevel: zod
       .enum(['view', 'comment', 'edit', 'owner'])
       .describe('Ordered from least to most access top -> bottom'),
@@ -35888,6 +36367,7 @@ export const accessRequestsCancelParams = zod.object({
     'email_thread',
     'agent_session',
     'external_chat',
+    'harness',
   ]),
   entity_id: zod.uuid(),
 });
@@ -35914,6 +36394,7 @@ export const accessRequestsResolveParams = zod.object({
     'email_thread',
     'agent_session',
     'external_chat',
+    'harness',
   ]),
   entity_id: zod.uuid(),
   request_id: zod.uuid(),
@@ -35945,6 +36426,12 @@ export const accessRequestsResolveResponse = zod
       ])
       .optional(),
     id: zod.uuid().describe('Stable request identity across revisions.'),
+    requestedByAgent: zod
+      .uuid()
+      .nullish()
+      .describe(
+        "The agent that asked on the requester's behalf, when one did."
+      ),
     requestedLevel: zod
       .enum(['view', 'comment', 'edit', 'owner'])
       .describe('Ordered from least to most access top -> bottom'),
@@ -35981,6 +36468,7 @@ export const accessRequestsDirectParams = zod.object({
     'email_thread',
     'agent_session',
     'external_chat',
+    'harness',
   ]),
   entity_id: zod.uuid(),
 });
@@ -36013,6 +36501,7 @@ export const accessRequestsSetDirectParams = zod.object({
     'email_thread',
     'agent_session',
     'external_chat',
+    'harness',
   ]),
   entity_id: zod.uuid(),
   user_id: zod.string(),
@@ -36051,6 +36540,7 @@ export const accessRequestsRemoveDirectParams = zod.object({
     'email_thread',
     'agent_session',
     'external_chat',
+    'harness',
   ]),
   entity_id: zod.uuid(),
   user_id: zod.string(),
@@ -36762,9 +37252,29 @@ export const externalChatMessagesResponse = zod
               .array(
                 zod
                   .object({
-                    count: zod.number().describe('Number of reacting people.'),
                     emoji: zod.string().describe('Emoji.'),
                     mine: zod.boolean().describe('Caller has this reaction.'),
+                    reactors: zod
+                      .array(
+                        zod
+                          .object({
+                            name: zod
+                              .string()
+                              .describe(
+                                'Display name, never authentication evidence.'
+                              ),
+                            userId: zod
+                              .string()
+                              .nullish()
+                              .describe('Verified Macro user, if any.'),
+                          })
+                          .describe(
+                            'A person named in a message: a Macro user when verified, else their name\nat the provider, else their phone number.'
+                          )
+                      )
+                      .describe(
+                        'The people who reacted with it, earliest first.'
+                      ),
                   })
                   .describe('Grouped reactions.')
               )
@@ -37272,9 +37782,25 @@ export const externalChatMessageResponse = zod
       .array(
         zod
           .object({
-            count: zod.number().describe('Number of reacting people.'),
             emoji: zod.string().describe('Emoji.'),
             mine: zod.boolean().describe('Caller has this reaction.'),
+            reactors: zod
+              .array(
+                zod
+                  .object({
+                    name: zod
+                      .string()
+                      .describe('Display name, never authentication evidence.'),
+                    userId: zod
+                      .string()
+                      .nullish()
+                      .describe('Verified Macro user, if any.'),
+                  })
+                  .describe(
+                    'A person named in a message: a Macro user when verified, else their name\nat the provider, else their phone number.'
+                  )
+              )
+              .describe('The people who reacted with it, earliest first.'),
           })
           .describe('Grouped reactions.')
       )
@@ -37924,6 +38450,7 @@ export const listFavoritesQueryParams = zod.object({
           'crm_contact',
           'crm_pipeline',
           'reminder',
+          'harness',
           'skill',
           'agent_session',
           'scheduled_action',
@@ -37989,6 +38516,7 @@ export const listFavoritesResponse = zod
                 'crm_contact',
                 'crm_pipeline',
                 'reminder',
+                'harness',
                 'skill',
                 'agent_session',
                 'scheduled_action',
@@ -38042,6 +38570,7 @@ export const addFavoriteBody = zod
         'crm_contact',
         'crm_pipeline',
         'reminder',
+        'harness',
         'skill',
         'agent_session',
         'scheduled_action',
@@ -38096,6 +38625,7 @@ export const addFavoriteResponse = zod
         'crm_contact',
         'crm_pipeline',
         'reminder',
+        'harness',
         'skill',
         'agent_session',
         'scheduled_action',
@@ -38147,6 +38677,7 @@ export const reorderFavoritesBody = zod
                 'crm_contact',
                 'crm_pipeline',
                 'reminder',
+                'harness',
                 'skill',
                 'agent_session',
                 'scheduled_action',
@@ -38191,6 +38722,7 @@ export const removeFavoriteByEntityParams = zod.object({
       'crm_contact',
       'crm_pipeline',
       'reminder',
+      'harness',
       'skill',
       'agent_session',
       'scheduled_action',
@@ -43281,12 +43813,18 @@ export const approveHarnessPairingBody = zod
     team_id: zod
       .uuid()
       .nullish()
-      .describe('Owning team. Omit for a private, user-owned harness.'),
+      .describe(
+        'Team to open the harness to. Omit to keep it to the approving user.'
+      ),
   })
   .describe('Request to approve a pairing and register the harness.');
 
 export const approveHarnessPairingResponse = zod
   .object({
+    access: zod
+      .enum(['owner', 'user', 'read', 'none'])
+      .optional()
+      .describe('What one caller may do with a machine.'),
     allow_permission_bypass: zod
       .boolean()
       .optional()
@@ -43306,22 +43844,19 @@ export const approveHarnessPairingResponse = zod
       .describe('When the daemon last attached a runtime connection.'),
     name: zod.string().describe('Display name.'),
     owner: zod
-      .union([
-        zod
-          .object({
-            type: zod.enum(['user']),
-            user_id: zod.string().describe('Owner user id.'),
-          })
-          .describe('User-owned (private) harness.'),
-        zod
-          .object({
-            team_id: zod.uuid().describe('Owner team id.'),
-            type: zod.enum(['team']),
-          })
-          .describe('Team-owned harness, usable by every team member.'),
-      ])
+      .object({
+        type: zod.enum(['user']),
+        user_id: zod.string().describe('Owner user id.'),
+      })
+      .describe('The person whose machine this is.')
       .describe(
-        'Harness owner.\n\nExactly one of a user or a team, mirroring the bots owner pattern. There\nare no system harnesses.'
+        "Harness owner.\n\nAlways one person: a machine is someone's computer. A team machine is a\nperson's machine with a grant to the team, never one owned by the team."
+      ),
+    shared_team_ids: zod
+      .array(zod.uuid())
+      .optional()
+      .describe(
+        'Teams it is a team machine for: their every member is a user of it.'
       ),
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
   })
@@ -43353,6 +43888,10 @@ export const claimHarnessPairingResponse = zod
   .object({
     harness: zod
       .object({
+        access: zod
+          .enum(['owner', 'user', 'read', 'none'])
+          .optional()
+          .describe('What one caller may do with a machine.'),
         allow_permission_bypass: zod
           .boolean()
           .optional()
@@ -43372,22 +43911,19 @@ export const claimHarnessPairingResponse = zod
           .describe('When the daemon last attached a runtime connection.'),
         name: zod.string().describe('Display name.'),
         owner: zod
-          .union([
-            zod
-              .object({
-                type: zod.enum(['user']),
-                user_id: zod.string().describe('Owner user id.'),
-              })
-              .describe('User-owned (private) harness.'),
-            zod
-              .object({
-                team_id: zod.uuid().describe('Owner team id.'),
-                type: zod.enum(['team']),
-              })
-              .describe('Team-owned harness, usable by every team member.'),
-          ])
+          .object({
+            type: zod.enum(['user']),
+            user_id: zod.string().describe('Owner user id.'),
+          })
+          .describe('The person whose machine this is.')
           .describe(
-            'Harness owner.\n\nExactly one of a user or a team, mirroring the bots owner pattern. There\nare no system harnesses.'
+            "Harness owner.\n\nAlways one person: a machine is someone's computer. A team machine is a\nperson's machine with a grant to the team, never one owned by the team."
+          ),
+        shared_team_ids: zod
+          .array(zod.uuid())
+          .optional()
+          .describe(
+            'Teams it is a team machine for: their every member is a user of it.'
           ),
         updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
       })
@@ -43407,6 +43943,10 @@ export const claimHarnessPairingResponse = zod
  */
 export const listHarnessesResponseItem = zod
   .object({
+    access: zod
+      .enum(['owner', 'user', 'read', 'none'])
+      .optional()
+      .describe('What one caller may do with a machine.'),
     allow_permission_bypass: zod
       .boolean()
       .optional()
@@ -43426,22 +43966,19 @@ export const listHarnessesResponseItem = zod
       .describe('When the daemon last attached a runtime connection.'),
     name: zod.string().describe('Display name.'),
     owner: zod
-      .union([
-        zod
-          .object({
-            type: zod.enum(['user']),
-            user_id: zod.string().describe('Owner user id.'),
-          })
-          .describe('User-owned (private) harness.'),
-        zod
-          .object({
-            team_id: zod.uuid().describe('Owner team id.'),
-            type: zod.enum(['team']),
-          })
-          .describe('Team-owned harness, usable by every team member.'),
-      ])
+      .object({
+        type: zod.enum(['user']),
+        user_id: zod.string().describe('Owner user id.'),
+      })
+      .describe('The person whose machine this is.')
       .describe(
-        'Harness owner.\n\nExactly one of a user or a team, mirroring the bots owner pattern. There\nare no system harnesses.'
+        "Harness owner.\n\nAlways one person: a machine is someone's computer. A team machine is a\nperson's machine with a grant to the team, never one owned by the team."
+      ),
+    shared_team_ids: zod
+      .array(zod.uuid())
+      .optional()
+      .describe(
+        'Teams it is a team machine for: their every member is a user of it.'
       ),
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
   })
@@ -43451,10 +43988,14 @@ export const listHarnessesResponseItem = zod
 export const listHarnessesResponse = zod.array(listHarnessesResponseItem);
 
 /**
- * @summary Handler for `GET /harnesses/me`.
+ * @summary Handler for `GET /harnesses/directory`.
  */
-export const getSelfHarnessResponse = zod
+export const listHarnessDirectoryResponseItem = zod
   .object({
+    access: zod
+      .enum(['owner', 'user', 'read', 'none'])
+      .optional()
+      .describe('What one caller may do with a machine.'),
     allow_permission_bypass: zod
       .boolean()
       .optional()
@@ -43474,22 +44015,70 @@ export const getSelfHarnessResponse = zod
       .describe('When the daemon last attached a runtime connection.'),
     name: zod.string().describe('Display name.'),
     owner: zod
-      .union([
-        zod
-          .object({
-            type: zod.enum(['user']),
-            user_id: zod.string().describe('Owner user id.'),
-          })
-          .describe('User-owned (private) harness.'),
-        zod
-          .object({
-            team_id: zod.uuid().describe('Owner team id.'),
-            type: zod.enum(['team']),
-          })
-          .describe('Team-owned harness, usable by every team member.'),
-      ])
+      .object({
+        type: zod.enum(['user']),
+        user_id: zod.string().describe('Owner user id.'),
+      })
+      .describe('The person whose machine this is.')
       .describe(
-        'Harness owner.\n\nExactly one of a user or a team, mirroring the bots owner pattern. There\nare no system harnesses.'
+        "Harness owner.\n\nAlways one person: a machine is someone's computer. A team machine is a\nperson's machine with a grant to the team, never one owned by the team."
+      ),
+    shared_team_ids: zod
+      .array(zod.uuid())
+      .optional()
+      .describe(
+        'Teams it is a team machine for: their every member is a user of it.'
+      ),
+    updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
+  })
+  .describe(
+    'A registered user-run harness.\n\nClients deserialize this, so both derives are used.'
+  );
+export const listHarnessDirectoryResponse = zod.array(
+  listHarnessDirectoryResponseItem
+);
+
+/**
+ * @summary Handler for `GET /harnesses/me`.
+ */
+export const getSelfHarnessResponse = zod
+  .object({
+    access: zod
+      .enum(['owner', 'user', 'read', 'none'])
+      .optional()
+      .describe('What one caller may do with a machine.'),
+    allow_permission_bypass: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether agents may bypass ACP permission requests on this harness.'
+      ),
+    connected: zod
+      .boolean()
+      .describe('Whether the daemon currently holds a runtime connection.'),
+    created_at: zod.iso.datetime({}).describe('Creation timestamp.'),
+    created_by: zod.string().describe('User that registered this harness.'),
+    id: zod.string(),
+    kind: zod.string().describe('Runtime kind. Currently always `macrod`.'),
+    last_connected_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When the daemon last attached a runtime connection.'),
+    name: zod.string().describe('Display name.'),
+    owner: zod
+      .object({
+        type: zod.enum(['user']),
+        user_id: zod.string().describe('Owner user id.'),
+      })
+      .describe('The person whose machine this is.')
+      .describe(
+        "Harness owner.\n\nAlways one person: a machine is someone's computer. A team machine is a\nperson's machine with a grant to the team, never one owned by the team."
+      ),
+    shared_team_ids: zod
+      .array(zod.uuid())
+      .optional()
+      .describe(
+        'Teams it is a team machine for: their every member is a user of it.'
       ),
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
   })
@@ -43566,6 +44155,10 @@ export const patchHarnessBody = zod
 
 export const patchHarnessResponse = zod
   .object({
+    access: zod
+      .enum(['owner', 'user', 'read', 'none'])
+      .optional()
+      .describe('What one caller may do with a machine.'),
     allow_permission_bypass: zod
       .boolean()
       .optional()
@@ -43585,28 +44178,70 @@ export const patchHarnessResponse = zod
       .describe('When the daemon last attached a runtime connection.'),
     name: zod.string().describe('Display name.'),
     owner: zod
-      .union([
-        zod
-          .object({
-            type: zod.enum(['user']),
-            user_id: zod.string().describe('Owner user id.'),
-          })
-          .describe('User-owned (private) harness.'),
-        zod
-          .object({
-            team_id: zod.uuid().describe('Owner team id.'),
-            type: zod.enum(['team']),
-          })
-          .describe('Team-owned harness, usable by every team member.'),
-      ])
+      .object({
+        type: zod.enum(['user']),
+        user_id: zod.string().describe('Owner user id.'),
+      })
+      .describe('The person whose machine this is.')
       .describe(
-        'Harness owner.\n\nExactly one of a user or a team, mirroring the bots owner pattern. There\nare no system harnesses.'
+        "Harness owner.\n\nAlways one person: a machine is someone's computer. A team machine is a\nperson's machine with a grant to the team, never one owned by the team."
+      ),
+    shared_team_ids: zod
+      .array(zod.uuid())
+      .optional()
+      .describe(
+        'Teams it is a team machine for: their every member is a user of it.'
       ),
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
   })
   .describe(
     'A registered user-run harness.\n\nClients deserialize this, so both derives are used.'
   );
+
+/**
+ * @summary Handler for `GET /harnesses/{harness_id}/residents`.
+ */
+export const listHarnessResidentsParams = zod.object({
+  harness_id: zod.string().describe('Harness ID'),
+});
+
+export const listHarnessResidentsResponseItem = zod
+  .object({
+    bot_id: zod.string(),
+    name: zod.string().describe('Display name.'),
+    owner_user_id: zod
+      .string()
+      .nullish()
+      .describe('The user owning the agent, when a person does.'),
+    team_id: zod
+      .uuid()
+      .nullish()
+      .describe('The team owning the agent, when a team does.'),
+  })
+  .describe(
+    'An agent that lives on a machine, as opposed to a coding agent directed\nthere turn by turn. Anyone who can reach it can talk to it; it stays up only\nwhile its own owner can use the machine.'
+  );
+export const listHarnessResidentsResponse = zod.array(
+  listHarnessResidentsResponseItem
+);
+
+/**
+ * Requires the owner's own session: an agent can ask for access to a machine
+but never open one, since that grants code execution on it.
+ * @summary Handler for `PUT /harnesses/{harness_id}/team-access`.
+ */
+export const setHarnessTeamAccessParams = zod.object({
+  harness_id: zod.string().describe('Harness ID'),
+});
+
+export const setHarnessTeamAccessBody = zod
+  .object({
+    enabled: zod
+      .boolean()
+      .describe('Whether every member of the team may use the machine.'),
+    team_id: zod.uuid().describe('The team, which the owner must belong to.'),
+  })
+  .describe("Request to open or close a machine to one of the owner's teams.");
 
 /**
  * @summary Gets the users history
@@ -48774,6 +49409,28 @@ export const getItemsSoupResponse = zod
               tag: zod.enum(['databaseRow']),
             })
             .describe('Database row item.'),
+          zod
+            .object({
+              data: zod
+                .object({
+                  createdAt: zod.iso
+                    .datetime({})
+                    .describe('When the machine was paired.'),
+                  id: zod.uuid().describe('The harness uuid.'),
+                  name: zod.string().describe("The machine's display name."),
+                  ownerId: zod
+                    .string()
+                    .describe('The person or team that owns the machine.'),
+                  updatedAt: zod.iso
+                    .datetime({})
+                    .describe('When the machine was last changed.'),
+                })
+                .describe(
+                  'A paired runtime (a macrod machine), listed only by attention feeds: its\naccess requests and removals are notifications filed under it, and it has\nno page of its own, so Settings → Machines opens it.'
+                ),
+              tag: zod.enum(['harness']),
+            })
+            .describe('Paired runtime, listed only by attention feeds.'),
         ])
         .describe('A single item in the Soup feed.')
         .and(
@@ -53750,6 +54407,28 @@ export const postItemsSoupResponse = zod
               tag: zod.enum(['databaseRow']),
             })
             .describe('Database row item.'),
+          zod
+            .object({
+              data: zod
+                .object({
+                  createdAt: zod.iso
+                    .datetime({})
+                    .describe('When the machine was paired.'),
+                  id: zod.uuid().describe('The harness uuid.'),
+                  name: zod.string().describe("The machine's display name."),
+                  ownerId: zod
+                    .string()
+                    .describe('The person or team that owns the machine.'),
+                  updatedAt: zod.iso
+                    .datetime({})
+                    .describe('When the machine was last changed.'),
+                })
+                .describe(
+                  'A paired runtime (a macrod machine), listed only by attention feeds: its\naccess requests and removals are notifications filed under it, and it has\nno page of its own, so Settings → Machines opens it.'
+                ),
+              tag: zod.enum(['harness']),
+            })
+            .describe('Paired runtime, listed only by attention feeds.'),
         ])
         .describe('A single item in the Soup feed.')
         .and(
@@ -58167,6 +58846,28 @@ export const postItemsSoupAstResponse = zod
               tag: zod.enum(['databaseRow']),
             })
             .describe('Database row item.'),
+          zod
+            .object({
+              data: zod
+                .object({
+                  createdAt: zod.iso
+                    .datetime({})
+                    .describe('When the machine was paired.'),
+                  id: zod.uuid().describe('The harness uuid.'),
+                  name: zod.string().describe("The machine's display name."),
+                  ownerId: zod
+                    .string()
+                    .describe('The person or team that owns the machine.'),
+                  updatedAt: zod.iso
+                    .datetime({})
+                    .describe('When the machine was last changed.'),
+                })
+                .describe(
+                  'A paired runtime (a macrod machine), listed only by attention feeds: its\naccess requests and removals are notifications filed under it, and it has\nno page of its own, so Settings → Machines opens it.'
+                ),
+              tag: zod.enum(['harness']),
+            })
+            .describe('Paired runtime, listed only by attention feeds.'),
         ])
         .describe('A single item in the Soup feed.')
         .and(
@@ -63167,6 +63868,32 @@ export const postItemsSoupAstGroupedResponse = zod
                     tag: zod.enum(['databaseRow']),
                   })
                   .describe('Database row item.'),
+                zod
+                  .object({
+                    data: zod
+                      .object({
+                        createdAt: zod.iso
+                          .datetime({})
+                          .describe('When the machine was paired.'),
+                        id: zod.uuid().describe('The harness uuid.'),
+                        name: zod
+                          .string()
+                          .describe("The machine's display name."),
+                        ownerId: zod
+                          .string()
+                          .describe(
+                            'The person or team that owns the machine.'
+                          ),
+                        updatedAt: zod.iso
+                          .datetime({})
+                          .describe('When the machine was last changed.'),
+                      })
+                      .describe(
+                        'A paired runtime (a macrod machine), listed only by attention feeds: its\naccess requests and removals are notifications filed under it, and it has\nno page of its own, so Settings → Machines opens it.'
+                      ),
+                    tag: zod.enum(['harness']),
+                  })
+                  .describe('Paired runtime, listed only by attention feeds.'),
               ])
               .describe('A single item in the Soup feed.')
               .and(
@@ -67551,6 +68278,32 @@ export const postItemsSoupAstGroupedResponse = zod
                     tag: zod.enum(['databaseRow']),
                   })
                   .describe('Database row item.'),
+                zod
+                  .object({
+                    data: zod
+                      .object({
+                        createdAt: zod.iso
+                          .datetime({})
+                          .describe('When the machine was paired.'),
+                        id: zod.uuid().describe('The harness uuid.'),
+                        name: zod
+                          .string()
+                          .describe("The machine's display name."),
+                        ownerId: zod
+                          .string()
+                          .describe(
+                            'The person or team that owns the machine.'
+                          ),
+                        updatedAt: zod.iso
+                          .datetime({})
+                          .describe('When the machine was last changed.'),
+                      })
+                      .describe(
+                        'A paired runtime (a macrod machine), listed only by attention feeds: its\naccess requests and removals are notifications filed under it, and it has\nno page of its own, so Settings → Machines opens it.'
+                      ),
+                    tag: zod.enum(['harness']),
+                  })
+                  .describe('Paired runtime, listed only by attention feeds.'),
               ])
               .describe('A single item in the Soup feed.')
               .and(
@@ -74463,6 +75216,217 @@ export const createViewHandlerResponse = zod.object({
   updatedAt: zod.iso.datetime({}),
   userId: zod.string(),
 });
+
+export const listSavedViewDefinitionsQueryFirstMin = 0;
+
+export const listSavedViewDefinitionsQueryParams = zod.object({
+  kind: zod
+    .string()
+    .optional()
+    .describe('Only definitions of this consumer kind, such as `email`.'),
+  first: zod
+    .number()
+    .min(listSavedViewDefinitionsQueryFirstMin)
+    .optional()
+    .describe('Page size, 1 to 50; defaults to 25.'),
+  after: zod
+    .string()
+    .optional()
+    .describe('`nextCursor` from the previous page.'),
+});
+
+export const listSavedViewDefinitionsResponse = zod
+  .object({
+    nextCursor: zod
+      .string()
+      .nullish()
+      .describe(
+        'Opaque cursor for the next page, absent when the listing is complete.'
+      ),
+    views: zod
+      .array(
+        zod
+          .object({
+            config: zod
+              .object({})
+              .describe(
+                'Versioned configuration interpreted by the consuming feature, with its\n`kind` (such as `email` or `task`) and `version`.'
+              ),
+            createdAt: zod.iso.datetime({}),
+            id: zod.uuid().describe('Stable identity of this definition.'),
+            name: zod.string().describe('Display name chosen by the owner.'),
+            ownerId: zod
+              .string()
+              .describe('User who owns and can edit this definition.'),
+            revision: zod
+              .number()
+              .describe('Current revision, required by updates and deletion.'),
+            sharedTeamId: zod
+              .uuid()
+              .nullish()
+              .describe(
+                'Team with access, or absent when the definition is private.'
+              ),
+            updatedAt: zod.iso.datetime({}),
+          })
+          .describe(
+            'A saved filter definition, not a snapshot of matching entities.'
+          )
+      )
+      .describe('Definitions the viewer can currently access.'),
+  })
+  .describe("A page in the viewer's own order, then by creation time and ID.");
+
+export const createSavedViewDefinitionBody = zod.object({
+  config: zod
+    .object({})
+    .describe(
+      'Consumer configuration with its `kind` and `version`, at most 32 KiB.'
+    ),
+  id: zod
+    .uuid()
+    .nullish()
+    .describe(
+      'Client-chosen ID, reused to retry the same creation; generated when absent.'
+    ),
+  name: zod.string().describe('Nonempty display name, at most 120 characters.'),
+  sharedTeamId: zod
+    .uuid()
+    .nullish()
+    .describe('Team to share with, which the creator must belong to.'),
+});
+
+export const reorderSavedViewDefinitionsBody = zod.object({
+  ids: zod
+    .array(zod.uuid())
+    .describe(
+      'Visible definitions of that kind in their new order, at most 200;\ndefinitions left out follow them by creation time.'
+    ),
+  kind: zod
+    .string()
+    .describe('Consumer kind whose order is replaced, such as `email`.'),
+});
+
+export const reorderSavedViewDefinitionsResponseItem = zod
+  .object({
+    config: zod
+      .object({})
+      .describe(
+        'Versioned configuration interpreted by the consuming feature, with its\n`kind` (such as `email` or `task`) and `version`.'
+      ),
+    createdAt: zod.iso.datetime({}),
+    id: zod.uuid().describe('Stable identity of this definition.'),
+    name: zod.string().describe('Display name chosen by the owner.'),
+    ownerId: zod
+      .string()
+      .describe('User who owns and can edit this definition.'),
+    revision: zod
+      .number()
+      .describe('Current revision, required by updates and deletion.'),
+    sharedTeamId: zod
+      .uuid()
+      .nullish()
+      .describe('Team with access, or absent when the definition is private.'),
+    updatedAt: zod.iso.datetime({}),
+  })
+  .describe('A saved filter definition, not a snapshot of matching entities.');
+export const reorderSavedViewDefinitionsResponse = zod.array(
+  reorderSavedViewDefinitionsResponseItem
+);
+
+export const getSavedViewDefinitionParams = zod.object({
+  saved_view_id: zod.uuid().describe('The saved view to read'),
+});
+
+export const getSavedViewDefinitionResponse = zod
+  .object({
+    config: zod
+      .object({})
+      .describe(
+        'Versioned configuration interpreted by the consuming feature, with its\n`kind` (such as `email` or `task`) and `version`.'
+      ),
+    createdAt: zod.iso.datetime({}),
+    id: zod.uuid().describe('Stable identity of this definition.'),
+    name: zod.string().describe('Display name chosen by the owner.'),
+    ownerId: zod
+      .string()
+      .describe('User who owns and can edit this definition.'),
+    revision: zod
+      .number()
+      .describe('Current revision, required by updates and deletion.'),
+    sharedTeamId: zod
+      .uuid()
+      .nullish()
+      .describe('Team with access, or absent when the definition is private.'),
+    updatedAt: zod.iso.datetime({}),
+  })
+  .describe('A saved filter definition, not a snapshot of matching entities.');
+
+export const deleteSavedViewDefinitionParams = zod.object({
+  saved_view_id: zod.uuid().describe('The saved view to delete'),
+});
+
+export const deleteSavedViewDefinitionQueryParams = zod.object({
+  expectedRevision: zod
+    .number()
+    .describe('Revision that must still be current when the deletion commits.'),
+});
+
+export const updateSavedViewDefinitionParams = zod.object({
+  saved_view_id: zod.uuid().describe('The saved view to update'),
+});
+
+export const updateSavedViewDefinitionBody = zod.object({
+  config: zod
+    .object({})
+    .nullish()
+    .describe(
+      'Complete replacement configuration; absent keeps the current one.'
+    ),
+  expectedRevision: zod
+    .number()
+    .describe('Revision that must still be current when the update commits.'),
+  name: zod
+    .string()
+    .nullish()
+    .describe('Replacement name; absent keeps the current one.'),
+  sharing: zod
+    .union([
+      zod.null(),
+      zod
+        .object({
+          teamId: zod.uuid().nullish(),
+        })
+        .describe(
+          'An explicit sharing change: a team, or `null` to make the definition private.'
+        ),
+    ])
+    .optional(),
+});
+
+export const updateSavedViewDefinitionResponse = zod
+  .object({
+    config: zod
+      .object({})
+      .describe(
+        'Versioned configuration interpreted by the consuming feature, with its\n`kind` (such as `email` or `task`) and `version`.'
+      ),
+    createdAt: zod.iso.datetime({}),
+    id: zod.uuid().describe('Stable identity of this definition.'),
+    name: zod.string().describe('Display name chosen by the owner.'),
+    ownerId: zod
+      .string()
+      .describe('User who owns and can edit this definition.'),
+    revision: zod
+      .number()
+      .describe('Current revision, required by updates and deletion.'),
+    sharedTeamId: zod
+      .uuid()
+      .nullish()
+      .describe('Team with access, or absent when the definition is private.'),
+    updatedAt: zod.iso.datetime({}),
+  })
+  .describe('A saved filter definition, not a snapshot of matching entities.');
 
 export const excludeDefaultViewHandlerBody = zod.object({
   defaultViewId: zod.string(),

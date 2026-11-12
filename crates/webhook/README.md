@@ -77,7 +77,7 @@ bookkeeping (including success/failure timestamp updates) do not produce them.
 
 The `webhook-event-ingestion` Kafka consumer reads `macro.documents`,
 `macro.channels`, `macro.messages`, `macro.webhooks`, `macro.agent_sessions`,
-and `macro.agent_session_lifecycle`. It supports these event names:
+`macro.agent_session_lifecycle`, and `macro.users`. It supports these event names:
 
 - Documents: `document.created`, `document.updated`, `document.deleted`, and
   `document.copied`.
@@ -97,6 +97,11 @@ and `macro.agent_session_lifecycle`. It supports these event names:
   `agent_session.waiting_for_input`, `agent_session.input_received`,
   `agent_session.stopped`, `agent_session.renamed`, and
   `agent_session.deleted`.
+- Users: `user.picture_changed` (`entity_type = "user"`, entity and ordering key
+  are the user id; `file_id` and `url` are both null when the picture was
+  removed). Persisted webhooks go only to the changed user's own personal and
+  team workspaces. The live SSE stream also reaches the user's contacts (user
+  scope only) and the team-scoped streams of the user's teams.
 - Calls: `call.started`, `call.ended`, `call.participant_joined`,
   `call.participant_left`, `call.recording_ready`, `call.summarized`,
   `call.ringing`, `call.answered`, `call.declined`, and `call.invited`.
@@ -254,6 +259,17 @@ headers are included, but case-insensitive attempts to override a Macro header
 are permanent configuration failures. Delivery applies the same HTTPS, DNS,
 blocked-address, reserved-header, signing, and no-redirect protections as
 validation.
+
+Blocked addresses are private, loopback, link-local (including cloud metadata),
+CGNAT `100.64.0.0/10`, `0.0.0.0/8`, unique-local, multicast, reserved and
+documentation ranges, IPv6 outside global unicast `2000::/3` (plus Teredo,
+benchmarking and documentation inside it), and IPv6 forms that wrap one of
+those IPv4 addresses (`::ffff:a.b.c.d`, NAT64 `64:ff9b::/96`, 6to4). A preflight lookup gives the
+user-facing message, and the HTTP client resolves through a filter that drops
+blocked answers at connect time, so a DNS answer that changes after preflight
+is still refused (reported as a retryable network failure). The client ignores
+system proxy settings. Local environments
+(`WebhookEndpointSchemePolicy::HttpAndHttps`) allow HTTP and local addresses.
 
 Every 2xx response succeeds. Network errors, timeouts, DNS resolution failures,
 and HTTP 408, 429, and 5xx responses are retryable. Other non-2xx responses and

@@ -56,6 +56,7 @@ impl MailboxProgressRepository for PgMailboxSync {
                 l.needs_reauth AS "needs_reauth!",
                 q.queued AS "queued!",
                 q.parked AS "parked!",
+                q.abandoned AS "abandoned!",
                 q.leased AS "leased!",
                 COALESCE(floor(EXTRACT(EPOCH FROM now() - q.oldest_due)), 0)::bigint AS "oldest_waiting_seconds!",
                 COALESCE(ceil(EXTRACT(EPOCH FROM q.parked_until - now())), 0)::bigint AS "parked_until_max_seconds!",
@@ -64,13 +65,15 @@ impl MailboxProgressRepository for PgMailboxSync {
                 floor(EXTRACT(EPOCH FROM now() - latest.last_imported_at))::bigint AS seconds_since_last_import
             FROM email_links l
             CROSS JOIN LATERAL (
-                SELECT count(*) AS queued,
-                    count(*) FILTER (WHERE available_at > now()) AS parked,
+                -- Abandoned rows wait at `available_at = 'infinity'`.
+                SELECT count(*) FILTER (WHERE available_at <> 'infinity') AS queued,
+                    count(*) FILTER (WHERE available_at > now() AND available_at <> 'infinity') AS parked,
+                    count(*) FILTER (WHERE available_at = 'infinity') AS abandoned,
                     count(*) FILTER (WHERE lease_until > now()) AS leased,
                     min(available_at) FILTER (
                         WHERE available_at <= now() AND (lease_until IS NULL OR lease_until <= now())
                     ) AS oldest_due,
-                    max(available_at) FILTER (WHERE available_at > now()) AS parked_until
+                    max(available_at) FILTER (WHERE available_at > now() AND available_at <> 'infinity') AS parked_until
                 FROM email_message_reconciliation
                 WHERE link_id = l.id AND generation = l.sync_generation
             ) q
@@ -94,7 +97,7 @@ impl MailboxProgressRepository for PgMailboxSync {
                     WHERE link_id = l.id ORDER BY minute DESC LIMIT 2
                 ) newest
             ) latest
-            WHERE l.provider = 'OUTLOOK' AND (l.is_sync_active OR q.queued > 0)
+            WHERE l.provider = 'OUTLOOK' AND (l.is_sync_active OR q.queued > 0 OR q.abandoned > 0)
         "#
         )
         .fetch_all(&self.db)
@@ -107,6 +110,7 @@ impl MailboxProgressRepository for PgMailboxSync {
                 sync_generation: row.sync_generation,
                 queued: row.queued,
                 parked: row.parked,
+                abandoned: row.abandoned,
                 leased: row.leased,
                 oldest_waiting_seconds: row.oldest_waiting_seconds,
                 parked_until_max_seconds: row.parked_until_max_seconds,

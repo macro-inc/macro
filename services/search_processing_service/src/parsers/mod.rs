@@ -5,3 +5,4 @@ pub mod markdown;
 #[cfg(all(feature = "pdf", not(feature = "no_pdf")))]
 pub mod pdf;
 pub mod psd;
+pub mod text;

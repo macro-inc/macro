@@ -83,6 +83,11 @@ async fn register<I: InflightAuthStore + 'static>(
             );
             (axum::http::StatusCode::BAD_REQUEST, INVALID_REDIRECT_URI).into_response()
         }
+        Err(RegisterClientError::ReservedClientName) => (
+            axum::http::StatusCode::BAD_REQUEST,
+            "client_name may not be Macro's own name",
+        )
+            .into_response(),
         Err(RegisterClientError::ClientRegistrationStore(error)) => {
             tracing::error!(error=?error, "failed to persist client registration");
             (
@@ -552,6 +557,7 @@ fn start_authorization_error_response(error: StartAuthorizationError) -> Respons
         StartAuthorizationError::InvalidRedirectUri => {
             (axum::http::StatusCode::BAD_REQUEST, INVALID_REDIRECT_URI).into_response()
         }
+
         StartAuthorizationError::UnregisteredRedirectUri => (
             axum::http::StatusCode::BAD_REQUEST,
             "redirect_uri was not registered for this client",
@@ -783,6 +789,22 @@ async fn token<I: InflightAuthStore + 'static>(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "server_error",
                 "failed to access inflight auth state",
+            )
+        }
+        Err(TokenExchangeError::ClientRegistrationStore(error)) => {
+            tracing::error!(error=?error, "failed to read client registrations");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "server_error",
+                "failed to read client registrations",
+            )
+        }
+        Err(TokenExchangeError::MintAccessToken(error)) => {
+            tracing::error!(error=?error, "failed to mint the resource's access token");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "server_error",
+                "failed to issue the access token",
             )
         }
         Err(TokenExchangeError::RefreshTokenBindingStore(error)) => {

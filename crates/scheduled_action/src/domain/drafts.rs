@@ -7,8 +7,9 @@
 //! `macro.routines.check`, which runs saving's checks and saves nothing,
 //! naming what it created. Each check is kept on the draft's row
 //! ([`DraftHandBacks`]), so the session and this drafter may run on any
-//! replicas. The drafter waits for the session's turn to end, reads the last
-//! check, then stops and deletes the session and the row. The session's
+//! replicas. A check that passes ends the draft: the drafter stops the
+//! session there and takes the last passing check (or the last check when
+//! the turn ends first), then deletes the session and the row. The session's
 //! usage is agent session usage, admitted and metered as any session's.
 
 use std::sync::Arc;
@@ -24,7 +25,7 @@ use anyhow::Result;
 use bot_id::BotId;
 use chrono::{SecondsFormat, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
-use routine_program::{CODE_STEPS, RoutineProgram, STEP_CONTEXT, Step};
+use routine_program::{CATALOG, CODE_STEPS, RoutineProgram, STEP_CONTEXT, Step};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use utoipa::ToSchema;
@@ -46,12 +47,12 @@ pub const DRAFT_TIMEOUT: Duration = Duration::from_secs(120);
 pub const STALE_DRAFT: Duration = Duration::from_secs(10 * 60);
 /// Drafts the sweep cleans up at a time.
 const SWEEP_BATCH: u16 = 64;
-/// How soon, then at most how often, the drafter reads the session's turn.
-const FIRST_POLL: Duration = Duration::from_millis(500);
-const MAX_POLL: Duration = Duration::from_secs(2);
-/// How long a session that has checked a passing routine gets to finish its
-/// turn before it is stopped and its last check taken.
-const CHECKED_GRACE: Duration = Duration::from_secs(15);
+/// How often the drafter reads the draft's row for a check that passes.
+const POLL: Duration = Duration::from_millis(250);
+/// Row reads per read of the session's turn, which reads its whole log: a
+/// turn read every 2 s, only to notice a turn that ends without a passing
+/// check.
+const ROW_READS_PER_TURN_READ: u32 = 8;
 /// How long the drafter waits, once the session has stopped, for the
 /// activity its last creations wrote, which is recorded asynchronously.
 const ACTIVITY_SETTLE: Duration = Duration::from_secs(2);
@@ -272,8 +273,7 @@ impl<Code, Sessions> RoutineDrafts<Code, Sessions> {
 enum Ending {
     /// Its turn ended, well or not.
     Finished,
-    /// It handed back a routine that passes its check and then kept going
-    /// past [`CHECKED_GRACE`], so it is stopped and its last check taken.
+    /// It handed back a routine that passes its check: its answer.
     Checked,
     /// It ran past [`DRAFT_TIMEOUT`].
     TimedOut,
@@ -440,8 +440,8 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
         })
     }
 
-    /// Open the hidden session, prompt it once and wait for its turn to end,
-    /// or for [`CHECKED_GRACE`] after a check that passes.
+    /// Open the hidden session, prompt it once and wait for a check that
+    /// passes, or for its turn to end.
     async fn run(
         &self,
         action: &RoutineSessionAction,
@@ -450,6 +450,7 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
     ) -> Result<Ending, RoutineSessionError> {
         self.sessions
             .prepare(PrepareRoutineSession {
+                billing: Default::default(),
                 selection: ValidateRoutineSession {
                     owner: action.owner.clone(),
                     bot_id: action.bot_id,
@@ -475,43 +476,45 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
             })
             .await?;
         let span = tracing::Span::current();
-        let mut delay = FIRST_POLL;
         let mut failures = 0;
-        let mut reads = 0_u32;
-        let mut clean_since: Option<tokio::time::Instant> = None;
-        loop {
-            tokio::time::sleep(delay).await;
-            delay = (delay * 2).min(MAX_POLL);
-            reads += 1;
-            span.record("routine.draft.status_reads", reads);
+        let mut polls = 0_u32;
+        let ending = loop {
+            tokio::time::sleep(POLL).await;
+            polls += 1;
+            if self.checked_clean(action).await {
+                break Ok(Ending::Checked);
+            }
+            if !polls.is_multiple_of(ROW_READS_PER_TURN_READ) {
+                continue;
+            }
+            // Recorded as it goes, so a draft that times out keeps it.
+            span.record(
+                "routine.draft.status_reads",
+                polls / ROW_READS_PER_TURN_READ,
+            );
             match self.sessions.status(action.clone()).await {
                 Ok(RoutineActionStatus::Succeeded | RoutineActionStatus::Failed(_)) => {
-                    span.record("routine.draft.ended", "turn_ended");
-                    return Ok(Ending::Finished);
+                    break Ok(Ending::Finished);
                 }
-                Ok(RoutineActionStatus::Pending(_)) => {
-                    failures = 0;
-                    match clean_since {
-                        Some(since) if since.elapsed() >= CHECKED_GRACE => {
-                            span.record("routine.draft.ended", "checked");
-                            return Ok(Ending::Checked);
-                        }
-                        Some(_) => {}
-                        None => {
-                            if self.checked_clean(action).await {
-                                clean_since = Some(tokio::time::Instant::now());
-                            }
-                        }
-                    }
-                }
+                Ok(RoutineActionStatus::Pending(_)) => failures = 0,
                 Err(error) => {
                     failures += 1;
                     if failures >= MAX_STATUS_FAILURES {
-                        return Err(error);
+                        break Err(error);
                     }
                 }
             }
+        };
+        match &ending {
+            Ok(Ending::Checked) => {
+                span.record("routine.draft.ended", "checked");
+            }
+            Ok(Ending::Finished) => {
+                span.record("routine.draft.ended", "turn_ended");
+            }
+            _ => {}
         }
+        ending
     }
 
     /// Whether the session has handed back a routine that passes its check.
@@ -519,7 +522,7 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
         self.hand_backs
             .handed_back(action.session_id.as_uuid())
             .await
-            .is_ok_and(|handed_back| handed_back.check.is_some_and(|check| check.ok))
+            .is_ok_and(|handed_back| handed_back.passed.is_some())
     }
 
     /// Delete the sessions and rows of drafts left behind by a process that
@@ -775,7 +778,8 @@ fn brief(
     let model = &context.agent_model;
     let steps = if code {
         format!(
-            "Steps run in order. Prefer a code step whenever code can do the job: acting, deciding with macro.ai.decide, and writing text with macro.ai.structuredCompletion all fit in one. An Ask AI step ({{type: 'agent', model: '{model}', instructions}}) hands open-ended work to AI with tools; a routine has at most one, last.\n\nHow to write a code step:\n{CODE_STEPS}\n\nThe type of `main`'s argument:\n```ts\n{STEP_CONTEXT}```"
+            "Steps run in order. Prefer a code step whenever code can do the job: acting, deciding with macro.ai.decide, and writing text with macro.ai.structuredCompletion all fit in one. An Ask AI step ({{type: 'agent', model: '{model}', instructions}}) hands open-ended work to AI with tools; a routine has at most one, last.\n\nHow to write a code step:\n{CODE_STEPS}\n\nThe type of `main`'s argument:\n```ts\n{STEP_CONTEXT}```\n\n{}",
+            catalog_examples(context.conditions)
         )
     } else {
         format!(
@@ -810,6 +814,47 @@ For this draft:
 
 4. Hand it back by checking it: `await macro.routines.check(routine, {{ created }})`, where `created` lists the handles of everything you created for it (empty when you created nothing). The check saves nothing and returns `ok`, `problems` and the code `steps` that don't type-check. Every check is taken as your answer, the last one winning: only ever check the whole routine you mean to hand back, never a test, a part of it or a variant without the items you found. Fix what it reports and check the whole routine again until `ok` is true. A code step's `main` takes `StepContext`: `export async function main({{ macro, trigger }}: StepContext)`. As soon as a check passes, stop with one short line."
     ))
+}
+
+/// Macro's catalog routines that are code, as worked examples of whole
+/// routines: what someone asked for, and the trigger and step that do it.
+/// Their code type-checks against the SDK (the harness's real-Deno tests).
+fn catalog_examples(conditions: bool) -> String {
+    let examples: String = CATALOG
+        .iter()
+        // A routine whose trigger asks a condition is no example where
+        // triggers can't.
+        .filter(|routine| conditions || !asks_condition(&routine.trigger))
+        .filter_map(|routine| {
+            let step = serde_json::to_value(Step::Code(routine.code.clone()?)).ok()?;
+            let example = json!({ "trigger": routine.trigger, "steps": [step] });
+            Some(format!(
+                "<example>\n<request>{}</request>\n{example}\n</example>\n",
+                routine.request
+            ))
+        })
+        .collect();
+    format!(
+        "Macro's own routines that are code, as worked examples (a cron trigger here leaves out its `timezone`; yours needs one):\n{examples}"
+    )
+}
+
+/// Whether a catalog trigger's filters ask AI a yes/no condition.
+fn asks_condition(trigger: &Value) -> bool {
+    let triggers = match trigger.get("triggers").and_then(Value::as_array) {
+        Some(triggers) => triggers.iter().collect(),
+        None => vec![trigger],
+    };
+    triggers.iter().any(|trigger| {
+        trigger
+            .get("filters")
+            .and_then(Value::as_array)
+            .is_some_and(|filters| {
+                filters
+                    .iter()
+                    .any(|filter| filter.get("condition").is_some())
+            })
+    })
 }
 
 /// The routine as the agent reads it: data, not instructions.

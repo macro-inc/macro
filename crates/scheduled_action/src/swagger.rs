@@ -5,9 +5,9 @@ use utoipa::OpenApi;
     reason = "utoipa path macros require these generated symbols in scope"
 )]
 use crate::inbound::axum_router::{
-    __path_check_action, __path_create_action, __path_delete_action, __path_execute_action,
-    __path_get_action, __path_health, __path_list_actions, __path_list_history,
-    __path_set_action_enabled, __path_update_action, ScheduledActionResponse,
+    __path_check_action, __path_create_action, __path_delete_action, __path_detach_action,
+    __path_execute_action, __path_get_action, __path_health, __path_list_actions,
+    __path_list_history, __path_set_action_enabled, __path_update_action, ScheduledActionResponse,
     SetScheduledActionEnabled,
 };
 #[expect(
@@ -51,11 +51,16 @@ use model::response::EmptyResponse;
         crate::inbound::axum_router::update_action,
         crate::inbound::axum_router::set_action_enabled,
         crate::inbound::axum_router::delete_action,
+        crate::inbound::axum_router::detach_action,
         crate::inbound::axum_router::execute_action,
         crate::inbound::axum_router::list_history,
         crate::inbound::axum_router::list_code_upgrades,
-        crate::inbound::axum_router::code_starters,
+        crate::inbound::axum_router::catalog,
         crate::inbound::draft_router::draft_routine,
+        crate::inbound::suggestion_router::list_suggestions,
+        crate::inbound::suggestion_router::generate_suggestions,
+        crate::inbound::suggestion_router::dismiss_suggestion,
+        crate::inbound::suggestion_router::suggest_routine,
         crate::inbound::template_router::share_template,
         crate::inbound::template_router::get_template,
         crate::inbound::template_router::unshare_template,
@@ -64,7 +69,19 @@ use model::response::EmptyResponse;
     components(
         schemas(
             AiAdmissionErrorBody,
-            crate::domain::code_check::StarterRoutine,
+            crate::inbound::axum_router::ExecutionRecordResponse,
+            crate::domain::models::SubRoutine,
+            crate::domain::models::CreatedRoutine,
+            crate::domain::catalog::CatalogEntry,
+            routine_program::Surface,
+            routine_program::NamedItemKind,
+            crate::domain::suggestions::model::RoutineSuggestions,
+            crate::domain::suggestions::model::RoutineSuggestion,
+            crate::domain::suggestions::model::SuggestedPick,
+            crate::domain::suggestions::model::SuggestionFrom,
+            crate::domain::suggestions::model::GenerationStatus,
+            crate::domain::suggestions::model::SuggestRequest,
+            crate::domain::suggestions::model::SuggestOutcome,
             crate::inbound::draft_router::DraftRoutineRequest,
             crate::domain::drafts::DraftRequest,
             crate::domain::drafts::RoutineSoFar,

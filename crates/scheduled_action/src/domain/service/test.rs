@@ -1,13 +1,15 @@
 mod admission;
 mod check;
 mod owned_purge;
+mod sub_routines;
 mod user_cleanup;
 
 use super::*;
 use crate::domain::event_runs::ClaimToken;
+use crate::domain::models::ListScope;
 use crate::domain::models::{
-    ActionConfigurationUpdate, ActionKind, ExecutionResource, ExecutionResourceType, ListedAction,
-    MAX_ACTION_TIME, RunVisibility,
+    ActionConfigurationUpdate, ActionExecutionRecord, ActionKind, ExecutionResource,
+    ExecutionResourceType, ListedAction, MAX_ACTION_TIME, RunVisibility,
 };
 use crate::domain::{
     execution::ExecutionHandle,
@@ -40,6 +42,101 @@ const FOREIGN_USER: &str = "macro|other@macro.com";
 pub(crate) struct FakeRepo {
     actions: Mutex<Vec<ScheduledAction>>,
     records: Mutex<Vec<ActionExecutionRecord>>,
+    /// Runs in progress, as claims would show them.
+    running: Mutex<Vec<RunningRun>>,
+}
+
+impl SubRoutines for FakeRepo {
+    async fn running_run(&self, routine: &Uuid) -> Result<Option<RunningRun>> {
+        let running = self.running.lock().unwrap();
+        Ok(running
+            .iter()
+            .find(|run| run.routine_id == *routine)
+            .cloned())
+    }
+
+    async fn running_run_of_session(&self, session: &Uuid) -> Result<Option<RunningRun>> {
+        let running = self.running.lock().unwrap();
+        Ok(running.iter().find(|run| run.run_id == *session).cloned())
+    }
+
+    async fn children(&self, parent: &Uuid) -> Result<Vec<ScheduledAction>> {
+        let actions = self.actions.lock().unwrap();
+        Ok(actions
+            .iter()
+            .filter(|action| action.parent_id() == Some(*parent))
+            .cloned()
+            .collect())
+    }
+
+    async fn active_children(&self, parents: &[Uuid]) -> Result<Vec<ScheduledAction>> {
+        let actions = self.actions.lock().unwrap();
+        Ok(actions
+            .iter()
+            .filter(|action| {
+                let parent = action.parent_id();
+                parent.is_some_and(|parent| parents.contains(&parent)) && !action.is_finished_once()
+            })
+            .cloned()
+            .collect())
+    }
+
+    async fn top_level_by_ids(&self, ids: &[Uuid]) -> Result<Vec<ScheduledAction>> {
+        let actions = self.actions.lock().unwrap();
+        Ok(actions
+            .iter()
+            .filter(|action| action.id.is_some_and(|id| ids.contains(&id)))
+            .filter(|action| action.sub_routine.is_none())
+            .cloned()
+            .collect())
+    }
+
+    async fn child_by_key(
+        &self,
+        parent: &Uuid,
+        key: &SubRoutineKey,
+    ) -> Result<Option<ScheduledAction>> {
+        let actions = self.actions.lock().unwrap();
+        Ok(actions
+            .iter()
+            .find(|action| {
+                action
+                    .sub_routine
+                    .as_ref()
+                    .is_some_and(|link| link.parent_id == *parent && link.key.as_ref() == Some(key))
+            })
+            .cloned())
+    }
+
+    async fn detach(&self, id: &Uuid) -> Result<Option<ScheduledAction>> {
+        let mut actions = self.actions.lock().unwrap();
+        let stored = actions.iter_mut().find(|action| action.id == Some(*id));
+        Ok(stored.and_then(|action| {
+            action.sub_routine.take()?;
+            Some(action.clone())
+        }))
+    }
+
+    async fn created_by_runs(
+        &self,
+        parent: &Uuid,
+        runs: &[Uuid],
+    ) -> Result<Vec<(Uuid, crate::domain::models::CreatedRoutine)>> {
+        let actions = self.actions.lock().unwrap();
+        Ok(actions
+            .iter()
+            .filter_map(|action| {
+                let link = action.sub_routine.as_ref()?;
+                (link.parent_id == *parent && runs.contains(&link.created_by_run_id)).then(|| {
+                    let created = crate::domain::models::CreatedRoutine {
+                        id: action.id.unwrap(),
+                        name: action.name.clone(),
+                    };
+                    (link.created_by_run_id, created)
+                })
+            })
+            .collect())
+    }
 }
 
 impl ScheduledActionRepo for FakeRepo {
@@ -89,12 +186,20 @@ impl ScheduledActionRepo for FakeRepo {
     }
 
     async fn delete_action(&self, id: &Uuid) -> Result<()> {
-        self.actions.lock().unwrap().retain(|a| a.id != Some(*id));
+        self.actions
+            .lock()
+            .unwrap()
+            .retain(|a| a.id != Some(*id) && a.parent_id() != Some(*id));
         Ok(())
     }
 
-    async fn get_execution_records(&self, _id: &Uuid) -> Result<Vec<ActionExecutionRecord>> {
-        Ok(vec![])
+    async fn get_execution_records(&self, id: &Uuid) -> Result<Vec<ActionExecutionRecord>> {
+        let records = self.records.lock().unwrap();
+        Ok(records
+            .iter()
+            .filter(|record| record.action_id == *id)
+            .cloned()
+            .collect())
     }
     async fn last_runs(
         &self,
@@ -650,18 +755,40 @@ async fn list_is_cron_only_by_default_but_id_operations_reach_events() {
         .await
         .unwrap();
     assert_eq!(
-        svc.get_actions(user(), false).await.unwrap()[0].action.id,
+        svc.get_actions(user(), false, ListScope::TopLevel)
+            .await
+            .unwrap()[0]
+            .action
+            .id,
         cron.id
     );
-    assert_eq!(svc.get_actions(user(), false).await.unwrap().len(), 1);
-    assert_eq!(svc.get_actions(user(), true).await.unwrap().len(), 2);
+    assert_eq!(
+        svc.get_actions(user(), false, ListScope::TopLevel)
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(
+        svc.get_actions(user(), true, ListScope::TopLevel)
+            .await
+            .unwrap()
+            .len(),
+        2
+    );
     svc.get_execution_records(view_receipt(event.id.unwrap()))
         .await
         .unwrap();
     svc.delete_action(owner_receipt(event.id.unwrap()))
         .await
         .unwrap();
-    assert_eq!(svc.get_actions(user(), true).await.unwrap().len(), 1);
+    assert_eq!(
+        svc.get_actions(user(), true, ListScope::TopLevel)
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
 }
 
 #[tokio::test]
@@ -691,7 +818,10 @@ async fn lists_each_routine_with_its_latest_run() {
         .unwrap()
         .extend([record(30, true), record(5, false)]);
 
-    let listed = svc.get_actions(user(), true).await.unwrap();
+    let listed = svc
+        .get_actions(user(), true, ListScope::TopLevel)
+        .await
+        .unwrap();
     let last_run = |id: Option<Uuid>| {
         listed
             .iter()
@@ -706,7 +836,7 @@ async fn lists_each_routine_with_its_latest_run() {
 }
 
 #[tokio::test]
-async fn nonowners_can_read_but_not_manage_routines() {
+async fn nonowners_can_neither_read_nor_manage_routines() {
     let svc = service(true);
     for owner in [
         Owner::from_principal_str(FOREIGN_USER).unwrap(),
@@ -718,9 +848,15 @@ async fn nonowners_can_read_but_not_manage_routines() {
             .await
             .unwrap();
         let id = created.id.unwrap();
-        assert_eq!(svc.get_action(id).await.unwrap().id, Some(id));
+        assert_eq!(
+            svc.get_action(&view_receipt(id)).await.unwrap().id,
+            Some(id)
+        );
         svc.repo.actions.lock().unwrap().last_mut().unwrap().owner = owner;
-        assert_eq!(svc.get_action(id).await.unwrap().id, Some(id));
+        assert_policy(
+            svc.get_action(&view_receipt(id)).await,
+            ActionPolicyError::NotFound,
+        );
         assert_policy(
             svc.update_action(edit_receipt(id), update(configuration(true)))
                 .await,
@@ -743,7 +879,12 @@ async fn nonowners_can_read_but_not_manage_routines() {
             ActionPolicyError::NotFound,
         );
     }
-    assert!(svc.get_actions(user(), true).await.unwrap().is_empty());
+    assert!(
+        svc.get_actions(user(), true, ListScope::TopLevel)
+            .await
+            .unwrap()
+            .is_empty()
+    );
     assert!(
         svc.repo
             .actions
@@ -933,7 +1074,9 @@ fn claim_expiry_instant_still_blocks_replacement() {
         enabled: true,
         run_visibility: RunVisibility::Unlisted,
         template_id: None,
+        suggestion_id: None,
         description: String::new(),
+        sub_routine: None,
     };
     let expires_at = action
         .claim_expires_at()
@@ -1001,7 +1144,9 @@ fn seeded(
         enabled: true,
         run_visibility: RunVisibility::Unlisted,
         template_id: None,
+        suggestion_id: None,
         description: String::new(),
+        sub_routine: None,
     }
 }
 
@@ -1144,11 +1289,19 @@ async fn read_service_keeps_both_triggers_for_the_owner_in_stable_order() {
             .collect::<Vec<_>>()
     };
     assert_eq!(
-        listed(svc.get_actions(user(), true).await.unwrap()),
+        listed(
+            svc.get_actions(user(), true, ListScope::TopLevel)
+                .await
+                .unwrap()
+        ),
         expected
     );
     assert_eq!(
-        listed(svc.get_actions(user(), false).await.unwrap()),
+        listed(
+            svc.get_actions(user(), false, ListScope::TopLevel)
+                .await
+                .unwrap()
+        ),
         vec!["early-cron", "low-id", "first-equal", "second-equal"]
     );
 }

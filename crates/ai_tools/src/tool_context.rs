@@ -2104,6 +2104,7 @@ pub struct ToolServiceContext {
     pub activity_tool_context: ToolActivityToolContext,
     #[from_ref(skip)]
     pub document_tool_context: ToolDocumentToolContext,
+    #[from_ref(skip)]
     pub image_generation_tool_context: ToolImageGenerationToolContext,
     /// Shared cognition-backed generation and decisions, attributed per request.
     pub cognition_tool_context: ToolCognitionToolContext,
@@ -2167,7 +2168,7 @@ pub struct ToolServiceContext {
     pub recorder: std::sync::Arc<dyn ai_usage::UsageRecorder>,
     /// The usage context (feature/user/entity) of the request currently using
     /// this context. Set per-session by the caller so AI calls made by tools
-    /// (e.g. subagents) are attributed to the feature that spawned them.
+    /// (e.g. GenerateObject) are attributed to the feature that spawned them.
     pub usage_context: ai_usage::UsageContext,
 }
 
@@ -2218,6 +2219,15 @@ impl FromRef<ToolServiceContext> for web_search::inbound::toolset::WebToolContex
             )),
             entity: context.usage_context.entity,
         }
+    }
+}
+
+impl FromRef<ToolServiceContext> for ToolImageGenerationToolContext {
+    fn from_ref(context: &ToolServiceContext) -> Self {
+        context
+            .image_generation_tool_context
+            .clone()
+            .with_agent_session(context.usage_context.agent_session_id)
     }
 }
 

@@ -96,6 +96,16 @@ impl ContainerManager for TaggedManager {
         Ok(())
     }
 
+    async fn release_idle(&self, _session: AgentSessionId) -> Result<()> {
+        self.record("release_idle");
+        Ok(())
+    }
+
+    async fn idle_release_is_lossless(&self, _session: AgentSessionId) -> Result<bool> {
+        self.record("idle_release_is_lossless");
+        Ok(true)
+    }
+
     fn resize_effect(&self, _from: SandboxSize, _to: SandboxSize) -> SandboxResizeEffect {
         unimplemented!("these tests never resize")
     }
@@ -131,6 +141,17 @@ impl AgentSessionRepo for FixedBotSessions {
         _ids: &[AgentSessionId],
     ) -> SessionResult<Vec<agent_session::domain::model::SessionPreviewCandidate>> {
         unimplemented!("the router never previews sessions")
+    }
+
+    async fn has_unfinished_turn(&self, _id: AgentSessionId) -> SessionResult<bool> {
+        Ok(false)
+    }
+
+    async fn billing(
+        &self,
+        _id: AgentSessionId,
+    ) -> SessionResult<agent_session::domain::model::SessionBilling> {
+        Ok(agent_session::domain::model::SessionBilling::default())
     }
 
     async fn get(&self, id: AgentSessionId) -> SessionResult<AgentSession> {

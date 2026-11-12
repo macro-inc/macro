@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT session_id, user_id, agent_id, surfaces\n               FROM routine_suggestion_session\n               WHERE closed_at IS NULL AND opened_at < $1\n               ORDER BY opened_at\n               LIMIT $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "session_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "agent_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "surfaces",
+        "type_info": "TextArray"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "d36e2b149d8168b858757a9f9fb5adbc127f2f192016884030d1c4abd4fb7823"
+}

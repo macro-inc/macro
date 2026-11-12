@@ -46,3 +46,19 @@ The composer has no visibility controls or saved audience choice. Exercise
 agent mentions, inherited ephemeral-thread replies, and shared-thread forks
 against the isolated full stack with two users; see
 `docs/agent-guide/channels.md` at the repository root.
+
+The attach regression taps the add drawer's Attach files on a phone. A phone
+browser opens the file picker within the tap. With the iOS app's Tauri bridge
+stubbed and its photo library picker failing, the composer opens no picker by
+itself, since WKWebView ignores a file input click once the native round trip
+has outlived the tap. It shows a toast whose Choose files button opens the
+picker instead.
+
+The mention-ranking fixture also mounts document discussion composers over a
+bounded virtual 100k contact source. Desktop/phone cases verify lazy activation,
+replaceable pages and scroll reset, a late-directory match, insertion, and an
+explicit empty scope that offers agents without falling back to the directory.
+Each scenario uses its own draft persistence key. The real configured editor,
+MarkdownShell, mention hook and menu run together; this catches dropped window
+transforms that isolated source tests cannot. Channel/CRM scope and agent rollout
+behavior also have unit coverage.

@@ -202,21 +202,19 @@ fn typecheck_compiles_no_rust() {
     );
 }
 
-/// The OpenAPI clients, specta types, SDK and docs tool pages all come from
-/// workspace binaries, so one job builds them once and checks all four.
+/// The OpenAPI clients, specta types, and SDK all come from
+/// workspace binaries, so one job builds them once and checks all three.
 #[test]
 fn generated_code_checks_every_rust_generated_artifact_in_one_job() {
     let yaml = web_app_check_main().to_string().expect("workflow yaml");
     let generated = job(&yaml, "generated-code", "biome-check");
     // Specta runs last: its `cargo run -p` builds resolve features per
-    // package and would otherwise make the docs build recompile.
+    // package and would otherwise make the schema build recompile.
     let order = [
         "Build schema binaries",
         "bun run gen-api -- --check",
         "bun run sync-specs",
         "git status --porcelain -- packages/sdk",
-        "bun run generate:tools",
-        "git status --porcelain -- apps/docs",
         "just gen-agent-fold-types",
         "just gen-database-sql-types",
         "just gen-dynamic-ui-types",
@@ -344,6 +342,10 @@ fn should_run_includes_fold_wasm_inputs() {
         should_run.contains("crates/database_sql/**"),
         "SQL engine wasm source must rebuild the web artifact: {should_run}"
     );
+    assert!(
+        should_run.contains("crates/natural_time/**"),
+        "date phrase wasm source must rebuild the web artifact: {should_run}"
+    );
 }
 
 #[test]
@@ -415,13 +417,15 @@ fn functional_job(yaml: &str) -> &str {
 fn test_job_shards_vitest_after_building_its_wasm() {
     let yaml = web_app_check_main().to_string().expect("workflow yaml");
     let test_job = test_job(&yaml);
-    let wasm = test_job
-        .find("just build-agent-fold-wasm")
-        .expect("build WASM before the test setup hook");
     let vitest = test_job
         .find("bun run test --shard=${{ matrix.shard }}/6")
         .expect("vitest step runs one shard");
-    assert!(wasm < vitest, "cold WASM compilation precedes Vitest");
+    for build in ["just build-agent-fold-wasm", "just build-natural-time-wasm"] {
+        let wasm = test_job
+            .find(build)
+            .unwrap_or_else(|| panic!("{build} runs before the test setup hook"));
+        assert!(wasm < vitest, "cold WASM compilation precedes Vitest");
+    }
     assert!(
         test_job.contains("fail-fast: false"),
         "a failing shard must not hide the others' failures: {test_job}"

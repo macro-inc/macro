@@ -134,6 +134,7 @@ async fn warming_initializes_without_a_prompt_or_visible_created_event() {
     assert!(signals.lifecycle.published().is_empty());
     let claimed = service
         .open_managed_session(OpenManagedSession {
+            billing: Default::default(),
             origin: trigger_context::TriggerOrigin::Unknown,
             id: Some(id),
             owner: model_owner::Owner::User(sender()),
@@ -166,7 +167,8 @@ async fn warming_initializes_without_a_prompt_or_visible_created_event() {
 }
 
 /// A claimed warm session delivers the create's first prompt under the id the
-/// caller already shows it under, like a cold open.
+/// caller already shows it under, and records the tab it was typed in on the
+/// first turn, like a cold open.
 #[tokio::test]
 async fn a_warm_claim_delivers_its_first_prompt_under_the_callers_id() {
     let (service, repo, containers, _, _) = harness();
@@ -188,8 +190,10 @@ async fn a_warm_claim_delivers_its_first_prompt_under_the_callers_id() {
     assert_eq!(warmed.unwrap().unwrap().id, id);
 
     let action_id = AgentActionId::mint();
+    let tab = agent_session::domain::model::UiClientId::from_uuid(Uuid::from_u128(0xc1));
     service
         .open_managed_session(OpenManagedSession {
+            billing: Default::default(),
             origin: trigger_context::TriggerOrigin::Unknown,
             id: Some(id),
             owner: model_owner::Owner::User(sender()),
@@ -197,6 +201,7 @@ async fn a_warm_claim_delivers_its_first_prompt_under_the_callers_id() {
                 action_id: Some(action_id),
                 prompt: "inspect".to_owned(),
                 attachments: Vec::new(),
+                client: Some(tab),
             }),
             repo_url: None,
             repo_branch: None,
@@ -230,23 +235,12 @@ async fn a_warm_claim_delivers_its_first_prompt_under_the_callers_id() {
         })
         .collect();
     assert_eq!(prompt_ids, vec![action_id.to_request_id()]);
-}
-
-fn span_exporter() -> (
-    opentelemetry_sdk::trace::InMemorySpanExporter,
-    opentelemetry_sdk::trace::SdkTracerProvider,
-    tracing::subscriber::DefaultGuard,
-) {
-    use opentelemetry::trace::TracerProvider as _;
-    use tracing_subscriber::layer::SubscriberExt as _;
-    let exporter = opentelemetry_sdk::trace::InMemorySpanExporter::default();
-    let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
-        .with_simple_exporter(exporter.clone())
-        .build();
-    let layer = tracing_opentelemetry::layer().with_tracer(provider.tracer("test"));
-    let guard = tracing::subscriber::set_default(tracing_subscriber::registry().with(layer));
-    tracing::callsite::rebuild_interest_cache();
-    (exporter, provider, guard)
+    let prompter = repo
+        .turn_prompter(id)
+        .await
+        .expect("the prompter is readable")
+        .expect("the first turn recorded its prompter");
+    assert_eq!(prompter.client, Some(tab));
 }
 
 fn attributes(
@@ -283,6 +277,7 @@ async fn a_missed_warm_claim_records_why_on_the_open_span() {
     );
     let session = service
         .open_managed_session(OpenManagedSession {
+            billing: Default::default(),
             origin: trigger_context::TriggerOrigin::Unknown,
             id: Some(AgentSessionId::new()),
             owner: model_owner::Owner::User(sender()),
@@ -337,6 +332,7 @@ async fn an_open_without_a_client_id_records_that_no_warm_id_was_sent() {
     );
     let session = service
         .open_managed_session(OpenManagedSession {
+            billing: Default::default(),
             origin: trigger_context::TriggerOrigin::Unknown,
             id: None,
             owner: model_owner::Owner::User(sender()),
@@ -420,6 +416,7 @@ async fn a_routine_run_opens_its_own_session_instead_of_claiming_a_warm_one() {
     );
     let session = service
         .open_managed_session(OpenManagedSession {
+            billing: Default::default(),
             origin: trigger_context::TriggerOrigin::Unknown,
             id: Some(AgentSessionId::new()),
             owner: model_owner::Owner::User(sender()),
@@ -457,6 +454,7 @@ async fn a_session_asked_for_out_of_sight_is_hidden_and_notifies_nobody() {
     let ((service, repo, _containers, _, _), turns) =
         harness_with_signals(PromptContextMock::default(), PromptComposerMock::default());
     let open = |visibility| OpenManagedSession {
+        billing: Default::default(),
         origin: trigger_context::TriggerOrigin::Requested { by: sender() },
         id: Some(AgentSessionId::new()),
         owner: model_owner::Owner::User(sender()),

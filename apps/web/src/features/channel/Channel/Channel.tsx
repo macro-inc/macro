@@ -10,8 +10,10 @@ import { t } from '@app/lib/i18n';
 import { beginInteraction, usePending } from '@app/observability/flow';
 import { startUiOperation } from '@app/observability/ui-operation';
 import { createActivityTracker } from '@channel/activity-tracker';
+import { CallChatEmptyState } from '@channel/Call/chat/components/CallChatEmptyState';
 import { useStartChannelCall } from '@channel/Call/use-start-channel-call';
 import { DebugSuspense } from '@channel/DebugSuspense';
+import { groupChatName, isNamedForPeople } from '@channel/group-chat-name';
 import {
   ChannelInput,
   type ChannelInputProps,
@@ -48,6 +50,7 @@ import {
   useChannelType,
 } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
+import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { DateValue } from '@core/util/date';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -171,6 +174,12 @@ export type ChannelProps = {
   onHandleReady?: (handle: ChannelHandle) => void;
   /** Whether to auto-focus the channel input on mount. Defaults to `!isTouchDevice()`. */
   autofocus?: boolean;
+  /**
+   * Esc on the message list, where the composer's Esc lands, hands focus back
+   * to the host's list (the one this conversation was opened from). Returns
+   * whether it did; without a list, Esc reaches the split as before.
+   */
+  onEscapeToList?: () => boolean;
   /** Shows the channel inside a call, opened on that call's thread. */
   callPanel?: {
     /** The root of the call's thread. */
@@ -191,6 +200,7 @@ export type ChannelHandle = {
   goToMessage: TargetMessageController['goToMessage'];
   goToLatest: (behavior?: ScrollBehavior) => void;
   getMessagesStateSnapshot: () => MessageTimelineStateSnapshot | undefined;
+  focusInput: () => void;
 };
 
 /** A composer that stays where it is, for a surface with no floating chrome. */
@@ -395,14 +405,22 @@ export function Channel(props: ChannelProps) {
     callPanel.onViewChannel();
   };
 
-  const [liveCallRowVisible, setLiveCallRowVisible] = createSignal(false);
-
   const unifiedInput = createUnifiedInputManager({
     initialReplyTarget: props.initialMessagesStateSnapshot?.replyTarget,
     defaultThreadId: callPanel?.rootId,
     // Clear any highlight left by tapping the reply flag's navigate action.
     onReplyThreadReleased: (threadId) => releaseSelectionAndTarget(threadId),
   });
+
+  const isDefaultCallThread = () => {
+    const target = unifiedInput.replyTarget();
+    return (
+      !!callPanel &&
+      target?.threadId === callPanel.rootId &&
+      !target.replyId &&
+      !target.message
+    );
+  };
 
   const threadManager = createThreadManager(
     props.initialMessagesStateSnapshot?.threads
@@ -477,12 +495,15 @@ export function Channel(props: ChannelProps) {
   const channelType = useChannelType(props.channelId);
   const { popoverSplit } = useSplitLayout();
 
-  // Placeholder name: channels render as "#name"; a 1:1 DM named "First Last"
-  // shortens to the first name, and group DMs like "A, B" keep their full name.
+  // Placeholder name: channels render as "#name", a group chat named for its
+  // people by the shortened list, and a 1:1 DM "First Last" by the first name.
   const inputPlaceholderName = () => {
     const name = channelName();
     if (!name) return undefined;
     if (channel()?.agent_dm) return name;
+    if (channelType() === ChannelTypeEnum.Private && isNamedForPeople(name)) {
+      return groupChatName(name);
+    }
     if (channelType() !== ChannelTypeEnum.DirectMessage) return `#${name}`;
     const parts = name.split(' ');
     return parts.length === 2 && !parts[0]?.endsWith(',') ? parts[0] : name;
@@ -736,22 +757,27 @@ export function Channel(props: ChannelProps) {
     finishLatestNavigation();
   };
 
-  const { messageListScopeId, attachMessageListRef, attachInputRef } =
-    createChannelHotkeys({
-      selection,
-      scrollToMessage: (id, options) => {
-        cancelLatestNavigation();
-        return threadListNavigation()?.scrollToMessage(id, options) ?? false;
-      },
-      messageById,
-      getMessageActions,
-      userId,
-      isEditing: () => !!messageEditor.state(),
-      isInputEmpty: () =>
-        (channelInputSnapshot()?.value.trim().length ?? 0) === 0,
-      onOpenFindBar: findBar.open,
-      onGoToBottom: goToLatest,
-    });
+  const {
+    messageListScopeId,
+    focusMessageList,
+    attachMessageListRef,
+    attachInputRef,
+  } = createChannelHotkeys({
+    selection,
+    scrollToMessage: (id, options) => {
+      cancelLatestNavigation();
+      return threadListNavigation()?.scrollToMessage(id, options) ?? false;
+    },
+    messageById,
+    getMessageActions,
+    userId,
+    isEditing: () => !!messageEditor.state(),
+    isInputEmpty: () =>
+      (channelInputSnapshot()?.value.trim().length ?? 0) === 0,
+    onOpenFindBar: findBar.open,
+    onGoToBottom: goToLatest,
+    onEscapeToList: () => props.onEscapeToList?.() ?? false,
+  });
 
   createChannelKeyboardHandler({
     scrollToLatest: () => threadListNavigation()?.scrollToLatest(),
@@ -842,6 +868,7 @@ export function Channel(props: ChannelProps) {
       goToMessage,
       goToLatest,
       getMessagesStateSnapshot,
+      focusInput: () => channelInputHandle()?.focus(),
     });
   });
 
@@ -918,6 +945,7 @@ export function Channel(props: ChannelProps) {
                             triggerBehavior="spring-back"
                           >
                             <ThreadList
+                              preserveReflowGap={!!callPanel && !isMobile()}
                               keys={rowKeys}
                               targetId={
                                 targetMessageController.hasPendingElementScroll()
@@ -999,6 +1027,21 @@ export function Channel(props: ChannelProps) {
                                           threadManager.getOrCreateThreadState(
                                             item.id
                                           );
+                                        const callRootSlot = () => {
+                                          if (!isCallRow()) return undefined;
+                                          return () => (
+                                            <Show when={callStatus()}>
+                                              {(status) => (
+                                                <CallRootLine
+                                                  channelId={props.channelId}
+                                                  message={m()}
+                                                  status={status()}
+                                                  inCallPanel={isPanelRoot()}
+                                                />
+                                              )}
+                                            </Show>
+                                          );
+                                        };
                                         return (
                                           <div
                                             class={
@@ -1008,27 +1051,9 @@ export function Channel(props: ChannelProps) {
                                             }
                                           >
                                             <ChannelThread
-                                              rootSlot={
-                                                isCallRow()
-                                                  ? () => (
-                                                      <Show when={callStatus()}>
-                                                        {(status) => (
-                                                          <CallRootLine
-                                                            channelId={
-                                                              props.channelId
-                                                            }
-                                                            message={m()}
-                                                            status={status()}
-                                                            inCallPanel={isPanelRoot()}
-                                                            onVisibilityChange={
-                                                              setLiveCallRowVisible
-                                                            }
-                                                          />
-                                                        )}
-                                                      </Show>
-                                                    )
-                                                  : undefined
-                                              }
+                                              repliesAsRoots={isPanelRoot()}
+                                              hideRail={isPanelRoot()}
+                                              rootSlot={callRootSlot()}
                                               hideCollapsedPreview={isCallRow()}
                                               beforeMessage={
                                                 <AgentConversationContextBoundary
@@ -1153,13 +1178,9 @@ export function Channel(props: ChannelProps) {
                                                 m().thread.reply_count === 0
                                               }
                                             >
-                                              <p class="pointer-events-none absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-ink-muted">
-                                                {t('calls.callThreadEmpty', {
-                                                  channel:
-                                                    channel()?.name ??
-                                                    t('calls.thisChannel'),
-                                                })}
-                                              </p>
+                                              <div class="pointer-events-none absolute inset-0">
+                                                <CallChatEmptyState />
+                                              </div>
                                             </Show>
                                           </div>
                                         );
@@ -1214,20 +1235,6 @@ export function Channel(props: ChannelProps) {
                         </MessageNotificationIndexContext.Provider>
                       </div>
                     </Show>
-                    <Show when={!callPanel}>
-                      <DebugSuspense name="Channel.active-call">
-                        <ActiveCallMessage
-                          channelId={props.channelId}
-                          hidden={liveCallRowVisible()}
-                          messageCount={(callId) =>
-                            messageIndex.callStatusByKey.has(callId)
-                              ? messageById().get(callId)?.thread.reply_count
-                              : undefined
-                          }
-                          onOpenRow={(callId) => goToMessage(callId)}
-                        />
-                      </DebugSuspense>
-                    </Show>
                   </div>
                   <DebugSuspense name="Channel.input">
                     <Dynamic
@@ -1236,7 +1243,17 @@ export function Channel(props: ChannelProps) {
                       }
                       region="accessory"
                     >
+                      <Show when={!callPanel}>
+                        <DebugSuspense name="Channel.active-call">
+                          <ActiveCallMessage channelId={props.channelId} />
+                        </DebugSuspense>
+                      </Show>
                       <ChannelInputContainer
+                        class={
+                          callPanel
+                            ? 'px-(--message-padding-x) touch:px-(--message-padding-x)'
+                            : undefined
+                        }
                         ref={(el) => {
                           attachInputRef(el);
                           composerTarget(el);
@@ -1290,8 +1307,14 @@ export function Channel(props: ChannelProps) {
                                   (messageById().get(threadId)?.thread
                                     .reply_count ?? 0) > 0
                                 }
+                                plain={isDefaultCallThread()}
+                                placeholder={
+                                  isDefaultCallThread()
+                                    ? t('calls.messageThisCall')
+                                    : undefined
+                                }
                                 pinnedLabel={
-                                  threadId === callPanel?.rootId
+                                  isDefaultCallThread()
                                     ? () => t('calls.replyingInCallThread')
                                     : undefined
                                 }
@@ -1318,6 +1341,7 @@ export function Channel(props: ChannelProps) {
                                   id: props.channelId,
                                 }}
                                 autofocus={props.autofocus}
+                                onEscape={focusMessageList}
                                 collapsible
                                 input={{
                                   mode: 'channel',

@@ -1,5 +1,6 @@
 import { MediaBackgroundPicker } from '@core/component/media/media-background-picker';
 import { MediaDevicePicker } from '@core/component/media/media-device-picker';
+import { rememberRecentBackgroundImage } from '@core/component/media/recent-background-images';
 import type { BackgroundEffect } from '@core/media/background-effect';
 import { fireAndForget } from '@core/util/fireAndForget';
 import Image from '@icon/system/regular/image.svg';
@@ -56,7 +57,13 @@ export function MeetingMediaSetup(props: {
     setUploadError(undefined);
     try {
       const path = await props.readBackgroundImage(file);
-      if (!disposed) selectBackground({ type: 'image', id: 'custom', path });
+      if (!disposed) {
+        selectBackground({ type: 'image', id: 'custom', path });
+        fireAndForget(
+          rememberRecentBackgroundImage({ id: 'custom', path }),
+          'recent-background-images'
+        );
+      }
     } catch (error) {
       if (!disposed)
         setUploadError(

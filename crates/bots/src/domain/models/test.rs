@@ -32,6 +32,7 @@ fn agent(owner: BotOwner) -> Agent {
         },
         auto_accept_permissions: Some(true),
         is_coding: true,
+        stopped_reason: None,
     }
 }
 

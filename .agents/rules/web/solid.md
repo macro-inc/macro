@@ -22,6 +22,7 @@ State ownership, reactivity, and async error handling.
   setter over `createEffect(() => { if (signal()) sideEffect() })` when setting
   a value should also clear related UI, blur a control, or scroll.
 - **FE-11** Check `solid-primitives` before writing a custom reactive utility.
+- **FE-70** Keep related state that changes together in one createStore, not parallel signals.
 - **FE-12** `async`/`await`, not `.then()`/`.catch()` chains; fallible calls
   return `Result` (FE-36) rather than being wrapped in `try`/`catch`. Enforced
   by oxlint `promise/prefer-await-to-then` — `bun run lint:oxlint` from the
@@ -77,6 +78,15 @@ State ownership, reactivity, and async error handling.
   further down does not save you. This has blanked the calendar grid twice — see
   `focusTarget` in `src/features/block-calendar/CalendarBlockAdapter.tsx` and
   `useSystemSkillsQuery`.
+- **FE-70** A computation that walks a whole large query result (thousands of
+  rows, or rows with nested arrays) reads `unwrap(query.data)` from
+  `solid-js/store`, not `query.data`. The result is a store proxy, so every
+  field read in a tracked scope creates a signal: walking a 14,700-channel
+  list tracked held about seven times the list's own memory. The read of
+  `query.data` still tracks the result being replaced, which is every update
+  of a query without `reconcile`. A query with `reconcile` updates rows in
+  place without replacing `data`, so an unwrapped walk would miss them: keep
+  its reads tracked.
 - **FE-52** Read reactive values (feature flags, `isEditable()`, the current
   user) inside a reactive scope, never as a snapshot at mount. A flag that is
   still loading is not "off".

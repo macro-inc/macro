@@ -9,11 +9,11 @@ mod team_roster;
 
 use crate::domain::{
     models::{
-        Agent, AgentChannelScope, AgentMcpServer, AgentMcpServers, AuthenticatedBot, Bot,
-        BotChannel, BotChannelType, BotId, BotKind, BotOwner, BotOwnerProfile, BotProfile,
-        BotToken, BotTokenCandidate, CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest,
-        CreateChannelScopedBotRequest, HarnessFacts, HarnessId, HarnessOwner, PatchBotRequest,
-        UpdateAgentRequest,
+        Agent, AgentChannelScope, AgentMcpServer, AgentMcpServers, AgentStoppedReason,
+        AuthenticatedBot, Bot, BotChannel, BotChannelType, BotId, BotKind, BotOwner,
+        BotOwnerProfile, BotProfile, BotToken, BotTokenCandidate, CreateAgentRequest,
+        CreateBotRequest, CreateBotTokenRequest, CreateChannelScopedBotRequest, HarnessFacts,
+        HarnessId, PatchBotRequest, UpdateAgentRequest,
     },
     ports::BotRepo,
 };
@@ -139,6 +139,7 @@ struct AgentRow {
     auto_accept_permissions: Option<bool>,
     is_coding: bool,
     is_ephemeral: bool,
+    runtime_stopped: bool,
 }
 
 impl TryFrom<AgentRow> for Agent {
@@ -191,6 +192,9 @@ impl TryFrom<AgentRow> for Agent {
             auto_accept_permissions: row.auto_accept_permissions,
             is_coding: row.is_coding,
             is_ephemeral: row.is_ephemeral,
+            stopped_reason: row
+                .runtime_stopped
+                .then_some(AgentStoppedReason::NoRuntimeAccess),
         })
     }
 }
@@ -434,6 +438,8 @@ impl BotRepo for PgBotsRepo {
             is_ephemeral: req.is_ephemeral,
             channel_ids: req.channel_ids,
             mcp: req.mcp,
+            // Creating one checks that its owner may run on its runtime.
+            stopped_reason: None,
         })
     }
 
@@ -595,6 +601,8 @@ impl BotRepo for PgBotsRepo {
             auto_accept_permissions: req.auto_accept_permissions,
             is_coding: req.is_coding,
             is_ephemeral,
+            // Saving one checks that its owner may run on its runtime.
+            stopped_reason: None,
         }))
     }
 
@@ -627,6 +635,11 @@ impl BotRepo for PgBotsRepo {
                 a.auto_accept_permissions,
                 a.is_coding,
                 a.is_ephemeral,
+                (
+                    a.harness_id IS NOT NULL
+                    AND NOT a.is_coding
+                    AND NOT agent_owner_can_run(b.id)
+                ) AS "runtime_stopped!",
                 ARRAY(
                     SELECT p.channel_id
                     FROM comms_channel_participants p
@@ -1071,6 +1084,11 @@ impl BotRepo for PgBotsRepo {
                 a.auto_accept_permissions,
                 a.is_coding,
                 a.is_ephemeral,
+                (
+                    a.harness_id IS NOT NULL
+                    AND NOT a.is_coding
+                    AND NOT agent_owner_can_run(b.id)
+                ) AS "runtime_stopped!",
                 ARRAY(
                     SELECT p.channel_id
                     FROM comms_channel_participants p
@@ -1112,13 +1130,55 @@ impl BotRepo for PgBotsRepo {
         row.map(Agent::try_from).transpose()
     }
 
+    async fn harness_granted_to_team(
+        &self,
+        harness_id: HarnessId,
+        team_id: Uuid,
+    ) -> Result<bool, Self::Err> {
+        let granted = sqlx::query_scalar!(
+            r#"
+            SELECT EXISTS (
+                SELECT 1
+                FROM entity_access ea
+                JOIN harnesses h ON h.id = ea.entity_id AND h.deleted_at IS NULL
+                WHERE ea.entity_id = $1
+                  AND ea.entity_type = 'harness'
+                  AND ea.source_type = 'team'
+                  AND ea.source_id = $2
+            ) AS "granted!"
+            "#,
+            harness_id.as_uuid(),
+            team_id.to_string(),
+        )
+        .fetch_one(&self.pool)
+        .await
+        .context("failed to read harness team grant")?;
+        Ok(granted)
+    }
+
+    async fn user_may_use_harness(
+        &self,
+        harness_id: HarnessId,
+        user_id: &str,
+    ) -> Result<bool, Self::Err> {
+        let may_use = sqlx::query_scalar!(
+            r#"SELECT harness_can_run($1, $2) AS "may_use!""#,
+            harness_id.as_uuid(),
+            user_id,
+        )
+        .fetch_one(&self.pool)
+        .await
+        .context("failed to read harness access")?;
+        Ok(may_use)
+    }
+
     async fn get_harness_facts(
         &self,
         harness_id: HarnessId,
     ) -> Result<Option<HarnessFacts>, Self::Err> {
         let row = sqlx::query!(
             r#"
-            SELECT owner_user_id, team_id, allow_permission_bypass
+            SELECT allow_permission_bypass
             FROM harnesses
             WHERE id = $1 AND deleted_at IS NULL
             "#,
@@ -1126,21 +1186,11 @@ impl BotRepo for PgBotsRepo {
         )
         .fetch_optional(&self.pool)
         .await
-        .context("failed to fetch harness owner")?;
+        .context("failed to fetch harness facts")?;
 
-        row.map(|row| match (row.owner_user_id, row.team_id) {
-            (Some(user_id), None) => Ok(HarnessFacts {
-                owner: HarnessOwner::User { user_id },
-                allow_permission_bypass: row.allow_permission_bypass,
-            }),
-            (None, Some(team_id)) => Ok(HarnessFacts {
-                owner: HarnessOwner::Team { team_id },
-                allow_permission_bypass: row.allow_permission_bypass,
-            }),
-            // Unreachable: harnesses_owner_check enforces exactly one owner.
-            _ => Err(anyhow::anyhow!("harness {harness_id} violates owner xor")),
-        })
-        .transpose()
+        Ok(row.map(|row| HarnessFacts {
+            allow_permission_bypass: row.allow_permission_bypass,
+        }))
     }
 
     async fn user_has_team(

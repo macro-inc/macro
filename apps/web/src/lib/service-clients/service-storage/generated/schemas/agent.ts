@@ -8,6 +8,7 @@ import type { AgentAutoAcceptPermissions } from './agentAutoAcceptPermissions';
 import type { AgentChannelScope } from './agentChannelScope';
 import type { AgentHarnessId } from './agentHarnessId';
 import type { AgentMcpServers } from './agentMcpServers';
+import type { AgentStoppedReasonProperty } from './agentStoppedReasonProperty';
 import type { Bot } from './bot';
 
 /**
@@ -39,4 +40,5 @@ settings; the persona's word, not the runtime's. */
   is_ephemeral?: boolean;
   /** Which MCP servers sessions of this agent are handed. */
   mcp: AgentMcpServers;
+  stopped_reason?: AgentStoppedReasonProperty;
 }
