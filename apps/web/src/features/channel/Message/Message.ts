@@ -11,6 +11,7 @@ import { Layout } from './Layout';
 import { MediaPreview } from './MediaPreview';
 import { MessageFlag } from './MessageFlag';
 import { NewDivider } from './NewDivider';
+import { NotSentIndicator } from './NotSentIndicator';
 import { Reactions } from './Reactions';
 import { Root } from './Root';
 import { SenderIcon } from './SenderIcon';
@@ -34,6 +35,7 @@ export const Message = {
   NewDivider,
   Reactions,
   EditedIndicator,
+  NotSentIndicator,
   HoverActions,
   MessageFlag,
   ActionMenu,

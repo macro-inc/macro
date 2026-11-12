@@ -356,6 +356,7 @@ async function boot(world: WorldCore) {
     '@queries/messages/timeline-entries'
   );
   const queuedWrites = await import('@queries/messages/graphql/queued-writes');
+  const unsentPosts = await import('@queries/messages/graphql/unsent-posts');
 
   const disposers: (() => void)[] = [];
   const hooks = solid.createRoot((dispose) => {
@@ -408,6 +409,7 @@ async function boot(world: WorldCore) {
     queryClient,
     host,
     queuedWrites,
+    unsentPosts,
     /** Open the channel, as its view does, and keep it open. */
     open() {
       observer = new solidQuery.InfiniteQueryObserver(

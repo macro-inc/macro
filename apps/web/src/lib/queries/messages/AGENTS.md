@@ -17,6 +17,8 @@ live events that keep them current.
   - `writes.ts`: channel message writes sent through the queue and waited on.
   - `queued-writes.ts`: the queued writes the timeline keeps showing, restored
     after a reload and applied again after reads.
+  - `unsent-posts.ts`: which queued posts have waited past 5 s, for the
+    "Not sent yet" row (`features/channel/Message/NotSentIndicator.tsx`).
   - `channel-sync.ts`: opening from the cache, catch-up, writing the page back.
   - `apply.ts`: changes applied to loaded pages; `convert.ts`: GraphQL ↔ timeline shapes.
   - `prewarm.ts`: warming the pages of channels not open yet, and evicting
@@ -108,7 +110,9 @@ live events that keep them current.
   page and a catch-up that applies changes drop their changes, so they are
   applied again in queue order, each only where it is missing; a message
   the queue deletes later is not put back. `hasPendingWrite` is true while
-  one is held.
+  one is held. A post held 5 s after the queue took it reads as not sent
+  (`isChannelPostNotSent`, reactive per message id); edits, deletes and
+  reactions never do.
 - The messages client sends a REST write again, twice a second apart, when
   the server answers 503 (its write guard); the id and nonce stay the same,
   so the retry cannot post twice. A refused edit, delete, reaction or thread

@@ -33,6 +33,7 @@ import {
   isChannelTracked,
   reconcileFailedChannelWrite,
 } from './channel-sync';
+import { trackQueuedPosts } from './unsent-posts';
 
 /**
  * A channel message write as the device cache's mutation queue holds it,
@@ -149,6 +150,17 @@ export function queuedChannelWrites(channelId: string): QueuedChannelWrite[] {
     .map(([, entry]) => entry.write);
 }
 
+/** The rows of held posts say they are not sent once they have waited a while. */
+function syncQueuedPosts() {
+  const posts = new Map<string, number>();
+  for (const entry of held.values()) {
+    if (entry.write.kind !== 'post') continue;
+    // A post restored without its queue time waited since before this page.
+    posts.set(entry.write.input.id, entry.enqueuedAtMs ?? 0);
+  }
+  trackQueuedPosts(posts);
+}
+
 /** Whether the module holds a queued write for the channel. */
 export function holdsQueuedChannelWrite(channelId: string): boolean {
   for (const entry of held.values()) {
@@ -194,11 +206,12 @@ export function holdQueuedChannelWrite(
     order: options.order,
     enqueuedAtMs: Date.now(),
   });
+  syncQueuedPosts();
 }
 
 /** The write settled; its change is no longer the timeline's to keep. */
 export function releaseQueuedChannelWrite(transactionId: string) {
-  held.delete(transactionId);
+  if (held.delete(transactionId)) syncQueuedPosts();
 }
 
 /** A committed write's change arrives by its number, or by reading again. */
@@ -257,6 +270,7 @@ function onSettled(host: CacheHost, settlement: MutationSettlement) {
   const entry = held.get(settlement.transactionId);
   if (!entry || entry.live) return;
   held.delete(settlement.transactionId);
+  syncQueuedPosts();
   const parent = channelWriteParent(entry.write);
   if (settlement.status === 'committed') {
     refreshAfterChannelWrite(parent);
@@ -274,6 +288,7 @@ function onSettled(host: CacheHost, settlement: MutationSettlement) {
 function onStorageReset(host: CacheHost) {
   const lost = [...held.values()];
   held.clear();
+  syncQueuedPosts();
   restores.delete(host);
   const failures = new Set(
     lost.filter((entry) => !entry.live).map((entry) => failureText(entry.write))
@@ -377,6 +392,7 @@ async function readQueue(host: CacheHost) {
     restored.push(entry);
   }
   if (restored.length === 0) return;
+  syncQueuedPosts();
   watchPageReplacements();
   for (const channelId of channelsOf(restored)) {
     reapplyQueuedChannelWrites({ type: 'channel', id: channelId });
@@ -650,6 +666,7 @@ export async function queueHoldsChannelWrite(
 /** Forget every held write and listener; tests start from a fresh page. */
 export function resetQueuedChannelWrites() {
   held.clear();
+  syncQueuedPosts();
   liveUuids.clear();
   stopReapply?.();
   stopReapply = undefined;

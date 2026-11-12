@@ -375,3 +375,41 @@ describe('a write restored after a reload', () => {
     expect(world.duplicates).toEqual([]);
   });
 });
+
+describe('a post the queue holds', () => {
+  const notSent = (id: string) =>
+    world.page.unsentPosts.isChannelPostNotSent(id);
+
+  it('reads as not sent after five seconds, until it is sent', async () => {
+    await openChannel();
+    const [earlier] = world.page.rows();
+    await world.setOffline(true);
+    const hello = world.page.send('hello');
+    world.page.edit(earlier?.id ?? '', 'earlier, edited');
+    world.page.react(earlier?.id ?? '', '👍');
+    await world.advance(4_000);
+    expect(notSent(hello.id)).toBe(false);
+
+    await world.advance(1_500);
+    expect(notSent(hello.id)).toBe(true);
+    // Only posts say so: an unsent edit or reaction leaves its row alone.
+    expect(notSent(earlier?.id ?? '')).toBe(false);
+
+    // Restored after a reload, it has already waited long enough.
+    await world.reload();
+    world.page.open();
+    await world.advance(100);
+    expect(notSent(hello.id)).toBe(true);
+
+    // The queue sends it at its next try, which backs off while offline.
+    await world.setOffline(false);
+    await world.advance(60_000, 1_000);
+    expect(applied()).toEqual([
+      'PostChannelMessage:hello',
+      'EditChannelMessage:earlier, edited',
+      'ReactToChannelMessage:👍',
+    ]);
+    expect(notSent(hello.id)).toBe(false);
+    expect(failures()).toEqual([]);
+  });
+});

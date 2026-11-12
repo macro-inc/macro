@@ -39,6 +39,7 @@ vi.mock('../Message', () => {
       AgentBadge: Nothing,
       Timestamp: Nothing,
       EditedIndicator: Nothing,
+      NotSentIndicator: Nothing,
       AgentSessionLink: Nothing,
       Attachments: Nothing,
       Reactions: Nothing,

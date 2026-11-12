@@ -991,9 +991,13 @@ the cache's mutation queue (`PostChannelMessage`, `EditChannelMessage`,
 resolve and delete, and channels without the cache keep the REST routes above.
 A message sent offline stays in the timeline and is sent once the connection
 returns, once each and in the order typed, also across a reload; an edit or
-reaction to it follows it. To verify, open a channel, set DevTools offline,
-send two messages, edit one, reload, then go online: both arrive once, in
-order, with the edit, and neither row appears twice at any point.
+reaction to it follows it. A post still queued five seconds after it was sent
+is dimmed with **Not sent yet** under it, in the channel and in thread
+replies, on desktop and phone, until it is sent; edits, deletions and
+reactions show nothing. To verify, open a channel, set DevTools offline,
+send two messages, edit one, wait five seconds for the marker, reload, then
+go online: both arrive once, in order, with the edit, the markers go, and
+neither row appears twice at any point.
 
 Reopening a cached channel, reconnecting its live subscription, or returning
 from an absence past the presence window revalidates its timeline with
