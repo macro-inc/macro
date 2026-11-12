@@ -9,7 +9,7 @@ function Pill(props: { work: BackgroundWorkSummary }) {
     <Surface
       hideBorder
       role="status"
-      class="pointer-events-auto flex size-auto max-w-xs rounded-full glass bg-toast text-sm text-ink"
+      class="pointer-events-auto flex size-auto min-w-0 max-w-sm rounded-full glass bg-toast text-sm text-ink"
     >
       {/* A summary that can be opened is a button; the rest only say. */}
       <Dynamic
@@ -19,9 +19,14 @@ function Pill(props: { work: BackgroundWorkSummary }) {
         onClick={() => props.work.onOpen?.()}
       >
         <Spinner size="sm" decorative />
-        <span class="min-w-0 truncate font-medium">{props.work.label}</span>
+        {/* The label says what is under way; a long detail gives way first. */}
+        <span class="shrink-0 whitespace-nowrap font-medium">
+          {props.work.label}
+        </span>
         <Show when={props.work.detail}>
-          <span class="shrink-0 text-ink-muted">{props.work.detail}</span>
+          <span class="min-w-0 truncate text-ink-muted">
+            {props.work.detail}
+          </span>
         </Show>
       </Dynamic>
     </Surface>
