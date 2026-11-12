@@ -392,7 +392,10 @@ describe('liveUpdatesGateExchange', () => {
     expect(forwarded[1]?.context[TRACE_PARENT_CONTEXT_KEY]).toBe(parent);
     // Only the first had a trace to wait in.
     expect(telemetry.spans).toMatchObject([
-      { parent: 'view.projects', attributes: { 'live_updates.outcome': 'live' } },
+      {
+        parent: 'view.projects',
+        attributes: { 'live_updates.outcome': 'live' },
+      },
     ]);
   });
 
