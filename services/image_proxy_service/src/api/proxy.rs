@@ -120,10 +120,9 @@ impl fmt::Display for ProxyError {
                 write!(f, "network error fetching upstream image: {chain}")
             }
             Self::UpstreamStatus(status) => write!(f, "upstream returned status {status}"),
-            Self::UnsupportedMediaType(ct) => write!(
-                f,
-                "upstream content-type is not a supported raster image: {ct}"
-            ),
+            Self::UnsupportedMediaType(ct) => {
+                write!(f, "upstream content-type is not a supported image: {ct}")
+            }
             Self::ImageTooLarge { content_length } => write!(
                 f,
                 "image exceeds max size of {MAX_IMAGE_SIZE} bytes (Content-Length: {content_length})"
@@ -205,21 +204,42 @@ pub async fn proxy_request_handler(
     image_response(&content_type, Body::from_stream(size_limited_stream))
 }
 
-/// Wrap an upstream image body for re-serving from this origin. `nosniff` keeps
-/// browsers on the declared raster type, and the CSP sandboxes the response if
-/// it is ever opened as a document.
+/// Wrap an upstream image body for re-serving from this origin. SVG is also
+/// sent as an attachment, so a client that ignores the CSP sandbox from
+/// [`sandbox_headers`] downloads it instead of rendering it. `<img>` ignores
+/// `Content-Disposition`.
 fn image_response(content_type: &str, body: Body) -> Result<Response, ProxyError> {
-    Response::builder()
+    let mut builder = Response::builder()
         .header("Content-Type", content_type)
         .header("Cache-Control", "public, max-age=31536000, immutable")
-        .header("Cross-Origin-Resource-Policy", "cross-origin")
-        .header("X-Content-Type-Options", "nosniff")
-        .header("Content-Security-Policy", "default-src 'none'; sandbox")
-        .body(body)
-        .map_err(|e| {
-            tracing::error!(error=?e, "could not stream chunks");
-            ProxyError::ResponseBuild(e)
-        })
+        .header("Cross-Origin-Resource-Policy", "cross-origin");
+    if media_type(content_type) == SVG_MEDIA_TYPE {
+        builder = builder.header("Content-Disposition", "attachment");
+    }
+    builder.body(body).map_err(|e| {
+        tracing::error!(error=?e, "could not stream chunks");
+        ProxyError::ResponseBuild(e)
+    })
+}
+
+/// Content-Security-Policy on every proxy response. `sandbox` without
+/// `allow-scripts` stops script in a document opened from this origin (an SVG
+/// opened in a tab); inline styles stay allowed so SVGs render as documents.
+const SANDBOX_CSP: &str = "default-src 'none'; style-src 'unsafe-inline'; sandbox";
+
+/// Applied to every proxy response, errors and redirects included, so no
+/// response from this origin is sniffed or runs script.
+async fn sandbox_headers(mut response: Response) -> Response {
+    let headers = response.headers_mut();
+    headers.insert(
+        axum::http::header::X_CONTENT_TYPE_OPTIONS,
+        axum::http::HeaderValue::from_static("nosniff"),
+    );
+    headers.insert(
+        axum::http::header::CONTENT_SECURITY_POLICY,
+        axum::http::HeaderValue::from_static(SANDBOX_CSP),
+    );
+    response
 }
 
 /// Follow redirects (re-checking each hop for private IPs) and validate the
@@ -387,10 +407,13 @@ fn extract_content_type(response: &reqwest::Response) -> Result<String, ProxyErr
     Ok(content_type)
 }
 
-/// Raster image types (and their common aliases) only: SVG and other document-like types can run script
-/// on this origin. `application/octet-stream` stays allowed because many image
-/// hosts send it (or no Content-Type at all); with `nosniff` a browser never
-/// renders it as a document.
+const SVG_MEDIA_TYPE: &str = "image/svg+xml";
+
+/// Image types this proxy serves. SVG is safe here only because of
+/// [`sandbox_headers`] and the attachment disposition in [`image_response`].
+/// `application/octet-stream` stays allowed because many image hosts send it
+/// (or no Content-Type at all); with `nosniff` a browser never renders it as a
+/// document.
 const ALLOWED_MEDIA_TYPES: &[&str] = &[
     "image/png",
     "image/x-png",
@@ -409,18 +432,22 @@ const ALLOWED_MEDIA_TYPES: &[&str] = &[
     "image/jxl",
     "image/x-icon",
     "image/vnd.microsoft.icon",
+    SVG_MEDIA_TYPE,
     "application/octet-stream",
 ];
 
-fn is_allowed_content_type(content_type: &str) -> bool {
-    let media_type = content_type
+/// The lowercased media type of a Content-Type, without parameters.
+fn media_type(content_type: &str) -> String {
+    content_type
         .split(';')
         .next()
         .unwrap_or(content_type)
         .trim()
-        .to_ascii_lowercase();
+        .to_ascii_lowercase()
+}
 
-    ALLOWED_MEDIA_TYPES.contains(&media_type.as_str())
+fn is_allowed_content_type(content_type: &str) -> bool {
+    ALLOWED_MEDIA_TYPES.contains(&media_type(content_type).as_str())
 }
 
 fn check_content_length(
@@ -475,7 +502,13 @@ fn build_error_chain(err: &reqwest::Error) -> String {
 }
 
 pub fn router() -> Router<crate::api::context::ApiContext> {
-    Router::new().route("/", get(proxy_request_handler))
+    with_sandbox_headers(Router::new().route("/", get(proxy_request_handler)))
+}
+
+fn with_sandbox_headers<State: Clone + Send + Sync + 'static>(
+    router: Router<State>,
+) -> Router<State> {
+    router.layer(axum::middleware::map_response(sandbox_headers))
 }
 
 #[cfg(test)]
