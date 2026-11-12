@@ -167,13 +167,16 @@ export async function exclusive<T>(instance: string, label: string, work: () => 
       closeSync(fd);
       break;
     } catch {
+      let raw = '';
       let holder: { pid?: number; label?: string } = {};
       try {
-        holder = JSON.parse(readFileSync(path, 'utf8'));
+        raw = readFileSync(path, 'utf8');
+        holder = JSON.parse(raw);
       } catch {}
       if (holder.pid && !alive(holder.pid)) {
+        // Only the dead holder's file: another waiter may have taken the lock since.
         try {
-          unlinkSync(path);
+          if (readFileSync(path, 'utf8') === raw) unlinkSync(path);
         } catch {}
         continue;
       }
@@ -263,7 +266,6 @@ export function currentHarness(instance: string): string | undefined {
 
 export async function useHarness(at: Stack, bin: string) {
   if (!existsSync(join(bin, 'agent_harness_service'))) throw new Error(`no agent_harness_service in ${bin}`);
-  const generated = join(at.owner, 'infra/local/generated', at.instance);
   const override = harnessOverride(at.instance);
   mkdirSync(dirname(override), { recursive: true });
   writeFileSync(
@@ -279,6 +281,21 @@ export async function useHarness(at: Stack, bin: string) {
       '',
     ].join('\n'),
   );
+  await recreateHarness(at, override);
+}
+
+/** Back to `bin`, or with none to the build the stack started with. */
+export async function restoreHarness(at: Stack, bin: string | undefined) {
+  if (bin) return useHarness(at, bin);
+  const override = harnessOverride(at.instance);
+  if (!existsSync(override)) return;
+  unlinkSync(override);
+  await recreateHarness(at);
+}
+
+/** Recreate the harness container from the stack's compose files, plus `override`, and wait until it answers. */
+async function recreateHarness(at: Stack, override?: string) {
+  const generated = join(at.owner, 'infra/local/generated', at.instance);
   const env = join(generated, 'local.generated.env');
   const compose = [
     `COMPOSE_PROJECT_NAME=macro-${at.instance}`,
@@ -287,7 +304,7 @@ export async function useHarness(at: Stack, bin: string) {
     `--env-file ${env}`,
     '-f docker/docker-compose.yml',
     `-f ${join(generated, 'docker-compose.override.yml')}`,
-    `-f ${override}`,
+    ...(override ? [`-f ${override}`] : []),
     'up -d --no-deps --no-build --force-recreate agent_harness_service',
   ].join(' ');
   const result = Bun.spawnSync(['nix', 'develop', '--command', 'bash', '-c', compose], {

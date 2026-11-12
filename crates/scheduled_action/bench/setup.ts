@@ -86,6 +86,12 @@ type SetupState = { day: string; databases: Record<string, string> };
 
 const statePath = (instance: string) => join(CACHE, `${instance}.${SCENARIO_NAME}.setup.json`);
 
+/** The database ids `setup` last chose on `instance`, if it ran here. */
+export function savedDatabases(instance: string): Record<string, string> | undefined {
+  const path = statePath(instance);
+  return existsSync(path) ? (JSON.parse(readFileSync(path, 'utf8')) as SetupState).databases : undefined;
+}
+
 /**
  * Due dates relative to today and the databases requests name. Due dates are
  * set again when the day changed since the last setup, so "due today" stays

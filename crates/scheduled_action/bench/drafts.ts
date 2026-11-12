@@ -24,7 +24,7 @@ import {
   verdictLines,
 } from './report';
 import { type SavedRoutine, type Tokens, onEvents, reset, runCheck, save } from './runcheck';
-import { SEEDED_IDS, seed, setup } from './setup';
+import { SEEDED_IDS, savedDatabases, seed, setup } from './setup';
 import {
   type Stack,
   call,
@@ -33,6 +33,7 @@ import {
   loadEnd,
   loadStart,
   login,
+  restoreHarness,
   runningHarnesses,
   stack,
   useHarness,
@@ -49,11 +50,16 @@ const STACK_OPTIONS = {
 
 // ---------- one attempt ----------
 
+/** A bare session asked about the name the case leaves open, instead of guessing. */
+const askedRightly = (item: Case, arm: Arm, asked: boolean | undefined, reply: string | undefined) =>
+  arm === 'bare' && item.asking !== undefined && asked === true && item.asking.test(reply ?? '');
+
 /** The mechanical checks for `arm`; a bare agent that asks about an unmatched name passes. */
 function checks(item: Case, arm: Arm, result: ArmResult, context: Context) {
-  if (arm === 'bare' && item.asking && result.asked) {
+  if (askedRightly(item, arm, result.asked, result.reply)) {
     return [{ says: 'asked which item the person meant instead of guessing', holds: true }];
   }
+  if (result.error) return [{ says: 'answered', holds: false }];
   const draft = result.draft;
   if (!draft) return [{ says: 'answered with a draft', holds: false }];
   return item.expect
@@ -83,7 +89,8 @@ type Session = {
 
 async function open(instance: string, tempo: string): Promise<Session> {
   const at = stack(instance, tempo);
-  const ids = await setup(at, TIMEZONE);
+  // Due dates written on a new day are task changes another eval's run check would see.
+  const ids = await exclusive(instance, 'setup', () => setup(at, TIMEZONE));
   const tokens: Tokens = {};
   for (const person of PERSON_KEYS) tokens[person] = await login(at, email(person));
   const judgeToken = await login(at, email(JUDGE));
@@ -142,8 +149,10 @@ async function attempt(
     const load = loadEnd(before);
     const context: Context = { ids, now: new Date(result.startedAtMs), timezone: TIMEZONE };
     const quality = checks(item, arm, result, context);
+    // Before the run check, so a session still running can't act during it.
+    if (result.sessionId) await deleteSession(at, owner, result.sessionId);
     let run: Attempt['run'];
-    if (options.runChecks && item.run && result.draft?.outcome === 'routine') {
+    if (options.runChecks && item.run && !result.error && result.draft?.outcome === 'routine') {
       try {
         const routine = await routineToRun(session, result);
         if (routine) run = await runCheck(at, db, tokens, item, result.draft, routine, context);
@@ -159,7 +168,6 @@ async function attempt(
         };
       }
     }
-    if (result.sessionId) await deleteSession(at, owner, result.sessionId);
     await reset(at, db, tokens, keep);
     return { result, load, quality, run, build };
   });
@@ -172,7 +180,7 @@ async function attempt(
       ? await draftSpans(at, result.traceId)
       : { spans: await sessionSpans(at, result.traceId, result.sessionId ?? '', window), checks: [] };
   const grade =
-    options.judge && result.draft
+    options.judge && result.draft && !result.error
       ? await judge(at, session.judgeToken, item, result.draft, result.reply, session.names, baseOf(session, item))
       : undefined;
   return {
@@ -198,6 +206,56 @@ async function attempt(
     sessionId: result.sessionId,
   };
 }
+
+type AttemptOptions = Parameters<typeof attempt>[3];
+
+/**
+ * One attempt, tried once more when the eval itself fails (a stack call
+ * refused, a connection dropped); a second failure is kept as an error,
+ * which fails every check and isn't timed.
+ */
+async function tryAttempt(session: Session, item: Case, arm: Arm, options: AttemptOptions): Promise<Attempt> {
+  for (let tries = 1; ; tries++) {
+    try {
+      return await attempt(session, item, arm, options);
+    } catch (error) {
+      console.log(`${item.id} ${arm} #${options.round}: the eval failed: ${String(error).slice(0, 300)}`);
+      if (tries < 2) {
+        await Bun.sleep(10_000);
+        continue;
+      }
+      return {
+        case: item.id,
+        arm,
+        label: options.label,
+        round: options.round,
+        traceId: '',
+        startedAt: new Date().toISOString(),
+        wallMs: 0,
+        error: `eval: ${String(error).slice(0, 500)}`,
+        quality: [{ says: 'answered', holds: false }],
+        load: loadEnd(loadStart()),
+        harness: currentHarness(session.at.instance),
+      };
+    }
+  }
+}
+
+const key = (item: { case: string; round: number }) => `${item.case}#${item.round}`;
+
+/**
+ * The cases still to run in `round`: rounds up to `last` (the file's last
+ * round) only get the cases the file already has, so resuming a run that
+ * stopped fills its gaps without adding other cases to finished rounds.
+ */
+function todo(results: Results, cases: Case[], round: number, last: number) {
+  const have = new Set(results.attempts.map(key));
+  const known = new Set(results.attempts.map((item) => item.case));
+  return cases.filter((item) => !have.has(key({ case: item.id, round })) && (round > last || known.has(item.id)));
+}
+
+/** The databases' ids, which `setup` picks per stack. */
+const databaseIds = (session: Session) => Object.fromEntries(DATABASES.map((name) => [name, session.ids[name]]));
 
 function line(item: Attempt) {
   const b = item.breakdown;
@@ -287,12 +345,14 @@ async function run(args: string[]) {
     throw new Error(`${out} holds ${results.label} ${results.arm} on ${results.model}; write to another file`);
   }
   mkdirSync(dirname(out), { recursive: true });
-  const done = Math.max(0, ...results.attempts.map((item) => item.round));
+  results.databases ??= databaseIds(session);
+  console.log(`${values.instance} answers with ${currentHarness(values.instance) ?? 'the build it started with'}`);
+  const last = Math.max(0, ...results.attempts.map((item) => item.round));
   // Round-robin over cases, so a slow stretch of the model's day spreads
   // across every case instead of landing on one.
-  for (let round = done + 1; round <= done + Number(values.rounds); round++) {
-    for (const item of selected(values)) {
-      const result = await attempt(session, item, which, {
+  for (let round = 1; round <= last + Number(values.rounds); round++) {
+    for (const item of todo(results, selected(values), round, last)) {
+      const result = await tryAttempt(session, item, which, {
         label: results.label,
         round,
         model: values.model,
@@ -351,31 +411,46 @@ async function ab(args: string[]) {
       true,
     ),
   );
-  const done = Math.max(0, ...all.flatMap((results) => results.attempts.map((item) => item.round)));
-  for (let round = done + 1; round <= done + Number(values.rounds); round++) {
-    const order = round % 2 === 1 ? [0, 1] : [1, 0];
-    for (const index of order) {
-      console.log(`round ${round}: ${sides[index].label} (${sides[index].bin})`);
-      // The segment holds the stack, so no other eval drafts on this build
-      // under its own label.
-      await exclusive(at.instance, `ab ${sides[index].label}`, async () => {
-        await useHarness(at, sides[index].bin);
-        const session = await open(values.instance as string, values.tempo as string);
-        for (const item of selected(values)) {
-          const result = await attempt(session, item, which, {
-            label: sides[index].label,
-            round,
-            model: values.model as string,
-            runChecks: !values['no-run-checks'],
-            judge: !values['no-judge'],
-          });
-          all[index].attempts.push(result);
-          writeFileSync(files[index], `${JSON.stringify(all[index], null, 1)}\n`);
-          console.log(line(result));
-        }
-        await session.db.close();
-      });
+  all.forEach((results, index) => {
+    if (results.label !== sides[index].label || results.arm !== which || results.model !== values.model) {
+      throw new Error(`${files[index]} holds ${results.label} ${results.arm} on ${results.model}; use another --dir`);
     }
+  });
+  const last = Math.max(0, ...all.flatMap((results) => results.attempts.map((item) => item.round)));
+  // Put back whatever the stack ran before, so a later `run` measures what it says.
+  const before = currentHarness(at.instance);
+  try {
+    for (let round = 1; round <= last + Number(values.rounds); round++) {
+      const order = round % 2 === 1 ? [0, 1] : [1, 0];
+      for (const index of order) {
+        const cases = todo(all[index], selected(values), round, last);
+        if (!cases.length) continue;
+        console.log(`round ${round}: ${sides[index].label} (${sides[index].bin})`);
+        // The segment holds the stack, so no other eval drafts on this build
+        // under its own label.
+        await exclusive(at.instance, `ab ${sides[index].label}`, async () => {
+          await useHarness(at, sides[index].bin);
+          const session = await open(values.instance as string, values.tempo as string);
+          all[index].databases ??= databaseIds(session);
+          for (const item of cases) {
+            const result = await tryAttempt(session, item, which, {
+              label: sides[index].label,
+              round,
+              model: values.model as string,
+              runChecks: !values['no-run-checks'],
+              judge: !values['no-judge'],
+            });
+            all[index].attempts.push(result);
+            writeFileSync(files[index], `${JSON.stringify(all[index], null, 1)}\n`);
+            console.log(line(result));
+          }
+          await session.db.close();
+        });
+      }
+    }
+  } finally {
+    await exclusive(at.instance, 'ab putting the harness back', () => restoreHarness(at, before));
+    console.log(`${at.instance} answers with ${before ?? 'the build it started with'} again`);
   }
   console.log(`wrote ${files.join(' and ')}`);
 }
@@ -439,11 +514,14 @@ async function reread(args: string[]) {
   const session = values.traces || values.judge ? await open(values.instance, values.tempo) : undefined;
   for (const path of positionals) {
     const results = JSON.parse(readFileSync(path, 'utf8')) as Results;
+    const databases = results.databases ?? savedDatabases(values.instance);
+    if (!databases) throw new Error(`${path} doesn't say which databases it used, and ${values.instance} has no setup here`);
+    const ids = { ...SEEDED_IDS, ...databases };
     for (const item of results.attempts) {
       const found = CASES.find((candidate) => candidate.id === item.case);
       if (!found) continue;
-      const context: Context = { ids: session?.ids ?? SEEDED_IDS, now: new Date(item.startedAt), timezone: TIMEZONE };
-      if (!(item.arm === 'bare' && found.asking && item.asked) && item.draft) {
+      const context: Context = { ids, now: new Date(item.startedAt), timezone: TIMEZONE };
+      if (!askedRightly(found, item.arm, item.asked, item.reply) && !item.error && item.draft) {
         item.quality = found.expect
           .filter((expectation) => !expectation.arms || expectation.arms.includes(item.arm))
           .map((expectation) => ({ says: expectation.says, holds: expectation.holds(item.draft as DraftResult, context) }));
@@ -457,7 +535,7 @@ async function reread(args: string[]) {
             : { spans: await sessionSpans(session.at, item.traceId, item.sessionId ?? '', window), checks: [] };
         item.breakdown = breakdown(spans, item.arm === 'bare' ? window : undefined) ?? item.breakdown;
       }
-      if (session && values.judge && item.draft) {
+      if (session && values.judge && item.draft && !item.error) {
         item.grade = await judge(
           session.at,
           session.judgeToken,
@@ -502,8 +580,12 @@ function calibrate(args: string[]) {
 
 async function seedCommand(args: string[]) {
   const { values } = parseArgs({ args, options: { ...STACK_OPTIONS } });
-  seed(values.instance);
-  const ids = await setup(stack(values.instance, values.tempo), TIMEZONE, true);
+  const at = stack(values.instance, values.tempo);
+  // Seeding resets the workspace under any draft running on it.
+  const ids = await exclusive(values.instance, 'seed', async () => {
+    seed(values.instance);
+    return setup(at, TIMEZONE, true);
+  });
   console.log(`seeded ${Object.keys(ids).length} named items on ${values.instance}`);
 }
 

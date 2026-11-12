@@ -46,12 +46,21 @@ export type Results = {
   startedAt: string;
   /** Other stacks whose harness was running when the run started. */
   stacks: string[];
+  /** The databases' ids on the stack, which checks need besides the seeded ids. */
+  databases?: Record<string, string>;
   attempts: Attempt[];
 };
 
 /** Every mechanical check held, and the run check too where the case has one and it ran. */
 export const passedAll = (attempt: Attempt) =>
   attempt.quality.length > 0 && attempt.quality.every((check) => check.holds) && (attempt.run?.holds ?? true);
+
+/**
+ * It answered: the draft endpoint replied without an error status, or the
+ * bare turn ended. Only these are timed; the rest fail every check, so a
+ * build that fails fast can't look faster.
+ */
+export const answered = (attempt: Attempt) => attempt.error === undefined;
 
 const graded = (attempt: Attempt) =>
   attempt.grade && 'score' in attempt.grade ? attempt.grade.score : undefined;
@@ -73,8 +82,9 @@ const pct = (share: number) => (Number.isNaN(share) ? '–' : `${Math.round(shar
 export const TARGET_MS = 15_000;
 
 export function summary(attempts: Attempt[]) {
-  const wall = attempts.map((attempt) => attempt.wallMs);
-  const with_ = attempts.filter((attempt) => attempt.breakdown);
+  const timed = attempts.filter(answered);
+  const wall = timed.map((attempt) => attempt.wallMs);
+  const with_ = timed.filter((attempt) => attempt.breakdown);
   const pick = (f: (b: Breakdown) => number) => with_.map((attempt) => f(attempt.breakdown as Breakdown));
   const grades = attempts.map(graded).filter((score): score is number => score !== undefined);
   const runs = attempts.filter((attempt) => attempt.run);
@@ -82,8 +92,9 @@ export function summary(attempts: Attempt[]) {
     attempts: attempts.length,
     median: median(wall),
     p90: quantile(wall, 0.9),
-    worst: Math.max(...wall),
-    under: attempts.filter((attempt) => attempt.wallMs < TARGET_MS).length / attempts.length,
+    worst: wall.length ? Math.max(...wall) : Number.NaN,
+    under: timed.filter((attempt) => attempt.wallMs < TARGET_MS).length / timed.length,
+    errors: attempts.length - timed.length,
     quality: attempts.filter(passedAll).length / attempts.length,
     mechanical:
       attempts.filter((attempt) => attempt.quality.length && attempt.quality.every((check) => check.holds)).length /
@@ -101,19 +112,19 @@ export function summary(attempts: Attempt[]) {
     tail: median(pick((b) => b.tailMs)),
     inputTokens: median(pick((b) => b.inputTokens)),
     outputTokens: median(pick((b) => b.outputTokens)),
-    load: median(attempts.map((attempt) => attempt.load.load1[0])),
+    load: median(timed.map((attempt) => attempt.load.load1[0])),
   };
 }
 
 export type Summary = ReturnType<typeof summary>;
 
 export const SUMMARY_HEADER = [
-  '| | n | median | p90 | worst | < 15 s | quality | mechanical | run | judge (pass) | no draft | setup | model (calls) | first token | tool wait | hand-back | tokens in / out | load |',
-  '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |',
+  '| | n | errors | median | p90 | worst | < 15 s | quality | mechanical | run | judge (pass) | no draft | setup | model (calls) | first token | tool wait | hand-back | tokens in / out | load |',
+  '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |',
 ];
 
 export function summaryRow(name: string, row: Summary) {
-  return `| ${name} | ${row.attempts} | ${s(row.median)} | ${s(row.p90)} | ${s(row.worst)} | ${pct(row.under)} | ${pct(row.quality)} | ${pct(row.mechanical)} | ${pct(row.runs)} | ${Number.isNaN(row.judge) ? '–' : row.judge.toFixed(1)} (${pct(row.judgePass)}) | ${row.noDraft} | ${s(row.setup)} | ${s(row.model)} (${row.modelCalls}) | ${s(row.firstToken)} | ${s(row.toolWait)} | ${s(row.tail)} | ${Math.round(row.inputTokens)} / ${Math.round(row.outputTokens)} | ${row.load.toFixed(0)} |`;
+  return `| ${name} | ${row.attempts} | ${row.errors} | ${s(row.median)} | ${s(row.p90)} | ${s(row.worst)} | ${pct(row.under)} | ${pct(row.quality)} | ${pct(row.mechanical)} | ${pct(row.runs)} | ${Number.isNaN(row.judge) ? '–' : row.judge.toFixed(1)} (${pct(row.judgePass)}) | ${row.noDraft} | ${s(row.setup)} | ${s(row.model)} (${row.modelCalls}) | ${s(row.firstToken)} | ${s(row.toolWait)} | ${s(row.tail)} | ${Math.round(row.inputTokens)} / ${Math.round(row.outputTokens)} | ${row.load.toFixed(0)} |`;
 }
 
 // ---------- verdict ----------
@@ -166,6 +177,8 @@ export type Verdict = {
   verdict: 'win' | 'loss' | 'noise';
   why: string;
   pairs: number;
+  /** Pairs where both sides answered, which the time compares. */
+  timedPairs: number;
   /** B's time over A's, per pair: median and 95% interval. */
   timeRatio: number;
   timeInterval: [number, number];
@@ -184,11 +197,14 @@ export type Verdict = {
 export function verdict(a: Attempt[], b: Attempt[], margin = QUALITY_MARGIN): Verdict {
   const sample = pairs(a, b);
   if (sample.length < 5) throw new Error(`only ${sample.length} paired attempts; run both sides on the same rounds`);
+  // Time compares the pairs where both sides answered; quality counts every pair.
+  const timedPairs = sample.filter((pair) => answered(pair.a) && answered(pair.b));
+  if (timedPairs.length < 5) throw new Error(`only ${timedPairs.length} pairs where both sides answered`);
   const ratio = (drawn: Pair[]) => Math.exp(median(drawn.map((pair) => Math.log(pair.b.wallMs / pair.a.wallMs))));
   const share = (drawn: Pair[], side: 'a' | 'b') => drawn.filter((pair) => passedAll(pair[side])).length / drawn.length;
   const delta = (drawn: Pair[]) => share(drawn, 'b') - share(drawn, 'a');
-  const timeRatio = ratio(sample);
-  const timeInterval = interval(sample, ratio);
+  const timeRatio = ratio(timedPairs);
+  const timeInterval = interval(timedPairs, ratio);
   const timeVerdict = timeInterval[1] < 1 ? 'win' : timeInterval[0] > 1 ? 'loss' : 'noise';
   const qualityDelta = delta(sample);
   const qualityInterval = interval(sample, delta);
@@ -215,6 +231,7 @@ export function verdict(a: Attempt[], b: Attempt[], margin = QUALITY_MARGIN): Ve
     verdict: result,
     why,
     pairs: sample.length,
+    timedPairs: timedPairs.length,
     timeRatio,
     timeInterval,
     timeVerdict,
@@ -229,7 +246,7 @@ export function verdictLines(v: Verdict) {
   return [
     `**${v.verdict.toUpperCase()}**: ${v.why}.`,
     '',
-    `- time: B/A median ×${v.timeRatio.toFixed(2)} (95% ${v.timeInterval[0].toFixed(2)}–${v.timeInterval[1].toFixed(2)}) over ${v.pairs} pairs: ${v.timeVerdict}`,
+    `- time: B/A median ×${v.timeRatio.toFixed(2)} (95% ${v.timeInterval[0].toFixed(2)}–${v.timeInterval[1].toFixed(2)}) over ${v.timedPairs} pairs: ${v.timeVerdict}`,
     `- quality (every check passed): ${pct(v.quality[0])} → ${pct(v.quality[1])}, ${v.qualityDelta >= 0 ? '+' : ''}${pct(v.qualityDelta)} (95% ${pct(v.qualityInterval[0])} to ${pct(v.qualityInterval[1])}); margin ${pct(v.margin)}`,
   ];
 }

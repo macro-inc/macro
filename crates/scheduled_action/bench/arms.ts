@@ -232,15 +232,21 @@ export async function bareArm(
   let question: { at: number; text: string } | undefined;
   let reply = '';
   let polls = 0;
-  while (performance.now() - started < TURN_TIMEOUT_MS) {
-    await Bun.sleep(POLL_MS);
-    polls++;
-    found ??= changed(await listRoutines(at, token), base, startedAtMs);
-    // The log is the whole session, so it's read every few polls.
-    if (polls % 4 === 0 || found) {
-      ({ ended, reply, question } = await turn(at, token, id));
-      if (ended || question) break;
+  try {
+    while (performance.now() - started < TURN_TIMEOUT_MS) {
+      await Bun.sleep(POLL_MS);
+      polls++;
+      found ??= changed(await listRoutines(at, token), base, startedAtMs);
+      // The log is the whole session, so it's read every few polls.
+      if (polls % 4 === 0 || found) {
+        ({ ended, reply, question } = await turn(at, token, id));
+        if (ended || question) break;
+      }
     }
+  } catch (error) {
+    // A session left running would act during later drafts.
+    await deleteSession(at, token, id);
+    throw error;
   }
   // A question to the person ends the turn's timed part: it waits for an answer.
   ended ??= question?.at;
@@ -258,10 +264,12 @@ export async function bareArm(
     // Without a routine, the time is the whole turn (or the timeout).
     wallMs: found ? found.at - startedAtMs : (turnMs ?? performance.now() - started),
     draft,
-    error: ended ? undefined : 'turn did not end',
+    // A routine that exists is an answer, even from a turn still running.
+    error: ended || routine ? undefined : 'turn did not end',
     turnMs,
     reply: reply.slice(0, 4000),
-    asked: !routine && (question !== undefined || /\?/.test(reply)),
+    // A question that ends a finished turn; a turn that timed out asked nothing.
+    asked: !routine && (question !== undefined || (ended !== undefined && /\?/.test(reply))),
     routine,
     sessionId: id,
   };
