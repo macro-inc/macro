@@ -380,7 +380,7 @@ not offered because those APIs do not support sessions. Runtime controls remain
 session-specific.
 
 A session transcript shows each tool call as a collapsible row (consecutive calls
-fold into a `Called N tools` group; click it to see the rows). A tool reached over
+fold into a `Used N tools` group; click it to see the rows). A tool reached over
 an MCP server - Macro's own (`ReadContent`) from a Cursor, Claude, or
 Codex session, or a third-party server (`ask_question`) - is titled by
 the tool's own name, without a server or workspace label, never by the harness's dispatcher
