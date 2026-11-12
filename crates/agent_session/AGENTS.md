@@ -180,7 +180,8 @@ skips the turn before any model call; unset or unreadable, summaries run.
   `/internal/routine-sessions/*`) also serve routine drafts: `delete` removes
   a session the scheduler opened for its owner, a routine's run (source
   `routine`) or a draft's background session, and refuses any other;
-  `activity` returns content-free counts (tool calls, turns).
+  `activity` returns content-free counts (tool calls, turns) and the names
+  of the tools called, never their input or output.
 - A background session (`AgentSession::is_background`, `SessionPurpose::Background`)
   is work the owner asked for that runs out of sight: source `user`, origin
   `requested` by the owner, `hidden`, opened from no message. A routine

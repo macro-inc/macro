@@ -863,6 +863,7 @@ fn activity_counts_tool_calls_and_turns_without_reading_them() {
         RoutineActivity {
             tool_calls: 3,
             turns: 1,
+            tools: Some(vec!["ExecuteCode".to_owned()]),
         }
     );
 }

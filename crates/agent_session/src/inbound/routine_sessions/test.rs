@@ -166,6 +166,7 @@ impl RoutineSessions for ServiceSpy {
         Ok(crate::domain::routines::RoutineActivity {
             tool_calls: 3,
             turns: 1,
+            tools: None,
         })
     }
 }

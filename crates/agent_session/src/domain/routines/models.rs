@@ -111,13 +111,19 @@ pub enum RoutineActionStatus {
     Failed(RoutineFailureReason),
 }
 
-/// How much a session did, without what: for its opener's telemetry.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+/// How much a session did, and with which tools, without what: for its
+/// opener's telemetry and for knowing whether it may have written anything.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RoutineActivity {
     /// Tool calls the agent made, across every turn.
     pub tool_calls: u32,
     /// Turns the session ran.
     pub turns: u32,
+    /// The tools it called, each once, sorted: a native tool by its name, an
+    /// MCP tool as `mcp__<server>__<tool>`. Absent from a replica that
+    /// doesn't report them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tools: Option<Vec<String>>,
 }
 
 /// Why the action has not established completion.
