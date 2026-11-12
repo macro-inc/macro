@@ -1,11 +1,12 @@
 import { debounce } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { ThrownResultError } from '@core/util/result';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { Telemetry } from '@macro-inc/observability';
 import type {
   MessageParent,
+  MessageThread,
   MessageTimelineEntry,
-  MessageTimelinePage,
 } from '@service-storage/messages';
 import { hashKey } from '@tanstack/solid-query';
 import { withinCacheHeadStart } from '../../calendar/graphql/readiness';
@@ -16,6 +17,7 @@ import {
   normalizeThreadReplySender,
 } from '../message-sender';
 import {
+  getThreadRepliesQueryKey,
   getThreadRepliesQueryKeyPrefix,
   setThreadRepliesData,
 } from '../thread-replies';
@@ -23,8 +25,10 @@ import {
   getMessageTimelineQueryKey,
   getMessageTimelineQueryKeyPrefix,
   insertActivitiesIntoMessageTimeline,
+  type LoadedTimelinePage,
   type MessageTimelineData,
   type MessageTimelinePageParam,
+  restartPendingChannelTimeline,
   setMessageTimelineData,
 } from '../timeline';
 import {
@@ -41,6 +45,7 @@ import {
 } from './convert';
 import {
   type ChannelChanges,
+  channelCacheHost,
   fetchChannelChanges,
   fetchChannelPage,
   fetchLatestChannelPage,
@@ -65,8 +70,6 @@ const PERSIST_DELAY_MS = 1_000;
 const SURFACE = 'channel-sync';
 
 type ChannelSyncState = {
-  /** The sequence number the in-memory timeline is current to. */
-  seq: number;
   /** The user record the cached page hangs off. */
   userId: string;
   /** The cached page is past the server's reset limit: read from the network. */
@@ -80,16 +83,14 @@ type ChannelSyncState = {
 const STATES = new Map<string, ChannelSyncState>();
 const ANSWERED_HOSTS = new WeakSet<object>();
 
-function track(channelId: string, seq: number, userId: string) {
+function track(channelId: string, userId: string) {
   const state = STATES.get(channelId);
   if (state) {
-    state.seq = seq;
     state.userId = userId;
     state.skipCache = false;
     return state;
   }
   const created: ChannelSyncState = {
-    seq,
     userId,
     skipCache: false,
     running: null,
@@ -100,9 +101,38 @@ function track(channelId: string, seq: number, userId: string) {
   return created;
 }
 
-/** The sequence number a channel's loaded timeline is current to, if it is tracked. */
+/**
+ * The sequence number the channel's loaded latest page is current to. It is
+ * kept on the page, not beside it: a refetch that commits, a cancelled one
+ * that reverts, and a rollback that restores a snapshot all move the rows
+ * and the number together, so the number never claims rows that are gone.
+ */
+function timelineSeq(parent: MessageParent): number | undefined {
+  const data = queryClient.getQueryData<MessageTimelineData>(
+    getMessageTimelineQueryKey(parent, null)
+  );
+  if (!data || data.pageParams[0] != null) return undefined;
+  return data.pages[0]?.channel_seq;
+}
+
+function setTimelineSeq(parent: MessageParent, seq: number) {
+  queryClient.setQueryData<MessageTimelineData>(
+    getMessageTimelineQueryKey(parent, null),
+    (data) => {
+      const first = data?.pages[0];
+      if (!data || !first || data.pageParams[0] != null) return data;
+      if (first.channel_seq === seq) return data;
+      return {
+        ...data,
+        pages: [{ ...first, channel_seq: seq }, ...data.pages.slice(1)],
+      };
+    }
+  );
+}
+
+/** The sequence number a channel's loaded timeline is current to, if it has one. */
 export function channelSyncSeq(channelId: string): number | undefined {
-  return STATES.get(channelId)?.seq;
+  return timelineSeq({ type: 'channel', id: channelId });
 }
 
 /** Forget every channel's position; the next open reads its page again. */
@@ -151,6 +181,9 @@ async function raceCacheWithNetwork(
     try {
       return { source: 'network', read: await network };
     } catch (error) {
+      // A refusal is the server's answer: someone removed from a channel
+      // must not be shown its cached page.
+      if (error instanceof ThrownResultError) throw error;
       // Offline or failing: the cached page is still better than nothing.
       const cached = await cache;
       if (!cached || signal?.aborted) throw error;
@@ -203,7 +236,7 @@ async function loadLatestPage(
   host: CacheHost,
   parent: MessageParent,
   signal?: AbortSignal
-): Promise<MessageTimelinePage> {
+): Promise<LoadedTimelinePage> {
   return Telemetry.span('channel.timeline_load', async (span) => {
     span.setAttr('channel.id', parent.id);
     const { source, read, raced } = await readLatestPage(host, parent, signal);
@@ -211,14 +244,17 @@ async function loadLatestPage(
     span.setAttr('channel.timeline.source', source);
     span.setAttr('channel.timeline.cache_raced', raced);
     span.setAttr('channel.timeline.entries', read.page.entries.length);
-    track(parent.id, read.seq, read.userId);
+    track(parent.id, read.userId);
     if (source === 'cache') {
       fireAndForget(catchUpChannel(host, parent), SURFACE);
     } else {
       // The server's page reaches the cache once it is on screen.
       schedulePersist(host, parent);
     }
-    return normalizeMessageTimelinePageSenders(read.page);
+    return {
+      ...normalizeMessageTimelinePageSenders(read.page),
+      channel_seq: read.seq,
+    };
   });
 }
 
@@ -233,7 +269,7 @@ export async function loadChannelTimelinePage(
   pageParam: MessageTimelinePageParam | null,
   loadAroundMessageId: string | null,
   signal?: AbortSignal
-): Promise<MessageTimelinePage> {
+): Promise<LoadedTimelinePage> {
   const cursor = pageParam?.next_cursor ?? pageParam?.previous_cursor;
   if (pageParam && cursor) {
     const read = await fetchChannelPage(
@@ -276,6 +312,15 @@ function applyChannelChanges(parent: MessageParent, changes: ChannelChanges) {
         ),
         removed
       )
+    );
+  }
+  for (const entry of entries) {
+    if (entry.type === 'activity') continue;
+    // A loaded thread shows its own copy of the root and its state.
+    const { state, thread: _summary, ...root } = entry.message;
+    queryClient.setQueryData<MessageThread>(
+      getThreadRepliesQueryKey(parent, root.id),
+      (thread) => thread && { ...thread, root, state }
     );
   }
   for (const reply of changes.replies) {
@@ -327,7 +372,6 @@ async function runCatchUp(
 ) {
   await Telemetry.span('channel.catch_up', async (span) => {
     span.setAttr('channel.id', parent.id);
-    span.setAttr('channel.catch_up.since', state.seq);
     let pages = 0;
     let rows = 0;
     let outcome = 'current';
@@ -336,6 +380,7 @@ async function runCatchUp(
         outcome = 'unloaded';
         return;
       }
+      span.setAttr('channel.catch_up.since', timelineSeq(parent) ?? -1);
       do {
         state.rerun = false;
         let more = true;
@@ -346,7 +391,12 @@ async function runCatchUp(
             return;
           }
           pages += 1;
-          const since = state.seq;
+          const since = timelineSeq(parent);
+          // The loaded page was not read with a sequence number, or is gone.
+          if (since === undefined) {
+            outcome = 'unloaded';
+            return;
+          }
           const changes = await fetchChannelChanges(parent.id, since);
           if (changes.reset) {
             outcome = 'reset';
@@ -354,24 +404,22 @@ async function runCatchUp(
             readAgain(parent);
             return;
           }
-          // A page read meanwhile moved the timeline; ask again from there.
-          if (state.seq !== since) continue;
-          if (
-            !queryClient.getQueryData(getMessageTimelineQueryKey(parent, null))
-          ) {
-            outcome = 'unloaded';
-            return;
-          }
+          // A page read, a cancelled refetch or a rollback meanwhile moved
+          // the timeline; ask again from where it is now.
+          if (timelineSeq(parent) !== since) continue;
           applyChannelChanges(parent, changes);
+          setTimelineSeq(parent, changes.seq);
           rows +=
             changes.entries.length +
             changes.replies.length +
             changes.activities.length +
             changes.removed.length;
-          state.seq = changes.seq;
           more = changes.hasMore;
         }
       } while (state.rerun);
+      // A page read that started before these changes would commit over
+      // them; start it again so it reads from the timeline as it is now.
+      if (rows > 0) await restartPendingChannelTimeline(parent);
       if (rows > 0) outcome = 'applied';
       schedulePersist(host, parent);
     } catch (error) {
@@ -440,13 +488,17 @@ async function persistLatestPage(host: CacheHost, parent: MessageParent) {
   // Only a page at the live edge is the channel's latest page.
   if (!data || !latest || data.pageParams[0] != null || latest.previous_cursor)
     return;
+  // A page read without a sequence number cannot be caught up later, and a
+  // cache that is no longer the session's is not this page's to write.
+  const seq = latest.channel_seq;
+  if (seq === undefined || channelCacheHost() !== host) return;
   // An optimistic row is not the server's; wait for its write to settle.
   if (hasPendingWrite(parent.id)) {
     schedulePersist(host, parent);
     return;
   }
   await writeCachedLatestPage(host, parent.id, {
-    seq: state.seq,
+    seq,
     userId: state.userId,
     page: trimLatestPage(latest, CURSOR_PAGE_LIMIT),
   });

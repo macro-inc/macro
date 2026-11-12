@@ -39,19 +39,27 @@ live events that keep them current.
   the rows: changed roots replace or join the loaded pages, removed ids leave
   them, replies go to loaded threads. A `reset`, more than 20 change pages, or
   a failed read invalidates the timeline, which then reads the server's page.
-- Changes apply only when the timeline's sequence number is still the one the
-  request was made with; a page read meanwhile moved it, and the catch-up asks
-  again from there. Applying older changes over a newer page would put old
-  rows back.
+- The sequence number lives on the loaded latest page (`channel_seq` on page
+  0), never beside it. A refetch that commits, a cancelled one that reverts,
+  and a rollback that restores a snapshot move the rows and the number
+  together; a number kept elsewhere ends up claiming rows that are gone.
+- Changes apply only when that number is still the one the request was made
+  with; otherwise the catch-up asks again from where the timeline is now.
+  After applying rows it restarts a page read still in flight, which would
+  commit its older snapshot over them. Changed roots also replace the root
+  and state of a loaded thread.
 - The page is written back about a second after a server read or a catch-up,
   never as part of the read that shows it, and only when
-  the first loaded page is the live edge and no message write for the channel
-  is pending, so an optimistic row is never stored.
+  the first loaded page is the live edge, the cache is still the session's,
+  and no message write for the channel is pending, so an optimistic row is
+  never stored.
 - A timeline already loaded is never replaced from the cache: a refetch reads
   the server.
 - A cache that has not answered a read yet is still starting, so the open asks
   the server at once and shows whichever answers first; a cache that has
   answered before is waited on alone for 2 s first. A cached page that wins
-  cancels the server read; one that arrives after a failed server read is
-  shown too, so a channel opens offline.
+  stops waiting for the server read; one that arrives after the server could
+  not be reached is shown too, so a channel opens offline. A refusal from the
+  server (not a member, not found) is its answer and is never covered by the
+  cached page.
 - Threads, `messagesByIds` and message resolution still read REST.
