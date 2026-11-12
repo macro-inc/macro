@@ -18,12 +18,12 @@ creation-time tracking. */
   /** The user's email */
   email: string;
   group?: GetLegacyUserPermissionsResponseGroup;
+  /** The claimed first-party mailbox handle, if one exists. */
+  handle?: GetLegacyUserPermissionsResponseHandle;
   /** Whether the user has the chrome extension */
   hasChromeExt: boolean;
   /** Whether the user has trialed through stripe */
   hasTrialed: boolean;
-  /** The claimed first-party mailbox handle, if one exists. */
-  handle?: GetLegacyUserPermissionsResponseHandle;
   /** Whether this is an agent account rather than a person */
   isAgent: boolean;
   /** The user's license status */

@@ -75,12 +75,31 @@ where
         .with_state(state)
 }
 
+/// Path parameters for member lifecycle endpoints.
 #[derive(serde::Deserialize)]
-struct MemberPath {
-    member_user_id: MacroUserIdStr<'static>,
+pub struct MemberPath {
+    /// The team member whose lifecycle state changes.
+    pub member_user_id: MacroUserIdStr<'static>,
 }
 
-async fn disable_member<S, Eas, Auth>(
+/// Disables a team member and revokes their server-side harness records.
+#[utoipa::path(
+    post,
+    path = "/team/members/{member_user_id}/disable",
+    operation_id = "disable_team_member",
+    params(
+        ("member_user_id" = String, Path, description = "The team member to disable")
+    ),
+    responses(
+        (status = 200, body = DisableMemberReport),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    ),
+)]
+pub async fn disable_member<S, Eas, Auth>(
     access: MacroUserTeamExtractorV2<AdminTeamRole, Eas, Auth>,
     State(state): State<EnterpriseRouterState<S, Eas, Auth>>,
     Path(path): Path<MemberPath>,
@@ -98,7 +117,24 @@ where
     ))
 }
 
-async fn enable_member<S, Eas, Auth>(
+/// Re-enables a previously disabled team member.
+#[utoipa::path(
+    post,
+    path = "/team/members/{member_user_id}/enable",
+    operation_id = "enable_team_member",
+    params(
+        ("member_user_id" = String, Path, description = "The team member to enable")
+    ),
+    responses(
+        (status = 204),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    ),
+)]
+pub async fn enable_member<S, Eas, Auth>(
     access: MacroUserTeamExtractorV2<AdminTeamRole, Eas, Auth>,
     State(state): State<EnterpriseRouterState<S, Eas, Auth>>,
     Path(path): Path<MemberPath>,
@@ -115,7 +151,21 @@ where
     Ok(StatusCode::NO_CONTENT)
 }
 
-async fn set_runtime_allowlist<S, Eas, Auth>(
+/// Replaces the exhaustive set of local runtime presets allowed for a team.
+#[utoipa::path(
+    put,
+    path = "/team/runtime-presets",
+    operation_id = "set_team_runtime_presets",
+    request_body = RuntimePresetAllowlist,
+    responses(
+        (status = 200, body = RuntimePresetAllowlist),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    ),
+)]
+pub async fn set_runtime_allowlist<S, Eas, Auth>(
     access: MacroUserTeamExtractorV2<AdminTeamRole, Eas, Auth>,
     State(state): State<EnterpriseRouterState<S, Eas, Auth>>,
     Json(allowlist): Json<RuntimePresetAllowlist>,
@@ -133,7 +183,20 @@ where
     ))
 }
 
-async fn clear_runtime_allowlist<S, Eas, Auth>(
+/// Clears a team's runtime allowlist, restoring the default local presets.
+#[utoipa::path(
+    delete,
+    path = "/team/runtime-presets",
+    operation_id = "clear_team_runtime_presets",
+    responses(
+        (status = 204),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    ),
+)]
+pub async fn clear_runtime_allowlist<S, Eas, Auth>(
     access: MacroUserTeamExtractorV2<AdminTeamRole, Eas, Auth>,
     State(state): State<EnterpriseRouterState<S, Eas, Auth>>,
 ) -> Result<StatusCode, EnterpriseError>

@@ -34,6 +34,7 @@ import type {
   CurrentSystemStatus,
   CursorApiKeyStatus,
   CursorModelsResponse,
+  DisableMemberReport,
   EmailConnectionProviders,
   EmailConnectionProvidersParams,
   EmptyResponse,
@@ -94,6 +95,7 @@ import type {
   PutUserNameParams,
   RedeemGtmInviteLinkRequest,
   ResendFusionauthVerifyUserEmailRequest,
+  RuntimePresetAllowlist,
   SendDomainNoticeResponse,
   SendInviteBody,
   SendMobileWelcomeEmailRequest,
@@ -5616,6 +5618,152 @@ export const rejectInvitation = async (
 };
 
 /**
+ * @summary Disables a team member and revokes their server-side harness records.
+ */
+export type disableTeamMemberResponse200 = {
+  data: DisableMemberReport;
+  status: 200;
+};
+
+export type disableTeamMemberResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type disableTeamMemberResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type disableTeamMemberResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type disableTeamMemberResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type disableTeamMemberResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type disableTeamMemberResponseSuccess = disableTeamMemberResponse200 & {
+  headers: Headers;
+};
+export type disableTeamMemberResponseError = (
+  | disableTeamMemberResponse400
+  | disableTeamMemberResponse401
+  | disableTeamMemberResponse403
+  | disableTeamMemberResponse404
+  | disableTeamMemberResponse500
+) & {
+  headers: Headers;
+};
+
+export type disableTeamMemberResponse =
+  | disableTeamMemberResponseSuccess
+  | disableTeamMemberResponseError;
+
+export const getDisableTeamMemberUrl = (memberUserId: string) => {
+  return `/team/members/${memberUserId}/disable`;
+};
+
+export const disableTeamMember = async (
+  memberUserId: string,
+  options?: RequestInit
+): Promise<disableTeamMemberResponse> => {
+  const res = await fetch(getDisableTeamMemberUrl(memberUserId), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: disableTeamMemberResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as disableTeamMemberResponse;
+};
+
+/**
+ * @summary Re-enables a previously disabled team member.
+ */
+export type enableTeamMemberResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type enableTeamMemberResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type enableTeamMemberResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type enableTeamMemberResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type enableTeamMemberResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type enableTeamMemberResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type enableTeamMemberResponseSuccess = enableTeamMemberResponse204 & {
+  headers: Headers;
+};
+export type enableTeamMemberResponseError = (
+  | enableTeamMemberResponse400
+  | enableTeamMemberResponse401
+  | enableTeamMemberResponse403
+  | enableTeamMemberResponse404
+  | enableTeamMemberResponse500
+) & {
+  headers: Headers;
+};
+
+export type enableTeamMemberResponse =
+  | enableTeamMemberResponseSuccess
+  | enableTeamMemberResponseError;
+
+export const getEnableTeamMemberUrl = (memberUserId: string) => {
+  return `/team/members/${memberUserId}/enable`;
+};
+
+export const enableTeamMember = async (
+  memberUserId: string,
+  options?: RequestInit
+): Promise<enableTeamMemberResponse> => {
+  const res = await fetch(getEnableTeamMemberUrl(memberUserId), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: enableTeamMemberResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as enableTeamMemberResponse;
+};
+
+/**
  * Team admins and owners only. The team's subscription is re-billed for
 the seat at once (prorated); the member's tier role and individual AI
 allowance follow immediately.
@@ -5829,6 +5977,147 @@ export const removeUserFromTeam = async (
     status: res.status,
     headers: res.headers,
   } as removeUserFromTeamResponse;
+};
+
+/**
+ * @summary Replaces the exhaustive set of local runtime presets allowed for a team.
+ */
+export type setTeamRuntimePresetsResponse200 = {
+  data: RuntimePresetAllowlist;
+  status: 200;
+};
+
+export type setTeamRuntimePresetsResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type setTeamRuntimePresetsResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type setTeamRuntimePresetsResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type setTeamRuntimePresetsResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type setTeamRuntimePresetsResponseSuccess =
+  setTeamRuntimePresetsResponse200 & {
+    headers: Headers;
+  };
+export type setTeamRuntimePresetsResponseError = (
+  | setTeamRuntimePresetsResponse400
+  | setTeamRuntimePresetsResponse401
+  | setTeamRuntimePresetsResponse403
+  | setTeamRuntimePresetsResponse500
+) & {
+  headers: Headers;
+};
+
+export type setTeamRuntimePresetsResponse =
+  | setTeamRuntimePresetsResponseSuccess
+  | setTeamRuntimePresetsResponseError;
+
+export const getSetTeamRuntimePresetsUrl = () => {
+  return `/team/runtime-presets`;
+};
+
+export const setTeamRuntimePresets = async (
+  runtimePresetAllowlist: RuntimePresetAllowlist,
+  options?: RequestInit
+): Promise<setTeamRuntimePresetsResponse> => {
+  const res = await fetch(getSetTeamRuntimePresetsUrl(), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(runtimePresetAllowlist),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: setTeamRuntimePresetsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as setTeamRuntimePresetsResponse;
+};
+
+/**
+ * @summary Clears a team's runtime allowlist, restoring the default local presets.
+ */
+export type clearTeamRuntimePresetsResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type clearTeamRuntimePresetsResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type clearTeamRuntimePresetsResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type clearTeamRuntimePresetsResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type clearTeamRuntimePresetsResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type clearTeamRuntimePresetsResponseSuccess =
+  clearTeamRuntimePresetsResponse204 & {
+    headers: Headers;
+  };
+export type clearTeamRuntimePresetsResponseError = (
+  | clearTeamRuntimePresetsResponse400
+  | clearTeamRuntimePresetsResponse401
+  | clearTeamRuntimePresetsResponse403
+  | clearTeamRuntimePresetsResponse500
+) & {
+  headers: Headers;
+};
+
+export type clearTeamRuntimePresetsResponse =
+  | clearTeamRuntimePresetsResponseSuccess
+  | clearTeamRuntimePresetsResponseError;
+
+export const getClearTeamRuntimePresetsUrl = () => {
+  return `/team/runtime-presets`;
+};
+
+export const clearTeamRuntimePresets = async (
+  options?: RequestInit
+): Promise<clearTeamRuntimePresetsResponse> => {
+  const res = await fetch(getClearTeamRuntimePresetsUrl(), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: clearTeamRuntimePresetsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as clearTeamRuntimePresetsResponse;
 };
 
 /**
@@ -6207,6 +6496,76 @@ export const patchUserGroup = async (
 };
 
 /**
+ * @summary Claims a handle once for this account. Existing usernames are unchanged
+until this endpoint is called; a taken handle is never replaced with a suffix.
+ */
+export type claimHandleResponse200 = {
+  data: ClaimHandleResponse;
+  status: 200;
+};
+
+export type claimHandleResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type claimHandleResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type claimHandleResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type claimHandleResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type claimHandleResponseSuccess = claimHandleResponse200 & {
+  headers: Headers;
+};
+export type claimHandleResponseError = (
+  | claimHandleResponse400
+  | claimHandleResponse401
+  | claimHandleResponse409
+  | claimHandleResponse500
+) & {
+  headers: Headers;
+};
+
+export type claimHandleResponse =
+  | claimHandleResponseSuccess
+  | claimHandleResponseError;
+
+export const getClaimHandleUrl = () => {
+  return `/user/handle`;
+};
+
+export const claimHandle = async (
+  claimHandleRequest: ClaimHandleRequest,
+  options?: RequestInit
+): Promise<claimHandleResponse> => {
+  const res = await fetch(getClaimHandleUrl(), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(claimHandleRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: claimHandleResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as claimHandleResponse;
+};
+
+/**
  * @summary Get the caller's interface language.
  */
 export type getUserLanguageResponse200 = {
@@ -6575,76 +6934,6 @@ export const deleteUser = async (
     status: res.status,
     headers: res.headers,
   } as deleteUserResponse;
-};
-
-/**
- * @summary Claims a handle once for this account. Existing usernames are unchanged
-until this endpoint is called; a taken handle is never replaced with a suffix.
- */
-export type claimHandleResponse200 = {
-  data: ClaimHandleResponse;
-  status: 200;
-};
-
-export type claimHandleResponse400 = {
-  data: ErrorResponse;
-  status: 400;
-};
-
-export type claimHandleResponse401 = {
-  data: ErrorResponse;
-  status: 401;
-};
-
-export type claimHandleResponse409 = {
-  data: ErrorResponse;
-  status: 409;
-};
-
-export type claimHandleResponse500 = {
-  data: ErrorResponse;
-  status: 500;
-};
-
-export type claimHandleResponseSuccess = claimHandleResponse200 & {
-  headers: Headers;
-};
-export type claimHandleResponseError = (
-  | claimHandleResponse400
-  | claimHandleResponse401
-  | claimHandleResponse409
-  | claimHandleResponse500
-) & {
-  headers: Headers;
-};
-
-export type claimHandleResponse =
-  | claimHandleResponseSuccess
-  | claimHandleResponseError;
-
-export const getClaimHandleUrl = () => {
-  return `/user/handle`;
-};
-
-export const claimHandle = async (
-  claimHandleRequest: ClaimHandleRequest,
-  options?: RequestInit
-): Promise<claimHandleResponse> => {
-  const res = await fetch(getClaimHandleUrl(), {
-    ...options,
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(claimHandleRequest),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: claimHandleResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as claimHandleResponse;
 };
 
 /**

@@ -6,6 +6,7 @@
  */
 
 /**
- * Required when this address creates a new account; ignored for an existing account, whose username remains unchanged until it claims one.
+ * Required when this address creates a new account; ignored for an
+existing account, whose username remains unchanged until it claims one.
  */
 export type PasswordlessRequestHandle = string | null;

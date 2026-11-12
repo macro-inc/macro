@@ -4833,6 +4833,159 @@
         }
       }
     },
+    "/team/members/{member_user_id}/disable": {
+      "post": {
+        "tags": ["enterprise::inbound::axum_router"],
+        "summary": "Disables a team member and revokes their server-side harness records.",
+        "operationId": "disable_team_member",
+        "parameters": [
+          {
+            "name": "member_user_id",
+            "in": "path",
+            "description": "The team member to disable",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DisableMemberReport"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/team/members/{member_user_id}/enable": {
+      "post": {
+        "tags": ["enterprise::inbound::axum_router"],
+        "summary": "Re-enables a previously disabled team member.",
+        "operationId": "enable_team_member",
+        "parameters": [
+          {
+            "name": "member_user_id",
+            "in": "path",
+            "description": "The team member to enable",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/team/members/{member_user_id}/plan": {
       "patch": {
         "tags": ["teams::inbound::axum_router::patch_team_member_plan"],
@@ -5014,6 +5167,125 @@
             }
           },
           "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/team/runtime-presets": {
+      "put": {
+        "tags": ["enterprise::inbound::axum_router"],
+        "summary": "Replaces the exhaustive set of local runtime presets allowed for a team.",
+        "operationId": "set_team_runtime_presets",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RuntimePresetAllowlist"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuntimePresetAllowlist"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["enterprise::inbound::axum_router"],
+        "summary": "Clears a team's runtime allowlist, restoring the default local presets.",
+        "operationId": "clear_team_runtime_presets",
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
             "description": "",
             "content": {
               "application/json": {
@@ -5364,6 +5636,75 @@
         }
       }
     },
+    "/user/handle": {
+      "put": {
+        "tags": ["user::claim_handle"],
+        "summary": "Claims a handle once for this account. Existing usernames are unchanged\nuntil this endpoint is called; a taken handle is never replaced with a suffix.",
+        "operationId": "claim_handle",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClaimHandleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaimHandleResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/user/language": {
       "get": {
         "tags": ["user"],
@@ -5635,75 +5976,6 @@
             }
           },
           "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/user/handle": {
-      "put": {
-        "tags": ["user::claim_handle"],
-        "summary": "Claims a handle once for this account. Existing usernames are unchanged\nuntil this endpoint is called; a taken handle is never replaced with a suffix.",
-        "operationId": "claim_handle",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ClaimHandleRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ClaimHandleResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "409": {
             "description": "",
             "content": {
               "application/json": {
@@ -6805,6 +7077,32 @@
           }
         }
       },
+      "ClaimHandleRequest": {
+        "type": "object",
+        "description": "An authenticated request to claim the account's first-party mailbox handle.",
+        "required": ["handle"],
+        "properties": {
+          "handle": {
+            "type": "string",
+            "description": "A lowercase handle satisfying the shared Rox mailbox grammar."
+          }
+        }
+      },
+      "ClaimHandleResponse": {
+        "type": "object",
+        "description": "The claimed handle and its first-party address.",
+        "required": ["handle", "address"],
+        "properties": {
+          "address": {
+            "type": "string",
+            "description": "`handle@rox.one`."
+          },
+          "handle": {
+            "type": "string",
+            "description": "The canonical handle."
+          }
+        }
+      },
       "CodexConfigRequest": {
         "type": "object",
         "description": "Explicit remote environment for future Codex sessions.",
@@ -7261,6 +7559,30 @@
           "overage_payment_failed"
         ]
       },
+      "DisableMemberReport": {
+        "type": "object",
+        "description": "Honest result of disabling a member: remote mailbox and laptop-file work remain gaps.",
+        "required": [
+          "mail_suspend_gap",
+          "harness_revoke_gap",
+          "server_records_revoked"
+        ],
+        "properties": {
+          "harness_revoke_gap": {
+            "type": "boolean",
+            "description": "Always true when local `mhns_` credentials cannot be reached from the server."
+          },
+          "mail_suspend_gap": {
+            "type": "boolean",
+            "description": "Always true: `mail.rox.one` has no suspend route in this repository."
+          },
+          "server_records_revoked": {
+            "type": "integer",
+            "description": "Server-side harness registrations and their token records revoked by this action.",
+            "minimum": 0
+          }
+        }
+      },
       "EmailConnectionProviders": {
         "type": "object",
         "description": "What the provider selector offers the requesting user.",
@@ -7504,6 +7826,10 @@
               }
             ]
           },
+          "handle": {
+            "type": ["string", "null"],
+            "description": "The claimed first-party mailbox handle, if one exists."
+          },
           "hasChromeExt": {
             "type": "boolean",
             "description": "Whether the user has the chrome extension"
@@ -7511,10 +7837,6 @@
           "hasTrialed": {
             "type": "boolean",
             "description": "Whether the user has trialed through stripe"
-          },
-          "handle": {
-            "type": ["string", "null"],
-            "description": "The claimed first-party mailbox handle, if one exists."
           },
           "isAgent": {
             "type": "boolean",
@@ -8305,32 +8627,6 @@
           }
         }
       },
-      "ClaimHandleRequest": {
-        "type": "object",
-        "description": "An authenticated request to claim the account's first-party mailbox handle.",
-        "required": ["handle"],
-        "properties": {
-          "handle": {
-            "type": "string",
-            "description": "A lowercase handle satisfying the shared Rox mailbox grammar."
-          }
-        }
-      },
-      "ClaimHandleResponse": {
-        "type": "object",
-        "description": "The claimed handle and its first-party address.",
-        "required": ["handle", "address"],
-        "properties": {
-          "address": {
-            "type": "string",
-            "description": "`handle@rox.one`."
-          },
-          "handle": {
-            "type": "string",
-            "description": "The canonical handle."
-          }
-        }
-      },
       "PasswordRequest": {
         "type": "object",
         "required": ["email", "password"],
@@ -8354,7 +8650,7 @@
           },
           "handle": {
             "type": ["string", "null"],
-            "description": "Required when this address creates a new account; ignored for an existing account, whose username remains unchanged until it claims one."
+            "description": "Required when this address creates a new account; ignored for an\nexisting account, whose username remains unchanged until it claims one."
           },
           "is_agent": {
             "type": "boolean",
@@ -8784,6 +9080,25 @@
           "email": {
             "type": "string",
             "description": "The email address to resend the verification email to"
+          }
+        }
+      },
+      "RuntimePreset": {
+        "type": "string",
+        "description": "Local runtime presets that a team may allow. Cloud runtimes are intentionally absent.",
+        "enum": ["opencode", "claude-code", "codex", "omp"]
+      },
+      "RuntimePresetAllowlist": {
+        "type": "object",
+        "description": "A present allowlist is exhaustive. An absent database row is represented by `Option::None`.",
+        "required": ["preset_ids"],
+        "properties": {
+          "preset_ids": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RuntimePreset"
+            },
+            "description": "The only local presets that may start for this team."
           }
         }
       },
