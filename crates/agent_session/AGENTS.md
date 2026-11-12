@@ -61,6 +61,10 @@ consumer talks to.
 
 ## Tool contracts
 
+Session create/control HTTP responses preserve retryable reply admission as
+`ReplyBusy`: 503 with `Retry-After: 1` and a safe body, while retaining the cause
+in tracing. Do not collapse it into the generic internal-error response.
+
 - `src/inbound/toolset/`: session reads, creation, lifecycle actions, and sharing. Mutations preserve acting-user identity and existing owner/edit receipts; internal controls accept only prompt/stop, never human approvals. `link_task` returns a `mention` chip to paste when naming the task.
 
 `release_session` stops an idle actor silently (`CloseReason::Released`): the

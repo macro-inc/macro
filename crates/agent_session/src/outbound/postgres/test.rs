@@ -2749,7 +2749,7 @@ async fn a_document_session_preserves_its_origin_and_inherits_live_document_acce
         .execute(&pool).await.unwrap();
     let messages = messages::outbound::pg_message_repo::PgMessageRepository::new(pool.clone());
     let parent = MessageParent::parse("document", &document_id).unwrap();
-    let root = messages
+    let (root, _) = messages
         .create(CreateMessage {
             kind: messages::domain::models::MessageKind::Message,
             guest_name: None,

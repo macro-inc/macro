@@ -14,6 +14,9 @@ pub const NO_RUNTIME_ACCESS_CODE: &str = "no_runtime_access";
 
 #[derive(Error, Debug)]
 pub enum AgentSessionError {
+    /// Message admission is busy; callers may retry without losing queued work.
+    #[error("agent reply is busy; retry the request")]
+    ReplyBusy(rootcause::Report),
     /// Invalid session activity paging input.
     #[error("{0}")]
     InvalidActivityQuery(&'static str),

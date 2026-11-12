@@ -15,6 +15,28 @@ use std::sync::{Arc, Mutex};
 use tower::ServiceExt;
 
 #[tokio::test]
+async fn reply_busy_has_the_same_safe_retry_response_on_create_and_control() {
+    let responses = [
+        AgentSessionApiError::Domain(AgentSessionError::ReplyBusy(rootcause::report!(
+            "private admission detail"
+        )))
+        .into_response(),
+        CreateSessionApiError::Domain(AgentSessionError::ReplyBusy(rootcause::report!(
+            "private admission detail"
+        )))
+        .into_response(),
+    ];
+    for response in responses {
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(response.headers()[header::RETRY_AFTER], "1");
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        assert_eq!(&body[..], b"agent reply is busy; retry the request");
+    }
+}
+
+#[tokio::test]
 async fn admission_maps_to_shared_public_http_contract_on_create_and_control() {
     use ai_billing::{AiAdmissionError, DenyReason};
     for (error, status) in [

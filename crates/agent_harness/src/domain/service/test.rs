@@ -95,6 +95,17 @@ fn disconnected_harness_errors_keep_the_session_error_classification() {
     ));
 }
 
+#[test]
+fn busy_reply_keeps_its_retryable_session_error_and_cause() {
+    let error = into_session_error(HarnessError::ReplyBusy(rootcause::report!(
+        "admission detail"
+    )));
+    let AgentSessionError::ReplyBusy(cause) = error else {
+        panic!("reply admission must not become an unknown session error");
+    };
+    assert!(cause.to_string().contains("admission detail"));
+}
+
 /// A sender whose email domain is `is_macro_staff` - the identity the
 /// Daytona staff gate admits.
 fn staff_sender() -> MacroUserIdStr<'static> {

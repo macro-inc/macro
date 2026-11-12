@@ -339,6 +339,17 @@ impl AgentSessionNotifier for NoopAgentSessionNotifier {
 /// the answer. The domain names the kind and the facts; the adapter owns
 /// what either looks like.
 pub trait SessionAnnouncer: Send + Sync + 'static {
+    /// Admit a reply before acquiring a journal lease that holds a connection.
+    /// Nested message writes reuse this admission while the operation runs.
+    fn with_write_admission<F>(
+        &self,
+        parent: &messages::domain::models::MessageParent,
+        operation: F,
+    ) -> impl Future<Output = Result<F::Output>> + Send
+    where
+        F: Future + Send,
+        F::Output: Send;
+
     /// Post the message a turn is answered through, returning what it became.
     fn announce(
         &self,
