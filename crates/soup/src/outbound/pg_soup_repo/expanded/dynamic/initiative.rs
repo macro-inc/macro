@@ -43,13 +43,15 @@ pub(in crate::outbound::pg_soup_repo) fn initiative_access_clause() -> String {
 /// The grant leg is one `(source_id, entity_type, entity_id)` index descent per
 /// source, returning only that source's initiative grants. The team link leg
 /// reads the initiatives owned by the caller's teammates, found through the
-/// caller's own `team_user` rows (the team ids among their sources); matching
-/// `team_id::text` against the source array instead reads all of `team_user`.
+/// caller's own `team_user` rows (the team ids among their sources), and
+/// checks each one's link, so it costs what the team owns, not the page.
+/// Matching `team_id::text` against the source array instead reads all of
+/// `team_user`.
 ///
-/// Both the set and the owners are collected into arrays, so every table is
-/// reached by index whatever the statistics say: with stale ones, a plain
-/// `IN` or join was planned as sequential scans of `initiative` and
-/// `"SharePermission"`.
+/// Both the set and the owners are collected into arrays, so `initiative` is
+/// reached by its primary key and owner index whatever the statistics say:
+/// with stale ones, a plain `IN` or join was planned as sequential scans of
+/// `initiative` and `"SharePermission"`.
 const INITIATIVE_LISTING_ACCESS: &str = r#"i.id = ANY(ARRAY(
         SELECT ea.entity_id FROM entity_access ea
         WHERE ea.entity_type = 'initiative'

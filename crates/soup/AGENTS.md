@@ -145,10 +145,11 @@ rows, initiatives, ...) and get back a single unified, paginated result.
 - The initiative listing starts from the caller's access instead
   (`INITIATIVE_LISTING_ACCESS`): one `(source_id, entity_type, entity_id)`
   index descent per source returns only that source's initiative grants, and
-  the owner's team link is reached through the caller's own `team_user` rows.
-  The set and the teammates are collected with `= ANY(ARRAY(...))`, which
-  keeps every table on an index under stale statistics; a plain `IN` or join
-  was planned as sequential scans of `initiative` there. The per-row form
+  the owner's team link is reached through the caller's own `team_user` rows,
+  checking every initiative their teammates own. The set and the teammates are
+  collected with `= ANY(ARRAY(...))`, which keeps `initiative` on its indexes
+  under stale statistics; a plain `IN` or join was planned as sequential scans
+  of `initiative` there. The per-row form
   tests every initiative in the table, each against every source. Never match
   `team_user.team_id::text` against the source array: no index serves it, so
   it reads all of `team_user`. A filter that names its ids (GraphQL
