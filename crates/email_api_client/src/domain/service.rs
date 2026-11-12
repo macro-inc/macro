@@ -118,6 +118,9 @@ where
     /// A cached token can outlive its grant. Only a fresh fetch reaches the
     /// authentication service, which either renews the token or reports the
     /// revoked grant so the token source marks the link for reauthorization.
+    /// A grant can also keep yielding tokens the provider rejects, as when
+    /// the owner withdrew a scope; a rejected fresh token is reported so the
+    /// link is marked all the same.
     ///
     /// Like [`Self::attempt`], admission and token failures are logged and
     /// returned as the outer error; the provider's final answer is left to the
@@ -137,7 +140,11 @@ where
             Err(EmailApiError::AuthRequired) => {
                 tracing::Span::current().record("retry_count", 1);
                 let fresh = self.get_access_token(link_id, TokenFreshness::Fresh);
-                self.attempt(link_id, operation, fresh, &read).await
+                let result = self.attempt(link_id, operation, fresh, &read).await?;
+                if matches!(result, Err(EmailApiError::AuthRequired)) {
+                    self.token_source.report_rejected_grant(link_id).await;
+                }
+                Ok(result)
             }
             result => Ok(result),
         }
