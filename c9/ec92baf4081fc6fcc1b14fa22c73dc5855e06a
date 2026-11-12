@@ -1,0 +1,2311 @@
+.agents/rules/infra/pulumi.md
+  s_60bbe192a6a060::t_bc4b2400d6738b 24-25
+.agents/rules/observability.md
+  s_60bbe192a6a060::t_51008f1ac20e36 59-60
+.agents/rules/web/architecture.md
+  s_60bbe192a6a060::t_6a852befa7d1d4 68-69
+.agents/skills/feature-flags/SKILL.md
+  s_60bbe192a6a060::t_05d4e5885a04b3 101-108
+.github/scripts/check-service-deployment-results.test.ts
+  s_60bbe192a6a060::t_b2960a3c2bd5dd 6
+.github/scripts/check-service-deployment-results.ts
+  s_60bbe192a6a060::t_3e48db0c30ba0a 14,24
+.github/workflows/deploy_all_services.yml
+  s_60bbe192a6a060::t_56c2a1e8ca2094 337,344
+.github/workflows/deploy_website.yml
+  s_60bbe192a6a060::t_98640ae91645dd 37-40,97
+.github/workspace-dep-closures.json
+  s_60bbe192a6a060::t_12c9ce2562ad52 7370-7371
+.sqlx/query-0681c9e1a0c3b446b2286d9e1748ae526168b7575928ce10f7d09508986572a4.json
+  s_60bbe192a6a060::t_283bf2eddb73c6 3,48-52,61-63,75,79
+.sqlx/query-2c91961617079ed2663dcdec5a3d8e845ef3ad62e45cf053378041581b66b5c8.json
+  s_60bbe192a6a060::t_efb527592897c2 3,15-19,28,33
+.sqlx/query-926edb559195082d525acb942fc6e8e666203c27c2d69fe79ffe4a3631930708.json
+  s_60bbe192a6a060::t_8151dc5f8988b7 3,25-27,36
+.sqlx/query-e223304cce2b1e66b76b031e2c82ebeabfb8ccdc220082ff8e5f65b9d72271e1.json
+  s_60bbe192a6a060::t_641e793c791d28 3,18-22,32-33,39,43
+.sqlx/query-e6e9995342cc3e60900a93cecdabb9da2f9ab1ffebf98dacf60c3807be1f6925.json
+  s_60bbe192a6a060::t_b409d053f8f1c6 3,16-17,24
+Cargo.lock
+  s_60bbe192a6a060::t_a0571fae00c7c4 527,554,1603,4288,8028,8258,10438,11265,12917,12963,12969,14888,16093,16113,16280,16318,16320,17294,17296,17460,17473,17532,20269,22505
+apps/docs/AGENTS.md
+  s_60bbe192a6a060::t_5944ea5b77d4ea 5-7,11-20,39-41,45,48
+apps/docs/AI/bring-your-own.mdx
+  s_60bbe192a6a060::t_5f8683869ea4bc 18-21
+apps/docs/CONTRIBUTING.md
+  s_60bbe192a6a060::t_52ece524c4bdfb 16,19-20
+apps/docs/README.md
+  s_60bbe192a6a060::t_f6a6f850726e55 1-60
+apps/docs/account/teams.mdx
+  s_60bbe192a6a060::t_ec4c3a4f00c5a1 11-14,22
+apps/docs/changelog/introduction.mdx
+  s_60bbe192a6a060::t_d1ca5d9bf22b55 9
+apps/docs/concepts/event-system.mdx
+  s_60bbe192a6a060::t_3a8df070d4a639 2-4,7,9,11,13-29
+apps/docs/concepts/mentions.mdx
+  s_60bbe192a6a060::t_59a3de17be357c 2,7-13,55-65
+apps/docs/concepts/properties.mdx
+  s_60bbe192a6a060::t_948028805e8f5d 9-11,49
+apps/docs/config/navigation.json
+  s_60bbe192a6a060::t_8ff5be4a12b759 13
+apps/docs/docs.json
+  s_60bbe192a6a060::t_869b318d43e66f 39,41,47,49-52,55-63,70-73,81,129-131,134-161,165-366,370-2071,2081
+apps/docs/integrations/github.mdx
+  s_60bbe192a6a060::t_cfe68986334ad5 13-16,25,29-49
+apps/docs/package.json
+  s_60bbe192a6a060::t_6265012525a9da 7
+apps/docs/product/agents.mdx
+  s_60bbe192a6a060::t_1a0951bd3942e6 7,83,93
+apps/docs/product/booking-links.mdx
+  s_60bbe192a6a060::t_e80b19f7753bd4 92
+apps/docs/product/calendar.mdx
+  s_60bbe192a6a060::t_8b00031f0f35f2 4,7,9,29-34,69-75
+apps/docs/product/calls.mdx
+  s_60bbe192a6a060::t_b9b1cb180c93f5 12-13
+apps/docs/product/canvas.mdx
+  s_60bbe192a6a060::t_6ebf9216c3d991 13-15
+apps/docs/product/channels.mdx
+  s_60bbe192a6a060::t_5d631da170511b 15-35
+apps/docs/product/crm.mdx
+  s_60bbe192a6a060::t_96e984d9a2dc84 7-8,41
+apps/docs/product/docs.mdx
+  s_60bbe192a6a060::t_3b68dfcce1a93f 19-20
+apps/docs/product/drive.mdx
+  s_60bbe192a6a060::t_2f7ca1e3b38de8 45-47
+apps/docs/product/email.mdx
+  s_60bbe192a6a060::t_1cee889905fdc8 12-17
+apps/docs/product/forms.mdx
+  s_60bbe192a6a060::t_5821ed889d2cac 1-40
+apps/docs/product/home.mdx
+  s_60bbe192a6a060::t_72966ec4b00df9 89-90,113-139
+apps/docs/product/routines.mdx
+  s_60bbe192a6a060::t_f23b42a5e135b5 111
+apps/docs/product/search.mdx
+  s_60bbe192a6a060::t_fce3eab6c537c2 2,7
+apps/docs/product/sharing.mdx
+  s_60bbe192a6a060::t_7cb67dfae79737 2,7-10,49-71
+apps/docs/product/skills.mdx
+  s_60bbe192a6a060::t_a07faa17e96e40 31
+apps/docs/product/snippets.mdx
+  s_60bbe192a6a060::t_55205e4a3b0e4e 7-8,17-25,29
+apps/docs/product/tagging.mdx
+  s_60bbe192a6a060::t_50c6ec2a2080f5 2-4,7-13,17-27,31-37
+apps/docs/product/tasks.mdx
+  s_60bbe192a6a060::t_a3d2ddb352927d 13-17,72-111
+apps/docs/security.mdx
+  s_60bbe192a6a060::t_d9e5d2a8e461ea 4,7,9,11,13,15,17,19,21
+apps/docs/support.mdx
+  s_60bbe192a6a060::t_97ad45dbc1479b 29-30
+apps/docs/switch-to-macro.mdx
+  s_60bbe192a6a060::t_32ac214f0856f3 2,4,7,9,11,13-15,17,19,21,23,25-26,28,30,38,40,42,44,46,48-50,66,68,70-72,74,76,78,80
+apps/marketing/README.md
+  s_60bbe192a6a060::t_bfe2ece504fb5a 8-61,76-99,119-120,135-149,153-163,255-260,281-283,286-287,289-291,301,329-330,350-351,354-357,360,366-401,433,448,456,462-463,465,489-492,533,551-558,573-576,684-687,725-728,750-753,759,772,792,795-796,803-806,840-842,854-855,860,894-896,905,933,942-943,965-966,986-988,996,1026,1030,1032,1041,1043,1046,1050,1055-1277
+apps/marketing/index.html
+  s_60bbe192a6a060::t_6affdcb151b64a 8,10,12-13,15-21
+apps/marketing/package.json
+  s_60bbe192a6a060::t_b5aa0afd435365 7,13-14,33,42,49-50
+apps/marketing/public/video/tutorials/ai-tagging.mp4
+  s_60bbe192a6a060::t_757f00150bb4b6 1-3
+apps/marketing/public/video/tutorials/automatic-permissions.mp4
+  s_60bbe192a6a060::t_9b996e929ec189 1-3
+apps/marketing/public/video/tutorials/company-graph.mp4
+  s_60bbe192a6a060::t_0e469358122709 1-3
+apps/marketing/public/video/tutorials/forms.mp4
+  s_60bbe192a6a060::t_b578e5dee02e09 1-3
+apps/marketing/public/video/tutorials/routines.mp4
+  s_60bbe192a6a060::t_cc00da2f687770 1-3
+apps/marketing/public/video/tutorials/skills.mp4
+  s_60bbe192a6a060::t_a32695f4e37adf 1-3
+apps/marketing/public/video/tutorials/unified-search.mp4
+  s_60bbe192a6a060::t_d6b5d234de8ed6 1-3
+apps/marketing/public/video/tutorials/workspace-events.mp4
+  s_60bbe192a6a060::t_83469954a0bf65 1-3
+apps/marketing/scripts/capture-light-tutorial-previews.mjs
+  s_60bbe192a6a060::t_5606b5fa47c2a3 1-2,4-65
+apps/marketing/scripts/documentation.test.ts
+  s_60bbe192a6a060::t_a4af7bd177a83f 1-52
+apps/marketing/scripts/documentation.ts
+  s_60bbe192a6a060::t_e09942bef26eb0 1-404
+apps/marketing/scripts/page-redirects.test.ts
+  s_60bbe192a6a060::t_db834a8c73bf95 1-7,9-21,23-62
+apps/marketing/scripts/prerender.ts
+  s_60bbe192a6a060::t_86d8e485ed3996 1,37,59-60,63,77-87,101-110,113-115,184-185,187,229,553,577-594
+apps/marketing/scripts/prerenderEntry.tsx
+  s_60bbe192a6a060::t_bcc744f0defe2a 6-8,95,106-109,111,115-118
+apps/marketing/scripts/site-search.test.ts
+  s_60bbe192a6a060::t_c8a1ceae754730 1-7,9-32,34-71
+apps/marketing/scripts/site-search.ts
+  s_60bbe192a6a060::t_e180fb4b512997 1-6,8,10-27,29-60,62-200
+apps/marketing/scripts/standaloneDev.ts
+  s_60bbe192a6a060::t_3044913a148909 2,5-36,40,44-46,48-50,81-83
+apps/marketing/scripts/standalonePreview.test.ts
+  s_60bbe192a6a060::t_b875f08ba2b022 5,9-69
+apps/marketing/scripts/verify-docs-redirects.ts
+  s_60bbe192a6a060::t_09375823809fec 1-204
+apps/marketing/scripts/verify-seo.ts
+  s_60bbe192a6a060::t_33db9de63d4d79 7,28-29,31-33,35-36,42-43,137-180,280,324-331
+apps/marketing/scripts/verify-standalone.ts
+  s_60bbe192a6a060::t_af4ebd90839db1 193-198
+apps/marketing/scripts/verifyDemo.ts
+  s_60bbe192a6a060::t_94c5e0c3d0eb1b 40-41,47
+apps/marketing/scripts/verifyHomepage.ts
+  s_60bbe192a6a060::t_0aa80fa20c066d 7-10,31,33-34,39,47,65-69,76-83,96-114,135-159,161-163,165-175,177-184,187,190,200-209,211-225,227-236,242,249
+apps/marketing/scripts/verifyProductPages.ts
+  s_60bbe192a6a060::t_daeb737d943796 103-104,109-110,114
+apps/marketing/seo/legacy-docs-paths.json
+  s_60bbe192a6a060::t_8a2f7de7bbab4d 1-216
+apps/marketing/seo/page-redirects.json
+  s_60bbe192a6a060::t_df050e6226439e 1-728
+apps/marketing/src/app/components/base/BaseHeader.tsx
+  s_60bbe192a6a060::t_27f83538585c70 7,10-15
+apps/marketing/src/app/components/dialogs/DialogTheme.tsx
+  s_60bbe192a6a060::t_673245bd0ef9e7 1
+apps/marketing/src/app/components/featureGraphics/AgentThreadGraphic.tsx
+  s_60bbe192a6a060::t_07b4e314d29523 1-8,88,91,596,711
+apps/marketing/src/app/components/featureGraphics/CallsGraphics.tsx
+  s_60bbe192a6a060::t_362ef1cdcf93e1 1,829
+apps/marketing/src/app/components/featureGraphics/ChannelPreviewGraphic.tsx
+  s_60bbe192a6a060::t_e3f03494cb2d75 1-14,250,268,276,278,286,308,314,327,333,342,349,363,540,546-547,553,560,571-572,577
+apps/marketing/src/app/components/featureGraphics/ChannelsGraphics.tsx
+  s_60bbe192a6a060::t_21442ca40440fa 1-13,764,779,781,783,981,1155,1190,1767,2421,3657
+apps/marketing/src/app/components/featureGraphics/ChannelsHeroGraphic.tsx
+  s_60bbe192a6a060::t_dd272c96e77ba9 1-16
+apps/marketing/src/app/components/featureGraphics/CrmGraphics.tsx
+  s_60bbe192a6a060::t_024c47f0bb0b03 1-5
+apps/marketing/src/app/components/featureGraphics/DocsMarkdownScene.test.tsx
+  s_60bbe192a6a060::t_921e2df8f3d553 18
+apps/marketing/src/app/components/featureGraphics/DocsMarkdownScene.tsx
+  s_60bbe192a6a060::t_7237cfb85b30b3 1-15,359,443,663,1067
+apps/marketing/src/app/components/featureGraphics/DocumentsGraphics.tsx
+  s_60bbe192a6a060::t_1d9499c9130280 1-16,3620,3625-3626,3640-3641,3668-3669
+apps/marketing/src/app/components/featureGraphics/EmailGraphics.tsx
+  s_60bbe192a6a060::t_9502558d4efb8b 1-23,983-984,1176,1632,2768,3524
+apps/marketing/src/app/components/featureGraphics/TasksGraphics.tsx
+  s_60bbe192a6a060::t_241a2f91576c07 1-21,3272
+apps/marketing/src/app/components/graphics/AgentThreadWindow.tsx
+  s_60bbe192a6a060::t_b8694eecbf4c5a 1-4
+apps/marketing/src/app/components/graphics/AiComposeGraphic.tsx
+  s_60bbe192a6a060::t_90a296a22c1e1d 1-4
+apps/marketing/src/app/components/graphics/TaskCard.tsx
+  s_60bbe192a6a060::t_505a7b6f5a3ecb 1-14
+apps/marketing/src/app/components/sections/AgentsCapabilityGrid.css
+  s_60bbe192a6a060::t_0dcde2b6f89956 17
+apps/marketing/src/app/components/sections/ComparisonTable.tsx
+  s_60bbe192a6a060::t_0fdc0503f397a4 168,207,336,345,356,361,379,393,414
+apps/marketing/src/app/components/sections/EmailTurboInbox.tsx
+  s_60bbe192a6a060::t_6dbb0c53038838 1-5
+apps/marketing/src/app/components/sections/HomeDesktopFeatureCarousel.tsx
+  s_60bbe192a6a060::t_9cb61aca135fbd 1-6
+apps/marketing/src/app/components/sections/HomeMobileFeatureCarousel.tsx
+  s_60bbe192a6a060::t_b2feecfa93aa23 1-6
+apps/marketing/src/app/components/sections/MigrationPaths.tsx
+  s_60bbe192a6a060::t_eae952a834da2f 1-8,140,149
+apps/marketing/src/app/components/sections/SceneAppPreview.tsx
+  s_60bbe192a6a060::t_bba7067e41b2b9 1-9
+apps/marketing/src/app/components/sections/SectionBento.tsx
+  s_60bbe192a6a060::t_c68b335f8d0169 1-4
+apps/marketing/src/app/components/sections/SectionMoreFeatures.tsx
+  s_60bbe192a6a060::t_890df1de0c411e 28
+apps/marketing/src/app/components/sections/TasksLifecycleScene.tsx
+  s_60bbe192a6a060::t_119457142e8cea 1-21,249,490,496,621
+apps/marketing/src/app/components/utils/UtilPlainText.tsx
+  s_60bbe192a6a060::t_b43d1e76b1ea60 121,155,176-178,185-188,194,198,200,208
+apps/marketing/src/app/components/utils/UtilWrap.tsx
+  s_60bbe192a6a060::t_823a37096d6b6d 3
+apps/marketing/src/app/components/utils/util-live-editor.css
+  s_60bbe192a6a060::t_0c5c36a458d4a3 1-2,5,13,17
+apps/marketing/src/app/data/featurePages.tsx
+  s_60bbe192a6a060::t_381afc4e50f9fa 1-6,25,31,37,43,49,55,61,67
+apps/marketing/src/app/main/App.navigation.test.tsx
+  s_60bbe192a6a060::t_0ba56c7dd763dd 1-10,12-31,33-46,48-61
+apps/marketing/src/app/main/App.tsx
+  s_60bbe192a6a060::t_778312fc2b6da5 1,14,21,40-41,44-53,59-63,98-100,141-146,151-153,162-171,228-229,282,296,309,313-318,344-348,350,367-384,399-409
+apps/marketing/src/app/main/index.css
+  s_60bbe192a6a060::t_af2c3a6885ca37 2,156-157,166,204
+apps/marketing/src/app/main/index.tsx
+  s_60bbe192a6a060::t_5b5c6aacc47d82 2,16-20,22-32,34-36
+apps/marketing/src/app/routes/RouteAgents.tsx
+  s_60bbe192a6a060::t_028b59e13b823c 1-6,1165,1181,1197
+apps/marketing/src/app/routes/RouteCalls.tsx
+  s_60bbe192a6a060::t_b680a9322e11ef 319,335,351
+apps/marketing/src/app/routes/RouteCrm.tsx
+  s_60bbe192a6a060::t_75e49c7a694b07 56,70-73,76,92,94,101-102,108-112,121-125,134-138,145-149,152-156,172
+apps/marketing/src/app/routes/RouteDownload.tsx
+  s_60bbe192a6a060::t_f9c42797f51dca 4,9-11,21-22,24-52
+apps/marketing/src/app/routes/RouteDpa.css
+  s_60bbe192a6a060::t_883782af63fbd5 1-2
+apps/marketing/src/app/routes/RouteDpa.tsx
+  s_60bbe192a6a060::t_4dd7cf5b500c28 12,75
+apps/marketing/src/app/routes/RouteEmail.tsx
+  s_60bbe192a6a060::t_6b1aa13ef80e15 3,6,14-17,19,29-32,50-52,70-73,103,111,113,119-121,123-124,130-135,137-140,143-144,146-152,156-158,162,165-178,181-185,194-198,207
+apps/marketing/src/app/routes/RouteGithub.tsx
+  s_60bbe192a6a060::t_0c2bd8ec7a7a37 1-11,2829,2845,3482
+apps/marketing/src/app/routes/RouteJobs.tsx
+  s_60bbe192a6a060::t_a595f5b9c44eed 160-161,163,165,167-168,171,173-178,181-209,211-223,225-241
+apps/marketing/src/app/routes/RouteLegal.css
+  s_60bbe192a6a060::t_b30076da8a1158 1-2,6-72,75-79,82-109,111-122,125-127
+apps/marketing/src/app/routes/RouteLegal.tsx
+  s_60bbe192a6a060::t_dca2915889092c 1-29
+apps/marketing/src/app/routes/RoutePartnerTerms.tsx
+  s_60bbe192a6a060::t_730565528eb224 4,607-609
+apps/marketing/src/app/routes/RoutePartners.tsx
+  s_60bbe192a6a060::t_c6971efbbffb01 99
+apps/marketing/src/app/routes/RoutePricing.css
+  s_60bbe192a6a060::t_ae02c3f233a6db 1-81
+apps/marketing/src/app/routes/RoutePricing.tsx
+  s_60bbe192a6a060::t_e872e0d4da27a5 1-5,8-9,11-14,18,20-59,141-142,144,237-279,305,307-355,358-359,363-375,377-410,416,420,424-471,473-494,496-497,499
+apps/marketing/src/app/routes/RouteTasks.css
+  s_60bbe192a6a060::t_9aad4923589bf7 43,50
+apps/marketing/src/app/routes/RouteTasks.tsx
+  s_60bbe192a6a060::t_8a50be7367fb67 11,22-32,42,82,90,92,99,103-104,108-109,111,115-120,129-130,132-139,143-148,157
+apps/marketing/src/app/routes/RouteWallOfLove.css
+  s_60bbe192a6a060::t_27040570fb58b3 1-7,9-16,18-30,32-41,43-298
+apps/marketing/src/app/routes/RouteWallOfLove.tsx
+  s_60bbe192a6a060::t_34bb77ef612891 1-11,13-14,16-35,37-128
+apps/marketing/src/app/routes/partners-hero.css
+  s_60bbe192a6a060::t_010c97c0dbcbf6 30,149
+apps/marketing/src/app/utils/appBaseUrl.ts
+  s_60bbe192a6a060::t_3b34f84bc77e92 1-4
+apps/marketing/src/app/utils/utilBaseUrl.ts
+  s_60bbe192a6a060::t_f599f62d426929 1-5
+apps/marketing/src/assets/app-icons/share.svg
+  s_60bbe192a6a060::t_d2a977c4b531a8 1-3
+apps/marketing/src/assets/app-icons/system/README.md
+  s_60bbe192a6a060::t_387ccdd3c819f9 1-15
+apps/marketing/src/assets/app-icons/system/bold/arrow-up-bold.svg
+  s_60bbe192a6a060::t_df1dfd50827be0 1-3
+apps/marketing/src/assets/app-icons/system/fill/buildings-fill.svg
+  s_60bbe192a6a060::t_571da9ce40edeb 1-3
+apps/marketing/src/assets/app-icons/system/fill/calendar-blank-fill.svg
+  s_60bbe192a6a060::t_552f9178c90e46 1-3
+apps/marketing/src/assets/app-icons/system/fill/chats-circle-fill.svg
+  s_60bbe192a6a060::t_816a31eec84009 1-3
+apps/marketing/src/assets/app-icons/system/fill/envelope-fill.svg
+  s_60bbe192a6a060::t_75b366ce76264d 1-3
+apps/marketing/src/assets/app-icons/system/fill/folder-simple-fill.svg
+  s_60bbe192a6a060::t_297b399d11763a 1-3
+apps/marketing/src/assets/app-icons/system/fill/house-fill.svg
+  s_60bbe192a6a060::t_958502ec7db83f 1-3
+apps/marketing/src/assets/app-icons/system/fill/lightning-fill.svg
+  s_60bbe192a6a060::t_eb91ee2053bb3c 1-3
+apps/marketing/src/assets/app-icons/system/fill/list-checks-fill.svg
+  s_60bbe192a6a060::t_a922908f4502fa 1-4
+apps/marketing/src/assets/app-icons/system/fill/pause-fill.svg
+  s_60bbe192a6a060::t_8ed69369df6842 1-3
+apps/marketing/src/assets/app-icons/system/fill/phone-call-fill.svg
+  s_60bbe192a6a060::t_62e096e5b99c1d 1-3
+apps/marketing/src/assets/app-icons/system/fill/play-fill.svg
+  s_60bbe192a6a060::t_19bf10123cff82 1-3
+apps/marketing/src/assets/app-icons/system/fill/sparkle-fill.svg
+  s_60bbe192a6a060::t_60014f7dcbb018 1-3
+apps/marketing/src/assets/app-icons/system/regular/align-center-vertical-simple.svg
+  s_60bbe192a6a060::t_dac8b5d39f6174 1-3
+apps/marketing/src/assets/app-icons/system/regular/arrow-bend-down-right.svg
+  s_60bbe192a6a060::t_0d0873b9c47378 1-3
+apps/marketing/src/assets/app-icons/system/regular/arrow-bend-up-left.svg
+  s_60bbe192a6a060::t_cc5c0c78b59b99 1-3
+apps/marketing/src/assets/app-icons/system/regular/arrow-bend-up-right.svg
+  s_60bbe192a6a060::t_e0fd950efed6df 1-3
+apps/marketing/src/assets/app-icons/system/regular/arrow-clockwise.svg
+  s_60bbe192a6a060::t_b38dcf96945d91 1-3
+apps/marketing/src/assets/app-icons/system/regular/arrow-counter-clockwise.svg
+  s_60bbe192a6a060::t_9a9201a5fc3be7 1-3
+apps/marketing/src/assets/app-icons/system/regular/arrow-down.svg
+  s_60bbe192a6a060::t_173e58212c86ac 1-3
+apps/marketing/src/assets/app-icons/system/regular/arrow-left.svg
+  s_60bbe192a6a060::t_d788f4de383d90 1-3
+apps/marketing/src/assets/app-icons/system/regular/arrow-right.svg
+  s_60bbe192a6a060::t_97f604d238cd09 1-3
+apps/marketing/src/assets/app-icons/system/regular/arrow-up-right.svg
+  s_60bbe192a6a060::t_e65ae3f1186e45 1-3
+apps/marketing/src/assets/app-icons/system/regular/arrow-up.svg
+  s_60bbe192a6a060::t_6899170fc63e4e 1-3
+apps/marketing/src/assets/app-icons/system/regular/arrows-out-simple.svg
+  s_60bbe192a6a060::t_a7bc7e8a50d394 1-3
+apps/marketing/src/assets/app-icons/system/regular/arrows-out.svg
+  s_60bbe192a6a060::t_fc17f654576cff 1-3
+apps/marketing/src/assets/app-icons/system/regular/article.svg
+  s_60bbe192a6a060::t_6de1ceeb218bff 1-7
+apps/marketing/src/assets/app-icons/system/regular/at.svg
+  s_60bbe192a6a060::t_b9333317f49e51 1-3
+apps/marketing/src/assets/app-icons/system/regular/bell.svg
+  s_60bbe192a6a060::t_98f24ef9ddd38d 1-3
+apps/marketing/src/assets/app-icons/system/regular/building-office.svg
+  s_60bbe192a6a060::t_2c7ed656307479 1-3
+apps/marketing/src/assets/app-icons/system/regular/buildings.svg
+  s_60bbe192a6a060::t_c0d09005da80f9 1-3
+apps/marketing/src/assets/app-icons/system/regular/calendar-blank.svg
+  s_60bbe192a6a060::t_b1b2a503bf5c1a 1-3
+apps/marketing/src/assets/app-icons/system/regular/calendar.svg
+  s_60bbe192a6a060::t_f6eeb043a1751f 1-3
+apps/marketing/src/assets/app-icons/system/regular/caret-down.svg
+  s_60bbe192a6a060::t_7c4451b437eec8 1-3
+apps/marketing/src/assets/app-icons/system/regular/caret-left.svg
+  s_60bbe192a6a060::t_0842f565ddfbe4 1-3
+apps/marketing/src/assets/app-icons/system/regular/caret-right.svg
+  s_60bbe192a6a060::t_dcbfb47ead7773 1-3
+apps/marketing/src/assets/app-icons/system/regular/caret-up.svg
+  s_60bbe192a6a060::t_276211de436b18 1-3
+apps/marketing/src/assets/app-icons/system/regular/chat-circle.svg
+  s_60bbe192a6a060::t_ee9da5374e053e 1-3
+apps/marketing/src/assets/app-icons/system/regular/chat-teardrop.svg
+  s_60bbe192a6a060::t_ab13f2352afe47 1-3
+apps/marketing/src/assets/app-icons/system/regular/chat-text.svg
+  s_60bbe192a6a060::t_2493106a0c6fd2 1-3
+apps/marketing/src/assets/app-icons/system/regular/chats-circle.svg
+  s_60bbe192a6a060::t_1ac605fdde18f5 1-3
+apps/marketing/src/assets/app-icons/system/regular/chats.svg
+  s_60bbe192a6a060::t_414156fe5140a5 1-3
+apps/marketing/src/assets/app-icons/system/regular/check-circle.svg
+  s_60bbe192a6a060::t_b985b81ef4e3f3 1-3
+apps/marketing/src/assets/app-icons/system/regular/check-square.svg
+  s_60bbe192a6a060::t_996dc713122836 1-4
+apps/marketing/src/assets/app-icons/system/regular/check.svg
+  s_60bbe192a6a060::t_0de5a658d9fcf4 1-3
+apps/marketing/src/assets/app-icons/system/regular/circle-dashed.svg
+  s_60bbe192a6a060::t_f5f82a1730b741 1-3
+apps/marketing/src/assets/app-icons/system/regular/circle-notch.svg
+  s_60bbe192a6a060::t_ea3b42f5ce4645 1-3
+apps/marketing/src/assets/app-icons/system/regular/circle.svg
+  s_60bbe192a6a060::t_afbaf4008b23e1 1-3
+apps/marketing/src/assets/app-icons/system/regular/clipboard-text.svg
+  s_60bbe192a6a060::t_d1b32fea11d9b6 1-5
+apps/marketing/src/assets/app-icons/system/regular/clipboard.svg
+  s_60bbe192a6a060::t_fd2b20e9e52689 1-4
+apps/marketing/src/assets/app-icons/system/regular/clock-clockwise.svg
+  s_60bbe192a6a060::t_3e3a71507bc4ef 1-3
+apps/marketing/src/assets/app-icons/system/regular/clock.svg
+  s_60bbe192a6a060::t_f5b0341ad2da95 1-3
+apps/marketing/src/assets/app-icons/system/regular/cloud-warning.svg
+  s_60bbe192a6a060::t_b096b8968fbdea 1-4
+apps/marketing/src/assets/app-icons/system/regular/cloud.svg
+  s_60bbe192a6a060::t_10f77d79371874 1-3
+apps/marketing/src/assets/app-icons/system/regular/code.svg
+  s_60bbe192a6a060::t_2f03121c954b44 1-3
+apps/marketing/src/assets/app-icons/system/regular/corners-out.svg
+  s_60bbe192a6a060::t_4c915d7d363fa8 1-3
+apps/marketing/src/assets/app-icons/system/regular/credit-card.svg
+  s_60bbe192a6a060::t_5fc30234e36717 1-3
+apps/marketing/src/assets/app-icons/system/regular/currency-dollar.svg
+  s_60bbe192a6a060::t_3320342b091f64 1-3
+apps/marketing/src/assets/app-icons/system/regular/database.svg
+  s_60bbe192a6a060::t_434d12e557d447 1-4
+apps/marketing/src/assets/app-icons/system/regular/dots-six-vertical.svg
+  s_60bbe192a6a060::t_ba3e6c22764943 1-3
+apps/marketing/src/assets/app-icons/system/regular/dots-three-vertical.svg
+  s_60bbe192a6a060::t_c5eac43e35a620 1-3
+apps/marketing/src/assets/app-icons/system/regular/dots-three.svg
+  s_60bbe192a6a060::t_3c7660ea0b1a58 1-3
+apps/marketing/src/assets/app-icons/system/regular/download-simple.svg
+  s_60bbe192a6a060::t_ea6272d3b9ac8a 1-3
+apps/marketing/src/assets/app-icons/system/regular/envelope-open.svg
+  s_60bbe192a6a060::t_34d38e7eaebf2a 1-3
+apps/marketing/src/assets/app-icons/system/regular/envelope.svg
+  s_60bbe192a6a060::t_c70d5278e270dd 1-3
+apps/marketing/src/assets/app-icons/system/regular/eye-slash.svg
+  s_60bbe192a6a060::t_fe10f5d8821238 1-3
+apps/marketing/src/assets/app-icons/system/regular/eye.svg
+  s_60bbe192a6a060::t_244553a082a5d2 1-3
+apps/marketing/src/assets/app-icons/system/regular/file-pdf.svg
+  s_60bbe192a6a060::t_a340a943cfdc80 1-7
+apps/marketing/src/assets/app-icons/system/regular/file-text.svg
+  s_60bbe192a6a060::t_ace6166d0625c8 1-5
+apps/marketing/src/assets/app-icons/system/regular/file.svg
+  s_60bbe192a6a060::t_6132e503bdb804 1-4
+apps/marketing/src/assets/app-icons/system/regular/files.svg
+  s_60bbe192a6a060::t_1c63d66bd1f75f 1-3
+apps/marketing/src/assets/app-icons/system/regular/folder-simple.svg
+  s_60bbe192a6a060::t_ef9d52a1ca5df6 1-3
+apps/marketing/src/assets/app-icons/system/regular/folder.svg
+  s_60bbe192a6a060::t_446d417dd6e26f 1-3
+apps/marketing/src/assets/app-icons/system/regular/function.svg
+  s_60bbe192a6a060::t_4bb4226b23a369 1-3
+apps/marketing/src/assets/app-icons/system/regular/funnel-simple.svg
+  s_60bbe192a6a060::t_b0675d5ffdf453 1-3
+apps/marketing/src/assets/app-icons/system/regular/funnel.svg
+  s_60bbe192a6a060::t_01bfca3a5ab0b9 1-3
+apps/marketing/src/assets/app-icons/system/regular/gear.svg
+  s_60bbe192a6a060::t_9ced5304de8466 1-3
+apps/marketing/src/assets/app-icons/system/regular/git-branch.svg
+  s_60bbe192a6a060::t_86a38f757b5ca8 1-3
+apps/marketing/src/assets/app-icons/system/regular/git-merge.svg
+  s_60bbe192a6a060::t_7c39ac955771fc 1-3
+apps/marketing/src/assets/app-icons/system/regular/git-pull-request.svg
+  s_60bbe192a6a060::t_7d375e424f278c 1-3
+apps/marketing/src/assets/app-icons/system/regular/globe.svg
+  s_60bbe192a6a060::t_7816a7b401183c 1-5
+apps/marketing/src/assets/app-icons/system/regular/hand-palm.svg
+  s_60bbe192a6a060::t_5d78267dfea93f 1-3
+apps/marketing/src/assets/app-icons/system/regular/hash-straight.svg
+  s_60bbe192a6a060::t_ac13a6f03cc215 1-3
+apps/marketing/src/assets/app-icons/system/regular/hash.svg
+  s_60bbe192a6a060::t_ca19ca19df7333 1-3
+apps/marketing/src/assets/app-icons/system/regular/house.svg
+  s_60bbe192a6a060::t_937ceb94a9a63b 1-3
+apps/marketing/src/assets/app-icons/system/regular/image.svg
+  s_60bbe192a6a060::t_15dc95b29e4b91 1-5
+apps/marketing/src/assets/app-icons/system/regular/info.svg
+  s_60bbe192a6a060::t_dae0ece6342bb9 1-3
+apps/marketing/src/assets/app-icons/system/regular/kanban.svg
+  s_60bbe192a6a060::t_df48ce02924193 1-3
+apps/marketing/src/assets/app-icons/system/regular/lightning.svg
+  s_60bbe192a6a060::t_775354c15fbe49 1-3
+apps/marketing/src/assets/app-icons/system/regular/link.svg
+  s_60bbe192a6a060::t_6008e68e6c8c22 1-3
+apps/marketing/src/assets/app-icons/system/regular/list-bullets.svg
+  s_60bbe192a6a060::t_ed70d2a54528e9 1-6
+apps/marketing/src/assets/app-icons/system/regular/list-checks.svg
+  s_60bbe192a6a060::t_808972a896f99e 1-4
+apps/marketing/src/assets/app-icons/system/regular/list.svg
+  s_60bbe192a6a060::t_dfc6dcf159e69f 1-3
+apps/marketing/src/assets/app-icons/system/regular/lock-key.svg
+  s_60bbe192a6a060::t_87a8a91060f7bd 1-5
+apps/marketing/src/assets/app-icons/system/regular/magnifying-glass.svg
+  s_60bbe192a6a060::t_46c27b0ec91b43 1-3
+apps/marketing/src/assets/app-icons/system/regular/microphone-slash.svg
+  s_60bbe192a6a060::t_a520259e07978f 1-3
+apps/marketing/src/assets/app-icons/system/regular/microphone.svg
+  s_60bbe192a6a060::t_e81ea735bf7f8d 1-3
+apps/marketing/src/assets/app-icons/system/regular/minus.svg
+  s_60bbe192a6a060::t_59c3a07a2f0c5b 1-3
+apps/marketing/src/assets/app-icons/system/regular/newspaper.svg
+  s_60bbe192a6a060::t_2d6758b0fa968e 1-7
+apps/marketing/src/assets/app-icons/system/regular/note-pencil.svg
+  s_60bbe192a6a060::t_5d2324be3ef7ba 1-5
+apps/marketing/src/assets/app-icons/system/regular/paint-bucket.svg
+  s_60bbe192a6a060::t_0e17e2ac88c2f0 1-3
+apps/marketing/src/assets/app-icons/system/regular/palette.svg
+  s_60bbe192a6a060::t_800781e15e2393 1-3
+apps/marketing/src/assets/app-icons/system/regular/paper-plane-tilt.svg
+  s_60bbe192a6a060::t_b6be1a44578511 1-3
+apps/marketing/src/assets/app-icons/system/regular/paperclip.svg
+  s_60bbe192a6a060::t_4c8841830c073d 1-3
+apps/marketing/src/assets/app-icons/system/regular/pause.svg
+  s_60bbe192a6a060::t_efc46bd17e54f1 1-3
+apps/marketing/src/assets/app-icons/system/regular/pencil-simple.svg
+  s_60bbe192a6a060::t_934cc6057842be 1-3
+apps/marketing/src/assets/app-icons/system/regular/pencil.svg
+  s_60bbe192a6a060::t_c7f4e352bfd39a 1-3
+apps/marketing/src/assets/app-icons/system/regular/phone-call.svg
+  s_60bbe192a6a060::t_63f3ae51f55bd7 1-3
+apps/marketing/src/assets/app-icons/system/regular/phone-disconnect.svg
+  s_60bbe192a6a060::t_5ab3d925f3f225 1-3
+apps/marketing/src/assets/app-icons/system/regular/phone.svg
+  s_60bbe192a6a060::t_70a119cce5cd6f 1-3
+apps/marketing/src/assets/app-icons/system/regular/play.svg
+  s_60bbe192a6a060::t_b04626bf55ba23 1-3
+apps/marketing/src/assets/app-icons/system/regular/plug.svg
+  s_60bbe192a6a060::t_e83699ae661188 1-3
+apps/marketing/src/assets/app-icons/system/regular/plugs-connected.svg
+  s_60bbe192a6a060::t_5f6d29539eaddc 1-3
+apps/marketing/src/assets/app-icons/system/regular/plugs.svg
+  s_60bbe192a6a060::t_c2998289d64638 1-5
+apps/marketing/src/assets/app-icons/system/regular/plus.svg
+  s_60bbe192a6a060::t_f0300f60e998fc 1-3
+apps/marketing/src/assets/app-icons/system/regular/priority-high.svg
+  s_60bbe192a6a060::t_b7af304a3556b4 1-3
+apps/marketing/src/assets/app-icons/system/regular/priority-low.svg
+  s_60bbe192a6a060::t_62d0dbbc9e9c90 1-3
+apps/marketing/src/assets/app-icons/system/regular/priority-medium.svg
+  s_60bbe192a6a060::t_752a3dab9fd8d5 1-3
+apps/marketing/src/assets/app-icons/system/regular/priority-urgent.svg
+  s_60bbe192a6a060::t_d9427b2b19f2b7 1-3
+apps/marketing/src/assets/app-icons/system/regular/record.svg
+  s_60bbe192a6a060::t_348c4acecbde8d 1-3
+apps/marketing/src/assets/app-icons/system/regular/screencast.svg
+  s_60bbe192a6a060::t_cfba19122ab63c 1-4
+apps/marketing/src/assets/app-icons/system/regular/shapes.svg
+  s_60bbe192a6a060::t_326f887a1301b4 1-3
+apps/marketing/src/assets/app-icons/system/regular/shield-check.svg
+  s_60bbe192a6a060::t_806c02ca3823ed 1-3
+apps/marketing/src/assets/app-icons/system/regular/sidebar-simple.svg
+  s_60bbe192a6a060::t_3bb2f5c268fdb4 1-3
+apps/marketing/src/assets/app-icons/system/regular/sigma.svg
+  s_60bbe192a6a060::t_98460fecb8a7af 1-3
+apps/marketing/src/assets/app-icons/system/regular/smiley.svg
+  s_60bbe192a6a060::t_5e2111a7e77a1e 1-3
+apps/marketing/src/assets/app-icons/system/regular/sort-ascending.svg
+  s_60bbe192a6a060::t_f1183a972342dd 1-3
+apps/marketing/src/assets/app-icons/system/regular/sparkle.svg
+  s_60bbe192a6a060::t_b0bab5c90fe40e 1-3
+apps/marketing/src/assets/app-icons/system/regular/speaker-high.svg
+  s_60bbe192a6a060::t_89149d782eee95 1-3
+apps/marketing/src/assets/app-icons/system/regular/spinner-gap.svg
+  s_60bbe192a6a060::t_3f79486ae833c4 1-3
+apps/marketing/src/assets/app-icons/system/regular/square-split-horizontal.svg
+  s_60bbe192a6a060::t_b5352ca910f0b7 1-6
+apps/marketing/src/assets/app-icons/system/regular/squares-four.svg
+  s_60bbe192a6a060::t_090078a2ece77b 1-6
+apps/marketing/src/assets/app-icons/system/regular/stack.svg
+  s_60bbe192a6a060::t_24a5286a7222a5 1-3
+apps/marketing/src/assets/app-icons/system/regular/star.svg
+  s_60bbe192a6a060::t_feb2f03731b02b 1-3
+apps/marketing/src/assets/app-icons/system/regular/table.svg
+  s_60bbe192a6a060::t_9b9fad0705af6b 1-4
+apps/marketing/src/assets/app-icons/system/regular/tag.svg
+  s_60bbe192a6a060::t_130e49ea6e36e1 1-4
+apps/marketing/src/assets/app-icons/system/regular/task-cancelled.svg
+  s_60bbe192a6a060::t_95ae6609f9de07 1-3
+apps/marketing/src/assets/app-icons/system/regular/task-created.svg
+  s_60bbe192a6a060::t_862c3b57eaa3c0 1-3
+apps/marketing/src/assets/app-icons/system/regular/task-done.svg
+  s_60bbe192a6a060::t_f607e55184c113 1-3
+apps/marketing/src/assets/app-icons/system/regular/task-in-progress.svg
+  s_60bbe192a6a060::t_a844e2ac58a1c1 1-3
+apps/marketing/src/assets/app-icons/system/regular/task-in-review.svg
+  s_60bbe192a6a060::t_467e5bbc83189a 1-3
+apps/marketing/src/assets/app-icons/system/regular/terminal-window.svg
+  s_60bbe192a6a060::t_5a9e4da2db8ae2 1-4
+apps/marketing/src/assets/app-icons/system/regular/terminal.svg
+  s_60bbe192a6a060::t_1df8b6a5fb3070 1-3
+apps/marketing/src/assets/app-icons/system/regular/text-a-underline.svg
+  s_60bbe192a6a060::t_c383da32396a6f 1-5
+apps/marketing/src/assets/app-icons/system/regular/text-aa.svg
+  s_60bbe192a6a060::t_645cd3f89d9f9f 1-3
+apps/marketing/src/assets/app-icons/system/regular/text-align-left.svg
+  s_60bbe192a6a060::t_dd69954bc9aa68 1-3
+apps/marketing/src/assets/app-icons/system/regular/text-b.svg
+  s_60bbe192a6a060::t_ac4d735dfc85e9 1-3
+apps/marketing/src/assets/app-icons/system/regular/text-italic.svg
+  s_60bbe192a6a060::t_57d46c1a3673ab 1-3
+apps/marketing/src/assets/app-icons/system/regular/text-strikethrough.svg
+  s_60bbe192a6a060::t_ce993cab260e3b 1-3
+apps/marketing/src/assets/app-icons/system/regular/text-underline.svg
+  s_60bbe192a6a060::t_599135ac0ab921 1-3
+apps/marketing/src/assets/app-icons/system/regular/trash.svg
+  s_60bbe192a6a060::t_1f08be538c0615 1-3
+apps/marketing/src/assets/app-icons/system/regular/tray.svg
+  s_60bbe192a6a060::t_35b2036c445002 1-3
+apps/marketing/src/assets/app-icons/system/regular/tree-structure.svg
+  s_60bbe192a6a060::t_532a1e5f7c179c 1-3
+apps/marketing/src/assets/app-icons/system/regular/upload-simple.svg
+  s_60bbe192a6a060::t_e522fda0e41794 1-3
+apps/marketing/src/assets/app-icons/system/regular/user-circle.svg
+  s_60bbe192a6a060::t_980017e28e169f 1-3
+apps/marketing/src/assets/app-icons/system/regular/user-plus.svg
+  s_60bbe192a6a060::t_9e337efa42e254 1-3
+apps/marketing/src/assets/app-icons/system/regular/user.svg
+  s_60bbe192a6a060::t_e785a37ffe4096 1-3
+apps/marketing/src/assets/app-icons/system/regular/users-three.svg
+  s_60bbe192a6a060::t_df6984363081b0 1-3
+apps/marketing/src/assets/app-icons/system/regular/users.svg
+  s_60bbe192a6a060::t_0cf6af829b7f8e 1-3
+apps/marketing/src/assets/app-icons/system/regular/video-camera-slash.svg
+  s_60bbe192a6a060::t_ed71ad0cd178a8 1-3
+apps/marketing/src/assets/app-icons/system/regular/wave-sine.svg
+  s_60bbe192a6a060::t_3a4eb6344ff0c1 1-3
+apps/marketing/src/assets/app-icons/system/regular/waveform.svg
+  s_60bbe192a6a060::t_d6faf55291a086 1-3
+apps/marketing/src/assets/app-icons/system/regular/x.svg
+  s_60bbe192a6a060::t_09054f8476d437 1-3
+apps/marketing/src/assets/icons/replacements/README.md
+  s_60bbe192a6a060::t_d3f1f1bdb3ce70 1-5
+apps/marketing/src/assets/icons/replacements/airtable.svg
+  s_60bbe192a6a060::t_228a76556fadb5 1
+apps/marketing/src/assets/icons/replacements/caldotcom.svg
+  s_60bbe192a6a060::t_7e5d4a4b935171 1
+apps/marketing/src/assets/icons/replacements/dropbox.svg
+  s_60bbe192a6a060::t_e6b0bb95009568 1
+apps/marketing/src/assets/icons/replacements/googlecalendar.svg
+  s_60bbe192a6a060::t_ca79ff3c6059ad 1
+apps/marketing/src/assets/icons/replacements/googledrive.svg
+  s_60bbe192a6a060::t_4c597571caf81a 1
+apps/marketing/src/assets/icons/replacements/googlesheets.svg
+  s_60bbe192a6a060::t_a6a31181662cff 1
+apps/marketing/src/assets/icons/replacements/lucid.svg
+  s_60bbe192a6a060::t_6e0fd4a8b52282 1
+apps/marketing/src/assets/icons/replacements/make.svg
+  s_60bbe192a6a060::t_0cddab7ec86743 1
+apps/marketing/src/assets/icons/replacements/microsoftexcel.svg
+  s_60bbe192a6a060::t_8bcb2803b21979 1
+apps/marketing/src/assets/icons/replacements/microsoftword.svg
+  s_60bbe192a6a060::t_a2cbfd9af36bc7 1
+apps/marketing/src/assets/icons/replacements/miro.svg
+  s_60bbe192a6a060::t_25a31e32ed0a0b 1
+apps/marketing/src/assets/icons/replacements/raycast.svg
+  s_60bbe192a6a060::t_64630f6e4051e4 1
+apps/marketing/src/assets/icons/replacements/salesforce.svg
+  s_60bbe192a6a060::t_cbce06e238a5f0 1
+apps/marketing/src/assets/icons/replacements/zapier.svg
+  s_60bbe192a6a060::t_38ab85224320d0 1
+apps/marketing/src/assets/logos/macro-wordmark.svg
+  s_60bbe192a6a060::t_21ccc4ef41729f 1-7
+apps/marketing/src/assets/people/rahul-initials.svg
+  s_60bbe192a6a060::t_95754b1caa6815 1
+apps/marketing/src/features/documentation/components/DocumentationContent.tsx
+  s_60bbe192a6a060::t_acd87968762c73 1-5,7-14,16-19,21-28,31,33-36,39,41-46,49,51-54,57,59-62,65-68,70-73,76,78-81,84-176
+apps/marketing/src/features/documentation/components/DocumentationNavigation.tsx
+  s_60bbe192a6a060::t_56b029b8372eac 1-540
+apps/marketing/src/features/documentation/components/FeatureGuide.tsx
+  s_60bbe192a6a060::t_0682a4a7746655 1-69
+apps/marketing/src/features/documentation/components/GuideGraphic.tsx
+  s_60bbe192a6a060::t_0ef80dda048c7e 1-76
+apps/marketing/src/features/documentation/components/GuideToolGraphic.tsx
+  s_60bbe192a6a060::t_d0cf92322befa7 1-24
+apps/marketing/src/features/documentation/components/GuideWorkspaceGraphic.tsx
+  s_60bbe192a6a060::t_572dcec5482769 1-158
+apps/marketing/src/features/documentation/components/PageOutline.tsx
+  s_60bbe192a6a060::t_7d507cff838c09 1-108
+apps/marketing/src/features/documentation/components/SecurityBadges.tsx
+  s_60bbe192a6a060::t_0bcbcca890f6f1 1-23
+apps/marketing/src/features/documentation/components/documentation-navigation.css
+  s_60bbe192a6a060::t_f8d9a66425a1cb 1-56,58,60-66,68-82,84-87
+apps/marketing/src/features/documentation/components/documentation.css
+  s_60bbe192a6a060::t_010ed02a97a774 1-58
+apps/marketing/src/features/documentation/components/feature-guide.css
+  s_60bbe192a6a060::t_81bcc0f898261c 1-2,4-5,7-12,14-15,17-18
+apps/marketing/src/features/documentation/components/guide-book-preview.css
+  s_60bbe192a6a060::t_656ae0f00a2f79 1-249
+apps/marketing/src/features/documentation/components/guide-db-preview.css
+  s_60bbe192a6a060::t_2739e65f41aa7e 1-210
+apps/marketing/src/features/documentation/components/guide-graphic.css
+  s_60bbe192a6a060::t_f4d716a883f354 1-69,71-75,77-81,83-86
+apps/marketing/src/features/documentation/components/guide-home-preview.css
+  s_60bbe192a6a060::t_ecab6a1ccbb2ad 1-9,11-14,16-28,30-32,34-225
+apps/marketing/src/features/documentation/components/guide-routine-preview.css
+  s_60bbe192a6a060::t_a4e2b58554498c 1-153
+apps/marketing/src/features/documentation/components/guide-share-preview.css
+  s_60bbe192a6a060::t_589307f8a6400f 1-254
+apps/marketing/src/features/documentation/components/page-outline-labels.ts
+  s_60bbe192a6a060::t_0347f04528a66d 1-114
+apps/marketing/src/features/documentation/components/page-outline.css
+  s_60bbe192a6a060::t_7a97aa5e0285c8 1-16
+apps/marketing/src/features/documentation/components/security-badges.css
+  s_60bbe192a6a060::t_457ea4b64b71b4 1-12
+apps/marketing/src/features/documentation/core/content.d.ts
+  s_60bbe192a6a060::t_2aa1b8344c35c1 1-17
+apps/marketing/src/features/documentation/core/page-search.test.ts
+  s_60bbe192a6a060::t_14e1443183ecf2 1-54
+apps/marketing/src/features/documentation/core/page-search.ts
+  s_60bbe192a6a060::t_1d443ec83b6b17 1-76
+apps/marketing/src/features/documentation/views/DocumentationPage.tsx
+  s_60bbe192a6a060::t_e4dd3b0c2ae9cb 1-155
+apps/marketing/src/features/marketing/components/BookingLinkStories.tsx
+  s_60bbe192a6a060::t_2149edc6ff541e 1-162
+apps/marketing/src/features/marketing/components/CalendarStories.tsx
+  s_60bbe192a6a060::t_2a57111fa1a8f1 1-190
+apps/marketing/src/features/marketing/components/DemoAgentChip.tsx
+  s_60bbe192a6a060::t_e602b44a6456b6 1-2
+apps/marketing/src/features/marketing/components/DemoAgentMessage.tsx
+  s_60bbe192a6a060::t_db5d27692064f6 1-4
+apps/marketing/src/features/marketing/components/DemoBookingDialog.tsx
+  s_60bbe192a6a060::t_a4d1f34eaaa772 1
+apps/marketing/src/features/marketing/components/DemoDeployDiff.tsx
+  s_60bbe192a6a060::t_c0f5cccab8cde2 18
+apps/marketing/src/features/marketing/components/DemoMentionMenu.test.tsx
+  s_60bbe192a6a060::t_991591c54d173f 77,93-95,202
+apps/marketing/src/features/marketing/components/DemoPrDocument.tsx
+  s_60bbe192a6a060::t_a5480ac04396f9 1-2
+apps/marketing/src/features/marketing/components/FeatureDemoArt.tsx
+  s_60bbe192a6a060::t_f72ed6ad31b13e 1-46
+apps/marketing/src/features/marketing/components/FeatureDemoBackdrop.tsx
+  s_60bbe192a6a060::t_8fd728f0c79afd 1-13
+apps/marketing/src/features/marketing/components/FeaturePage.tsx
+  s_60bbe192a6a060::t_c2686a72a78b84 1-12,20-25,27-28,38-48,52,55-75,79,83-84,106-107,109-132,140-143,145-147,149-155,166-167,189-196
+apps/marketing/src/features/marketing/components/HomepageAgentTrace.tsx
+  s_60bbe192a6a060::t_72aa371ceb8608 1
+apps/marketing/src/features/marketing/components/HomepageBlog.tsx
+  s_60bbe192a6a060::t_d0e2ce7d79af61 1-3
+apps/marketing/src/features/marketing/components/HomepageClosing.tsx
+  s_60bbe192a6a060::t_1d37b3351aa836 1-5,9-14,17-28
+apps/marketing/src/features/marketing/components/HomepageCollaborativeDoc.tsx
+  s_60bbe192a6a060::t_807856519483ba 6,20-22,79-85,88-99
+apps/marketing/src/features/marketing/components/HomepageConversation.tsx
+  s_60bbe192a6a060::t_3e3437834d6e93 54,103
+apps/marketing/src/features/marketing/components/HomepageCrm.tsx
+  s_60bbe192a6a060::t_adae7af070fafc 40-41,50,101-102
+apps/marketing/src/features/marketing/components/HomepageEmailCompose.tsx
+  s_60bbe192a6a060::t_1d0bcb1a2f736f 1-3,20-21,60,104,119-120
+apps/marketing/src/features/marketing/components/HomepageFeatureDetails.test.tsx
+  s_60bbe192a6a060::t_2f3a69f64e0352 21
+apps/marketing/src/features/marketing/components/HomepageFeatureDetails.tsx
+  s_60bbe192a6a060::t_c0f3d123c36e18 1,19-22
+apps/marketing/src/features/marketing/components/HomepageFeatureLinks.tsx
+  s_60bbe192a6a060::t_c2109fc853dd6d 1-11
+apps/marketing/src/features/marketing/components/HomepageInteractiveDemo.tsx
+  s_60bbe192a6a060::t_a14af6a2133c09 1-2
+apps/marketing/src/features/marketing/components/HomepageMention.tsx
+  s_60bbe192a6a060::t_c2e857525c1d11 1-8
+apps/marketing/src/features/marketing/components/HomepageOpenSource.tsx
+  s_60bbe192a6a060::t_72724b0a2b1016 1,5-7
+apps/marketing/src/features/marketing/components/HomepagePullRequest.tsx
+  s_60bbe192a6a060::t_4fac3fd5273698 1
+apps/marketing/src/features/marketing/components/HomepageResources.tsx
+  s_60bbe192a6a060::t_a868b5d944d052 1-101
+apps/marketing/src/features/marketing/components/HomepageScrollCue.tsx
+  s_60bbe192a6a060::t_06281146f81cd2 1,37-40
+apps/marketing/src/features/marketing/components/HomepageSections.tsx
+  s_60bbe192a6a060::t_04db667f68e44f 31,176,189-190,199,203,230,333
+apps/marketing/src/features/marketing/components/HomepageSidebar.tsx
+  s_60bbe192a6a060::t_138f043897456a 1-15
+apps/marketing/src/features/marketing/components/HomepageSpreadsheet.tsx
+  s_60bbe192a6a060::t_b33c98bac722cd 1-21
+apps/marketing/src/features/marketing/components/HomepageStandaloneDemos.test.tsx
+  s_60bbe192a6a060::t_c7b2e65e209107 51,122,124,126,155,160,166,174-176,179
+apps/marketing/src/features/marketing/components/HomepageUnification.tsx
+  s_60bbe192a6a060::t_d437a7e6686c3d 355
+apps/marketing/src/features/marketing/components/HomepageWorkspace.tsx
+  s_60bbe192a6a060::t_22b3a8b6d979d0 5-20
+apps/marketing/src/features/marketing/components/HomepageWorkspaceCalendar.tsx
+  s_60bbe192a6a060::t_137471c2432563 1-5
+apps/marketing/src/features/marketing/components/HomepageWorkspaceList.tsx
+  s_60bbe192a6a060::t_0122818fdc80ed 1-16
+apps/marketing/src/features/marketing/components/HomepageWorkspaceTasks.tsx
+  s_60bbe192a6a060::t_855f846ea88b4f 1-6
+apps/marketing/src/features/marketing/components/ProductMention.tsx
+  s_60bbe192a6a060::t_e73bc56ffe0872 1-14,16-32,34-53
+apps/marketing/src/features/marketing/components/SiteHeader.test.tsx
+  s_60bbe192a6a060::t_5e1b00590797d1 13-14,22,24,26,28-29,31-41,43,46,48-70,73-81,83-89,92,96,100,104-119
+apps/marketing/src/features/marketing/components/SiteHeader.tsx
+  s_60bbe192a6a060::t_ae00916b1fef66 1-4,8-11,14,16-18,20-22,24-64,80,104-107,112,114,117-131,135-143,145-151,154-156,158-164,167-169,188,194-196,198-213
+apps/marketing/src/features/marketing/components/SitePageClosing.tsx
+  s_60bbe192a6a060::t_92038e8671f079 1-12
+apps/marketing/src/features/marketing/components/SpreadsheetRecordPreview.tsx
+  s_60bbe192a6a060::t_b56002ba86c4ad 1
+apps/marketing/src/features/marketing/components/TutorialVideoEmbed.test.tsx
+  s_60bbe192a6a060::t_7cc6724d2783c3 1-9,11-25,27-40,42-50
+apps/marketing/src/features/marketing/components/TutorialVideoEmbed.tsx
+  s_60bbe192a6a060::t_962778fb56ca6b 1-16,18-19,21-25,27,29,34-46,48-52,54-80,83-153
+apps/marketing/src/features/marketing/components/TutorialWallpaper.tsx
+  s_60bbe192a6a060::t_f18d4bbc76d888 1-181
+apps/marketing/src/features/marketing/components/agents/AgentComposer.tsx
+  s_60bbe192a6a060::t_9e96ee072abe38 1-3
+apps/marketing/src/features/marketing/components/agents/AgentParallelSearchStory.tsx
+  s_60bbe192a6a060::t_874483068c5906 1-193
+apps/marketing/src/features/marketing/components/agents/AgentSession.tsx
+  s_60bbe192a6a060::t_9ad4ca323dfd3a 1-2
+apps/marketing/src/features/marketing/components/agents/AgentStories.tsx
+  s_60bbe192a6a060::t_19759f33d0411f 1-3
+apps/marketing/src/features/marketing/components/agents/AgentTranscript.tsx
+  s_60bbe192a6a060::t_6c4bb2d5c4447a 1-11,57-63,202,260-263,269-271,273-286
+apps/marketing/src/features/marketing/components/agents/AgentWorkflowStories.test.tsx
+  s_60bbe192a6a060::t_1e084d7f102db0 139-141
+apps/marketing/src/features/marketing/components/agents/AgentWorkflowStories.tsx
+  s_60bbe192a6a060::t_46b935ad8c9e93 1-2,152,204,823-827,831,840-841,860-861
+apps/marketing/src/features/marketing/components/agents/FolderComposerMockup.tsx
+  s_60bbe192a6a060::t_8c0253e38eb5ba 1-4
+apps/marketing/src/features/marketing/components/agents/LaunchConversation.tsx
+  s_60bbe192a6a060::t_7a0b9e59f9a17c 37,44,55
+apps/marketing/src/features/marketing/components/agents/NorthwindCollaboration.tsx
+  s_60bbe192a6a060::t_155da718b0b80e 1
+apps/marketing/src/features/marketing/components/agents/NorthwindSession.tsx
+  s_60bbe192a6a060::t_fc051a80d10eca 1
+apps/marketing/src/features/marketing/components/agents/agent-parallel-search.css
+  s_60bbe192a6a060::t_c090b0c99244bf 1-12
+apps/marketing/src/features/marketing/components/agents/agent-workflows.css
+  s_60bbe192a6a060::t_ed860d31f1e31c 15,25
+apps/marketing/src/features/marketing/components/agents/workflowData.ts
+  s_60bbe192a6a060::t_fe6c47b65f83fe 46,49,75,112
+apps/marketing/src/features/marketing/components/animateOpenSource.test.ts
+  s_60bbe192a6a060::t_f251638fbf1520 59,61,111-127
+apps/marketing/src/features/marketing/components/animateOpenSource.ts
+  s_60bbe192a6a060::t_90ae6f9bbe6b23 4-6,176-178
+apps/marketing/src/features/marketing/components/benefits/BenefitGraphic.tsx
+  s_60bbe192a6a060::t_b4074f884cb9cc 1-36,38-43,45-61,63,65-67,69-71,75-85,87-89,93-96,98-107,112,114-120,122-124,126-141,143,146-158,162,164-185,187-191,193-204,206-209,211-213,215-231,233-252,255-264,266-272,274-276,278-281,283-305,307-320,322-345,347-374,376-378,380-391,393-394,396,398-400,402-406,408,411-478
+apps/marketing/src/features/marketing/components/benefits/BenefitVideoPoster.tsx
+  s_60bbe192a6a060::t_4be9285585442c 1-585
+apps/marketing/src/features/marketing/components/benefits/CompanyGraphDemo.tsx
+  s_60bbe192a6a060::t_667f6e77d0d2dd 1-9,11-25,27-61
+apps/marketing/src/features/marketing/components/benefits/LinkedTasksDemo.tsx
+  s_60bbe192a6a060::t_e2bd23da4cd43c 1-125
+apps/marketing/src/features/marketing/components/benefits/benefit-page.css
+  s_60bbe192a6a060::t_417146ae29de9f 1-136
+apps/marketing/src/features/marketing/components/booking-link-stories.css
+  s_60bbe192a6a060::t_005483234b95a1 1-165
+apps/marketing/src/features/marketing/components/calendar-stories.css
+  s_60bbe192a6a060::t_55bc6145170bbe 1-70
+apps/marketing/src/features/marketing/components/calls/CallChannel.tsx
+  s_60bbe192a6a060::t_e4b655a7e7a031 1-9
+apps/marketing/src/features/marketing/components/calls/CallOverlay.tsx
+  s_60bbe192a6a060::t_fb02fb884e491f 1-8
+apps/marketing/src/features/marketing/components/calls/CallRecord.tsx
+  s_60bbe192a6a060::t_83f389765f0cfd 1-11,47
+apps/marketing/src/features/marketing/components/calls/CallStories.test.tsx
+  s_60bbe192a6a060::t_61773d7adff7a1 84,109-111,129,142,210,212-213,217-219,398-400
+apps/marketing/src/features/marketing/components/calls/CallStories.tsx
+  s_60bbe192a6a060::t_04b46108bc1c56 1-7,111
+apps/marketing/src/features/marketing/components/calls/CallsComparison.tsx
+  s_60bbe192a6a060::t_93e5126b60d2a3 42,44
+apps/marketing/src/features/marketing/components/calls/call-fixtures.ts
+  s_60bbe192a6a060::t_19b549b3676595 4
+apps/marketing/src/features/marketing/components/calls/call-stories.css
+  s_60bbe192a6a060::t_42603716912bb1 61,93
+apps/marketing/src/features/marketing/components/channels/ChannelStories.test.tsx
+  s_60bbe192a6a060::t_6961a57802f40c 148,153,157,167,200,345,372,433,471
+apps/marketing/src/features/marketing/components/channels/ChannelStories.tsx
+  s_60bbe192a6a060::t_d470b55df5dd4f 217,403,409,415,421,427,440,447,453,460,466,493,504,510,516,518,529-530,547,577,639,665
+apps/marketing/src/features/marketing/components/channels/ChannelWorkSurface.tsx
+  s_60bbe192a6a060::t_260d1b881e9c3a 1-4
+apps/marketing/src/features/marketing/components/channels/channel-stories.css
+  s_60bbe192a6a060::t_e821052582224e 18,20
+apps/marketing/src/features/marketing/components/channels/channelProject.ts
+  s_60bbe192a6a060::t_00ef0416b03b6a 13,19,26,33,39,46,53,59,66,73,80,86,93,100,106,113,124,130,138,145,153,165,167,172-174,186,194-195,217,231,237,244,253,259,268,273,287,292,298,304,311,317,324,331,338,345,351,370,376,388,394,406,412,424,430,442,448,457,461,467,474-475,478-479,485-486,495-498,501-503,505,508,511-515,518-522,525-529,533,536-538,541-545,548-553,556-561,564-568,571-576,578,580,583-586
+apps/marketing/src/features/marketing/components/comparisons/FeatureComparisons.test.tsx
+  s_60bbe192a6a060::t_33ac51c51e58ef 23,56,60,71,98
+apps/marketing/src/features/marketing/components/comparisons/FeatureComparisons.tsx
+  s_60bbe192a6a060::t_faf414af21fa40 4,78-116
+apps/marketing/src/features/marketing/components/comparisons/MigrationComparison.test.tsx
+  s_60bbe192a6a060::t_ad2d2899a7997e 9,18,42
+apps/marketing/src/features/marketing/components/comparisons/feature-comparisons.css
+  s_60bbe192a6a060::t_777f65877911d5 1,3-4,6-8,14-16,18-24,26-38,40-45
+apps/marketing/src/features/marketing/components/crm/CompanyPipelineEntry.tsx
+  s_60bbe192a6a060::t_0bdc934f885fc5 1-5
+apps/marketing/src/features/marketing/components/crm/CrmFollowupDemo.tsx
+  s_60bbe192a6a060::t_f7c8b54880f543 1
+apps/marketing/src/features/marketing/components/crm/CrmHeroSidebar.tsx
+  s_60bbe192a6a060::t_d6eb1648cb8a0e 1-5
+apps/marketing/src/features/marketing/components/demo-booking-dialog.css
+  s_60bbe192a6a060::t_9a94106c70430d 13
+apps/marketing/src/features/marketing/components/demo-glass.css
+  s_60bbe192a6a060::t_29294e5d061ceb 1-10,12-18,20-28,30-63,65-91
+apps/marketing/src/features/marketing/components/demo-mentions.css
+  s_60bbe192a6a060::t_7d6869b04b6b4e 65
+apps/marketing/src/features/marketing/components/documents/DocMention.tsx
+  s_60bbe192a6a060::t_b1ad8f2144078c 1-6
+apps/marketing/src/features/marketing/components/documents/DocumentFrame.tsx
+  s_60bbe192a6a060::t_eb5b0eaf5fc906 1-3
+apps/marketing/src/features/marketing/components/documents/DocumentOrganizationDemo.tsx
+  s_60bbe192a6a060::t_f2e5039fe08ad4 1-6
+apps/marketing/src/features/marketing/components/documents/DocumentProjectDemo.tsx
+  s_60bbe192a6a060::t_31de9ce8b82108 1
+apps/marketing/src/features/marketing/components/documents/DocumentReferencesDemo.tsx
+  s_60bbe192a6a060::t_76de890cf07e6a 1-74
+apps/marketing/src/features/marketing/components/documents/DocumentShareSheet.tsx
+  s_60bbe192a6a060::t_eae250994570c4 1-10,25-27,100-103,107
+apps/marketing/src/features/marketing/components/documents/DocumentStories.test.tsx
+  s_60bbe192a6a060::t_f882c0129926cb 335,342-343
+apps/marketing/src/features/marketing/components/documents/DocumentStories.tsx
+  s_60bbe192a6a060::t_84cf0e5f70bdbc 1-2
+apps/marketing/src/features/marketing/components/documents/document-stories.css
+  s_60bbe192a6a060::t_9bdff6b184afbe 66-71,249-251
+apps/marketing/src/features/marketing/components/email/EmailAccountsDemo.tsx
+  s_60bbe192a6a060::t_5d698da1316a78 1-4
+apps/marketing/src/features/marketing/components/email/EmailAgenticEditingDemo.tsx
+  s_60bbe192a6a060::t_fa6ab1eac8d1a2 1,23,186,208
+apps/marketing/src/features/marketing/components/email/EmailAutoTagDemo.tsx
+  s_60bbe192a6a060::t_fd4d2a8204eb7e 1-39
+apps/marketing/src/features/marketing/components/email/EmailDemoSource.tsx
+  s_60bbe192a6a060::t_24e1ef8ac5ae0d 18,20,24,43
+apps/marketing/src/features/marketing/components/email/EmailDemos.test.tsx
+  s_60bbe192a6a060::t_89247434422a0c 64,169,264-266,356
+apps/marketing/src/features/marketing/components/email/EmailFeatureDemos.test.tsx
+  s_60bbe192a6a060::t_4794fbbb97174d 243
+apps/marketing/src/features/marketing/components/email/EmailInboxDemo.tsx
+  s_60bbe192a6a060::t_bbc33c1ad93695 1-3
+apps/marketing/src/features/marketing/components/email/EmailKeyboardDemo.tsx
+  s_60bbe192a6a060::t_e2c0619b4ad9ed 1-2
+apps/marketing/src/features/marketing/components/email/EmailShareStory.test.tsx
+  s_60bbe192a6a060::t_4f372a8b8a0cca 1-96
+apps/marketing/src/features/marketing/components/email/EmailShareStory.tsx
+  s_60bbe192a6a060::t_15aed0160dc8c5 1-237
+apps/marketing/src/features/marketing/components/email/EmailSharingDemo.tsx
+  s_60bbe192a6a060::t_a52408e09e8aba 1-4,6,30,130-131,139,181-211
+apps/marketing/src/features/marketing/components/email/email-accounts-demo.css
+  s_60bbe192a6a060::t_56cba619879261 3,10,27-32
+apps/marketing/src/features/marketing/components/email/email-auto-tag-demo.css
+  s_60bbe192a6a060::t_546a0580347fc4 1-80
+apps/marketing/src/features/marketing/components/email/email-demos.css
+  s_60bbe192a6a060::t_c7f20e0d3224e3 13,114
+apps/marketing/src/features/marketing/components/email/email-desktop-demo.css
+  s_60bbe192a6a060::t_5b32c8a8f68cbd 33
+apps/marketing/src/features/marketing/components/email/email-feature-demos.css
+  s_60bbe192a6a060::t_151dcc0e2224a2 73,77,86-87,94,125
+apps/marketing/src/features/marketing/components/email/email-hero.css
+  s_60bbe192a6a060::t_4c91551a5222dc 3-6,34,37-40,46-51,53,73,77-79,90,108-109
+apps/marketing/src/features/marketing/components/email/email-keyboard-stage.css
+  s_60bbe192a6a060::t_acf2922f73faf8 4-5
+apps/marketing/src/features/marketing/components/email/email-share-story.css
+  s_60bbe192a6a060::t_2be6d262c27500 1-49
+apps/marketing/src/features/marketing/components/email/frozen/ChannelComposer.tsx
+  s_60bbe192a6a060::t_150883c3df27c1 1-3
+apps/marketing/src/features/marketing/components/email/frozen/EmailRows.tsx
+  s_60bbe192a6a060::t_c9a9e31d369c62 1
+apps/marketing/src/features/marketing/components/email/frozen/EmailShell.tsx
+  s_60bbe192a6a060::t_d7ccf74bf78034 1-19
+apps/marketing/src/features/marketing/components/email/frozen/EmailThread.tsx
+  s_60bbe192a6a060::t_92eb071ef36667 1-6
+apps/marketing/src/features/marketing/components/email/frozen/SearchBar.tsx
+  s_60bbe192a6a060::t_17d5c8fcfdb8d7 2-4
+apps/marketing/src/features/marketing/components/feature-demo-art.css
+  s_60bbe192a6a060::t_25f58a261854b3 1-195
+apps/marketing/src/features/marketing/components/feature-demo-backdrop.css
+  s_60bbe192a6a060::t_fd69eb3bb45946 1-37
+apps/marketing/src/features/marketing/components/feature-page.css
+  s_60bbe192a6a060::t_ce31cfd5ae2342 15-16,23,74-75,100-106
+apps/marketing/src/features/marketing/components/homepage-agent-trace.css
+  s_60bbe192a6a060::t_cb2287bde119f2 14
+apps/marketing/src/features/marketing/components/homepage-closing-content.css
+  s_60bbe192a6a060::t_8e6afab30c5b6e 23,35
+apps/marketing/src/features/marketing/components/homepage-collaborative-doc.css
+  s_60bbe192a6a060::t_2d2699ba398941 137
+apps/marketing/src/features/marketing/components/homepage-email-compose.css
+  s_60bbe192a6a060::t_26d03abefd024d 43
+apps/marketing/src/features/marketing/components/homepage-feature-details.css
+  s_60bbe192a6a060::t_068825bb48cc85 1,3-6
+apps/marketing/src/features/marketing/components/homepage-feature-links.css
+  s_60bbe192a6a060::t_b9e9001821778e 1-33
+apps/marketing/src/features/marketing/components/homepage-interactive-demo.css
+  s_60bbe192a6a060::t_7f68f12fd2d9ae 5,32
+apps/marketing/src/features/marketing/components/homepage-reassurance.css
+  s_60bbe192a6a060::t_0e4da1573e89e6 1
+apps/marketing/src/features/marketing/components/homepage-resources.css
+  s_60bbe192a6a060::t_9d31958fcdcf28 1-24
+apps/marketing/src/features/marketing/components/homepage-sidebar.css
+  s_60bbe192a6a060::t_4dcfa74b5f09c9 18,32,39,55
+apps/marketing/src/features/marketing/components/homepage-workspace.css
+  s_60bbe192a6a060::t_4a399fc04f70d5 1
+apps/marketing/src/features/marketing/components/homepage/CrmPipelineScene.tsx
+  s_60bbe192a6a060::t_315be7e7e120a8 1-8
+apps/marketing/src/features/marketing/components/homepage/HomepageDatabaseWorkflow.tsx
+  s_60bbe192a6a060::t_4f1274f4ab783d 1-10,12-18,20-110
+apps/marketing/src/features/marketing/components/homepage/HomepageProductPreview.tsx
+  s_60bbe192a6a060::t_706655c2a0f672 1-225
+apps/marketing/src/features/marketing/components/homepage/HomepageTiles.tsx
+  s_60bbe192a6a060::t_7402545104568b 1-5,7-124
+apps/marketing/src/features/marketing/components/homepage/HomepageWorkflows.tsx
+  s_60bbe192a6a060::t_4cce1a72c947f8 1-311
+apps/marketing/src/features/marketing/components/homepage/MacroHero.tsx
+  s_60bbe192a6a060::t_f5c4ddc4962b5c 1-2,4-5,7-28
+apps/marketing/src/features/marketing/components/homepage/homepage-email-story.css
+  s_60bbe192a6a060::t_53fd6d45ca329f 1-38
+apps/marketing/src/features/marketing/components/homepage/homepage-feature-splits.css
+  s_60bbe192a6a060::t_4fe99a48cacb87 1-61
+apps/marketing/src/features/marketing/components/homepage/homepage-preview-light.css
+  s_60bbe192a6a060::t_95f1a8b6430dbe 1-25,27-33
+apps/marketing/src/features/marketing/components/homepage/homepage-product-preview.css
+  s_60bbe192a6a060::t_12c06c206d43df 1-342
+apps/marketing/src/features/marketing/components/homepage/homepage-scenes.css
+  s_60bbe192a6a060::t_4f6b738b5c5001 17,29
+apps/marketing/src/features/marketing/components/homepage/macro-hero.css
+  s_60bbe192a6a060::t_666f3570be7695 1-16
+apps/marketing/src/features/marketing/components/homepage/macro-homepage.css
+  s_60bbe192a6a060::t_33cb6e1fbcce74 1-162
+apps/marketing/src/features/marketing/components/page-aura.css
+  s_60bbe192a6a060::t_602f17be298f54 1-9,11-35,37-69,71-79,81-85
+apps/marketing/src/features/marketing/components/paper/DatabaseStories.tsx
+  s_60bbe192a6a060::t_8a76b5dade4a34 1-50
+apps/marketing/src/features/marketing/components/paper/NotionImportGraphic.tsx
+  s_60bbe192a6a060::t_8de0dd969f6a3f 1-5,7-47
+apps/marketing/src/features/marketing/components/paper/PaperChatCall.tsx
+  s_60bbe192a6a060::t_62d9a28443ec64 1-45
+apps/marketing/src/features/marketing/components/paper/PaperChatCreate.tsx
+  s_60bbe192a6a060::t_0c52dd85bf03f4 1-386
+apps/marketing/src/features/marketing/components/paper/PaperDatabaseFields.tsx
+  s_60bbe192a6a060::t_bc4275c84ecd4d 1-258
+apps/marketing/src/features/marketing/components/paper/PaperDatabaseFieldsMobile.tsx
+  s_60bbe192a6a060::t_2e9d09bfe4338d 1-218
+apps/marketing/src/features/marketing/components/paper/PaperDatabaseQuery.tsx
+  s_60bbe192a6a060::t_2e2dfa5b7f9a84 1-135
+apps/marketing/src/features/marketing/components/paper/PaperEmailAccounts.tsx
+  s_60bbe192a6a060::t_7ebc0c8983c8b5 1-246
+apps/marketing/src/features/marketing/components/paper/PaperEmailSource.tsx
+  s_60bbe192a6a060::t_9da802bf63f572 1-618
+apps/marketing/src/features/marketing/components/paper/PaperEmailTask.tsx
+  s_60bbe192a6a060::t_bad47a3461bed8 1-39
+apps/marketing/src/features/marketing/components/paper/PaperFeatureGraphic.tsx
+  s_60bbe192a6a060::t_379c4a2aa1dff4 1-52
+apps/marketing/src/features/marketing/components/paper/notion-import-graphic.css
+  s_60bbe192a6a060::t_6faa5ac5336042 1-8,10-17,19-68
+apps/marketing/src/features/marketing/components/paper/paper-chat-call.css
+  s_60bbe192a6a060::t_18bee1f66edc7b 1-41
+apps/marketing/src/features/marketing/components/paper/paper-database-fields.css
+  s_60bbe192a6a060::t_1302461ba725da 1-3
+apps/marketing/src/features/marketing/components/paper/paper-email-source.css
+  s_60bbe192a6a060::t_6f0afe21ba1928 1-67
+apps/marketing/src/features/marketing/components/paper/paper-email-task.css
+  s_60bbe192a6a060::t_473cd557343f31 1-33
+apps/marketing/src/features/marketing/components/paper/paper-feature-art.css
+  s_60bbe192a6a060::t_983a900d56644e 1-311
+apps/marketing/src/features/marketing/components/paper/paper-feature-graphic.css
+  s_60bbe192a6a060::t_73fc289d18150f 1-113
+apps/marketing/src/features/marketing/components/pricing/SavingsCalculator.tsx
+  s_60bbe192a6a060::t_6a237bc5d3d879 9,11-13,15-24,26,28,30,32,34,36-39,58-63,65-97,100-102,105-108,110-264,267,269,303-308,310-326,328-347,350-361
+apps/marketing/src/features/marketing/components/pricing/savings-calculator.css
+  s_60bbe192a6a060::t_23d75e74fdce40 1-26,31-38
+apps/marketing/src/features/marketing/components/product-feature-section.css
+  s_60bbe192a6a060::t_c4ca524c66a6ab 1,4,6-7,16,21-22,27-28,30,33-34,37-39,57,59-61,64-66
+apps/marketing/src/features/marketing/components/product-mention.css
+  s_60bbe192a6a060::t_f9d22a8e097176 1-16,18-22,24-29,31-33,35-51
+apps/marketing/src/features/marketing/components/product/ProductIntroduction.tsx
+  s_60bbe192a6a060::t_7aac1b8b9cd7eb 1-40
+apps/marketing/src/features/marketing/components/product/ProductPage.tsx
+  s_60bbe192a6a060::t_5052d2cade1272 1-24,26,30-31,37,39,45-76,79-86,93-94,98,101-124,126-128
+apps/marketing/src/features/marketing/components/product/ReplacementAppIcon.tsx
+  s_60bbe192a6a060::t_3b4357ae5ddf82 1-96
+apps/marketing/src/features/marketing/components/product/product-introduction.css
+  s_60bbe192a6a060::t_a97d60151ee420 1-3,5-10,12-15,17-21
+apps/marketing/src/features/marketing/components/product/product-page.css
+  s_60bbe192a6a060::t_c8202f02bca483 8,29
+apps/marketing/src/features/marketing/components/product/replacement-app-icon.css
+  s_60bbe192a6a060::t_9c590f51342fa0 1-2
+apps/marketing/src/features/marketing/components/reviews/GithubWorkflow.tsx
+  s_60bbe192a6a060::t_0b050ef6caa16d 1-2,47-50,124,139,171-173,512-516,525
+apps/marketing/src/features/marketing/components/reviews/ReviewChanges.tsx
+  s_60bbe192a6a060::t_cb503829d9265b 1-3
+apps/marketing/src/features/marketing/components/reviews/ReviewHome.tsx
+  s_60bbe192a6a060::t_7b5e0c6294e3d3 1-16,123,180,329
+apps/marketing/src/features/marketing/components/reviews/ReviewPrMention.tsx
+  s_60bbe192a6a060::t_58d9079d1dc12b 1-2
+apps/marketing/src/features/marketing/components/reviews/ReviewPullRequest.tsx
+  s_60bbe192a6a060::t_5da3d598b4e6b2 1-5
+apps/marketing/src/features/marketing/components/reviews/githubProject.ts
+  s_60bbe192a6a060::t_2271452537b2ee 17
+apps/marketing/src/features/marketing/components/reviews/review-fixtures.ts
+  s_60bbe192a6a060::t_1e3abfcbd529d7 86-87
+apps/marketing/src/features/marketing/components/reviews/review-stories.css
+  s_60bbe192a6a060::t_6f6b3bccbf0227 65
+apps/marketing/src/features/marketing/components/sales/SalesCalculator.tsx
+  s_60bbe192a6a060::t_3609282c270b89 1-3
+apps/marketing/src/features/marketing/components/site-navigation.css
+  s_60bbe192a6a060::t_1cb57d9c2a61b7 11,18,43,46,48-49,51-52,54,56,58,60,62,72-74,79,83,85,87,108
+apps/marketing/src/features/marketing/components/spreadsheet-demo-data.ts
+  s_60bbe192a6a060::t_a21cdba00b1055 23,25
+apps/marketing/src/features/marketing/components/tasks/TaskContextDemo.tsx
+  s_60bbe192a6a060::t_b9b470c3d43527 1-2
+apps/marketing/src/features/marketing/components/tasks/TaskPaperGraphic.tsx
+  s_60bbe192a6a060::t_7bee17bcb2d9d9 1-69
+apps/marketing/src/features/marketing/components/tasks/TaskProjectView.tsx
+  s_60bbe192a6a060::t_1a680b4a891dda 1-2
+apps/marketing/src/features/marketing/components/tasks/TaskStories.test.tsx
+  s_60bbe192a6a060::t_734e16f8434fce 135,149,152,155,163,191-192,195-196,230,233,236,242,256,297,355,371,375,383-404
+apps/marketing/src/features/marketing/components/tasks/TaskStories.tsx
+  s_60bbe192a6a060::t_a47db2f925602e 7,29,32,44,46,48,84,86,90-91,97,107,142,148,153-154,161,193,213,232-257,288,350-358,360-362
+apps/marketing/src/features/marketing/components/tasks/TasksWorkspace.tsx
+  s_60bbe192a6a060::t_a90dcab810ced0 1-6
+apps/marketing/src/features/marketing/components/tasks/TasksWorkspaceControls.tsx
+  s_60bbe192a6a060::t_9a1e7db83cf8e4 1-8
+apps/marketing/src/features/marketing/components/tasks/TasksWorkspaceSidebar.tsx
+  s_60bbe192a6a060::t_bc9559b5f6091b 1-7
+apps/marketing/src/features/marketing/components/tasks/paper/PaperTaskProperties.tsx
+  s_60bbe192a6a060::t_269e628dcb1036 1-601
+apps/marketing/src/features/marketing/components/tasks/paper/PaperTaskPropertiesMobile.tsx
+  s_60bbe192a6a060::t_a90ce1f99bd6f8 1-167
+apps/marketing/src/features/marketing/components/tasks/paper/PaperTaskRow.tsx
+  s_60bbe192a6a060::t_7ebf33ffd35101 1-199
+apps/marketing/src/features/marketing/components/tasks/paper/PaperTaskRowMobile.tsx
+  s_60bbe192a6a060::t_632ea4c81eb82e 1-196
+apps/marketing/src/features/marketing/components/tasks/paper/PaperTaskViews.tsx
+  s_60bbe192a6a060::t_523986e74806c4 1-259
+apps/marketing/src/features/marketing/components/tasks/paper/paper-task-art.css
+  s_60bbe192a6a060::t_41a8f0ce9189c6 1-185
+apps/marketing/src/features/marketing/components/tasks/task-paper-graphic.css
+  s_60bbe192a6a060::t_45c8b5aee754b3 1-71
+apps/marketing/src/features/marketing/components/tasks/task-stories.css
+  s_60bbe192a6a060::t_39ee16c79970f2 24,27-28,34,37,40-47,49-52
+apps/marketing/src/features/marketing/components/tasks/taskChannelHistory.ts
+  s_60bbe192a6a060::t_4e763efec65e2e 7-13,16-21,24-30
+apps/marketing/src/features/marketing/components/tasks/tasks-page.css
+  s_60bbe192a6a060::t_6d671f2980ba31 120-126
+apps/marketing/src/features/marketing/components/tutorial-video-embed.css
+  s_60bbe192a6a060::t_cfae6e3d6a0003 1-136
+apps/marketing/src/features/marketing/components/workspace-story.css
+  s_60bbe192a6a060::t_8499214df03280 5-6,51,68-72,125-130
+apps/marketing/src/features/marketing/components/workspace/ChatSidebar.tsx
+  s_60bbe192a6a060::t_7268774d10b622 1-4
+apps/marketing/src/features/marketing/components/workspace/CompanyRecord.tsx
+  s_60bbe192a6a060::t_a8f277007af5da 1-21,100
+apps/marketing/src/features/marketing/components/workspace/DummyWorkspace.test.tsx
+  s_60bbe192a6a060::t_a59e8e84625454 82,113,139-140,158-159,183,185
+apps/marketing/src/features/marketing/components/workspace/DummyWorkspace.tsx
+  s_60bbe192a6a060::t_2e77dfea1dcbb2 1-23
+apps/marketing/src/features/marketing/components/workspace/WorkspaceAgents.tsx
+  s_60bbe192a6a060::t_1e815e3445b531 2-4
+apps/marketing/src/features/marketing/components/workspace/WorkspaceCalendar.tsx
+  s_60bbe192a6a060::t_6c9f4e59b3d078 1-3
+apps/marketing/src/features/marketing/components/workspace/WorkspaceChannel.tsx
+  s_60bbe192a6a060::t_bf4046453f3708 1-5,43,399-401,431,439
+apps/marketing/src/features/marketing/components/workspace/WorkspaceCompanies.tsx
+  s_60bbe192a6a060::t_d476fb58ee4141 1
+apps/marketing/src/features/marketing/components/workspace/WorkspaceDocuments.tsx
+  s_60bbe192a6a060::t_ff915f412315c7 1-7
+apps/marketing/src/features/marketing/components/workspace/WorkspaceEmail.tsx
+  s_60bbe192a6a060::t_3b0ff3459cd353 1-10
+apps/marketing/src/features/marketing/components/workspace/WorkspaceEventDetails.tsx
+  s_60bbe192a6a060::t_88ebf422bfa39f 1-8,110
+apps/marketing/src/features/marketing/components/workspace/WorkspaceHomeFeed.tsx
+  s_60bbe192a6a060::t_fb0acc83e72748 1-6
+apps/marketing/src/features/marketing/components/workspace/WorkspaceSidebar.tsx
+  s_60bbe192a6a060::t_dd431855163b6a 1-17
+apps/marketing/src/features/marketing/components/workspace/WorkspaceSpreadsheet.tsx
+  s_60bbe192a6a060::t_e7cab8f10a5dfe 1-2
+apps/marketing/src/features/marketing/components/workspace/WorkspaceTasks.tsx
+  s_60bbe192a6a060::t_7c71182be31fe8 1-5
+apps/marketing/src/features/marketing/components/workspace/dummy-workspace.css
+  s_60bbe192a6a060::t_1ad6c157f679cc 3,25,102,121,149
+apps/marketing/src/features/marketing/components/workspace/frozen/CreatePalette.tsx
+  s_60bbe192a6a060::t_f06b360236ef55 1-2
+apps/marketing/src/features/marketing/components/workspace/frozen/DemoTags.tsx
+  s_60bbe192a6a060::t_4a24ab54117a92 1
+apps/marketing/src/features/marketing/components/workspace/frozen/DetailPanel.tsx
+  s_60bbe192a6a060::t_6dc1bb6c92e065 1-2
+apps/marketing/src/features/marketing/components/workspace/frozen/EmailReply.tsx
+  s_60bbe192a6a060::t_d2de2e29dd0a53 1-4
+apps/marketing/src/features/marketing/components/workspace/frozen/MessageRow.tsx
+  s_60bbe192a6a060::t_53b75ffa12f818 1-4
+apps/marketing/src/features/marketing/components/workspace/frozen/PropertyValueIcon.tsx
+  s_60bbe192a6a060::t_c7986db9350985 1-9
+apps/marketing/src/features/marketing/components/workspace/frozen/SearchPalette.tsx
+  s_60bbe192a6a060::t_7e1d261faae705 1
+apps/marketing/src/features/marketing/components/workspace/frozen/TaskComposer.tsx
+  s_60bbe192a6a060::t_087a4bc470ebe8 1-6
+apps/marketing/src/features/marketing/components/workspace/frozen/TaskMention.tsx
+  s_60bbe192a6a060::t_06dbc47c97266f 1
+apps/marketing/src/features/marketing/components/workspace/frozen/TaskNotebook.tsx
+  s_60bbe192a6a060::t_fe16e6e3199c5c 1-5,35-36,47-48,50-52,148-152,213-225,271
+apps/marketing/src/features/marketing/components/workspace/frozen/TaskProperties.tsx
+  s_60bbe192a6a060::t_a4d6dac123be3a 1,181
+apps/marketing/src/features/marketing/components/workspace/frozen/model-picker/ModelCatalogPicker.tsx
+  s_60bbe192a6a060::t_fcc73079a62cc6 2-5,17,171
+apps/marketing/src/features/marketing/components/workspace/frozen/model-picker/ProviderIcon.tsx
+  s_60bbe192a6a060::t_c16b2a5432b9f4 2
+apps/marketing/src/features/marketing/components/workspace/frozen/model-picker/model-catalog-picker.css
+  s_60bbe192a6a060::t_9f163f020bae78 1-17
+apps/marketing/src/features/marketing/components/workspace/workspace-companies.css
+  s_60bbe192a6a060::t_444a527fe95775 18,43
+apps/marketing/src/features/marketing/core/benefit-pages.ts
+  s_60bbe192a6a060::t_5c95efb03d1f65 1-212
+apps/marketing/src/features/marketing/core/customer-love.ts
+  s_60bbe192a6a060::t_6048383bc0be2a 1-220,222-318,320-323
+apps/marketing/src/features/marketing/core/demo-email.ts
+  s_60bbe192a6a060::t_56c5f57f7c1bb5 33,92
+apps/marketing/src/features/marketing/core/demo-mentions.ts
+  s_60bbe192a6a060::t_c35b3d93db95d3 22-41
+apps/marketing/src/features/marketing/core/desktopDownloads.test.ts
+  s_60bbe192a6a060::t_9288d2ef39e3f2 36
+apps/marketing/src/features/marketing/core/desktopDownloads.ts
+  s_60bbe192a6a060::t_57918851ab5738 22
+apps/marketing/src/features/marketing/core/dummy-workspace.ts
+  s_60bbe192a6a060::t_c78a76b833f515 126,130,185,305
+apps/marketing/src/features/marketing/core/email-demo-story.ts
+  s_60bbe192a6a060::t_055f337b870d41 8,14,16,117,241
+apps/marketing/src/features/marketing/core/feature-comparisons.ts
+  s_60bbe192a6a060::t_f4129891f69ce9 160-162
+apps/marketing/src/features/marketing/core/homepage-demo-content.ts
+  s_60bbe192a6a060::t_bda913091dfdb8 17,42
+apps/marketing/src/features/marketing/core/homepage-demo-people.ts
+  s_60bbe192a6a060::t_973d5ed52f851b 3-4,9-10,12,17,23,29,34-58
+apps/marketing/src/features/marketing/core/navigation.ts
+  s_60bbe192a6a060::t_349c9b7d126cb0 2-27,35,92-104
+apps/marketing/src/features/marketing/core/product-introductions.ts
+  s_60bbe192a6a060::t_7e3cd20a1bf1e8 1-102
+apps/marketing/src/features/marketing/core/replacement-app-costs.test.ts
+  s_60bbe192a6a060::t_1ed9338e021275 1-17
+apps/marketing/src/features/marketing/core/replacement-app-costs.ts
+  s_60bbe192a6a060::t_12712da60990d2 1-40
+apps/marketing/src/features/marketing/core/savings-calculator.test.ts
+  s_60bbe192a6a060::t_3971d03b6a6ae7 75-95
+apps/marketing/src/features/marketing/core/savings-calculator.ts
+  s_60bbe192a6a060::t_935ca7fc6be007 115,123-126,130-138,164-165,173-176,178
+apps/marketing/src/features/marketing/core/tutorial-videos.ts
+  s_60bbe192a6a060::t_81d9c91e7fdafd 4,7-127,140-143
+apps/marketing/src/features/marketing/core/workspace-chat-fixtures.ts
+  s_60bbe192a6a060::t_ddfe523f387f22 25,27,31,47,52,64,74,79,86,105,109,120,130,138-144,148,153,165,177,189,201,207,211,219,228,240,247,250,254,268,271,275,282,292,296,303,312,317,331,338,345,357,364,367,382,389,402,409,423,430,436,443,452,456,465,469,482,493,495,507,514,524,528,530,535,548,554,567,574,588,590,596,599,614,621,624,628,640,647,650,661,675,685,689,696,706,717,723,728,731,741,750,763,769,776,779,789,796,803,815,829,836,846,850,871,880,884,890,899,908,921,927,933,940,943,954,963,967,980,983,993,999,1006,1015,1019
+apps/marketing/src/features/marketing/core/workspace-features.ts
+  s_60bbe192a6a060::t_f215d8868dbbb5 1-422
+apps/marketing/src/features/marketing/core/workspace-fixtures.ts
+  s_60bbe192a6a060::t_71415e8c0da457 194,202,240,258-259,266,282,290,306,402,488,497
+apps/marketing/src/features/marketing/core/workspace-home-feed.ts
+  s_60bbe192a6a060::t_e0f56d251250e1 21-22,35,55,70,76
+apps/marketing/src/features/marketing/core/workspace-parity-fixtures.ts
+  s_60bbe192a6a060::t_8ccc3b3c1f85a1 57,130
+apps/marketing/src/features/marketing/primitives/createCrmDemoWorkspace.ts
+  s_60bbe192a6a060::t_59197d02054aab 35-36,41
+apps/marketing/src/features/marketing/primitives/createDummyWorkspace.test.ts
+  s_60bbe192a6a060::t_2eda707c1556be 47,55,59-69,74,131,141
+apps/marketing/src/features/marketing/primitives/createEmailDemoGeneration.ts
+  s_60bbe192a6a060::t_34afcc80c01791 6,28-29,69-73
+apps/marketing/src/features/marketing/views/BenefitPage.tsx
+  s_60bbe192a6a060::t_343be9862ff14e 1-79
+apps/marketing/src/features/marketing/views/ProductAgentsPage.tsx
+  s_60bbe192a6a060::t_9f07c6ff6ad89a 1-2,14,20,28-31,71,73,81-82,89-93,102-106,115-119,128-129,140-143,152,171
+apps/marketing/src/features/marketing/views/ProductCallsPage.tsx
+  s_60bbe192a6a060::t_86fce17560d0a5 21,64,66,76-77,81-85,94-98,107-111,120
+apps/marketing/src/features/marketing/views/ProductChannelsPage.tsx
+  s_60bbe192a6a060::t_49ef187aca88c4 10-12,18,20,27-28,34-35,37-39,43-47,56-57,59-61,65-69,83,95-97,124,135
+apps/marketing/src/features/marketing/views/ProductDocumentsPage.tsx
+  s_60bbe192a6a060::t_c0d634cf7f5760 1,6,9,23-24,44-48,59,69,77-78,84-86,90-91,96-98,100,104-106,110-111,114-120,132
+apps/marketing/src/features/marketing/views/ProductFormsPage.tsx
+  s_60bbe192a6a060::t_6f4f8609994284 1-249
+apps/marketing/src/features/marketing/views/ProductReviewsPage.tsx
+  s_60bbe192a6a060::t_9e668bae80118f 55,65,72-74,80-84,93-97,106-110,112-115,119-123,131
+apps/marketing/src/features/marketing/views/ReplaceAppsPage.tsx
+  s_60bbe192a6a060::t_b95393c5b8cb0f 1-60
+apps/marketing/src/features/marketing/views/SalesPage.tsx
+  s_60bbe192a6a060::t_8782a11e5892dd 99
+apps/marketing/src/features/marketing/views/WorkspaceFeaturePage.tsx
+  s_60bbe192a6a060::t_68934c8abbdfdf 1-12,14-123
+apps/marketing/src/features/marketing/views/agents-page.css
+  s_60bbe192a6a060::t_b928d2d3a4939f 2,4,6,19
+apps/marketing/src/features/marketing/views/calls-page.css
+  s_60bbe192a6a060::t_ae2230904cf65a 3,5,54-56
+apps/marketing/src/features/marketing/views/forms-page.css
+  s_60bbe192a6a060::t_985cfc9846531f 1-62
+apps/marketing/src/features/marketing/views/replace-apps-page.css
+  s_60bbe192a6a060::t_eef2208d6c9b80 1-60
+apps/marketing/src/features/marketing/views/sales-page.css
+  s_60bbe192a6a060::t_4106cd1038861a 43
+apps/marketing/src/features/marketing/views/workspace-feature-page.css
+  s_60bbe192a6a060::t_d31b41aacd88c2 1-46
+apps/marketing/src/features/setup/Homepage.tsx
+  s_60bbe192a6a060::t_e08a263845f51b 1-6,9-14,18-19,21-35,37-41,43-70,74-85,87-105
+apps/marketing/src/features/setup/ImportEntityPill.tsx
+  s_60bbe192a6a060::t_897ac1560f57b6 1
+apps/marketing/src/features/setup/components/ConnectorIcon.tsx
+  s_60bbe192a6a060::t_be646424e8b7fc 1
+apps/marketing/src/features/setup/components/FeatureOverview.tsx
+  s_60bbe192a6a060::t_9e8e9e95760477 2-17,30,39,48,57,66,75,84,93,121,130,139,148,157,166,175,189,201,203-209,240-241,243-245,258
+apps/marketing/src/features/setup/components/GoogleAccountsStep.tsx
+  s_60bbe192a6a060::t_b26bfdf2c9f7c3 2-6
+apps/marketing/src/features/setup/components/IntegrationResults.tsx
+  s_60bbe192a6a060::t_d9bd65ecef59e5 1-2
+apps/marketing/src/features/setup/components/OnboardingShell.tsx
+  s_60bbe192a6a060::t_3238a003845c86 1-2,12,66-86,90-96
+apps/marketing/src/features/setup/components/OnboardingTrustDetails.tsx
+  s_60bbe192a6a060::t_ea98a3c124d2c7 1-2
+apps/marketing/src/features/setup/components/PaymentPreview.tsx
+  s_60bbe192a6a060::t_b6188b10ef2009 2
+apps/marketing/src/features/setup/components/StoryContinue.tsx
+  s_60bbe192a6a060::t_090afd71b072f9 1
+apps/marketing/src/features/setup/components/TeamSetup.tsx
+  s_60bbe192a6a060::t_a94dd80f86f5d1 1-2
+apps/marketing/src/features/setup/components/WelcomeSteps.tsx
+  s_60bbe192a6a060::t_f922a7f6827dd0 9
+apps/marketing/src/features/setup/components/WorkspaceIntro.tsx
+  s_60bbe192a6a060::t_74340230c665b7 4
+apps/marketing/src/features/setup/components/WorkspaceTexture.tsx
+  s_60bbe192a6a060::t_3c072343a982c6 10,14-15,22-25
+apps/marketing/src/features/setup/components/feature-overview.css
+  s_60bbe192a6a060::t_d66aefc83d7c54 156-160
+apps/marketing/src/features/setup/cream-preview.css
+  s_60bbe192a6a060::t_7f50c9dd86476f 2,249,308,313,456-457,486,599-664
+apps/marketing/src/features/setup/flow/ToolsStep.tsx
+  s_60bbe192a6a060::t_bee0b7a6c76d10 1
+apps/marketing/src/features/setup/flow/shared.tsx
+  s_60bbe192a6a060::t_f4da680f639cbd 1-2
+apps/marketing/src/features/setup/preview.tsx
+  s_60bbe192a6a060::t_6c29371f22910d 7,46,48,53-58
+apps/marketing/src/features/setup/primitives.tsx
+  s_60bbe192a6a060::t_3c387ae6cea306 1
+apps/marketing/src/features/setup/sitePalette.test.ts
+  s_60bbe192a6a060::t_e9ecc3e380a621 1-8,10-30,32-52,54-67,69-97
+apps/marketing/src/features/setup/sitePalette.ts
+  s_60bbe192a6a060::t_87a66fdeb4785b 4-7,18,33-37,39-43,48-55
+apps/marketing/src/lib/theme/utils/themeUtils.ts
+  s_60bbe192a6a060::t_118d40f71564c4 2,26,43
+apps/marketing/src/routes/posts/PostContextScenes.tsx
+  s_60bbe192a6a060::t_e0a67282551d6c 1-6,8,10-15,18-19,21-26,29-31,33-67,70-71,73-87,89-110
+apps/marketing/src/routes/posts/PostFaq.tsx
+  s_60bbe192a6a060::t_b37176ce460be3 1
+apps/marketing/src/routes/posts/PostPage.tsx
+  s_60bbe192a6a060::t_b18a2d7041d5eb 6,82-86,106-128,173
+apps/marketing/src/routes/posts/PostProductGraphic.tsx
+  s_60bbe192a6a060::t_e5d04990c150f4 1-242
+apps/marketing/src/routes/posts/PostTaskScenes.tsx
+  s_60bbe192a6a060::t_c9bf5bc3388aa7 1-9,11-57,59-68
+apps/marketing/src/routes/posts/PostWorkspaceScenes.tsx
+  s_60bbe192a6a060::t_f14e6630700c07 1-59
+apps/marketing/src/routes/posts/PostsPageTail.tsx
+  s_60bbe192a6a060::t_972ed1f7831f61 1,3-4
+apps/marketing/src/routes/posts/entries/ai-editing-agents/AiEditingAgents.css
+  s_60bbe192a6a060::t_52d481d56ea8e2 1-2,68-69
+apps/marketing/src/routes/posts/entries/ai-editing-agents/index.tsx
+  s_60bbe192a6a060::t_19f2ae138de177 1,39-43
+apps/marketing/src/routes/posts/entries/code-reviews-report/CodeReviewsReport.css
+  s_60bbe192a6a060::t_f742c497f675a9 41
+apps/marketing/src/routes/posts/entries/desync-customer-story/index.tsx
+  s_60bbe192a6a060::t_11592dde9a045d 1-2,4-12,14-37
+apps/marketing/src/routes/posts/entries/gmail-rate-limits/index.tsx
+  s_60bbe192a6a060::t_93afc223ccc83b 1,151-159
+apps/marketing/src/routes/posts/entries/macro-vs-clickup/index.tsx
+  s_60bbe192a6a060::t_7f7f333fc758c6 1,121-126,222,243,245,264,291,304,309,311-312,325,327-328,579
+apps/marketing/src/routes/posts/entries/macro-vs-linear/MacroVsLinear.css
+  s_60bbe192a6a060::t_15a2b6388a84d1 1-2,18-19
+apps/marketing/src/routes/posts/entries/macro-vs-linear/index.tsx
+  s_60bbe192a6a060::t_569b7c317d3abd 2,17,36,46,62-64,114,116,122-127,152,157,189,196-197,205-207,217,226,228,240,252,254,292-295,299,308,313-314,316-317,328-329,335-340,342,426-427
+apps/marketing/src/routes/posts/entries/macro-vs-notion/MacroVsNotion.css
+  s_60bbe192a6a060::t_06712b8f420d95 1-2,265,289,375-376
+apps/marketing/src/routes/posts/entries/macro-vs-notion/index.tsx
+  s_60bbe192a6a060::t_3b34b66d8cf1bc 1,108-113,282,284-285,323,325-326,414-415
+apps/marketing/src/routes/posts/entries/macro-vs-slack/index.tsx
+  s_60bbe192a6a060::t_e21614728a0c7d 1,111-116,181,205,213,215-216,228,230,252,259,272,281,294,297,355
+apps/marketing/src/routes/posts/entries/macro-vs-superhuman/index.tsx
+  s_60bbe192a6a060::t_4fd97466c3ea3a 1,38,106-111,161,173,188,202,226,250,265,267-268,278,341,343-344,456
+apps/marketing/src/routes/posts/entries/mfs-sharing/MfsSharing.css
+  s_60bbe192a6a060::t_81851aff0eca6e 1-2,121,143-144
+apps/marketing/src/routes/posts/entries/mfs-sharing/index.tsx
+  s_60bbe192a6a060::t_97d6b4e96f38d7 1,195-199,202-205
+apps/marketing/src/routes/posts/index.tsx
+  s_60bbe192a6a060::t_a27bddcdf2f5ef 1,90
+apps/marketing/src/routes/posts/post-product-graphic.css
+  s_60bbe192a6a060::t_4e131c8f33555c 1-73
+apps/marketing/src/routes/posts/post-reading.css
+  s_60bbe192a6a060::t_97cf61eb7ccc21 1-2,7-11,17-20,36,40-44,53-54,56-58,62-63,68-70,124-126,187-191,198-199,261,265-290
+apps/marketing/src/routes/posts/posts-index.css
+  s_60bbe192a6a060::t_b22102766f98e1 3,18,24,61,72,96-97,113
+apps/marketing/src/routes/posts/posts-shell.css
+  s_60bbe192a6a060::t_c4dbcebb18a30a 1-2,31-33,51,53,62,86-132,254,296,651-652,702-703
+apps/marketing/src/routes/posts/registry.ts
+  s_60bbe192a6a060::t_514edc1de0dcfb 44-45
+apps/marketing/src/styles/body-headings.css
+  s_60bbe192a6a060::t_8142e81300bbdc 1-35
+apps/marketing/src/styles/site-icons.css
+  s_60bbe192a6a060::t_5ed57579bff173 1-21
+apps/marketing/src/styles/site-ui.css
+  s_60bbe192a6a060::t_dcd5fc243aabf1 3,182-183
+apps/marketing/src/ui/components/ComposerSurface.tsx
+  s_60bbe192a6a060::t_693cda00a09d66 39,41
+apps/marketing/src/ui/components/Dropdown.tsx
+  s_60bbe192a6a060::t_a9bd8285084725 1
+apps/marketing/src/ui/components/SendButton.tsx
+  s_60bbe192a6a060::t_60bce7bcb6c18f 1-2
+apps/marketing/start.html
+  s_60bbe192a6a060::t_61b6743e800ca7 4,6,8,10,12-13,15-21
+apps/marketing/vite.config.ts
+  s_60bbe192a6a060::t_4984f14d626b43 7,16,18
+apps/marketing/vite.prerender.config.ts
+  s_60bbe192a6a060::t_fc6fd904be5b5d 10,18,21-25
+apps/marketing/vitest.config.ts
+  s_60bbe192a6a060::t_6f1049107c0afb 7,21,25
+apps/web/AGENTS.md
+  s_60bbe192a6a060::t_2ebbbfbaf46735 333-334,757,848,852,856,979-981,984-986,989,994-995,997-999,1002,1005,1434
+apps/web/src/components/app/AppProviders.tsx
+  s_60bbe192a6a060::t_28bb7193c98905 2,142-144
+apps/web/src/components/app/mobile/PillTabs.test.tsx
+  s_60bbe192a6a060::t_f2cd7dbf721c39 15,56,132-188
+apps/web/src/components/app/mobile/PillTabs.tsx
+  s_60bbe192a6a060::t_3e02bc9123b063 1,58-59,345-360,475-490
+apps/web/src/components/app/mobile/browser-test/fixture.tsx
+  s_60bbe192a6a060::t_e125022b8bbdc3 9,248-259,537-539
+apps/web/src/components/app/mobile/browser-test/stacked-sheets.browser.e2e.ts
+  s_60bbe192a6a060::t_f83998a206ff93 185-198,200,202-203,205-208
+apps/web/src/components/app/split-layout/TiledSplits.tsx
+  s_60bbe192a6a060::t_5f5bdb7a38ecac 112
+apps/web/src/components/app/split-layout/components/SplitFileMenu.tsx
+  s_60bbe192a6a060::t_acee35adfa2d38 49-52,152-158,218-228,231-250,298-301,310-312,314-323,325-348,350-356,358-371,373-380,484-485
+apps/web/src/components/app/split-layout/components/SplitLabel.tsx
+  s_60bbe192a6a060::t_4f1f099af9a380 27,338
+apps/web/src/components/app/split-layout/context.ts
+  s_60bbe192a6a060::t_da9f3b63153876 2,32
+apps/web/src/features/agent-navigation/context/agent-arrivals.tsx
+  s_60bbe192a6a060::t_566923e8bf4da7 1-72
+apps/web/src/features/agent-navigation/core/navigable-routes.test.tsx
+  s_60bbe192a6a060::t_dac2365a9edf17 3,6,26
+apps/web/src/features/agent-navigation/core/ui-command.test.ts
+  s_60bbe192a6a060::t_1c2fc7acea25dd 1-109
+apps/web/src/features/agent-navigation/core/ui-command.ts
+  s_60bbe192a6a060::t_38e63c147c3ffa 1-115
+apps/web/src/features/agent-navigation/primitives/apply-ui-command.test.tsx
+  s_60bbe192a6a060::t_45c174f37cc2ab 1-443
+apps/web/src/features/agent-navigation/primitives/apply-ui-command.ts
+  s_60bbe192a6a060::t_1aedec7f624124 1-5,7-36,39-65,68-77,81-83,85-87,89,92-98,100-101,104-118,122-128,130,132-135,138-140,143-150,152,156-160,162-183,186-219,221-223,226-231,233-238
+apps/web/src/features/agent-navigation/primitives/arrival-motion.ts
+  s_60bbe192a6a060::t_7e39185dd668af 1-193
+apps/web/src/features/agent-navigation/tests/app-routes.ts
+  s_60bbe192a6a060::t_b820a5722edd33 1-17
+apps/web/src/features/agent-navigation/views/agent-navigation-startup.test.tsx
+  s_60bbe192a6a060::t_e03b43b45a5600 1-65
+apps/web/src/features/agent-navigation/views/agent-navigation.test.tsx
+  s_60bbe192a6a060::t_8b50e8bb3adb6f 1-104
+apps/web/src/features/agent-navigation/views/agent-navigation.tsx
+  s_60bbe192a6a060::t_4745104b28f7b1 1-251
+apps/web/src/features/block-agent/context/pending-session.test.tsx
+  s_60bbe192a6a060::t_360be5dc623817 4,19-22,35-41,44-50,136,499-523
+apps/web/src/features/block-agent/context/pending-session.ts
+  s_60bbe192a6a060::t_2b10f3ed2f336f 33,173-176,221
+apps/web/src/features/channels-view/channels-view.test.tsx
+  s_60bbe192a6a060::t_98e0b0a07b053c 70-73,189-205,401,405-406,412,414-427
+apps/web/src/features/channels-view/channels-view.tsx
+  s_60bbe192a6a060::t_4b4ab0e1eb7608 43-44,69,93-107,117,122,126-131,134-137,180,194-201,217
+apps/web/src/features/channels-view/components/ChannelPins.tsx
+  s_60bbe192a6a060::t_048334f36a594b 13,18-23
+apps/web/src/features/channels-view/components/ChannelsMobileView.test.tsx
+  s_60bbe192a6a060::t_52e8af7653080c 125,308-330,332-338
+apps/web/src/features/channels-view/components/ChannelsMobileView.tsx
+  s_60bbe192a6a060::t_0e8b6206a245f2 36,45,47,54,66-71,100-101,105-118,133,200-375,400,408-412,438,440
+apps/web/src/features/channels-view/components/ConversationsCreateMenu.tsx
+  s_60bbe192a6a060::t_41c8f02636d574 24,56-60,79-81
+apps/web/src/features/channels-view/components/rail/ChannelFavoriteRows.test.tsx
+  s_60bbe192a6a060::t_350b72fedd68ad 672-729,738,778,848,911,979,1032,1067,1115
+apps/web/src/features/channels-view/components/rail/ChannelLabelNameDialog.test.tsx
+  s_60bbe192a6a060::t_a452b8db168a79 15,65-69,73-75,84-85,94,192,194-197,216-217,221,228-333
+apps/web/src/features/channels-view/components/rail/ChannelOption.tsx
+  s_60bbe192a6a060::t_5ebf35d4e85e82 33-34,105-106,111-112,196-216,220-225,259
+apps/web/src/features/channels-view/components/rail/ChannelsRail.test.tsx
+  s_60bbe192a6a060::t_95caa71156c85a 17,26-30,35-40,60-87,123,284-289,291,305,311-319,322,361,376-387,390-393,400-402,421-424,513,568-570,643-709,1287-1386,1420-1454
+apps/web/src/features/channels-view/components/rail/ChannelsRail.tsx
+  s_60bbe192a6a060::t_4c882b91c59021 104,458-468,470,506,539-551,567-586,605,1117-1138,1141-1143,1149,1159-1162,1169-1183,1186-1197,1390,1394-1395,1397,1403
+apps/web/src/features/channels-view/components/rail/ChannelsRailContext.ts
+  s_60bbe192a6a060::t_78bc4cbac1ff1d 6-7,176-181,186-187,190-194,208,211
+apps/web/src/features/channels-view/components/rail/SmartTagDialog.test.tsx
+  s_60bbe192a6a060::t_22ee6cca0ecb3c 21-23
+apps/web/src/features/channels-view/components/rail/hooks/useChannelLabelActions.ts
+  s_60bbe192a6a060::t_e9bfba156204e8 21,25,40,47,53,61,135-207,226,228-234,237-246,269-295,297-299,301-303,306-325,327-340,342,344-358,361-390,392,398-399,403-414,419,430,445,449-453,479,499-564,576,587,620-621,624-630,656,725-727,731
+apps/web/src/features/channels-view/components/rail/hooks/useChannelSectionNotifications.ts
+  s_60bbe192a6a060::t_0305f825dd43ea 2,5,7,28,99-100,136-152,160,168,218-219,222-223
+apps/web/src/features/channels-view/components/rail/next/ChannelLabelRows.tsx
+  s_60bbe192a6a060::t_1e43a1c7782267 10,12,14-15,21-23,25-26,40,42-47,50-58,60-73,77,79-101,103-104,106-109,111-132,136-139,142,144-150,156,160-171,175-180,185-342,353,369,371-384,386-394,398-399,401-411
+apps/web/src/features/channels-view/components/rail/next/ChannelMuteMenu.tsx
+  s_60bbe192a6a060::t_07c51bc6aa90ef 1-60
+apps/web/src/features/channels-view/components/rail/next/ChannelRailVirtualizer.test.ts
+  s_60bbe192a6a060::t_396aadf30876f3 2-3,39-41,311-381
+apps/web/src/features/channels-view/components/rail/next/ChannelRailVirtualizer.tsx
+  s_60bbe192a6a060::t_54d0bf2918c4f3 68,208
+apps/web/src/features/channels-view/components/rail/next/ChannelSectionHeading.tsx
+  s_60bbe192a6a060::t_cc73f052ef0ce7 60,112,119-133,135-143
+apps/web/src/features/channels-view/components/rail/next/ChannelSectionMenu.tsx
+  s_60bbe192a6a060::t_ec82304b124856 17,23,29,55-61,73,89-95,103,169,191-214,221,224,227
+apps/web/src/features/channels-view/components/rail/next/ExpandedChannelsRail.tsx
+  s_60bbe192a6a060::t_195c78ad317779 7,9,48,71,75,327,330,349-352,377,522-523,621,870,877,880
+apps/web/src/features/channels-view/components/rail/next/JoinChannelButton.tsx
+  s_60bbe192a6a060::t_7ac70c5b4f8bef 1-3,5-33
+apps/web/src/features/channels-view/components/rail/next/ResizableRailSection.tsx
+  s_60bbe192a6a060::t_04f8ec73561adb 21-22,50-51,165,171-175
+apps/web/src/features/channels-view/components/rail/next/SectionChannelsDialog.tsx
+  s_60bbe192a6a060::t_08bb2195a7fdba 2,7,15,43,45,47,51,54-55,74,99,105,108,112,130,134-138,153-157,159-173,175-177,185-213,216,222,227-253,255-259,262-263,265,268-372,379
+apps/web/src/features/channels-view/components/rail/next/SectionDialog.tsx
+  s_60bbe192a6a060::t_0bc97ead072010 2,48,72-109,121-135,138-142,220-226,256-259,291-292,343,345,364-368
+apps/web/src/features/channels-view/components/rail/next/SectionSearchResults.tsx
+  s_60bbe192a6a060::t_d56dba9c39df5f 1-149
+apps/web/src/features/channels-view/components/rail/next/build-channel-rail-rows.ts
+  s_60bbe192a6a060::t_89ecce0b7eb82c 65,87,95-96,116-126,131,134-137,250-260,267-283,353-363
+apps/web/src/features/channels-view/components/rail/next/channel-discovery-source.ts
+  s_60bbe192a6a060::t_ee6075cccf3d7f 1-139
+apps/web/src/features/channels-view/components/rail/next/channel-discovery.ts
+  s_60bbe192a6a060::t_07f669405040b6 1-9
+apps/web/src/features/channels-view/components/rail/next/collapsed-unread-channels.ts
+  s_60bbe192a6a060::t_62897b8736ea06 1-10,13-32,34-41,43,45-46
+apps/web/src/features/channels-view/components/rail/next/mobile/MobileSectionOptions.tsx
+  s_60bbe192a6a060::t_7926d5ef304392 1-274
+apps/web/src/features/channels-view/components/rail/next/mobile/MobileSectionsView.tsx
+  s_60bbe192a6a060::t_e6aca05f92a39f 1-280
+apps/web/src/features/channels-view/components/rail/next/mobile/mobile-section-tabs.ts
+  s_60bbe192a6a060::t_6881424596788a 1-49
+apps/web/src/features/channels-view/components/rail/next/mobile/use-mobile-section-actions.ts
+  s_60bbe192a6a060::t_96d14ad1dbcb36 1-62
+apps/web/src/features/channels-view/core/channel-label-eligibility.test.ts
+  s_60bbe192a6a060::t_6ef1fa3470c1e5 37-45
+apps/web/src/features/channels-view/core/channel-label-eligibility.ts
+  s_60bbe192a6a060::t_334cec32669a5b 18,21,24
+apps/web/src/features/channels-view/core/smart-tags.test.ts
+  s_60bbe192a6a060::t_28172adb8a4c7a 32-83
+apps/web/src/features/channels-view/core/smart-tags.ts
+  s_60bbe192a6a060::t_035d9aa11a86d1 28-64
+apps/web/src/features/channels-view/persistence.ts
+  s_60bbe192a6a060::t_c25eedda017e46 101
+apps/web/src/features/channels-view/queries.test.ts
+  s_60bbe192a6a060::t_8672fe693baa05 13-20,57,316-352
+apps/web/src/features/channels-view/queries/channel-search-source.test.ts
+  s_60bbe192a6a060::t_97e527dce84cce 7,13-19,30,122-123,202-215,241,530-606
+apps/web/src/features/channels-view/queries/channel-search-source.ts
+  s_60bbe192a6a060::t_61babca1564f25 18-19,49
+apps/web/src/features/channels-view/types.ts
+  s_60bbe192a6a060::t_edb71ab787c08c 18-19
+apps/web/src/features/command/CommandMenu.tsx
+  s_60bbe192a6a060::t_64716bd454c33b 32,68,470-473,735-739,747,760,772-774
+apps/web/src/features/command/act-on-current-selection.test.ts
+  s_60bbe192a6a060::t_c892910af00fb6 1,3-9,12,14,16-17,19,22-31,33-37,39-43,45,47-57
+apps/web/src/features/command/act-on-current-selection.ts
+  s_60bbe192a6a060::t_f422c8b520f6dc 1-16
+apps/web/src/features/drive-view/drive-folder-actions.tsx
+  s_60bbe192a6a060::t_6a4d32b06aa8bb 19,89,119
+apps/web/src/features/drive-view/drive-host-actions.ts
+  s_60bbe192a6a060::t_8c91ccc9ed08a9 195
+apps/web/src/features/email-compose/core/local-draft.ts
+  s_60bbe192a6a060::t_fdc498a229d51c 58-59
+apps/web/src/features/entity/bulk-edit/BulkEditEntityModal.test.tsx
+  s_60bbe192a6a060::t_1fd3574af41152 30-47,144-189
+apps/web/src/features/entity/bulk-edit/BulkEditEntityModal.tsx
+  s_60bbe192a6a060::t_43d28725d8d5ea 1-5,9,17-18,21,23,25,31,34-36,40-81,83-84,86-90,92,97-98,105-107,112,114,117-126,129-135,137-140
+apps/web/src/features/next-soup/actions/make-mute-action.ts
+  s_60bbe192a6a060::t_f85adb014e517b 3-4,8,11,32-35,38-40,42-64,73-77,80-85,88-95,99,139-155,163
+apps/web/src/features/next-soup/actions/make-share-action.test.ts
+  s_60bbe192a6a060::t_dd1942822fa45a 1-105
+apps/web/src/features/next-soup/actions/make-share-action.ts
+  s_60bbe192a6a060::t_8eccbd6a77e864 1,4,7,9,12-13,23-32,36,41,43,45-60
+apps/web/src/features/next-soup/actions/use-entity-action-hotkeys.test.ts
+  s_60bbe192a6a060::t_09be8cab755ef1 55-57
+apps/web/src/features/next-soup/actions/use-entity-action-hotkeys.ts
+  s_60bbe192a6a060::t_bd06cfbc27e89b 44,131,545-571,746-749,753,763
+apps/web/src/features/notifications/components/NotificationMuteMenu.tsx
+  s_60bbe192a6a060::t_95b462bee1c4ac 1-161
+apps/web/src/features/notifications/components/NotificationReadMarker.tsx
+  s_60bbe192a6a060::t_4887f79fe3e543 1,7,40,44-61,155,161-174
+apps/web/src/features/notifications/core/snooze.ts
+  s_60bbe192a6a060::t_99647d9bc839d1 50-53,55
+apps/web/src/features/notifications/primitives/create-message-read-visibility.ts
+  s_60bbe192a6a060::t_9612f29d3cb27e 1,30-32,47
+apps/web/src/features/notifications/tests/debounced-notification-read-marker.test.tsx
+  s_60bbe192a6a060::t_b8c99bf20816bb 1-8,10,168-232
+apps/web/src/features/property/README.md
+  s_60bbe192a6a060::t_8b030f3932bb0d 114-119
+apps/web/src/features/property/editors/popover/EditorPopover.tsx
+  s_60bbe192a6a060::t_1b6b40dd8165de 51-55
+apps/web/src/features/property/editors/popover/EntityEditor.test.tsx
+  s_60bbe192a6a060::t_67ad2cdc910b20 9,212-242,262-274
+apps/web/src/features/property/editors/selectors/PropertyEntitySelector.tsx
+  s_60bbe192a6a060::t_81c0b5907ac7ca 500-504,506,509,535,569-570
+apps/web/src/features/sharing/global-share-modal/shareable-entity.ts
+  s_60bbe192a6a060::t_8cc382c2421d67 42-45
+apps/web/src/features/sharing/global-share-modal/tests/shareable-entity.test.ts
+  s_60bbe192a6a060::t_63d13236100d1e 1,3,22-41
+apps/web/src/features/sharing/share-delivery/bulk-share.tsx
+  s_60bbe192a6a060::t_e70653983d81de 1-94
+apps/web/src/features/sharing/share-delivery/components/share-status.tsx
+  s_60bbe192a6a060::t_ef811b2c16de68 1-119
+apps/web/src/features/sharing/share-delivery/context/share-delivery-context.ts
+  s_60bbe192a6a060::t_6ab677fd262191 1-8,10-16,18-20,22,24-40
+apps/web/src/features/sharing/share-delivery/core/delivery-plan.test.ts
+  s_60bbe192a6a060::t_31256bf804328d 1-480
+apps/web/src/features/sharing/share-delivery/core/delivery-plan.ts
+  s_60bbe192a6a060::t_6dfeb6fbfe4f7f 1-32,34-42,45-46,48-51,54-73,76-80,83-156,159-176,179-183,186-203,206-253,256-309,312-337,340-385
+apps/web/src/features/sharing/share-delivery/core/share-item.test.ts
+  s_60bbe192a6a060::t_e5b2f516ca0579 1-8,10-18,20,22-30,32-199
+apps/web/src/features/sharing/share-delivery/core/share-item.ts
+  s_60bbe192a6a060::t_3892ec40788b6d 1-189
+apps/web/src/features/sharing/share-delivery/primitives/create-share-form.test.ts
+  s_60bbe192a6a060::t_3e7360baaec89f 1-599
+apps/web/src/features/sharing/share-delivery/primitives/create-share-form.ts
+  s_60bbe192a6a060::t_da205fbf6eae72 1-350
+apps/web/src/features/sharing/share-delivery/queries/channel-access.test.ts
+  s_60bbe192a6a060::t_e7bddf1643399c 1-337
+apps/web/src/features/sharing/share-delivery/queries/channel-access.ts
+  s_60bbe192a6a060::t_2e34f2027b9dda 1-130
+apps/web/src/features/sharing/share-delivery/share-delivery.test.ts
+  s_60bbe192a6a060::t_fd3926cc3e12f1 1-416
+apps/web/src/features/sharing/share-delivery/share-delivery.ts
+  s_60bbe192a6a060::t_a06bfcb3a31a5c 1-29,31-43,45-47,49-56,58-165
+apps/web/src/features/sharing/share-delivery/views/bulk-share-view.test.tsx
+  s_60bbe192a6a060::t_0f26c863e2e1e7 1-364
+apps/web/src/features/sharing/share-delivery/views/bulk-share-view.tsx
+  s_60bbe192a6a060::t_05d0bf2c0dbad1 1-246
+apps/web/src/features/soup/SoupEntityActionDrawer.tsx
+  s_60bbe192a6a060::t_63ebd125104f57 4-7,9,17,37-45,51-54,74-114,116-128,130
+apps/web/src/features/soup/SoupEntityActionsMenu.test.tsx
+  s_60bbe192a6a060::t_5396604e6e54df 6-8,11,49-54,80-88,128-132,171-246
+apps/web/src/features/soup/SoupEntityActionsMenu.tsx
+  s_60bbe192a6a060::t_1f64ab8dced66c 10,74-94
+apps/web/src/features/soup/createSoupEntityActions.test.ts
+  s_60bbe192a6a060::t_ffd89bc0c07948 6-9,11,23-24,77,81-83,108-114,143-191
+apps/web/src/features/soup/createSoupEntityActions.ts
+  s_60bbe192a6a060::t_5418c592b68595 57,63,72,267-270,280-289,293-294,297,307,316-329,401,559,561-566
+apps/web/src/lib/analytics/analytics.test.ts
+  s_60bbe192a6a060::t_6282e26d1c186a 17,31,47,166-191
+apps/web/src/lib/analytics/analytics.ts
+  s_60bbe192a6a060::t_56beb92a4601a9 11-15,57-61,174-184,200-201,538
+apps/web/src/lib/analytics/app-events.ts
+  s_60bbe192a6a060::t_ef2ebb176f7d4e 187-197
+apps/web/src/lib/core/agent-session/AgentSession.test.ts
+  s_60bbe192a6a060::t_399614aa34a85e 31-47,186,333-373
+apps/web/src/lib/core/agent-session/AgentSession.ts
+  s_60bbe192a6a060::t_08f52d81c9b107 66,438-442,485-495
+apps/web/src/lib/core/agent-session/tests/device.ts
+  s_60bbe192a6a060::t_815ae4d6c8fd11 1-6,8,10,12-16,18-41
+apps/web/src/lib/core/agent-session/ui-client.test.ts
+  s_60bbe192a6a060::t_603e45bb8d0ba8 1-48,50-78,80-96,98-125,127-154,156-251,254
+apps/web/src/lib/core/agent-session/ui-client.ts
+  s_60bbe192a6a060::t_03c7cb8de6d70d 1-17,19-25,27-180
+apps/web/src/lib/core/component/LexicalMarkdown/component/menu/MentionsMenu/MentionsMenu.test.tsx
+  s_6caae8bc8234ff::t_9c46840d1ec87a 707-748
+apps/web/src/lib/core/component/LexicalMarkdown/component/menu/MentionsMenu/MentionsMenu.tsx
+  s_60bbe192a6a060::t_754b8b000702cf 30,154-157,719-734,736-737
+apps/web/src/lib/core/component/SendAsGroupToggle.test.tsx
+  s_60bbe192a6a060::t_4b610007d873ee 1-42
+apps/web/src/lib/core/component/SendAsGroupToggle.tsx
+  s_60bbe192a6a060::t_e0c6fc21d001c1 1,3-41
+apps/web/src/lib/core/component/ShareComposeLayout.tsx
+  s_60bbe192a6a060::t_250595b8225fe5 1-3,5-54,56-106
+apps/web/src/lib/core/component/ShareRecipientField.tsx
+  s_60bbe192a6a060::t_b8977bbcffa203 1-31
+apps/web/src/lib/core/component/TopBar/ShareButton.tsx
+  s_60bbe192a6a060::t_027a3d13ee0ca7 164,314,317
+apps/web/src/lib/core/component/TopBar/ShareDialog.tsx
+  s_60bbe192a6a060::t_affe8044b49f16 1-29
+apps/web/src/lib/core/component/TopBar/ShareDrawer.tsx
+  s_60bbe192a6a060::t_bfc6a496e5922a 1-3,5-7,11-16,18-36,40-44,46-51,55-60,62-70
+apps/web/src/lib/core/component/TopBar/shareModal.test.tsx
+  s_60bbe192a6a060::t_155bebea8a574f 15-17
+apps/web/src/lib/core/constant/featureFlags.ts
+  s_60bbe192a6a060::t_ec93508df429a5 175-184,843,851-857
+apps/web/src/lib/core/util/channels.test.ts
+  s_60bbe192a6a060::t_d40372649a8318 1,3,5,11,17-19,106-194
+apps/web/src/lib/core/util/channels.ts
+  s_60bbe192a6a060::t_1190cb4c32096c 7,28-31,60,64-65,69-73,75-76,105-108,111,113-114,117-118,120,124,126,128-131,135,139-140
+apps/web/src/lib/core/util/debounce.ts
+  s_6caae8bc8234ff::t_a49914c15b7131 6,18-31,34,39-43
+apps/web/src/lib/i18n/browser-test/menus.tsx
+  s_60bbe192a6a060::t_d4cd23143cd119 45
+apps/web/src/lib/i18n/locales/en.ts
+  s_60bbe192a6a060::t_03405a4e510923 3,37
+apps/web/src/lib/i18n/locales/en/agent-navigation.ts
+  s_60bbe192a6a060::t_141e6332e08ff7 1-8
+apps/web/src/lib/i18n/locales/en/channel-sections.ts
+  s_60bbe192a6a060::t_292da649507016 5-27,36,38,47-49
+apps/web/src/lib/i18n/locales/en/entity-actions.ts
+  s_60bbe192a6a060::t_c12eeb759569e5 40,72-75
+apps/web/src/lib/queries/channel-labels/channel-labels.test.tsx
+  s_60bbe192a6a060::t_cf88e573a31ed9 37-40
+apps/web/src/lib/queries/channel-labels/channel-labels.ts
+  s_60bbe192a6a060::t_56db1f5249ca1f 2-5,21-28,35-36,39,41,56,62-63,81-87,109-115,122-123,126-127,131,147,157-158,186,202,217,246,262,278-286,340,352,360,375,387,401
+apps/web/src/lib/queries/channel-labels/keys.ts
+  s_60bbe192a6a060::t_92734a35794291 4-8,13-24
+apps/web/src/lib/queries/channel/by-ids.ts
+  s_60bbe192a6a060::t_ca09c007093f42 9,112-117
+apps/web/src/lib/queries/channel/get-or-create-dm.ts
+  s_60bbe192a6a060::t_cc33275fc0cc9c 97,116-120,136-137
+apps/web/src/lib/queries/channel/tests/get-or-create-dm.test.tsx
+  s_60bbe192a6a060::t_a741d6e9af57d5 1-87
+apps/web/src/lib/queries/email/draft-queue.test.ts
+  s_60bbe192a6a060::t_62835b6610a948 5,23,48,101-109,605-618
+apps/web/src/lib/queries/email/draft-queue.ts
+  s_60bbe192a6a060::t_86e549b729149f 370-377,418-427,429-430,439
+apps/web/src/lib/queries/email/draft-sync.scenarios.test.ts
+  s_60bbe192a6a060::t_eb8b26caa3a3b0 275-325
+apps/web/src/lib/queries/email/local-drafts.test.ts
+  s_60bbe192a6a060::t_dc09a4a03fd345 39-46,575,606,663,666-684,1040
+apps/web/src/lib/queries/email/local-drafts.ts
+  s_60bbe192a6a060::t_f1cb2c8d969b75 546-563,567,580,582,594-596,605
+apps/web/src/lib/queries/email/tests/draft-sync-queue.ts
+  s_60bbe192a6a060::t_aec40f5f4215f8 27-32,44-45,112-167,264-268,271,372,374-378
+apps/web/src/lib/queries/messages/mutations.ts
+  s_60bbe192a6a060::t_2d06877f6d5b9f 7,439-454
+apps/web/src/lib/queries/messages/tests/mutations.test.tsx
+  s_60bbe192a6a060::t_4f1a037420a26a 10-18,23,46-47,86,89,825-938
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/createAgentSessionRequest.ts
+  s_60bbe192a6a060::t_34fa6bc817226f 14,82-87
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/createAgentSessionRequestPromptClientId.ts
+  s_60bbe192a6a060::t_2331c8f465e2f2 1-15
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/index.ts
+  s_60bbe192a6a060::t_3a0717d9c8442a 197
+apps/web/src/lib/service-clients/service-agent-harness/openapi.json
+  s_60bbe192a6a060::t_6d5484d06ceaa8 5831-5835
+apps/web/src/lib/service-clients/service-auth/generated/client.ts
+  s_60bbe192a6a060::t_31070334e3f897 4539-4543,4555
+apps/web/src/lib/service-clients/service-auth/openapi.json
+  s_60bbe192a6a060::t_432cb59154a010 3949-3958
+apps/web/src/lib/service-clients/service-cognition/generated/tools/schemas.ts
+  s_60bbe192a6a060::t_bb4a9f0c2253e5 12138-12139,14541-14542,18730,20687-20690
+apps/web/src/lib/service-clients/service-cognition/generated/tools/types.ts
+  s_60bbe192a6a060::t_675567bc9b5d47 7027,7031,8269,11665,11729-11738,12024,13652,13695-13704,15409,15433-15438,15890,16613,16789-16794
+apps/web/src/lib/service-clients/service-connection/websocket.ts
+  s_60bbe192a6a060::t_0ed71a1060ce19 27-28
+apps/web/src/lib/service-clients/service-storage/channel-labels.ts
+  s_60bbe192a6a060::t_cc0146a461e177 1-69
+apps/web/src/lib/service-clients/service-storage/client.ts
+  s_60bbe192a6a060::t_fa1ea7779d8896 31,2810-2811
+apps/web/src/lib/service-clients/service-storage/generated/schemas/channelLabel.ts
+  s_60bbe192a6a060::t_d082de5105a74c 7,14-17,20,22,26-27
+apps/web/src/lib/service-clients/service-storage/generated/schemas/channelLabelExplicitChannelIds.ts
+  s_60bbe192a6a060::t_f09229cfb26926 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/createChannelSectionParams.ts
+  s_60bbe192a6a060::t_c0087e7f2a7c24 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/deleteChannelSectionParams.ts
+  s_60bbe192a6a060::t_454feb31a627c9 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/index.ts
+  s_60bbe192a6a060::t_759c3732846a9e 490,696,857,1909,2274,2507,2599,3145
+apps/web/src/lib/service-clients/service-storage/generated/schemas/listChannelSectionsParams.ts
+  s_60bbe192a6a060::t_fd2de931425965 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/previewChannelSectionParams.ts
+  s_60bbe192a6a060::t_a2b48ca64e3e35 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/setChannelSectionParams.ts
+  s_60bbe192a6a060::t_33cbde6c63c552 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/smartTagChannelMatch.ts
+  s_60bbe192a6a060::t_f22cb726aa23d6 7,15-16
+apps/web/src/lib/service-clients/service-storage/generated/schemas/smartTagChannelMatchIsParticipant.ts
+  s_60bbe192a6a060::t_b36db456ca47b1 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/smartTagPreview.ts
+  s_60bbe192a6a060::t_3e26179ef4dfcf 15
+apps/web/src/lib/service-clients/service-storage/generated/schemas/updateChannelSectionParams.ts
+  s_60bbe192a6a060::t_52957e8340e5d6 1-14
+apps/web/src/lib/service-clients/service-storage/generated/zod.ts
+  s_60bbe192a6a060::t_5de452c0c754f0 5377,5382,5387-5392,5433,5498,5503,5506-5511,5546,5605-5610,5621,5701,5706,5709-6110,6145
+apps/web/src/lib/service-clients/service-storage/openapi.json
+  s_60bbe192a6a060::t_3a43f7c8428faa 5087-5598,31756,31770,31778,31785-31792,54537-54540,54562
+apps/web/src/vite-env.d.ts
+  s_60bbe192a6a060::t_5027369488822e 30
+apps/web/tests/functional/whatsapp-linked.spec.ts
+  s_60bbe192a6a060::t_fe71fdb2b7ee22 1436-1439
+bun.lock
+  s_60bbe192a6a060::t_26ec8de9af410b 30,39,47,1189,1373-1374,1927-1928,1943-1944,1963-1966,2089-2090,2171-2172,2271-2272,2277-2278,2303-2304,2467-2468,2611-2614,2629-2640,2863-2864,2867-2868,2923-2924,2943-2946,2963-2964,2979-2980,3233-3234,3251-3252,3255-3256,3263-3288,3291-3294,3313-3352,3355-3366,3369-3376,3379-3380,3537-3538,3573,3681-3688,3701-3712,3959-3962,4045-4046,4109-4110,4115-4116,4253,4337-4338,4391-4392,4585-4586,4663-4664,4691-4728,4741-4742,4759-4760,4809-4810,4981-4982,4997-4998,5175-5176,5185-5186,5259-5262
+crates/agent/src/agent_loop.rs
+  s_60bbe192a6a060::t_eb490fc2e2890b 11,13,398-412,415,427-428
+crates/agent/src/test/agent_loop/test_eager_tools.rs
+  s_60bbe192a6a060::t_4b8849a8d7a7ad 5
+crates/agent/src/test/agent_loop/test_tool_search.rs
+  s_60bbe192a6a060::t_815015b9917cad 29-32,62-66,253-272,277-354
+crates/agent/src/tool_adapter.rs
+  s_60bbe192a6a060::t_096b978299b985 5,202-207,215,217-226,235
+crates/agent_code_mode/AGENTS.md
+  s_60bbe192a6a060::t_beaa235a7d1db0 60-62
+crates/agent_code_mode/SKILL.md
+  s_60bbe192a6a060::t_13682b7d99cfbc 62
+crates/agent_code_mode/src/domain/service.rs
+  s_60bbe192a6a060::t_0111c4f3ff567d 364-398
+crates/agent_code_mode/src/inbound/toolset/session/execute_code.md
+  s_60bbe192a6a060::t_41e1e36d233007 5
+crates/agent_egress/AGENTS.md
+  s_60bbe192a6a060::t_0883ced9e0b47e 83-87
+crates/agent_egress/src/outbound/actor_mcp.rs
+  s_60bbe192a6a060::t_3fe1d9a57fd78b 8,37,43-46,52,66-67
+crates/agent_egress/src/outbound/actor_mcp/test.rs
+  s_60bbe192a6a060::t_9d35f57baea2ed 51
+crates/agent_egress/src/outbound/custom_mcp.rs
+  s_60bbe192a6a060::t_d2dcc7fb773803 19,40,49-55,124
+crates/agent_egress/src/outbound/custom_mcp/test.rs
+  s_60bbe192a6a060::t_f951e9c9b3a349 139,168,187,210,239,252,271-277
+crates/agent_egress/src/outbound/forwarder.rs
+  s_60bbe192a6a060::t_7770006e3ef8b8 9,17,24,26-29,37-38,46,66-67,84-86
+crates/agent_egress/src/outbound/forwarder/test.rs
+  s_60bbe192a6a060::t_9b79fbeb34f9ed 1-67
+crates/agent_harness/AGENTS.md
+  s_60bbe192a6a060::t_6bc9b956abc7d0 108-127,134-136
+crates/agent_harness/Cargo.toml
+  s_60bbe192a6a060::t_016706f2f20ab8 82,103
+crates/agent_harness/src/domain/service.rs
+  s_60bbe192a6a060::t_5aaaa26564a2fc 32-34,217-219,418,449-463
+crates/agent_harness/src/domain/service/deliver.rs
+  s_60bbe192a6a060::t_01b0be2bb465d9 153,155,160,164,169
+crates/agent_harness/src/domain/service/external_replies.rs
+  s_60bbe192a6a060::t_ef9fdeb5556a46 175,184-186
+crates/agent_harness/src/domain/service/idle.rs
+  s_60bbe192a6a060::t_36eccf7528f908 12,15-86,142-144,150,153-155,158-163,167-193,195,197-198,211-212,215,217-220,224,226-232,235,238-242,245,248-249,252,259,263-264
+crates/agent_harness/src/domain/service/queue.rs
+  s_60bbe192a6a060::t_5bec73770d594f 182-197,971,1388-1395,1914-1919,1923,1926-1938,1947-1948
+crates/agent_harness/src/domain/service/test.rs
+  s_60bbe192a6a060::t_6f5fa4e28e8c33 570,588,649,4593-4595,4600,4614,4645-4650,5191-5251
+crates/agent_harness/src/domain/service/test/chat_reply/conversations.rs
+  s_60bbe192a6a060::t_0a81b9aa61f884 145
+crates/agent_harness/src/domain/service/test/chat_reply/conversations/notifications.rs
+  s_60bbe192a6a060::t_91609e4bd07918 27
+crates/agent_harness/src/domain/service/test/idle_release.rs
+  s_60bbe192a6a060::t_625bbb7ec5f1ba 260-701
+crates/agent_harness/src/domain/service/test/notifications.rs
+  s_60bbe192a6a060::t_db12ab66ded0fb 161
+crates/agent_harness/src/domain/service/test/warm.rs
+  s_60bbe192a6a060::t_f1a97817eaadc9 170-171,193,204,238-243
+crates/agent_harness/src/domain/service/warm.rs
+  s_60bbe192a6a060::t_b0abc75998b2fa 55,207-208,219,229,398,408
+crates/agent_harness/src/testing/helpers/containers.rs
+  s_60bbe192a6a060::t_0974c368c3b3af 219-221,325-358,541-545
+crates/agent_inmem/AGENTS.md
+  s_60bbe192a6a060::t_e18020c02d4581 24-30,89-91
+crates/agent_inmem/src/domain/agent.rs
+  s_60bbe192a6a060::t_55d2ccf8994170 93,1405
+crates/agent_inmem/src/domain/agent/test.rs
+  s_60bbe192a6a060::t_62f5a5aee966e0 821,823
+crates/agent_inmem/src/domain/replay.rs
+  s_60bbe192a6a060::t_1a7bb53a3c5f6d 358-360
+crates/agent_inmem/src/domain/replay/test.rs
+  s_60bbe192a6a060::t_29385d6efaa424 733-839
+crates/agent_inmem/src/outbound/approval_gate/test.rs
+  s_60bbe192a6a060::t_e06aa54ea2e3f5 18,30,268-293
+crates/agent_inmem/src/outbound/manager/test.rs
+  s_60bbe192a6a060::t_84649d26ffbead 1698-1853
+crates/agent_inmem/src/outbound/rig_engine/test.rs
+  s_60bbe192a6a060::t_e96cfb151ecebb 506-575
+crates/agent_inmem/src/rig_engine.rs
+  s_60bbe192a6a060::t_4d9db0052f61f1 179-186,210-212,245-271,735,791-806,808-842
+crates/agent_preview/Cargo.toml
+  s_60bbe192a6a060::t_827665e02aadd7 24
+crates/agent_session/AGENTS.md
+  s_60bbe192a6a060::t_c0cc51e4f0ca18 97-99
+crates/agent_session/src/domain/control.rs
+  s_60bbe192a6a060::t_b13e68ba4d4cd2 23-37,49-50,63
+crates/agent_session/src/domain/model.rs
+  s_60bbe192a6a060::t_5a2ea68da5412a 966-1012
+crates/agent_session/src/domain/ports.rs
+  s_60bbe192a6a060::t_dfb6f5b735b714 359-363,367,373
+crates/agent_session/src/domain/service/presentation.rs
+  s_60bbe192a6a060::t_0aa0e8a6204048 86-87
+crates/agent_session/src/domain/updates.rs
+  s_60bbe192a6a060::t_969f7c12826bc3 121-122
+crates/agent_session/src/inbound/axum_router.rs
+  s_60bbe192a6a060::t_c7e9cc0516d07d 1928-1934,2022-2026,2068,2070-2071,2138-2142,2333,2341-2364
+crates/agent_session/src/inbound/axum_router/test.rs
+  s_60bbe192a6a060::t_e7866b3f206d78 1129-1130,1133-1151,1155,1160-1226
+crates/agent_session/src/inbound/toolset/coding_agents.rs
+  s_60bbe192a6a060::t_80290d9b99dad3 169,172
+crates/ai_projections/src/outbound/agent_generator.rs
+  s_60bbe192a6a060::t_1db52c723ebd03 59-60
+crates/ai_tools/AGENTS.md
+  s_60bbe192a6a060::t_c0abb2e16e1143 7,16-17,47-49
+crates/ai_tools/src/build_context.rs
+  s_60bbe192a6a060::t_f6f79f4c0da871 416,579,609-611
+crates/ai_tools/src/lib.rs
+  s_60bbe192a6a060::t_97a853542d3403 168-170,293,316,436
+crates/ai_tools/src/mcp_app_catalog.rs
+  s_60bbe192a6a060::t_556862be1cec3f 68-70,84,105,114,130,139,146-148,153
+crates/ai_tools/src/memory.rs
+  s_60bbe192a6a060::t_4075fed6fe4e98 2,47
+crates/ai_tools/src/schemas/mod.rs
+  s_60bbe192a6a060::t_ae9a1319f4261b 7
+crates/ai_tools/src/schemas/subagent.rs
+  s_60bbe192a6a060::t_f036a7b25011f8 1-2,4,6-7,12-14,17-18
+crates/ai_tools/src/search/search_service/context.rs
+  s_60bbe192a6a060::t_46aa9909de5c39 31
+crates/ai_tools/src/search_tools.rs
+  s_60bbe192a6a060::t_8a0c0ed24693b8 29-32,42,69,128,131,147-157
+crates/ai_tools/src/search_tools/test.rs
+  s_60bbe192a6a060::t_d82d84e391fb84 98,121,144,155,161-202
+crates/ai_tools/src/test.rs
+  s_60bbe192a6a060::t_4d06bfa6b6fa98 38-63,140-141,158,177,183,240-261,425-426,757,863-865,868-870,937,1036
+crates/ai_tools/src/tool_context.rs
+  s_60bbe192a6a060::t_b82e8643ffc875 2170
+crates/ai_toolset/src/caller.rs
+  s_60bbe192a6a060::t_d8a74ae373d7f2 15-17
+crates/ai_toolset/src/context.rs
+  s_60bbe192a6a060::t_2595b140d36453 1,37-40,62,86-91
+crates/ai_toolset/src/tool_search.rs
+  s_60bbe192a6a060::t_9c3fc0d66a2a9f 131-135
+crates/ai_usage/src/domain/ports.rs
+  s_60bbe192a6a060::t_613366d320675d 19,343
+crates/anthropic/src/toolset/text_editor_code_execution.rs
+  s_60bbe192a6a060::t_e872e3c32ceec5 15
+crates/calendar_events/AGENTS.md
+  s_60bbe192a6a060::t_b6b46f3f6949f4 236-238
+crates/calendar_events/src/inbound/toolset.rs
+  s_60bbe192a6a060::t_bc5ae12e9313ce 25,470-471,508-555
+crates/calendar_events/src/inbound/toolset/list_calendar_events.rs
+  s_60bbe192a6a060::t_1c47ead30284e8 18,51-56,168-169,297,301-303,310-311,313
+crates/calendar_events/src/inbound/toolset/read_calendar_event.rs
+  s_60bbe192a6a060::t_af7619a9f9e797 14-17,86-91,124-128,133,168-169,195-197,264-269
+crates/calendar_events/src/inbound/toolset/test.rs
+  s_60bbe192a6a060::t_4bec6ef100cb21 354,1364,1370-1420
+crates/calendar_events/src/inbound/toolset/test/read_calendar_event.rs
+  s_60bbe192a6a060::t_0651c08199517d 62,184-209
+crates/channel_bots/src/outbound/agent_loop_responder.rs
+  s_60bbe192a6a060::t_aa1d6488f5927f 44
+crates/channel_labels/AGENTS.md
+  s_60bbe192a6a060::t_859deb975a089c 44-45,50-52
+crates/channel_labels/Cargo.toml
+  s_60bbe192a6a060::t_4098b91f01ff77 42
+crates/channel_labels/src/domain/models.rs
+  s_60bbe192a6a060::t_97bec08bf30d42 48-50,60,66-69,84,86-89,178-182
+crates/channel_labels/src/domain/models/test.rs
+  s_60bbe192a6a060::t_bfd878fdc98919 1-2,34-76
+crates/channel_labels/src/domain/service.rs
+  s_60bbe192a6a060::t_3555958f001617 19,29-40,180,236
+crates/channel_labels/src/domain/service/test.rs
+  s_60bbe192a6a060::t_a6eb11da693f28 77,656-715
+crates/channel_labels/src/inbound/axum_router.rs
+  s_60bbe192a6a060::t_0edfa5f113648e 120-151,480-690
+crates/channel_labels/src/lib.rs
+  s_60bbe192a6a060::t_d31a7484189f8c 16-18
+crates/channel_labels/src/outbound/pg_channel_labels_repo.rs
+  s_60bbe192a6a060::t_325be8356783bb 21,27-38,67,84,102-104,114-138,140,145-147,149-151,163-164,209-217,293-301,339,344,347-351,355,359,372-380,416,482-490,528,530,532-536,546,557,572-573,579-584,587-588
+crates/channel_labels/src/outbound/pg_channel_labels_repo/test/team_channels.rs
+  s_60bbe192a6a060::t_51186c097330eb 240-663
+crates/coding_agent_worker/src/dispatch.rs
+  s_60bbe192a6a060::t_37337aa1e63952 161,259
+crates/coding_agent_worker/src/herdr/acp_agent.rs
+  s_60bbe192a6a060::t_23e3afac247d9e 846-847,850-852,867,881-884
+crates/coding_agent_worker/src/outbound/agent_session/test.rs
+  s_60bbe192a6a060::t_85eb6aa18bdf2a 57
+crates/crm/src/domain/pipeline_workflows.rs
+  s_60bbe192a6a060::t_a5b2552530ed2e 940
+crates/crm/src/inbound/toolset/list_companies.rs
+  s_60bbe192a6a060::t_9c07e552b48502 76
+crates/crm/src/inbound/toolset/pipelines/create_pipeline.rs
+  s_60bbe192a6a060::t_ca3031bee43ada 21
+crates/email/AGENTS.md
+  s_60bbe192a6a060::t_6a0f2646ad6d70 238-241
+crates/email/src/domain/mailbox.rs
+  s_60bbe192a6a060::t_01b013defe7503 417-419,445-447,457-458,463,469,481,704-715
+crates/email/src/domain/mailbox/lifecycle.rs
+  s_60bbe192a6a060::t_34a88c287b8f40 10,31-44,143,147,209-232
+crates/email/src/domain/mailbox/lifecycle/test.rs
+  s_60bbe192a6a060::t_153163654501c6 2,98-487
+crates/email/src/domain/mailbox/watches.rs
+  s_60bbe192a6a060::t_818566f824e631 134-135,138-141,143-148,155-156,184,187,237,244-245,249,276,309
+crates/email/src/outbound/mailbox_pg/lifecycle.rs
+  s_60bbe192a6a060::t_292a8f46d6759b 318-320,324-325,330-336
+crates/email/src/outbound/mailbox_pg/lifecycle/test.rs
+  s_60bbe192a6a060::t_5a55c5854934ef 6-9,17-69,121-367
+crates/email_api_client/src/domain/service.rs
+  s_60bbe192a6a060::t_c9372b92775428 97
+crates/email_api_client/src/domain/service/attachments.rs
+  s_60bbe192a6a060::t_0bd2e3c5169b26 14
+crates/email_api_client/src/domain/service/blocklist.rs
+  s_60bbe192a6a060::t_f3ace1ee91bd43 50
+crates/email_api_client/src/domain/service/contacts.rs
+  s_60bbe192a6a060::t_b8a52493ddec09 15,32,58
+crates/email_api_client/src/domain/service/labels.rs
+  s_60bbe192a6a060::t_bfcd1ac1af38b1 15
+crates/email_api_client/src/domain/service/messages.rs
+  s_60bbe192a6a060::t_bf7a72f590f177 17,32,47,67,83,98,229
+crates/email_api_client/src/domain/service/raw_message.rs
+  s_60bbe192a6a060::t_8ea7c83bb99e48 14
+crates/email_api_client/src/domain/service/send.rs
+  s_60bbe192a6a060::t_ac09663d93f090 93
+crates/email_api_client/src/domain/service/sync.rs
+  s_60bbe192a6a060::t_cb009e28cde2ea 14,30
+crates/feature_flags/AGENTS.md
+  s_60bbe192a6a060::t_ca57c63fa4efec 24-30
+crates/feature_flags/Cargo.toml
+  s_60bbe192a6a060::t_4d42c0ac31623c 8
+crates/feature_flags/README.md
+  s_60bbe192a6a060::t_4543d4df0e3c5b 39,47,61-72
+crates/feature_flags/src/outbound/posthog.rs
+  s_60bbe192a6a060::t_7a0f7e54665c43 4,14-26,37,49-58,94,107
+crates/feature_flags/src/outbound/posthog/test.rs
+  s_60bbe192a6a060::t_4f3dad58ac5913 12-18,40,74-115,226-232,240-248,258-261,267-268,286-292,307-309
+crates/folds/agent_fold/src/domain/harness/macro_inmem.rs
+  s_60bbe192a6a060::t_3d0ec76cbcffe6 9
+crates/macro_entrypoint/src/test.rs
+  s_60bbe192a6a060::t_8dfbd99b49cb6a 185
+crates/mcp_client/AGENTS.md
+  s_60bbe192a6a060::t_88312ca0cd17fc 24-27,39-40,73-81
+crates/mcp_client/Cargo.toml
+  s_60bbe192a6a060::t_9113a8ad20c9cb 24,36,44
+crates/mcp_client/src/domain/models/address_policy.rs
+  s_60bbe192a6a060::t_c129b19694fc5f 1,3-4,9-34,37-41,44-52,54-68,70-76,79-88
+crates/mcp_client/src/domain/models/address_policy/test.rs
+  s_60bbe192a6a060::t_732edd642c5742 1,3-5,7-55
+crates/mcp_client/src/domain/models/mod.rs
+  s_60bbe192a6a060::t_3ccf6a83202e17 1,9-10,18-20
+crates/mcp_client/src/domain/models/server.rs
+  s_60bbe192a6a060::t_15973cac6fd252 2,7,9,13-49,90-97,100,106,109,112-114
+crates/mcp_client/src/domain/models/server/test.rs
+  s_60bbe192a6a060::t_e18e1354a4dff2 1-84
+crates/mcp_client/src/domain/ports.rs
+  s_60bbe192a6a060::t_30a47c17a8025b 1-3,5-28,68
+crates/mcp_client/src/domain/service/server_access.rs
+  s_60bbe192a6a060::t_0d2d8648832625 15,18,88,104
+crates/mcp_client/src/domain/service/server_access/test.rs
+  s_60bbe192a6a060::t_e110f7ffb8771b 3,111,121,139,154-157
+crates/mcp_client/src/domain/service/server_directory.rs
+  s_60bbe192a6a060::t_087ab3eb573299 6,8,153-154
+crates/mcp_client/src/domain/service/toolset.rs
+  s_60bbe192a6a060::t_9f124c9beb51be 2,177-181,188,447,450
+crates/mcp_client/src/outbound/guarded_http.rs
+  s_60bbe192a6a060::t_06ac9c222e386d 1-226
+crates/mcp_client/src/outbound/guarded_http/test.rs
+  s_60bbe192a6a060::t_0605f2d34b1787 2-17,19-72,75-77,79-90,94-102,104-106,108,111-124,127-129,131-178
+crates/mcp_client/src/outbound/mod.rs
+  s_60bbe192a6a060::t_f032d7d15099aa 3-4
+crates/mcp_client/src/outbound/oauth.rs
+  s_60bbe192a6a060::t_7a2de9d82a10f9 6-8,11,24,36,43,50-55,60,203,255
+crates/mcp_client/src/outbound/oauth/test.rs
+  s_60bbe192a6a060::t_8d0287f16dcf43 182
+crates/mcp_select/src/lib.rs
+  s_60bbe192a6a060::t_15d05e98cbb8b5 14,208,217,231-232,235,241,286-288,291,310
+crates/mcp_select/src/test.rs
+  s_60bbe192a6a060::t_86fd0f87dc530f 112-117,147-152,181,414-419,447-450
+crates/mcp_toolset/AGENTS.md
+  s_60bbe192a6a060::t_37bac311b3cccc 41-46
+crates/mcp_toolset/Cargo.toml
+  s_60bbe192a6a060::t_dc48b3d1cc0729 15,20,22-23
+crates/mcp_toolset/src/toolset.rs
+  s_60bbe192a6a060::t_1d52482102e861 20-22,32-35,280,292-300
+crates/mcp_toolset/src/toolset/test.rs
+  s_60bbe192a6a060::t_9b702b1bbb37da 1-122
+crates/messages/src/outbound/pg_message_repo.rs
+  s_60bbe192a6a060::t_95587e5bb67750 355-356,361
+crates/messages/src/outbound/pg_message_repo/test.rs
+  s_60bbe192a6a060::t_b43603b20054ef 841-871
+crates/prompt/src/code_mode.rs
+  s_60bbe192a6a060::t_a6b53edf8f83eb 8
+crates/prompt/src/do_not.rs
+  s_60bbe192a6a060::t_b6e8f9110be9f7 13,17-18
+crates/prompt/src/mentions.rs
+  s_60bbe192a6a060::t_69c250a3ab756f 21
+crates/system_skills/src/configure_agent.rs
+  s_60bbe192a6a060::t_ab42c773b907cf 9
+crates/teams/AGENTS.md
+  s_60bbe192a6a060::t_dd026860409fc6 64-67
+crates/teams/src/domain/model.rs
+  s_60bbe192a6a060::t_827ebc7e99d552 698-700
+crates/teams/src/inbound/axum_router.rs
+  s_60bbe192a6a060::t_92e9b08e6d908e 265-270
+crates/teams/src/inbound/axum_router/create_team.rs
+  s_60bbe192a6a060::t_65958972d203f9 36
+crates/teams/src/outbound/team_repo.rs
+  s_60bbe192a6a060::t_f4981295b35132 170-176
+crates/teams/src/outbound/team_repo/test.rs
+  s_60bbe192a6a060::t_992e66239bd64b 206-265
+crates/unfurl/src/outbound/http_safety.rs
+  s_60bbe192a6a060::t_c974e7583c322e 8,83,92-148,150-157,263,268,274,277,285,288,298,302,310,317,322-415
+crates/unfurl/src/outbound/reqwest_fetcher.rs
+  s_60bbe192a6a060::t_0cf4d191293d60 61
+crates/unfurl/src/outbound/resolver.rs
+  s_60bbe192a6a060::t_5aa15916fd3764 19,40
+crates/universal_input/src/domain/fallback.rs
+  s_60bbe192a6a060::t_c59489a91bd1a8 95,112,125-128,131
+crates/webhook/AGENTS.md
+  s_60bbe192a6a060::t_3b0b70f5d1f926 21-24
+crates/webhook/README.md
+  s_60bbe192a6a060::t_9cd13a70f27a3f 254-264
+crates/webhook/src/domain/blocked_address.rs
+  s_60bbe192a6a060::t_844c4e70890ea0 1-4,6-7,9,11-17,19-83
+crates/webhook/src/domain/blocked_address/test.rs
+  s_60bbe192a6a060::t_cba944fea02384 1,3-24,26-50,52-64,66-105
+crates/webhook/src/domain/mod.rs
+  s_60bbe192a6a060::t_830560ec2dcbdc 3-5
+crates/webhook/src/domain/service.rs
+  s_60bbe192a6a060::t_03705773c928dc 7,107
+crates/webhook/src/domain/service/test.rs
+  s_60bbe192a6a060::t_cfdc2d810c1fe2 1032-1033
+crates/webhook/src/outbound.rs
+  s_60bbe192a6a060::t_e40efcc06d565d 3-4
+crates/webhook/src/outbound/address_guard.rs
+  s_60bbe192a6a060::t_2bbeae8424fe1e 1-58
+crates/webhook/src/outbound/address_guard_test.rs
+  s_60bbe192a6a060::t_868e1cdbf485e9 2-13,18-35,39-48,50-57
+crates/webhook/src/outbound/http_delivery.rs
+  s_60bbe192a6a060::t_fe356d3efcc55b 63
+crates/webhook/src/outbound/http_delivery_test.rs
+  s_60bbe192a6a060::t_b3f6a50e1038b1 3,7,9-22,270-387
+crates/webhook/src/outbound/http_validator.rs
+  s_60bbe192a6a060::t_644e15ecd5928b 7,9,15-20,30-32,45-62,66-67,73,88,180-181,185,188-190,192-194,196-208,210
+crates/webhook/src/outbound/http_validator_test.rs
+  s_60bbe192a6a060::t_32930271dac01c 77-80,88,101
+docs/CRM_EMAIL_PRIVACY.md
+  s_60bbe192a6a060::t_e219aac6c22940 91-96
+docs/agent-guide/README.md
+  s_60bbe192a6a060::t_ea49fb1bd07298 64-106
+docs/agent-guide/ai-chat.md
+  s_60bbe192a6a060::t_0e276a6662c4ff 226-259,334-336,1107-1109,1305,1945-1947,2386-2387,2675-2676
+docs/agent-guide/channels.md
+  s_60bbe192a6a060::t_e11455c010cda0 1118-1125,1152-1153,1166-1168,1174-1177,1182-1210,1216-1219,1226-1228,1266-1365,1685
+docs/agent-guide/databases.md
+  s_60bbe192a6a060::t_d93c1e51eda4e4 183-184
+docs/agent-guide/email.md
+  s_60bbe192a6a060::t_ab5cec399cee2d 717-720
+docs/agent-guide/external.md
+  s_6caae8bc8234ff::t_33d8a38852a44f 140
+docs/agent-guide/files.md
+  s_60bbe192a6a060::t_bc9ee1ea6b7f18 160-161
+docs/agent-guide/navigation.md
+  s_60bbe192a6a060::t_542dfedee45ead 1847-1852,1873-1909
+docs/agent-guide/observability.md
+  s_60bbe192a6a060::t_5be903e2d85f68 69-70,132-166
+docs/agent-guide/settings.md
+  s_60bbe192a6a060::t_4d67842ed4e3b4 153-157,172-175
+docs/agent-guide/tasks.md
+  s_60bbe192a6a060::t_139ecf6b12503b 106-112
+docs/architecture/email.md
+  s_60bbe192a6a060::t_e2d4d073ba3aa5 310-318
+docs/architecture/frontend-features.md
+  s_60bbe192a6a060::t_deccdb66865337 590-593
+docs/development/infrastructure.md
+  s_60bbe192a6a060::t_008744d1fb8565 28,188-192
+docs/development/running-locally.md
+  s_60bbe192a6a060::t_bda16bc8c6e1eb 295-298
+docs/guides/add-entity.md
+  s_60bbe192a6a060::t_d7da504ad6f5ae 379,472-476
+docs/runbooks/ai-billing-rollout.md
+  s_60bbe192a6a060::t_8514b34e2e3e10 96,106
+infra/bun.lock
+  s_60bbe192a6a060::t_9a4365d6289216 201-204,781-782
+infra/stacks/email-service/index.ts
+  s_60bbe192a6a060::t_b77b4402c865d4 424
+infra/stacks/email-service/pubsub_workers.ts
+  s_60bbe192a6a060::t_0b5dafd9712800 6,118,131-132
+infra/stacks/openbao/AGENTS.md
+  s_60bbe192a6a060::t_9538c3f6c9d89b 1,3,5-7,9,11-38
+infra/stacks/openbao/CLAUDE.md
+  s_60bbe192a6a060::t_14baf1a5289e9a 1
+infra/stacks/openbao/Pulumi.dev.yaml
+  s_60bbe192a6a060::t_ea8e21b7ad8507 1-2
+infra/stacks/openbao/Pulumi.yaml
+  s_60bbe192a6a060::t_96e8b095b77c07 1-3
+infra/stacks/openbao/README.md
+  s_60bbe192a6a060::t_15565aedf9890b 1-153
+infra/stacks/openbao/index.ts
+  s_60bbe192a6a060::t_089dce559a2c75 1-588
+infra/stacks/openbao/package.json
+  s_60bbe192a6a060::t_f153cb837a8c92 1-7
+infra/stacks/openbao/server-config.ts
+  s_60bbe192a6a060::t_ba7c9a67d507ac 1-10,12-31,33-37,39-42,44-67
+infra/stacks/openbao/tsconfig.json
+  s_60bbe192a6a060::t_4e841735893e99 1-3
+infra/stacks/website/README.md
+  s_60bbe192a6a060::t_cd2aacf9596b14 79-85,91-108
+infra/stacks/website/edge-redirects.ts
+  s_60bbe192a6a060::t_a258d63a12b31d 1-12
+infra/stacks/website/index.ts
+  s_60bbe192a6a060::t_bf43900f6d3ac5 4-5,7,144-160
+infra/stacks/website/wwwRedirect/handler.js
+  s_60bbe192a6a060::t_8cc88aab7d336b 25-57
+nix-support/node_modules-hashes.json
+  s_60bbe192a6a060::t_35034eab55d598 3-4
+packages/sdk-mcp/src/__snapshots__/tools.entity.json
+  s_60bbe192a6a060::t_584d909bd6c6d9 24-25
+packages/sdk-mcp/src/__snapshots__/tools.method.json
+  s_60bbe192a6a060::t_0f463e392dc2c3 193,196-198
+packages/sdk/AGENTS.md
+  s_60bbe192a6a060::t_646bb7005ade1a 141
+packages/sdk/generated/agent-harness/types.gen.ts
+  s_6caae8bc8234ff::t_ee173cb7ea6050 1508-1515
+packages/sdk/generated/auth/types.gen.ts
+  s_6caae8bc8234ff::t_22f1ac9949f078 4013
+packages/sdk/generated/storage/index.ts
+  s_6caae8bc8234ff::t_065989627f6afa 4
+packages/sdk/generated/storage/sdk.gen.ts
+  s_6caae8bc8234ff::t_746e8da47b350a 5,959-1028
+packages/sdk/generated/storage/types.gen.ts
+  s_6caae8bc8234ff::t_cc06d56e12ef40 3617-3620,3624,3628,3635-3638,17793-17796,17812,25102-25282
+packages/sdk/specs/agent-harness.json
+  s_60bbe192a6a060::t_5d9e19c02e122c 5831-5835
+packages/sdk/specs/auth.json
+  s_60bbe192a6a060::t_d402dfc22ed4c7 3949-3958
+packages/sdk/specs/storage.json
+  s_60bbe192a6a060::t_9fbbe5f6f96825 5087-5598,31756,31770,31778,31785-31792,54537-54540,54562
+packages/sdk/src/coverage/skipped.ts
+  s_60bbe192a6a060::t_5e9d9abee42f86 307-313
+packages/sdk/src/entities/crm/pipeline.ts
+  s_60bbe192a6a060::t_f93d24331091df 348,392,439,588-591
+packages/sdk/src/entities/ui/namespace.ts
+  s_60bbe192a6a060::t_8fa63c7c7cbcaa 41,66-67
+packages/sdk/src/utils/activity.test.ts
+  s_60bbe192a6a060::t_a7ef438ce6cd99 38-55
+packages/sdk/src/utils/activity.ts
+  s_60bbe192a6a060::t_4f80ed9bbec9db 89-90
+packages/sdk/src/utils/verbs.ts
+  s_60bbe192a6a060::t_2cc697915cd075 77
+packages/sdk/tests/pipeline-entries.test.ts
+  s_60bbe192a6a060::t_727087d935ce92 120-121,227-248
+rules/ast-grep/rust-no-infra-in-domain.yml
+  s_60bbe192a6a060::t_f449f70276c4b8 10-11
+rules/ast-grep/rust-span-field-recorded-once.yml
+  s_60bbe192a6a060::t_d4fc732eee9924 1-20
+rules/ast-grep/ts-feature-components-presentational.yml
+  s_60bbe192a6a060::t_2ebf9483a0a395 32
+rules/ast-grep/ts-feature-core-pure.yml
+  s_60bbe192a6a060::t_b24e4baaf3a6cd 33
+rules/ast-grep/ts-feature-data-no-ui.yml
+  s_60bbe192a6a060::t_d5a47d97146739 46-47
+rules/ast-grep/ts-feature-layers-use-context.yml
+  s_60bbe192a6a060::t_c425f0fedab45d 85-89
+rules/ast-grep/tsx-feature-components-presentational.yml
+  s_60bbe192a6a060::t_390add2afce314 32
+rules/ast-grep/tsx-feature-core-pure.yml
+  s_60bbe192a6a060::t_af30cbf429e414 33
+rules/ast-grep/tsx-feature-data-no-ui.yml
+  s_60bbe192a6a060::t_771be43b5d4281 46-47
+rules/ast-grep/tsx-feature-layers-use-context.yml
+  s_60bbe192a6a060::t_c2bb5fe42f83a5 85-89
+services/agent_harness_service/src/code_mode/reviews.rs
+  s_60bbe192a6a060::t_587eff426c9c25 144,172
+services/agent_harness_service/src/cognition/api/context/test.rs
+  s_60bbe192a6a060::t_d98d9aadcd3756 638,855,871-877
+services/agent_harness_service/src/cognition/api/stream/chat_message.rs
+  s_60bbe192a6a060::t_2de6c35741ba87 595
+services/agent_harness_service/src/cognition/api/structured_completion.rs
+  s_60bbe192a6a060::t_cd7a72cb254ffc 195
+services/agent_harness_service/src/cognition/server.rs
+  s_60bbe192a6a060::t_86c53b88d5999e 99-100,106,393,683,728,1053
+services/agent_harness_service/src/cognition/service/database_query.rs
+  s_60bbe192a6a060::t_69435048c94376 111,116,136-139,213
+services/agent_harness_service/src/containers.rs
+  s_60bbe192a6a060::t_a14101da282000 302-304,312-316
+services/agent_harness_service/src/containers/test.rs
+  s_60bbe192a6a060::t_62eb6e7f5ff02d 357-379
+services/agent_harness_service/src/main.rs
+  s_60bbe192a6a060::t_b279ab7168ce47 548,553-558,568,617,628,656,772,1474-1475,1776
+services/agent_harness_service/src/public_mcp/tool_service.rs
+  s_60bbe192a6a060::t_1ff9977e347563 175
+services/agent_harness_service/src/public_mcp/tool_service/test.rs
+  s_60bbe192a6a060::t_0ffd7fa06f43a8 405-408,411,425,443,580,595
+services/agent_harness_service/src/scheduling.rs
+  s_60bbe192a6a060::t_8d6357298f3d63 441
+services/authentication_service/src/server.rs
+  s_60bbe192a6a060::t_4259bb4716d4e9 259
+services/document_storage_service/AGENTS.md
+  s_60bbe192a6a060::t_6930ea110293e9 19
+services/document_storage_service/src/api.rs
+  s_60bbe192a6a060::t_6c799d31d074a2 302-307
+services/document_storage_service/src/api/context.rs
+  s_60bbe192a6a060::t_98e7664a33810c 980-981
+services/document_storage_service/src/api/swagger.rs
+  s_60bbe192a6a060::t_1e36ac373465a4 514-521
+services/document_storage_service/src/server.rs
+  s_60bbe192a6a060::t_0d8b1272c391ad 897,1557,2430-2436
+services/email_service/AGENTS.md
+  s_60bbe192a6a060::t_a1224467dfb67e 77-80
+services/email_service/src/api/email/settings/import_signature/gmail_images/test.rs
+  s_60bbe192a6a060::t_af6f9bec1c59fd 2,187,191-193,196,198-201
+services/email_service/src/bin/backfill_outlook_snippets/process.rs
+  s_60bbe192a6a060::t_a004844083678b 52
+services/email_service/src/util/process_pre_insert/sfs_map.rs
+  s_60bbe192a6a060::t_c73204f96ae82c 13-15,17-18,157-170,199,204-209,211-213,215,217-219,221-225,229-230,233,235,237,243,251,258-260,263,271,278,286,292
+services/email_service/src/util/process_pre_insert/sfs_map/public_http.rs
+  s_60bbe192a6a060::t_e374b94bf84f75 1-7,9-13,15-17,19-21,23-24,26-31,33-43,45-48,50-52,54-55,57-198
+services/email_service/src/util/process_pre_insert/sfs_map/public_http/test.rs
+  s_60bbe192a6a060::t_e2062e1f37cbd0 1-279
+services/image_proxy_service/AGENTS.md
+  s_60bbe192a6a060::t_c6ac33c999af36 34-37
+services/image_proxy_service/src/api/proxy.rs
+  s_60bbe192a6a060::t_1958cef09b20a0 84,95-98,123-125,151,204-213,215-242,404,410-441,446-447,449-450,505-514
+services/image_proxy_service/src/api/proxy/test.rs
+  s_60bbe192a6a060::t_5d6e63621a5f43 1-2,65-90,93-172,240
+services/image_proxy_service/src/api/test.rs
+  s_60bbe192a6a060::t_2f45c25eacb059 115-140
+services/mcp_auth_proxy/Cargo.toml
+  s_60bbe192a6a060::t_2148647b9833de 39
+services/mcp_auth_proxy/README.md
+  s_60bbe192a6a060::t_405b4b96c676a0 176-185
+services/mcp_auth_proxy/src/domain.rs
+  s_60bbe192a6a060::t_a8f12599665f95 7-8
+services/mcp_auth_proxy/src/domain/access_token_clients.rs
+  s_60bbe192a6a060::t_df4352997fb380 5,17,54-56,69,73-79
+services/mcp_auth_proxy/src/domain/access_token_clients/test.rs
+  s_60bbe192a6a060::t_866ecd38327e28 73-109
+services/mcp_auth_proxy/src/domain/client_name.rs
+  s_60bbe192a6a060::t_4278b1050b34e3 1-5,7-8,10-13,15-16,18-20,22-39,41-43,45-103
+services/mcp_auth_proxy/src/domain/client_name/test.rs
+  s_60bbe192a6a060::t_13b8ab5e115bb6 1-121
+services/mcp_auth_proxy/src/domain/service.rs
+  s_60bbe192a6a060::t_4e1e24590cdd42 17,54-55,363,625-632,635,1046-1048,1050-1052,1086-1088
+services/mcp_auth_proxy/src/domain/service/test.rs
+  s_60bbe192a6a060::t_c0c5818897b0b8 85-141,465
+services/mcp_auth_proxy/src/inbound/axum_router.rs
+  s_60bbe192a6a060::t_b159d74a1e8631 86-90
+services/mcp_auth_proxy/src/inbound/axum_router/test.rs
+  s_60bbe192a6a060::t_612a3be226a388 169-189,245,262-263
+services/unfurl_service/src/http_safety.rs
+  s_60bbe192a6a060::t_860f37f2d8c938 8,33,136,145-207,209-210
+services/unfurl_service/src/http_safety/resolver.rs
+  s_60bbe192a6a060::t_475e8b101a5eee 7,21
+services/unfurl_service/src/http_safety/test.rs
+  s_60bbe192a6a060::t_e381870f6795d4 42-44,48-51,55-56,60-62,66-69,73-78,82-87,144-231
+tooling/xtask/crates/xtask_local/src/local.rs
+  s_60bbe192a6a060::t_378a01e7133e88 1257-1273,1306-1345,1347,1349-1354,1356-1397,1405-1407,1425,1456,1458-1459
+tooling/xtask/crates/xtask_local/src/local/test.rs
+  s_60bbe192a6a060::t_d6def7fb1d4f09 71-132
+tooling/xtask/crates/xtask_workflows/src/workflows/deploy_all_services.rs
+  s_60bbe192a6a060::t_63e4bf5cb24c52 68,330,333-343,349
+tooling/xtask/crates/xtask_workflows/src/workflows/deploy_all_services/test.rs
+  s_60bbe192a6a060::t_0d1fd7aee99226 49-50,55-60,63-64,68,71-77,79-87,89-99,101,104,106,110-111,118,120-123
+tooling/xtask/crates/xtask_workflows/src/workflows/deploy_website.rs
+  s_60bbe192a6a060::t_2225ac649d438f 89-92,197
+tooling/xtask/crates/xtask_workflows/src/workflows/deploy_website/test.rs
+  s_60bbe192a6a060::t_ab6391e3a71cbd 24-26
+tooling/xtask/crates/xtask_workflows/src/workflows/web_app_check_main.rs
+  s_60bbe192a6a060::t_afdf1fc06371f8 214
+tooling/xtask/crates/xtask_workflows/src/workflows/web_app_check_main/test.rs
+  s_60bbe192a6a060::t_b4eaaffdc9a07e 205-206,212
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "c9ec92baf4081fc6fcc1b14fa22c73dc5855e06a",
+  "prompts": {},
+  "sessions": {
+    "s_60bbe192a6a060": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "46f7c65c-e6e3-42b5-a7ea-a9973c9087d3",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_6caae8bc8234ff": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7703182d-758f-48a6-a293-94534204101f",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
