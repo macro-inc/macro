@@ -7,6 +7,9 @@ pub mod connection_gateway;
 /// Current audience capabilities from the entity access service.
 #[cfg(feature = "outbound")]
 pub mod entity_access_audience;
+/// Who has link previews, read from the `enable-link-previews` flag.
+#[cfg(feature = "link_previews")]
+pub mod flagged_link_previews;
 /// Contextual notification transport.
 #[cfg(feature = "delivery")]
 pub mod notification_sender;

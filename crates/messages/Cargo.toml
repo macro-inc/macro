@@ -39,7 +39,7 @@ kafka_consumer = [
   "dep:tokio-util",
   "macro_event_broker/outbound",
 ]
-link_previews = ["dep:unfurl", "ports"]
+link_previews = ["dep:feature_flags", "dep:unfurl", "ports"]
 outbound = ["dep:initiative", "dep:macro_uuid", "dep:sqlx", "ports"]
 ports = ["dep:async-trait", "dep:entity_access", "dep:futures", "dep:rootcause", "entity_access/ports"]
 schema = ["channel_sender/schema", "dep:utoipa", "activity/schema"]
@@ -58,6 +58,7 @@ channel_sender = { path = "../channel_sender" }
 chrono = { workspace = true }
 connection_gateway_client = { path = "../connection_gateway_client", optional = true }
 entity_access = { path = "../entity_access", default-features = false, optional = true }
+feature_flags = { path = "../feature_flags", optional = true }
 initiative = { path = "../initiative", default-features = false, features = ["ports"], optional = true }
 kafka_util = { path = "../kafka_util", optional = true }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = [

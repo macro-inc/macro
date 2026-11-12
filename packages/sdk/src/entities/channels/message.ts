@@ -167,7 +167,8 @@ export class Message extends FavoritableEntity<MessageRecord> {
 
   /**
    * Permanently remove the link preview cards from a message you sent, for
-   * everyone; later edits get none either. Anyone but the sender is refused.
+   * everyone; later edits get none either. Anyone but the sender is refused,
+   * and it is not found while link previews are off for you.
    *
    * @destructive
    * @idempotent

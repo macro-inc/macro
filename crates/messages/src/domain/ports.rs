@@ -653,6 +653,16 @@ pub trait LinkPreviewFetcher: Send + Sync + 'static {
     ) -> std::pin::Pin<Box<dyn Future<Output = Option<LinkPreview>> + Send + 'a>>;
 }
 
+/// Whether a person has link previews: computed for the messages they write
+/// or trigger, and theirs to remove.
+pub trait LinkPreviewGate: Send + Sync + 'static {
+    /// False when they don't, or when that can't be read.
+    fn enabled_for<'a>(
+        &'a self,
+        person: &'a macro_user_id::user_id::MacroUserIdStr<'static>,
+    ) -> std::pin::Pin<Box<dyn Future<Output = bool> + Send + 'a>>;
+}
+
 /// Message compositions that do not create raw bot Markdown.
 pub struct NoMessageMentionExtractor;
 impl MessageMentionExtractor for NoMessageMentionExtractor {

@@ -22422,7 +22422,7 @@
     "/messages/{parent_type}/{parent_id}/items/{id}/link_previews": {
       "delete": {
         "tags": ["messages::inbound::axum_router"],
-        "summary": "Remove the caller's own message's link previews for everyone. The message\ngets none again, whatever links a later edit adds.",
+        "summary": "Remove the caller's own message's link previews for everyone. The message\ngets none again, whatever links a later edit adds. Not found while link\npreviews are off for the caller.",
         "operationId": "entity_message_remove_link_previews",
         "parameters": [
           {

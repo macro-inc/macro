@@ -2,26 +2,30 @@
 //! a post or edit and stored with the message, so a client renders each card
 //! with the message instead of growing the message once a page loads.
 use super::*;
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use std::sync::Arc;
 
-/// Which links get a card, and what a page's card shows.
+/// Which links get a card, what a page's card shows, and who has cards.
 #[derive(Clone)]
 pub(super) struct LinkPreviewSources {
     links: Arc<dyn MessageLinkExtractor>,
     pages: Arc<dyn LinkPreviewFetcher>,
+    gate: Arc<dyn LinkPreviewGate>,
 }
 
 impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
-    /// Supply link extraction and page fetching. Without them, messages keep
-    /// no link previews.
+    /// Supply link extraction, page fetching, and who has link previews.
+    /// Without them, messages keep no link previews.
     pub fn with_link_previews(
         mut self,
         links: impl MessageLinkExtractor,
         pages: impl LinkPreviewFetcher,
+        gate: impl LinkPreviewGate,
     ) -> Self {
         self.link_previews = Some(LinkPreviewSources {
             links: Arc::new(links),
             pages: Arc::new(pages),
+            gate: Arc::new(gate),
         });
         self
     }
@@ -34,12 +38,12 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
     /// the parent's own audience. Safe to repeat: an unchanged set writes and
     /// publishes nothing, and a message edited or deleted meanwhile is left to
     /// the newer change. A message whose sender removed its previews keeps
-    /// none.
+    /// none, and so does one whose author doesn't have link previews.
     #[tracing::instrument(
         name = "message.link_previews.refresh",
         err,
         skip(self, parent),
-        fields(links, fetched, previews, changed)
+        fields(enabled, links, fetched, previews, changed)
     )]
     pub async fn refresh_link_previews(
         &self,
@@ -62,11 +66,19 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         if self.repo.link_previews_suppressed(parent, id).await? {
             return Ok(());
         }
+        let span = tracing::Span::current();
+        let enabled = match author(&message) {
+            Some(author) => sources.gate.enabled_for(&author).await,
+            None => false,
+        };
+        span.record("enabled", enabled);
+        if !enabled {
+            return Ok(());
+        }
 
         let urls = sources.links.extract(&message.content).await?;
         let previews = previews_for(sources, &message, &urls).await;
 
-        let span = tracing::Span::current();
         span.record("links", urls.len());
         span.record("previews", previews.len());
         let changed = previews != message.link_previews;
@@ -96,7 +108,8 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
     }
 
     /// Remove a message's link previews for everyone, for good: it gets none
-    /// again, whatever links a later edit adds. Only its sender may.
+    /// again, whatever links a later edit adds. Only its sender may, and only
+    /// while they have link previews; otherwise there is nothing to remove.
     ///
     /// Safe to repeat: a message already without previews stays so, and its
     /// viewers are told again.
@@ -108,6 +121,13 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
     ) -> Result<Message, MessageError> {
         let parent = parent_from_receipt(&access)?;
         let actor = actor_from_receipt(&access, &parent)?;
+        let enabled = match (&self.link_previews, access.acting_user_id()) {
+            (Some(sources), Some(caller)) => sources.gate.enabled_for(caller).await,
+            _ => false,
+        };
+        if !enabled {
+            return Err(MessageError::NotFound);
+        }
         self.ensure_parent(&parent).await?;
         let current = self.active_message(&parent, id, false).await?;
         reject_call_root(&current)?;
@@ -129,6 +149,19 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         .await;
         Ok(message)
     }
+}
+
+/// The person whose link previews a message follows: its sender, or for a
+/// bot's message the person who triggered it. Webhook and other unprompted
+/// posts, and call guests, have none.
+fn author(message: &Message) -> Option<MacroUserIdStr<'static>> {
+    if let Some(user) = message.sender_id.as_user() {
+        return Some(user.clone());
+    }
+    let triggered_by = message.triggered_by.as_deref()?;
+    MacroUserIdStr::parse_from_str(triggered_by)
+        .ok()
+        .map(CowLike::into_owned)
 }
 
 /// Previews for `urls` in order. A link the message already has a preview

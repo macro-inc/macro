@@ -3893,7 +3893,8 @@ export class Sdk extends HeyApiClient {
 
     /**
      * Remove the caller's own message's link previews for everyone. The message
-     * gets none again, whatever links a later edit adds.
+     * gets none again, whatever links a later edit adds. Not found while link
+     * previews are off for the caller.
      */
     public entityMessageRemoveLinkPreviews<ThrowOnError extends boolean = false>(options: Options<EntityMessageRemoveLinkPreviewsData, ThrowOnError>): RequestResult<EntityMessageRemoveLinkPreviewsResponses, unknown, ThrowOnError> {
         return (options.client ?? this.client).delete<EntityMessageRemoveLinkPreviewsResponses, unknown, ThrowOnError>({ url: '/messages/{parent_type}/{parent_id}/items/{id}/link_previews', ...options });

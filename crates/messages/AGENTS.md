@@ -32,7 +32,8 @@ they need.
 - `src/domain/service/link_previews.rs`: channel message link previews, stored
   in `comms_message_link_previews`. `src/inbound/link_preview_consumer.rs`
   (feature `kafka_consumer`) runs them from `macro.messages`;
-  `src/outbound/unfurl_link_previews.rs` (feature `link_previews`) reads pages.
+  `src/outbound/unfurl_link_previews.rs` (feature `link_previews`) reads pages,
+  and `src/outbound/flagged_link_previews.rs` decides who has them.
 
 ## Scope
 
@@ -46,7 +47,8 @@ they need.
 - Depends on (by feature): `entity_access` (ports/inbound), `model` (annotations),
   `properties`/`models_properties`/`model_notifications`/`notification`
   (delivery), `initiative` (outbound), `macro_event_broker`/`macro_event_topics`
-  (broker), `kafka_util` (kafka_consumer), `unfurl` (link_previews).
+  (broker), `kafka_util` (kafka_consumer), `unfurl` and `feature_flags`
+  (link_previews).
 - Used by: `agent_harness`, `agent_session`, `agent_trigger`, `ai_tools`, `bots`,
   `channel_bots`, `channels`, `coding_agent_worker`, `crm`, `documents`,
   `lexical_client`, `lexical_mention_extractor`, `macro_db_client`,
@@ -95,6 +97,13 @@ grant users another agent invocation's edit, deletion, or reaction authority.
   them, sets `comms_messages.link_previews_suppressed`, and publishes the same
   `link_previews_updated`. A suppressed message is skipped by every later
   refresh, and the guarded write refuses one already under way.
+
+- Link previews follow the `enable-link-previews` flag (`LinkPreviewGate`,
+  `outbound/flagged_link_previews.rs`), read for the message's author: its
+  sender, or the person who triggered a bot's reply. Unprompted bot posts and
+  call guests get none, and a flag that can't be read counts as off. Removal
+  checks the caller's flag and answers 404 while it is off. The web app reads
+  the same key to show the cards and the remove button.
 
 - Most modules are feature-gated (`ai_tools`, `annotations`, `broker`,
   `delivery`, `inbound`, `kafka_consumer`, `link_previews`, `outbound`, `ports`,

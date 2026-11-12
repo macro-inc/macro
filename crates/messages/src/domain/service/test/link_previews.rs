@@ -30,6 +30,33 @@ impl LinkPreviewFetcher for Pages {
     }
 }
 
+const AUTHOR: &str = "macro|author@example.com";
+
+/// Link previews for these people only. Remembers whom it was asked about.
+#[derive(Clone)]
+struct People {
+    on: Vec<&'static str>,
+    asked: Arc<Mutex<Vec<String>>>,
+}
+impl People {
+    fn on(on: Vec<&'static str>) -> Self {
+        Self {
+            on,
+            asked: Arc::default(),
+        }
+    }
+}
+impl LinkPreviewGate for People {
+    fn enabled_for<'a>(
+        &'a self,
+        person: &'a macro_user_id::user_id::MacroUserIdStr<'static>,
+    ) -> std::pin::Pin<Box<dyn Future<Output = bool> + Send + 'a>> {
+        self.asked.lock().unwrap().push(person.to_string());
+        let enabled = self.on.contains(&person.as_ref());
+        Box::pin(async move { enabled })
+    }
+}
+
 fn preview(url: &str, title: &str) -> LinkPreview {
     LinkPreview {
         url: url.to_string(),
@@ -53,13 +80,24 @@ fn channel_repo(stored: Vec<LinkPreview>) -> Repo {
     }
 }
 
+/// Link previews on for the fixture message's author.
 fn service(
     repo: Repo,
     links: Vec<&'static str>,
     pages: Pages,
     events: Events,
 ) -> MessageService<Repo, Events> {
-    MessageService::new(repo, events).with_link_previews(Links(links), pages)
+    gated_service(repo, links, pages, events, People::on(vec![AUTHOR]))
+}
+
+fn gated_service(
+    repo: Repo,
+    links: Vec<&'static str>,
+    pages: Pages,
+    events: Events,
+    people: People,
+) -> MessageService<Repo, Events> {
+    MessageService::new(repo, events).with_link_previews(Links(links), pages, people)
 }
 
 #[tokio::test]
@@ -234,7 +272,7 @@ async fn the_sender_removes_their_previews_for_everyone_and_for_good() {
     );
 
     let removed = service
-        .remove_link_previews(channel_member("macro|author@example.com"), message.id)
+        .remove_link_previews(channel_member(AUTHOR), message.id)
         .await
         .unwrap();
 
@@ -263,28 +301,120 @@ async fn the_sender_removes_their_previews_for_everyone_and_for_good() {
 
 #[tokio::test]
 async fn nobody_but_the_sender_removes_a_messages_previews() {
+    let admin = "macro|admin@example.com";
     let repo = channel_repo(vec![preview(ARTICLE, "stored")]);
     let events = Events::default();
     let message = repo.message.clone();
-    let service = service(
+    let service = gated_service(
         repo.clone(),
         vec![ARTICLE],
         Pages::default(),
         events.clone(),
+        People::on(vec![AUTHOR, admin]),
     );
 
     // A channel admin may edit and delete the message, but not this.
     let result = service
         .remove_link_previews(
-            channel_receipt(
-                "macro|admin@example.com",
-                entity_access::domain::models::ParticipantRole::Admin,
-            ),
+            channel_receipt(admin, entity_access::domain::models::ParticipantRole::Admin),
             message.id,
         )
         .await;
 
     assert!(matches!(result, Err(MessageError::Forbidden)));
+    assert!(!*repo.link_previews_suppressed.lock().unwrap());
+    assert!(events.0.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn an_author_without_link_previews_gets_none() {
+    let repo = channel_repo(vec![]);
+    let pages = Pages::default();
+    let people = People::on(vec![]);
+    let message = repo.message.clone();
+    gated_service(
+        repo.clone(),
+        vec![ARTICLE],
+        pages.clone(),
+        Events::default(),
+        people.clone(),
+    )
+    .refresh_link_previews(&message.parent, message.id)
+    .await
+    .unwrap();
+
+    assert_eq!(*people.asked.lock().unwrap(), vec![AUTHOR.to_string()]);
+    assert!(pages.0.lock().unwrap().is_empty());
+    assert!(repo.link_preview_writes.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_bot_reply_follows_the_person_who_triggered_it() {
+    let trigger = "macro|asker@example.com";
+    let mut repo = channel_repo(vec![]);
+    repo.message.sender_id = ChannelSender::new_from_bot(bot_id::MACRO_AI_BOT_ID);
+    repo.message.triggered_by = Some(trigger.to_string());
+    let people = People::on(vec![trigger]);
+    let message = repo.message.clone();
+    gated_service(
+        repo.clone(),
+        vec![ARTICLE],
+        Pages::default(),
+        Events::default(),
+        people.clone(),
+    )
+    .refresh_link_previews(&message.parent, message.id)
+    .await
+    .unwrap();
+
+    assert_eq!(*people.asked.lock().unwrap(), vec![trigger.to_string()]);
+    assert_eq!(
+        *repo.link_preview_writes.lock().unwrap(),
+        vec![vec![preview(ARTICLE, "fetched")]]
+    );
+}
+
+#[tokio::test]
+async fn an_unprompted_bot_post_gets_none() {
+    let mut repo = channel_repo(vec![]);
+    repo.message.sender_id = ChannelSender::new_from_bot(bot_id::MACRO_AI_BOT_ID);
+    let people = People::on(vec![AUTHOR]);
+    let pages = Pages::default();
+    let message = repo.message.clone();
+    gated_service(
+        repo.clone(),
+        vec![ARTICLE],
+        pages.clone(),
+        Events::default(),
+        people.clone(),
+    )
+    .refresh_link_previews(&message.parent, message.id)
+    .await
+    .unwrap();
+
+    assert!(people.asked.lock().unwrap().is_empty());
+    assert!(pages.0.lock().unwrap().is_empty());
+    assert!(repo.link_preview_writes.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn removing_previews_is_not_found_for_a_sender_without_link_previews() {
+    let repo = channel_repo(vec![preview(ARTICLE, "stored")]);
+    let events = Events::default();
+    let message = repo.message.clone();
+    let service = gated_service(
+        repo.clone(),
+        vec![ARTICLE],
+        Pages::default(),
+        events.clone(),
+        People::on(vec![]),
+    );
+
+    let result = service
+        .remove_link_previews(channel_member(AUTHOR), message.id)
+        .await;
+
+    assert!(matches!(result, Err(MessageError::NotFound)));
     assert!(!*repo.link_previews_suppressed.lock().unwrap());
     assert!(events.0.lock().unwrap().is_empty());
 }

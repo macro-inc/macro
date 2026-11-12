@@ -367,7 +367,8 @@ where
 
 #[utoipa::path(operation_id = "entity_message_remove_link_previews", delete, path = "/messages/{parent_type}/{parent_id}/items/{id}/link_previews", params(("parent_type" = String, Path), ("parent_id" = String, Path), ("id" = Uuid, Path)), responses((status = 200, body = Message)))]
 /// Remove the caller's own message's link previews for everyone. The message
-/// gets none again, whatever links a later edit adds.
+/// gets none again, whatever links a later edit adds. Not found while link
+/// previews are off for the caller.
 pub async fn remove_link_previews<A, Auth>(
     State(state): State<MessagesRouterState<A, Auth>>,
     user: MacroAuthorizationExtractor<Auth, AnyPrincipal>,
