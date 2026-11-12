@@ -198,7 +198,13 @@ export function ChannelsMobileView(props: {
   };
   const content = (
     <Switch>
-      <Match when={!forceEmptyState() && props.source.isLoading()}>
+      <Match
+        when={
+          !forceEmptyState() &&
+          props.source.isLoading() &&
+          visibleChannels().length === 0
+        }
+      >
         <div class="grid min-h-32 place-items-center text-ink-muted">
           <SpinnerIcon
             aria-hidden={false}

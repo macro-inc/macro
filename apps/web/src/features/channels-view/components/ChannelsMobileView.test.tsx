@@ -7,7 +7,7 @@ import {
   screen,
   waitFor,
 } from '@solidjs/testing-library';
-import { For, type JSX } from 'solid-js';
+import { createSignal, For, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChannelsDataSource } from '../queries';
 
@@ -214,6 +214,32 @@ describe('mobile channel activation', () => {
     } finally {
       log.mockRestore();
     }
+  });
+});
+
+describe('mobile section hydration', () => {
+  it('keeps resolved conversations usable while remaining members load', async () => {
+    const [loading, setLoading] = createSignal(true);
+    const sectionSource: ChannelsDataSource = {
+      ...source,
+      isLoading: loading,
+      isFetching: loading,
+    };
+    render(() => (
+      <ChannelsMobileView
+        source={sectionSource}
+        pinned={[]}
+        searchQuery=""
+        onClearSearch={() => {}}
+      />
+    ));
+
+    const row = screen.getByRole('button', { name: 'One' });
+    fireEvent.click(row);
+    await waitFor(() => expect(mocks.openSplit).toHaveBeenCalledOnce());
+    setLoading(false);
+    setLoading(true);
+    expect(screen.getByRole('button', { name: 'One' })).toBe(row);
   });
 });
 
