@@ -1,3 +1,4 @@
+import { CrmRecordDemo } from '../../features/marketing/components/crm/CrmRecordDemo';
 import { DemoInteractionBoundary } from '../../features/marketing/components/DemoInteractionBoundary';
 import { EmailAgenticEditingDemo } from '../../features/marketing/components/email/EmailAgenticEditingDemo';
 import { EmailAutoTagDemo } from '../../features/marketing/components/email/EmailAutoTagDemo';
@@ -14,10 +15,12 @@ import { HomepageClosing } from '../../features/marketing/components/HomepageClo
 import { PaperEmailAccounts } from '../../features/marketing/components/paper/PaperEmailAccounts';
 import { PaperEmailTask } from '../../features/marketing/components/paper/PaperEmailTask';
 import { PaperFeatureGraphic } from '../../features/marketing/components/paper/PaperFeatureGraphic';
+import { PaperEmailSignalNoise } from '../../features/marketing/components/paper/PaperInbox';
 import { ProductIntroduction } from '../../features/marketing/components/product/ProductIntroduction';
 import { ProductBrand } from '../../features/marketing/components/product/ProductPage';
 import { TutorialVideoEmbed } from '../../features/marketing/components/TutorialVideoEmbed';
 import { setPageSeo } from '../utils/utilSeo';
+import '../../features/marketing/components/crm/crm-page.css';
 import '../../features/marketing/components/email/email-hero.css';
 
 const faqItems = [
@@ -130,63 +133,49 @@ export function RouteEmail() {
       <TutorialVideoEmbed tutorial="mail" />
       <ProductIntroduction product="Email" />
       <FeaturePageSection
+        id="keyboard-speed"
+        demo={{
+          tone: 'email',
+        }}
+        title="Navigate with Superhuman speed."
+        description="We bring your emails into our own database so we’re not bottlenecked by Gmail’s API. Use J, K, and E to navigate and mark emails done, or open splits to draft and search side by side."
+      >
+        <DemoInteractionBoundary
+          class="feature-page-visual"
+          render={() => <EmailKeyboardDemo />}
+        />
+      </FeaturePageSection>
+      <FeaturePageSection
         id="email-accounts"
-        title="See your accounts in one inbox."
-        description="Read, search, and triage your email accounts together. Signal shows your important emails; Noise keeps newsletters and promotions out of the way."
+        title="All your accounts in one inbox."
+        description="Triage all your email accounts in a single inbox, or one at a time. We backfill everything, so search is split-second across every account."
       >
         <PaperFeatureGraphic label="Switch between all inboxes, individual accounts, and email aliases.">
           <PaperEmailAccounts />
         </PaperFeatureGraphic>
       </FeaturePageSection>
       <FeaturePageSection
-        id="auto-tags"
-        title="Tag incoming emails automatically."
-        description="Use an agent routine to tag incoming emails by customer, project, or topic. The same tags work across emails, docs, and tasks, so you can find the related work together."
+        id="signal-noise"
+        title="Signal vs. Noise."
+        description="Signal is your important email. Noise is the newsletters, receipts, and inbound you don’t need to see first. Macro separates them for you, so you can focus on what matters."
       >
         <PaperFeatureGraphic
-          height={360}
-          mobileHeight={390}
-          label="An inbox with one highlighted email automatically tagged Customers and Follow up by a routine. Callouts point to each tag."
+          height={280}
+          mobileHeight={482}
+          label="Important emails from people in Signal, beside newsletters and receipts in Noise."
         >
-          <EmailAutoTagDemo />
+          <PaperEmailSignalNoise />
         </PaperFeatureGraphic>
       </FeaturePageSection>
       <FeaturePageSection
         id="email-sharing"
         demo={{ tone: 'email', glassFrame: false }}
-        title="Share email threads in Macro Chat."
+        title="Share an email with your team, no screenshot."
         description="Share an email in a channel without taking a screenshot of Gmail and pasting it in Slack. Your team sees the full thread, including future replies, so they’re not asking what happened after your screenshot."
       >
         <DemoInteractionBoundary
           class="feature-page-visual"
           render={() => <EmailShareStory />}
-        />
-      </FeaturePageSection>
-      <FeaturePageSection
-        id="email-crm"
-        title="Your Macro CRM, one click from any email."
-        description="Open a company or contact record from any email to see its CRM history. Catch up on the relationship without leaving your inbox."
-      />
-      <FeaturePageSection
-        id="email-to-task"
-        title="Turn email into Macro Tasks."
-        description="Create a task from the thread and assign it without leaving your inbox. The email stays linked as the source, so the original conversation is one click away."
-      >
-        <PaperFeatureGraphic label="Create a task from an email, with the original thread linked as its source.">
-          <PaperEmailTask />
-        </PaperFeatureGraphic>
-      </FeaturePageSection>
-      <FeaturePageSection
-        id="keyboard-speed"
-        demo={{
-          tone: 'email',
-        }}
-        title="Navigate with superhuman speed."
-        description="We bring your emails into our own database so we’re not bottlenecked by Gmail’s API. Use J, K, and E to navigate and mark emails done, or open splits to draft and search side by side."
-      >
-        <DemoInteractionBoundary
-          class="feature-page-visual"
-          render={() => <EmailKeyboardDemo />}
         />
       </FeaturePageSection>
       <FeaturePageSection
@@ -201,6 +190,41 @@ export function RouteEmail() {
           class="feature-page-visual"
           render={() => <EmailAgenticEditingDemo />}
         />
+      </FeaturePageSection>
+      <FeaturePageSection
+        id="email-to-task"
+        title="Turn an email into a task."
+        description="Create a task from the thread and assign it without leaving your inbox. The email stays linked as the source, so the original conversation is one click away, and you can see when it’s resolved."
+      >
+        <PaperFeatureGraphic label="Create a task from an email, with the original thread linked as its source.">
+          <PaperEmailTask />
+        </PaperFeatureGraphic>
+      </FeaturePageSection>
+      <FeaturePageSection
+        id="email-crm"
+        demo={{
+          tone: 'email',
+        }}
+        title="Your Macro CRM, one click from any email."
+        description="Open a company or contact record from any email to see every email between your team and that company, without opening a heavyweight CRM. Catch up on the relationship without leaving your inbox."
+      >
+        <DemoInteractionBoundary
+          class="feature-page-visual"
+          render={() => <CrmRecordDemo />}
+        />
+      </FeaturePageSection>
+      <FeaturePageSection
+        id="auto-tags"
+        title="Let routines watch your email."
+        description="Set up a routine that runs when an email arrives. Have an agent tag incoming emails by customer, project, or topic, or notify a channel when an urgent support email comes in. The same tags work across emails, docs, and tasks."
+      >
+        <PaperFeatureGraphic
+          height={360}
+          mobileHeight={390}
+          label="An inbox with one highlighted email automatically tagged Customers and Follow up by a routine. Callouts point to each tag."
+        >
+          <EmailAutoTagDemo />
+        </PaperFeatureGraphic>
       </FeaturePageSection>
       <EmailComparison />
       <FeaturePageFaq
