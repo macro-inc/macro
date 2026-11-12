@@ -793,6 +793,42 @@ describe('createWorkerCacheHost', () => {
     }
   );
 
+  it('keeps a search queued through a blocked handoff and answers it from the replacement engine', async () => {
+    vi.useFakeTimers();
+    const host = createWorkerCacheHost({
+      scope: 'scope-1',
+      requestTimeoutMs: 10,
+    });
+    await host.currentRevision();
+    const adapter = requireAdapter();
+    adapter.ignoredKinds.add('read');
+    adapter.ignoredKinds.add('search');
+    adapter.options.onCacheReadAvailabilityChanged?.('waiting');
+    const read = host.readQuery({ opKey: 7, query: 'query Parked { user }' });
+    const refused = expect(read).rejects.toThrow('owner handoff timeout');
+    const page = { documents: [], nextCursor: null };
+    const search = host.search({
+      profile: 'quick-access-v1',
+      buckets: ['document'],
+      query: 'todo',
+      limit: 20,
+    });
+    await vi.advanceTimersByTimeAsync(0);
+
+    adapter.options.onCacheReadAvailabilityChanged?.('blocked');
+    await refused;
+    await vi.advanceTimersByTimeAsync(60_001);
+
+    const queued = adapter.requests.find(
+      (request) => request.kind === 'search'
+    );
+    if (!queued) throw new Error('missing search');
+    adapter.options.onCacheReadAvailabilityChanged?.('ready');
+    adapter.respond(queued.id, page);
+    await expect(search).resolves.toEqual(page);
+    host.dispose();
+  });
+
   it('queues parked reads, writes, and teardown in call order without background timeouts', async () => {
     vi.useFakeTimers();
     const host = createWorkerCacheHost({

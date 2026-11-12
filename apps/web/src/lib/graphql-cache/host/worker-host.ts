@@ -505,6 +505,10 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         entry.timer = undefined;
       }
       if (!isReadOnlyCacheRequest(entry.kind)) continue;
+      // A search has no network fallback to hurry to. The coordinator still
+      // holds it for the replacement engine, so refusing it would only drop
+      // its place in line and leave the caller to ask again behind the rest.
+      if (entry.kind === 'search') continue;
       pending.delete(id);
       if (entry.timer !== undefined) clearTimeout(entry.timer);
       recordRequestOutcome(entry, 'error', error);

@@ -21,7 +21,11 @@ import type {
   SearchCachePage,
   WriteResult,
 } from '../protocol';
-import { parseCacheRevision, parseStorageGeneration } from '../protocol';
+import {
+  isTypedSearch,
+  parseCacheRevision,
+  parseStorageGeneration,
+} from '../protocol';
 import {
   type CacheTelemetryRecorderLike,
   classifyCacheError,
@@ -101,7 +105,10 @@ export interface CacheWorkerCoreOptions {
 const BACKGROUND_HYDRATION_PRIORITY = -1;
 const NORMAL_READ_PRIORITY = 0;
 const USER_VISIBLE_READ_PRIORITY = 1;
-const CACHE_WRITE_PRIORITY = 2;
+// Someone is typing and waiting on it, and unlike a list read it has no
+// network fallback, so it runs before the rereads of lists already on screen.
+const TYPED_SEARCH_PRIORITY = 2;
+const CACHE_WRITE_PRIORITY = 3;
 
 /** Reads may reorder while they overlap, but never across lifecycle barriers. */
 function isOrderingBarrier(request: CacheRequest): boolean {
@@ -111,6 +118,11 @@ function isOrderingBarrier(request: CacheRequest): boolean {
     request.kind === 'teardown' ||
     request.kind === 'clear'
   );
+}
+
+/** A new engine or cleared storage: nothing may run ahead of these. */
+function isLifecycleBarrier(request: CacheRequest): boolean {
+  return request.kind === 'init' || request.kind === 'clear';
 }
 
 function isAuthoritativeWrite(request: CacheRequest): boolean {
@@ -157,6 +169,7 @@ function revisionAdvancementCategory(
 function requestPriority(request: CacheRequest): number {
   if (request.kind === 'hydrate' || request.kind === 'people-update')
     return BACKGROUND_HYDRATION_PRIORITY;
+  if (isTypedSearch(request)) return TYPED_SEARCH_PRIORITY;
   if (request.kind === 'read') {
     return request.priority === 'user-visible'
       ? USER_VISIBLE_READ_PRIORITY
@@ -445,6 +458,27 @@ export class CacheWorkerCore {
         ) {
           index = i;
         }
+      }
+    }
+
+    // A typed search registers nothing and writes nothing, so the generation
+    // checks and operation teardowns that fence other reads do not order it.
+    // After an engine restart those fences sit between it and the head of the
+    // replayed backlog.
+    let lifecycleEnd = this.queue.findIndex((queued) =>
+      isLifecycleBarrier(queued.request)
+    );
+    if (lifecycleEnd === -1) lifecycleEnd = this.queue.length;
+    for (let i = segmentEnd; i < lifecycleEnd; i += 1) {
+      const candidate = this.queue[i];
+      const selected = this.queue[index];
+      if (
+        candidate &&
+        selected &&
+        isTypedSearch(candidate.request) &&
+        candidate.priority > selected.priority
+      ) {
+        index = i;
       }
     }
 

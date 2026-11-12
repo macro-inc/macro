@@ -989,6 +989,17 @@ export const OWNER_LOCK_UNAVAILABLE_ERROR_CODE: CacheResponseErrorCode =
  * owners and the foreground wait ran out. Storage is untouched and the engine
  * keeps running, so the request can be retried once an owner is ready.
  */
+/** A text search someone is waiting on; an empty query only browses a list. */
+export function isTypedSearch(
+  request: Pick<CacheRequest, 'kind'> | CacheRequest
+): boolean {
+  return (
+    request.kind === 'search' &&
+    'request' in request &&
+    request.request.query.trim() !== ''
+  );
+}
+
 export const OWNER_HANDOFF_BLOCKED_ERROR_CODE: CacheResponseErrorCode =
   'owner-handoff-blocked';
 
