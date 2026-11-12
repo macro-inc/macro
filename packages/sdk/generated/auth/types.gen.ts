@@ -168,6 +168,30 @@ export type CheckoutSessionV2Response = {
 };
 
 /**
+ * An authenticated request to claim the account's first-party mailbox handle.
+ */
+export type ClaimHandleRequest = {
+    /**
+     * A lowercase handle satisfying the shared Rox mailbox grammar.
+     */
+    handle: string;
+};
+
+/**
+ * The claimed handle and its first-party address.
+ */
+export type ClaimHandleResponse = {
+    /**
+     * `handle@rox.one`.
+     */
+    address: string;
+    /**
+     * The canonical handle.
+     */
+    handle: string;
+};
+
+/**
  * Explicit remote environment for future Codex sessions.
  */
 export type CodexConfigRequest = {
@@ -555,6 +579,24 @@ export type CursorModelsResponse = {
 export type DenyReason = 'allowance_exhausted' | 'free_allowance_exhausted' | 'overage_limit_reached' | 'overage_payment_failed';
 
 /**
+ * Honest result of disabling a member: remote mailbox and laptop-file work remain gaps.
+ */
+export type DisableMemberReport = {
+    /**
+     * Always true when local `mhns_` credentials cannot be reached from the server.
+     */
+    harness_revoke_gap: boolean;
+    /**
+     * Always true: `mail.rox.one` has no suspend route in this repository.
+     */
+    mail_suspend_gap: boolean;
+    /**
+     * Server-side harness registrations and their token records revoked by this action.
+     */
+    server_records_revoked: number;
+};
+
+/**
  * What the provider selector offers the requesting user.
  */
 export type EmailConnectionProviders = {
@@ -722,6 +764,10 @@ export type GetLegacyUserPermissionsResponse = {
     email: string;
     group?: null | AbGroup;
     /**
+     * The claimed first-party mailbox handle, if one exists.
+     */
+    handle?: string | null;
+    /**
      * Whether the user has the chrome extension
      */
     hasChromeExt: boolean;
@@ -729,10 +775,6 @@ export type GetLegacyUserPermissionsResponse = {
      * Whether the user has trialed through stripe
      */
     hasTrialed: boolean;
-    /**
-     * The claimed first-party mailbox handle, if one exists.
-     */
-    handle?: string | null;
     /**
      * Whether this is an agent account rather than a person
      */
@@ -1335,30 +1377,6 @@ export type MergeGithubPullRequestResponse = {
     sha: string;
 };
 
-/**
- * An authenticated request to claim the account's first-party mailbox handle.
- */
-export type ClaimHandleRequest = {
-    /**
-     * A lowercase handle satisfying the shared Rox mailbox grammar.
-     */
-    handle: string;
-};
-
-/**
- * The claimed handle and its first-party address.
- */
-export type ClaimHandleResponse = {
-    /**
-     * `handle@rox.one`.
-     */
-    address: string;
-    /**
-     * The canonical handle.
-     */
-    handle: string;
-};
-
 export type PasswordRequest = {
     /**
      * The email to login with
@@ -1373,7 +1391,8 @@ export type PasswordlessRequest = {
      */
     email: string;
     /**
-     * Required when this address creates a new account; ignored for an existing account, whose username remains unchanged until it claims one.
+     * Required when this address creates a new account; ignored for an
+     * existing account, whose username remains unchanged until it claims one.
      */
     handle?: string | null;
     /**
@@ -1704,6 +1723,21 @@ export type ResendFusionauthVerifyUserEmailRequest = {
      * The email address to resend the verification email to
      */
     email: string;
+};
+
+/**
+ * Local runtime presets that a team may allow. Cloud runtimes are intentionally absent.
+ */
+export type RuntimePreset = 'opencode' | 'claude-code' | 'codex' | 'omp';
+
+/**
+ * A present allowlist is exhaustive. An absent database row is represented by `Option::None`.
+ */
+export type RuntimePresetAllowlist = {
+    /**
+     * The only local presets that may start for this team.
+     */
+    preset_ids: Array<RuntimePreset>;
 };
 
 /**
@@ -4355,6 +4389,62 @@ export type JoinTeamResponses = {
     200: unknown;
 };
 
+export type DisableTeamMemberData = {
+    body?: never;
+    path: {
+        /**
+         * The team member to disable
+         */
+        member_user_id: string;
+    };
+    query?: never;
+    url: '/team/members/{member_user_id}/disable';
+};
+
+export type DisableTeamMemberErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type DisableTeamMemberError = DisableTeamMemberErrors[keyof DisableTeamMemberErrors];
+
+export type DisableTeamMemberResponses = {
+    200: DisableMemberReport;
+};
+
+export type DisableTeamMemberResponse = DisableTeamMemberResponses[keyof DisableTeamMemberResponses];
+
+export type EnableTeamMemberData = {
+    body?: never;
+    path: {
+        /**
+         * The team member to enable
+         */
+        member_user_id: string;
+    };
+    query?: never;
+    url: '/team/members/{member_user_id}/enable';
+};
+
+export type EnableTeamMemberErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type EnableTeamMemberError = EnableTeamMemberErrors[keyof EnableTeamMemberErrors];
+
+export type EnableTeamMemberResponses = {
+    204: void;
+};
+
+export type EnableTeamMemberResponse = EnableTeamMemberResponses[keyof EnableTeamMemberResponses];
+
 export type PatchTeamMemberPlanData = {
     body: PatchTeamMemberPlanRequest;
     path: {
@@ -4431,6 +4521,50 @@ export type RemoveUserFromTeamError = RemoveUserFromTeamErrors[keyof RemoveUserF
 export type RemoveUserFromTeamResponses = {
     200: unknown;
 };
+
+export type ClearTeamRuntimePresetsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/team/runtime-presets';
+};
+
+export type ClearTeamRuntimePresetsErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ClearTeamRuntimePresetsError = ClearTeamRuntimePresetsErrors[keyof ClearTeamRuntimePresetsErrors];
+
+export type ClearTeamRuntimePresetsResponses = {
+    204: void;
+};
+
+export type ClearTeamRuntimePresetsResponse = ClearTeamRuntimePresetsResponses[keyof ClearTeamRuntimePresetsResponses];
+
+export type SetTeamRuntimePresetsData = {
+    body: RuntimePresetAllowlist;
+    path?: never;
+    query?: never;
+    url: '/team/runtime-presets';
+};
+
+export type SetTeamRuntimePresetsErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SetTeamRuntimePresetsError = SetTeamRuntimePresetsErrors[keyof SetTeamRuntimePresetsErrors];
+
+export type SetTeamRuntimePresetsResponses = {
+    200: RuntimePresetAllowlist;
+};
+
+export type SetTeamRuntimePresetsResponse = SetTeamRuntimePresetsResponses[keyof SetTeamRuntimePresetsResponses];
 
 export type GetUserTeamsData = {
     body?: never;
@@ -4563,6 +4697,28 @@ export type PatchUserGroupResponses = {
 };
 
 export type PatchUserGroupResponse = PatchUserGroupResponses[keyof PatchUserGroupResponses];
+
+export type ClaimHandleData = {
+    body: ClaimHandleRequest;
+    path?: never;
+    query?: never;
+    url: '/user/handle';
+};
+
+export type ClaimHandleErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ClaimHandleError = ClaimHandleErrors[keyof ClaimHandleErrors];
+
+export type ClaimHandleResponses = {
+    200: ClaimHandleResponse;
+};
+
+export type ClaimHandleResponse2 = ClaimHandleResponses[keyof ClaimHandleResponses];
 
 export type GetUserLanguageData = {
     body?: never;
@@ -4699,28 +4855,6 @@ export type GetUserInfoResponses = {
 };
 
 export type GetUserInfoResponse = GetUserInfoResponses[keyof GetUserInfoResponses];
-
-export type ClaimHandleData = {
-    body: ClaimHandleRequest;
-    path?: never;
-    query?: never;
-    url: '/user/handle';
-};
-
-export type ClaimHandleErrors = {
-    400: ErrorResponse;
-    401: ErrorResponse;
-    409: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type ClaimHandleError = ClaimHandleErrors[keyof ClaimHandleErrors];
-
-export type ClaimHandleResponses = {
-    200: ClaimHandleResponse;
-};
-
-export type ClaimHandleResponse2 = ClaimHandleResponses[keyof ClaimHandleResponses];
 
 export type GetUserNameData = {
     body?: never;

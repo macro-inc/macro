@@ -10,7 +10,8 @@ import type { PasswordlessRequestReferralCode } from './passwordlessRequestRefer
 export interface PasswordlessRequest {
   /** The email to initiate passwordless authentication for */
   email: string;
-  /** Required when this address creates a new account; ignored for an existing account, whose username remains unchanged until it claims one. */
+  /** Required when this address creates a new account; ignored for an
+existing account, whose username remains unchanged until it claims one. */
   handle?: PasswordlessRequestHandle;
   /** Create an agent account if this address has no account yet. Otherwise
 `true` has no effect, and `false` reverts an agent flag nobody has proven:
