@@ -8561,7 +8561,9 @@ type GraphqlSoupChannel implements GraphqlSoupEntity {
 	"""
 	metadata: GraphqlEntityMetadata!
 	"""
-	The name.
+	The name the viewer sees: the stored name, or for an unnamed channel
+	one derived for the viewer (a DM shows the other participant, a group
+	its other participants). An agent DM shows its persona's name.
 	"""
 	name: String
 	"""
@@ -8580,6 +8582,15 @@ type GraphqlSoupChannel implements GraphqlSoupEntity {
 	The identifier of the team.
 	"""
 	teamId: ID
+	"""
+	Whether members of the channel's team join it automatically.
+	"""
+	autoJoinTeam: Boolean!
+	"""
+	The persona, when this is the viewer's private conversation with an
+	agent; null for every other channel.
+	"""
+	agentDm: GraphqlSoupChannelAgentDm
 	"""
 	The created timestamp in RFC 3339 format.
 	"""
@@ -8646,6 +8657,25 @@ type GraphqlSoupChannel implements GraphqlSoupEntity {
 	The viewer's frecency score for this entity, when loaded.
 	"""
 	frecencyScore: Float
+}
+
+"""
+The persona an agent DM shows. Embedded in its channel, with no `id`: once
+the persona is gone its name reads "Unavailable agent".
+"""
+type GraphqlSoupChannelAgentDm {
+	"""
+	The persona's bot identifier.
+	"""
+	botId: ID!
+	"""
+	The persona's display name.
+	"""
+	name: String!
+	"""
+	The persona's avatar URL, when it has one.
+	"""
+	avatarUrl: String
 }
 
 """

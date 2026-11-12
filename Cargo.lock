@@ -13660,6 +13660,7 @@ dependencies = [
 name = "models_soup"
 version = "0.1.0"
 dependencies = [
+ "bot_id",
  "call",
  "channels",
  "chrono",
