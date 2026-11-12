@@ -42,6 +42,13 @@ Check read-only and generation revocation before treating these app rows as
 accepted. Preview layout notifications require a real native layout owner; row
 registration alone does not supply that capability.
 
+For a checklist containing a task reference, hover its bar and open **Filter
+tasks**. With Read or Comment access, choosing or clearing a filter must leave
+the bar and editor usable without writing settings. Grant Edit access on that
+same session and verify a subsequent choice updates settings. Native reader
+filtering currently cancels quietly; Off's reader-local filter changes remain
+a parity gap.
+
 The native body installs its checkbox pointer bridge through `installOverlays`.
 Click or tap a checklist marker, switch the view read-only, then unlock it and
 repeat; revoked Session write access must reject the toggle even if the local UI

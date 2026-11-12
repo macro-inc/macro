@@ -11,7 +11,7 @@
 
 - Wait for an acknowledged native view generation before initial overlay queries; retire and report an unavailable optional overlay without failing document startup.
 
-- Dispatch native application commands a reader can reach (menu search close, mention preview collapse, diff accept/reject) through `dispatchApplicationCommandIfSessionEdit`: it checks actual Session access at admission, and a ReadOnly refusal is a fatal session error that closes the editor.
+- Dispatch native application commands a reader can reach (menu search close, mention preview collapse, diff accept/reject, checklist filters) through `dispatchApplicationCommandIfSessionEdit` or `dispatchApplicationCommandSettledIfSessionEdit`: it checks actual Session access at admission, and a ReadOnly refusal is a fatal session error that closes the editor.
 
 - Validate native USER menu wiring with the real settled input and shared mention renderer in `editing/browser-test/user-mentions.browser.e2e.ts`; keep remaining mention kinds and service tracking as explicit coverage gaps.
 

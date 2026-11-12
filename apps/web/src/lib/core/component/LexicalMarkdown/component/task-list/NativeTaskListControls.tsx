@@ -14,7 +14,7 @@ import { Portal } from 'solid-js/web';
 import type { NormalizedSettings } from '../../plugins/checklist-controls/model';
 import type { NativeChecklistPlanHost } from '../../plugins/checklist-controls/native-plan-host';
 import type { NativeChecklistBar } from '../../plugins/checklist-controls/native-plan-schema';
-import { dispatchApplicationCommandSettled } from '../../plugins/group-b/command';
+import { dispatchApplicationCommandSettledIfSessionEdit } from '../../plugins/group-b/command';
 import { TaskListBar } from './TaskListBar';
 import { createTaskListNames, createTaskListTaskInfo } from './task-list-facts';
 
@@ -170,11 +170,13 @@ function NativeTaskListEntry(props: {
   const [hovered, setHovered] = createSignal(false);
   const [available, setAvailable] = createSignal(true);
   const list = props.bar.parentElement;
+  let active = true;
   const enter = () => setHovered(true);
   const leave = () => setHovered(false);
   list?.addEventListener('pointerenter', enter);
   list?.addEventListener('pointerleave', leave);
   onCleanup(() => {
+    active = false;
     list?.removeEventListener('pointerenter', enter);
     list?.removeEventListener('pointerleave', leave);
   });
@@ -188,16 +190,29 @@ function NativeTaskListEntry(props: {
     }))
   );
   const update = async (patch: Partial<NormalizedSettings>) => {
+    const view = props.view;
+    const key = props.key;
     try {
-      const result = await dispatchApplicationCommandSettled(
-        props.view,
+      const result = await dispatchApplicationCommandSettledIfSessionEdit(
+        view,
         'group-b.checklist',
-        {
-          action: 'settings',
-          key: props.key,
-          settings: { ...props.result().settings, ...patch },
+        () => {
+          if (
+            !active ||
+            !list ||
+            props.bar.parentElement !== list ||
+            view.getElementByKey(key) !== list
+          )
+            throw new Error('Checklist settings target is unavailable');
+          return {
+            action: 'settings',
+            key,
+            settings: { ...props.result().settings, ...patch },
+          };
         }
       );
+      if (result.status === 'cancelled' && result.reason === 'session-access')
+        return;
       if (result.status === 'error') throw result.error;
       if (result.status === 'cancelled')
         throw new Error('Checklist settings admission cancelled');

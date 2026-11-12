@@ -111,3 +111,31 @@ export function dispatchApplicationCommandSettled(
   if (!input) throw new Error('Native view generation is unavailable');
   return view.port.inputSettled(input, event);
 }
+
+/** Check current session access before evaluating a queued application payload. */
+export function dispatchApplicationCommandSettledIfSessionEdit(
+  view: EditorView,
+  name: string,
+  payload: () => JsonValue
+): Promise<InputSettlement> {
+  if (!(view.port instanceof SessionPort))
+    throw new Error(
+      'Settled application commands require the native session port'
+    );
+  const generation = view.mirror.keyGeneration;
+  if (!view.isMounted || generation === null)
+    throw new Error('Native view generation is unavailable');
+  return view.port.inputSettledIfSessionEdit(() => {
+    if (!view.isMounted || view.mirror.keyGeneration !== generation)
+      throw new Error('Native view generation changed before admission');
+    const input = applicationInput(view, name, payload());
+    if (
+      !view.isMounted ||
+      view.mirror.keyGeneration !== generation ||
+      !input?.isEditorApplication() ||
+      input.value.generation !== generation
+    )
+      throw new Error('Native view generation changed during admission');
+    return input.value;
+  });
+}

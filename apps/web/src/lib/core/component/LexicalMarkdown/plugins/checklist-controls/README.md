@@ -37,3 +37,9 @@ or deletes native delivery authority. Pure DTO tests are not native
 receipt/transfer proof. Ordinary-session lifetime tests exercise ownership and
 cleanup; refresh controls require the matching producer and compare its real
 receipts against the Source collector and planner.
+
+Native filter settings use current session Edit access at queued admission. Read
+and Comment access cancel quietly before payload evaluation, preserving the bar
+and editor. This is a no-op: Source reader-local filter changes remain a parity
+gap. Queued writes retain their intended generation and require the same live
+list target before evaluating current settings.

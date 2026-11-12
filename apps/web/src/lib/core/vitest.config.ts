@@ -53,6 +53,7 @@ export default defineConfig({
     server: {
       deps: {
         inline: [
+          '@solidjs/router',
           'solid-transition-group',
           '@solid-primitives/refs',
           '@solid-primitives/transition-group',
