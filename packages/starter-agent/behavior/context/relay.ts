@@ -303,7 +303,9 @@ export const startRelay = ({
     capability: token,
     apiKey,
     anthropic,
-    fetch: (request) => fetch(request),
+    // As it came: Bun decodes a compressed answer but keeps its
+    // content-encoding, so the caller would decode it twice.
+    fetch: (request) => fetch(request, { decompress: false }),
     equal: constantTimeEqual,
   });
   const socket = socketTarget({

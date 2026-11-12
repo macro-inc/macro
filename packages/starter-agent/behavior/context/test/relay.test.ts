@@ -211,6 +211,40 @@ describe('startRelay', () => {
       macro.stop(true);
     }
   });
+
+  test('passes a compressed answer through as it came, so the caller can decode it', async () => {
+    const body = JSON.stringify({
+      token: 'livekit-token',
+      url: 'wss://rtc.example',
+    });
+    const macro = Bun.serve({
+      hostname: '127.0.0.1',
+      port: 0,
+      fetch: () =>
+        new Response(Bun.gzipSync(body), {
+          headers: {
+            'content-type': 'application/json',
+            'content-encoding': 'gzip',
+          },
+        }),
+    });
+    const relay = startRelay({
+      targets: { storage: macro.url.href },
+      egress: 'https://egress.example',
+      apiKey,
+    });
+    try {
+      const response = await fetch(`${relay.url}/storage/call/record/c/join`, {
+        method: 'POST',
+        headers: { 'x-macro-user-api-key': relay.token },
+      });
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual(JSON.parse(body));
+    } finally {
+      relay.stop();
+      macro.stop(true);
+    }
+  });
 });
 
 const upgrade = (path: string, headers: Record<string, string> = {}) =>
