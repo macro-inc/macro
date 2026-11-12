@@ -1,0 +1,59 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT session_id, request, progress, created_at, state, result, finished_at\n            FROM scheduled_action_draft\n            WHERE session_id = $1 AND owner_id = $2 AND state IN ('drafting', 'ready', 'failed')\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "session_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "request",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 2,
+        "name": "progress",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "state",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "result",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 6,
+        "name": "finished_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "f5a3b11fa6a764518741e1cff8425d0e9cde4e8d39f09beb18979e08b0d8f064"
+}

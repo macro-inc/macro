@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT count(*) AS \"drafting!\" FROM scheduled_action_draft\n            WHERE owner_id = $1 AND state = 'drafting'\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "drafting!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "71544c9c1b1db047e1812c026df1eacbf6b905134d061c5c1e658a01c89ae1bf"
+}
