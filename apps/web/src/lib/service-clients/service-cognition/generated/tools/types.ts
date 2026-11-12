@@ -15476,13 +15476,15 @@ export interface SendConfirmedEmail {
    */
   subject: string;
   /**
-   * The address of the inbox to send from, when the user has more than one
-   * connected and this email belongs to a particular one. Use the exact
-   * `emailAddress` of a connected inbox — `ListInboxes` lists them, and
-   * `GetThread` reports the `inbox` a thread belongs to. Omit it unless
-   * you know which inbox is right: a reply then goes out from the inbox
-   * that received the message it answers, and a new email from the user's
-   * primary inbox. The user can change it in the composer either way.
+   * The address to send from, when the user has more than one and this
+   * email belongs to a particular one: the exact `emailAddress` of a
+   * connected inbox (`ListInboxes` lists them, and `GetThread` reports the
+   * `inbox` a thread belongs to), or a verified Gmail send-as alias of one,
+   * which then sends from that inbox under the alias's display name. Omit
+   * it unless you know which address is right: a reply then goes out from
+   * the inbox that received the message it answers, and a new email from
+   * the user's primary inbox. The user can change it in the composer
+   * either way.
    */
   from?: string | null;
   /**
@@ -15557,13 +15559,15 @@ export interface SendEmail {
    */
   subject: string;
   /**
-   * The address of the inbox to send from, when the user has more than one
-   * connected and this email belongs to a particular one. Use the exact
-   * `emailAddress` of a connected inbox — `ListInboxes` lists them, and
-   * `GetThread` reports the `inbox` a thread belongs to. Omit it unless
-   * you know which inbox is right: a reply then goes out from the inbox
-   * that received the message it answers, and a new email from the user's
-   * primary inbox. The user can change it in the composer either way.
+   * The address to send from, when the user has more than one and this
+   * email belongs to a particular one: the exact `emailAddress` of a
+   * connected inbox (`ListInboxes` lists them, and `GetThread` reports the
+   * `inbox` a thread belongs to), or a verified Gmail send-as alias of one,
+   * which then sends from that inbox under the alias's display name. Omit
+   * it unless you know which address is right: a reply then goes out from
+   * the inbox that received the message it answers, and a new email from
+   * the user's primary inbox. The user can change it in the composer
+   * either way.
    */
   from?: string | null;
   /**

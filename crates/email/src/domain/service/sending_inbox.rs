@@ -110,14 +110,18 @@ where
                     continue;
                 }
             };
-            let Some(sender) = senders
-                .into_iter()
-                .find(|sender| sender.email_address.0.as_ref().eq_ignore_ascii_case(address))
-            else {
+            let Some(sender) = senders.into_iter().find(|sender| {
+                sender
+                    .email_address
+                    .0
+                    .as_ref()
+                    .eq_ignore_ascii_case(address)
+            }) else {
                 continue;
             };
             if sender.verified {
-                tracing::Span::current().record("matched_link_id", tracing::field::display(inbox.id));
+                tracing::Span::current()
+                    .record("matched_link_id", tracing::field::display(inbox.id));
                 return Ok((index, sender.email_address));
             }
             unverified_in.get_or_insert(inbox);

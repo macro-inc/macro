@@ -180,9 +180,7 @@ where
         .map_err(|error| match error {
             EmailErr::InboxNotFound
             | EmailErr::UnknownSendingInbox { .. }
-            | EmailErr::UnverifiedSendingAlias { .. } => {
-                EventForwardError::InboxUnavailable
-            }
+            | EmailErr::UnverifiedSendingAlias { .. } => EventForwardError::InboxUnavailable,
             other => EventForwardError::Email(other),
         })?;
 

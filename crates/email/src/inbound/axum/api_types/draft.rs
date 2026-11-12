@@ -150,7 +150,11 @@ impl ApiDraftInput {
     /// not an email address rather than dropped, so a typo never sends from
     /// the inbox's own address instead.
     pub(crate) fn sender_email(&self) -> Result<Option<EmailStr<'static>>, EmailErr> {
-        let Some(from) = self.from.as_deref().map(str::trim).filter(|from| !from.is_empty())
+        let Some(from) = self
+            .from
+            .as_deref()
+            .map(str::trim)
+            .filter(|from| !from.is_empty())
         else {
             return Ok(None);
         };

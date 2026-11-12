@@ -640,6 +640,7 @@ dependencies = [
  "futures",
  "github",
  "github_pull_requests",
+ "gmail_client",
  "granola_sync",
  "harness_id",
  "harnesses",
