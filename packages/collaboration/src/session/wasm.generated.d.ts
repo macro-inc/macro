@@ -159,6 +159,11 @@ export class EditorSession {
      */
     input(msg: Uint8Array, now: number, wall: number): number;
     /**
+     * Observe the main commit of one closed programmatic application input.
+     * Correlation is a canonical nonzero decimal u64, never a graph capability.
+     */
+    inputObserved(msg: Uint8Array, now: number, wall: number, entry_id: string): number;
+    /**
      * Key routing computed by the host view.
      */
     keyDown(code: number, mods: number, routed: number, key: string, anchor_key: number, anchor_offset: number, anchor_type: number, focus_key: number, focus_offset: number, focus_type: number, selection_kind: number, now: number): number;
@@ -179,6 +184,10 @@ export class EditorSession {
      * Bulk typed read queries; no per-node JavaScript callbacks.
      */
     query(msg: Uint8Array): Uint8Array;
+    /**
+     * Copy the exact completed receipt without advancing or consuming output.
+     */
+    readInputCommitReceipt(entry_id: string): InputCommitReceipt;
     /**
      * Register Enter at the named native priority, after existing equal listeners.
      */
@@ -285,6 +294,45 @@ export class EditorSession {
      * Earliest monotonic deadline, or -1.
      */
     wakeAt(): number;
+}
+
+/**
+ * Whether the exact observed main transaction reached a successful commit.
+ */
+export enum InputCommitKind {
+    /**
+     * No successful main transaction commit was observed for this entry.
+     */
+    NotPublished = 0,
+    /**
+     * The main transaction committed, independently of later failures.
+     */
+    Published = 1,
+}
+
+/**
+ * Owned primitive evidence. This retains no editor, output or native lease.
+ */
+export class InputCommitReceipt {
+    private constructor();
+    free(): void;
+    [Symbol.dispose](): void;
+    /**
+     * Actual main commit identity, absent when no main transaction committed.
+     */
+    readonly commitId: bigint | undefined;
+    /**
+     * The exact accepted session-local correlation identity.
+     */
+    readonly entryId: bigint;
+    /**
+     * Actual main command handling result, absent without a main commit.
+     */
+    readonly mainHandled: boolean | undefined;
+    /**
+     * Publication outcome of only the designated main transaction.
+     */
+    readonly mainKind: InputCommitKind;
 }
 
 /**
@@ -458,6 +506,7 @@ export interface InitOutput {
     readonly memory: WebAssembly.Memory;
     readonly __wbg_docsession_free: (a: number, b: number) => void;
     readonly __wbg_editorsession_free: (a: number, b: number) => void;
+    readonly __wbg_inputcommitreceipt_free: (a: number, b: number) => void;
     readonly __wbg_syncrouter_free: (a: number, b: number) => void;
     readonly __wbg_viewcommandfailure_free: (a: number, b: number) => void;
     readonly docsession_authorization: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
@@ -495,11 +544,13 @@ export interface InitOutput {
     readonly editorsession_host: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly editorsession_initialize: (a: number) => [number, number, number, number];
     readonly editorsession_input: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+    readonly editorsession_inputObserved: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number];
     readonly editorsession_keyDown: (a: number, b: number, c: number, d: number, e: any, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number) => [number, number, number];
     readonly editorsession_listenerTable: (a: number) => [number, number, number, number];
     readonly editorsession_markdown: (a: number, b: number) => [number, number, number, number];
     readonly editorsession_nodeText: (a: number, b: number) => [number, number];
     readonly editorsession_query: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly editorsession_readInputCommitReceipt: (a: number, b: number, c: number) => [number, number, number];
     readonly editorsession_registerViewEnter: (a: number, b: bigint, c: number) => [bigint, number, number];
     readonly editorsession_registerViewEscape: (a: number, b: bigint, c: number) => [bigint, number, number];
     readonly editorsession_retireViewObservation: (a: number) => void;
@@ -524,6 +575,10 @@ export interface InitOutput {
     readonly editorsession_viewCommandEnter: (a: number, b: number, c: number) => [number, number, number];
     readonly editorsession_viewCommandEscape: (a: number, b: number, c: number) => [number, number, number];
     readonly editorsession_viewCommandOwner: (a: number) => [bigint, number, number];
+    readonly inputcommitreceipt_commitId: (a: number) => [number, bigint];
+    readonly inputcommitreceipt_entryId: (a: number) => bigint;
+    readonly inputcommitreceipt_mainHandled: (a: number) => number;
+    readonly inputcommitreceipt_mainKind: (a: number) => number;
     readonly installViewCommandHost: (a: any, b: any) => [number, number];
     readonly prepareMacroPaste: () => [number, number];
     readonly requestRetireViewObservation: (a: bigint, b: bigint, c: bigint) => [number, number];
