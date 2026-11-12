@@ -30,25 +30,29 @@ function sourceStyles(): (string | null)[] {
   editor.setRootElement(root);
   let key = '';
   const seen: (string | null)[] = [];
-  STEPS.forEach((style, index) => {
-    editor.update(
-      () => {
-        if (index === 0) {
-          const code = $createCodeNode('plaintext');
-          code.setStyle(style);
-          $getRoot().append(code);
-          key = code.getKey();
-        } else {
-          $getRoot().getFirstChildOrThrow<CodeNode>().setStyle(style);
-        }
-      },
-      { discrete: true }
-    );
-    const dom = editor.getElementByKey(key);
-    if (!dom) throw new Error('Missing Source code element');
-    if (index === 0) dom.style.setProperty(FOREIGN, 'dashed');
-    seen.push(dom.getAttribute('style'));
-  });
+  try {
+    STEPS.forEach((style, index) => {
+      editor.update(
+        () => {
+          if (index === 0) {
+            const code = $createCodeNode('plaintext');
+            code.setStyle(style);
+            $getRoot().append(code);
+            key = code.getKey();
+          } else {
+            $getRoot().getFirstChildOrThrow<CodeNode>().setStyle(style);
+          }
+        },
+        { discrete: true }
+      );
+      const dom = editor.getElementByKey(key);
+      if (!dom) throw new Error('Missing Source code element');
+      if (index === 0) dom.style.setProperty(FOREIGN, 'dashed');
+      seen.push(dom.getAttribute('style'));
+    });
+  } finally {
+    editor.setRootElement(null);
+  }
   return seen;
 }
 
