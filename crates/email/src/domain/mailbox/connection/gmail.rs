@@ -133,8 +133,8 @@ where
                     backfill_job_id: None,
                 });
             }
-            if existing_owner.is_none()
-                && let Some(existing_link) = service
+            let existing_link =
+                service
                     .links
                     .link_for_email(&linked_email)
                     .await
@@ -143,9 +143,21 @@ where
                             error,
                             "Failed to look up existing link for shared-mailbox dedup",
                         )
-                    })?
-                && existing_link.macro_id.as_ref() != request.actor_id.as_str()
-            {
+                    })?;
+            if let Some(existing_link) = existing_link {
+                // A mailbox has one Google grant, held by whichever FusionAuth user its
+                // identity is linked to. Only a mailbox no Macro account owns can become
+                // a shared inbox; any other existing inbox keeps that grant, so a second
+                // inbox could never sync. The other account is never named.
+                if existing_owner.is_some()
+                    || existing_link.macro_id.as_ref() == request.actor_id.as_str()
+                {
+                    tracing::info!(
+                        existing_link_id = %existing_link.id,
+                        "gmail mailbox is already an inbox in another account"
+                    );
+                    return Err(ConnectionError::MailboxConnectedElsewhere);
+                }
                 if !request.force_share {
                     return Err(ConnectionError::SharedInboxConflict {
                         email_address: linked_email.clone(),

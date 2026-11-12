@@ -58,6 +58,9 @@ enum InitErrorKind {
     #[error("Invalid input")]
     Parse(#[from] macro_user_id::error::ParseErr),
 
+    #[error("Mailbox is already connected as an inbox in another account")]
+    MailboxConnectedElsewhere,
+
     #[error("Inbox is already connected by another user")]
     SharedInboxConflict {
         email_address: String,
@@ -71,6 +74,11 @@ pub const ALREADY_INITIALIZED_CODE: &str = "ALREADY_INITIALIZED";
 
 /// Stable machine-readable code for [`ConnectionError::NoGmailGrant`].
 pub const NO_GMAIL_GRANT_CODE: &str = "NO_GMAIL_GRANT";
+
+/// Stable machine-readable code for [`ConnectionError::MailboxConnectedElsewhere`].
+/// The client tells the user to remove the inbox there first; the other account is
+/// never named.
+pub const MAILBOX_CONNECTED_ELSEWHERE_CODE: &str = "MAILBOX_CONNECTED_ELSEWHERE";
 
 /// Structured 400 body carrying a machine-readable code. Clients branch on
 /// `code` instead of parsing the human message.
@@ -100,6 +108,7 @@ fn connection_error_status(error: &ConnectionError) -> StatusCode {
         | ConnectionError::AttemptOwnerMismatch
         | ConnectionError::AttemptAuthenticationIncomplete
         | ConnectionError::LoginEmailUnavailable
+        | ConnectionError::MailboxConnectedElsewhere
         | ConnectionError::Parse(_) => StatusCode::BAD_REQUEST,
         ConnectionError::ProviderError(EmailApiError::RateLimited { .. }) => {
             StatusCode::TOO_MANY_REQUESTS
@@ -171,6 +180,14 @@ impl IntoResponse for InitError {
                 Json(InitErrorCodeResponse {
                     code: NO_GMAIL_GRANT_CODE.to_string(),
                     message: InitErrorKind::NoGmailGrant.to_string(),
+                }),
+            )
+                .into_response(),
+            InitErrorKind::MailboxConnectedElsewhere => (
+                status_code,
+                Json(InitErrorCodeResponse {
+                    code: MAILBOX_CONNECTED_ELSEWHERE_CODE.to_string(),
+                    message: InitErrorKind::MailboxConnectedElsewhere.to_string(),
                 }),
             )
                 .into_response(),
@@ -299,6 +316,7 @@ impl From<ConnectionError> for InitError {
                 InitErrorKind::BadRequest("Failed to extract email".into())
             }
             ConnectionError::Parse(error) => InitErrorKind::Parse(error),
+            ConnectionError::MailboxConnectedElsewhere => InitErrorKind::MailboxConnectedElsewhere,
             ConnectionError::SharedInboxConflict {
                 email_address,
                 existing_owner_email,

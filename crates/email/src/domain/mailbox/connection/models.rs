@@ -46,6 +46,10 @@ pub enum ConnectionError {
     LoginEmailUnavailable,
     #[error("Invalid input")]
     Parse(#[from] macro_user_id::error::ParseErr),
+    /// The mailbox is already an inbox under another account (or another
+    /// FusionAuth user of this one), which holds its Google grant.
+    #[error("Mailbox is already connected as an inbox in another account")]
+    MailboxConnectedElsewhere,
     #[error("Inbox is already connected by another user")]
     SharedInboxConflict {
         email_address: String,

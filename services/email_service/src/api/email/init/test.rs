@@ -87,6 +87,14 @@ async fn no_gmail_grant_is_a_coded_400() {
 }
 
 #[tokio::test]
+async fn mailbox_connected_elsewhere_is_a_coded_400() {
+    let response = InitError::from(ConnectionError::MailboxConnectedElsewhere).into_response();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let body = body_json(response).await;
+    assert_eq!(body["code"], MAILBOX_CONNECTED_ELSEWHERE_CODE);
+}
+
+#[tokio::test]
 async fn already_initialized_is_a_coded_400() {
     let response = InitError::from(ConnectionError::AlreadyInitialized).into_response();
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
@@ -165,6 +173,7 @@ fn only_shared_inbox_conflict_keeps_the_in_progress_link() {
     for err in [
         InitError::AlreadyInitialized,
         InitError::NoGmailGrant,
+        InitError::MailboxConnectedElsewhere,
         InitError::EnqueueError,
         InitError::InvalidUserIdentity,
         InitError::ProviderError(EmailApiError::AuthRequired),

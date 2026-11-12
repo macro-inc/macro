@@ -227,6 +227,51 @@ async fn shared_conflict_keeps_the_attempt_for_confirmation() {
     );
 }
 
+/// The mailbox has its own account, but an older inbox for it in another account holds
+/// its Google grant, so the replaced grant never reached the caller. Provisioning a second
+/// inbox would fail at the provider; init refuses before calling it.
+#[tokio::test]
+async fn own_mailbox_held_as_an_inbox_in_another_account_is_connected_elsewhere() {
+    let (service, fake) = service(Data {
+        owner: Some("macro|actor@example.com".into()),
+        by_email: Some(link("macro|other@example.com")),
+        ..Data::default()
+    });
+    assert!(matches!(
+        service.connect(request(true)).await,
+        Err(ConnectionError::MailboxConnectedElsewhere)
+    ));
+    assert_eq!(
+        fake.0.lock().unwrap().calls,
+        [
+            "recognizes",
+            "attempt",
+            "account",
+            "by_grant",
+            "by_email",
+            "failure",
+            "cleanup"
+        ]
+    );
+}
+
+#[tokio::test]
+async fn inbox_under_another_fusionauth_user_of_the_same_account_is_connected_elsewhere() {
+    // The fake grant lookup ignores its arguments; leaving `by_grant` empty is what
+    // models the caller's FusionAuth user not holding this inbox.
+    let mut held = link("macro|actor@example.com");
+    held.fusionauth_user_id = Uuid::from_u128(6).to_string();
+    let (service, fake) = service(Data {
+        by_email: Some(held),
+        ..Data::default()
+    });
+    assert!(matches!(
+        service.connect(request(true)).await,
+        Err(ConnectionError::MailboxConnectedElsewhere)
+    ));
+    assert!(!fake.0.lock().unwrap().calls.contains(&"watch".into()));
+}
+
 #[tokio::test(start_paused = true)]
 async fn promotion_is_durable_before_relocation_and_survives_its_failure() {
     for failure in [None, Some("relocate")] {
