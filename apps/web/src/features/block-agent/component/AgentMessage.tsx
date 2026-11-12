@@ -199,10 +199,15 @@ function ToolGroupPart(props: {
     );
   // A call the log left running in a finished turn is over (see
   // `settledToolStatus`), so a settled turn's run is never "Using".
+  // Rows the group renders, so the window follows the right one.
+  const shownParts = () =>
+    parts()
+      .map((part, offset) => ({ part, index: props.start + offset }))
+      .filter(({ part }) => !isCodeModeSupportCall(part));
   const activeIndex = () =>
     props.inFlight
-      ? parts().findIndex(
-          (part) => part.kind === 'tool_use' && isToolActive(part.status)
+      ? shownParts().findIndex(
+          ({ part }) => part.kind === 'tool_use' && isToolActive(part.status)
         )
       : -1;
   const active = () => activeIndex() !== -1;
@@ -218,18 +223,21 @@ function ToolGroupPart(props: {
         .every((part) => part.kind === 'thought'));
   const summary = () => (current() ? activity() : undefined);
   const renderParts = () => (
-    <Index each={parts()}>
-      {(part, offset) => (
-        <Show when={!isCodeModeSupportCall(part())}>
-          <div class="min-h-8 shrink-0">
-            <AgentMessagePart
-              part={part()}
-              message={props.message}
-              index={props.start + offset}
-              inFlight={props.inFlight}
-            />
-          </div>
-        </Show>
+    <Index each={shownParts()}>
+      {(shown) => (
+        // A program's rows keep their own height; one with no steps yet
+        // takes none.
+        <div
+          class="shrink-0"
+          classList={{ 'min-h-8': !isCodeExecution(shown().part) }}
+        >
+          <AgentMessagePart
+            part={shown().part}
+            message={props.message}
+            index={shown().index}
+            inFlight={props.inFlight}
+          />
+        </div>
       )}
     </Index>
   );

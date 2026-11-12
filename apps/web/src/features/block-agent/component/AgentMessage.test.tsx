@@ -591,6 +591,23 @@ describe('Message tool runs', () => {
     expect(view.getByTestId('group').dataset.autoOpen).toBe('false');
   });
 
+  it('follows the running call among the rows shown, past hidden lookups', () => {
+    const view = render(() => (
+      <Message
+        message={message(
+          [
+            lookup('search', 'SearchTools'),
+            tool('a'),
+            tool('b', { status: 'running' }),
+          ],
+          null
+        )}
+        inFlight
+      />
+    ));
+    expect(view.getByTestId('group').dataset.activeIndex).toBe('1');
+  });
+
   it('lets a run of ordinary calls open as before', () => {
     const view = render(() => (
       <Message message={message([tool('a'), tool('b')], null)} inFlight />

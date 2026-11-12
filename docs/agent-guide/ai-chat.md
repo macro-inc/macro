@@ -1838,8 +1838,9 @@ drafts, and payloads that do not fit their renderer stay as summary rows with
 no caret. Tool arguments and results never fall back to raw JSON.
 
 Tool runs keep one group from their first call. Historical runs start collapsed;
-live calls get a 150 ms buffer, so fast parallel bursts can finish as **Called N
-tools** without flashing a list. Ongoing work opens a scrollable window of at
+live calls get a 150 ms buffer, so fast parallel bursts can finish as **Used N
+tools** without flashing a list. Ongoing work (except a run with an `ExecuteCode`
+program) opens a scrollable window of at
 most five compact rows. The window follows unfinished calls first, keeping slow
 work visible even when later calls finish, until you scroll or interact with it;
 scrolling back to the bottom resumes following. An automatically opened window
