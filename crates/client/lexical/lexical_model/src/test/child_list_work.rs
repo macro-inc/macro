@@ -433,7 +433,7 @@ mod foreign {
             let instance = ForeignInstance::new(
                 editor.foreign_instance_owner(),
                 1,
-                u32::try_from(index).expect("small seed"),
+                u32::try_from(index + 1).expect("small seed"),
             )?;
             state
                 .view()
