@@ -405,3 +405,18 @@ async fn an_event_on_a_calendar_the_listing_does_not_know_still_blocks_time() {
         1
     );
 }
+
+#[tokio::test]
+async fn a_copy_on_an_unknown_calendar_blocks_time_beside_a_turned_off_one() {
+    let mut meeting = listing(COWORKER);
+    meeting.event.sources.push(copy_on(Uuid::from_u128(0x99)));
+    assert_eq!(busy_with(false, meeting).await.len(), 1);
+}
+
+#[tokio::test]
+async fn a_snapshot_on_a_turned_off_calendar_frees_the_host() {
+    let mut snapshot = listing(COWORKER);
+    snapshot.event.is_snapshot = true;
+    snapshot.event.attendees = vec![host_row(AttendeeResponseStatus::Accepted, false)];
+    assert!(busy_with(false, snapshot).await.is_empty());
+}

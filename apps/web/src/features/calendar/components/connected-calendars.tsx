@@ -249,7 +249,9 @@ export function ConnectedCalendars(props: {
           Visibility and colors are saved in this browser. Busy is saved to your
           account: events on a Busy calendar block your booking links and your
           availability, shown or hidden. Turn Busy off for a calendar that isn't
-          your schedule, such as a coworker's you follow.
+          your schedule, such as a coworker's you follow. Meetings you're
+          invited to, or organize with guests, still count unless you decline
+          them.
         </p>
         <Show when={props.busyError}>
           <p role="alert" class="px-6 text-xs text-ink-muted">

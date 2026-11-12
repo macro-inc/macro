@@ -447,14 +447,24 @@ where
 }
 
 /// Whether an occurrence takes the host's time: a calendar holding it counts
-/// toward their availability (one such copy is enough, and a calendar the
-/// listing does not know counts), or they are in the meeting, as team
-/// availability reads it.
+/// toward their availability (one such copy is enough, and a copy on a
+/// calendar the listing does not know counts, as does an event naming no
+/// calendar), or they are in the meeting, as team availability reads it.
 fn occupies_host(labels: &CalendarLabels, event: &CalendarEvent) -> bool {
-    labels.event_on_schedule(event) != Some(false)
-        || attends_meeting(&event.attendees, event.is_read_only, |attendee| {
-            attendee.is_self
-        })
+    let mut calendars = event
+        .calendar_id
+        .into_iter()
+        .chain(event.sources.iter().map(|copy| copy.calendar_id))
+        .peekable();
+    let counted = calendars.peek().is_none()
+        || calendars.any(|id| labels.counts_toward_availability(id) != Some(false));
+    counted
+        || attends_meeting(
+            &event.attendees,
+            event.is_read_only,
+            event.is_snapshot,
+            |attendee| attendee.is_self,
+        )
 }
 
 fn carries_url(location: Option<&str>, description: Option<&str>, url: &str) -> bool {

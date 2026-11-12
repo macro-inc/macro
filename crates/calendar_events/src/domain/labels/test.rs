@@ -243,20 +243,28 @@ fn a_meeting_is_one_the_user_is_invited_to_or_organizes_with_guests() {
         row(INBOX, false, AttendeeResponseStatus::Declined),
     ];
 
-    assert!(attends_meeting(&invited, false, own));
-    assert!(attends_meeting(&invited, true, own), "a guest row is real");
-    assert!(attends_meeting(&organized, false, own));
+    assert!(attends_meeting(&invited, false, false, own));
     assert!(
-        !attends_meeting(&organized, true, own),
+        attends_meeting(&invited, true, false, own),
+        "a guest row is real"
+    );
+    assert!(attends_meeting(&organized, false, false, own));
+    assert!(
+        !attends_meeting(&organized, true, false, own),
         "Graph names the mailbox organizer on a read-only calendar"
     );
     assert!(
-        !attends_meeting(&solo, false, own),
+        !attends_meeting(&solo, false, false, own),
         "an entry with no one else on it is no meeting"
     );
-    assert!(!attends_meeting(&declined, false, own));
+    assert!(!attends_meeting(&declined, false, false, own));
+    assert!(
+        !attends_meeting(&invited, false, true, own),
+        "a snapshot's guest row is the calendar it was added to"
+    );
     assert!(!attends_meeting(
         &[row(COLLEAGUE, true, accepted)],
+        false,
         false,
         own
     ));

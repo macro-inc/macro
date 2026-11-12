@@ -1,3 +1,4 @@
+import { useIsAuthenticated } from '@core/context/user';
 import { throwOnErr } from '@core/util/result';
 import type { AvailabilityCalendarsResponse } from '@service-calendar/generated/schemas/availabilityCalendarsResponse';
 import { emailClient } from '@service-email/client';
@@ -11,12 +12,15 @@ import {
   replaceCachedQuery,
 } from './setting-saves';
 
-function availabilityCalendarsQueryOptions(userId: string | undefined) {
+function availabilityCalendarsQueryOptions(
+  userId: string | undefined,
+  authenticated: boolean
+) {
   return queryOptions({
     queryKey: calendarKeys.availabilityCalendars(userId ?? '').queryKey,
     queryFn: ({ signal }) =>
       throwOnErr(() => emailClient.getAvailabilityCalendars(signal)),
-    enabled: Boolean(userId),
+    enabled: Boolean(userId) && authenticated,
     staleTime: 0,
     refetchOnWindowFocus: true,
   });
@@ -29,7 +33,10 @@ function availabilityCalendarsQueryOptions(userId: string | undefined) {
 export function useAvailabilityCalendarsQuery(
   userId: Accessor<string | undefined>
 ) {
-  return useQuery(() => availabilityCalendarsQueryOptions(userId()));
+  const authenticated = useIsAuthenticated();
+  return useQuery(() =>
+    availabilityCalendarsQueryOptions(userId(), authenticated() === true)
+  );
 }
 
 interface AvailabilityCalendarChange {

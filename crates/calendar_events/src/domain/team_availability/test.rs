@@ -280,6 +280,20 @@ fn subscriptions_do_not_block_owner_but_owned_attendance_does() {
 }
 
 #[test]
+fn a_snapshot_on_an_excluded_calendar_does_not_block() {
+    let mut snapshot = source(
+        "a",
+        "snapshot",
+        timed("2026-10-07T09:00:00Z", "2026-10-07T10:00:00Z"),
+    );
+    snapshot.contributes_to_availability = false;
+    snapshot.event.is_snapshot = true;
+    snapshot.event.attendees = vec![attendee("a@example.com", AttendeeResponseStatus::Accepted)];
+    let result = calculate(window(), inputs(vec![member("a")], vec![snapshot]));
+    assert!(result.members[0].busy.is_empty());
+}
+
+#[test]
 fn an_excluded_calendar_blocks_only_the_meetings_the_owner_is_in() {
     let mut shared = source(
         "a",

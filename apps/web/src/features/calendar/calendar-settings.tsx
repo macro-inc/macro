@@ -38,12 +38,10 @@ function CalendarSettingsContent() {
   const countsAsBusy = createMemo(
     () =>
       new Map(
-        (availability.isSuccess ? availability.data.calendars : []).map(
-          (calendar) => [
-            calendar.calendarId,
-            calendar.contributesToAvailability,
-          ]
-        )
+        (availability.data?.calendars ?? []).map((calendar) => [
+          calendar.calendarId,
+          calendar.contributesToAvailability,
+        ])
       )
   );
   const [connecting, setConnecting] = createSignal(false);
@@ -162,7 +160,7 @@ function CalendarSettingsContent() {
             }
           );
         }}
-        busyError={availability.isError}
+        busyError={availability.isError && availability.data === undefined}
         onBusyRetry={() =>
           fireAndForget(availability.refetch(), 'calendar-settings')
         }

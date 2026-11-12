@@ -169,7 +169,12 @@ impl TeamSourceOccurrence {
             return false;
         }
         self.contributes_to_availability
-            || attends_meeting(self.attendees(), self.event.is_read_only, is_owned)
+            || attends_meeting(
+                self.attendees(),
+                self.event.is_read_only,
+                self.event.is_snapshot,
+                is_owned,
+            )
     }
 }
 
