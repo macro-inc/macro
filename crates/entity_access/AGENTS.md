@@ -63,6 +63,12 @@ the entity-access domain service.
   checked access at the right level; domain code downstream (e.g.
   `entity_mutation`) takes a receipt, not a raw boolean/level.
 
+- Spans here never record a user id (a `MacroUserId` is an email): skip it.
+  Checks record how many source ids they bound as `source_id_count`, through
+  `user_source_ids` in the Postgres adapter and `domain::telemetry`; a caller
+  wraps its checks in `observe_source_ids` to record the count on its own span,
+  as `initiative.read` does. A new check that fetches source ids goes through
+  `user_source_ids` so its span gets the count.
 - `ExternalChat` resolves ordinary entity-access/link/team grants through `external_chat_access_level`; its extractor reads `chat_id`.
 
 ## Related

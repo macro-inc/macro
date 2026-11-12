@@ -77,3 +77,4 @@ rootcause = { workspace = true }
 sqlx = { workspace = true, features = ["postgres", "runtime-tokio-rustls"] }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tower = { workspace = true }
+tracing-subscriber = { workspace = true }

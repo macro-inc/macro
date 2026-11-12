@@ -53,7 +53,7 @@ pub struct SourceIds(pub Vec<String>);
 
 /// Grabs the users source ids for the entity access table
 /// NOTE: This could return an empty list in the event the user is not logged in and attempting to review a resource
-#[tracing::instrument(skip(pool), err)]
+#[tracing::instrument(skip(pool, user_id), err)]
 #[cfg_attr(
     not(test),
     cached(
