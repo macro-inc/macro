@@ -68,7 +68,7 @@ use super::model::{
     MAX_AGENT_SESSION_NAME_CHARS, MAX_PREVIEW_SESSION_IDS, Message, MessageId, ReplicaId,
     SandboxSize, SessionClaim, SessionLog, SessionManagement, SessionPreviewCandidate,
     SessionRelease, StoredAgentSessionLog, StoredQueuedAction, ThreadSession,
-    cursor_run_checkpoint,
+    cursor_run_checkpoint, session_owner_user,
 };
 use super::model::{SessionBot, SessionSource, SessionVisibility, TurnPrompter};
 use super::ports::{
@@ -497,12 +497,12 @@ pub trait AgentSessionService: Send + Sync + 'static {
 struct UnrestrictedAgentSessions;
 
 impl enterprise::domain::AgentSessionAdmission for UnrestrictedAgentSessions {
-    async fn ensure_allowed(
-        &self,
+    fn ensure_allowed<'a>(
+        &'a self,
         _user: MacroUserIdStr<'static>,
-        _preset_id: &str,
-    ) -> enterprise::domain::Result<()> {
-        Ok(())
+        _preset_id: &'a str,
+    ) -> enterprise::domain::EnterpriseFuture<'a, ()> {
+        Box::pin(async { Ok(()) })
     }
 }
 

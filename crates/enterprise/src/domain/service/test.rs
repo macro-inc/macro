@@ -10,6 +10,7 @@ const TEAM_ID: Uuid = Uuid::from_u128(0x1234);
 struct State {
     disabled: bool,
     allowlist: Option<RuntimePresetAllowlist>,
+    allowlist_team: Option<Uuid>,
     commits: Vec<(bool, AuditResult)>,
     bindings: Vec<VerifiedRoxIdentity>,
 }
@@ -46,15 +47,21 @@ impl EnterpriseRepository for FakeRepo {
 
     async fn set_runtime_allowlist(
         &self,
-        _team_id: Uuid,
+        team_id: Uuid,
         allowlist: Option<&RuntimePresetAllowlist>,
     ) -> Result<()> {
-        self.0.lock().unwrap().allowlist = allowlist.cloned();
+        let mut state = self.0.lock().unwrap();
+        state.allowlist = allowlist.cloned();
+        state.allowlist_team = Some(team_id);
         Ok(())
     }
 
-    async fn runtime_allowlist(&self, _team_id: Uuid) -> Result<Option<RuntimePresetAllowlist>> {
-        Ok(self.0.lock().unwrap().allowlist.clone())
+    async fn runtime_allowlist(&self, team_id: Uuid) -> Result<Option<RuntimePresetAllowlist>> {
+        let state = self.0.lock().unwrap();
+        if state.allowlist_team.is_some() && state.allowlist_team != Some(team_id) {
+            return Ok(None);
+        }
+        Ok(state.allowlist.clone())
     }
 
     async fn record(&self, _record: AuditRecord) -> Result<()> {
@@ -212,6 +219,75 @@ async fn disable_uses_soft_lifecycle_and_reports_gaps_without_reading_billing_fl
 }
 
 #[tokio::test]
+async fn non_member_is_refused_before_lifecycle_or_audit_writes() {
+    let repository = FakeRepo::default();
+    let lifecycle = FakeLifecycle::default();
+    let service = EnterpriseService::new(
+        repository.clone(),
+        FakeTeams(vec![Uuid::from_u128(0x9999)]),
+        lifecycle.clone(),
+        FakeMembers,
+        FakeHarnesses,
+    );
+
+    assert!(matches!(
+        service
+            .disable_member(receipt(), user("member@example.com"))
+            .await,
+        Err(EnterpriseError::NotTeamMember)
+    ));
+    assert!(lifecycle.0.lock().unwrap().is_empty());
+    assert!(repository.0.lock().unwrap().commits.is_empty());
+}
+
+#[derive(Clone)]
+struct FailingHarnesses;
+
+impl HarnessRevoker for FailingHarnesses {
+    async fn revoke_server_records(&self, _member: &MacroUserIdStr<'_>) -> Result<usize> {
+        Err(EnterpriseError::Storage(anyhow::anyhow!(
+            "injected harness revocation failure"
+        )))
+    }
+}
+
+#[tokio::test]
+async fn harness_revocation_failure_still_blocks_new_member_work() {
+    let repository = FakeRepo::default();
+    let lifecycle = FakeLifecycle::default();
+    let service = EnterpriseService::new(
+        repository.clone(),
+        FakeTeams(vec![TEAM_ID]),
+        lifecycle.clone(),
+        FakeMembers,
+        FailingHarnesses,
+    );
+
+    assert!(
+        service
+            .disable_member(receipt(), user("member@example.com"))
+            .await
+            .is_err()
+    );
+
+    assert_eq!(
+        lifecycle.0.lock().unwrap().as_slice(),
+        ["deactivate:fusion-member"]
+    );
+    assert!(repository.0.lock().unwrap().disabled);
+    assert_eq!(
+        repository.0.lock().unwrap().commits,
+        [(true, AuditResult::MailSuspendGap)]
+    );
+    assert!(matches!(
+        RuntimePolicy::new(repository, FakeTeams(Vec::new()))
+            .ensure_allowed(user("member@example.com"), "opencode")
+            .await,
+        Err(EnterpriseError::MemberDisabled)
+    ));
+}
+
+#[tokio::test]
 async fn disabled_member_is_refused_email_init_and_agent_session_start() {
     let repository = FakeRepo::default();
     repository.0.lock().unwrap().disabled = true;
@@ -258,6 +334,27 @@ async fn present_allowlist_is_exhaustive() {
     assert!(matches!(
         policy
             .ensure_allowed(user("member@example.com"), "codex")
+            .await,
+        Err(EnterpriseError::RuntimePresetDenied)
+    ));
+}
+
+#[tokio::test]
+async fn allowlist_on_any_team_is_enforced_not_only_the_first_membership() {
+    let restricted_team = Uuid::from_u128(0x5678);
+    let repository = FakeRepo::default();
+    {
+        let mut state = repository.0.lock().unwrap();
+        state.allowlist = Some(RuntimePresetAllowlist {
+            preset_ids: vec![RuntimePreset::Opencode],
+        });
+        state.allowlist_team = Some(restricted_team);
+    }
+    let policy = RuntimePolicy::new(repository, FakeTeams(vec![TEAM_ID, restricted_team]));
+
+    assert!(matches!(
+        policy
+            .ensure_allowed(user("member@example.com"), "codex-cloud")
             .await,
         Err(EnterpriseError::RuntimePresetDenied)
     ));

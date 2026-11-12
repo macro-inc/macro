@@ -4,6 +4,9 @@ use entity_access::domain::models::{AdminTeamRole, EntityAccessReceipt};
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
+/// Boxed enterprise use-case result used by object-erased admission ports.
+pub type EnterpriseFuture<'a, T> = std::pin::Pin<Box<dyn Future<Output = Result<T>> + Send + 'a>>;
+
 /// Verified identity exchange. Production has no broker implementation and returns a typed gap.
 pub trait IdentityBroker: Clone + Send + Sync + 'static {
     /// Exchange broker-owned proof for verified identity facts.
@@ -89,17 +92,17 @@ pub trait HarnessRevoker: Clone + Send + Sync + 'static {
 /// Agent-session admission supplied to the session domain.
 pub trait AgentSessionAdmission: Send + Sync + 'static {
     /// Refuse disabled members and presets outside an exhaustive team list.
-    fn ensure_allowed(
-        &self,
+    fn ensure_allowed<'a>(
+        &'a self,
         user: MacroUserIdStr<'static>,
-        preset_id: &str,
-    ) -> impl Future<Output = Result<()>> + Send;
+        preset_id: &'a str,
+    ) -> EnterpriseFuture<'a, ()>;
 }
 
 /// Email initialization's member-active gate.
 pub trait MemberAccess: Send + Sync + 'static {
     /// Fail with [`super::EnterpriseError::MemberDisabled`] after an admin disable.
-    fn ensure_active(&self, user: &MacroUserIdStr<'_>) -> impl Future<Output = Result<()>> + Send;
+    fn ensure_active<'a>(&'a self, user: &'a MacroUserIdStr<'_>) -> EnterpriseFuture<'a, ()>;
 }
 
 /// Team-admin use cases consumed by the HTTP adapter.

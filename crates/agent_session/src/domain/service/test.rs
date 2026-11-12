@@ -62,12 +62,12 @@ fn fixture() -> Fixture {
 struct DisabledMember;
 
 impl enterprise::domain::AgentSessionAdmission for DisabledMember {
-    async fn ensure_allowed(
-        &self,
+    fn ensure_allowed<'a>(
+        &'a self,
         _user: MacroUserIdStr<'static>,
-        _preset_id: &str,
-    ) -> enterprise::domain::Result<()> {
-        Err(enterprise::domain::EnterpriseError::MemberDisabled)
+        _preset_id: &'a str,
+    ) -> enterprise::domain::EnterpriseFuture<'a, ()> {
+        Box::pin(async { Err(enterprise::domain::EnterpriseError::MemberDisabled) })
     }
 }
 
