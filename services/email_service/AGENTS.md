@@ -51,6 +51,18 @@ the gateway `/email` prefix.
   implements the cleanup capabilities without owning deletion policy.
   Both workers reuse the domain's catalog, contact, notification and pending-label
   rules; their adapters retain the existing atomic writes and savepoints.
+  SFS deletion composes `email::domain::attachment_cleanup::sfs_deletion` with
+  `outbound/sfs_deletion.rs`; its listener only decodes and acknowledges the
+  domain disposition. The domain deletes the file before its database row and
+  accepts a file-service 404 as an already completed file deletion.
+  SFS uploads compose `email::domain::mailbox::contacts::sfs_upload` with
+  `outbound/sfs_upload.rs`; mapping fallback, best-effort writes, and self-contact
+  refresh decisions live in the domain. Adapters reuse the existing image
+  fetch/upload and gateway helpers with their original spans and failures.
+  CRM cleanup composes `email::domain::crm_cleanup` with `outbound/crm_cleanup.rs`;
+  the domain owns job state, pruning, dispatch, teardown guards and retry policy.
+  Adapters retain the existing SQL and CRM teardown transactions, queue envelope,
+  and UTC reads at the same two decision sites.
 - `src/backfill_outbox.rs`: cancellation-aware polling facade for the domain's
   durable backfill publication. `outbound/backfill_jobs/outbox.rs` keeps each
   row lock through the queue send and commits the publication marker afterwards.
