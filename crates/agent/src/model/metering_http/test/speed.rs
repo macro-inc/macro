@@ -228,13 +228,19 @@ fn model_call_span_records_the_tier_and_effort_sent() {
     let _guard = tracing::subscriber::set_default(tracing_subscriber::registry().with(layer));
     tracing::callsite::rebuild_interest_cache();
 
-    for body in [
-        json!({"model":"gpt-6.1-sol","service_tier":"priority","reasoning":{"effort":"xhigh"}}),
-        json!({"model":"claude-opus-5-5","speed":"fast","output_config":{"effort":"low"}}),
-        json!({"model":"gpt-5.5"}),
+    for (protocol, body) in [
+        (
+            WireProtocol::Responses,
+            json!({"model":"gpt-6.1-sol","service_tier":"priority","reasoning":{"effort":"xhigh"}}),
+        ),
+        (
+            WireProtocol::Anthropic,
+            json!({"model":"claude-opus-5-5","speed":"fast","service_tier":"auto","output_config":{"effort":"low"}}),
+        ),
+        (WireProtocol::Responses, json!({"model":"gpt-5.5"})),
     ] {
         let span = tracing::info_span!("chat_streaming");
-        record_request_settings(&span, &body);
+        record_request_settings(&span, protocol, &body);
     }
 
     provider.force_flush().unwrap();

@@ -44,8 +44,16 @@ pub struct MeteredHttpClient<H = http_client::ReqwestClient> {
 
 /// Puts the tier and effort the provider actually receives on the model-call
 /// span (Rig's), so a trace shows what a session's settings turned into.
-fn record_request_settings(span: &tracing::Span, body: &Value) {
-    if let Some(tier) = body.get("service_tier").and_then(Value::as_str) {
+fn record_request_settings(span: &tracing::Span, protocol: WireProtocol, body: &Value) {
+    let openai = matches!(
+        protocol,
+        WireProtocol::Responses | WireProtocol::ChatCompletions
+    );
+    if let Some(tier) = body
+        .get("service_tier")
+        .and_then(Value::as_str)
+        .filter(|_| openai)
+    {
         span.set_str(attr::OPENAI_REQUEST_SERVICE_TIER, tier);
     }
     if let Some(speed) = body.get("speed").and_then(Value::as_str) {
@@ -110,7 +118,7 @@ impl<H> MeteredHttpClient<H> {
     ) -> http_client::Result<(Request<Bytes>, Option<Attempt>)> {
         let sent = serde_json::from_slice::<Value>(request.body()).ok();
         if let Some(body) = &sent {
-            record_request_settings(&tracing::Span::current(), body);
+            record_request_settings(&tracing::Span::current(), self.protocol, body);
         }
         if self.protocol == WireProtocol::Anthropic
             && sent
@@ -141,8 +149,7 @@ impl<H> MeteredHttpClient<H> {
             return Ok((request, None));
         };
         let parsed = (|| {
-            let body: Value =
-                serde_json::from_slice(request.body()).map_err(|_| MeteringError::Unsupported)?;
+            let body = sent.ok_or(MeteringError::Unsupported)?;
             let model = if self.protocol == WireProtocol::Gemini {
                 request
                     .uri()
