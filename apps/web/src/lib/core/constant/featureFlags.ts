@@ -172,6 +172,16 @@ export const enableCanvasArtifacts = defineFlag({
   default: onInDev,
 });
 
+/**
+ * Agents open items for the person who prompted them, in the tab they typed
+ * in (`macro.ui.open`). The harness reads the same PostHog key.
+ */
+export const enableAgentNavigation = defineFlag({
+  key: 'enable-agent-navigation',
+  env: 'ENABLE_AGENT_NAVIGATION',
+  default: onInDev,
+});
+
 /** Browser-style tabs in the macOS desktop title bar; each tab holds a split layout. */
 export const enableDesktopTabs = defineFlag({
   key: 'enable-desktop-tabs',

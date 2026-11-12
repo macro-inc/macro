@@ -9,7 +9,13 @@ const PROJECT_KEY: &str = "test-project-key";
 const TIMEOUT: Duration = Duration::from_secs(2);
 
 fn loader(server: &MockServer) -> PostHogFeatureFlags {
-    PostHogFeatureFlags::new(&server.uri(), PROJECT_KEY.into(), TIMEOUT).unwrap()
+    PostHogFeatureFlags::new(
+        &server.uri(),
+        PROJECT_KEY.into(),
+        TIMEOUT,
+        Environment::Production,
+    )
+    .unwrap()
 }
 
 fn user() -> MacroUserIdStr<'static> {
@@ -31,6 +37,7 @@ async fn loads_once_per_user_and_reads_a_stable_snapshot() {
         .and(body_partial_json(json!({
             "api_key": PROJECT_KEY, "distinct_id": alice.as_ref(),
             "evaluation_runtime": "server", "geoip_disable": true,
+            "person_properties": {"environment": "prod"},
         })))
         .respond_with(ResponseTemplate::new(200).set_body_json(healthy(json!({
             "code": {"key": "code", "enabled": true},
@@ -62,6 +69,48 @@ async fn loads_once_per_user_and_reads_a_stable_snapshot() {
         assert_eq!(snapshot.get("missing"), None);
     }
     assert_eq!(server.received_requests().await.unwrap().len(), 2);
+}
+
+#[tokio::test]
+async fn a_dev_only_flag_stays_off_in_prod_for_the_same_user() {
+    let server = MockServer::start().await;
+    // PostHog's side: the flag targets `environment = dev`.
+    Mock::given(body_partial_json(
+        json!({"person_properties": {"environment": "dev"}}),
+    ))
+    .respond_with(ResponseTemplate::new(200).set_body_json(healthy(json!({
+        "dev-only": {"key": "dev-only", "enabled": true}
+    }))))
+    .with_priority(1)
+    .mount(&server)
+    .await;
+    Mock::given(method("POST"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(healthy(json!({
+            "dev-only": {"key": "dev-only", "enabled": false}
+        }))))
+        .mount(&server)
+        .await;
+
+    let in_environment = |environment| {
+        PostHogFeatureFlags::new(&server.uri(), PROJECT_KEY.into(), TIMEOUT, environment).unwrap()
+    };
+    let prod = in_environment(Environment::Production)
+        .load(&user())
+        .await
+        .unwrap();
+    let dev = in_environment(Environment::Develop)
+        .load(&user())
+        .await
+        .unwrap();
+    assert!(!prod.is_enabled("dev-only"));
+    assert!(dev.is_enabled("dev-only"));
+}
+
+#[test]
+fn environment_values_are_the_targeting_contract() {
+    assert_eq!(environment_value(Environment::Production), "prod");
+    assert_eq!(environment_value(Environment::Develop), "dev");
+    assert_eq!(environment_value(Environment::Local), "local");
 }
 
 #[tokio::test]
@@ -174,9 +223,13 @@ async fn total_timeout_returns_error() {
         .expect(1)
         .mount(&server)
         .await;
-    let provider =
-        PostHogFeatureFlags::new(&server.uri(), PROJECT_KEY.into(), Duration::from_millis(50))
-            .unwrap();
+    let provider = PostHogFeatureFlags::new(
+        &server.uri(),
+        PROJECT_KEY.into(),
+        Duration::from_millis(50),
+        Environment::Production,
+    )
+    .unwrap();
     let result = tokio::time::timeout(Duration::from_secs(1), provider.load(&user())).await;
     assert!(result.expect("load must honor its own deadline").is_err());
 }
@@ -184,7 +237,15 @@ async fn total_timeout_returns_error() {
 #[test]
 fn invalid_or_disabled_configuration_fails_at_construction() {
     for key in ["", " ", " key", "key "] {
-        assert!(PostHogFeatureFlags::new("https://us.i.posthog.com", key.into(), TIMEOUT).is_err());
+        assert!(
+            PostHogFeatureFlags::new(
+                "https://us.i.posthog.com",
+                key.into(),
+                TIMEOUT,
+                Environment::Production
+            )
+            .is_err()
+        );
     }
     for host in [
         "not a url",
@@ -194,13 +255,17 @@ fn invalid_or_disabled_configuration_fails_at_construction() {
         "https://posthog.com/?key=secret",
         "https://posthog.com/#fragment",
     ] {
-        assert!(PostHogFeatureFlags::new(host, PROJECT_KEY.into(), TIMEOUT).is_err());
+        assert!(
+            PostHogFeatureFlags::new(host, PROJECT_KEY.into(), TIMEOUT, Environment::Production)
+                .is_err()
+        );
     }
     assert!(
         PostHogFeatureFlags::new(
             "https://us.i.posthog.com",
             PROJECT_KEY.into(),
-            Duration::ZERO
+            Duration::ZERO,
+            Environment::Production,
         )
         .is_err()
     );
@@ -218,8 +283,13 @@ async fn deadline_also_bounds_a_stalled_response_body() {
         socket.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 1000\r\nContent-Type: application/json\r\n\r\n{").await.unwrap();
         tokio::time::sleep(Duration::from_secs(2)).await;
     });
-    let provider =
-        PostHogFeatureFlags::new(&host, PROJECT_KEY.into(), Duration::from_millis(100)).unwrap();
+    let provider = PostHogFeatureFlags::new(
+        &host,
+        PROJECT_KEY.into(),
+        Duration::from_millis(100),
+        Environment::Production,
+    )
+    .unwrap();
     let result = tokio::time::timeout(Duration::from_secs(1), provider.load(&user())).await;
     server.abort();
     assert!(
@@ -234,7 +304,9 @@ async fn connection_failure_is_not_a_missing_flag() {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let host = format!("http://{}", listener.local_addr().unwrap());
     drop(listener);
-    let provider = PostHogFeatureFlags::new(&host, PROJECT_KEY.into(), TIMEOUT).unwrap();
+    let provider =
+        PostHogFeatureFlags::new(&host, PROJECT_KEY.into(), TIMEOUT, Environment::Production)
+            .unwrap();
     let error = provider.load(&user()).await.unwrap_err();
     assert!(matches!(
         error.downcast_current_context::<LoadError>(),

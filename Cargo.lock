@@ -524,6 +524,7 @@ dependencies = [
  "lexical_client",
  "macro_authorization",
  "macro_db_migrator",
+ "macro_env",
  "macro_env_var",
  "macro_event_broker",
  "macro_tower_layers",
@@ -550,6 +551,7 @@ dependencies = [
  "serde_json",
  "shared_entity_registry",
  "sqlx",
+ "strum 0.27.2",
  "thiserror 2.0.18",
  "tokio",
  "tokio-tungstenite 0.28.0",
@@ -638,6 +640,7 @@ dependencies = [
  "frecency",
  "fusionauth",
  "futures",
+ "genai_telemetry",
  "github",
  "github_pull_requests",
  "granola_sync",
@@ -894,6 +897,7 @@ dependencies = [
  "entity_access_db_utils",
  "entity_registry",
  "entity_registry_db_utils",
+ "feature_flags",
  "futures",
  "genai_telemetry",
  "harness_id",
@@ -1488,6 +1492,7 @@ dependencies = [
  "async-trait",
  "chrono",
  "futures",
+ "genai_telemetry",
  "lazy_static",
  "macro_env_var",
  "macro_user_id",
@@ -1598,7 +1603,7 @@ dependencies = [
  "objc2-foundation",
  "parking_lot",
  "percent-encoding",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
  "wl-clipboard-rs",
  "x11rb",
 ]
@@ -6499,6 +6504,7 @@ dependencies = [
  "axum-extra",
  "backoff",
  "bytes",
+ "genai_telemetry",
  "infer 0.19.0",
  "macro_authorization",
  "macro_env_var",
@@ -7794,6 +7800,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-openai",
+ "genai_telemetry",
  "workspace-hack",
 ]
 
@@ -8023,7 +8030,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -8253,6 +8260,7 @@ dependencies = [
 name = "feature_flags"
 version = "0.1.0"
 dependencies = [
+ "macro_env",
  "macro_user_id",
  "reqwest 0.13.4",
  "rootcause",
@@ -8794,6 +8802,7 @@ dependencies = [
  "opentelemetry",
  "opentelemetry_sdk",
  "serde_json",
+ "strum 0.27.2",
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",
@@ -8832,7 +8841,6 @@ version = "1.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fb130435a959a8d525e6bca66ff6c40981a300ee96d70e3ef56f046556d614a3"
 dependencies = [
- "generic-array 0.14.9",
  "rustversion",
  "typenum",
 ]
@@ -10028,9 +10036,9 @@ checksum = "e712f64ec3850b98572bffac52e2c6f282b29fe6c5fa6d42334b30be438d95c1"
 
 [[package]]
 name = "hickory-net"
-version = "0.26.1"
+version = "0.26.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e2295ed2f9c31e471e1428a8f88a3f0e1f4b27c15049592138d1eebe9c35b183"
+checksum = "c480823ed7c2c5d0f09c41020cb6b7c28029ce60ec42dc942158dcf22f8e0a4d"
 dependencies = [
  "async-trait",
  "cfg-if",
@@ -10072,9 +10080,9 @@ dependencies = [
 
 [[package]]
 name = "hickory-resolver"
-version = "0.26.1"
+version = "0.26.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f0d58d28879ceecde6607729660c2667a081ccdc082e082675042793960f178c"
+checksum = "3f3da5255c95d5a716857d54b5b8f4e8d67c3484d3beaaaae2ce25063b3ba981"
 dependencies = [
  "cfg-if",
  "futures-util",
@@ -10433,7 +10441,7 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2 0.5.10",
+ "socket2 0.6.3",
  "system-configuration",
  "tokio",
  "tower-service",
@@ -10731,6 +10739,7 @@ dependencies = [
  "base64 0.22.1",
  "bot_id",
  "entity_registry",
+ "genai_telemetry",
  "image",
  "lexical_client",
  "macro_authorization",
@@ -10910,6 +10919,7 @@ dependencies = [
  "indexmap 2.14.0",
  "lazy-regex",
  "macro_user_id",
+ "models_databases",
  "pipedream_mcp",
  "rand 0.9.4",
  "rootcause",
@@ -10918,6 +10928,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "uuid",
  "workspace-hack",
 ]
 
@@ -11260,7 +11271,7 @@ checksum = "3640c1c38b8e4e43584d8df18be5fc6b0aa314ce6ebf51b53313d4306cca8e46"
 dependencies = [
  "hermit-abi",
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -12912,6 +12923,7 @@ dependencies = [
  "base64 0.22.1",
  "futures",
  "macro_authorization",
+ "macro_env",
  "macro_env_var",
  "macro_user_id",
  "model-error-response",
@@ -12957,11 +12969,13 @@ dependencies = [
  "ai_toolset",
  "anyhow",
  "futures",
+ "macro_user_id",
  "regex",
  "rmcp",
  "schemars 1.2.1",
  "serde_json",
  "thiserror 2.0.18",
+ "tokio",
  "tracing",
  "workspace-hack",
 ]
@@ -14880,7 +14894,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7d8fae84b431384b68627d0f9b3b1245fcf9f46f6c0e3dc902e9dce64edd1967"
 dependencies = [
  "libc",
- "windows-sys 0.45.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -16085,7 +16099,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "22505a5c94da8e3b7c2996394d1c933236c4d743e81a410bcca4e6989fc066a4"
 dependencies = [
  "bytes",
- "heck 0.4.1",
+ "heck 0.5.0",
  "itertools 0.12.1",
  "log",
  "multimap",
@@ -16105,7 +16119,7 @@ version = "0.14.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "343d3bd7056eda839b03204e68deff7d1b13aba7af2b2fd16890697274262ee7"
 dependencies = [
- "heck 0.4.1",
+ "heck 0.5.0",
  "itertools 0.14.0",
  "log",
  "multimap",
@@ -16272,7 +16286,7 @@ dependencies = [
  "quinn-udp",
  "rustc-hash 2.1.2",
  "rustls",
- "socket2 0.5.10",
+ "socket2 0.6.3",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
@@ -16310,9 +16324,9 @@ dependencies = [
  "cfg_aliases",
  "libc",
  "once_cell",
- "socket2 0.5.10",
+ "socket2 0.6.3",
  "tracing",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -17286,9 +17300,9 @@ dependencies = [
 
 [[package]]
 name = "russh"
-version = "0.63.3"
+version = "0.65.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "036204edbd199552a5b3832f63c60dcdf395dc44c7f06b4af1c0e8139cc11bce"
+checksum = "94be3d86c71b9ed220a675c405e35c7a02565a009bf8da2e9cc13a700320a5c5"
 dependencies = [
  "aes 0.9.3",
  "bitflags 2.11.1",
@@ -17452,7 +17466,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.4.15",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -17465,7 +17479,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -17524,7 +17538,7 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -20176,6 +20190,7 @@ dependencies = [
  "connection_gateway_client",
  "embedding",
  "futures",
+ "genai_telemetry",
  "lexical_client",
  "macro_aws_config",
  "macro_db_migrator",
@@ -20261,7 +20276,7 @@ dependencies = [
  "getrandom 0.4.2",
  "once_cell",
  "rustix 1.1.6",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -22497,7 +22512,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

@@ -1,7 +1,7 @@
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { hasLoginCookie } from '@core/util/cookies';
 import { getOrCreateCacheScope } from '@graphql-cache/scope';
-import { partialMatchKey, type QueryKey } from '@tanstack/query-core';
+import { hashKey, partialMatchKey, type QueryKey } from '@tanstack/query-core';
 import { authKeys } from './auth/keys';
 import { hasCachedUserIdentity } from './auth/user-info-cache';
 import { calendarKeys } from './calendar/keys';
@@ -44,11 +44,18 @@ export function createQueryPersistenceScopes(
   const accountScope = getOrCreateCacheScope();
   const scopedKey = (name: string) =>
     createPersistenceKey(`${name}-${accountScope}`, 1);
+  const channels = createPerQueryIDBStore({ dbName: scopedKey('channels') });
+  // Saved before keys named their account; no query has these hashes to expire them.
+  for (const key of [
+    channelKeys.activity._def,
+    channelKeys.listChannels._def,
+  ]) {
+    channels.remove(hashKey(key));
+  }
+
   return [
     {
-      store: createPerQueryIDBStore({
-        dbName: scopedKey('channels'),
-      }),
+      store: channels,
       maxAge: { value: 7, unit: 'd' },
       buster,
       shouldPersist: shouldPersistChannelQuery,

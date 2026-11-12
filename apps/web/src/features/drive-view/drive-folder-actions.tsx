@@ -116,7 +116,7 @@ export function DriveFolderActions(props: { folder: DriveFolderMetadata }) {
       />
       <MenuItem
         text={t('entityActions.share')}
-        onClick={() => fireAndForget(share.execute(entity()), 'drive-view')}
+        onClick={() => fireAndForget(share.execute([entity()]), 'drive-view')}
       />
       <Show when={deleteFolder.canExecute(entity())}>
         <MenuSeparator />
