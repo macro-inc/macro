@@ -38,7 +38,11 @@ const toRowType = (
     .with('PULL_REQUEST', () => 'pull_request' as const)
     .with('CALENDAR_EVENT', () => 'calendar_event' as const)
     .with('CALENDAR_JOIN_REQUEST', () => 'calendar_join_request' as const)
-    .with('ACCESS_REQUESTED', () => 'access_requested' as const)
+    .with(
+      'ACCESS_REQUESTED',
+      'PASSWORD_ACCESS_REQUESTED',
+      () => 'access_requested' as const
+    )
     .with('ACCESS_GRANTED', () => 'access_granted' as const)
     .with('ACCESS_REMOVED', () => 'access_removed' as const)
     .exhaustive(() => 'other' as const);

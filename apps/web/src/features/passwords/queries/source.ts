@@ -27,7 +27,11 @@ import type {
   PasswordResult,
   PasswordSource,
 } from '../context/passwords-context';
-import type { PasswordFolder, PasswordItem } from '../core/types';
+import type {
+  PasswordFolder,
+  PasswordGrant,
+  PasswordItem,
+} from '../core/types';
 
 function metadata(item: PasswordItemMetadata): PasswordItem {
   return {
@@ -230,8 +234,17 @@ export function createPasswordSource(
         } satisfies PasswordPatchItem)
       ).map(metadata);
     },
-    grants(id) {
-      return request<GrantDto[]>(`/items/${id}/share`, 'GET');
+    async grants(id) {
+      return (await request<GrantDto[]>(`/items/${id}/share`, 'GET')).map(
+        (grants) =>
+          grants.flatMap((grant): PasswordGrant[] => {
+            // Human sharing excludes agent access, which has its own controls.
+            if (grant.kind !== 'user' && grant.kind !== 'team') return [];
+            return [
+              { kind: grant.kind, id: grant.id, permission: grant.permission },
+            ];
+          })
+      );
     },
     async remove(id) {
       return (await action('passwords.delete', `/items/${id}`, 'DELETE')).map(

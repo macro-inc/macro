@@ -9,6 +9,7 @@ import {
   waitForElementToBeRemoved,
 } from '@solidjs/testing-library';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
+import userEvent from '@testing-library/user-event';
 import { err, ok } from 'neverthrow';
 import { afterEach, expect, it } from 'vitest';
 import { AgentRequests } from '../components/agent-requests';
@@ -137,6 +138,9 @@ function mount(source: AgentRequestSource) {
         new QueryClient({ defaultOptions: { queries: { retry: false } } })
       }
     >
+      <style>
+        {'[role="menu"] { animation-name: none; transition-duration: 0s; }'}
+      </style>
       <PasswordsProvider
         value={{
           scope: FIXTURE_SCOPE,
@@ -184,22 +188,25 @@ it('denies a pending request and the agent leaves the list', async () => {
 });
 
 it('revokes an approved agent by approval or grant, and a creator only by grant', async () => {
+  const user = userEvent.setup();
   const { source, calls } = fakeSource([[APPROVED, CREATOR]]);
   mount(source);
   await screen.findByText(/can view this item/);
   const [approvedRevoke, creatorRevoke] = screen.getAllByRole('button', {
     name: /^Revoke access for/,
   });
-  fireEvent.click(creatorRevoke);
+  await user.click(creatorRevoke);
   expect(
     screen.queryByRole('menuitem', { name: 'Remove approval' })
   ).toBeNull();
-  expect(
-    await screen.findByRole('menuitem', { name: 'Remove access' })
-  ).toBeTruthy();
-  fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
-  fireEvent.click(approvedRevoke);
-  fireEvent.click(
+  const removeAccess = await screen.findByRole('menuitem', {
+    name: 'Remove access',
+  });
+  const creatorMenuClosed = waitForElementToBeRemoved(removeAccess);
+  await user.keyboard('{Escape}');
+  await creatorMenuClosed;
+  await user.click(approvedRevoke);
+  await user.click(
     await screen.findByRole('menuitem', { name: 'Remove approval' })
   );
   await screen.findByText(/can view this item/);

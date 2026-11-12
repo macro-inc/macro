@@ -1,5 +1,5 @@
 import { t } from '@app/lib/i18n';
-import { getDisplayName } from '@core/user';
+import { getDisplayName, tryMacroId } from '@core/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { PasswordAgentAccessRequestState } from '@service-storage/generated/schemas/passwordAgentAccessRequestState';
 import type { PasswordAgentRevokeScope } from '@service-storage/generated/schemas/passwordAgentRevokeScope';
@@ -106,7 +106,7 @@ export function AgentRequests(props: {
         </Show>
         <For each={shown()}>
           {(state) => {
-            const name = () => getDisplayName(state.agentAccountId);
+            const name = () => getDisplayName(tryMacroId(state.agentAccountId));
             return (
               <div class="flex flex-wrap items-center gap-2 text-sm">
                 <span class="min-w-0 flex-1">

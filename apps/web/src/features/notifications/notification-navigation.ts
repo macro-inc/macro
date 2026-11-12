@@ -652,7 +652,9 @@ function getSupportedHandler(
                 itemId: meta.content.itemId,
                 requestId: meta.content.requestId,
               },
-              entryMetadata: { route: paneRoute({ id: 'view-passwords' }) },
+              entryMetadata: {
+                route: paneRoute({ id: 'view-passwords', params: {} }),
+              },
             },
             { newSplit, sourceHandle, onApplied }
           );
