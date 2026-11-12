@@ -1,4 +1,4 @@
-import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
+import { GO_TO_COMMAND_SCOPE } from '@app/constants/hotkeys';
 import {
   EXTERNAL_VIEW_PATH,
   LIST_VIEW_PATHS,
@@ -18,14 +18,18 @@ import {
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
-import { useHotkeyInterceptor } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { useGoToLeader } from '@components/app/app-sidebar/go-to-leader';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import type {
   ReferredFrom,
   SplitContent,
   SplitHandle,
 } from '@components/app/split-layout/layoutManager';
+import {
+  canOpenInNewTab,
+  openInNewTab,
+} from '@components/app/tab-layout/open-in-new-tab';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
 import { getIconConfig } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
@@ -35,12 +39,9 @@ import {
   enableTasksReviews,
   enableWhatsappLinked,
 } from '@core/constant/featureFlags';
-import { getRunnableHotkeys } from '@core/hotkey/getCommands';
 import { registerHotkey } from '@core/hotkey/hotkeys';
-import { activeScope, clearPressedKeys } from '@core/hotkey/state';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
-import { activateClosestDOMScope } from '@core/hotkey/utils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import BellIcon from '@icon/system/regular/bell.svg';
 import HomeIcon from '@icon/system/regular/house.svg';
@@ -48,13 +49,11 @@ import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import PlugIcon from '@icon/system/regular/plug.svg';
 import ActivityIcon from '@icon/system/regular/pulse.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import { debounce } from '@solid-primitives/scheduled';
 import { cn } from '@ui';
 import {
   type Component,
   createEffect,
   createMemo,
-  createSignal,
   type JSX,
   onCleanup,
   Show,
@@ -216,25 +215,6 @@ export function navigateToSidebarView(args: {
   }).split;
 }
 
-/** Whether the "g" leader key is currently awaiting a destination key. */
-const [goToHotkeyVisible, setGoToHotkeyVisible] = createSignal(false);
-
-/**
- * True while the "g" leader awaits a destination, so nav buttons can show
- * their destination key. Any key in the GoTo scope leaves it, including a
- * view's own GoTo command (Email's g s), so the hints clear with it.
- */
-export const isGoToLeaderActive = () =>
-  goToHotkeyVisible() && activeScope() === GO_TO_COMMAND_SCOPE;
-
-const resetGoToHotkeysState = () => {
-  setGoToHotkeyVisible(false);
-  // To prevent the next key from triggering the hotkey handler,
-  // we reset the pressed keys state and exit the command scope
-  clearPressedKeys();
-  activateClosestDOMScope();
-};
-
 /**
  * Hosts the always-on global shortcuts that must keep working even on
  * full-cover routes like solo settings: the "g" leader key with its per-link
@@ -275,68 +255,12 @@ export const GoToHotkeys = () => {
     )
   );
 
-  const debounceResetHotkeysState = debounce(resetGoToHotkeysState, 2000);
-  const debounceSetHotkeyVisible = debounce(
-    () => setGoToHotkeyVisible(true),
-    200
-  );
+  const goToLeader = useGoToLeader();
 
-  // Register 'g' as a leader key that activates the global GO_TO command scope
-  const leaderHotkey = registerHotkey({
-    hotkey: GO_TO_LEADER_KEY,
-    scopeId: 'global',
-    hotkeyToken: TOKENS.sidebar.goToLeader,
-    description: () => t('nav.goToPage'),
-    keyDownHandler: () => {
-      // We debounce the time till the hot keys are visible to allow other commands
-      // like g+g to fire
-      debounceSetHotkeyVisible();
-      debounceResetHotkeysState();
-      return true;
-    },
-    activateCommandScopeId: GO_TO_COMMAND_SCOPE,
-    hide: true,
-    registrationType: 'add',
-  });
-
-  // These two register in the 'global' scope, which outlives this component, so
-  // dispose them on unmount. Otherwise a remount (e.g. crossing the mobile
-  // breakpoint) leaks: the 'add' leader stacks duplicate handlers and the
-  // token-only invite command accumulates in the registry. The per-link nav
-  // hotkeys below are disposed by their own effect cleanup.
-  onCleanup(() => {
-    inviteHotkey.dispose();
-    leaderHotkey.dispose();
-  });
-
-  // When the go to command scope is active, we want to prevent
-  // other default hotkeys from running. So doing "g" + some key
-  // not part of the sidebar hotkeys, won't fire the command
-  // for the key
-  useHotkeyInterceptor((context) => {
-    // If a hotkey is going to be fired, but the hotkeys are not
-    // visible, then it's not a sidebar nav hotkey and we can
-    // ignore it and reset our visible state
-    if (!goToHotkeyVisible()) {
-      debounceSetHotkeyVisible.clear();
-      return false;
-    }
-
-    if (context.eventType !== 'keydown') return false;
-
-    if (
-      context.activeScopeId !== GO_TO_COMMAND_SCOPE ||
-      // The sidebar's letters and those a focused view adds (Email's g s).
-      getRunnableHotkeys(GO_TO_COMMAND_SCOPE).has(context.pressedKeysString)
-    ) {
-      return false;
-    }
-
-    resetGoToHotkeysState();
-    debounceResetHotkeysState.clear();
-
-    return true;
-  });
+  // Send Invites registers in the 'global' scope, which outlives this
+  // component, so dispose it on unmount. The per-link nav hotkeys below are
+  // disposed by their own effect cleanup.
+  onCleanup(() => inviteHotkey.dispose());
 
   // Register navigation shortcuts in the global GO_TO command scope.
   // This must be reactive because prod feature flags can add links after the
@@ -345,10 +269,7 @@ export const GoToHotkeys = () => {
     const disposers = links().map((link) => {
       const openSidebarView = (e?: KeyboardEvent) => {
         e?.preventDefault();
-        if (goToHotkeyVisible()) {
-          resetGoToHotkeysState();
-          debounceResetHotkeysState.clear();
-        }
+        goToLeader.leave();
 
         if (link.id === 'search' && !e?.shiftKey) {
           const activeSplit = globalSplitManager()?.activeSplit();
@@ -650,6 +571,12 @@ export const SidebarOpenInSplitMenu = (props: SidebarOpenInSplitMenuProps) => {
             onClick={openInNewSplit}
             disabled={!canOpenInNewSplit()}
           />
+          <Show when={canOpenInNewTab()}>
+            <MenuItem
+              text={t('nav.openInNewTab')}
+              onClick={() => openInNewTab(openInCurrentSplit)}
+            />
+          </Show>
           <Show when={canOpenFullscreen()}>
             <MenuItem text={t('nav.openFullscreen')} onClick={openFullscreen} />
           </Show>

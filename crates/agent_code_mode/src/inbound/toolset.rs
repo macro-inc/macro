@@ -49,6 +49,8 @@ pub struct UserCodeModeToolContext {
     /// Who the authenticated request came from; the adapter builds a context
     /// per call, so there is no default.
     pub caller: ai_toolset::ToolCaller,
+    /// Session provenance verified by the managed MCP bearer middleware.
+    pub session: Option<uuid::Uuid>,
 }
 
 /// Code mode for clients outside agent sessions, such as the public MCP.
@@ -95,7 +97,7 @@ pub struct ExecuteCode {
     pub turn_id: macro_uuid::Uuid,
     /// A JavaScript ES module, with imports and an exported async main function.
     #[schemars(
-        description = "JavaScript module, at most 64 KiB. Import { Macro } from '@macro-inc/sdk' and Handlebars from 'handlebars'. Export async function main({token, hosts}) { const macro = new Macro({token, hosts}); return {data: ...}; }. The optional reviews array defaults to empty. Dependencies are preinstalled; no TypeScript syntax or package downloads. The token and hosts are supplied by the runner; never return or log the token."
+        description = "JavaScript module, at most 64 KiB. Import { Macro } from '@macro-inc/sdk' and Handlebars from 'handlebars'. Export async function main({token, hosts, webAppUrl}) { const macro = new Macro({token, hosts, webAppUrl}); return {data: ...}; }. The optional reviews array defaults to empty. Dependencies are preinstalled; no TypeScript syntax or package downloads. The token, hosts and webAppUrl are supplied by the runner; never return or log the token."
     )]
     pub source: String,
     /// Deadline including queueing and API calls.
@@ -188,6 +190,7 @@ impl AsyncTool<UserCodeModeToolContext> for UserExecuteCode {
             .execute(
                 &request.user_id,
                 &context.caller,
+                context.session,
                 ExecuteRequest {
                     source: self.source.clone(),
                     timeout_ms: self.timeout_ms,

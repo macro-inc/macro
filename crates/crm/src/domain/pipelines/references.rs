@@ -4,6 +4,7 @@ use super::*;
 /// unchanged references do not require the editor to reselect the record.
 pub(super) fn primary_references(
     pipeline: &Pipeline,
+    record_type: PipelineRecordType,
     batch: &OpBatch,
 ) -> Result<std::collections::BTreeSet<Uuid>, PipelineError> {
     use models_databases::{CellValue, CellWrite, DatabaseOp, RowChanges, RowsChange};
@@ -11,7 +12,7 @@ pub(super) fn primary_references(
     for op in &batch.ops {
         let cells: Vec<&CellWrite> = match op {
             DatabaseOp::Rows {
-                change: RowsChange::Insert { rows },
+                change: RowsChange::Insert { rows, .. },
                 ..
             } => rows.iter().flatten().collect(),
             DatabaseOp::Rows {
@@ -36,11 +37,7 @@ pub(super) fn primary_references(
             }
             if let CellValue::Entities(values) = &cell.value {
                 for value in values {
-                    let expected = match pipeline.record_type {
-                        PipelineRecordType::Company => models_databases::EntityKind::Company,
-                        PipelineRecordType::Contact => models_databases::EntityKind::Contact,
-                    };
-                    if value.entity_type != expected {
+                    if value.entity_type != record_type.entity_kind() {
                         return Err(PipelineError::Invalid(
                             "Choose the required CRM record type",
                         ));

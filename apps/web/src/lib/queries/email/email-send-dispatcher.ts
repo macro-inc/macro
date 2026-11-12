@@ -5,7 +5,12 @@ import type {
   createLocalDraftStore,
   DraftStorageSession,
 } from './local-draft-store';
-import { type EmailSendIntent, usableEmailSendIntents } from './send-intent';
+import {
+  type EmailSendIntent,
+  emailSendDelivering,
+  emailSendInProgress,
+  usableEmailSendIntents,
+} from './send-intent';
 
 type Journal = Pick<
   ReturnType<typeof createLocalDraftStore>,
@@ -37,17 +42,19 @@ export function createEmailSendDispatcher(options: {
   let running: Promise<void> | undefined;
   let rerun = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const active = (row: EmailSendIntent) => {
-    const status =
-      row.response?.cancelEmailSend?.attempt.status ??
-      row.response?.sendEmailMessage?.attempt.status;
-    return (
-      !row.dispatch?.paused &&
-      !row.locallyCancelled &&
-      status !== 'SENT' &&
-      status !== 'CANCELLED' &&
-      (row.cancellationRequested ||
-        (row.phase !== 'failed' && status !== 'FAILED'))
+  // A reply to a message this device is still delivering waits for it; the
+  // server would refuse the reply. A cancelled or failed target releases it.
+  const awaitsReplyTarget = (
+    row: EmailSendIntent,
+    rows: readonly EmailSendIntent[]
+  ) => {
+    const target = row.metadata.payload.input.message.replyingToId;
+    if (target == null || row.submissionStarted || row.cancellationRequested)
+      return false;
+
+    return emailSendDelivering(
+      rows.filter((other) => other.uuid !== row.uuid),
+      String(target)
     );
   };
   async function dispatch(row: EmailSendIntent) {
@@ -168,14 +175,15 @@ export function createEmailSendDispatcher(options: {
     try {
       const rows = usableEmailSendIntents(
         await options.journal.sends(options.session)
-      ).filter(active);
+      ).filter(emailSendInProgress);
       if (disposed) return;
       const now = Date.now();
       const due = rows.filter(
         (row) =>
           !inFlight.has(row.uuid) &&
           (row.dispatch?.leaseUntil ?? 0) <= now &&
-          (row.dispatch?.nextAttemptAt ?? 0) <= now
+          (row.dispatch?.nextAttemptAt ?? 0) <= now &&
+          !awaitsReplyTarget(row, rows)
       );
       // The journal also reserves each draft; unrelated drafts never share a
       // head-of-line queue. Limit concurrent HTTP work rather than ordering it.

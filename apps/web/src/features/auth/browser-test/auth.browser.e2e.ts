@@ -14,6 +14,50 @@ test('a returning user signs in with an emailed code', async ({ page }) => {
   await expectLanded(page, '/');
 });
 
+test('email verification retries cleanup without reusing a consumed code', async ({
+  page,
+}) => {
+  await openFixture(page, '/?page=login&cleanupFailure=once');
+  await page.getByRole('button', { name: 'Continue with email' }).click();
+  await signInWithCode(page, 'returning@example.com', '424242');
+  await expect(
+    page.getByRole('status', { name: 'Notifications' })
+  ).toContainText('Local cleanup failed');
+  const verify = page.getByRole('button', { name: 'Verify', exact: true });
+  await expect(verify).toBeEnabled();
+  await expect(page.getByLabel('One-time code')).toHaveValue('424242');
+  await verify.click();
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Create your workspace' })
+  ).toBeVisible();
+  expect(
+    (await fakeCalls(page)).filter((call) => call.startsWith('verify:'))
+  ).toHaveLength(1);
+});
+
+test('changing the email after cleanup failure starts fresh verification', async ({
+  page,
+}) => {
+  await openFixture(page, '/?page=login&cleanupFailure=once');
+  await page.getByRole('button', { name: 'Continue with email' }).click();
+  await signInWithCode(page, 'first@example.com', '424242');
+  await expect(
+    page.getByRole('status', { name: 'Notifications' })
+  ).toContainText('Local cleanup failed');
+  await page.getByRole('button', { name: 'Change email', exact: true }).click();
+  await signInWithCode(page, 'second@example.com', '424242');
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Create your workspace' })
+  ).toBeVisible();
+  expect(
+    (await fakeCalls(page)).filter((call) => call.startsWith('verify:'))
+  ).toEqual([
+    'verify:first@example.com:424242',
+    'verify:second@example.com:424242',
+  ]);
+  expect((await fakeAuth(page)).user?.email).toBe('second@example.com');
+});
+
 test('a wrong code can be corrected without starting over', async ({
   page,
 }) => {
@@ -108,7 +152,7 @@ test('desktop sign-up: slides, Google, then onboarding resumes at the work inbox
   await page.getByRole('button', { name: 'Get started' }).click();
   await page.getByRole('button', { name: 'Continue' }).click();
   await page.getByRole('button', { name: 'Continue' }).click();
-  await page.getByRole('button', { name: 'Connect work email' }).click();
+  await page.getByRole('button', { name: 'Continue with Google' }).click();
 
   // Back from Google: signed in, onboarding picks up where sign-up left off.
   await expect(
@@ -179,7 +223,7 @@ test('returning from Google sign-up settles into onboarding without flashing', a
   await page.getByRole('button', { name: 'Get started' }).click();
   await page.getByRole('button', { name: 'Continue' }).click();
   await page.getByRole('button', { name: 'Continue' }).click();
-  await page.getByRole('button', { name: 'Connect work email' }).click();
+  await page.getByRole('button', { name: 'Continue with Google' }).click();
 
   // Back from Google: the session takes 500ms to resolve on the fresh load.
   await expect(
@@ -211,4 +255,41 @@ test('a mobile-web visitor gets a desktop link instead of signing up', async ({
     page.getByRole('heading', { name: 'Macro is better on desktop.' })
   ).toBeVisible();
   expect(await fakeCalls(page)).toContain('lead:visitor@acme.com');
+});
+
+test('a failed provider sign-up falls back to the email form with the reason', async ({
+  page,
+}) => {
+  await openFixture(page, '/?page=signup&sso_error=admin_consent_required', {
+    ssoEmail: 'founder@example.com',
+  });
+  await expect(
+    page.getByText(
+      'Your organization needs an admin to approve Macro. Continue with your email instead.'
+    )
+  ).toBeVisible();
+  await expect(page.getByPlaceholder(/you@company\.com/)).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Continue with Microsoft' })
+  ).toHaveCount(0);
+});
+
+test('with Microsoft sign-up off, the work step is Google only as before', async ({
+  page,
+}) => {
+  await openFixture(page, '/?page=signup&microsoft=off', {
+    ssoEmail: 'founder@example.com',
+  });
+  await page.getByRole('button', { name: 'Get started' }).click();
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await expect(
+    page.getByRole('heading', { level: 1, name: /Connect your work/ })
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Connect work email' })
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Continue with Microsoft' })
+  ).toHaveCount(0);
 });

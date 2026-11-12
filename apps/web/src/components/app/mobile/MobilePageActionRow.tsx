@@ -1,4 +1,4 @@
-import { SoupChatInput } from '@app/features/chat/SoupChatInput';
+import { MobileAgentComposer } from '@app/features/agents-view/mobile-agent-composer';
 import { activeElement } from '@app/signal/focus';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { isEditableInput } from '@core/util/isEditableInput';
@@ -17,7 +17,7 @@ export function MobilePageActionRow() {
   const composer = (
     <Show when={showsComposer()}>
       <div ref={composerRef} class="pointer-events-auto min-w-0 flex-1">
-        <SoupChatInput />
+        <MobileAgentComposer />
       </div>
     </Show>
   );

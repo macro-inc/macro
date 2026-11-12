@@ -10,3 +10,7 @@ mod service;
 
 pub use api::swagger::ApiDoc;
 pub use server::{CognitionRuntime, build};
+/// Bounded tool-free completions, which routine suggestions use too.
+pub use service::structured_completion::{
+    ToolFreeCompletion, ToolFreeCompletionService, ToolFreeRequest,
+};

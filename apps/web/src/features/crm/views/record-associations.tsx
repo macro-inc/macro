@@ -1,11 +1,10 @@
 import EmptyStateCallsGraphic from '@design/empty-state-calls.svg';
 import EmptyStateDocGraphic from '@design/empty-state-doc.svg';
-import { createSignal, Show } from 'solid-js';
-import { CrmListEmpty, CrmListSkeleton } from '../components/list-state';
+import { createSignal } from 'solid-js';
+import { CrmListEmpty } from '../components/list-state';
 import { RecordSection } from '../components/record-section';
 import { useCrmContext } from '../context/crm-context';
 import type { CrmRecordScope } from '../core/record';
-import { CrmDatabasesView } from './databases';
 import { RecordItemList } from './record-item-list';
 
 /**
@@ -83,18 +82,6 @@ export function RecordCallsSection(props: { scope?: CrmRecordScope }) {
         }
       />
     </RecordSection>
-  );
-}
-
-/** Databases require a loaded record so pending details never request workspace scope. */
-export function RecordDatabasesSection(props: { scope?: CrmRecordScope }) {
-  return (
-    <Show
-      when={props.scope}
-      fallback={<CrmListSkeleton label="Loading databases" />}
-    >
-      {(scope) => <CrmDatabasesView scope={scope()} />}
-    </Show>
   );
 }
 

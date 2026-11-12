@@ -6,8 +6,8 @@ Every alert links the **Outlook sync** dashboard; mailboxes are named by their
 opaque `link_id`.
 
 The email-service pubsub workers report each Outlook mailbox about once a
-minute in an `outlook mailbox health` log (backlog, parked work, oldest wait,
-recent imports, `sync_active`, `needs_reauth`), and trace each unit of sync
+minute in an `outlook mailbox health` log (backlog, parked and abandoned work,
+oldest wait, recent imports, `sync_active`, `needs_reauth`), and trace each unit of sync
 work as an `outlook.sync.discover`, `.enumerate`, `.reconcile` or `.project`
 span with `outlook.outcome` and `outlook.defer_reason`. Datadog renames the
 Graph and token spans, so find them by their fields:
@@ -26,6 +26,17 @@ indexed, with their whole trace; successes are sampled.
 Sync work defers itself: a refused or failed unit is parked and retried
 later, so most of these alerts clear without action. Don't edit queue rows in
 production.
+
+A message whose own reads keep failing stops retrying: after 3 refusals Graph
+won't change (`permanent`, such as an undecodable response, or `forbidden`, a
+403 on that one message) or 50 other failures (about a day of backoff). It is
+then `abandoned`: the span records `@outlook.outcome:abandoned`, a
+`"mailbox message abandoned"` WARN names its `@defer_reason` and attempts, and
+the health snapshot counts it in `abandoned` instead of `queued`. The next
+Graph change to the message, a resync or a reconnect queues it again with
+fresh attempts. Throttling and token failures never count toward this. An
+invitation whose MIME source Graph won't return is retried twice
+(`calendar_parts`), then imported without its calendar parts.
 
 ## Stalled mailbox
 
@@ -46,7 +57,7 @@ A mailbox has had a message claimable for 15 minutes and imported none in that t
 ## Parked too long
 
 A message is parked more than 30 minutes into the future. The mailbox gate
-parks for at most its 10-minute window and failures park for 30 seconds to 10
+parks for at most its 10-minute window and failures park for 30 seconds to 30
 minutes, so this is a long Graph `Retry-After`, which the worker honours for up
 to a day, or a bug.
 
@@ -98,7 +109,10 @@ needs a few more failures to alert.
 ## Reauthorization
 
 More Outlook mailboxes need reauthorization than an hour ago. Their sync stops
-until each user reconnects, so a spike is user-visible.
+until each user reconnects, so a spike is user-visible. Sync claims skip a
+flagged mailbox, so its queued work waits (`queued` stays above zero) without
+asking authentication-service for tokens; it resumes once a reconnect or a
+token that works again clears the flag.
 
 - List them: `env:prod "outlook mailbox health" @needs_reauth:true`,
   grouped by `@link_id`.
@@ -120,4 +134,5 @@ as `effect` instead and don't count here.
   serialization failures point at contention; connection errors at the pool or
   the database.
 - Follow the [MacroDB runbook](macrodb.md) for locks, connections and load.
-- Levers: as in the MacroDB runbook. Each deferral retries after 30 seconds.
+- Levers: as in the MacroDB runbook. Each deferral retries after 30 seconds,
+  doubling for a message that keeps failing.

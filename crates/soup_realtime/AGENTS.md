@@ -55,6 +55,9 @@ tasks itself.
 - Property definition/option lifecycle events are intentionally ignored; they
   don't identify every affected entity.
 - Channel threads use their containing channel as the access source.
+- Agent sessions have no source event here: their patches come from channel
+  references, linked pull requests, and the harness publishing through
+  `outbound/agent_sessions.rs`' `SoupWorkRegistrationSignal` for registered work.
 - Only `call.record_imported` patches calls; native call lifecycle events on
   `macro.calls` are ignored. The web cache has no local call projection, so a
   call patch makes mounted lists that can contain calls refetch

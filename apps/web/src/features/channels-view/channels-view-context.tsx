@@ -22,14 +22,17 @@ import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { ContextProviderProps } from '@solid-primitives/context';
-import { type Accessor, createEffect, createMemo, on } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createMemo,
+  createSignal,
+  on,
+  onCleanup,
+} from 'solid-js';
 import { createStore, type Store } from 'solid-js/store';
 import { channelsSearch, channelsSearchCodec } from './channels-route';
-import {
-  CHANNELS_DEFAULT_RAIL_WIDTH,
-  CHANNELS_DEFAULT_SORT_BY,
-  clampChannelsRailWidth,
-} from './constants';
+import { CHANNELS_DEFAULT_SORT_BY } from './constants';
 import { createChannelsViewPersistence } from './persistence';
 import type {
   ChannelListSort,
@@ -46,6 +49,17 @@ type ChannelsViewProviderProps = ContextProviderProps & {
   initialState?: ChannelsViewStateOptions;
 };
 
+/** A selection that asked for its conversation's composer to take focus. */
+export type ComposerFocusRequest = { channelId: string; id: number };
+
+export type SelectChannelOptions = {
+  /**
+   * A click or Enter on a row: an already open conversation focuses its
+   * composer again. A newly shown one decides from how it arrived.
+   */
+  focusComposer?: boolean;
+};
+
 export type ChannelsViewContext = {
   state: Store<ChannelsViewState>;
   /** The mobile list opens channels in the split; only desktop renders detail. */
@@ -54,6 +68,8 @@ export type ChannelsViewContext = {
   sectionsEnabled: Accessor<boolean>;
   sectionsLoading: Accessor<boolean>;
   selectedChannel: Accessor<ChannelPreviewSelection | undefined>;
+  /** Set by a selection with `focusComposer`; any other selection clears it. */
+  composerFocusRequest: Accessor<ComposerFocusRequest | undefined>;
   /** Whether the Threads tab is available to this user. */
   threadsEnabled: Accessor<boolean>;
   /**
@@ -66,7 +82,14 @@ export type ChannelsViewContext = {
   threadsChannelId: Accessor<string | undefined>;
   setThreadsChannelId: (channelId: string | undefined) => void;
   setTab: (tab: ChannelsTab) => void;
-  setSelectedChannel: (channel: ChannelPreviewSelection | undefined) => boolean;
+  setSelectedChannel: (
+    channel: ChannelPreviewSelection | undefined,
+    options?: SelectChannelOptions
+  ) => boolean;
+  /** Keyboard focus to a conversation's sidebar row; false without a rail. */
+  focusRailRow: (channelId: string) => boolean;
+  /** The rail supplies `focusRailRow` for as long as it is mounted. */
+  registerRailRowFocus: (focus: (channelId: string) => boolean) => void;
   setGroupOpen: (group: ChannelsRailSection, open: boolean) => void;
   /** Per-user collapse state of a team channel label. */
   setLabelOpen: (labelId: string, open: boolean) => void;
@@ -76,7 +99,6 @@ export type ChannelsViewContext = {
     preferences: ChannelSectionPreferences
   ) => void;
   setSectionOrder: (sections: ChannelSectionKey[]) => void;
-  setAsideWidth: (width: number) => void;
 };
 
 function createInitialState(
@@ -103,14 +125,11 @@ function createInitialState(
     },
     sectionPreferences: { ...initial.sectionPreferences },
     sectionOrder: initial.sectionOrder ?? [],
-    asideWidth: clampChannelsRailWidth(
-      initial.asideWidth ?? CHANNELS_DEFAULT_RAIL_WIDTH
-    ),
   };
 }
 
 function shouldRestorePreferences(initial: ChannelsViewStateOptions): boolean {
-  return initial.asideWidth === undefined && initial.sortBy === undefined;
+  return initial.sortBy === undefined;
 }
 
 export const [ChannelsViewProvider, useChannelsView] =
@@ -194,10 +213,25 @@ export const [ChannelsViewProvider, useChannelsView] =
           'channels-view'
         );
       };
+      const [railRowFocus, setRailRowFocus] =
+        createSignal<(channelId: string) => boolean>();
+      const registerRailRowFocus = (focus: (channelId: string) => boolean) => {
+        setRailRowFocus(() => focus);
+        onCleanup(() =>
+          setRailRowFocus((current) =>
+            current === focus ? undefined : current
+          )
+        );
+      };
+      const [composerFocusRequest, setComposerFocusRequest] =
+        createSignal<ComposerFocusRequest>();
+      let lastComposerFocusRequestId = 0;
       const setSelectedChannel = (
-        channel: ChannelPreviewSelection | undefined
+        channel: ChannelPreviewSelection | undefined,
+        options: SelectChannelOptions = {}
       ) => {
         if (!channel) {
+          setComposerFocusRequest(undefined);
           fireAndForget(
             navigate(
               { route: channelsSplitRoute, params: {} },
@@ -208,6 +242,14 @@ export const [ChannelsViewProvider, useChannelsView] =
           return true;
         }
         if (mobileLayout() || !selectPreview.canSelect(channel)) return false;
+        setComposerFocusRequest(
+          options.focusComposer
+            ? {
+                channelId: channelIdForPreviewNavigation(channel),
+                id: ++lastComposerFocusRequestId,
+              }
+            : undefined
+        );
         navigateToChannel(channel);
         return true;
       };
@@ -235,6 +277,7 @@ export const [ChannelsViewProvider, useChannelsView] =
         state,
         mobileLayout,
         selectedChannel,
+        composerFocusRequest,
         sectionsEnabled,
         sectionsLoading: () => sectionsFlag().loading,
         threadsEnabled,
@@ -255,6 +298,8 @@ export const [ChannelsViewProvider, useChannelsView] =
           setSearch({ tab });
         },
         setSelectedChannel,
+        focusRailRow: (channelId) => railRowFocus()?.(channelId) ?? false,
+        registerRailRowFocus,
         setGroupOpen: (group, open) => setState('expandedGroups', group, open),
         setLabelOpen: (labelId, open) =>
           setState('collapsedLabels', (collapsed) =>
@@ -271,8 +316,6 @@ export const [ChannelsViewProvider, useChannelsView] =
             [section]: { ...current[section], ...preferences },
           })),
         setSectionOrder: (sections) => setState('sectionOrder', sections),
-        setAsideWidth: (width) =>
-          setState('asideWidth', clampChannelsRailWidth(width)),
       };
     }
   );

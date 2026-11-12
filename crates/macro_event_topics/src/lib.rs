@@ -51,6 +51,8 @@ topics! {
     MacroBotsTopic => "macro.bots",
     /// Call lifecycle and recording events.
     MacroCallsTopic => "macro.calls",
+    /// Public call notifications for webhooks and event streams.
+    MacroCallNotificationsTopic => "macro.call_notifications",
     /// Document lifecycle events (created / updated / deleted / copied).
     MacroDocumentsTopic => "macro.documents",
     /// Committed GitHub pull request updates.
@@ -98,4 +100,6 @@ topics! {
     MacroDatabasesTopic => "macro.databases",
     /// Form lifecycle (created, renamed, trashed, restored, purged), sharing and response events.
     MacroFormsTopic => "macro.forms",
+    /// User profile changes, such as a new profile picture.
+    MacroUsersTopic => "macro.users",
 }

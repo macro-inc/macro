@@ -19,8 +19,9 @@ files, notification effects and the `/external-chats` routes, over the
   `ReplyBlock` decision (`reply_block`) combines `SendAuthority`, the
   provider account and its `SendingFacts`.
 - `src/domain/timeline.rs` + `timeline/view.rs`: DTOs and how stored rich
-  content, mentions and votes become names and tallies (`People` comes from
-  the provider). `src/domain/rich.rs`: stored `RichContent`.
+  content, mentions and votes become names and tallies. `People` comes from
+  the provider (`ChatProvider::people`) and names provider ids and stored
+  persons (senders, reactors, voters); this crate's SQL never names anyone. `src/domain/rich.rs`: stored `RichContent`.
 - `src/domain/effects.rs`, `media.rs`: notification outbox and attachment
   import drained by DSS. `src/signals.rs`: channels DSS listens on.
 - `src/outbound/pg.rs`: the adapter, plus public transaction helpers

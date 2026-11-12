@@ -8,6 +8,7 @@ use models_databases::{
     ViewChange, ViewId,
     views::{RequestedLayout, ViewLayout},
 };
+use models_properties::{DataType, service::property_option::PropertyOptionValue};
 use std::collections::{BTreeMap, HashSet};
 
 /// Fields required when a deal enters a particular option of a stage column.
@@ -374,7 +375,7 @@ fn validate_batch(
                 _ => {}
             },
             DatabaseOp::Rows { change, .. } => match change {
-                RowsChange::Insert { rows } => {
+                RowsChange::Insert { rows, .. } => {
                     for (row_index, cells) in rows.iter().enumerate() {
                         let mut draft = Draft {
                             cells: HashMap::new(),

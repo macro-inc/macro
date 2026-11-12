@@ -121,6 +121,8 @@ aws "${list_args[@]}" |
 # not own - the records themselves, the archive uploaded as its own resource,
 # and the cache WASM, which `prune-old-brotli-from-s3.sh` retires on its own
 # schedule because the generic sync never uploads it.
+prunable=$work/prunable
+: >"$prunable"
 while IFS= read -r key; do
   [ -n "$key" ] || continue
   case "$key" in
@@ -129,5 +131,22 @@ while IFS= read -r key; do
   *cache_wasm_bg*) continue ;;
   *index.html) continue ;;
   esac
-  aws s3 rm "s3://$bucket/$key" >/dev/null
+  printf '%s\n' "$key" >>"$prunable"
 done < <(LC_ALL=C comm -23 "$existing" "$retained")
+
+# One request per 1000 keys, the DeleteObjects limit: starting the CLI once per
+# key took minutes on every deploy. This call exits 0 even when S3 refuses keys,
+# so the response has to be read for the failure to stop the deploy.
+if [ -s "$prunable" ]; then
+  split -l 1000 "$prunable" "$work/batch."
+fi
+for batch in "$work"/batch.*; do
+  [ -e "$batch" ] || continue
+  jq -Rn '{Objects: [inputs | {Key: .}], Quiet: true}' <"$batch" >"$batch.json"
+  errors=$(aws s3api delete-objects --bucket "$bucket" --delete "file://$batch.json" \
+    --query 'Errors' --output json)
+  if [ "$errors" != "null" ] && [ "$errors" != "[]" ]; then
+    echo "S3 refused to delete some keys: $errors" >&2
+    exit 1
+  fi
+done

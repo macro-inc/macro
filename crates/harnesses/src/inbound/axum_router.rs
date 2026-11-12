@@ -5,14 +5,14 @@ use std::sync::Arc;
 use axum::{
     Json, Router,
     extract::{FromRef, Path, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
-    routing::{delete, get, post},
+    routing::{delete, get, patch, post, put},
 };
 use harness_id::HarnessId;
 use macro_authorization::{
-    HarnessOnly, MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
-    UserOrInternal,
+    AccountHolderOrInternal, HarnessOnly, MacroAuthorizationExtractor, MacroAuthorizationService,
+    MacroAuthorizationState, UserOnly, UserOrInternal,
 };
 use model_error_response::ErrorResponse;
 use serde::Serialize;
@@ -21,11 +21,15 @@ use uuid::Uuid;
 use crate::domain::{
     models::{
         ApprovePairingRequest, ClaimOutcome, ClaimPairingRequest, ClaimedPairing,
-        CreatePairingRequest, CreatedPairing, Harness, HarnessAgent, HarnessSession,
-        PairingDetails,
+        CreatePairingRequest, CreatedPairing, Harness, HarnessAgent, HarnessResident,
+        HarnessSession, PairingDetails, PatchHarnessRequest, RUNTIME_CONNECTED_HEADER,
+        SetHarnessTeamAccessRequest,
     },
     ports::{HarnessError, HarnessService},
 };
+
+#[cfg(test)]
+mod test;
 
 /// State for the harnesses router.
 pub struct HarnessesRouterState<S, Auth> {
@@ -101,6 +105,18 @@ where
             post(claim_pairing_handler::<S, Auth>),
         )
         .route("/harnesses", get(list_harnesses_handler::<S, Auth>))
+        .route(
+            "/harnesses/directory",
+            get(list_directory_handler::<S, Auth>),
+        )
+        .route(
+            "/harnesses/{harness_id}/team-access",
+            put(set_team_access_handler::<S, Auth>),
+        )
+        .route(
+            "/harnesses/{harness_id}/residents",
+            get(list_residents_handler::<S, Auth>),
+        )
         .route("/harnesses/me", get(get_self_harness_handler::<S, Auth>))
         .route(
             "/harnesses/me",
@@ -116,7 +132,8 @@ where
         )
         .route(
             "/harnesses/{harness_id}",
-            delete(delete_harness_handler::<S, Auth>),
+            delete(delete_harness_handler::<S, Auth>)
+                .merge(patch(patch_harness_handler::<S, Auth>)),
         )
         .with_state(state)
 }
@@ -197,7 +214,7 @@ pub async fn get_pairing_handler<S: HarnessService, Auth: MacroAuthorizationServ
 )]
 pub async fn approve_pairing_handler<S: HarnessService, Auth: MacroAuthorizationService>(
     State(state): State<HarnessesRouterState<S, Auth>>,
-    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    authorization: MacroAuthorizationExtractor<Auth, AccountHolderOrInternal>,
     Path(path): Path<PairingCodePath>,
     Json(req): Json<ApprovePairingRequest>,
 ) -> Result<Json<Harness>, HarnessesHandlerErr> {
@@ -272,6 +289,130 @@ pub async fn list_harnesses_handler<S: HarnessService, Auth: MacroAuthorizationS
     ))
 }
 
+/// Handler for `GET /harnesses/directory`.
+#[utoipa::path(
+    get,
+    tag = "harnesses",
+    operation_id = "list_harness_directory",
+    path = "/harnesses/directory",
+    responses(
+        (status = 200, body = Vec<Harness>),
+        (status = 401, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+pub async fn list_directory_handler<S: HarnessService, Auth: MacroAuthorizationService>(
+    State(state): State<HarnessesRouterState<S, Auth>>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+) -> Result<Json<Vec<Harness>>, HarnessesHandlerErr> {
+    Ok(Json(
+        state
+            .service
+            .list_directory(authorization.authorization.user.macro_user_id)
+            .await?,
+    ))
+}
+
+/// Handler for `PUT /harnesses/{harness_id}/team-access`.
+///
+/// Requires the owner's own session: an agent can ask for access to a machine
+/// but never open one, since that grants code execution on it.
+#[utoipa::path(
+    put,
+    tag = "harnesses",
+    operation_id = "set_harness_team_access",
+    path = "/harnesses/{harness_id}/team-access",
+    params(("harness_id" = HarnessId, Path, description = "Harness ID")),
+    request_body = SetHarnessTeamAccessRequest,
+    responses(
+        (status = 204),
+        (status = 401, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+pub async fn set_team_access_handler<S: HarnessService, Auth: MacroAuthorizationService>(
+    State(state): State<HarnessesRouterState<S, Auth>>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOnly>,
+    Path(path): Path<HarnessPath>,
+    Json(req): Json<SetHarnessTeamAccessRequest>,
+) -> Result<StatusCode, HarnessesHandlerErr> {
+    if !authorization.authorization.is_human_session() {
+        return Err(HarnessError::Unauthorized.into());
+    }
+    state
+        .service
+        .set_team_access(
+            authorization.authorization.macro_user_id,
+            path.harness_id,
+            req,
+        )
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Handler for `GET /harnesses/{harness_id}/residents`.
+#[utoipa::path(
+    get,
+    tag = "harnesses",
+    operation_id = "list_harness_residents",
+    path = "/harnesses/{harness_id}/residents",
+    params(("harness_id" = HarnessId, Path, description = "Harness ID")),
+    responses(
+        (status = 200, body = Vec<HarnessResident>),
+        (status = 401, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+pub async fn list_residents_handler<S: HarnessService, Auth: MacroAuthorizationService>(
+    State(state): State<HarnessesRouterState<S, Auth>>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Path(path): Path<HarnessPath>,
+) -> Result<Json<Vec<HarnessResident>>, HarnessesHandlerErr> {
+    Ok(Json(
+        state
+            .service
+            .list_residents(
+                authorization.authorization.user.macro_user_id,
+                path.harness_id,
+            )
+            .await?,
+    ))
+}
+
+/// Handler for `PATCH /harnesses/{harness_id}`.
+#[utoipa::path(
+    patch,
+    tag = "harnesses",
+    operation_id = "patch_harness",
+    path = "/harnesses/{harness_id}",
+    params(("harness_id" = HarnessId, Path, description = "Harness ID")),
+    request_body = PatchHarnessRequest,
+    responses(
+        (status = 200, body = Harness),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+pub async fn patch_harness_handler<S: HarnessService, Auth: MacroAuthorizationService>(
+    State(state): State<HarnessesRouterState<S, Auth>>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Path(path): Path<HarnessPath>,
+    Json(req): Json<PatchHarnessRequest>,
+) -> Result<Json<Harness>, HarnessesHandlerErr> {
+    Ok(Json(
+        state
+            .service
+            .patch_harness(
+                authorization.authorization.user.macro_user_id,
+                path.harness_id,
+                req,
+            )
+            .await?,
+    ))
+}
+
 /// Handler for `DELETE /harnesses/{harness_id}`.
 #[utoipa::path(
     delete,
@@ -317,13 +458,29 @@ pub async fn delete_harness_handler<S: HarnessService, Auth: MacroAuthorizationS
 pub async fn get_self_harness_handler<S: HarnessService, Auth: MacroAuthorizationService>(
     State(state): State<HarnessesRouterState<S, Auth>>,
     authorization: MacroAuthorizationExtractor<Auth, HarnessOnly>,
+    headers: HeaderMap,
 ) -> Result<Json<Harness>, HarnessesHandlerErr> {
-    Ok(Json(
-        state
-            .service
-            .get_self(authorization.authorization.harness_id)
-            .await?,
-    ))
+    let harness = state
+        .service
+        .get_self(authorization.authorization.harness_id)
+        .await?;
+
+    if runtime_presence_disagrees(&headers, &harness) {
+        tracing::warn!(
+            telemetry_event = "harness_presence_disagreement",
+            harness = %harness.id,
+            last_connected_at = ?harness.last_connected_at,
+            "a daemon holds a runtime connection this harness reads as offline"
+        );
+    }
+
+    Ok(Json(harness))
+}
+
+/// Whether the daemon asking says it holds a connection the harness reads as not
+/// having. Only the daemon can see this: the service's own answer is what is wrong.
+fn runtime_presence_disagrees(headers: &HeaderMap, harness: &Harness) -> bool {
+    headers.contains_key(RUNTIME_CONNECTED_HEADER) && !harness.connected
 }
 
 /// Handler for `DELETE /harnesses/me`.

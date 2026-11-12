@@ -184,6 +184,11 @@ impl AttachmentFiles for MailAttachmentFiles {
             bytes,
         )
         .await
-        .map_err(failed)
+        .map_err(|error| match error {
+            crate::util::upload_attachment::UploadAttachmentError::AttachmentDeleted => {
+                AttachmentError::NotFound
+            }
+            error => failed(error),
+        })
     }
 }
