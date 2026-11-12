@@ -85,7 +85,7 @@ pub struct NameSearchRequest {
 }
 
 /// An item a name matched, by kind.
-#[derive(Serialize, Deserialize, Debug, ToSchema, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, ToSchema, Clone, PartialEq, Eq, Hash)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum NamedItem {
     /// A channel.

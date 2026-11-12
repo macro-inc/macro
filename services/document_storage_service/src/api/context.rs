@@ -1106,6 +1106,7 @@ impl From<&ApiContext> for SearchHandlerState {
             calendar_event_labels: Arc::new(CalendarService::new(PgCalendarRepository::new(
                 ctx.readonly_db.0.clone(),
             ))) as Arc<dyn CalendarEventLabelReader>,
+            name_sources: Vec::new(),
         }
     }
 }
