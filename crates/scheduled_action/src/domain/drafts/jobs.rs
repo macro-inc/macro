@@ -13,7 +13,7 @@ use std::time::Duration;
 
 use agent_session::domain::model::AgentSessionId;
 use agent_session::domain::routines::RoutineSessions;
-use anyhow::Result;
+use anyhow::{Context as _, Result};
 use bot_id::BotId;
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -313,6 +313,18 @@ pub struct DraftJobs<Code, Sessions, Updates> {
     shutdown: CancellationToken,
 }
 
+impl<Code, Sessions, Updates> Clone for DraftJobs<Code, Sessions, Updates> {
+    fn clone(&self) -> Self {
+        Self {
+            drafts: Arc::clone(&self.drafts),
+            store: Arc::clone(&self.store),
+            updates: Arc::clone(&self.updates),
+            tasks: self.tasks.clone(),
+            shutdown: self.shutdown.clone(),
+        }
+    }
+}
+
 impl<Code, Sessions, Updates> DraftJobs<Code, Sessions, Updates> {
     /// Jobs run on `tasks`; `shutdown` interrupts them, and each ends with
     /// what it has.
@@ -596,8 +608,94 @@ impl<Code: RoutineCode, Sessions: RoutineSessions, Updates: RoutineDraftUpdates>
         context: DraftContext,
         traceparent: Option<String>,
     ) -> Result<DraftJob> {
-        let started = tracing::Span::current();
         let (program, context) = self.drafts.read_request(&request, context)?;
+        // The rest runs on the jobs' tasks, so a request dropped while its
+        // row is written can't leave the row without its drafter.
+        let jobs = self.clone();
+        self.tasks
+            .spawn(
+                async move {
+                    jobs.begin(owner, client_id, request, program, context, traceparent)
+                        .await
+                }
+                .in_current_span(),
+            )
+            .await
+            .context("start a background routine draft")?
+    }
+
+    async fn jobs(&self, owner: MacroUserIdStr<'static>) -> Result<Vec<DraftJob>> {
+        self.store.jobs(&owner, LISTED).await
+    }
+
+    async fn job(&self, owner: MacroUserIdStr<'static>, id: Uuid) -> Result<DraftJob> {
+        Ok(self
+            .store
+            .job(&owner, id)
+            .await?
+            .ok_or(DraftJobError::NotFound)?)
+    }
+
+    // The span records the draft and how the cancel went, and the trace the
+    // draft started in, so the two can be found together.
+    #[tracing::instrument(name = "routine.draft.cancel", skip_all, fields(
+        routine.draft.id = %id,
+        routine.draft.state = tracing::field::Empty,
+        routine.draft.outcome = tracing::field::Empty,
+        routine.draft.start_traceparent = tracing::field::Empty,
+    ), err)]
+    async fn discard(&self, owner: MacroUserIdStr<'static>, id: Uuid) -> Result<()> {
+        let span = tracing::Span::current();
+        let Some(cancelled) = self.store.cancel_job(&owner, id).await? else {
+            span.record("routine.draft.outcome", "not_found");
+            anyhow::bail!(DraftJobError::NotFound);
+        };
+        if let Some(traceparent) = &cancelled.traceparent {
+            span.record("routine.draft.start_traceparent", traceparent.as_str());
+        }
+        if cancelled.finished {
+            span.record("routine.draft.state", "finished");
+            span.record("routine.draft.outcome", "discarded");
+            clean_up(
+                self.drafts.sessions.as_ref(),
+                self.drafts.hand_backs.as_ref(),
+                &stale_action(&StaleDraft {
+                    session: id,
+                    owner: owner.clone(),
+                    agent: cancelled.agent,
+                }),
+                true,
+            )
+            .await;
+        } else {
+            // Its drafter, on whichever replica, stops at its next read of
+            // the row and deletes the session and the row; the sweep does
+            // when the drafter is gone.
+            span.record("routine.draft.state", "drafting");
+            span.record("routine.draft.outcome", "cancelled");
+        }
+        self.updates
+            .publish_draft(&owner, removed(id, cancelled.progress))
+            .await;
+        Ok(())
+    }
+}
+
+impl<Code: RoutineCode, Sessions: RoutineSessions, Updates: RoutineDraftUpdates>
+    DraftJobs<Code, Sessions, Updates>
+{
+    /// Start's body, from writing the job's row to its admission, in the
+    /// start's span: the row, the drafter and the answer to the start.
+    async fn begin(
+        &self,
+        owner: MacroUserIdStr<'static>,
+        client_id: Uuid,
+        request: DraftRequest,
+        program: Vec<Step>,
+        context: DraftContext,
+        traceparent: Option<String>,
+    ) -> Result<DraftJob> {
+        let started = tracing::Span::current();
         // A start sent again, as a client does when its connection drops,
         // answers with the job the first one started.
         if let Some(job) = self.store.started(&owner, client_id).await? {
@@ -670,66 +768,6 @@ impl<Code: RoutineCode, Sessions: RoutineSessions, Updates: RoutineDraftUpdates>
         Ok(job)
     }
 
-    async fn jobs(&self, owner: MacroUserIdStr<'static>) -> Result<Vec<DraftJob>> {
-        self.store.jobs(&owner, LISTED).await
-    }
-
-    async fn job(&self, owner: MacroUserIdStr<'static>, id: Uuid) -> Result<DraftJob> {
-        Ok(self
-            .store
-            .job(&owner, id)
-            .await?
-            .ok_or(DraftJobError::NotFound)?)
-    }
-
-    // The span records the draft and how the cancel went, and the trace the
-    // draft started in, so the two can be found together.
-    #[tracing::instrument(name = "routine.draft.cancel", skip_all, fields(
-        routine.draft.id = %id,
-        routine.draft.state = tracing::field::Empty,
-        routine.draft.outcome = tracing::field::Empty,
-        routine.draft.start_traceparent = tracing::field::Empty,
-    ), err)]
-    async fn discard(&self, owner: MacroUserIdStr<'static>, id: Uuid) -> Result<()> {
-        let span = tracing::Span::current();
-        let Some(cancelled) = self.store.cancel_job(&owner, id).await? else {
-            span.record("routine.draft.outcome", "not_found");
-            anyhow::bail!(DraftJobError::NotFound);
-        };
-        if let Some(traceparent) = &cancelled.traceparent {
-            span.record("routine.draft.start_traceparent", traceparent.as_str());
-        }
-        if cancelled.finished {
-            span.record("routine.draft.state", "finished");
-            span.record("routine.draft.outcome", "discarded");
-            clean_up(
-                self.drafts.sessions.as_ref(),
-                self.drafts.hand_backs.as_ref(),
-                &stale_action(&StaleDraft {
-                    session: id,
-                    owner: owner.clone(),
-                    agent: cancelled.agent,
-                }),
-                true,
-            )
-            .await;
-        } else {
-            // Its drafter, on whichever replica, stops at its next read of
-            // the row and deletes the session and the row; the sweep does
-            // when the drafter is gone.
-            span.record("routine.draft.state", "drafting");
-            span.record("routine.draft.outcome", "cancelled");
-        }
-        self.updates
-            .publish_draft(&owner, removed(id, cancelled.progress))
-            .await;
-        Ok(())
-    }
-}
-
-impl<Code: RoutineCode, Sessions: RoutineSessions, Updates: RoutineDraftUpdates>
-    DraftJobs<Code, Sessions, Updates>
-{
     /// Fail jobs whose drafter is gone, telling their owners, and stop their
     /// sessions; delete cancelled jobs nobody cleaned up, and finished jobs
     /// never opened within [`FINISHED_RETENTION`], with their sessions. How

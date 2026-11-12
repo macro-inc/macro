@@ -33,6 +33,8 @@ pub(super) struct Rows {
     pub(super) failing_results: std::sync::atomic::AtomicU8,
     /// Whether reading a draft's row never answers.
     pub(super) stalls: std::sync::atomic::AtomicBool,
+    /// Where a job's start waits once its row is written, before it hears so.
+    pub(super) beginning: Gate,
 }
 
 /// A background draft's part of its row.

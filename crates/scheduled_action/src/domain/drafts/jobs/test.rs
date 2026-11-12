@@ -43,6 +43,7 @@ impl DraftJobStore for Rows {
                 traceparent: job.traceparent.clone(),
             },
         );
+        self.beginning.pass().await;
         Ok(true)
     }
 
@@ -515,6 +516,40 @@ async fn a_ready_draft_is_readable_until_its_owner_discards_it() {
     );
     // Gone: discarding again finds nothing.
     assert!(replica.jobs.discard(owner(), job.id).await.is_err());
+}
+
+/// A start whose request is dropped once its row is written, before it
+/// hears so, still drafts its job: the row never waits for a drafter that
+/// will never come.
+#[tokio::test(start_paused = true)]
+async fn a_start_dropped_as_its_row_is_written_still_drafts() {
+    let rows = Arc::new(Rows {
+        beginning: Gate::held(),
+        ..Rows::default()
+    });
+    let sessions = checks_and_runs(&rows, json!([code_step("Make a task", "good")]));
+    let replica = Replica::new(&rows, &sessions);
+
+    tokio::select! {
+        _ = replica.start(routine(BUG_REPORTS)) => panic!("a start answered before its row"),
+        () = rows.beginning.reached.notified() => {}
+    }
+    rows.beginning.open();
+    replica.settled().await;
+
+    let ids: Vec<Uuid> = rows.jobs.lock().unwrap().keys().copied().collect();
+    let [id] = ids[..] else {
+        panic!("expected one job, got {ids:?}");
+    };
+    let prepared: Vec<Uuid> = sessions
+        .prepared
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|prepared| prepared.session_id.as_uuid())
+        .collect();
+    assert_eq!(prepared, [id]);
+    assert_eq!(rows.phase(id), Some(DraftJobPhase::Ready));
 }
 
 /// A start sent again, as the client sends it when its connection drops,
