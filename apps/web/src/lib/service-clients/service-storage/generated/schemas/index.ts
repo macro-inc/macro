@@ -1984,6 +1984,7 @@ export * from './messageDirection';
 export * from './messageEditedAt';
 export * from './messageEvent';
 export * from './messageEventNonce';
+export * from './messageEventSeq';
 export * from './messageGuestName';
 export * from './messageImportedAuthor';
 export * from './messageKind';
