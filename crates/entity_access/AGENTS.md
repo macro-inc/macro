@@ -62,6 +62,10 @@ the entity-access domain service.
 - `EntityAccessReceipt<R: RequiredPermission>` is the only proof a caller
   checked access at the right level; domain code downstream (e.g.
   `entity_mutation`) takes a receipt, not a raw boolean/level.
+- `get_documents_access` checks many documents in one statement
+  (`queries/document_access/documents_access.sql`) and must answer each one as
+  `get_document_access` does: change their sources together, and extend
+  `test/documents_access.rs` and its fixture, which compare the two.
 
 - `get_user_source_ids` is cached for 10 s per process and concurrent misses
   for one user share one query through `single_flight`. A failure then arrives

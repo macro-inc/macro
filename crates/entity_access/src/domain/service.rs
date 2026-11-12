@@ -367,6 +367,34 @@ where
         })
     }
 
+    #[tracing::instrument(err(level = Level::DEBUG), skip_all, fields(document_count = document_ids.len()))]
+    async fn generate_document_view_access_receipts(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+        document_ids: &[String],
+    ) -> Result<HashMap<String, EntityAccessReceipt<ViewAccessLevel>>, AccessError> {
+        let levels = self
+            .repo
+            .get_documents_access(document_ids, user_id)
+            .await?;
+        let mut receipts = HashMap::with_capacity(levels.len());
+        for (document_id, access_level) in levels {
+            // The permission check the single-document path makes: a level
+            // below View is a refusal, so the document is left out.
+            if let Ok(receipt) = EntityAccessReceipt::try_new_authenticated_user(
+                MacroUserIdStr(user_id.clone().into_owned()),
+                Entity {
+                    entity_id: document_id.clone(),
+                    entity_type: EntityType::Document,
+                },
+                EntityPermission::AccessLevel { access_level },
+            ) {
+                receipts.insert(document_id, receipt);
+            }
+        }
+        Ok(receipts)
+    }
+
     #[tracing::instrument(skip_all, fields(row_count = row_ids.len()))]
     async fn generate_database_row_view_access_receipts(
         &self,
