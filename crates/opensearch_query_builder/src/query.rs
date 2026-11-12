@@ -5,6 +5,7 @@ use serde::Serialize;
 mod bool;
 mod function_score;
 mod has_child;
+mod match_bool_prefix;
 mod match_phrase;
 mod match_phrase_prefix;
 mod match_query;
@@ -23,6 +24,7 @@ pub use function_score::{
     RandomScore, ScoreFunction, ScoreFunctionType, ScoreMode, ScriptScore,
 };
 pub use has_child::{HasChildQuery, InnerHits};
+pub use match_bool_prefix::MatchBoolPrefixQuery;
 pub use match_phrase::MatchPhraseQuery;
 pub use match_phrase_prefix::MatchPhrasePrefixQuery;
 pub use match_query::MatchQuery;
@@ -47,6 +49,8 @@ pub enum QueryType<'a> {
     MatchPhrase(MatchPhraseQuery<'a>),
     /// Match phrase prefix query
     MatchPhrasePrefix(MatchPhrasePrefixQuery<'a>),
+    /// Match bool prefix query
+    MatchBoolPrefix(MatchBoolPrefixQuery<'a>),
     /// Match query
     Match(MatchQuery<'a>),
     /// Range query
@@ -76,6 +80,7 @@ impl<'a> ToOpenSearchJson for QueryType<'a> {
             QueryType::FunctionScore(function_score) => function_score.to_json(),
             QueryType::MatchPhrase(match_phrase) => match_phrase.to_json(),
             QueryType::MatchPhrasePrefix(match_phrase_prefix) => match_phrase_prefix.to_json(),
+            QueryType::MatchBoolPrefix(match_bool_prefix) => match_bool_prefix.to_json(),
             QueryType::Match(match_query) => match_query.to_json(),
             QueryType::Term(term) => term.to_json(),
             QueryType::Terms(terms) => terms.to_json(),
@@ -164,6 +169,9 @@ impl<'a> QueryType<'a> {
             QueryType::MatchPhrase(match_phrase) => QueryType::MatchPhrase(match_phrase.to_owned()),
             QueryType::MatchPhrasePrefix(match_phrase_prefix) => {
                 QueryType::MatchPhrasePrefix(match_phrase_prefix.to_owned())
+            }
+            QueryType::MatchBoolPrefix(match_bool_prefix) => {
+                QueryType::MatchBoolPrefix(match_bool_prefix.to_owned())
             }
             QueryType::Match(match_query) => QueryType::Match(match_query.to_owned()),
             QueryType::Range(range) => QueryType::Range(range.to_owned()),
