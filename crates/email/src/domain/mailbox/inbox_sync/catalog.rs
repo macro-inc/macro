@@ -1,19 +1,19 @@
-use super::{ConnectionSourceError, InboxSyncImportRepository};
+use super::{ConnectionSourceError, InboxSyncCatalog};
 use anyhow::Context;
 use models_email::email::service::label::Label;
 use std::collections::HashMap;
 use uuid::Uuid;
 
-// syncs our db labels with gmail - adds new labels, updates changed labels, deletes removed labels
+/// Reconcile the provider catalog with the stored catalog, preserving existing label identities.
 #[tracing::instrument(skip(db, provider_labels), err)]
-pub(super) async fn sync_labels<R: InboxSyncImportRepository>(
+pub async fn sync_labels<R: LabelCatalogRepository>(
     db: &R,
     link_id: Uuid,
     provider_labels: &[Label],
 ) -> anyhow::Result<()> {
     // Step 1: Fetch the persisted labels
     let db_labels = db
-        .catalog(link_id)
+        .stored_catalog(link_id)
         .await
         .map_err(ConnectionSourceError::into_original)
         .context("Failed to fetch labels from database")?;
@@ -68,7 +68,7 @@ pub(super) async fn sync_labels<R: InboxSyncImportRepository>(
     // Step 4: Perform deletions if needed
     let deleted_count = if !labels_to_delete.is_empty() {
         let result = db
-            .delete_catalog(link_id, labels_to_delete.clone())
+            .delete_stored_catalog(link_id, labels_to_delete.clone())
             .await
             .map_err(ConnectionSourceError::into_original)
             .context(format!(
@@ -83,7 +83,7 @@ pub(super) async fn sync_labels<R: InboxSyncImportRepository>(
 
     // Step 5: Perform insert/update operations
     if !labels_to_upsert.is_empty() {
-        db.upsert_catalog(labels_to_upsert)
+        db.upsert_stored_catalog(labels_to_upsert)
             .await
             .map_err(ConnectionSourceError::into_original)
             .context("Failed to insert/update labels from Gmail")?;
@@ -100,4 +100,42 @@ pub(super) async fn sync_labels<R: InboxSyncImportRepository>(
     }
 
     Ok(())
+}
+
+/// Catalog facts and writes shared by live sync and backfill initialization.
+pub trait LabelCatalogRepository: Send + Sync {
+    /// Original persistence error.
+    type CatalogError: ConnectionSourceError;
+    /// Read the complete stored catalog.
+    fn stored_catalog(
+        &self,
+        link: Uuid,
+    ) -> impl Future<Output = Result<Vec<Label>, Self::CatalogError>> + Send;
+    /// Delete the missing provider label identities.
+    fn delete_stored_catalog(
+        &self,
+        link: Uuid,
+        labels: Vec<String>,
+    ) -> impl Future<Output = Result<u64, Self::CatalogError>> + Send;
+    /// Insert and update the reconciled labels.
+    fn upsert_stored_catalog(
+        &self,
+        labels: Vec<Label>,
+    ) -> impl Future<Output = Result<(), Self::CatalogError>> + Send;
+}
+impl<R: InboxSyncCatalog> LabelCatalogRepository for R {
+    type CatalogError = R::Err;
+    async fn stored_catalog(&self, link: Uuid) -> Result<Vec<Label>, Self::CatalogError> {
+        self.catalog(link).await
+    }
+    async fn delete_stored_catalog(
+        &self,
+        link: Uuid,
+        labels: Vec<String>,
+    ) -> Result<u64, Self::CatalogError> {
+        self.delete_catalog(link, labels).await
+    }
+    async fn upsert_stored_catalog(&self, labels: Vec<Label>) -> Result<(), Self::CatalogError> {
+        self.upsert_catalog(labels).await
+    }
 }

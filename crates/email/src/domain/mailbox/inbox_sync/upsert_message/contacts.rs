@@ -2,7 +2,7 @@ use super::*;
 use models_email::service::backfill::{
     BackfillOperation, BackfillPubsubMessage, LinkScopedPayload, PopulateCrmContactPayload,
 };
-pub(super) type CrmContactRecipient = (
+pub type CrmContactRecipient = (
     String,
     Option<String>,
     chrono::DateTime<chrono::Utc>,
@@ -56,7 +56,8 @@ where
     Ok(())
 }
 
-fn build_contact_connections<'a>(
+/// Parse contact identities, skipping malformed addresses without logging their values.
+pub fn build_contact_connections<'a>(
     _owner: &MacroUserIdStr<'static>,
     link_id: Uuid,
     emails: impl IntoIterator<Item = &'a str>,
@@ -91,6 +92,27 @@ where
     Q: InboxSyncQueue,
     E: MacroEventBroker + InboxSyncRefresher + InboxSyncImportEffects,
 {
+    enqueue_crm_contacts(link_id, self_email, contacts, is_sent, |message| async {
+        ctx.queue
+            .enqueue_backfill(message)
+            .await
+            .map_err(ConnectionSourceError::into_original)
+    })
+    .await
+}
+
+/// Normalize and publish distinct, non-self CRM contacts in input order.
+pub async fn enqueue_crm_contacts<F, Fut>(
+    link_id: Uuid,
+    self_email: &str,
+    contacts: impl IntoIterator<Item = CrmContactRecipient>,
+    is_sent: bool,
+    mut enqueue: F,
+) -> Result<(), ProcessingError>
+where
+    F: FnMut(BackfillPubsubMessage) -> Fut,
+    Fut: Future<Output = anyhow::Result<()>>,
+{
     let mut seen: HashSet<String> = HashSet::new();
     for (raw_email, contact_name, first_at, last_at) in contacts {
         let contact_email = raw_email.trim().to_ascii_lowercase();
@@ -117,12 +139,10 @@ where
             }),
         };
 
-        ctx.queue.enqueue_backfill(ps_message).await.map_err(|e| {
+        enqueue(ps_message).await.map_err(|e| {
             ProcessingError::Retryable(DetailedError {
                 reason: FailureReason::SqsEnqueueFailed,
-                source: e
-                    .into_original()
-                    .context("Failed to enqueue PopulateCrmContact message"),
+                source: e.context("Failed to enqueue PopulateCrmContact message"),
             })
         })?;
     }

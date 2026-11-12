@@ -264,7 +264,8 @@ where
 
     Ok(Some(new_message))
 }
-fn build_notification_recipients(
+/// Select the owner and valid delegated primaries for notification delivery.
+pub fn build_notification_recipients(
     owner: &MacroUserIdStr<'static>,
     primaries: Vec<String>,
 ) -> HashSet<MacroUserIdStr<'static>> {

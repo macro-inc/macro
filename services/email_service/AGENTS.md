@@ -38,13 +38,18 @@ the gateway `/email` prefix.
   only decodes and acknowledges the domain disposition. Settlement transactions,
   Gmail calls, and retry publication are in `outbound/message_labels/gmail_ops.rs`.
   Inbox sync composes `email::domain::mailbox::inbox_sync` with adapters in
-  `outbound/inbox_lifecycle/inbox_sync/`; its separate `InboxSyncContext` keeps
-  the shared backfill context unchanged. History and upsert orchestration also
-  live in the domain; these adapters retain the existing journal, invitation,
-  upload, notification and persistence implementations. The pending-label
-  compatibility module only re-exports the adapter used by backfill.
-- `src/backfill_outbox.rs`, `src/backfill_init_service.rs`,
-  `src/backfill_completion_service.rs`: Gmail history backfill orchestration.
+  `outbound/inbox_lifecycle/inbox_sync/`; its separate `InboxSyncContext` holds
+  only its service and receiver. Backfill also has a separate `BackfillContext`: its
+  domain worker owns admission, retry/deferral, listing, thread/message import,
+  initialization, completion accounting and leases, metadata, attachment and CRM
+  policy, with adapters in `outbound/backfill_jobs/worker/`. Inbox sync's history and upsert
+  orchestration also live in the domain; these adapters retain the existing
+  journal, invitation, upload, notification and persistence implementations.
+  Both workers reuse the domain's catalog, contact, notification and pending-label
+  rules; their adapters retain the existing atomic writes and savepoints.
+- `src/backfill_outbox.rs`: cancellation-aware polling facade for the domain's
+  durable backfill publication. `outbound/backfill_jobs/outbox.rs` keeps each
+  row lock through the queue send and commits the publication marker afterwards.
 - `src/crm_enrichment_worker.rs`: periodic pass that resolves pending CRM
   company directory entries (names/logos) left by binaries without a resolver,
   using the public-homepage `UnfurlCompanyMetadataResolver` wired in
@@ -71,8 +76,9 @@ the gateway `/email` prefix.
   `src/api/context.rs` → `src/api/swagger.rs`.
 - Add a pubsub consumer: new module under `src/pubsub/` → wire into
   `src/pubsub/mod.rs` and the `pubsub_workers` binary.
-- Add a backfill step: `src/backfill_init_service.rs` →
-  `src/backfill_completion_service.rs` → `src/backfill_outbox.rs`.
+- Add a backfill step in `email::domain::backfill_jobs::worker`; wire its leaf
+  capabilities in `outbound/backfill_jobs/worker/` and its durable publication
+  in `email::domain::backfill_jobs::outbox`.
 
 ## Checks
 
@@ -125,8 +131,8 @@ the gateway `/email` prefix.
   requeue or redeliver a rate-limited message, never drop it. Up to twelve
   refused backfill requests per mailbox wait up to 20 s for room so backfill's
   slots don't idle; the rest are sent back as new, delayed messages
-  (`pubsub/backfill/deferral.rs`), because waiting out the visibility timeout
-  would spend the queue's 20 deliveries.
+  (`email::domain::backfill_jobs::worker`), because waiting out the visibility
+  timeout would spend the queue's 20 deliveries.
   Inbox sync releases the upload claims of a refused attachment fetch and
   requeues the upsert, because a claimed attachment is never offered again.
 - An attachment row can be deleted after it is claimed: a Gmail draft gets a
@@ -140,7 +146,7 @@ the gateway `/email` prefix.
   the thread row and all of its messages in one transaction
   (`insert_backfilled_thread`), so a failed write leaves nothing for a retry
   to skip. Each message has its own savepoint: one whose data can never be
-  stored (`db_error::is_unstorable`) is skipped and logged, and the rest of the
+  stored (`outbound/backfill_jobs/worker/database_error.rs`) is skipped and logged, and the rest of the
   thread commits. The CRM fan-out is enqueued after the write slot is taken
   and before the write: after the commit nothing in the handler may request a
   retry, because a retry would find the thread and skip it, and an operation
@@ -211,7 +217,7 @@ the gateway `/email` prefix.
   the primary queue dead-letters after three receives.
 - Header addresses that Gmail accepts can fail `MacroUserIdStr::try_from_email`.
   Skip the bad address with a WARN that omits it (the parse error echoes it)
-  instead of failing the step; see `pubsub::util::build_contact_connections`.
+  instead of failing the step; see `email::domain::mailbox::inbox_sync::build_contact_connections`.
 - The `link_manager` worker receives one message at a time and renews its
   visibility while processing. Don't raise its receive batch: messages queued
   behind a long mailbox purge would be redelivered and purged twice.

@@ -15,6 +15,13 @@ use std::sync::Arc;
 use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImpl};
 use tokio_util::sync::CancellationToken;
 
+/// Listener capabilities, assembled once from the existing worker inputs.
+#[derive(Clone)]
+pub(crate) struct BackfillContext {
+    pub(crate) sqs_worker: sqs_worker::SQSWorker,
+    pub(crate) service: Arc<crate::outbound::backfill_jobs::worker::Backfill>,
+}
+
 /// method that ingests sqs messages and calls the process function for each
 #[expect(clippy::too_many_arguments, reason = "too annoying to fix right now")]
 pub async fn run_worker(
@@ -73,8 +80,8 @@ pub(crate) fn context(
     crm_service: CrmServiceType,
     macro_event_broker: PubSubEventBroker,
     notifications_enabled: bool,
-) -> PubSubContext {
-    PubSubContext {
+) -> BackfillContext {
+    let leaves = PubSubContext {
         gmail_history: email::domain::mailbox::gmail_history::GmailHistoryService(
             email::outbound::mailbox_pg::PgMailboxSync::new(db.clone()),
         ),
@@ -97,6 +104,21 @@ pub(crate) fn context(
         macro_event_broker,
         notifications_enabled,
         retry_worker: false,
+    };
+    use crate::outbound::backfill_jobs::worker::*;
+    BackfillContext {
+        sqs_worker: leaves.sqs_worker.clone(),
+        service: Arc::new(email::domain::backfill_jobs::worker::BackfillService {
+            repository: PgBackfillWorker {
+                jobs: crate::outbound::backfill_jobs::PgBackfillJobs(leaves.db.clone()),
+            },
+            gmail: GmailBackfill(leaves.email_api.clone()),
+            queue: BackfillSqs(leaves.sqs_client.clone()),
+            effects: BackfillWorkerEffects(leaves.clone()),
+            crm: BackfillWorkerCrm(leaves.crm_service.clone()),
+            contacts_sync: cfg!(feature = "contacts_sync"),
+            attachment_upload: cfg!(feature = "attachment_upload"),
+        }),
     }
 }
 

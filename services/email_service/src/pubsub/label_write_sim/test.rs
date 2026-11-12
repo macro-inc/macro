@@ -327,7 +327,9 @@ scenario!(
     a_recovery_backfill_does_not_bring_back_an_archive_that_landed_during_its_fetch,
     913,
     |world| {
-        use models_email::email::service::backfill::{BackfillMessagePayload, JobScopedPayload};
+        use models_email::email::service::backfill::{
+            BackfillMessagePayload, BackfillOperation, BackfillPubsubMessage, JobScopedPayload,
+        };
         let sim = &mut Sim::new(&mut world, 1);
         sim.act(Action::Archive(T1, true), false).await.unwrap();
         sim.deliver_all(Queue::Ops, Reply::RateLimited).await;
@@ -336,9 +338,19 @@ scenario!(
             .await
             .unwrap()
             .unwrap();
+        let job = email_db_client::backfill::job::insert::create_backfill_job(
+            &ctx.db,
+            link.id,
+            &link.fusionauth_user_id,
+            None,
+            true,
+        )
+        .await
+        .unwrap()
+        .unwrap();
         let scope = JobScopedPayload {
             link_id: link.id,
-            job_id: uuid::Uuid::from_u128(0xb0),
+            job_id: job.id,
             payload: BackfillMessagePayload {
                 thread_provider_id: THREADS[T1].to_string(),
                 thread_db_id: sim.world.thread_ids[THREADS[T1]],
@@ -351,9 +363,28 @@ scenario!(
             .gmail
             .pause_next(Kind::ReadFull, Some("m1a"), PauseAt::AfterApply);
         let mut backfill = tokio::spawn(async move {
-            let _ =
-                crate::pubsub::backfill::backfill_message::backfill_message(&ctx, &scope, &link)
-                    .await;
+            let backfill = crate::pubsub::backfill::worker::context(
+                ctx.db,
+                &ctx.sqs_worker,
+                ctx.sqs_client,
+                ctx.contacts_ingress,
+                ctx.email_api,
+                ctx.redis_client,
+                ctx.notification_ingress_service,
+                ctx.sfs_client,
+                ctx.connection_gateway_client,
+                ctx.dss_client,
+                ctx.system_properties_service,
+                ctx.crm_service,
+                ctx.macro_event_broker,
+                ctx.notifications_enabled,
+            );
+            let _ = backfill
+                .service
+                .process(&BackfillPubsubMessage {
+                    backfill_operation: BackfillOperation::BackfillMessage(scope),
+                })
+                .await;
         });
         let arrived = tokio::select! {
             _ = &mut backfill => false,

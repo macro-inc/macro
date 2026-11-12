@@ -27,7 +27,13 @@ tools — hexagonal, heavily feature-gated.
   completed/discovered Google grants, shared promotion, and failed-attempt cleanup.
   Reuses mailbox initialization and backfill-job services.
 - `src/domain/backfill_jobs.rs` (feature `mailbox`): backfill-job access,
-  cancellation, active-job reuse, and initialization publication.
+  cancellation, active-job reuse, and initialization publication. Its `worker`
+  module owns queue admission, retry/deferral policy, listing, thread/message
+  import, initialization, completion accounting and leases, metadata, attachments,
+  sent contact seeding and CRM operations. Its `outbox` module owns durable
+  initialization, completion and consent publication through transaction ports.
+  Backfill and inbox sync share catalog reconciliation, contact parsing,
+  notification selection, CRM normalization and pending-label snapshot rules.
 - `src/domain/mailbox/inbox_sync.rs` (feature `mailbox`): Gmail delivery admission,
   disposition, provider-error routing, message deletion, and label reconciliation.
   It also owns history/catalog reconciliation, recovery backfills, provider-message

@@ -6,6 +6,11 @@ use models_email::service::{
 };
 use uuid::Uuid;
 
+/// Durable initialization, completion and consent publication.
+pub mod outbox;
+/// Queued backfill execution and delivery policy.
+pub mod worker;
+
 mod connection;
 pub use connection::*;
 

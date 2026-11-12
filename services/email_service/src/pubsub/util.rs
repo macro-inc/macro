@@ -1,79 +1,15 @@
-use crate::pubsub::context::PubSubContext;
-use chrono::{DateTime, Utc};
 use connection_gateway_client::client::ConnectionGatewayClient;
-use contacts::domain::models::messages::ContactConnection;
 use email::domain::events::EmailMacroEvent;
 use macro_event_broker::MacroEventBroker;
-use macro_user_id::user_id::MacroUserIdStr;
 /// shared utils across different pubsub workers
 use models_email::api::refresh::RefreshEmailEvent;
 
 #[cfg(test)]
 mod test;
-use models_email::email::service::backfill::{
-    BackfillOperation, BackfillPubsubMessage, LinkScopedPayload, PopulateCrmContactPayload,
-};
 use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
-use std::collections::HashSet;
-use uuid::Uuid;
 
-/// The macro users to notify about a link's inbox: its owner plus every primary
-/// delegated to read it. Shared by the new-mail and reauth notification paths so
-/// both fan out to the same recipients. Delegated primaries that fail to parse as
-/// a macro user id are skipped.
-pub fn build_notification_recipients(
-    owner: &MacroUserIdStr<'static>,
-    primaries: Vec<String>,
-) -> HashSet<MacroUserIdStr<'static>> {
-    let mut recipient_ids = HashSet::from([owner.clone()]);
-
-    for primary in primaries {
-        match MacroUserIdStr::try_from(primary) {
-            Ok(id) => {
-                recipient_ids.insert(id);
-            }
-            Err(e) => {
-                tracing::warn!(
-                    error=?e,
-                    inbox_owner=%owner,
-                    "skipping delegated primary that failed to parse as a macro user id"
-                );
-            }
-        }
-    }
-
-    recipient_ids
-}
-
-/// Contact connections from a link's owner to each address. Addresses that fail
-/// to parse as a macro user id are skipped, so one malformed header address
-/// doesn't drop the connections to the others.
-pub fn build_contact_connections<'a>(
-    owner: &MacroUserIdStr<'static>,
-    link_id: Uuid,
-    emails: impl IntoIterator<Item = &'a str>,
-) -> Vec<ContactConnection> {
-    emails
-        .into_iter()
-        .filter_map(|email| match MacroUserIdStr::try_from_email(email) {
-            Ok(contact) => Some(ContactConnection::new(owner.clone(), contact)),
-            // The parse error echoes the address, so it stays out of the log.
-            Err(_) => {
-                tracing::warn!(
-                    %link_id,
-                    "skipping contact address that failed to parse as a macro user id"
-                );
-                None
-            }
-        })
-        .collect()
-}
-
-/// One recipient tuple `(email, name, first_at, last_at)` fed into
-/// [`enqueue_populate_crm_contacts`]. Per-message paths use the same
-/// timestamp for both endpoints; the historical seed passes the
-/// contact's pre-aggregated MIN/MAX.
-pub type CrmContactRecipient = (String, Option<String>, DateTime<Utc>, DateTime<Utc>);
+// Retained for link_manager until its worker moves behind the domain.
+pub use email::domain::mailbox::inbox_sync::build_notification_recipients;
 
 #[tracing::instrument(skip(tx, result), level = "debug")]
 pub async fn complete_transaction_with_processing_error<T>(
@@ -198,72 +134,4 @@ pub async fn cg_refresh_join_request(
         .inspect_err(
             |e| tracing::error!(%event_id, "Failed to refresh the requester's calendar: {e}"),
         );
-}
-
-/// Producer-side fan-out helper: normalizes and enqueues one
-/// `PopulateCrmContact` message per distinct, non-self contact.
-///
-/// Takes `(email, name, first_at, last_at)` tuples. `name` comes from
-/// the gmail message's recipient header on per-message paths and from
-/// `email_contacts.name` on the historical path. `first_at` /
-/// `last_at` carry the contact's known activity range — per-message
-/// paths set both to `message.internal_date_ts`; the historical seed
-/// sets them to MIN/MAX from its aggregating SQL.
-///
-/// `is_sent` flags whether the populating message was sent by the user
-/// (true) or received (false). One fan-out batch is one direction;
-/// callers that need to enqueue both (the historical seed) call this
-/// helper twice. The consumer uses the flag to gate company INSERTs
-/// and `first_interaction` LEAST-merging (received-direction never
-/// creates a new `crm_companies` row and never moves
-/// `first_interaction` backwards).
-///
-/// Trim and lowercase addresses, then skip malformed, self and duplicate
-/// addresses. Dedup is by email only, so the
-/// first name / timestamps seen for a given address in this batch win.
-pub async fn enqueue_populate_crm_contacts(
-    ctx: &PubSubContext,
-    link_id: Uuid,
-    self_email: &str,
-    contacts: impl IntoIterator<Item = CrmContactRecipient>,
-    is_sent: bool,
-) -> Result<(), ProcessingError> {
-    let mut seen: HashSet<String> = HashSet::new();
-    for (raw_email, contact_name, first_at, last_at) in contacts {
-        let contact_email = raw_email.trim().to_ascii_lowercase();
-        let Some((local, domain)) = contact_email.split_once('@') else {
-            continue;
-        };
-        if local.is_empty() || domain.is_empty() || domain.contains('@') {
-            continue;
-        }
-        if contact_email == self_email || !seen.insert(contact_email.clone()) {
-            continue;
-        }
-
-        let ps_message = BackfillPubsubMessage {
-            backfill_operation: BackfillOperation::PopulateCrmContact(LinkScopedPayload {
-                link_id,
-                payload: PopulateCrmContactPayload {
-                    contact_email,
-                    contact_name,
-                    first_at,
-                    last_at,
-                    is_sent,
-                },
-            }),
-        };
-
-        ctx.sqs_client
-            .enqueue_email_backfill_message(ps_message)
-            .await
-            .map_err(|e| {
-                ProcessingError::Retryable(DetailedError {
-                    reason: FailureReason::SqsEnqueueFailed,
-                    source: e.context("Failed to enqueue PopulateCrmContact message"),
-                })
-            })?;
-    }
-
-    Ok(())
 }
