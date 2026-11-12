@@ -14,12 +14,14 @@ use uuid::Uuid;
 use whatsapp_linked::domain::session::SessionService;
 use whatsapp_linked::outbound::pg::PgWhatsAppRepository;
 
-use super::{PgAccountDirectory, PgAccountLocks};
+use super::PgAccountDirectory;
 use crate::domain::ports::{
-    AccountControl, AccountDirectory, AccountExit, AccountLocks, AccountRunner,
+    AccountControl, AccountDirectory, AccountExit, AccountLocks, AccountRunner, AccountSignal,
 };
-use crate::domain::supervisor::{Supervisor, SupervisorConfig, SupervisorError};
-use crate::outbound::signals::{SIGNAL_CAPACITY, SignalListener};
+use crate::outbound::signals;
+use session_fleet::listener::{SIGNAL_CAPACITY, SignalListener};
+use session_fleet::locks::{LockNamespace, PgAccountLocks};
+use session_fleet::supervisor::{FleetNames, Supervisor, SupervisorConfig, SupervisorError};
 
 const KEEPALIVE: Duration = Duration::from_millis(100);
 
@@ -64,12 +66,22 @@ async fn only_one_replica_locks_an_account_and_discovery_skips_it(
     let pairing = insert_account(&pool, "macro|pairing", "pairing").await;
     insert_account(&pool, "macro|logged-out", "logged_out").await;
     let tracker = TaskTracker::new();
-    let first = PgAccountLocks::connect(&options, KEEPALIVE, &tracker)
-        .await
-        .unwrap();
-    let second = PgAccountLocks::connect(&options, KEEPALIVE, &tracker)
-        .await
-        .unwrap();
+    let first = PgAccountLocks::connect(
+        &options,
+        LockNamespace("whatsapp-account:"),
+        KEEPALIVE,
+        &tracker,
+    )
+    .await
+    .unwrap();
+    let second = PgAccountLocks::connect(
+        &options,
+        LockNamespace("whatsapp-account:"),
+        KEEPALIVE,
+        &tracker,
+    )
+    .await
+    .unwrap();
     let directory = PgAccountDirectory::new(SessionService::new(Arc::new(
         PgWhatsAppRepository::new(pool.clone()),
     )));
@@ -111,12 +123,22 @@ async fn killing_the_lock_connection_frees_its_locks_and_reports_the_loss(
     let pool = pool_options.connect_with(options.clone()).await.unwrap();
     let account = insert_account(&pool, "macro|owner", "connected").await;
     let tracker = TaskTracker::new();
-    let doomed = PgAccountLocks::connect(&options, KEEPALIVE, &tracker)
-        .await
-        .unwrap();
-    let survivor = PgAccountLocks::connect(&options, KEEPALIVE, &tracker)
-        .await
-        .unwrap();
+    let doomed = PgAccountLocks::connect(
+        &options,
+        LockNamespace("whatsapp-account:"),
+        KEEPALIVE,
+        &tracker,
+    )
+    .await
+    .unwrap();
+    let survivor = PgAccountLocks::connect(
+        &options,
+        LockNamespace("whatsapp-account:"),
+        KEEPALIVE,
+        &tracker,
+    )
+    .await
+    .unwrap();
     assert!(doomed.try_lock(account).await.unwrap());
 
     let terminated = sqlx::query_scalar!(
@@ -144,7 +166,9 @@ struct ReportingRunner {
 }
 
 impl AccountRunner for ReportingRunner {
-    async fn run(&self, account: Uuid, control: AccountControl) -> AccountExit {
+    type Signal = AccountSignal;
+
+    async fn run(&self, account: Uuid, control: AccountControl<AccountSignal>) -> AccountExit {
         self.started.send((account, Instant::now())).unwrap();
         tokio::select! {
             () = control.release.cancelled() => AccountExit::Released,
@@ -164,10 +188,17 @@ async fn start_replica(
     options: &PgConnectOptions,
     tracker: &TaskTracker,
 ) -> Replica {
-    let locks = PgAccountLocks::connect(options, KEEPALIVE, tracker)
+    let locks = PgAccountLocks::connect(
+        options,
+        LockNamespace("whatsapp-account:"),
+        KEEPALIVE,
+        tracker,
+    )
+    .await
+    .unwrap();
+    let listener = SignalListener::connect(options, signals::channels())
         .await
         .unwrap();
-    let listener = SignalListener::connect(options).await.unwrap();
     let (signal_sender, mut signals) = mpsc::channel(SIGNAL_CAPACITY);
     let shutdown = CancellationToken::new();
     tracker.spawn(listener.run(signal_sender, shutdown.clone()));
@@ -189,6 +220,11 @@ async fn start_replica(
             stop_timeout: Duration::from_secs(5),
             drain_deadline: Duration::from_secs(100),
             health_every: Duration::from_secs(600),
+            names: FleetNames {
+                fleet: "whatsapp",
+                health_event: "whatsapp_session_health",
+                drain_event: "whatsapp_session_drain",
+            },
         },
     );
     let stop = shutdown.clone();

@@ -5,4 +5,3 @@ pub mod account;
 pub mod inbound;
 pub mod media;
 pub mod ports;
-pub mod supervisor;

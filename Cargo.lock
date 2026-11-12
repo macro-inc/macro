@@ -6674,6 +6674,7 @@ dependencies = [
  "attention_feed",
  "authentication_service_client",
  "aws-sdk-dynamodb",
+ "aws-sdk-kms",
  "aws-sdk-s3",
  "aws-sdk-secretsmanager",
  "aws-sdk-sns",
@@ -6742,6 +6743,7 @@ dependencies = [
  "initiative",
  "initiative_description",
  "jsonwebtoken 10.3.0",
+ "kms_envelope",
  "lexical_client",
  "lexical_mention_extractor",
  "macro_auth",
@@ -6802,6 +6804,7 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "slack_integration",
+ "slack_linked",
  "soup",
  "soup_realtime",
  "sqlx",
@@ -18678,6 +18681,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "session_fleet"
+version = "0.1.0"
+dependencies = [
+ "external_chat",
+ "rootcause",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "sha1"
 version = "0.10.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -19164,6 +19183,7 @@ dependencies = [
  "lazy-regex",
  "macro_authorization",
  "macro_db_migrator",
+ "macro_env",
  "macro_user_id",
  "model-entity",
  "model_owner",
@@ -22630,6 +22650,7 @@ dependencies = [
  "rustls",
  "serde",
  "serde_json",
+ "session_fleet",
  "sha2 0.10.9",
  "sqlx",
  "thiserror 2.0.18",

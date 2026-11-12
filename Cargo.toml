@@ -167,6 +167,7 @@ members = [
   "crates/external_chat",
   "crates/whatsapp_linked",
   "crates/kms_envelope",
+  "crates/session_fleet",
   "crates/slack_linked",
   "crates/whatsapp_store_pg",
   "crates/whatsmeow",

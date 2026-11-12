@@ -6,11 +6,18 @@ use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-use super::{Signal, Supervisor, SupervisorConfig, SupervisorError};
-use crate::domain::ports::{
-    AccountControl, AccountDirectory, AccountExit, AccountLocks, AccountRunner, AccountSignal,
-    FleetHealth, LeaseError, Traced,
+use super::{FleetNames, FleetSignal, Supervisor, SupervisorConfig, SupervisorError};
+use crate::ports::{
+    AccountControl, AccountDirectory, AccountExit, AccountLocks, AccountRunner, FleetHealth,
+    LeaseError, Traced,
 };
+
+/// What a test runner is told.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AccountSignal {
+    Send,
+    Changed,
+}
 
 /// Locks shared by every fake replica, like advisory locks on one server.
 #[derive(Clone, Default)]
@@ -49,7 +56,7 @@ impl AccountDirectory for FakeDirectory {
             .collect())
     }
 
-    async fn pairing_account(&self, _pairing: Uuid) -> Result<Option<Uuid>, LeaseError> {
+    async fn resolve(&self, _key: Uuid) -> Result<Option<Uuid>, LeaseError> {
         Ok(None)
     }
 
@@ -84,7 +91,9 @@ struct FakeRunner {
 }
 
 impl AccountRunner for FakeRunner {
-    async fn run(&self, account: Uuid, mut control: AccountControl) -> AccountExit {
+    type Signal = AccountSignal;
+
+    async fn run(&self, account: Uuid, mut control: AccountControl<AccountSignal>) -> AccountExit {
         self.events.send(RunnerEvent::Started(account)).unwrap();
         loop {
             tokio::select! {
@@ -112,6 +121,11 @@ const CONFIG: SupervisorConfig = SupervisorConfig {
     stop_timeout: Duration::from_secs(5),
     drain_deadline: Duration::from_secs(100),
     health_every: Duration::from_secs(60),
+    names: FleetNames {
+        fleet: "test",
+        health_event: "test_session_health",
+        drain_event: "test_session_drain",
+    },
 };
 
 #[tokio::test(start_paused = true)]
@@ -149,15 +163,36 @@ async fn takes_free_accounts_up_to_its_cap_and_forwards_their_signals() {
         Some(RunnerEvent::Started(second))
     );
     signals
-        .send(Signal::SendRequested(second).into())
+        .send(
+            FleetSignal::Account {
+                account: second,
+                signal: AccountSignal::Send,
+                take: false,
+            }
+            .into(),
+        )
         .await
         .unwrap();
     signals
-        .send(Signal::SendRequested(third).into())
+        .send(
+            FleetSignal::Account {
+                account: third,
+                signal: AccountSignal::Send,
+                take: false,
+            }
+            .into(),
+        )
         .await
         .unwrap();
     signals
-        .send(Signal::GroupsRequested(first).into())
+        .send(
+            FleetSignal::Account {
+                account: first,
+                signal: AccountSignal::Changed,
+                take: false,
+            }
+            .into(),
+        )
         .await
         .unwrap();
     assert_eq!(
@@ -166,7 +201,7 @@ async fn takes_free_accounts_up_to_its_cap_and_forwards_their_signals() {
     );
     assert_eq!(
         runner_events.recv().await,
-        Some(RunnerEvent::Signal(first, AccountSignal::Groups))
+        Some(RunnerEvent::Signal(first, AccountSignal::Changed))
     );
     assert_eq!(
         *locks.held.lock().unwrap(),
@@ -186,7 +221,9 @@ struct SpanRunner {
 }
 
 impl AccountRunner for SpanRunner {
-    async fn run(&self, account: Uuid, mut control: AccountControl) -> AccountExit {
+    type Signal = AccountSignal;
+
+    async fn run(&self, account: Uuid, mut control: AccountControl<AccountSignal>) -> AccountExit {
         self.started.send(account).unwrap();
         loop {
             tokio::select! {
@@ -228,7 +265,11 @@ async fn a_forwarded_signal_carries_the_span_of_its_notification() {
     let notification = tracing::info_span!("whatsapp.signal.receive");
     signals
         .send(Traced {
-            signal: Signal::SendRequested(account),
+            signal: FleetSignal::Account {
+                account: account,
+                signal: AccountSignal::Send,
+                take: false,
+            },
             span: notification.clone(),
         })
         .await

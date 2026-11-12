@@ -112,7 +112,9 @@ fn survive<Value>(
 }
 
 impl<Connector: SessionConnector> AccountRunner for AccountSessions<Connector> {
-    async fn run(&self, account: Uuid, control: AccountControl) -> AccountExit {
+    type Signal = AccountSignal;
+
+    async fn run(&self, account: Uuid, control: AccountControl<AccountSignal>) -> AccountExit {
         let lease = match self.sessions.begin_lease(account).await {
             Ok(lease) => lease,
             Err(report) if matches!(report.current_context(), ExternalChatError::NotFound) => {
@@ -319,7 +321,7 @@ impl<Session: WhatsAppSession> Running<'_, Session> {
     async fn serve(
         &mut self,
         mut events: mpsc::UnboundedReceiver<SessionEvent>,
-        mut control: AccountControl,
+        mut control: AccountControl<AccountSignal>,
     ) -> AccountExit {
         let gate = Arc::clone(&self.gate);
         let mut tick = tokio::time::interval(self.config.tick_every);

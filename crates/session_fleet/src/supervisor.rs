@@ -11,33 +11,50 @@ use tokio_util::sync::CancellationToken;
 use tracing::Instrument;
 use uuid::Uuid;
 
-use super::ports::{
-    AccountControl, AccountDirectory, AccountExit, AccountLocks, AccountRunner, AccountSignal,
-    LeaseError, Traced,
+use crate::ports::{
+    AccountControl, AccountDirectory, AccountExit, AccountLocks, AccountRunner, LeaseError, Traced,
 };
 
 #[cfg(test)]
 mod test;
 
-/// Signals for this replica, one per `NOTIFY` (see `outbound::signals`).
+/// Signals for this replica, one per `NOTIFY` (see [`crate::listener`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Signal {
-    /// `whatsapp_account_released`: another replica let the account go.
-    AccountReleased(Uuid),
-    /// `whatsapp_pairing_requested`, carrying the pairing id.
-    PairingRequested(Uuid),
-    /// `whatsapp_send_requested`.
-    SendRequested(Uuid),
-    /// `whatsapp_roster_requested`.
-    GroupsRequested(Uuid),
-    /// `whatsapp_lookup_requested`.
-    LookupRequested(Uuid),
-    /// `whatsapp_history_requested`.
-    HistoryRequested(Uuid),
-    /// `whatsapp_account_changed`.
-    AccountChanged(Uuid),
-    /// The listener reconnected, so notifications may have been missed.
-    Resync,
+pub enum FleetSignal<Signal> {
+    /// Another replica let the account go: take it.
+    Released(Uuid),
+    /// Work for an account. With `take`, an account no runner here holds is
+    /// taken (the signal says it needs a session); without, it is ignored.
+    Account {
+        /// The account.
+        account: Uuid,
+        /// What its runner is told.
+        signal: Signal,
+        /// Take the account when this replica doesn't run it.
+        take: bool,
+    },
+    /// Work for the account [`AccountDirectory::resolve`] finds for `key`;
+    /// taken when this replica doesn't run it.
+    Keyed {
+        /// The key (WhatsApp: a pairing transaction).
+        key: Uuid,
+        /// What the account's runner is told.
+        signal: Signal,
+    },
+    /// The listener reconnected, so notifications may have been missed:
+    /// every runner gets `signal`, then free accounts are looked for.
+    Resync(Signal),
+}
+
+/// What a fleet is called in its spans and log events.
+#[derive(Debug, Clone, Copy)]
+pub struct FleetNames {
+    /// The `fleet` field of every span (`whatsapp`, `slack`).
+    pub fleet: &'static str,
+    /// `telemetry_event` of the periodic health report.
+    pub health_event: &'static str,
+    /// `telemetry_event` of the drain summary.
+    pub drain_event: &'static str,
 }
 
 /// Limits and timings.
@@ -57,6 +74,8 @@ pub struct SupervisorConfig {
     pub drain_deadline: Duration,
     /// How often to report fleet health.
     pub health_every: Duration,
+    /// Names in telemetry.
+    pub names: FleetNames,
 }
 
 /// Why the supervisor returned early.
@@ -74,8 +93,8 @@ pub enum SupervisorError {
 /// the runner re-read its state, so dropped duplicates lose nothing.
 const ACCOUNT_SIGNAL_CAPACITY: usize = 8;
 
-struct Running {
-    signals: mpsc::Sender<Traced<AccountSignal>>,
+struct Running<Signal> {
+    signals: mpsc::Sender<Traced<Signal>>,
     release: CancellationToken,
     stop: CancellationToken,
     /// Ends the runner's task when it ignores `stop` for `stop_timeout`.
@@ -83,12 +102,12 @@ struct Running {
 }
 
 /// Runs the accounts this replica holds locks for.
-pub struct Supervisor<Locks, Directory, Runner> {
+pub struct Supervisor<Locks, Directory, Runner: AccountRunner> {
     locks: Locks,
     directory: Directory,
     runner: Arc<Runner>,
     config: SupervisorConfig,
-    accounts: HashMap<Uuid, Running>,
+    accounts: HashMap<Uuid, Running<Runner::Signal>>,
     tasks: JoinSet<AccountExit>,
     task_accounts: HashMap<Id, Uuid>,
 }
@@ -98,6 +117,7 @@ where
     Locks: AccountLocks,
     Directory: AccountDirectory,
     Runner: AccountRunner,
+    Runner::Signal: Clone,
 {
     /// A supervisor over one lock connection.
     pub fn new(
@@ -121,7 +141,7 @@ where
     /// are lost (then stops every account and returns the error).
     pub async fn run(
         mut self,
-        signals: &mut mpsc::Receiver<Traced<Signal>>,
+        signals: &mut mpsc::Receiver<Traced<FleetSignal<Runner::Signal>>>,
         shutdown: CancellationToken,
     ) -> Result<(), SupervisorError> {
         let lost = self.locks.lost();
@@ -159,56 +179,51 @@ where
                     return Err(SupervisorError::LocksLost);
                 }
                 Err(LeaseError::Internal(report)) => {
-                    tracing::warn!(error = %report, "WhatsApp account supervision step failed");
+                    tracing::warn!(fleet = self.config.names.fleet, error = %report, "Account supervision step failed");
                 }
             }
         }
     }
 
-    async fn handle(&mut self, signal: Signal, span: &tracing::Span) -> Result<(), LeaseError> {
+    async fn handle(
+        &mut self,
+        signal: FleetSignal<Runner::Signal>,
+        span: &tracing::Span,
+    ) -> Result<(), LeaseError> {
         match signal {
-            Signal::AccountReleased(account) => self.take(account).await,
-            Signal::PairingRequested(pairing) => {
-                match self.directory.pairing_account(pairing).await? {
-                    Some(account) if self.accounts.contains_key(&account) => {
-                        self.forward(account, AccountSignal::Pairing(pairing), span);
-                        Ok(())
-                    }
-                    Some(account) => self.take(account).await,
-                    None => Ok(()),
+            FleetSignal::Released(account) => self.take(account).await,
+            FleetSignal::Keyed { key, signal } => match self.directory.resolve(key).await? {
+                Some(account) if self.accounts.contains_key(&account) => {
+                    self.forward(account, signal, span);
+                    Ok(())
+                }
+                Some(account) => self.take(account).await,
+                None => Ok(()),
+            },
+            FleetSignal::Account {
+                account,
+                signal,
+                take,
+            } => {
+                if self.accounts.contains_key(&account) {
+                    self.forward(account, signal, span);
+                    Ok(())
+                } else if take {
+                    self.take(account).await
+                } else {
+                    Ok(())
                 }
             }
-            Signal::SendRequested(account) => {
-                self.forward(account, AccountSignal::Send, span);
-                Ok(())
-            }
-            Signal::GroupsRequested(account) => {
-                self.forward(account, AccountSignal::Groups, span);
-                Ok(())
-            }
-            Signal::LookupRequested(account) => {
-                self.forward(account, AccountSignal::Lookup, span);
-                Ok(())
-            }
-            Signal::HistoryRequested(account) => {
-                self.forward(account, AccountSignal::History, span);
-                Ok(())
-            }
-            Signal::AccountChanged(account) if self.accounts.contains_key(&account) => {
-                self.forward(account, AccountSignal::Changed, span);
-                Ok(())
-            }
-            Signal::AccountChanged(account) => self.take(account).await,
-            Signal::Resync => {
+            FleetSignal::Resync(signal) => {
                 for running in self.accounts.values() {
-                    let _ = running.signals.try_send(AccountSignal::Resync.into());
+                    let _ = running.signals.try_send(signal.clone().into());
                 }
                 self.rescan().await
             }
         }
     }
 
-    fn forward(&self, account: Uuid, signal: AccountSignal, span: &tracing::Span) {
+    fn forward(&self, account: Uuid, signal: Runner::Signal, span: &tracing::Span) {
         if let Some(running) = self.accounts.get(&account) {
             // Full means the runner already has work queued; see the capacity.
             let _ = running.signals.try_send(Traced {
@@ -228,7 +243,8 @@ where
             return Ok(());
         }
         let span = tracing::info_span!(
-            "whatsapp.account.lease",
+            "session_fleet.account.lease",
+            fleet = self.config.names.fleet,
             account_id = %account,
             acquired = tracing::field::Empty,
             held = self.accounts.len(),
@@ -284,7 +300,7 @@ where
             // session, so it is announced like any stopped account.
             Err(error) if error.is_cancelled() && draining => (error.id(), AccountExit::Stopped),
             Err(error) => {
-                tracing::error!(error = %error, "WhatsApp account task panicked");
+                tracing::error!(fleet = self.config.names.fleet, error = %error, "Account task panicked");
                 (error.id(), AccountExit::Failed)
             }
         };
@@ -294,7 +310,8 @@ where
         self.accounts.remove(&account);
         let announce = exit == AccountExit::Released || (draining && exit == AccountExit::Stopped);
         let span = tracing::info_span!(
-            "whatsapp.account.release",
+            "session_fleet.account.release",
+            fleet = self.config.names.fleet,
             account_id = %account,
             exit = ?exit,
             announced = announce,
@@ -313,11 +330,12 @@ where
     async fn report_health(&self) -> Result<(), LeaseError> {
         let health = self.directory.health().await?;
         tracing::info!(
-            telemetry_event = "whatsapp_session_health",
+            telemetry_event = self.config.names.health_event,
+            fleet = self.config.names.fleet,
             accounts_running = self.accounts.len(),
             accounts_unowned = health.accounts_unowned,
             oldest_unprocessed_inbound_seconds = health.oldest_unprocessed_inbound_seconds,
-            "WhatsApp session health"
+            "Session fleet health"
         );
         Ok(())
     }
@@ -328,7 +346,8 @@ where
         }
         let room = self.config.max_accounts - self.accounts.len() as u32;
         let span = tracing::info_span!(
-            "whatsapp.account.rescan",
+            "session_fleet.account.rescan",
+            fleet = self.config.names.fleet,
             room,
             candidates = tracing::field::Empty,
         );
@@ -353,7 +372,8 @@ where
         let started = tokio::time::Instant::now();
         let drain_end = started + self.config.drain_deadline;
         let span = tracing::info_span!(
-            "whatsapp.drain",
+            "session_fleet.drain",
+            fleet = self.config.names.fleet,
             accounts = self.accounts.len(),
             batch = self.config.drain_batch,
             released = tracing::field::Empty,
@@ -428,7 +448,7 @@ where
                         tracing::error!(
                             parent: &span,
                             count = pending.len(),
-                            "WhatsApp accounts did not stop in time; aborting them"
+                            "Accounts did not stop in time; aborting them"
                         );
                         for account in &pending {
                             if let Some(running) = self.accounts.get(account) {
@@ -447,7 +467,7 @@ where
                         return Err(SupervisorError::LocksLost);
                     }
                     Err(LeaseError::Internal(report)) => {
-                        tracing::warn!(parent: &span, error = %report, "Releasing a WhatsApp account failed");
+                        tracing::warn!(parent: &span, error = %report, "Releasing an account failed");
                     }
                 }
             }
@@ -456,11 +476,12 @@ where
         span.record("timed_out", timed_out);
         tracing::info!(
             parent: &span,
-            telemetry_event = "whatsapp_session_drain",
+            telemetry_event = self.config.names.drain_event,
+            fleet = self.config.names.fleet,
             drain_duration_ms = started.elapsed().as_millis() as u64,
             accounts_released = released,
             accounts_timed_out = timed_out,
-            "WhatsApp session drain finished"
+            "Session fleet drain finished"
         );
         Ok(())
     }
@@ -478,8 +499,9 @@ where
         .is_err()
         {
             tracing::error!(
+                fleet = self.config.names.fleet,
                 count,
-                "WhatsApp accounts did not stop in time; aborting them"
+                "Accounts did not stop in time; aborting them"
             );
             self.tasks.shutdown().await;
         }
