@@ -4015,6 +4015,7 @@ dependencies = [
  "axum",
  "base64 0.22.1",
  "bot_id",
+ "channel_change_db_utils",
  "channels",
  "chrono",
  "cloudfront_sign",
