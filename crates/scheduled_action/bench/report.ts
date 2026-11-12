@@ -56,11 +56,14 @@ export const passedAll = (attempt: Attempt) =>
   attempt.quality.length > 0 && attempt.quality.every((check) => check.holds) && (attempt.run?.holds ?? true);
 
 /**
- * It answered: the draft endpoint replied without an error status, or the
- * bare turn ended. Only these are timed; the rest fail every check, so a
- * build that fails fast can't look faster.
+ * It came back with a routine or a step: only these are timed. A draft that
+ * failed, a bare turn that ended or ran out of time without a routine, and
+ * the eval's own errors still count against quality (unless asking was
+ * right) and as not under 15 s, so a build can't look faster by failing fast
+ * or drop its slowest drafts by running out of time.
  */
-export const answered = (attempt: Attempt) => attempt.error === undefined;
+export const delivered = (attempt: Attempt) =>
+  attempt.error === undefined && (attempt.draft?.outcome === 'routine' || attempt.draft?.outcome === 'step');
 
 const graded = (attempt: Attempt) =>
   attempt.grade && 'score' in attempt.grade ? attempt.grade.score : undefined;
@@ -82,7 +85,7 @@ const pct = (share: number) => (Number.isNaN(share) ? '–' : `${Math.round(shar
 export const TARGET_MS = 15_000;
 
 export function summary(attempts: Attempt[]) {
-  const timed = attempts.filter(answered);
+  const timed = attempts.filter(delivered);
   const wall = timed.map((attempt) => attempt.wallMs);
   const with_ = timed.filter((attempt) => attempt.breakdown);
   const pick = (f: (b: Breakdown) => number) => with_.map((attempt) => f(attempt.breakdown as Breakdown));
@@ -93,8 +96,9 @@ export function summary(attempts: Attempt[]) {
     median: median(wall),
     p90: quantile(wall, 0.9),
     worst: wall.length ? Math.max(...wall) : Number.NaN,
-    under: timed.filter((attempt) => attempt.wallMs < TARGET_MS).length / timed.length,
-    errors: attempts.length - timed.length,
+    // Of every request: one that got no routine didn't get one in 15 s.
+    under: timed.filter((attempt) => attempt.wallMs < TARGET_MS).length / attempts.length,
+    errors: attempts.filter((attempt) => attempt.error !== undefined).length,
     quality: attempts.filter(passedAll).length / attempts.length,
     mechanical:
       attempts.filter((attempt) => attempt.quality.length && attempt.quality.every((check) => check.holds)).length /
@@ -177,7 +181,7 @@ export type Verdict = {
   verdict: 'win' | 'loss' | 'noise';
   why: string;
   pairs: number;
-  /** Pairs where both sides answered, which the time compares. */
+  /** Pairs where both sides came back with a routine, which the time compares. */
   timedPairs: number;
   /** B's time over A's, per pair: median and 95% interval. */
   timeRatio: number;
@@ -197,9 +201,9 @@ export type Verdict = {
 export function verdict(a: Attempt[], b: Attempt[], margin = QUALITY_MARGIN): Verdict {
   const sample = pairs(a, b);
   if (sample.length < 5) throw new Error(`only ${sample.length} paired attempts; run both sides on the same rounds`);
-  // Time compares the pairs where both sides answered; quality counts every pair.
-  const timedPairs = sample.filter((pair) => answered(pair.a) && answered(pair.b));
-  if (timedPairs.length < 5) throw new Error(`only ${timedPairs.length} pairs where both sides answered`);
+  // Time compares the pairs where both sides came back with a routine; quality counts every pair.
+  const timedPairs = sample.filter((pair) => delivered(pair.a) && delivered(pair.b));
+  if (timedPairs.length < 5) throw new Error(`only ${timedPairs.length} pairs where both sides came back with a routine`);
   const ratio = (drawn: Pair[]) => Math.exp(median(drawn.map((pair) => Math.log(pair.b.wallMs / pair.a.wallMs))));
   const share = (drawn: Pair[], side: 'a' | 'b') => drawn.filter((pair) => passedAll(pair[side])).length / drawn.length;
   const delta = (drawn: Pair[]) => share(drawn, 'b') - share(drawn, 'a');
