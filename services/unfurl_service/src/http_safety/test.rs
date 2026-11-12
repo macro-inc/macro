@@ -139,3 +139,87 @@ async fn test_assert_not_internal_allows_public() {
     let result = assert_not_internal(&url).await;
     assert!(result.is_ok());
 }
+
+#[test]
+fn blocks_every_non_public_range() {
+    let blocked = [
+        // 0.0.0.0/8, not just 0.0.0.0.
+        "0.1.2.3",
+        // 100.64.0.0/10: carrier-grade NAT and Tailscale.
+        "100.64.0.1",
+        "100.127.255.254",
+        "192.0.0.1",
+        "198.18.0.1",
+        "198.19.255.255",
+        "192.0.2.1",
+        "224.0.0.1",
+        "240.0.0.1",
+        "255.255.255.255",
+        "ff02::1",
+        "fec0::1",
+        "2001:db8::1",
+        "64:ff9b:1::1",
+        "100::1",
+        // fd00:ec2::254: the EC2 metadata service over IPv6.
+        "fd00:ec2::254",
+        // NAT64 wrapping 127.0.0.1 and 169.254.169.254.
+        "64:ff9b::7f00:1",
+        "64:ff9b::a9fe:a9fe",
+        // IPv4-compatible ::127.0.0.1 and ::10.0.0.1.
+        "::7f00:1",
+        "::a00:1",
+        // 6to4 wrapping 127.0.0.1 and 100.64.0.1.
+        "2002:7f00:1::",
+        "2002:6440:1::",
+        // Teredo.
+        "2001::1",
+        "2001:0:4136:e378:8000:63bf:3fff:fdd2",
+        // IPv4-mapped CGNAT.
+        "::ffff:100.64.0.1",
+    ];
+    for ip in blocked {
+        assert!(
+            is_private_ip(&ip.parse().unwrap()),
+            "{ip} should be blocked"
+        );
+    }
+}
+
+#[test]
+fn allows_public_addresses_including_wrapped_public_v4() {
+    let allowed = [
+        "8.8.8.8",
+        "100.63.255.255",
+        "100.128.0.1",
+        "198.20.0.1",
+        "2606:4700:4700::1111",
+        "64:ff9b::808:808",
+        "2002:808:808::",
+        "::ffff:1.1.1.1",
+    ];
+    for ip in allowed {
+        assert!(
+            !is_private_ip(&ip.parse().unwrap()),
+            "{ip} should be allowed"
+        );
+    }
+}
+
+#[tokio::test]
+async fn assert_not_internal_blocks_wrapped_and_cgnat_literals() {
+    for raw in [
+        "http://100.64.0.1/",
+        "http://0.1.2.3/",
+        "http://[64:ff9b::7f00:1]/",
+        "http://[::127.0.0.1]/",
+        "http://[::ffff:169.254.169.254]/",
+        "http://[2002:7f00:1::]/",
+        "http://[fd00:ec2::254]/",
+    ] {
+        let url = Url::parse(raw).unwrap();
+        assert!(
+            matches!(assert_not_internal(&url).await, Err(FetchError::PrivateIp)),
+            "{raw} should be refused"
+        );
+    }
+}

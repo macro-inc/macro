@@ -5,7 +5,7 @@ use futures::StreamExt;
 use reqwest::StatusCode;
 use std::error::Error;
 use std::fmt;
-use std::net::IpAddr;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::sync::Arc;
 use url::Url;
 
@@ -30,6 +30,7 @@ impl SsrfSafeHttpClient {
             .connect_timeout(CONNECT_TIMEOUT)
             .redirect(reqwest::redirect::Policy::none())
             .dns_resolver(Arc::new(PrivateIpFilteringResolver))
+            .no_proxy()
             .build()
             .map(Self)
     }
@@ -142,24 +143,78 @@ pub async fn assert_not_internal(url: &Url) -> Result<(), FetchError> {
 }
 
 pub fn is_private_ip(ip: &IpAddr) -> bool {
-    match ip {
-        IpAddr::V4(v4) => {
-            v4.is_loopback()
-                || v4.is_private()
-                || v4.is_link_local()
-                || v4.is_unspecified()
-                || v4.is_broadcast()
-        }
-        IpAddr::V6(v6) => {
-            if let Some(mapped_v4) = v6.to_ipv4_mapped() {
-                return is_private_ip(&IpAddr::V4(mapped_v4));
-            }
-            v6.is_loopback()
-                || v6.is_unspecified()
-                || v6.is_unique_local()
-                || v6.is_unicast_link_local()
-        }
+    match *ip {
+        IpAddr::V4(ip) => is_blocked_ipv4(ip),
+        IpAddr::V6(ip) => match embedded_ipv4(ip) {
+            Some(ip) => is_blocked_ipv4(ip),
+            None => is_blocked_ipv6(ip),
+        },
     }
+}
+
+fn is_blocked_ipv4(ip: Ipv4Addr) -> bool {
+    let [first, second, third, _] = ip.octets();
+
+    // 0.0.0.0/8: "this network".
+    first == 0
+        || ip.is_private()
+        || ip.is_loopback()
+        // 169.254.0.0/16, including the 169.254.169.254 metadata service.
+        || ip.is_link_local()
+        // 100.64.0.0/10: carrier-grade NAT and Tailscale.
+        || (first == 100 && (second & 0xc0) == 64)
+        // 192.0.0.0/24: IETF protocol assignments.
+        || (first == 192 && second == 0 && third == 0)
+        // 198.18.0.0/15: benchmarking.
+        || (first == 198 && (second & 0xfe) == 18)
+        || ip.is_documentation()
+        || ip.is_multicast()
+        // 240.0.0.0/4 reserved, and the broadcast address.
+        || first >= 240
+}
+
+fn is_blocked_ipv6(ip: Ipv6Addr) -> bool {
+    let segments = ip.segments();
+
+    ip.is_unspecified()
+        || ip.is_loopback()
+        || ip.is_multicast()
+        // fc00::/7, including the fd00:ec2::254 metadata service.
+        || ip.is_unique_local()
+        || ip.is_unicast_link_local()
+        // fec0::/10: deprecated site-local.
+        || (segments[0] & 0xffc0) == 0xfec0
+        // 2001::/32: Teredo, which tunnels to an obfuscated IPv4 address.
+        || (segments[0] == 0x2001 && segments[1] == 0)
+        // 2001:db8::/32: documentation.
+        || (segments[0] == 0x2001 && segments[1] == 0x0db8)
+        // 64:ff9b:1::/48: local-use NAT64.
+        || (segments[0] == 0x64 && segments[1] == 0xff9b && segments[2] == 1)
+        // 100::/64: discard-only.
+        || segments[..4] == [0x100, 0, 0, 0]
+}
+
+/// The IPv4 address an IPv6 address carries: IPv4-mapped (`::ffff:0:0/96`),
+/// NAT64 (`64:ff9b::/96`), IPv4-compatible (`::/96`), or 6to4 (`2002::/16`).
+fn embedded_ipv4(ip: Ipv6Addr) -> Option<Ipv4Addr> {
+    if let Some(mapped) = ip.to_ipv4_mapped() {
+        return Some(mapped);
+    }
+
+    let segments = ip.segments();
+    let low_bits = Ipv4Addr::from((u32::from(segments[6]) << 16) | u32::from(segments[7]));
+
+    if segments[..6] == [0x64, 0xff9b, 0, 0, 0, 0] || segments[..6] == [0; 6] {
+        return Some(low_bits);
+    }
+
+    if segments[0] == 0x2002 {
+        return Some(Ipv4Addr::from(
+            (u32::from(segments[1]) << 16) | u32::from(segments[2]),
+        ));
+    }
+
+    None
 }
 
 pub async fn send_request(
