@@ -172,10 +172,10 @@ fn code_edge_arrows_insert_a_caret_before_the_first_block_and_leave_middle_lines
             Ok((code, highlight))
         })?
         .0;
-    let up = Command::Key {
-        command: KeyCommand::ArrowUp,
-        event: None,
-    };
+    let up = Command::KeyDown(KeyEvent {
+        key: "ArrowUp".into(),
+        ..KeyEvent::default()
+    });
     assert_eq!(editor.dispatch(&up)?.0, Handled::No);
     assert_eq!(
         editor.state().view().first_child(NodeKey::ROOT),
@@ -221,10 +221,10 @@ fn fresh_code_text_uses_edge_navigation_without_model_highlight_nodes() -> Resul
         .0;
     assert_eq!(
         editor
-            .dispatch(&Command::Key {
-                command: KeyCommand::ArrowUp,
-                event: None
-            })?
+            .dispatch(&Command::KeyDown(KeyEvent {
+                key: "ArrowUp".into(),
+                ..KeyEvent::default()
+            }))?
             .0,
         Handled::Yes
     );

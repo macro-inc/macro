@@ -41,14 +41,9 @@ pub(super) fn register(builder: EditorBuilder) -> EditorBuilder {
             TransformScope::Types(&["text", "code-highlight"]),
         )
 }
-static COMMANDS: [CommandRegistration; 8] = [
+static COMMANDS: [CommandRegistration; 7] = [
     CommandRegistration {
-        command: CommandKind::Key(KeyCommand::ArrowUp),
-        priority: CommandPriority::Low,
-        placement: Placement::After,
-    },
-    CommandRegistration {
-        command: CommandKind::Key(KeyCommand::ArrowDown),
+        command: CommandKind::KeyDown,
         priority: CommandPriority::Low,
         placement: Placement::After,
     },
@@ -88,6 +83,9 @@ impl Plugin for Code {
     fn name(&self) -> &'static str {
         "group-b.code"
     }
+    fn key_down_keys(&self) -> lexical_model::KeyDownKeys {
+        lexical_model::KeyDownKeys::Only(&["ArrowUp", "ArrowDown"])
+    }
     fn commands(&self) -> &[CommandRegistration] {
         &COMMANDS
     }
@@ -100,14 +98,12 @@ impl Plugin for Code {
                 return apply(tx, command);
             }
             Command::SelectAll(_) => return select_all(tx),
-            Command::Key {
-                command: KeyCommand::ArrowUp,
-                ..
-            } => return navigation::arrow(tx, false),
-            Command::Key {
-                command: KeyCommand::ArrowDown,
-                ..
-            } => return navigation::arrow(tx, true),
+            Command::KeyDown(event) if event.key.as_ref() == "ArrowUp" => {
+                return navigation::arrow(tx, false);
+            }
+            Command::KeyDown(event) if event.key.as_ref() == "ArrowDown" => {
+                return navigation::arrow(tx, true);
+            }
             Command::Key {
                 command: KeyCommand::Tab,
                 event,

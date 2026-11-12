@@ -191,3 +191,91 @@ fn arrows_select_adjacent_inline_decorators_and_leave_them_beside_the_node() {
     );
     assert!(!prevented(&view));
 }
+
+#[test]
+fn vertical_core_fallthrough_leaves_each_selected_block_at_the_source_model_point() {
+    for kind in [
+        "image",
+        "video",
+        "horizontalrule",
+        "database-query",
+        "document-card",
+    ] {
+        let config = crate::application::application_editor_config(
+            EditorConfig::default(),
+            Arc::new(AtomicI64::new(0)),
+            macro_document_model::EditorType::MarkdownSync,
+        );
+        let mut surface = EditorSurface::new(config, 7, now(0)).expect("Macro surface");
+        let doc = lexical_loro::new_doc(7).expect("document");
+        let mut view = Vec::new();
+        surface
+            .init(&doc, now(0), Access::Edit, &mut view)
+            .expect("initialize");
+        surface.apply(&doc, Input::SetState {
+            state: serde_json::from_value(json!({"root":{"type":"root","children":[
+                {"type":"paragraph","children":[{"type":"text","text":"Before"}]},
+                {"type":kind,"displayMode":"table","queryId":"query","prompt":"Count entries"},
+                {"type":"paragraph","children":[{"type":"text","text":"end"}]}
+            ]}})).expect("typed model"), tags: TagSet::default(),
+        }, now(1), Access::Edit, &mut view).expect("set state");
+        let children = surface
+            .state()
+            .view()
+            .children_keys(NodeKey::ROOT)
+            .expect("root children");
+        assert_eq!(surface.state().view().type_name(children[1]).unwrap(), kind);
+        for (key, next) in [("ArrowUp", children[0]), ("ArrowDown", children[2])] {
+            surface
+                .apply(
+                    &doc,
+                    Input::SelectionFromView {
+                        selection: ViewSelection::Node(vec![children[1]]),
+                        change: None,
+                    },
+                    now(2),
+                    Access::Edit,
+                    &mut view,
+                )
+                .expect("node selection");
+            view.clear();
+            let event = KeyEvent {
+                key: key.into(),
+                ..KeyEvent::default()
+            };
+            let command = if key == "ArrowUp" {
+                KeyCommand::ArrowUp
+            } else {
+                KeyCommand::ArrowDown
+            };
+            surface
+                .apply(
+                    &doc,
+                    Input::KeyDown {
+                        event: event.clone(),
+                        routed: Some(Command::Key {
+                            command,
+                            event: Some(event),
+                        }),
+                        routed_prevent_default: false,
+                        selection: ViewSelection::KeepModel,
+                    },
+                    now(3),
+                    Access::Edit,
+                    &mut view,
+                )
+                .expect("vertical key");
+            let Some(Selection::Range(range)) = surface.state().selection() else {
+                panic!("range after {key} {kind}");
+            };
+            // Source selectPrevious uses the paragraph end, selectNext its
+            // Element0 start. DOM feedback may subsequently descend to text.
+            assert_eq!(
+                range.anchor,
+                Point::element(next, ChildIndex(if key == "ArrowUp" { 1 } else { 0 }))
+            );
+            assert_eq!(range.focus, range.anchor);
+            assert!(prevented(&view));
+        }
+    }
+}

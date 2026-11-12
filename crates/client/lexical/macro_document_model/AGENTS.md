@@ -10,6 +10,8 @@ The transformer layer uses the shared lexical_markdown engine; route adapters ar
 
 ## Boundaries
 
+- Run Code vertical navigation on generic KeyDown LOW with its immutable Up/Down eligibility; keep key-specific application stopping after generic dispatch and ordinary Core movement at Editor priority.
+
 - Prepare vertical block stops with block_navigation from the pending tree and selection; select only actual noninline keyboard-selectable image, video, horizontalrule, database-query and document-card nodes, using fresh host edge rectangles only when the caret is inside a block.
 
 - Read toolbar range format, link presence and ordered top-level kinds through group-b.format-facts; preserve Source endpoint, shadow-root and raw list-kind rules, and leave table facts with group-b.table-facts.
