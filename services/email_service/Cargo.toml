@@ -210,3 +210,5 @@ tracing-opentelemetry = { workspace = true }
 tracing-subscriber = { workspace = true }
 macro_auth = { path = "../../crates/macro_auth", features = ["testing"] }
 macro_db_migrator = { path = "../../crates/macro_db_migrator" }
+gmail_emulator = { path = "../../crates/gmail_emulator" }
+outlook_emulator = { path = "../../crates/outlook_emulator" }
