@@ -228,8 +228,9 @@ export class Task extends Document {
    * branch names. It is the slug of the team the task is numbered in, then
    * the task's number in that team; `documents.byTeamSlug` resolves a slug of
    * the caller's current team back to its task. `undefined` when the task has
-   * no team number, or that team is not one of the caller's. For the whole
-   * branch name Macro suggests, call `branchName()`.
+   * no team number, or that team is not one of the caller's. `branchName()`
+   * suggests a whole branch name, but takes its prefix from the caller's first
+   * team, so it can differ from this slug.
    *
    * @readonly
    */
