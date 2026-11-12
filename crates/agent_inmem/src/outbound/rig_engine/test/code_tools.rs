@@ -66,13 +66,9 @@ fn request(mcp_tools: Option<RemoteMcpToolSet>) -> TurnRequest {
     }
 }
 
-fn mode(request: &TurnRequest, only_code: bool) -> Option<ToolMode> {
-    tool_mode(request, only_code).ok()
-}
-
 #[tokio::test]
-async fn conversation_turns_run_code_mode_whenever_every_code_tool_is_listed() {
-    assert_eq!(mode(&request(None), false), Some(ToolMode::Standard));
+async fn conversation_turns_need_every_code_tool_and_never_fall_back() {
+    assert!(code_tools_listed(&request(None)).is_err());
     for names in [
         vec![],
         vec!["ExecuteCode"],
@@ -80,37 +76,23 @@ async fn conversation_turns_run_code_mode_whenever_every_code_tool_is_listed() {
         vec!["ExecuteCode", "DescribeCodeTools"],
     ] {
         let (server, tools) = remote(&names).await;
-        assert_eq!(mode(&request(Some(tools)), false), Some(ToolMode::Standard));
+        assert!(
+            code_tools_listed(&request(Some(tools))).is_err(),
+            "{names:?}"
+        );
         server.cancel().await.unwrap();
     }
     let (server, tools) = remote(&["ExecuteCode", "DescribeCodeTools", "ReadCodeDocs"]).await;
-    let mut turn = request(Some(tools));
-    turn.purpose = TurnPurpose::Summary;
-    assert_eq!(mode(&turn, false), Some(ToolMode::Standard));
-    turn.purpose = TurnPurpose::Conversation;
-    assert_eq!(mode(&turn, false), Some(ToolMode::Code));
+    assert!(code_tools_listed(&request(Some(tools))).is_ok());
     server.cancel().await.unwrap();
 }
 
 #[tokio::test]
-async fn code_mode_only_turns_never_fall_back_to_direct_tools() {
-    assert!(tool_mode(&request(None), true).is_err());
-    for names in [vec![], vec!["ExecuteCode", "DescribeCodeTools"]] {
-        let (server, tools) = remote(&names).await;
-        assert!(tool_mode(&request(Some(tools)), true).is_err());
-        server.cancel().await.unwrap();
-    }
+async fn summaries_and_other_owners_need_no_code_tools() {
     let mut summary = request(None);
     summary.purpose = TurnPurpose::Summary;
-    assert_eq!(mode(&summary, true), Some(ToolMode::Standard));
-    let (server, tools) = remote(&["ExecuteCode", "DescribeCodeTools", "ReadCodeDocs"]).await;
-    assert_eq!(mode(&request(Some(tools)), true), Some(ToolMode::Code));
-    server.cancel().await.unwrap();
-}
-
-#[tokio::test]
-async fn sessions_without_a_user_owner_keep_the_direct_tools() {
-    let mut turn = request(None);
-    turn.owner = Owner::Team(uuid::Uuid::now_v7());
-    assert_eq!(mode(&turn, true), Some(ToolMode::Standard));
+    assert!(code_tools_listed(&summary).is_ok());
+    let mut team = request(None);
+    team.owner = Owner::Team(uuid::Uuid::now_v7());
+    assert!(code_tools_listed(&team).is_ok());
 }
