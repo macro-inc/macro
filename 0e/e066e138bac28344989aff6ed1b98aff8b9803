@@ -1,0 +1,46 @@
+tooling/xtask/crates/xtask_workflows/src/workflows/ci_gate_sweep.rs
+  s_17d61e2f251d32::t_6bfec5dd4fe001 1-47
+tooling/xtask/crates/xtask_workflows/src/workflows/scripts/ci_gate.ts
+  s_17d61e2f251d32::t_65e4b28a264cc3 14-22,50-58,62-75,127,217-220,246-287,324-327,341,494-573,576-577,579-580,582-601,610
+  s_17d61e2f251d32::t_3461c89222d904 574-575,578,581
+tooling/xtask/crates/xtask_workflows/src/workflows/export_ci_telemetry.rs
+  s_17d61e2f251d32::t_354b405277e0e8 29
+.agents/skills/run-ci/SKILL.md
+  s_17d61e2f251d32::t_87a61be88ce66a 65-66,75-78
+  s_17d61e2f251d32::t_c5274296465f7c 79
+docs/development/ci.md
+  s_17d61e2f251d32::t_87a61be88ce66a 17-20
+.github/workflows/export-ci-telemetry.yml
+  s_17d61e2f251d32::t_354b405277e0e8 22
+tooling/xtask/crates/xtask_workflows/src/workflows.rs
+  s_17d61e2f251d32::t_6bfec5dd4fe001 33,351-354
+  s_17d61e2f251d32::t_59fff8638b8da0 355
+tooling/xtask/crates/xtask_workflows/src/workflows/scripts/ci_gate.test.ts
+  s_17d61e2f251d32::t_31dec4c15f18f8 16-21,216-346
+.github/workflows/ci-gate-fork.yml
+  s_17d61e2f251d32::t_cd40d3df0a3ffd 43-51,79-87,91-104,156,246-249,275-316,353-356,370,523-630,639,687-695,723-731,735-748,800,890-893,919-960,997-1000,1014,1167-1274,1283
+.github/workflows/ci-gate-label.yml
+  s_17d61e2f251d32::t_b9e5002aa8e199 38-46,74-82,86-99,151,241-244,270-311,348-351,365,518-625,634
+.github/workflows/ci-gate-reminder.yml
+  s_17d61e2f251d32::t_6e60f386718e02 37-45,73-81,85-98,150,240-243,269-310,347-350,364,517-624,633
+.github/workflows/ci-gate-sweep.yml
+  s_17d61e2f251d32::t_679c7684849310 1-651
+.github/workflows/pr-ci.yml
+  s_17d61e2f251d32::t_a334db78100b55 47-55,83-91,95-108,160,250-253,279-320,357-360,374,527-634,643,848-856,884-892,896-909,961,1051-1054,1080-1121,1158-1161,1175,1328-1435,1444
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "0ee066e138bac28344989aff6ed1b98aff8b9803",
+  "prompts": {},
+  "sessions": {
+    "s_17d61e2f251d32": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d9bf6d10-a996-4fd0-93a1-a23330860332",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
