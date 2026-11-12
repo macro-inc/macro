@@ -29,7 +29,7 @@ mod test;
 
 /// The PostHog flag for agent teammates, shared with the web app. Off, or
 /// unreadable, means no agent teammates for that admin.
-pub const AGENT_TEAMMATES_FLAG: &str = "enable-agent-teammates";
+pub use agent_credentials::AGENT_TEAMMATES_FLAG;
 
 /// Variables the brain reads from its enrollment, besides the addresses an
 /// [`EnrollmentEnvironment`] supplies.

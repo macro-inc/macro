@@ -1,7 +1,9 @@
 //! Agent teammates' brains call the gateway with the agent's own Macro API
 //! key under `/brain/anthropic/*`; usage counts against the agent account.
 
-use std::{future::Future, pin::Pin};
+use std::{future::Future, pin::Pin, sync::Arc};
+
+use feature_flags::FeatureFlags;
 
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
@@ -26,6 +28,44 @@ pub(crate) type BrainLookup<'a> =
 pub(crate) trait BrainAuthenticator: Send + Sync + 'static {
     /// The agent teammate a live key belongs to; `None` for any other key.
     fn authenticate<'a>(&'a self, key: &'a str) -> BrainLookup<'a>;
+}
+
+type Evaluate =
+    dyn Fn(MacroUserIdStr<'static>) -> Pin<Box<dyn Future<Output = bool> + Send>> + Send + Sync;
+
+/// `enable-agent-teammates` for the agent's own account. No provider, a
+/// failed load or the flag off all refuse the brain route.
+#[derive(Clone, Default)]
+pub(crate) struct BrainRollout {
+    evaluate: Option<Arc<Evaluate>>,
+}
+
+impl BrainRollout {
+    pub(crate) fn new<Flags: FeatureFlags + 'static>(flags: Flags) -> Self {
+        let flags = Arc::new(flags);
+        Self {
+            evaluate: Some(Arc::new(move |user| {
+                let flags = Arc::clone(&flags);
+                Box::pin(async move {
+                    flags
+                        .load(&user)
+                        .await
+                        .inspect_err(|error| {
+                            tracing::warn!(?error, "agent teammates rollout unavailable; refusing the brain");
+                        })
+                        .unwrap_or_default()
+                        .is_enabled(agent_credentials::AGENT_TEAMMATES_FLAG)
+                })
+            })),
+        }
+    }
+
+    pub(crate) async fn enabled(&self, agent: &MacroUserIdStr<'static>) -> bool {
+        let Some(evaluate) = &self.evaluate else {
+            return false;
+        };
+        evaluate(agent.clone()).await
+    }
 }
 
 /// Keys from `user_api_key`, agents from `team_agents`.

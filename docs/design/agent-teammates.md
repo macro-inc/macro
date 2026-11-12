@@ -116,8 +116,10 @@ The agent's account appears only as a hash.
 
 - **Identity**: seeded from the invite form when filled; otherwise the agent
   asks its owner.
-- **Authority**: the owner is the inviting admin or the buyer; only the owner
-  gives orders; text the agent reads is never an order.
+- **Authority**: the owner is the inviting admin or the buyer, while they are
+  on the team; once they leave, the team's owner is, and is told once (checked
+  before every wake). Only the owner gives orders; text the agent reads is
+  never an order.
 - **Self-hosted**: supported through SOPS credentials, as a secondary path.
 - **Self-edits**: gated by the agent's own check; no GitHub CI for hosted
   agents.
@@ -141,5 +143,6 @@ The agent's account appears only as a hash.
 
 - `enable-agent-teammates`: every entry point (invite, the purchase default,
   enrollment, agent_git routes, the team_agents API, the image choice, the
-  web settings). Off, or an unreachable flag service, means off.
+  web settings, and the brain's `/brain/anthropic` gateway, evaluated for the
+  agent's own account). Off, or an unreachable flag service, means off.
 - `enable-agent-vault`: the secrets capability.

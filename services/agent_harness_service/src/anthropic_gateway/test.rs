@@ -515,7 +515,9 @@ async fn bundled_claude_models_reach_upstream_and_keep_their_billing_model() {
 
 mod brain_route {
     use super::*;
-    use crate::anthropic_gateway::brain::{BrainAuthenticator, BrainCaller, BrainLookup};
+    use crate::anthropic_gateway::brain::{
+        BrainAuthenticator, BrainCaller, BrainLookup, BrainRollout,
+    };
     use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 
     const AGENT: &str = "macro|sam-rivera-abc123@agents.macro.invalid";
@@ -535,9 +537,30 @@ mod brain_route {
         }
     }
 
+    /// Agent teammates on for [`AGENT`].
+    fn agent_teammates_on() -> BrainRollout {
+        let mut flags = FakeFeatureFlags::default();
+        flags.set(
+            MacroUserIdStr::parse_from_str(AGENT).unwrap().into_owned(),
+            Ok(FlagSnapshot::new([(
+                agent_credentials::AGENT_TEAMMATES_FLAG.into(),
+                FlagValue::Boolean(true),
+            )])),
+        );
+        BrainRollout::new(flags)
+    }
+
     async fn brain_gateway(
         upstream_url: &str,
         brains: Option<Arc<dyn BrainAuthenticator>>,
+    ) -> (Router, Arc<RecordingUsage>) {
+        brain_gateway_with(upstream_url, brains, agent_teammates_on()).await
+    }
+
+    async fn brain_gateway_with(
+        upstream_url: &str,
+        brains: Option<Arc<dyn BrainAuthenticator>>,
+        rollout: BrainRollout,
     ) -> (Router, Arc<RecordingUsage>) {
         let usage = Arc::new(RecordingUsage::default());
         let mut state = GatewayState::new(
@@ -551,7 +574,7 @@ mod brain_route {
         )
         .unwrap();
         if let Some(brains) = brains {
-            state = state.with_brains(brains);
+            state = state.with_brains(brains, rollout);
         }
         (router(state), usage)
     }
@@ -583,6 +606,36 @@ mod brain_route {
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].user.as_ref(), AGENT);
         assert_eq!(events[0].entity, None);
+    }
+
+    #[tokio::test]
+    async fn with_agent_teammates_off_for_the_agent_its_brain_is_refused() {
+        let (upstream_url, seen) = fake_anthropic().await;
+        let (app, usage) = brain_gateway_with(
+            &upstream_url,
+            Some(Arc::new(OneAgent)),
+            BrainRollout::new(FakeFeatureFlags::default()),
+        )
+        .await;
+
+        let response = app.oneshot(brain_request("mak_agent")).await.unwrap();
+
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        assert!(seen.lock().unwrap().is_empty());
+        assert!(usage.0.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn without_a_flag_provider_the_brain_is_refused() {
+        let (upstream_url, seen) = fake_anthropic().await;
+        let (app, _) =
+            brain_gateway_with(&upstream_url, Some(Arc::new(OneAgent)), BrainRollout::default())
+                .await;
+
+        let response = app.oneshot(brain_request("mak_agent")).await.unwrap();
+
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        assert!(seen.lock().unwrap().is_empty());
     }
 
     #[tokio::test]

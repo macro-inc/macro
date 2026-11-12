@@ -164,6 +164,8 @@ pub(super) struct GatewayState<Sessions> {
     api_key: Option<HeaderValue>,
     /// Agent teammates' brains; `None` refuses every `/brain/anthropic` call.
     brains: Option<Arc<dyn brain::BrainAuthenticator>>,
+    /// Whether agent teammates are on for the calling agent.
+    brain_rollout: brain::BrainRollout,
 }
 
 impl<Sessions> GatewayState<Sessions> {
@@ -196,12 +198,19 @@ impl<Sessions> GatewayState<Sessions> {
             upstream_url: upstream_url.trim_end_matches('/').to_owned(),
             api_key,
             brains: None,
+            brain_rollout: brain::BrainRollout::default(),
         })
     }
 
-    /// Serve agent teammates' brains under `/brain/anthropic`.
-    pub(super) fn with_brains(mut self, brains: Arc<dyn brain::BrainAuthenticator>) -> Self {
+    /// Serve agent teammates' brains under `/brain/anthropic`, to agents with
+    /// `enable-agent-teammates` on.
+    pub(super) fn with_brains(
+        mut self,
+        brains: Arc<dyn brain::BrainAuthenticator>,
+        rollout: brain::BrainRollout,
+    ) -> Self {
         self.brains = Some(brains);
+        self.brain_rollout = rollout;
         self
     }
 }
@@ -350,6 +359,9 @@ async fn forward<Sessions: AgentSessionRepo>(
             agent_credentials::telemetry_id(brain.user_id.as_ref()),
         );
         span.record("agent.team.id", tracing::field::display(brain.team_id));
+        if !state.brain_rollout.enabled(&brain.user_id).await {
+            return Err(Rejection::AGENT_TEAMMATES_OFF);
+        }
         (brain.user_id, None)
     } else {
         let session = authenticate(state.sessions.as_ref(), &parts.headers).await?;
@@ -651,6 +663,15 @@ impl Rejection {
         message: std::borrow::Cow::Borrowed(
             "send the agent session's Macro token as `Authorization: Bearer`",
         ),
+    };
+
+    /// Fails closed: agent teammates are off for the calling agent, or its
+    /// flags could not be read.
+    const AGENT_TEAMMATES_OFF: Self = Self {
+        status: StatusCode::FORBIDDEN,
+        kind: "permission_error",
+        outcome: "agent_teammates_off",
+        message: std::borrow::Cow::Borrowed("agent teammates are not enabled for this agent"),
     };
 
     /// Fails closed: the session is not on a Macro computer, its lookup

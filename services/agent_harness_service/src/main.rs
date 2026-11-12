@@ -1377,9 +1377,15 @@ async fn run() -> anyhow::Result<()> {
             anthropic_gateway::ANTHROPIC_API_URL,
             &config.anthropic_api_key,
         )?
-        .with_brains(Arc::new(
-            anthropic_gateway::brain::PgBrainAuthenticator::new(pool.clone()),
-        )),
+        .with_brains(
+            Arc::new(anthropic_gateway::brain::PgBrainAuthenticator::new(
+                pool.clone(),
+            )),
+            feature_flags
+                .clone()
+                .map(anthropic_gateway::brain::BrainRollout::new)
+                .unwrap_or_default(),
+        ),
     );
     let computer_tasks = tokio_util::task::TaskTracker::new();
     let sign_in_ahead = Arc::new(std::sync::OnceLock::new());
