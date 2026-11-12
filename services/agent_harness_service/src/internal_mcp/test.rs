@@ -155,7 +155,7 @@ fn memory_app(repo: InMemoryAgentSessionRepo, memory: FakeAgentMemory) -> Router
     let tasks = FixedTasks::default();
     router(
         Arc::new(repo.clone()),
-        "localhost".into(),
+        vec!["localhost".into()],
         InternalTools {
             service: Arc::new(SessionPullRequestService::new(
                 repo,

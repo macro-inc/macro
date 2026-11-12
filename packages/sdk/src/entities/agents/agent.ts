@@ -181,7 +181,12 @@ export class Agent extends MacroEntity<AgentRecord> {
     id ? Harness.byId(this.client, id) : undefined,
   );
 
-  /** What the agent remembers across its sessions, and its revision. */
+  /**
+   * What the agent remembers across its sessions, and its revision.
+   *
+   * @readonly
+   * @idempotent
+   */
   async memory(): Promise<AgentMemory> {
     return agentMemory(
       unwrap(
@@ -196,6 +201,8 @@ export class Agent extends MacroEntity<AgentRecord> {
    * Replace what the agent remembers, whole. Fails without changing anything
    * when the memory is no longer at `revision`, as when the agent remembered
    * something since it was read: read it again and reconcile.
+   *
+   * @destructive
    */
   async updateMemory(content: string, revision: number): Promise<AgentMemory> {
     return agentMemory(

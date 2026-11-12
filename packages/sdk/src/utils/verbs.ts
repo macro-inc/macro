@@ -212,7 +212,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     generated: 'renderCanvas',
     rejected: 'declineCall',
     read: `
-      getAccountManagerGrant getDocumentAnchors getSelfBot getBot meetingLookup
+      getAccountManagerGrant getAgentMemory getDocumentAnchors getSelfBot getBot meetingLookup
       meetingInvitePermissions getCallRecord previewSmartTag getActivity getChannel
       getMyChannelAccessRequest getChannelAccessRequest getContactByEmail getContact getCompany
       getCrmPipeline getCrmPipelinePermissions getCrmPipelineStageRequirements getCrmPipelineTable
@@ -267,7 +267,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       createSavedViewDefinition createSpreadsheet saveDatabaseQuery startCall
     `,
     edited: `
-      resetCrmTeamStages updateAgent editAnchor patchBot meetingUpdate editCallRecord
+      resetCrmTeamStages updateAgent updateAgentMemory editAnchor patchBot meetingUpdate editCallRecord
       editCallTranscript patchChannel setChannelPicture setEmailSync setCompanyHidden
       setCrmCompanyName setContactHidden setCrmContactName applyCrmPipelineOps
       updateCrmPipelinePermissions setCrmPipelineStageRequirement putCrmTeamSettings
