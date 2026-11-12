@@ -23,6 +23,7 @@ import { err } from 'neverthrow';
 import {
   createEffect,
   createSignal,
+  type JSX,
   Match,
   on,
   onCleanup,
@@ -413,6 +414,17 @@ function loadLogo(source: ReturnType<typeof usePasswords>['source']) {
 }
 
 /**
+ * The touch list header (pills). Like the shell's own Content, it goes away
+ * while a detail replaces the list on phones; a tablet split keeps it.
+ */
+function ListChrome(props: { children: JSX.Element }) {
+  const shell = useViewShell();
+  return (
+    <Show when={shell.detail.placement() !== 'replace'}>{props.children}</Show>
+  );
+}
+
+/**
  * The floating New on touch layouts. Phones hide it while a detail replaces
  * the list; tablets keep the detail beside the list, so it stays.
  */
@@ -728,24 +740,26 @@ export function VaultView(props: {
                   : collectionTitle(vault)}
               </ViewSidebar.Title>
             </ViewShell.TopBar>
-            <ViewShell.Header>
-              <div class="flex min-w-0 flex-col gap-1">
-                <div class="h-10 min-w-0 flex-1">
-                  <PillTabs
-                    scrollable
-                    class="-ml-(--mobile-chrome-gutter) w-[calc(100%+2*var(--mobile-chrome-gutter))] max-w-none flex-none"
-                    contentClass="px-(--mobile-chrome-gutter)"
-                    items={mobileTabs()}
-                    value={mobileTab()}
-                    onChange={(tab) =>
-                      tab === 'folders'
-                        ? setMobileFolders(true)
-                        : selectFilter(tab)
-                    }
-                  />
+            <ListChrome>
+              <ViewShell.Header>
+                <div class="flex min-w-0 flex-col gap-1">
+                  <div class="h-10 min-w-0 flex-1">
+                    <PillTabs
+                      scrollable
+                      class="-ml-(--mobile-chrome-gutter) w-[calc(100%+2*var(--mobile-chrome-gutter))] max-w-none flex-none"
+                      contentClass="px-(--mobile-chrome-gutter)"
+                      items={mobileTabs()}
+                      value={mobileTab()}
+                      onChange={(tab) =>
+                        tab === 'folders'
+                          ? setMobileFolders(true)
+                          : selectFilter(tab)
+                      }
+                    />
+                  </div>
                 </div>
-              </div>
-            </ViewShell.Header>
+              </ViewShell.Header>
+            </ListChrome>
             <MobileNew
               hasSelection={!!selection()}
               onCreate={create}
