@@ -7,6 +7,7 @@
 //! boundaries. Main measurements disable query logging; the separate ignored
 //! commit-phase diagnostic explicitly enables it and is not a baseline result.
 
+mod admission_pool;
 mod bounded;
 mod delayed;
 mod open_loop;
