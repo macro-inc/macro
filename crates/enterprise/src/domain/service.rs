@@ -112,11 +112,12 @@ where
 
         // Axiom: this admin action is a soft off-switch, never account or content deletion.
         self.lifecycle.deactivate_user(&fusion_user_id).await?;
-        let server_records_revoked = self.harnesses.revoke_server_records(&member).await?;
-        let report = DisableMemberReport::new(server_records_revoked);
+        let mut report = DisableMemberReport::new(0);
+        // Commit the admission gate before any revocable capability can fail open.
         self.repository
             .commit_member_state(&actor, &member, true, report.audit_result())
             .await?;
+        report.server_records_revoked = self.harnesses.revoke_server_records(&member).await?;
         Ok(report)
     }
 
@@ -178,11 +179,16 @@ impl<R> MemberAccessService<R> {
 }
 
 impl<R: EnterpriseRepository> MemberAccess for MemberAccessService<R> {
-    async fn ensure_active(&self, user: &MacroUserIdStr<'_>) -> Result<()> {
-        if self.0.member_disabled(user).await? {
-            return Err(EnterpriseError::MemberDisabled);
-        }
-        Ok(())
+    fn ensure_active<'a>(
+        &'a self,
+        user: &'a MacroUserIdStr<'_>,
+    ) -> super::EnterpriseFuture<'a, ()> {
+        Box::pin(async move {
+            if self.0.member_disabled(user).await? {
+                return Err(EnterpriseError::MemberDisabled);
+            }
+            Ok(())
+        })
     }
 }
 
@@ -201,21 +207,25 @@ impl<R, T> RuntimePolicy<R, T> {
 }
 
 impl<R: EnterpriseRepository, T: TeamDirectory> AgentSessionAdmission for RuntimePolicy<R, T> {
-    async fn ensure_allowed(&self, user: MacroUserIdStr<'static>, preset_id: &str) -> Result<()> {
-        if self.repository.member_disabled(&user).await? {
-            return Err(EnterpriseError::MemberDisabled);
-        }
+    fn ensure_allowed<'a>(
+        &'a self,
+        user: MacroUserIdStr<'static>,
+        preset_id: &'a str,
+    ) -> super::EnterpriseFuture<'a, ()> {
+        Box::pin(async move {
+            if self.repository.member_disabled(&user).await? {
+                return Err(EnterpriseError::MemberDisabled);
+            }
 
-        let Some(team_id) = self.teams.team_ids(user).await?.first().copied() else {
-            return Ok(());
-        };
-        let Some(allowlist) = self.repository.runtime_allowlist(team_id).await? else {
-            // Axiom: absence preserves all presets that start today.
-            return Ok(());
-        };
-        if !allowlist.permits(preset_id) {
-            return Err(EnterpriseError::RuntimePresetDenied);
-        }
-        Ok(())
+            for team_id in self.teams.team_ids(user).await? {
+                if let Some(allowlist) = self.repository.runtime_allowlist(team_id).await?
+                    && !allowlist.permits(preset_id)
+                {
+                    return Err(EnterpriseError::RuntimePresetDenied);
+                }
+            }
+            // Axiom: absence on every membership preserves all presets that start today.
+            Ok(())
+        })
     }
 }

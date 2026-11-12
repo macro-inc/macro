@@ -22,6 +22,30 @@ use entity_access_db_utils::AccessLevel;
 use entity_registry::OwnerGrantPolicy;
 use entity_registry_db_utils::OwnedEntityRegistrar;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
+use sqlx::Row;
+
+async fn migrate_for_test(pool: &PgPool) {
+    // Run both colliding migration bodies in an isolated test database,
+    // changing only the in-memory version assigned to the mailbox migration.
+    let migrations = MACRO_DB_MIGRATIONS
+        .iter()
+        .map(|migration| {
+            let mut migration = migration.clone();
+            if migration.version == 20261110150956 && migration.description == "rox mailbox handles"
+            {
+                migration.version = 20261110150959;
+            }
+            migration
+        })
+        .collect::<Vec<_>>();
+    sqlx::migrate::Migrator {
+        migrations: std::borrow::Cow::Owned(migrations),
+        ..sqlx::migrate::Migrator::DEFAULT
+    }
+    .run(pool)
+    .await
+    .unwrap();
+}
 
 fn user_id(value: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(value.to_string()).expect("valid macro user id")
@@ -376,6 +400,35 @@ async fn create_refuses_a_caller_minted_id_held_by_another_entity(pool: PgPool) 
         AgentSessionError::SessionIdTaken(taken) if taken == id
     ));
     assert_eq!(agent_session_row_count(&pool, id).await, 0);
+}
+
+#[sqlx::test(migrations = false)]
+async fn create_records_the_chosen_preset_and_rolls_back_duplicate_audit(pool: PgPool) {
+    migrate_for_test(&pool).await;
+    let repo = test_repo(&pool);
+    let bot_id = create_test_bot(&pool).await;
+    let params = CreateAgentSessionParams {
+        harness: "omp".to_owned(),
+        ..new_session(bot_id, None, None)
+    };
+    let id = params.id;
+
+    let created = create_session(&repo, params.clone()).await;
+    assert_eq!(created.harness, "omp");
+    assert!(AgentSessionRepo::create(&repo, params).await.is_err());
+
+    let audits = sqlx::query(
+        "SELECT actor_id, action, resource_id, result FROM enterprise_audit WHERE resource_id = $1",
+    )
+    .bind(id.to_string())
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(audits.len(), 1);
+    assert_eq!(audits[0].get::<String, _>("actor_id"), OWNER);
+    assert_eq!(audits[0].get::<String, _>("action"), "agent_session_start");
+    assert_eq!(audits[0].get::<String, _>("resource_id"), id.to_string());
+    assert_eq!(audits[0].get::<String, _>("result"), "success");
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

@@ -37,6 +37,12 @@ impl<S, Eas, Auth> Clone for EnterpriseRouterState<S, Eas, Auth> {
     }
 }
 
+impl<S, Eas, Auth> FromRef<EnterpriseRouterState<S, Eas, Auth>> for Arc<Eas> {
+    fn from_ref(state: &EnterpriseRouterState<S, Eas, Auth>) -> Self {
+        state.entity_access_service.clone()
+    }
+}
+
 impl<S, Eas, Auth> FromRef<EnterpriseRouterState<S, Eas, Auth>> for MacroAuthorizationState<Auth> {
     fn from_ref(state: &EnterpriseRouterState<S, Eas, Auth>) -> Self {
         state.authorization_state.clone()
@@ -164,6 +170,12 @@ impl IntoResponse for EnterpriseError {
             }
             other => other.to_string(),
         };
-        (status, Json(ErrorResponse { message })).into_response()
+        (
+            status,
+            Json(ErrorResponse {
+                message: message.into(),
+            }),
+        )
+            .into_response()
     }
 }
