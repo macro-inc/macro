@@ -2,22 +2,19 @@ import { toast } from '@core/component/Toast/Toast';
 import {
   $convertPasteToText,
   $isPasteNode,
-  type PasteNodeDecoratorProps,
   type PasteOrigin,
 } from '@macro-inc/lexical-core';
 import { $createNodeSelection, $getNodeByKey, $setSelection } from 'lexical';
 import { useContext } from 'solid-js';
 import { LexicalWrapperContext } from '../../../context/LexicalWrapperContext';
-import type { PasteNodeHostProp } from '../../../decorator-host/paste-node-host';
 import { removeNodeAndRestoreSelection } from '../../../plugins/shared/removeNodeAndRestoreSelection';
+import type { PasteNodeUIProps } from '../PasteNode';
 
 /**
  * Editor plumbing shared by the paste-node decorators: node selection and
  * the copy / convert / delete actions, independent of how the chip looks.
  */
-export function usePasteNode(
-  props: PasteNodeDecoratorProps & PasteNodeHostProp
-) {
+export function usePasteNode(props: PasteNodeUIProps) {
   const wrapper = useContext(LexicalWrapperContext);
   const editor = () => wrapper?.editor;
   const selection = () => wrapper?.selection;
@@ -63,7 +60,8 @@ export function usePasteNode(
 
   const copyText = async () => {
     try {
-      await navigator.clipboard.writeText(props.content);
+      // String() matches writeText's own conversion of a stored null.
+      await navigator.clipboard.writeText(String(props.content));
       toast.success(`Copied ${origin()} text to clipboard`);
     } catch (e) {
       console.error('Failed to copy pasted text to clipboard', e);

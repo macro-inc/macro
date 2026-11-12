@@ -1,7 +1,6 @@
-import type { PasteNodeDecoratorProps } from '@macro-inc/lexical-core';
 import { cn, Layer } from '@ui';
 import { createSignal, Show } from 'solid-js';
-import type { PasteNodeHostProp } from '../../../decorator-host/paste-node-host';
+import type { PasteNodeUIProps } from '../PasteNode';
 import { QuoteReplyPreview } from '../QuoteReplyPreview';
 import { PasteActionsMenu } from './PasteActionsMenu';
 import { PasteTextViewer } from './PasteTextViewer';
@@ -14,7 +13,7 @@ import { usePasteNode } from './usePasteNode';
  * one clipped line, the full text behind a click.
  */
 export function ReferencedText(
-  props: PasteNodeDecoratorProps & PasteNodeHostProp
+  props: Extract<PasteNodeUIProps, { origin: 'referenced' }>
 ) {
   const node = usePasteNode(props);
   const [open, setOpen] = createSignal(false);

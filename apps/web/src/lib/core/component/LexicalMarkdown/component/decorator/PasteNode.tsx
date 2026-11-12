@@ -8,18 +8,36 @@ import { ReferencedText } from './paste/ReferencedText';
 import { usePasteNode } from './paste/usePasteNode';
 
 /**
+ * Source `importJSON` normalizes the origin but keeps stored content as is, so
+ * a null or omitted content reaches a clipboard paste, which renders it as
+ * text. A referenced chip's content must be text: its quote preview parses it
+ * as markdown (`StaticMarkdown` reads `markdown.includes`).
+ */
+export type PasteNodeUIProps = Omit<
+  PasteNodeDecoratorProps,
+  'content' | 'origin'
+> &
+  PasteNodeHostProp &
+  (
+    | { origin: 'referenced'; content: string }
+    | { origin?: 'pasted'; content?: string | null }
+  );
+
+/** The props of a referenced chip; undefined for a clipboard paste. */
+function referencedProps(props: PasteNodeUIProps) {
+  return props.origin === 'referenced' ? props : undefined;
+}
+
+/**
  * Block-level decorator for a {@link PasteNode}. A clipboard paste renders
  * as the collapsed code-fence chip below; text referenced from a
  * conversation renders as a quote reply ({@link ReferencedText}), the same
  * row a channel reply uses.
  */
-export function PasteNode(props: PasteNodeDecoratorProps & PasteNodeHostProp) {
+export function PasteNode(props: PasteNodeUIProps) {
   return (
-    <Show
-      when={props.origin === 'referenced'}
-      fallback={<PastedText {...props} />}
-    >
-      <ReferencedText {...props} />
+    <Show when={referencedProps(props)} fallback={<PastedText {...props} />}>
+      {(referenced) => <ReferencedText {...referenced()} />}
     </Show>
   );
 }
@@ -30,7 +48,7 @@ export function PasteNode(props: PasteNodeDecoratorProps & PasteNodeHostProp) {
  * bottom-left and a `⋯` menu floating in the top-right. Clicking it opens
  * the full text. Mirrors the DocumentCard.
  */
-function PastedText(props: PasteNodeDecoratorProps & PasteNodeHostProp) {
+function PastedText(props: PasteNodeUIProps) {
   const node = usePasteNode(props);
   const [open, setOpen] = createSignal(false);
 
@@ -81,7 +99,9 @@ function PastedText(props: PasteNodeDecoratorProps & PasteNodeHostProp) {
         open={open()}
         onOpenChange={setOpen}
         title="Pasted text"
-        content={props.content}
+        // The viewer counts lines of text; a stored null or omitted content
+        // shows as the empty text its preview renders.
+        content={props.content ?? ''}
         onCopy={node.copyText}
       />
     </Layer>
