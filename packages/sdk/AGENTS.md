@@ -51,7 +51,16 @@ enforced by the ordinary backend APIs.
   either the single agent task or `steps` (generated `CodeStep`s, agent steps
   with `Agent` handles) and `dangerouslyOperateAsUser`, which its TSDoc
   restricts to an explicit user request; `routineBody` maps both onto the
-  scheduler's `RoutineTask`. `routines.check` sends the same body to
+  scheduler's `RoutineTask`. `routines.create(options, { key })` passes
+  `?key=`; inside a routine's run the server makes the new routine a
+  sub-routine of the running routine, from the credential alone, and a
+  repeated key updates it. `routines.list()` returns top-level routines;
+  `{ includeChildren }` adds active sub-routines and `{ parent }` returns one
+  routine's. `Routine.parent()`, `createdByRun()` (a `RoutineRun`), `key()`,
+  `children()` and `keepAsOwn()` read and change the link, and
+  `RoutineExecution.created` holds the routines a run created. The rules an
+  agent needs are in the `@agent` block on `RoutineNamespace`.
+  `routines.check` sends the same body to
   `POST /scheduled-actions/check` (as `{routine, created}`), which runs
   saving's checks and saves nothing; code mode's catalog lists it as a read.
   `created` takes handles with an `entityType` (`CreatedEntity`) and is kept
@@ -214,6 +223,9 @@ the existing gateway prefixes.
   keep its phased serialization types and stored JSON shape aligned.
 - Workspace advanced filters use the server's serialized AST names, not Rust
   enum variant names. Validate new filter examples against the real local API.
+- Code-mode programs are untyped JavaScript, so a mistyped option key is
+  dropped silently. Create-style methods call `rejectUnknownOptions`
+  (`src/utils/options.ts`) so it throws instead; the documents namespace does.
 - Async iterators are lazy; `limit` is page size. Preserve filters on every page
   and do not fetch another page after the caller breaks the loop.
 - Handles must serialize identity or loaded detail, never authenticated clients.

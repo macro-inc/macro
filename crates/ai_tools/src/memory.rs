@@ -1,5 +1,5 @@
 //! Memory composition root. The domain never depends on the combined tool host.
-use crate::{ToolEmailToolContext, ToolServiceContext, subagent_toolset};
+use crate::{ToolEmailToolContext, ToolServiceContext, base_toolset};
 use macro_user_id::user_id::MacroUserIdStr;
 use memory::{
     domain::{ports::*, service::MemoryServiceImpl},
@@ -44,7 +44,7 @@ pub fn build_memory_service(
     pool: sqlx::PgPool,
     context: ToolServiceContext,
 ) -> MemoryServiceImpl<PgMemoryRepo> {
-    let mut toolset = subagent_toolset()
+    let mut toolset = base_toolset()
         .add_subtoolset::<ToolEmailToolContext>(email::inbound::toolset::mcp_toolset());
     // No shell, nested agents, connector discovery, mutations, memory reads, or
     // lazy tool loading: research cannot edit preferences or recursively read itself.
