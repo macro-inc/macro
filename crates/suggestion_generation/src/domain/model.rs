@@ -143,7 +143,7 @@ pub enum GenerationOutcome {
 /// Why a generation call failed.
 #[derive(Debug, thiserror::Error)]
 pub enum GenerationError {
-    /// Neither ideas nor routine suggestions are on for the person.
+    /// Neither suggestions nor routine suggestions are on for the person.
     #[error("suggestions are off")]
     NotFound,
     /// Anything else.

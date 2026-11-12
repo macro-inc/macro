@@ -57,7 +57,7 @@ impl RoutineSuggestionApi for Suggestions {
         &self,
         _: &MacroUserIdStr<'static>,
         _: &[Surface],
-        _: ideas::domain::model::GenerationTrigger,
+        _: suggestions::domain::model::GenerationTrigger,
         _: chrono_tz::Tz,
     ) -> Result<String> {
         unreachable!("routes never brief")

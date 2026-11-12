@@ -20,8 +20,8 @@ struct FakeRepo {
     saved: Mutex<Vec<Uuid>>,
     /// (generation, action, reason) per change.
     changes: Mutex<Vec<(Uuid, &'static str, String)>>,
-    /// Suggestions kept with a routine idea.
-    ideas: Mutex<Vec<Uuid>>,
+    /// Suggestions kept with a routine suggestion.
+    cards: Mutex<Vec<Uuid>>,
 }
 
 impl SuggestionRepo for FakeRepo {
@@ -59,8 +59,8 @@ impl SuggestionRepo for FakeRepo {
             .lock()
             .unwrap()
             .push((generation, "created", suggestion.reason.clone()));
-        if suggestion.idea.is_some() {
-            self.ideas.lock().unwrap().push(id);
+        if suggestion.card.is_some() {
+            self.cards.lock().unwrap().push(id);
         }
         Ok(Kept::Stored(id))
     }
@@ -251,7 +251,7 @@ fn catalog(key: &str, surfaces: &[Surface], keep: f32) -> SuggestRequest {
         reason: "Most of your mail is supplier updates".to_owned(),
         surfaces: surfaces.to_vec(),
         keep_probability: keep,
-        idea: None,
+        card: None,
     }
 }
 
@@ -284,9 +284,13 @@ async fn only_the_persons_open_routines_sessions_may_suggest() {
     let other = MacroUserIdStr::try_from("macro|someone-else@example.com".to_owned()).unwrap();
     let theirs = h.session_of(other, SessionKind::Routines, &[Surface::Email]);
     assert_not_suggesting(h.service.suggest(&principal, Some(theirs), request()).await);
-    // The person's own ideas session.
-    let ideas = h.session_of(user(), SessionKind::Ideas, &[]);
-    assert_not_suggesting(h.service.suggest(&principal, Some(ideas), request()).await);
+    // The person's own suggestions session.
+    let suggestions = h.session_of(user(), SessionKind::Suggestions, &[]);
+    assert_not_suggesting(
+        h.service
+            .suggest(&principal, Some(suggestions), request())
+            .await,
+    );
     assert!(h.repo.suggestions.lock().unwrap().is_empty());
 }
 
@@ -301,8 +305,8 @@ async fn suggest(h: &Harness, session: Uuid, request: SuggestRequest) -> Suggest
         .unwrap()
 }
 
-fn idea() -> super::model::RoutineIdea {
-    super::model::RoutineIdea {
+fn card() -> super::model::RoutineSuggestionCard {
+    super::model::RoutineSuggestionCard {
         title: "Chase late deliveries".to_owned(),
         importance: 60,
         categories: Vec::new(),
@@ -316,7 +320,7 @@ fn drafted(reason: &str, keep: f32) -> SuggestRequest {
         reason: reason.to_owned(),
         surfaces: vec![Surface::Tasks],
         keep_probability: keep,
-        idea: idea(),
+        card: card(),
     }
 }
 
@@ -340,7 +344,7 @@ async fn a_suggestion_is_checked_before_it_is_kept() {
             reason: "You get many supplier emails".to_owned(),
             surfaces: vec![Surface::Email],
             keep_probability: 0.5,
-            idea: None,
+            card: None,
         },
     )
     .await;
@@ -371,7 +375,7 @@ async fn a_suggestion_is_checked_before_it_is_kept() {
             reason: "orders@supplier.example writes to you daily".to_owned(),
             surfaces: vec![Surface::Email],
             keep_probability: 0.5,
-            idea: None,
+            card: None,
         },
     )
     .await;
@@ -390,7 +394,7 @@ async fn a_suggestion_is_checked_before_it_is_kept() {
             reason: "You chase late deliveries every week".to_owned(),
             surfaces: vec![Surface::Tasks],
             keep_probability: 0.4,
-            idea: idea(),
+            card: card(),
         },
     )
     .await;
@@ -552,7 +556,7 @@ async fn a_drafted_routine_naming_someones_details_is_refused() {
                 reason: "You chase late deliveries every week".to_owned(),
                 surfaces: vec![Surface::Tasks],
                 keep_probability: 0.4,
-                idea: idea(),
+                card: card(),
             },
         )
         .await;
@@ -858,12 +862,17 @@ async fn a_routines_session_reviews_and_retires_and_a_retired_pick_may_return() 
         .collect();
     assert_eq!(actions, ["created", "retired", "created"]);
     // Only a routines session may review or retire.
-    let ideas = h.session_of(user(), SessionKind::Ideas, &[]);
-    assert!(h.service.review(&principal, Some(ideas)).await.is_err());
+    let suggestions = h.session_of(user(), SessionKind::Suggestions, &[]);
+    assert!(
+        h.service
+            .review(&principal, Some(suggestions))
+            .await
+            .is_err()
+    );
 }
 
 #[tokio::test]
-async fn a_drafted_routine_brings_its_idea_and_a_catalog_pick_none() {
+async fn a_drafted_routine_brings_its_card_and_a_catalog_pick_none() {
     let h = harness(true);
     let session = open_session(&h, &[Surface::Email, Surface::Tasks]).await;
     let kept = suggest(
@@ -873,7 +882,7 @@ async fn a_drafted_routine_brings_its_idea_and_a_catalog_pick_none() {
     )
     .await;
     assert!(kept.ok, "{kept:?}");
-    assert_eq!(*h.repo.ideas.lock().unwrap(), [kept.id.unwrap()]);
+    assert_eq!(*h.repo.cards.lock().unwrap(), [kept.id.unwrap()]);
     let SuggestRequest::Catalog {
         key,
         knobs,
@@ -885,7 +894,7 @@ async fn a_drafted_routine_brings_its_idea_and_a_catalog_pick_none() {
     else {
         unreachable!()
     };
-    let with_idea = suggest(
+    let with_card = suggest(
         &h,
         session,
         SuggestRequest::Catalog {
@@ -894,13 +903,13 @@ async fn a_drafted_routine_brings_its_idea_and_a_catalog_pick_none() {
             reason,
             surfaces,
             keep_probability,
-            idea: Some(idea()),
+            card: Some(card()),
         },
     )
     .await;
-    assert!(!with_idea.ok);
-    assert!(with_idea.problems[0].contains("leave `card` out"));
-    // The idea's title is checked like any idea's.
+    assert!(!with_card.ok);
+    assert!(with_card.problems[0].contains("leave `card` out"));
+    // The suggestion's title is checked like any suggestion's.
     let SuggestRequest::Routine {
         routine,
         created,
@@ -921,7 +930,7 @@ async fn a_drafted_routine_brings_its_idea_and_a_catalog_pick_none() {
             reason,
             surfaces,
             keep_probability,
-            idea: super::model::RoutineIdea {
+            card: super::model::RoutineSuggestionCard {
                 title: format!("Write to {}@{}.com", "sam", "example"),
                 importance: 60,
                 categories: Vec::new(),
@@ -930,5 +939,5 @@ async fn a_drafted_routine_brings_its_idea_and_a_catalog_pick_none() {
     )
     .await;
     assert!(!named.ok);
-    assert_eq!(h.repo.ideas.lock().unwrap().len(), 1);
+    assert_eq!(h.repo.cards.lock().unwrap().len(), 1);
 }

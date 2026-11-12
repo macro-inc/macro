@@ -58,7 +58,7 @@ export function useRoutineSuggestionsEnabled(): () => boolean {
 }
 
 /**
- * Starts the person's onboarding generation (their ideas and routine
+ * Starts the person's onboarding generation (their suggestions and routine
  * suggestions, as each is on for them); later calls change nothing on the
  * server. The suggestions read right after seed the step's list.
  */

@@ -7,11 +7,11 @@ use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::post;
 use axum::{Json, Router};
-use ideas::domain::model::GenerationTrigger;
 use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOnly,
 };
 use serde::Deserialize;
+use suggestions::domain::model::GenerationTrigger;
 use utoipa::IntoParams;
 
 use scheduled_action::domain::suggestions::model::RoutineSuggestions;
@@ -144,13 +144,13 @@ where
     Ok(Json(GenerationStarted { started }))
 }
 
-impl<Repo, Sessions, Routines, Ideas, Flags> StartGeneration
-    for crate::domain::service::GenerationService<Repo, Sessions, Routines, Ideas, Flags>
+impl<Repo, Sessions, Routines, SuggestionFeed, Flags> StartGeneration
+    for crate::domain::service::GenerationService<Repo, Sessions, Routines, SuggestionFeed, Flags>
 where
     Repo: crate::domain::ports::GenerationRepo,
     Sessions: agent_session::domain::routines::RoutineSessions,
     Routines: scheduled_action::domain::suggestions::ports::RoutineSuggestionApi,
-    Ideas: ideas::domain::ports::IdeaApi,
+    SuggestionFeed: suggestions::domain::ports::SuggestionApi,
     Flags: feature_flags::FeatureFlags + 'static,
 {
     async fn start_onboarding(

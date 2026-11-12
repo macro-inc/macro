@@ -90,7 +90,7 @@ each run.
   Suggestions are never rewritten; a retired catalog pick may be suggested
   again, a dismissed one never. A drafted routine comes with its `card` (title,
   importance, categories) and is written with its `routine` suggestion in one
-  transaction (`ideas_db_utils`), refused when that would pass the suggestion
+  transaction (`suggestions_db_utils`), refused when that would pass the suggestion
   limits; dismissing, retiring or saving it from the routine suggestion closes
   that `routine` suggestion in the same transaction. A catalog pick takes no
   `card`. Every kept and retired suggestion is logged in

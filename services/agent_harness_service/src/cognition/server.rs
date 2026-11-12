@@ -388,6 +388,7 @@ pub async fn build(
     let document_tool_context = match ai_tools::canvas_artifacts_rollout(
         config.posthog_api_key.value(),
         config.posthog_host.value(),
+        config.environment,
     )? {
         Some(rollout) => document_tool_context.with_canvas_artifacts(rollout),
         None => document_tool_context,
@@ -677,6 +678,7 @@ pub async fn build(
     let rollout = ai_tools::macro_connect_rollout(
         config.posthog_api_key.value(),
         config.posthog_host.value(),
+        config.environment,
     )?;
     let connectors: ai_tools::ToolPipedreamConnection = pipedream_client.as_ref().map(|client| {
         let backends = pipedream_mcp::outbound::dispatch::ConnectorBackends::new(
