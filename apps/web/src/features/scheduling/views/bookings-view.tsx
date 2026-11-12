@@ -142,7 +142,7 @@ export function BookingsView(props: {
             </div>
           }
         >
-          <HeaderActionGroup label="Booking filters">
+          <HeaderActionGroup label="Booking filters" size="md">
             {filters()}
           </HeaderActionGroup>
           <ListHeaderSearch

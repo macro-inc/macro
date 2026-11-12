@@ -44,8 +44,11 @@ construction. Browse them at `/app/component/ui` (Foundations → Controls).
   view tabs on the left; islands on the right in the order filters, view
   options, New, Search (detail views: entity actions, sharing, navigation,
   detail toggle). Detail-header groups use `sm` labelled segments and `icon-sm`
-  icon-only segments (28px controls); Drive and Tasks list-header groups use
-  `md` / `icon-md`, matching Tabs, New, and Search. Keep 8px between islands. Filter, sort, group, and download live in the header, never
+  icon-only segments (28px controls); list-header groups (any header with New
+  or Search) use `md` / `icon-md`, matching Tabs, New, and Search. A labelled
+  action outside an island (`HeaderActionButton`, `ChatWithAgentButton`) is
+  32px, so in a detail header give it `grouped` inside a `HeaderActionGroup`.
+  Keep 8px between islands. Filter, sort, group, and download live in the header, never
   in a second toolbar row; only active filter chips sit below it.
 - **FE-63** Style controls only through their props (`variant`, `size`, `finish`,
   `fullWidth`); `class` on a control is for placement (margin,

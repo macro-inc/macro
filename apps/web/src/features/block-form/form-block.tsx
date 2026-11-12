@@ -142,6 +142,7 @@ function FormBlockContent(props: {
       when={published()}
       fallback={
         <HeaderActionButton
+          grouped
           label="Publish"
           icon={
             <PaperPlaneTilt class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
@@ -151,6 +152,7 @@ function FormBlockContent(props: {
       }
     >
       <HeaderActionButton
+        grouped
         label="Open form"
         icon={<ArrowSquareOut class="size-3.5" />}
         onClick={openRespond}
