@@ -39,8 +39,8 @@ export function createSavedViewDraft<Config, Issue>(options: {
   const [state, setState] = createStore<{
     confirmed?: Confirmed<Config, Issue>;
     retained: RetainedDraft[];
-    latestRevision: number;
-  }>({ retained: [], latestRevision: 0 });
+    latest?: { record: SavedView };
+  }>({ retained: [] });
   const retain = () => {
     const owner = {
       token: Symbol(),
@@ -73,7 +73,7 @@ export function createSavedViewDraft<Config, Issue>(options: {
     on(
       () => [options.selectedId(), options.viewerId()] as const,
       ([id, viewer]) => {
-        setState({ latestRevision: 0, retained: [] });
+        setState({ latest: undefined, retained: [] });
         const previous = state.confirmed;
         if (previous?.record.id !== id || previous?.viewerId !== viewer)
           setState('confirmed', undefined);
@@ -100,11 +100,14 @@ export function createSavedViewDraft<Config, Issue>(options: {
           state.confirmed?.record.id === id
             ? state.confirmed.record.revision
             : 0;
-        setState(
-          'latestRevision',
-          Math.max(state.latestRevision, record.revision, localRevision)
+        const latestRevision = Math.max(
+          state.latest?.record.revision ?? 0,
+          localRevision
         );
-        if (record.revision < state.latestRevision) return;
+        if (record.revision < latestRevision) return;
+        // Retain the definition, not only its revision: a later source emission
+        // can be older, but Reset must still restore the newest observed data.
+        setState('latest', { record });
         const retained = state.retained.some(
           (draft) => draft.id === id && draft.viewerId === viewer
         );
@@ -120,11 +123,10 @@ export function createSavedViewDraft<Config, Issue>(options: {
   const revision = () => {
     const id = options.selectedId();
     const local = state.confirmed?.record;
-    const remote = options.source.data();
+    const latest = state.latest?.record;
     return Math.max(
-      state.latestRevision,
       local && local.id === id ? local.revision : 0,
-      remote && remote.id === id ? remote.revision : 0
+      latest && latest.id === id ? latest.revision : 0
     );
   };
   const view = createMemo<SavedViewSelection<Issue>>(() => {
@@ -162,18 +164,24 @@ export function createSavedViewDraft<Config, Issue>(options: {
     return { kind: 'loading' };
   });
   const reset = (record?: SavedView) => {
-    if (record) {
-      if (record.id !== options.selectedId() || record.revision < revision())
-        return;
-      setState(
-        'latestRevision',
-        Math.max(state.latestRevision, record.revision)
-      );
-      install(record, options.read(record.config));
-    }
-    if (options.creating()) return options.resetNew();
-    const baseline = state.confirmed?.config;
-    if (baseline !== undefined) options.apply(baseline);
+    const latest = state.latest?.record;
+    // Explicit Reset discards local edits, including when source reconciliation
+    // retained a newer authorized definition while editing.
+    const candidate =
+      record ?? (latest && latest.revision >= revision() ? latest : undefined);
+    batch(() => {
+      if (candidate) {
+        if (
+          candidate.id !== options.selectedId() ||
+          candidate.revision < revision()
+        )
+          return;
+        install(candidate, options.read(candidate.config));
+      }
+      if (options.creating()) return options.resetNew();
+      const baseline = state.confirmed?.config;
+      if (baseline !== undefined) options.apply(baseline);
+    });
   };
   const acceptConfirmed = (record: SavedView) => {
     if (record.id !== options.selectedId()) return false;
@@ -187,11 +195,6 @@ export function createSavedViewDraft<Config, Issue>(options: {
       return false;
     const decoded = options.decode(record.config);
     if (decoded.isOk()) {
-      if (record.id === options.selectedId())
-        setState(
-          'latestRevision',
-          Math.max(state.latestRevision, record.revision)
-        );
       install(record, { config: decoded.value, issues: [] });
       return true;
     }

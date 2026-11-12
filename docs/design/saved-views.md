@@ -95,6 +95,9 @@ shared GraphQL client reactively; callers supply feature inputs, not clients.
 The shared draft primitive owns confirmed definition snapshots, dirty state,
 retained edits, and revision-aware reconciliation. Task and Project adapters own
 their codecs, defaults, diagnostics, and application to feature settings.
+Reset discards local edits and applies the latest authorized definition, including
+revisions received while editing. Saves use the revision of the displayed
+baseline, not a newer revision whose settings have not been applied.
 The Tasks host owns navigation and account/task lifecycle. Task actions capture the host request scope before
 writing or reloading, reject stale completions, and explicitly select created
 views. Mutation dialogs receive a refresh callback, not both query sources.

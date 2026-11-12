@@ -291,7 +291,7 @@ export function ProjectSavedViewActions() {
         id: view.record.id,
         name: view.record.name,
         config: config.value,
-        expectedRevision: request.revision,
+        expectedRevision: view.record.revision,
       });
       if (!request.isCurrent()) return;
       if (result.error)
