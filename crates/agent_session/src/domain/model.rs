@@ -975,6 +975,53 @@ pub struct HistoryBoundary {
     pub initialization_log_id: Uuid,
 }
 
+/// The `_meta` namespace Macro writes its own keys under on ACP frames.
+pub const META_NAMESPACE: &str = "macro";
+
+/// The key under [`META_NAMESPACE`] that marks a `tool_call` frame as a card
+/// the service presented ([`SessionToolPresentation`]), not a call the agent
+/// made. The agent never saw it, so a rebuild of the agent's conversation
+/// from the log leaves it out.
+const PRESENTED_KEY: &str = "presented";
+
+/// The tool name a code-mode view card is presented under.
+pub const PRESENT_VIEW_TITLE: &str = "mcp__macro_internal__PresentView";
+
+/// The tool name a code-mode review card is presented under.
+pub const PRESENT_REVIEW_TITLE: &str = "mcp__macro_internal__PresentReview";
+
+/// The `_meta` a presented card's `tool_call` frame carries.
+#[must_use]
+pub fn presented_meta() -> agent_client_protocol::schema::v1::Meta {
+    let mut meta = agent_client_protocol::schema::v1::Meta::new();
+    meta.insert(
+        META_NAMESPACE.to_owned(),
+        serde_json::json!({ PRESENTED_KEY: true }),
+    );
+    meta
+}
+
+/// Whether a `tool_call` frame is a card the service presented.
+///
+/// Cards logged before the marker are recognized by the shape only
+/// presentation writes: a view or review title, the matching `view_` or
+/// `review_` id (a model's call ids never take it), opened `in_progress`.
+#[must_use]
+pub fn is_presented(call: &agent_client_protocol::schema::v1::ToolCall) -> bool {
+    let marked = call
+        .meta
+        .as_ref()
+        .and_then(|meta| meta.get(META_NAMESPACE))
+        .and_then(|ours| ours.get(PRESENTED_KEY))
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false);
+    let id = &*call.tool_call_id.0;
+    let legacy = call.status == agent_client_protocol::schema::v1::ToolCallStatus::InProgress
+        && ((call.title == PRESENT_VIEW_TITLE && id.starts_with("view_"))
+            || (call.title == PRESENT_REVIEW_TITLE && id.starts_with("review_")));
+    marked || legacy
+}
+
 /// A durable, nonblocking tool card supplied by a trusted session capability.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SessionToolPresentation {
