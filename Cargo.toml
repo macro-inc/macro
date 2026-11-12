@@ -7,6 +7,7 @@ exclude = ["vendor", "crates/password_import/fuzz"]
 members = [
   "crates/passwords",
   "crates/password_import",
+  "crates/password_import_wasm",
   "crates/openbao_client",
   "crates/access_requests",
   "crates/agent_api_keys",

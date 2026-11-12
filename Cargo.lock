@@ -15219,6 +15219,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "password_import_wasm"
+version = "0.1.0"
+dependencies = [
+ "password_import",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "passwords"
 version = "0.1.0"
 dependencies = [
