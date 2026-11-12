@@ -1,0 +1,23 @@
+apps/web/src/features/channels-view/components/rail/ChannelsRail.test.tsx
+  s_c40baa4cb59bb5::t_64eea54c6d3314 5-8,18-24,124-125,189-192,252-253,589-590,1242-1256
+  s_c40baa4cb59bb5::t_2244910f7cd9f9 1257-1258
+apps/web/src/features/channels-view/components/rail/ChannelsRail.tsx
+  s_c40baa4cb59bb5::t_367841241e6545 889-890
+  s_c40baa4cb59bb5::t_ecee2884e488ef 891-902,904,906-908,910,912-925,927,929-931,933,935-938,940-962,964,966-986,988-1016
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "64b532552378654df069d24050bce6946374b495",
+  "prompts": {},
+  "sessions": {
+    "s_c40baa4cb59bb5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c5088a1d-2aaa-4b5f-a34c-ae72d37aea28",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
