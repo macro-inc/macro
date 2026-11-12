@@ -262,7 +262,6 @@
               "AI/mcp/tools/set-form-access",
               "AI/mcp/tools/set-sender-policy",
               "AI/mcp/tools/share-with-channel",
-              "AI/mcp/tools/subagent",
               "AI/mcp/tools/text-editor-code-execution",
               "AI/mcp/tools/update-agent-session-sharing",
               "AI/mcp/tools/update-booking-settings",

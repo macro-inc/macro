@@ -92,9 +92,6 @@ pub const AGENT_NAME: &str = "macro-inmem";
 /// Claude Code's `claudeCode` layout so the fold reads both the same way.
 pub const META_NAMESPACE: &str = "macro";
 
-/// The one tool in the Macro toolset that delegates to another agent.
-const SUBAGENT_TOOL: &str = "Subagent";
-
 /// Slash command that asks the user a question through `elicitation/create`
 /// instead of running the model: `/ask <question>` for free text, or
 /// `/ask <question> | option | option` for a single select.
@@ -1405,8 +1402,7 @@ fn update_for_part(
 
 /// The `_meta` this agent stamps on a tool call so the fold can read it by
 /// name rather than guess from the title: `macro.toolName` (an MCP tool as
-/// `mcp__<server>__<tool>`, the convention Claude Code set) and
-/// `macro.subagent` on a delegation.
+/// `mcp__<server>__<tool>`, the convention Claude Code set).
 fn tool_call_meta(name: &str, mcp: Option<&McpInfo>) -> Meta {
     let tool_name = match mcp {
         Some(mcp) => format!("mcp__{}__{}", mcp.service, mcp.tool_name),
@@ -1414,9 +1410,6 @@ fn tool_call_meta(name: &str, mcp: Option<&McpInfo>) -> Meta {
     };
     let mut ours = serde_json::Map::new();
     ours.insert("toolName".to_owned(), serde_json::Value::String(tool_name));
-    if mcp.is_none() && name == SUBAGENT_TOOL {
-        ours.insert("subagent".to_owned(), serde_json::Value::Bool(true));
-    }
     let mut meta = Meta::new();
     meta.insert(META_NAMESPACE.to_owned(), serde_json::Value::Object(ours));
     meta
