@@ -24,9 +24,7 @@ Time Sync).
 1. Deploy the stack (explicit permission required). The task becomes healthy
    while uninitialized.
 2. Create the Doppler project `openbao` with a `dev` config only.
-3. Forward the task's API port over SSM (ECS Exec is enabled) and initialize
-   with a local `bao` CLI (`nix shell nixpkgs#openbao`). The credentials go
-   straight into Doppler and are never printed:
+3. Forward the task's API port over SSM (ECS Exec is enabled):
 
    ```sh
    cluster=<cloudStorageClusterName output of the document-storage dev stack>
@@ -36,35 +34,78 @@ Time Sync).
      --query "tasks[0].containers[?name=='openbao'].runtimeId | [0]" --output text)
    aws ssm start-session --target "ecs:${cluster}_${task##*/}_${runtime}" \
      --document-name AWS-StartPortForwardingSession \
-     --parameters '{"portNumber":["8200"],"localPortNumber":["18200"]}' &
-   bao operator init -address=http://127.0.0.1:18200 \
-     -recovery-shares=1 -recovery-threshold=1 -format=json \
-     | jq '{OPENBAO_ROOT_TOKEN: .root_token, OPENBAO_RECOVERY_KEY: .recovery_keys_b64[0]}' \
-     | doppler secrets upload -p openbao -c dev /dev/stdin > /dev/null
-   kill %1
+     --parameters '{"portNumber":["8200"],"localPortNumber":["18200"]}'
    ```
 
-   With KMS auto-unseal the vault unseals itself on every restart. The recovery
-   key is only for `bao operator generate-root`.
+4. In a second shell, initialize with a local `bao` CLI
+   (`nix shell nixpkgs#openbao`). The output goes to a private file, never to
+   the terminal, and that file is kept until Doppler holds both values. Init
+   runs only once, so if any later step fails, keep the file and retry from the
+   upload:
 
-## Provisioning (follow-up)
+   ```sh
+   umask 077
+   init=$(mktemp)
+   bao operator init -address=http://127.0.0.1:18200 \
+     -recovery-shares=1 -recovery-threshold=1 -format=json > "$init"
+   jq '{OPENBAO_ROOT_TOKEN: .root_token, OPENBAO_RECOVERY_KEY: .recovery_keys_b64[0]}' "$init" \
+     | doppler secrets upload -p openbao -c dev /dev/stdin > /dev/null
+   cmp -s <(jq -r .root_token "$init") \
+          <(doppler secrets get OPENBAO_ROOT_TOKEN -p openbao -c dev --plain) &&
+   cmp -s <(jq -r '.recovery_keys_b64[0]' "$init") \
+          <(doppler secrets get OPENBAO_RECOVERY_KEY -p openbao -c dev --plain) &&
+   shred -u "$init"
+   ```
 
-Team namespaces, mounts, JWT roles, and the lifecycle role are applied by a
-hosted provisioning entrypoint. It is not in this stack yet: it lands with the
-Passwords change, reuses the local bootstrap's policy and role logic, and
-accepts only this exact HTTPS origin. Until then, no team can use the vault.
+   If `$init` still exists afterwards, the upload or the check failed. Rerun
+   the upload and the checks; never rerun `operator init`. With KMS auto-unseal
+   the vault unseals itself on every restart. The recovery key is only for
+   `bao operator generate-root`.
 
-The document storage service's dev Doppler config gets `OPENBAO_ADDRESS`,
-`PASSWORDS_JWT_ISSUER`, and `PASSWORDS_JWT_SIGNING_KEY` together at
-provisioning time; it refuses a partial set. Only explicitly provisioned teams
-work, because creating a team does not create its namespace.
+## Provisioning (follow-up, not in this stack yet)
+
+Hosted provisioning of team namespaces, mounts, JWT roles, and the lifecycle
+role is a follow-up that lands after Passwords. Until it does, no team can use
+the vault. It will reuse the local bootstrap's policy and role logic and accept
+only this exact HTTPS origin.
+
+At provisioning time, the document storage service's dev Doppler config gets
+`OPENBAO_ADDRESS`, `PASSWORDS_JWT_ISSUER`, and `PASSWORDS_JWT_SIGNING_KEY`
+together; it refuses a partial set. Only explicitly provisioned teams work,
+because creating a team does not create its namespace.
+
+## Backups
+
+The daily AWS Backup job copies files while OpenBao may be writing Raft data, so
+a recovery point can be inconsistent. That is acceptable for dev. Before a backup
+you depend on (an upgrade, a risky change), stop the task first, then scale back
+up:
+
+```sh
+aws ecs update-service --cluster "$cluster" --service openbao --desired-count 0
+aws backup start-backup-job --backup-vault-name openbao-dev \
+  --resource-arn <file system ARN> --iam-role-arn <openbao-backup-role-dev ARN>
+# wait for the job to finish (aws backup describe-backup-job), then:
+aws ecs update-service --cluster "$cluster" --service openbao --desired-count 1
+```
 
 ## Restore
 
-Restore the latest AWS Backup recovery point of the EFS file system, either to a
-new file system or to a directory on this one. Point the access point at the
-restored `/openbao` directory and redeploy. The seal key must still exist. The
-copy is file-level and crash-consistent; Raft replays its log on start.
+1. Scale the service to 0 (see above).
+2. In AWS Backup, restore the recovery point to **this** file system with an
+   item-level restore of `/openbao` (or the current `dataDirectory`). AWS Backup
+   writes it under a new top-level directory, `/aws-backup-restore_<timestamp>/`,
+   and keeps ownership (uid 100).
+3. Point the stack at the restored copy and redeploy. Access points are
+   immutable, so this replaces the access point:
+
+   ```sh
+   pulumi config set dataDirectory /aws-backup-restore_<timestamp>/openbao --stack macro-inc/dev
+   pulumi up --stack macro-inc/dev   # explicit permission required
+   ```
+
+4. Commit the `Pulumi.dev.yaml` change. The seal key must still exist. The old
+   directory stays on the file system until you delete it.
 
 ## Prod later
 

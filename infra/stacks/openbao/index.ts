@@ -36,6 +36,10 @@ const API_ADDRESS = `https://${HOSTNAME}`;
 const HTTPS_PORT = 443;
 const NFS_PORT = 2049;
 
+// The Raft directory on EFS. A restore points this at the restored copy
+// (README "Restore"); changing it replaces the access point.
+const DATA_DIRECTORY = new pulumi.Config().get('dataDirectory') ?? '/openbao';
+
 const tags = { project: BASE_NAME, environment: stack, tech_lead: 'wolf' };
 const durable = { protect: true, retainOnDelete: true };
 const vpc = get_coparse_api_vpc();
@@ -279,7 +283,7 @@ const accessPoint = new aws.efs.AccessPoint(`${BASE_NAME}-data`, {
   fileSystemId: fileSystem.id,
   posixUser: { uid: OPENBAO_UID, gid: OPENBAO_GID },
   rootDirectory: {
-    path: '/openbao',
+    path: DATA_DIRECTORY,
     creationInfo: {
       ownerUid: OPENBAO_UID,
       ownerGid: OPENBAO_GID,
@@ -399,11 +403,12 @@ const targetGroup = new aws.lb.TargetGroup(`${BASE_NAME}-tg`, {
   deregistrationDelay: 5,
   healthCheck: {
     ...DEFAULT_TARGET_GROUP_HEALTH_CHECK,
-    path: '/v1/sys/health',
+    // ALB matchers stop at 499, so uninitialized (the first deploy, before
+    // `operator init`) answers 200 instead of 501. Sealed (503) stays
+    // unhealthy, so ECS replaces the task.
+    path: '/v1/sys/health?uninitcode=200',
     unhealthyThreshold: 3,
-    // 200 active; 501 not yet initialized (first deploy, before `operator
-    // init`). Sealed (503) is unhealthy, so ECS replaces the task.
-    matcher: '200,501',
+    matcher: '200',
   },
   tags,
 });
