@@ -700,6 +700,16 @@ service_url! {
 }
 
 service_url! {
+    /// Microsoft Graph v1.0 API root. Microsoft's host in every environment;
+    /// override it to run against `crates/outlook_emulator`.
+    pub struct MicrosoftGraphUrl {
+        local: "https://graph.microsoft.com/v1.0/",
+        dev: "https://graph.microsoft.com/v1.0/",
+        prod: "https://graph.microsoft.com/v1.0/",
+    }
+}
+
+service_url! {
     /// Control and internal MCP surface of the live preview service.
     pub struct PreviewGatewayUrl {
         local: "http://localhost:8101/preview",
