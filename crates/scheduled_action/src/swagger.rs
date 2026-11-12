@@ -106,6 +106,7 @@ use model_entity::{AppearanceColor, AppearanceIcon, EntityAppearance};
             crate::domain::drafts::DraftedStep,
             crate::domain::drafts::StepProblem,
             crate::domain::drafts::DraftCreated,
+            crate::inbound::draft_job_router::StartDraftJobRequest,
             crate::domain::drafts::jobs::DraftJob,
             crate::domain::drafts::jobs::DraftJobState,
             crate::domain::drafts::jobs::DraftAsked,

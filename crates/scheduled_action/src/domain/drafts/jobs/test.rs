@@ -17,7 +17,10 @@ use crate::domain::ports::{DraftHandBacks, StaleDraft};
 
 #[async_trait::async_trait]
 impl DraftJobStore for Rows {
-    async fn begin_job(&self, job: &NewDraftJob) -> Result<()> {
+    async fn begin_job(&self, job: &NewDraftJob) -> Result<bool> {
+        if self.live(&job.owner, job.client_id).is_some() {
+            return Ok(false);
+        }
         self.drafts.lock().unwrap().insert(
             job.session,
             (
@@ -30,6 +33,7 @@ impl DraftJobStore for Rows {
         self.jobs.lock().unwrap().insert(
             job.session,
             JobRow {
+                client_id: job.client_id,
                 phase: DraftJobPhase::Drafting,
                 request: job.request.clone(),
                 progress: job.progress.clone(),
@@ -38,7 +42,17 @@ impl DraftJobStore for Rows {
                 traceparent: job.traceparent.clone(),
             },
         );
-        Ok(())
+        Ok(true)
+    }
+
+    async fn started(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        client_id: Uuid,
+    ) -> Result<Option<DraftJob>> {
+        Ok(self
+            .live(owner, client_id)
+            .and_then(|session| self.read(session)))
     }
 
     async fn drafting(&self, owner: &MacroUserIdStr<'static>) -> Result<u32> {
@@ -172,6 +186,21 @@ impl DraftJobStore for Rows {
 }
 
 impl Rows {
+    /// `owner`'s live job the start with `client_id` began.
+    fn live(&self, owner: &MacroUserIdStr<'static>, client_id: Uuid) -> Option<Uuid> {
+        let drafts = self.drafts.lock().unwrap();
+        self.jobs
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|(session, job)| {
+                job.client_id == client_id
+                    && job.phase != DraftJobPhase::Cancelled
+                    && drafts.get(*session).is_some_and(|(by, ..)| by == owner)
+            })
+            .map(|(session, _)| *session)
+    }
+
     /// Job `session` as its owner reads it.
     fn read(&self, session: Uuid) -> Option<DraftJob> {
         let started = self.drafts.lock().unwrap().get(&session)?.3;
@@ -259,9 +288,21 @@ impl Replica {
         }
     }
 
+    /// Start `request` as a new start.
     async fn start(&self, request: DraftRequest) -> Result<DraftJob> {
+        self.start_as(macro_uuid::generate_uuid_v7(), request).await
+    }
+
+    /// Start `request` as the start the client gave `client_id`.
+    async fn start_as(&self, client_id: Uuid, request: DraftRequest) -> Result<DraftJob> {
         self.jobs
-            .start(owner(), request, context(), Some(TRACEPARENT.into()))
+            .start(
+                owner(),
+                client_id,
+                request,
+                context(),
+                Some(TRACEPARENT.into()),
+            )
             .await
     }
 
@@ -455,6 +496,66 @@ async fn a_ready_draft_is_readable_until_its_owner_discards_it() {
     assert!(replica.jobs.discard(owner(), job.id).await.is_err());
 }
 
+/// A start sent again, as the client sends it when its connection drops,
+/// answers with the job the first began, on any replica and even once it is
+/// ready, and starts no second session. Discarded, the same id starts
+/// afresh.
+#[tokio::test(start_paused = true)]
+async fn a_start_sent_again_answers_with_the_same_job() {
+    let rows = Arc::new(Rows::default());
+    let sessions = checks_and_runs(&rows, json!([code_step("Make a task", "good")]));
+    let replica = Replica::new(&rows, &sessions);
+    let other = Replica::new(&rows, &sessions);
+    let client_id = macro_uuid::generate_uuid_v7();
+
+    let job = replica.start_as(client_id, routine(BUG_REPORTS)).await.unwrap();
+    let again = other.start_as(client_id, routine(BUG_REPORTS)).await.unwrap();
+
+    assert_eq!(again.id, job.id);
+    assert_eq!(again.state, DraftJobState::Drafting);
+    assert_eq!(sessions.prepared.lock().unwrap().len(), 1);
+    assert_eq!(rows.jobs.lock().unwrap().len(), 1);
+
+    replica.settled().await;
+    let ready = replica.start_as(client_id, routine(BUG_REPORTS)).await.unwrap();
+    assert_eq!(ready.id, job.id);
+    assert!(matches!(ready.state, DraftJobState::Ready { .. }), "{ready:?}");
+    assert_eq!(sessions.prepared.lock().unwrap().len(), 1);
+
+    // Someone else's start with the same id is theirs.
+    let theirs = replica
+        .jobs
+        .start(stranger(), client_id, routine(BUG_REPORTS), context(), None)
+        .await
+        .unwrap();
+    assert_ne!(theirs.id, job.id);
+
+    replica.jobs.discard(owner(), job.id).await.unwrap();
+    let fresh = replica.start_as(client_id, routine(BUG_REPORTS)).await.unwrap();
+    assert_ne!(fresh.id, job.id);
+}
+
+/// At the drafting limit, a start sent again still finds its job.
+#[tokio::test(start_paused = true)]
+async fn a_start_sent_again_at_the_limit_finds_its_job() {
+    let rows = Arc::new(Rows::default());
+    let sessions = hangs(&rows);
+    let replica = Replica::new(&rows, &sessions);
+    for _ in 1..MAX_DRAFTING {
+        replica.start(routine(BUG_REPORTS)).await.unwrap();
+    }
+    let client_id = macro_uuid::generate_uuid_v7();
+    let job = replica.start_as(client_id, routine(BUG_REPORTS)).await.unwrap();
+
+    let again = replica.start_as(client_id, routine(BUG_REPORTS)).await.unwrap();
+
+    assert_eq!(again.id, job.id);
+    assert_eq!(
+        sessions.prepared.lock().unwrap().len() as u32,
+        MAX_DRAFTING
+    );
+}
+
 /// A cancel on any replica marks the row; the drafter, wherever it runs,
 /// stops at its next read of it and deletes the session and the row.
 #[tokio::test(start_paused = true)]
@@ -545,6 +646,7 @@ async fn the_sweep_fails_interrupted_drafts_and_keeps_unopened_ones() {
         rows.jobs.lock().unwrap().insert(
             session,
             JobRow {
+                client_id: macro_uuid::generate_uuid_v7(),
                 phase,
                 request: DraftAsked::default(),
                 progress: DraftJobProgress {
@@ -678,7 +780,13 @@ async fn too_many_drafts_at_once_are_refused() {
     // Someone else still can.
     replica
         .jobs
-        .start(stranger(), routine(BUG_REPORTS), context(), None)
+        .start(
+            stranger(),
+            macro_uuid::generate_uuid_v7(),
+            routine(BUG_REPORTS),
+            context(),
+            None,
+        )
         .await
         .unwrap();
 }

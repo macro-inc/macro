@@ -82,9 +82,13 @@ each run.
   /scheduled-actions/draft-jobs` validates the request and waits only for
   the session's prompt to be admitted (the blocking route's 400/402/503,
   plus 409 past `MAX_DRAFTING` drafting at once), then answers 202 with the
-  job; `GET` lists drafting and unopened finished ones, `GET .../{id}` reads
-  one (its `Draft` when ready), `DELETE .../{id}` cancels or discards one
-  (404 when not the caller's). The job id is its hidden session's. Its
+  job. The body carries a client-made `clientId`; a start sent again with
+  it (the client resends when its connection drops) answers with the live
+  job that start began and creates no session (`client_id` and a unique
+  index per owner on the row, checked before the limit). `GET` lists
+  drafting and unopened finished ones, `GET .../{id}` reads one (its
+  `Draft` when ready), `DELETE .../{id}` cancels or discards one (404 when
+  not the caller's). The job id is its hidden session's. Its
   state, request (kind and words), progress, result, `finished_at` and the
   starting `traceparent` live on its `scheduled_action_draft` row
   (`DraftJobStore`, `state` NULL for a blocking draft, which keeps its old
@@ -101,8 +105,9 @@ each run.
   writer in the job's task writes each to the row and sends the owner a
   `routine_draft_update` message (`RoutineDraftUpdates`) without blocking
   the drafter, coalescing bursts. Progress carries counts, the trigger and
-  step titles, never code or the words. Spans: `routine.draft.start` (the
-  job's `routine.draft` span is its child), `routine.draft.cancel`,
+  step titles, never code or the words. Spans: `routine.draft.start`
+  (`routine.draft.repeated` on a start sent again; the job's
+  `routine.draft` span is its child), `routine.draft.cancel`,
   `routine.draft.jobs.sweep`, `routine.draft.interrupt`; no owner id
   (it holds an email). Replicas still on code without job rows sweep them
   as stale blocking drafts after `STALE_DRAFT`.

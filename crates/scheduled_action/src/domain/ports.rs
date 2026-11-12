@@ -438,8 +438,16 @@ pub trait DraftHandBacks: Send + Sync + 'static {
 /// job holds it erased, as it does the hand-backs.
 #[async_trait::async_trait]
 pub trait DraftJobStore: Send + Sync + 'static {
-    /// Start `job`, drafting.
-    async fn begin_job(&self, job: &super::drafts::jobs::NewDraftJob) -> Result<()>;
+    /// Start `job`, drafting, unless its owner has a live job (drafting,
+    /// ready or failed) with its client id. Whether it started.
+    async fn begin_job(&self, job: &super::drafts::jobs::NewDraftJob) -> Result<bool>;
+
+    /// `owner`'s live job that the start with `client_id` began.
+    async fn started(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        client_id: Uuid,
+    ) -> Result<Option<super::drafts::jobs::DraftJob>>;
 
     /// How many of `owner`'s jobs are drafting.
     async fn drafting(&self, owner: &MacroUserIdStr<'static>) -> Result<u32>;
@@ -513,10 +521,13 @@ pub trait RoutineDraftUpdates: Send + Sync + 'static {
 pub trait RoutineDraftJobService: Send + Sync + 'static {
     /// Start drafting `request` for `owner`, once it is valid and its usage
     /// admitted, which the blocking draft's errors say otherwise.
-    /// `traceparent` is the starting request's trace context.
+    /// `client_id` is the id the client gave the start: sent again, it
+    /// answers with the job it started while that job is live, starting
+    /// nothing. `traceparent` is the starting request's trace context.
     fn start(
         &self,
         owner: MacroUserIdStr<'static>,
+        client_id: Uuid,
         request: super::drafts::DraftRequest,
         context: super::drafts::DraftContext,
         traceparent: Option<String>,

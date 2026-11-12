@@ -185,15 +185,18 @@ fn read_progress(progress: Option<serde_json::Value>) -> DraftJobProgress {
 
 #[async_trait::async_trait]
 impl DraftJobStore for PgDraftHandBacks {
-    async fn begin_job(&self, job: &NewDraftJob) -> Result<()> {
+    async fn begin_job(&self, job: &NewDraftJob) -> Result<bool> {
         let request = serde_json::to_value(&job.request).context("encode a draft's request")?;
         let progress =
             serde_json::to_value(&job.progress).context("encode a draft's progress")?;
-        sqlx::query!(
+        let began = sqlx::query!(
             r#"
             INSERT INTO scheduled_action_draft
-                (session_id, owner_id, bot_id, state, request, progress, created_at, traceparent)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                (session_id, owner_id, bot_id, state, request, progress, created_at,
+                 traceparent, client_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            ON CONFLICT (owner_id, client_id) WHERE state IN ('drafting', 'ready', 'failed')
+                DO NOTHING
             "#,
             job.session,
             job.owner.as_ref(),
@@ -203,11 +206,42 @@ impl DraftJobStore for PgDraftHandBacks {
             progress,
             job.created_at,
             job.traceparent.as_deref(),
+            job.client_id,
         )
         .execute(&self.pool)
         .await
         .context("start a background routine draft")?;
-        Ok(())
+        Ok(began.rows_affected() > 0)
+    }
+
+    async fn started(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        client_id: Uuid,
+    ) -> Result<Option<DraftJob>> {
+        let row = sqlx::query!(
+            r#"
+            SELECT session_id, request, progress, created_at, state, result, finished_at
+            FROM scheduled_action_draft
+            WHERE owner_id = $1 AND client_id = $2 AND state IN ('drafting', 'ready', 'failed')
+            "#,
+            owner.as_ref(),
+            client_id,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .context("find a started routine draft")?;
+        Ok(row.and_then(|row| {
+            stored_job(
+                row.session_id,
+                row.request,
+                row.progress,
+                row.created_at,
+                row.state,
+                row.result,
+                row.finished_at,
+            )
+        }))
     }
 
     async fn drafting(&self, owner: &MacroUserIdStr<'static>) -> Result<u32> {

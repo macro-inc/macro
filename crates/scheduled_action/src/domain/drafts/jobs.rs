@@ -166,6 +166,25 @@ pub enum DraftJobState {
     },
 }
 
+impl DraftJobState {
+    /// Its name on the wire and on spans.
+    pub fn name(&self) -> &'static str {
+        match self {
+            Self::Drafting => "drafting",
+            Self::Ready { .. } => "ready",
+            Self::Failed { .. } => "failed",
+        }
+    }
+}
+
+/// `job`, which a start sent again found, recorded on the start's span.
+fn repeated(span: &tracing::Span, job: DraftJob) -> DraftJob {
+    span.record("routine.draft.id", job.id.to_string());
+    span.record("routine.draft.repeated", true);
+    span.record("routine.draft.state", job.state.name());
+    job
+}
+
 impl DraftJob {
     /// A job as its row keeps it: what was asked, its progress, its phase and
     /// its result. A finished job whose result this build can't read failed.
@@ -208,6 +227,8 @@ impl DraftJob {
 pub struct NewDraftJob {
     pub session: Uuid,
     pub owner: MacroUserIdStr<'static>,
+    /// The id the client gave the start: one live job per id and owner.
+    pub client_id: Uuid,
     /// The agent whose session drafts it.
     pub agent: BotId,
     pub request: DraftAsked,
@@ -520,32 +541,49 @@ impl<Code: RoutineCode, Sessions: RoutineSessions, Updates: RoutineDraftUpdates>
         routine.draft.kind = request.kind_name(),
         routine.draft.id = tracing::field::Empty,
         routine.draft.state = tracing::field::Empty,
+        routine.draft.repeated = tracing::field::Empty,
     ), err)]
     async fn start(
         &self,
         owner: MacroUserIdStr<'static>,
+        client_id: Uuid,
         request: DraftRequest,
         context: DraftContext,
         traceparent: Option<String>,
     ) -> Result<DraftJob> {
         let started = tracing::Span::current();
         let (program, context) = self.drafts.read_request(&request, context)?;
+        // A start sent again, as a client does when its connection drops,
+        // answers with the job the first one started.
+        if let Some(job) = self.store.started(&owner, client_id).await? {
+            return Ok(repeated(&started, job));
+        }
         if self.store.drafting(&owner).await? >= MAX_DRAFTING {
             anyhow::bail!(DraftJobError::TooMany);
         }
         let session = AgentSessionId::new();
         let id = session.as_uuid();
-        started.record("routine.draft.id", id.to_string());
         let job = NewDraftJob {
             session: id,
             owner: owner.clone(),
+            client_id,
             agent: self.drafts.agent.bot,
             request: DraftAsked::of(&request),
             progress: DraftJobProgress::default(),
             created_at: Utc::now(),
             traceparent,
         };
-        self.store.begin_job(&job).await?;
+        if !self.store.begin_job(&job).await? {
+            // The same start, sent again, began first.
+            let job = self
+                .store
+                .started(&owner, client_id)
+                .await?
+                .ok_or(DraftJobError::NotFound)?;
+            return Ok(repeated(&started, job));
+        }
+        started.record("routine.draft.id", id.to_string());
+        started.record("routine.draft.repeated", false);
         // The job's span is this request's child, so the whole draft is one
         // trace however long it outlives the request.
         let span = draft_span(&request);
@@ -583,14 +621,7 @@ impl<Code: RoutineCode, Sessions: RoutineSessions, Updates: RoutineDraftUpdates>
                 .await?
                 .ok_or(DraftJobError::NotFound)?,
         };
-        started.record(
-            "routine.draft.state",
-            match &job.state {
-                DraftJobState::Drafting => "drafting",
-                DraftJobState::Ready { .. } => "ready",
-                DraftJobState::Failed { .. } => "failed",
-            },
-        );
+        started.record("routine.draft.state", job.state.name());
         Ok(job)
     }
 

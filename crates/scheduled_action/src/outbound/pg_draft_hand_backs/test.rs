@@ -234,10 +234,25 @@ mod jobs {
 
     async fn begin(drafts: &PgDraftHandBacks, owner: &MacroUserIdStr<'static>) -> Uuid {
         let session = macro_uuid::generate_uuid_v7();
+        assert!(
+            begin_as(drafts, owner, session, macro_uuid::generate_uuid_v7()).await,
+            "a new client id starts a job"
+        );
+        session
+    }
+
+    /// Start job `session` for the start with `client_id`. Whether it began.
+    async fn begin_as(
+        drafts: &PgDraftHandBacks,
+        owner: &MacroUserIdStr<'static>,
+        session: Uuid,
+        client_id: Uuid,
+    ) -> bool {
         drafts
             .begin_job(&NewDraftJob {
                 session,
                 owner: owner.clone(),
+                client_id,
                 agent: bot_id::BotId::TEST_A,
                 request: DraftAsked {
                     kind: DraftKind::Routine,
@@ -248,8 +263,7 @@ mod jobs {
                 traceparent: Some(TRACEPARENT.into()),
             })
             .await
-            .unwrap();
-        session
+            .unwrap()
     }
 
     fn failed(message: &str) -> Draft {
@@ -358,6 +372,41 @@ mod jobs {
                 .finished
         );
         assert!(drafts.jobs(&owner(), 20).await.unwrap().is_empty());
+    }
+
+    /// A start sent again finds the job the first began, and begins no
+    /// second one, until that job is cancelled; other people's ids are
+    /// their own.
+    #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+    async fn a_start_sent_again_finds_its_job(pool: PgPool) {
+        let drafts = PgDraftHandBacks::new(pool.clone());
+        let client_id = macro_uuid::generate_uuid_v7();
+        let first = macro_uuid::generate_uuid_v7();
+        assert!(begin_as(&drafts, &owner(), first, client_id).await);
+        assert_eq!(drafts.started(&owner(), client_id).await.unwrap().unwrap().id, first);
+
+        let again = macro_uuid::generate_uuid_v7();
+        assert!(!begin_as(&drafts, &owner(), again, client_id).await);
+        let rows = sqlx::query_scalar!(
+            r#"SELECT count(*) AS "count!" FROM scheduled_action_draft"#
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(rows, 1);
+        // Finished, it is still the start's job.
+        drafts.finish_job(first, &failed("no")).await.unwrap();
+        assert!(!begin_as(&drafts, &owner(), again, client_id).await);
+        assert_eq!(drafts.started(&owner(), client_id).await.unwrap().unwrap().id, first);
+        // The same id from someone else is theirs.
+        assert_eq!(drafts.started(&stranger(), client_id).await.unwrap(), None);
+        assert!(begin_as(&drafts, &stranger(), again, client_id).await);
+        // Cancelled, the id starts afresh.
+        drafts.cancel_job(&owner(), first).await.unwrap();
+        assert_eq!(drafts.started(&owner(), client_id).await.unwrap(), None);
+        assert!(
+            begin_as(&drafts, &owner(), macro_uuid::generate_uuid_v7(), client_id).await
+        );
     }
 
     #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

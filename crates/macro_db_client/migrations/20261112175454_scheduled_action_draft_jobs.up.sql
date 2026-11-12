@@ -20,9 +20,18 @@ ALTER TABLE scheduled_action_draft
     ADD COLUMN result JSONB,
     ADD COLUMN finished_at TIMESTAMPTZ,
     -- The W3C trace context of the request that started the job.
-    ADD COLUMN traceparent TEXT;
+    ADD COLUMN traceparent TEXT,
+    -- The id the client gave the start, so a start sent again (as a client
+    -- does when its connection drops) finds the job instead of starting
+    -- another.
+    ADD COLUMN client_id UUID;
 
 -- A person's jobs, newest first. Blocking drafts (state NULL) aren't listed.
 CREATE INDEX scheduled_action_draft_owner_jobs
     ON scheduled_action_draft (owner_id, created_at DESC)
     WHERE state IS NOT NULL;
+
+-- One live job per start a person sends. A cancelled job frees its id.
+CREATE UNIQUE INDEX scheduled_action_draft_owner_client
+    ON scheduled_action_draft (owner_id, client_id)
+    WHERE state IN ('drafting', 'ready', 'failed');

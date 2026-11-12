@@ -34,6 +34,7 @@ pub(super) struct Rows {
 /// A background draft's part of its row.
 #[derive(Debug, Clone)]
 pub(super) struct JobRow {
+    pub(super) client_id: Uuid,
     pub(super) phase: jobs::DraftJobPhase,
     pub(super) request: jobs::DraftAsked,
     pub(super) progress: progress::DraftJobProgress,

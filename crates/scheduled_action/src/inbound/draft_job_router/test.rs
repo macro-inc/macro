@@ -19,7 +19,8 @@ use crate::domain::ports::{RoutineDraftJobService, RoutineDraftService};
 use crate::inbound::axum_router::test::{FakeAuth, request};
 use crate::inbound::draft_router::{RoutineDraftRouterState, routine_draft_router};
 
-/// Keeps each started job, drafting, under its owner.
+/// Keeps each started job, drafting, under its owner, and the job each
+/// owner's client id started.
 #[derive(Default)]
 struct Jobs(Mutex<HashMap<Uuid, (MacroUserIdStr<'static>, DraftJob)>>);
 
@@ -27,6 +28,7 @@ impl RoutineDraftJobService for Jobs {
     async fn start(
         &self,
         owner: MacroUserIdStr<'static>,
+        client_id: Uuid,
         request: DraftRequest,
         _: DraftContext,
         _: Option<String>,
@@ -41,8 +43,14 @@ impl RoutineDraftJobService for Jobs {
                 _ => {}
             }
         }
+        // The fake's job id is its client id: a start sent again finds it.
+        if let Some((by, job)) = self.0.lock().unwrap().get(&client_id)
+            && *by == owner
+        {
+            return Ok(job.clone());
+        }
         let job = DraftJob {
-            id: macro_uuid::generate_uuid_v7(),
+            id: client_id,
             request: DraftAsked {
                 kind: DraftKind::Routine,
                 description: match &request {
@@ -115,11 +123,24 @@ fn router() -> Router {
     })
 }
 
+/// The blocking route's body.
 fn body(description: &str) -> Value {
     json!({
         "draft": { "type": "routine", "description": description },
         "context": { "timezone": "UTC", "agentModel": "anthropic/claude-sonnet-5-5" },
     })
+}
+
+/// A start's body, as the start the client gave `client_id`.
+fn start_as(client_id: Uuid, description: &str) -> Value {
+    let mut body = body(description);
+    body["clientId"] = json!(client_id);
+    body
+}
+
+/// A new start's body.
+fn start(description: &str) -> Value {
+    start_as(macro_uuid::generate_uuid_v7(), description)
 }
 
 const JOBS: &str = "/scheduled-actions/draft-jobs";
@@ -128,12 +149,32 @@ const JOBS: &str = "/scheduled-actions/draft-jobs";
 async fn starts_lists_reads_and_discards_the_callers_drafts() {
     let app = router();
 
-    let (status, job) = request(&app, "POST", JOBS, "owner", body("label invoices")).await;
+    let client_id = macro_uuid::generate_uuid_v7();
+    let (status, job) = request(
+        &app,
+        "POST",
+        JOBS,
+        "owner",
+        start_as(client_id, "label invoices"),
+    )
+    .await;
     assert_eq!(status, StatusCode::ACCEPTED);
     assert_eq!(job["state"], "drafting");
     assert_eq!(job["request"], json!({ "kind": "routine", "description": "label invoices" }));
     assert_eq!(job["progress"], json!({ "stage": "started" }));
     let one = format!("{JOBS}/{}", job["id"].as_str().unwrap());
+    // Sent again, the start answers with the same job.
+    assert_eq!(
+        request(
+            &app,
+            "POST",
+            JOBS,
+            "owner",
+            start_as(client_id, "label invoices"),
+        )
+        .await,
+        (StatusCode::ACCEPTED, job.clone())
+    );
 
     let (status, listed) = request(&app, "GET", JOBS, "owner", Value::Null).await;
     assert_eq!(status, StatusCode::OK);
@@ -175,7 +216,7 @@ async fn needs_a_signed_in_user() {
     let one = format!("{JOBS}/{}", Uuid::nil());
 
     for (method, path, body) in [
-        ("POST", JOBS, body("label invoices")),
+        ("POST", JOBS, start("label invoices")),
         ("GET", JOBS, Value::Null),
         ("GET", &one, Value::Null),
         ("DELETE", &one, Value::Null),
@@ -194,10 +235,12 @@ async fn refuses_what_it_cannot_start_like_the_blocking_route() {
     let app = router();
 
     for (body, status) in [
-        (body(" "), StatusCode::BAD_REQUEST),
+        (start(" "), StatusCode::BAD_REQUEST),
         (json!({ "draft": { "type": "poem" } }), StatusCode::BAD_REQUEST),
-        (body("busy"), StatusCode::SERVICE_UNAVAILABLE),
-        (body("again"), StatusCode::CONFLICT),
+        // A start needs the client's id for it.
+        (body("label invoices"), StatusCode::BAD_REQUEST),
+        (start("busy"), StatusCode::SERVICE_UNAVAILABLE),
+        (start("again"), StatusCode::CONFLICT),
     ] {
         assert_eq!(
             request(&app, "POST", JOBS, "owner", body.clone()).await.0,
@@ -230,7 +273,7 @@ async fn its_paths_live_beside_the_routine_routes() {
         }))
         .merge(router());
 
-    let (status, job) = request(&app, "POST", JOBS, "owner", body("label invoices")).await;
+    let (status, job) = request(&app, "POST", JOBS, "owner", start("label invoices")).await;
     assert_eq!(status, StatusCode::ACCEPTED);
     let one = format!("{JOBS}/{}", job["id"].as_str().unwrap());
     assert_eq!(request(&app, "GET", &one, "owner", Value::Null).await.1, job);

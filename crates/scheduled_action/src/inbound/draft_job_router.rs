@@ -14,10 +14,13 @@ use macro_authorization::{
 };
 use macro_uuid::Uuid;
 
+use serde::Deserialize;
+use utoipa::ToSchema;
+
 use crate::domain::drafts::jobs::DraftJob;
+use crate::domain::drafts::{DraftContext, DraftRequest};
 use crate::domain::ports::RoutineDraftJobService;
 use crate::inbound::axum_router::ScheduledActionApiError;
-use crate::inbound::draft_router::DraftRoutineRequest;
 
 #[cfg(test)]
 mod test;
@@ -73,14 +76,27 @@ fn current_traceparent() -> Option<String> {
         .map(str::to_owned)
 }
 
+/// A background draft to start: what the blocking route takes, and the id
+/// the client made for this start.
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct StartDraftJobRequest {
+    /// Made by the client, once per start. Sent again with it (as when the
+    /// connection drops before the answer), the start answers with the job
+    /// it began, starting nothing, until that job is discarded.
+    pub client_id: Uuid,
+    pub draft: DraftRequest,
+    pub context: DraftContext,
+}
+
 #[utoipa::path(
     post,
     path = "/scheduled-actions/draft-jobs",
     tag = "scheduled actions",
     operation_id = "start_routine_draft_job",
-    request_body = DraftRoutineRequest,
+    request_body = StartDraftJobRequest,
     responses(
-        (status = 202, body = DraftJob, description = "Drafting in the background; read it, or follow `routine_draft_update` messages, until it is ready or failed. A request that can't be drafted at all comes back failed"),
+        (status = 202, body = DraftJob, description = "Drafting in the background; read it, or follow `routine_draft_update` messages, until it is ready or failed. A request that can't be drafted at all comes back failed. Sent again with the same `clientId`, the job that start began, as it is now"),
         (status = 400, body = String),
         (status = 401, body = String),
         (status = 402, body = AiAdmissionErrorBody, description = "AI usage limit reached"),
@@ -92,7 +108,7 @@ fn current_traceparent() -> Option<String> {
 pub async fn start_draft_job<J, Auth>(
     State(state): State<RoutineDraftJobRouterState<J, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOnly>,
-    request: Result<Json<DraftRoutineRequest>, JsonRejection>,
+    request: Result<Json<StartDraftJobRequest>, JsonRejection>,
 ) -> Result<impl IntoResponse, ScheduledActionApiError>
 where
     J: RoutineDraftJobService,
@@ -103,6 +119,7 @@ where
         .service
         .start(
             user.authorization.macro_user_id.clone(),
+            request.client_id,
             request.draft,
             request.context,
             current_traceparent(),
