@@ -19151,6 +19151,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "slack_linked"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "chrono",
+ "entity_access_db_utils",
+ "entity_registry_db_utils",
+ "external_chat",
+ "kms_envelope",
+ "lazy-regex",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_user_id",
+ "model-entity",
+ "model_owner",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "share_permission_db_utils",
+ "slack_client",
+ "sqlx",
+ "strum 0.27.2",
+ "tokio",
+ "tracing",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "smallvec"
 version = "1.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

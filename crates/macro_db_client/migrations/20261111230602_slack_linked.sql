@@ -20,7 +20,8 @@ ALTER TABLE external_chat ADD CONSTRAINT external_chat_slack_remote_id_check CHE
 -- (sign-in, disconnect, session end) and fences memberships and sends;
 -- lease_epoch fences the session-service replica running the account.
 -- credentials: the sealed {token, d, d-s} (kms_envelope blob under the
--- account's data key); present exactly while the session may be used.
+-- account's data key); present while the session may be used, and until a
+-- requested sign-out ran.
 CREATE TABLE slack_account (
     id uuid PRIMARY KEY,
     user_id text NOT NULL REFERENCES "User"(id) ON DELETE CASCADE,
@@ -42,10 +43,16 @@ CREATE TABLE slack_account (
     kms_key_id text CHECK (octet_length(kms_key_id) <= 512),
     encryption_version smallint,
     last_connected_at timestamptz,
+    -- The owner disconnected with "sign out of Slack": the replica signs the
+    -- session out, then wipes the credentials.
+    sign_out_requested boolean NOT NULL DEFAULT false,
+    -- Last time DSS asked for a catalogue refresh (rate limit).
+    catalogue_requested_at timestamptz,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
     UNIQUE (user_id, team_id),
-    CHECK ((state IN ('connecting', 'connected')) = (credentials IS NOT NULL)),
+    CHECK (state NOT IN ('connecting', 'connected') OR credentials IS NOT NULL),
+    CHECK (state IN ('connecting', 'connected') OR credentials IS NULL OR sign_out_requested),
     CHECK ((credentials IS NULL) = (data_key_ciphertext IS NULL)),
     CHECK ((credentials IS NULL) = (kms_key_id IS NULL)),
     CHECK ((credentials IS NULL) = (encryption_version IS NULL)),
