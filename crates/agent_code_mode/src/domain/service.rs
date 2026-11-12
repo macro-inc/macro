@@ -311,9 +311,12 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "DeleteBot"
                 | "GetBotWebhooks"
                 | "ManageBotChannelAccess"
-                // macro.agents.coding() and macro.agentSessions.createManaged.
+                // macro.agents.coding(), macro.agents.list() and
+                // macro.agentSessions.createManaged, which prompts an agent
+                // its operator runs as well as a managed one.
                 | "ListCodingAgents"
                 | "DispatchCodingAgent"
+                | "CreateAgentSession"
                 // macro.connectedApps.discover and .addServer.
                 | "DiscoverConnectors"
                 | "ConnectMcpServer"
