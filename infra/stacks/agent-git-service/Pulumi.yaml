@@ -1,3 +1,0 @@
-name: agent-git-service
-runtime: nodejs
-description: Macro agent git remotes

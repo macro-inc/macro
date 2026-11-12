@@ -42,7 +42,8 @@ standalone `bun.lock` (`tooling/scripts/starter-agent-lock.sh`).
 
 ## Boundaries
 
-- Used by: `services/agent_git_service` (composition root); agent
+- Used by: `services/agent_harness_service` (composition root, `src/agent_git.rs`,
+  under `/agent-git`); agent
   provisioning through `client::AgentGitClient` (`default-features = false,
   features = ["client"]`), so callers need no storage volume.
 
@@ -50,9 +51,8 @@ standalone `bun.lock` (`tooling/scripts/starter-agent-lock.sh`).
 
 - `TMPDIR=/home/wolf/tmp cargo test -p agent_git` (`SQLX_OFFLINE` unset; needs
   `git` on `PATH`). `tests/smart_http.rs` runs real `git clone`/`push`.
-- `nix build .#checks.x86_64-linux.pruned-deploy-src-brain-template` verifies
-  that full and pruned service sources preserve every template file (the check
-  is renamed with the Nix move to `packages/starter-agent`).
+- `nix build .#checks.x86_64-linux.pruned-deploy-src-starter-agent` verifies
+  that full and pruned service sources preserve every template file.
 
 ## Gotchas
 
@@ -69,8 +69,13 @@ standalone `bun.lock` (`tooling/scripts/starter-agent-lock.sh`).
 - Directories are `<sha256(user id)>.git`. Delete removes the directory before
   the row; the `"User"` cascade alone leaves the directory behind.
 - Push limits: size is measured before each push (refused at the cap, and one
-  push may not carry more than the remaining room); the rate limit is
-  in-memory per process, so the service runs one task.
+  push may not carry more than the remaining room); the rate limit is a
+  token bucket in the repo's `agent_repos` row (`push_tokens`), shared by
+  every replica.
+- Every replica serves every repo from the same EFS volume. A receive-pack
+  holds the repo's Postgres advisory lock (`PgRepoLock`: a session of its own,
+  closed on drop) until its response ends; create, ensure and delete take the
+  same lock. git's own lockfiles stay as the second guard.
 - Receive-pack rejects every Content-Encoding with 415; the remaining quota is
   also passed to git as `receive.maxInputSize`. Both receive/transfer object
   fsck checks are enabled through process config. Missing repos and bad tokens

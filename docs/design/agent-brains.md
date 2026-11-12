@@ -65,8 +65,9 @@ persona map.
 
 ## The workspace repo (Macro-hosted git, 1:1)
 
-`agent_git_service` hosts exactly one bare repo per agent, created with the
-agent and deleted with it. Smart HTTP (`git http-backend`) behind axum auth:
+`agent_harness_service` hosts exactly one bare repo per agent under
+`/agent-git`, created with the agent and deleted with it. Smart HTTP
+(`git http-backend`) behind axum auth:
 
 - the agent's repo token (minted at creation, stored hashed) reads and
   pushes only its own repo;

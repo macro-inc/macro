@@ -32,9 +32,6 @@ pub struct AgentGitServiceImpl<Repos, Store, Admins, Limiter, Backend> {
     adapters: AgentGitAdapters<Repos, Store, Admins, Limiter, Backend>,
     limits: RepoLimits,
     template: WorkspaceTemplate,
-    // The service runs one task. Serialize management across the filesystem
-    // and database so recovery cannot publish a repo after deletion finishes.
-    mutations: tokio::sync::Mutex<()>,
 }
 
 impl<Repos, Store, Admins, Limiter, Backend>
@@ -50,7 +47,6 @@ impl<Repos, Store, Admins, Limiter, Backend>
             adapters,
             limits,
             template,
-            mutations: tokio::sync::Mutex::new(()),
         }
     }
 }
@@ -91,7 +87,15 @@ where
         team_id: Uuid,
         seed: &PersonaSeed,
     ) -> Result<CreatedRepo, AgentGitError> {
-        let _mutation = self.mutations.lock().await;
+        // Every replica serializes management of a repo, across the
+        // filesystem and database, so recovery cannot publish a repo after
+        // deletion finishes.
+        let _lock = self
+            .adapters
+            .repos
+            .lock_repo(&agent_user_id)
+            .await
+            .map_err(internal)?;
         let existing = self
             .adapters
             .repos
@@ -141,7 +145,12 @@ where
         seed: &PersonaSeed,
         token: RepoToken,
     ) -> Result<CreatedRepo, AgentGitError> {
-        let _mutation = self.mutations.lock().await;
+        let _lock = self
+            .adapters
+            .repos
+            .lock_repo(&agent_user_id)
+            .await
+            .map_err(internal)?;
         // The database uniqueness constraint arbitrates concurrent recovery.
         // Never use upsert_repo here: it intentionally rotates live tokens.
         self.adapters
@@ -180,7 +189,12 @@ where
     }
 
     async fn delete_repo(&self, agent_user_id: &MacroUserIdStr<'_>) -> Result<(), AgentGitError> {
-        let _mutation = self.mutations.lock().await;
+        let _lock = self
+            .adapters
+            .repos
+            .lock_repo(agent_user_id)
+            .await
+            .map_err(internal)?;
         // Directory first: a failure leaves the row, so a retry finds the repo.
         self.adapters
             .store
@@ -242,6 +256,21 @@ where
             return Err(AgentGitError::EncodedPush);
         }
 
+        // A push holds the repo's lock until its response ends, so pushes from
+        // any replica, and management, never interleave on disk.
+        let receive_pack = request.endpoint == GitEndpoint::Rpc(GitService::ReceivePack);
+        let lock = if receive_pack {
+            Some(
+                self.adapters
+                    .repos
+                    .lock_repo(agent_user_id)
+                    .await
+                    .map_err(internal)?,
+            )
+        } else {
+            None
+        };
+
         let mut max_input_size = None;
         if access == GitAccess::Push {
             let size_bytes = self
@@ -259,8 +288,14 @@ where
                 });
             }
 
-            if request.endpoint == GitEndpoint::Rpc(GitService::ReceivePack) {
-                if !self.adapters.limiter.try_acquire_push(agent_user_id) {
+            if receive_pack {
+                if !self
+                    .adapters
+                    .limiter
+                    .try_acquire_push(agent_user_id)
+                    .await
+                    .map_err(internal)?
+                {
                     return Err(AgentGitError::PushRateLimited);
                 }
 
@@ -275,14 +310,22 @@ where
             }
         }
 
-        self.adapters
+        let mut response = self
+            .adapters
             .backend
             .serve(
                 &AuthorizedRepo::new(repo.agent_user_id, access, max_input_size),
                 request,
             )
             .await
-            .map_err(internal)
+            .map_err(internal)?;
+        if let Some(lock) = lock {
+            response.body = Box::pin(response.body.map(move |chunk| {
+                let _held = &lock;
+                chunk
+            }));
+        }
+        Ok(response)
     }
 }
 

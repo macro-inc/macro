@@ -176,7 +176,6 @@ members = [
   "services/calendar_service",
   "services/call_recording_preview_handler",
   "services/connection_gateway",
-  "services/agent_git_service",
   "services/contacts_service",
   "services/convert_service",
   "services/dataloss_prevention_handler",

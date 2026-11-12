@@ -254,6 +254,13 @@ pub struct Config {
     /// Port the control routes are served on.
     #[macro_config_default(8101)]
     pub port: u16,
+    /// Directory holding agent teammates' bare repos: the EFS volume every
+    /// replica mounts in AWS, a compose volume locally. Must exist.
+    pub repo_storage_root: std::path::PathBuf,
+    /// Pushes to an agent repo are refused once it reaches this size.
+    pub max_repo_size_bytes: u64,
+    /// Push budget per agent repo, shared by every replica.
+    pub pushes_per_minute: u32,
     /// Port the sandbox-facing egress proxy is served on.
     ///
     /// The shared gateway forwards `/agent-harness-egress/*` to this listener.
