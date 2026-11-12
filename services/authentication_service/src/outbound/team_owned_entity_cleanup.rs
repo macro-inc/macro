@@ -37,6 +37,10 @@ impl<B, R> TeamOwnedEntityCleanupAdapter<B, R> {
     ///
     /// `internal_key` is the fleet-wide internal service key that the agent
     /// harness and scheduled-action services validate.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "one client per service whose team-owned entities are cleaned up"
+    )]
     pub fn new(
         vault_metadata: Arc<dyn passwords::domain::ports::Repository>,
         bots: B,
