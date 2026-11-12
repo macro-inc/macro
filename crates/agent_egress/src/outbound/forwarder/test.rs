@@ -36,10 +36,20 @@ async fn internal_upstreams_are_refused_outside_local_development() {
     let port = serve(Arc::clone(&hits)).await;
     let forwarder = ReqwestForwarder::new(AddressPolicy::PublicOnly).unwrap();
 
+    // Nothing listens there, so only the policy message tells a refusal
+    // apart from a failed connect.
+    let error = forwarder
+        .forward(get_request("https://10.0.0.1/"))
+        .await
+        .unwrap_err();
+    assert!(
+        error.to_string().contains("not a public address"),
+        "{error}"
+    );
+
     for url in [
         format!("http://127.0.0.1:{port}/"),
         format!("http://localhost:{port}/"),
-        "https://10.0.0.1/".to_owned(),
     ] {
         assert!(forwarder.forward(get_request(&url)).await.is_err(), "{url}");
     }
