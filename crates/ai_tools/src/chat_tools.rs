@@ -53,7 +53,11 @@ impl ChatToolsets {
     }
 
     /// The tools `user`'s turns run with.
-    #[tracing::instrument(skip_all, fields(code_mode = tracing::field::Empty))]
+    #[tracing::instrument(
+        name = "chat.select_tools",
+        skip_all,
+        fields(code_mode = tracing::field::Empty)
+    )]
     pub async fn for_user(&self, user: &MacroUserIdStr<'static>) -> ChatTools {
         let code_mode = match &self.code_mode {
             Some((tools, rollout)) if rollout(user.clone()).await => Some(tools),

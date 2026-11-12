@@ -1,5 +1,20 @@
 # AI Chat (Agents)
 
+## Chat in code mode
+
+For users the server-side `ai-chat-code-mode` PostHog flag is on for, the
+standalone and doc-scoped chat (and AI projections) answer with `ExecuteCode`,
+`DescribeCodeTools` and `ReadCodeDocs` instead of the direct Macro tools: the
+chat shows **Discover code tools**, **Read SDK reference** and **Run code**
+rows. Email and calendar drafts still end in the composer card. Without the
+flag, or when it cannot be read, chat keeps its direct tools. Locally, point
+`POSTHOG_HOST` at a stand-in `/flags/?v=2` server that answers the flag on
+(through `run_local --env-file`); never change real PostHog flags.
+
+Verify with the flag on: ask "how many tasks do I have?" and confirm a
+**Run code** row answers it, then ask "what is Macro?" and confirm it reads
+`AboutMacro` rather than calling `SelfKnowledge`.
+
 ## Recently shared in an agent session
 
 With agent session activity enabled, the first side panel section lists items

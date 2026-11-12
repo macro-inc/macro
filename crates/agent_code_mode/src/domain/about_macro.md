@@ -18,10 +18,10 @@ Macro is organized into "blocks":
 - **Calls** — calls and call records.
 - **CRM** — customer relationship management.
 - **Folders** — file storage.
-- **Agents** — AI conversations and coding sessions that can act across the workspace. Read conversations with ReadAgentSession.
+- **Agents** — AI conversations and coding sessions that can act across the workspace. Read conversations with ReadAgentSession (`macro.agentSessions.byId()` in code mode).
 
 Cross-cutting concepts: the **Unified Inbox** (recent items across every block,
-read via the ListEntities tool), **Unified Search**, **Unified Memory**,
+read via the ListEntities tool, or `macro.workspace` in code mode), **Unified Search**, **Unified Memory**,
 bidirectional **@mentions / linking**, and **permissions** that inherit from
 channels.
 
@@ -35,7 +35,7 @@ channels.
    it with the WebFetch tool (`macro.web.fetch()` in code mode).
 3. **Cite the docs.** Link the user to the specific docs page you used, but always
    link the human-facing page, never the raw Markdown. The `.md` form is only for
-   your own WebFetch reads; when you show a user a link, drop the trailing `.md`
+   your own WebFetch (`macro.web.fetch()`) reads; when you show a user a link, drop the trailing `.md`
    and strip any query string. Read `https://docs.macro.com/getting-started.md`,
    but link `https://docs.macro.com/getting-started`. Never route a user to a
    `.md` URL or to one carrying tracking parameters (e.g. `?_gl=…`) — surface only
@@ -70,7 +70,7 @@ channels.
 ## Workflow for "what is Macro / how do I…" questions
 
 1. Identify what the user is asking about (a block, a concept, billing, etc.).
-2. Fetch the relevant docs.macro.com `.md` page with WebFetch (or llms.txt first
+2. Fetch the relevant docs.macro.com `.md` page with WebFetch or `macro.web.fetch()` (or llms.txt first
    if you are unsure which page to read).
 3. Answer concisely, grounded in the docs, and link the page you used — as the
    clean route, without the `.md` suffix or any query string.
