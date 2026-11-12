@@ -147,6 +147,10 @@ the gateway `/email` prefix.
   domain rechecks the scheduled actor's access before cross-inbox downloads.
 - Macro's own digest emails are filtered out of Signal/email notifications
   (#7039) — don't reintroduce a path that notifies on our own sends.
+- Remote signature images and contact photos are fetched only through
+  `util/process_pre_insert/sfs_map/public_http.rs`, whose resolver and
+  redirect policy refuse non-public addresses. Don't fetch them with another
+  client.
 - Long attachment names are truncated to the DSS limit before upload (#7893);
   don't remove that truncation when touching `util/upload_attachment.rs`.
 - Scheduled Gmail sends recheck forwarded source inbox access before resolving
