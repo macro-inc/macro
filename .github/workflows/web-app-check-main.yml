@@ -663,12 +663,14 @@ jobs:
       run: just build-agent-fold-wasm
       env:
         WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
+        WASM_PKG_HTTP_CACHE: '1'
       timeout-minutes: 15
       working-directory: apps/web
     - name: Build natural-time WASM for tests
       run: just build-natural-time-wasm
       env:
         WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
+        WASM_PKG_HTTP_CACHE: '1'
       timeout-minutes: 15
       working-directory: apps/web
     - name: Test
@@ -752,6 +754,7 @@ jobs:
         CARGO_PROFILE_AI_ENGINE_WASM_LTO: 'off'
         CARGO_PROFILE_AI_ENGINE_WASM_CODEGEN_UNITS: '16'
         WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
+        WASM_PKG_HTTP_CACHE: '1'
       working-directory: apps/web
     - name: Functional Browser Tests
       run: bun run test:functional
@@ -830,6 +833,7 @@ jobs:
       run: just build-agent-fold-wasm
       env:
         WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
+        WASM_PKG_HTTP_CACHE: '1'
       timeout-minutes: 15
       working-directory: apps/web
     - name: Sign-up Browser Tests
@@ -957,6 +961,7 @@ jobs:
         CARGO_PROFILE_AI_ENGINE_WASM_LTO: 'off'
         CARGO_PROFILE_AI_ENGINE_WASM_CODEGEN_UNITS: '16'
         WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
+        WASM_PKG_HTTP_CACHE: '1'
         VITE_SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}
         VITE_POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
       working-directory: apps/web
