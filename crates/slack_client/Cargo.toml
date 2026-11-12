@@ -8,6 +8,7 @@ description = "Typed client for the Slack web client's session API: login, Web A
 [dependencies]
 bytes = { workspace = true }
 chrono = { workspace = true }
+cookie = { workspace = true }
 futures = { workspace = true }
 lazy-regex = { workspace = true }
 rand = { workspace = true }
@@ -27,5 +28,6 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 zeroize = { workspace = true, features = ["derive"] }
 
 [dev-dependencies]
+rustls = { workspace = true }
 slack_fake_server = { path = "../slack_fake_server" }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "test-util"] }

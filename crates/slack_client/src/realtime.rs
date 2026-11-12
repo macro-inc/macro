@@ -61,9 +61,9 @@ impl Default for RealtimeConfig {
 /// What the real-time connection reports.
 #[derive(Clone, Debug, PartialEq)]
 pub enum RealtimeEvent {
-    /// Dialing; `attempt` counts failures since the last stable connection.
+    /// Dialing; `attempt` counts reconnects since the last stable connection.
     Connecting {
-        /// Failed attempts so far.
+        /// Reconnects so far.
         attempt: u32,
     },
     /// Slack said `hello`. Events may have been missed while disconnected

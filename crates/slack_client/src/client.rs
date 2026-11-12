@@ -243,24 +243,29 @@ impl SlackClient {
     /// Whether `url` is Slack's (or the configured fake's), so it may carry
     /// the session's credentials.
     pub(crate) fn is_slack_host(&self, url: &Url) -> bool {
-        let Some(host) = url.host_str() else {
-            return false;
-        };
-        let configured = [
-            &self.inner.workspace.url,
-            &self.inner.endpoints.slack,
-            &self.inner.endpoints.app,
-            &self.inner.endpoints.edge_api,
-        ];
-        let is_configured = configured
-            .iter()
-            .any(|known| known.host_str() == Some(host) && known.port_or_known_default() == url.port_or_known_default());
-        let is_slack = url.scheme() == "https"
-            && (host == "slack.com"
-                || host.ends_with(".slack.com")
-                || host.ends_with(".slack-edge.com"));
-        is_configured || is_slack
+        is_slack_url(
+            url,
+            &[
+                &self.inner.workspace.url,
+                &self.inner.endpoints.slack,
+                &self.inner.endpoints.app,
+                &self.inner.endpoints.edge_api,
+            ],
+        )
     }
+}
+
+/// Whether `url` is an https Slack host or one of the `configured` origins.
+pub(crate) fn is_slack_url(url: &Url, configured: &[&Url]) -> bool {
+    let Some(host) = url.host_str() else {
+        return false;
+    };
+    let is_configured = configured.iter().any(|known| {
+        known.host_str() == Some(host) && known.port_or_known_default() == url.port_or_known_default()
+    });
+    let is_slack = url.scheme() == "https"
+        && (host == "slack.com" || host.ends_with(".slack.com") || host.ends_with(".slack-edge.com"));
+    is_configured || is_slack
 }
 
 /// A downloaded file.
@@ -353,7 +358,7 @@ pub(crate) fn decode<Response: DeserializeOwned>(
     serde_json::from_slice(body).map_err(|source| SlackError::Decode { method, source })
 }
 
-fn retry_after(headers: &HeaderMap) -> Duration {
+pub(crate) fn retry_after(headers: &HeaderMap) -> Duration {
     headers
         .get(header::RETRY_AFTER)
         .and_then(|value| value.to_str().ok())

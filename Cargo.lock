@@ -19032,10 +19032,12 @@ version = "0.1.0"
 dependencies = [
  "bytes",
  "chrono",
+ "cookie",
  "futures",
  "lazy-regex",
  "rand 0.9.4",
  "reqwest 0.13.4",
+ "rustls",
  "serde",
  "serde_json",
  "slack_fake_server",

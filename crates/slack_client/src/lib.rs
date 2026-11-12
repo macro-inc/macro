@@ -13,6 +13,7 @@ mod endpoints;
 mod error;
 mod ids;
 mod method;
+pub mod login;
 pub mod models;
 pub mod realtime;
 mod pacing;
@@ -26,3 +27,5 @@ pub use ids::{
     UserId,
 };
 pub use method::{RateTier, SlackMethod};
+#[cfg(test)]
+mod test;
