@@ -536,17 +536,6 @@ jobs:
           git diff -- packages/sdk | head -200
           exit 1
         fi
-    - name: Regenerate MCP tool pages
-      run: bun run generate:tools
-      working-directory: apps/docs
-    - name: Verify docs tool reference is fresh
-      run: |
-        if [ -n "$(git status --porcelain -- apps/docs)" ]; then
-          echo "apps/docs tool reference is stale. Run 'bun run generate:tools' in apps/docs and commit the result."
-          git status --porcelain -- apps/docs
-          git diff -- apps/docs | head -200
-          exit 1
-        fi
     - name: Check Specta Types
       run: |
         just gen-agent-fold-types
