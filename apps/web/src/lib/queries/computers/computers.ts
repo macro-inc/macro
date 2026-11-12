@@ -8,6 +8,7 @@ import {
 } from '@queries/harnesses/harnesses';
 import { harnessKeys } from '@queries/harnesses/keys';
 import {
+  COMPUTERS_UNAVAILABLE,
   type ComputerStatus,
   type ComputerStatusKind,
   computersClient,
@@ -144,9 +145,11 @@ function computerOffersQueryOptions(enabled: boolean) {
     queryKey: computerKeys.offers.queryKey,
     enabled,
     queryFn: () => throwOnErr(computersClient.offers),
-    // A trial doesn't end by retrying; show why at once.
+    // Neither a trial nor a missing host ends by retrying; show why at once.
     retry: (failures, error) =>
-      !thrownResultErrorHasCode(error, TEAM_ON_TRIAL) && failures < 3,
+      !thrownResultErrorHasCode(error, TEAM_ON_TRIAL) &&
+      !thrownResultErrorHasCode(error, COMPUTERS_UNAVAILABLE) &&
+      failures < 3,
   });
 }
 
