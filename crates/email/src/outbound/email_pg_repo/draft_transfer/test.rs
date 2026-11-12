@@ -100,7 +100,8 @@ async fn transfer_preserves_uploads_and_fences_old_saves_deletes_and_delivery(db
             plan.source_thread_id,
             &[request.source_link_id],
             Some(ACTOR),
-            0
+            0,
+            true
         )
         .await
         .unwrap()
@@ -553,6 +554,7 @@ async fn thread_pages_omit_deleted_and_moved_drafts(db: PgPool) {
         &[request.source_link_id],
         Some(ACTOR),
         0,
+        true,
     )
     .await
     .unwrap()

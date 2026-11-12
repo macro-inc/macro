@@ -407,8 +407,8 @@ pub(crate) async fn delete_draft_message(
     thread_db_id: Uuid,
     link_ids: &[Uuid],
     actor: Option<&str>,
-
     expected_generation: i32,
+    discard: bool,
 ) -> Result<Option<DraftDeletion>, sqlx::Error> {
     let mut tx = pool.begin().await?;
 
@@ -503,6 +503,21 @@ pub(crate) async fn delete_draft_message(
         return Ok(Some(DraftDeletion {
             thread_deleted: false,
         }));
+    }
+
+    // Before the delete cascades the bindings away. A guarded delete that
+    // matches nothing returns without committing, so this rolls back too.
+    if discard {
+        sqlx::query!(
+            r#"
+            INSERT INTO email_draft_client_discards (link_id, client_id)
+            SELECT link_id, client_id FROM email_draft_client_ids WHERE message_id = $1
+            ON CONFLICT (link_id, client_id) DO NOTHING
+            "#,
+            message_id,
+        )
+        .execute(&mut *tx)
+        .await?;
     }
 
     let deleted_link_id = sqlx::query_scalar!(

@@ -187,6 +187,7 @@ async fn delete_draft_message_recomputes_thread_metadata(
         &[Uuid::parse_str(LINK_ID)?],
         None,
         0,
+        true,
     )
     .await?;
 
@@ -222,6 +223,7 @@ async fn delete_draft_message_returns_sent_thread_out_of_inbox(
         &[Uuid::parse_str(LINK_ID)?],
         None,
         0,
+        true,
     )
     .await?;
 
