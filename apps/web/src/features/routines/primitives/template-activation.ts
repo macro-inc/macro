@@ -5,7 +5,7 @@ import type {
 } from '@service-scheduled-action/generated/schemas';
 import { type Accessor, createMemo, createSignal } from 'solid-js';
 import { DEFAULT_RUN_VISIBILITY } from '../core/draft';
-import { firstAgent, stepsFromTask, stepsToWire } from '../core/routine-steps';
+import { firstAgent, programSteps, stepsToWire } from '../core/routine-steps';
 import {
   type Activator,
   fillTemplatePrompt,
@@ -31,10 +31,9 @@ export type TemplateReference = {
 export function templatePrompt(
   template: Pick<RoutineTemplate, 'task'>
 ): string {
-  const steps = stepsFromTask(template.task);
-  if (steps) return firstAgent(steps)?.instructions ?? '';
-  const prompt = template.task.user_prompt;
-  return typeof prompt === 'string' ? prompt : '';
+  if (!('steps' in template.task)) return template.task.user_prompt;
+  const steps = programSteps(template.task);
+  return (steps && firstAgent(steps)?.instructions) ?? '';
 }
 
 /**
@@ -44,15 +43,17 @@ export function templatePrompt(
 function filledTask(
   task: RoutineTemplate['task'],
   fill: (text: string) => string
-) {
-  const steps = stepsFromTask(task);
-  if (!steps)
+): RoutineTemplate['task'] {
+  if (!('steps' in task))
     return {
       ...task,
-      ...(typeof task.prompt === 'string' ? { prompt: fill(task.prompt) } : {}),
-      user_prompt: fill(templatePrompt({ task })),
+      prompt: fill(task.prompt),
+      user_prompt: fill(task.user_prompt),
     };
-  return { ...task, steps: stepsToWire(mapStepTexts(steps, fill)) };
+  const steps = programSteps(task);
+  return steps
+    ? { ...task, steps: stepsToWire(mapStepTexts(steps, fill)) }
+    : task;
 }
 
 /**

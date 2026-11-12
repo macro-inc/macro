@@ -26,7 +26,10 @@ import {
   isConnectAppTarget,
 } from '../nodes/ConnectAppNode';
 import { ContactMentionNode } from '../nodes/ContactMentionNode';
-import { DateMentionNode } from '../nodes/DateMentionNode';
+import {
+  DateMentionNode,
+  parseDateMentionBody,
+} from '../nodes/DateMentionNode';
 import { DocumentCardNode } from '../nodes/DocumentCardNode';
 import { DocumentMentionNode } from '../nodes/DocumentMentionNode';
 import { GroupMentionNode } from '../nodes/GroupMentionNode';
@@ -192,21 +195,15 @@ export const I_DATE_MENTION: TextMatchTransformer = {
     return `<m-date-mention>${data}</m-date-mention>`;
   },
   replace: (node: TextNode, match: RegExpMatchArray) => {
-    try {
-      const data = JSON.parse(match[1]);
-      for (const field of ['date', 'displayFormat']) {
-        if (!(field in data)) throw new Error(`Missing field ${field}`);
-      }
-      const dateMentionNode = new DateMentionNode(
-        data.date,
-        data.displayFormat,
-        data.mentionUuid
-      );
-      node.replace(dateMentionNode);
-    } catch (e) {
-      console.error('Error in I_DATE_MENTION replace:', e);
+    const data = parseDateMentionBody(match[1]);
+    if (!data) {
+      console.error('Error in I_DATE_MENTION replace: not a date', match[1]);
       replaceTextWithUnknownMention(node, 'Unknown Date');
+      return;
     }
+    node.replace(
+      new DateMentionNode(data.date, data.displayFormat, data.mentionUuid)
+    );
   },
 };
 

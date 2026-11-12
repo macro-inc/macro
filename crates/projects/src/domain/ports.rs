@@ -260,6 +260,18 @@ pub trait ProjectSearchIndexer: Send + Sync + 'static {
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 }
 
+/// Port for the items other domains file in folders but do not trash with
+/// them (databases and forms). The composition root implements it over the
+/// owning domains, so the projects domain never depends on their crates.
+pub trait FiledItemsUnfiler: Send + Sync + 'static {
+    /// Return the items filed directly in any of `project_ids` to the root,
+    /// without the grants those folders passed down.
+    fn unfile_from_projects(
+        &self,
+        project_ids: Vec<String>,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+}
+
 /// What a folder duplication needs from other domains, acting as the user who
 /// duplicates the folder.
 ///
@@ -385,6 +397,15 @@ impl ProjectSearchIndexer for UnavailableProjectSearchIndexer {
         _documents: Vec<(String, String)>,
     ) -> anyhow::Result<()> {
         anyhow::bail!("project search indexing is not available in this host")
+    }
+}
+
+/// Unfiler for hosts that never trash folders; it fails if one tries.
+pub struct UnavailableFiledItemsUnfiler;
+
+impl FiledItemsUnfiler for UnavailableFiledItemsUnfiler {
+    async fn unfile_from_projects(&self, _project_ids: Vec<String>) -> anyhow::Result<()> {
+        anyhow::bail!("unfiling folder contents is not available in this host")
     }
 }
 

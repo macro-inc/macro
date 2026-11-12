@@ -6,14 +6,18 @@ import CalendarCheckIcon from '@icon/system/regular/calendar-check.svg';
 import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import ChatsCircleIcon from '@icon/system/regular/chats-circle.svg';
+import DatabaseIcon from '@icon/system/regular/database.svg';
 import EnvelopeIcon from '@icon/system/regular/envelope.svg';
 import FileTextIcon from '@icon/system/regular/file-text.svg';
 import FolderSimpleIcon from '@icon/system/regular/folder-simple.svg';
 import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
 import HouseIcon from '@icon/system/regular/house.svg';
+import LaptopIcon from '@icon/system/regular/laptop.svg';
 import ListChecksIcon from '@icon/system/regular/list-checks.svg';
 import PhoneCallIcon from '@icon/system/regular/phone-call.svg';
+import ShapesIcon from '@icon/system/regular/shapes.svg';
 import AgentIcon from '@icon/system/regular/sparkle.svg';
+import TableIcon from '@icon/system/regular/table.svg';
 import WhatsappIcon from '@phosphor/whatsapp-logo.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button } from '@ui';
@@ -43,6 +47,9 @@ const TILES: Record<TutorialId, Tile> = {
   chat: { icon: ChatsCircleIcon, from: '--color-violet', to: '--color-blue' },
   tasks: { icon: ListChecksIcon, from: '--color-green', to: '--color-teal' },
   docs: { icon: FileTextIcon, from: '--color-blue', to: '--color-violet' },
+  spreadsheets: { icon: TableIcon, from: '--color-lime', to: '--color-teal' },
+  databases: { icon: DatabaseIcon, from: '--color-cyan', to: '--color-blue' },
+  canvas: { icon: ShapesIcon, from: '--color-red', to: '--color-orange' },
   drive: {
     icon: FolderSimpleIcon,
     from: '--color-yellow',
@@ -56,6 +63,7 @@ const TILES: Record<TutorialId, Tile> = {
   },
   calls: { icon: PhoneCallIcon, from: '--color-lime', to: '--color-green' },
   agents: { icon: AgentIcon, from: '--color-purple', to: '--color-pink' },
+  macrod: { icon: LaptopIcon, from: '--color-cyan', to: '--color-violet' },
   github: {
     icon: GitPullRequestIcon,
     from: '--color-purple',

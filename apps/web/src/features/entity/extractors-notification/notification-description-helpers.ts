@@ -106,6 +106,7 @@ export function getActionVerb(type: NotificationType): string {
       .with('initiative_discussion', () => 'commented')
       .with('entity_access_requested', () => 'requested access')
       .with('entity_access_granted', () => 'granted access')
+      .with('runtime_access_removed', () => 'removed access')
       .with('commented_on_document', 'crm_discussion', () => 'commented')
       .with('channel_message_reply', () => 'replied')
       .with(
@@ -170,6 +171,9 @@ export function getTypeNoun(type: NotificationType, count: number): string {
     )
     .with('entity_access_granted', () =>
       count === 1 ? 'access grant' : 'access grants'
+    )
+    .with('runtime_access_removed', () =>
+      count === 1 ? 'access removal' : 'access removals'
     )
     .with('commented_on_document', 'crm_discussion', () =>
       count === 1 ? 'comment' : 'comments'

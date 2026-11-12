@@ -2,7 +2,6 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
-import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import { recipientEntityMapper, type WithCustomUserInput } from '@core/user';
 import { useFocusLock } from '@core/util/createControlledOpenSignal';
 import { getDestinationFromOptions } from '@core/util/destination';
@@ -18,6 +17,7 @@ import {
   usePatchChannelMutation,
 } from '@queries/channel/channels';
 import { useAddParticipantsMutation } from '@queries/channel/participants';
+import { useContactRecipientSource } from '@queries/contacts/recipient-source';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import {
   Button,
@@ -44,7 +44,6 @@ export function CreateChannelModal() {
   const { replaceOrInsertSplit } = useSplitLayout();
   const userId = useUserId();
   const [step, setStep] = createSignal<ChannelCreationStep>('name');
-  const { users: recipientOptions } = useCombinedRecipients();
   const agentsQuery = useAgentsQuery(
     () => newChannelModalOpen() && step() === 'invite'
   );
@@ -65,7 +64,6 @@ export function CreateChannelModal() {
   const [addedAgentIds, setAddedAgentIds] = createSignal<string[]>([]);
   const channelName = createMemo(() => name().trim());
   const inviteOptions = createMemo(() => [
-    ...recipientOptions(),
     ...(agentsQuery.isSuccess ? agentsQuery.data : []).map((agent) =>
       recipientEntityMapper('agent')(agent.bot)
     ),
@@ -392,6 +390,7 @@ export function CreateChannelModal() {
               <div class="flex flex-col gap-3">
                 <RecipientSelector<'user' | 'contact' | 'agent'>
                   options={inviteOptions}
+                  createSource={useContactRecipientSource}
                   selectedOptions={selectedRecipients()}
                   setSelectedOptions={setSelectedRecipients}
                   placeholder="Search people, agents, or email addresses"

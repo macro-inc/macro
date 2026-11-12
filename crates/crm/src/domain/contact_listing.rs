@@ -8,7 +8,7 @@ use super::companies_repo::{CrmCompanyListSort, CrmCompanySoupCursor};
 
 pub use super::model::CrmContactForSoup;
 
-/// Filtering and ordering applied to an opt-in contact listing.
+/// Filtering and ordering applied to an authorized contact listing.
 #[derive(Debug, Clone)]
 pub struct CrmContactListQuery {
     /// Predicates over authorized records, evaluated before deduplication.
@@ -26,7 +26,7 @@ pub struct CrmContactListQuery {
 /// Authorized scope chosen by the CRM service, never by a query filter.
 #[derive(Debug)]
 pub enum CrmContactListScope<'a> {
-    /// Every enabled CRM team the viewer belongs to. Hidden access is
+    /// Every team the viewer belongs to. Hidden access is
     /// checked separately against the viewer's role on each owning team.
     Viewer(&'a str),
     /// A verified team-scoped bot receipt, restricted to that team's records.

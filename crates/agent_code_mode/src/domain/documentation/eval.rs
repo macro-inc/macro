@@ -65,7 +65,14 @@ const PROMPTS: &[(&str, &[&str])] = &[
         "Write a project brief for the onboarding revamp",
         &["documents"],
     ),
-    ("Fix the formulas in the budget spreadsheet", &["documents"]),
+    (
+        "Fix the formulas in the budget spreadsheet",
+        &["documents", "spreadsheets"],
+    ),
+    (
+        "Arrange the boxes on the roadmap canvas into a flowchart",
+        &["canvases"],
+    ),
     (
         "Post a poll in the design channel about the two logo options",
         &["channels"],

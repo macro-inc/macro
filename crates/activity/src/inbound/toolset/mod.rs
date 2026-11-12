@@ -8,5 +8,5 @@ mod test;
 
 pub use context::{ActivityToolContext, activity_toolset};
 pub use read_activity::{
-    ReadActivity, ReadActivityResponse, ToolActivityAction, ToolActivityEvent,
+    ReadActivity, ReadActivityError, ReadActivityResponse, ToolActivityAction, ToolActivityEvent,
 };

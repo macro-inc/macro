@@ -11,6 +11,7 @@ import {
   useAddParticipantsMutation,
   useRemoveParticipantsMutation,
 } from '@queries/channel/participants';
+import { useContactRecipientSource } from '@queries/contacts/recipient-source';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import { ChannelType } from '@service-storage/generated/schemas/channelType';
 import { ParticipantRole } from '@service-storage/generated/schemas/participantRole';
@@ -184,6 +185,7 @@ export function ChannelParticipantsTab(props: {
                 <Show when={isEditable()}>
                   <div class="shrink-0 border-b border-edge-divider px-6 py-3">
                     <ParticipantsAddPanel
+                      createSource={useContactRecipientSource}
                       participants={participants}
                       onAddParticipants={addParticipants}
                     />
@@ -246,6 +248,7 @@ export function ChannelParticipantsTab(props: {
           isEditable()
             ? (onAdded) => (
                 <ParticipantsAddPanel
+                  createSource={useContactRecipientSource}
                   participants={participants}
                   onAddParticipants={(ids) => addParticipants(ids, onAdded)}
                 />

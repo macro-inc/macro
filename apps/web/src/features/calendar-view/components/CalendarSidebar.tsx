@@ -15,6 +15,7 @@ import {
   useUpcomingTeamOoo,
 } from '@app/features/calendar/hooks/use-team-ooo';
 import { TEAM_OOO_SOURCE_ID } from '@app/features/calendar/types';
+import { SidebarRoutineSuggestions } from '@app/features/routine-suggestions/routine-suggestions';
 import { CalendarSchedulingActions } from '@app/features/scheduling/calendar-actions';
 import { TutorialSidebarItem } from '@app/features/video-tutorials';
 import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
@@ -379,6 +380,7 @@ export function CalendarSidebar() {
         </CalendarCreateMenu>
       </ViewSidebar.Primary>
       <ViewSidebar.Content class="pt-2">
+        <SidebarRoutineSuggestions surface="calendar" />
         <ViewSidebar.Nav
           aria-label={t('tutorials.watchTutorial')}
           class="empty:hidden"

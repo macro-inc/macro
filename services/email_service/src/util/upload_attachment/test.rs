@@ -10,7 +10,7 @@ fn metadata(filename: &str) -> AttachmentUploadMetadata {
         internal_date_ts: Default::default(),
         message_db_id: Uuid::nil(),
         thread_db_id: Uuid::nil(),
-        sender_email: String::new(),
+        sender_email: None,
         subject: None,
     }
 }
@@ -40,7 +40,7 @@ fn long_names_keep_the_leading_graphemes_dss_accepts() {
 fn upload_args(sender: &str, recipients: &[&str]) -> AttachmentUploadArgs {
     AttachmentUploadArgs {
         attachment_metadata: AttachmentUploadMetadata {
-            sender_email: sender.to_string(),
+            sender_email: Some(sender.to_string()),
             subject: Some("Quarterly report".to_string()),
             thread_db_id: Uuid::from_u128(1),
             message_db_id: Uuid::from_u128(2),

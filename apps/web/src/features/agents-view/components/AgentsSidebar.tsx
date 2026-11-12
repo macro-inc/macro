@@ -12,6 +12,7 @@ import {
   type EntityActionViewContext,
   toEntityActionListState,
 } from '@app/features/next-soup/actions';
+import { SidebarRoutineSuggestions } from '@app/features/routine-suggestions/routine-suggestions';
 import {
   MaybeSoupEntityActionDrawerManager,
   SoupEntityContextMenu,
@@ -310,6 +311,7 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
         </Show>
 
         <ViewSidebar.Content class="gap-2 overflow-hidden pt-2">
+          <SidebarRoutineSuggestions surface="agents" />
           <Show when={!isTouchDevice()}>
             <ViewSidebar.Nav aria-label="Agent tools">
               <ViewSidebar.Item
@@ -511,6 +513,9 @@ export function AgentCreateMenu(props: {
   onRoutine: () => void;
   onConversation: () => void;
 }) {
+  // Kobalte returns focus to the trigger after the menu closes, which would
+  // take it back from the composer or form the choice opens.
+  let chosen: (() => void) | undefined;
   return (
     <Dropdown placement="bottom-start">
       <Dropdown.Trigger
@@ -519,14 +524,22 @@ export function AgentCreateMenu(props: {
         menu
         aria-label="New conversation or agent"
       />
-      <Dropdown.Content class="w-80 max-w-[calc(100vw-2rem)]">
+      <Dropdown.Content
+        class="w-80 max-w-[calc(100vw-2rem)]"
+        onCloseAutoFocus={(event) => {
+          if (!chosen) return;
+          event.preventDefault();
+          queueMicrotask(chosen);
+          chosen = undefined;
+        }}
+      >
         <Dropdown.Group>
           <CreateMenuItem
             icon={AgentIcon}
             title={t('create.conversationLabel')}
             description={t('create.guideConversation')}
             onSelect={() => {
-              queueMicrotask(props.onConversation);
+              chosen = props.onConversation;
             }}
           />
           <CreateMenuItem
@@ -534,7 +547,7 @@ export function AgentCreateMenu(props: {
             title={t('create.workAgentLabel')}
             description={t('create.guideWorkAgent')}
             onSelect={() => {
-              queueMicrotask(() => props.onCreate('agent'));
+              chosen = () => props.onCreate('agent');
             }}
           />
           <CreateMenuItem
@@ -542,7 +555,7 @@ export function AgentCreateMenu(props: {
             title={t('create.codingAgentLabel')}
             description={t('create.guideCodingAgent')}
             onSelect={() => {
-              queueMicrotask(() => props.onCreate('coder'));
+              chosen = () => props.onCreate('coder');
             }}
           />
           <CreateMenuItem
@@ -550,7 +563,7 @@ export function AgentCreateMenu(props: {
             title={t('create.routineLabel')}
             description={t('create.guideRoutine')}
             onSelect={() => {
-              queueMicrotask(props.onRoutine);
+              chosen = props.onRoutine;
             }}
           />
         </Dropdown.Group>

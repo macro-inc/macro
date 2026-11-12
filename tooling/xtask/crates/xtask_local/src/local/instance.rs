@@ -3,26 +3,17 @@
 //! The default instance is named `macro` and keeps the exact resource names
 //! and host ports the repo uses today, so existing worktrees and muscle memory
 //! are untouched. A named instance (`--instance agent-a`) derives a disjoint
-//! set of project name, networks, volumes, and a deterministic high port window
-//! so two stacks can run concurrently without clobbering each other.
-
-use std::net::TcpListener;
+//! set of project name, networks, and volumes. Its port window and Docker
+//! subnet come from [`super::allocator`], so concurrent stacks can't collide.
 
 use anyhow::{Context, Result, bail};
-use strum::{EnumIter, IntoEnumIterator};
+pub use xtask_ports::Port;
 
-use super::repo_root;
+use super::{allocator, repo_root};
 
 /// The reserved default instance name. Maps to today's frozen `macro` Compose
 /// project and the fixed base ports.
-pub const DEFAULT_NAME: &str = "macro";
-
-/// Start of the non-default port window. Keep the entire allocation below
-/// Linux's default ephemeral range (32768-60999), otherwise an ordinary
-/// outbound connection can intermittently occupy a Compose host port.
-const WINDOW_START: u32 = 20_000;
-const STRIDE: u32 = 100;
-const BUCKETS: u32 = 120; // 20000..=31999
+pub const DEFAULT_NAME: &str = xtask_ports::DEFAULT_INSTANCE;
 
 /// A validated instance name: lowercase ASCII alphanumerics, hyphen, and
 /// underscore, starting alphanumeric, non-empty, <= 40 chars. The newtype
@@ -62,88 +53,6 @@ fn ensure_valid(raw: &str) -> Result<()> {
     Ok(())
 }
 
-/// Every host port the orchestrator allocates. The discriminant IS the port the
-/// default `macro` instance binds (matching the values hardcoded in the compose
-/// files today); a named instance binds `port_base + offset`, where `offset` is
-/// the variant's position in declaration order. Adding a port is a single line:
-/// `NewThing = 8099,`. Offsets stay below `STRIDE`, so named windows never
-/// overlap.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, EnumIter)]
-#[repr(u16)]
-pub enum Port {
-    Postgres = 5432,
-    Redis = 6379,
-    RedisUi = 8001,
-    OpenSearch = 9200,
-    OpenSearchPa = 9600,
-    FusionAuth = 9011,
-    LocalStack = 4566,
-    MailpitSmtp = 1025,
-    MailpitUi = 8025,
-    Proxy = 8090,
-    Frontend = 3000,
-    Auth = 8080,
-    ConnGateway = 8082,
-    Contacts = 8083,
-    DocCognition = 8085,
-    DocStorage = 8086,
-    Email = 8087,
-    Notification = 8089,
-    SearchProcessing = 8092,
-    StaticFile = 8094,
-    Unfurl = 8095,
-    ImageProxy = 8097,
-    Kafka = 9092,
-    SdkWebhookSsh = 8788,
-    SdkWebhookHostReceiver = 8789,
-    // Appended (not slotted by number) so existing per-instance port offsets,
-    // which come from declaration order, stay stable.
-    /// Retired with agent_proxy_service; kept (in place, at the end) because
-    /// per-instance port offsets come from declaration order, and removing a
-    /// variant would shift every one declared after it.
-    AgentProxy = 8091,
-    /// Agent session control API.
-    AgentHarness = 8101,
-    /// The agent egress proxy, `agent_harness_service`'s second listener.
-    /// Published on every local instance - it is what the Cursor egress
-    /// tunnel points at, and Cursor's cloud is outside the compose network.
-    AgentHarnessEgress = 8102,
-    /// Scheduled actions API and dispatcher (default compose port 8099).
-    ScheduledAction = 8099,
-    /// Calendar service API (default compose port 8088). Appended at the end so
-    /// existing per-instance port offsets, which come from declaration order,
-    /// stay stable.
-    Calendar = 8088,
-    /// Live-preview control API. Appended after Calendar for the same reason.
-    PreviewControl = 8110,
-    /// Stock SSH reverse-tunnel listener.
-    PreviewSsh = 2222,
-    /// Local wildcard preview TLS listener.
-    PreviewHttps = 8443,
-}
-
-impl Port {
-    /// The port the default `macro` instance binds — the variant's discriminant.
-    pub const fn fixed(self) -> u16 {
-        self as u16
-    }
-
-    /// The per-port offset within a named instance's stride: the variant's
-    /// position in declaration order. Unique and `< STRIDE` by construction
-    /// (there are far fewer variants than the stride).
-    pub fn offset(self) -> u16 {
-        Port::iter()
-            .position(|p| p == self)
-            .expect("every Port is yielded by iter()") as u16
-    }
-
-    /// Every allocated port — used by doctor / collision probing / the env
-    /// summary.
-    pub fn all() -> impl Iterator<Item = Port> {
-        Port::iter()
-    }
-}
-
 /// A resolved instance: its identity plus the derived resource names and port
 /// base. Construct with [`Instance::derive`].
 #[derive(Clone, Debug)]
@@ -151,11 +60,23 @@ pub struct Instance {
     name: InstanceName,
     project_name: String,
     port_base: u16,
+    subnet_block: Option<u8>,
 }
 
 impl Instance {
-    /// Derive the instance from the `--instance`/`--port-base` flags. `None`
-    /// (or `--instance macro`) is the default instance.
+    /// Find an instance a command acts on without starting it: the window its
+    /// containers or allocation hold, so no `--port-base` needs repeating.
+    pub fn resolve(instance: Option<&str>, port_base: Option<u16>) -> Result<Self> {
+        Ok(allocator::resolve(
+            Self::derive(instance, port_base)?,
+            port_base.is_some(),
+        ))
+    }
+
+    /// Derive the instance from the `--instance`/`--port-base` flags, with the
+    /// name's hashed window. `None` (or `--instance macro`) is the default
+    /// instance. Start flows use [`allocator::allocate`], other commands
+    /// [`Instance::resolve`].
     pub fn derive(instance: Option<&str>, port_base: Option<u16>) -> Result<Self> {
         let name = match instance {
             None | Some(DEFAULT_NAME) => InstanceName(DEFAULT_NAME.to_string()),
@@ -166,12 +87,22 @@ impl Instance {
         } else {
             format!("macro-{}", name.0)
         };
-        let port_base = port_base.unwrap_or_else(|| derive_port_base(&name));
+        let port_base = port_base.unwrap_or_else(|| xtask_ports::hashed_window(name.as_str()));
         Ok(Instance {
             name,
             project_name,
             port_base,
+            subnet_block: None,
         })
+    }
+
+    /// This instance on an allocated port window and subnet block.
+    pub(super) fn with_allocation(self, port_base: u16, subnet_block: Option<u8>) -> Self {
+        Instance {
+            port_base,
+            subnet_block,
+            ..self
+        }
     }
 
     pub fn name(&self) -> &str {
@@ -187,7 +118,6 @@ impl Instance {
         &self.project_name
     }
 
-    #[allow(dead_code)] // used by tests and diagnostics
     pub fn port_base(&self) -> u16 {
         self.port_base
     }
@@ -209,6 +139,37 @@ impl Instance {
     /// External `auth` network name.
     pub fn network_auth(&self) -> String {
         self.suffixed_dash("auth")
+    }
+
+    /// The `services` network's Docker name.
+    pub fn network_services(&self) -> String {
+        format!("{}_services", self.project_name)
+    }
+
+    /// The FusionAuth `auth-internal` network's Docker name.
+    pub fn network_auth_internal(&self) -> String {
+        format!("{}_auth-internal", self.project_name)
+    }
+
+    /// The networks this instance creates itself, each with the subnet its
+    /// allocation assigns. The default instance's `services` and `auth-internal`
+    /// stay Compose-managed: the machine-wide collectors share `macro_services`.
+    pub fn networks(&self) -> Vec<(String, Option<String>)> {
+        let mut names = vec![self.network_databases(), self.network_auth()];
+        if !self.is_default() {
+            names.push(self.network_services());
+            names.push(self.network_auth_internal());
+        }
+        names
+            .into_iter()
+            .enumerate()
+            .map(|(index, name)| {
+                let subnet = self
+                    .subnet_block
+                    .map(|block| xtask_ports::network_subnet(block, index));
+                (name, subnet)
+            })
+            .collect()
     }
 
     pub fn volume_postgres(&self) -> String {
@@ -259,20 +220,6 @@ impl Instance {
         }
     }
 
-    /// Probe every allocated host port with a TCP bind. Returns the host ports
-    /// that are already in use. Advisory-only; surfaced as a warning in doctor.
-    pub fn busy_ports(&self) -> Vec<u16> {
-        Port::all()
-            .filter_map(|p| {
-                let host_port = self.port(p);
-                match TcpListener::bind(("127.0.0.1", host_port)) {
-                    Ok(_) => None,
-                    Err(_) => Some(host_port),
-                }
-            })
-            .collect()
-    }
-
     /// Create the instance's generated-artifact directory.
     pub fn ensure_artifact_dir(&self) -> Result<std::path::PathBuf> {
         let dir = self.artifact_dir();
@@ -280,22 +227,6 @@ impl Instance {
             .with_context(|| format!("creating artifact dir {}", dir.display()))?;
         Ok(dir)
     }
-}
-
-/// Deterministically derive a port base from the instance name with FNV-1a.
-/// FNV is stable across machines and Rust versions (unlike `DefaultHasher`),
-/// so two developers running `--instance agent-a` get the same ports.
-fn derive_port_base(name: &InstanceName) -> u16 {
-    (WINDOW_START + (fnv1a(name.as_str()) % BUCKETS) * STRIDE) as u16
-}
-
-fn fnv1a(s: &str) -> u32 {
-    let mut h: u32 = 0x811c_9dc5;
-    for b in s.bytes() {
-        h ^= b as u32;
-        h = h.wrapping_mul(0x0100_0193);
-    }
-    h
 }
 
 #[cfg(test)]

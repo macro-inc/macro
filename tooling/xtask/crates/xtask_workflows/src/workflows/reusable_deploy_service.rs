@@ -117,6 +117,7 @@ fn build_job(name: &str, gate_output: &str) -> Job {
         )))
         .runs_on(runners::Runner::Mid.to_string())
         .add_step(steps::checkout_v4().add_with(("clean", false)))
+        .add_step(steps::setup_bun_pinned())
         .add_step(steps::mount_nix_cache_volume())
         .add_step(steps::setup_nix())
 }

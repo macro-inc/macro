@@ -9,19 +9,6 @@ vi.mock('./queries/compose-routine', () => ({ composeRoutine: compose }));
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => ({ enabled: true, loading: false }),
 }));
-vi.mock('./queries/step-sources', () => ({
-  useEmailLabelNames: () => () => [],
-  useRoutineTags: () => () => [],
-}));
-vi.mock('../agents-view/queries/agent-roster-source', () => ({
-  createAgentRosterSource: () => ({ roster: () => [] }),
-}));
-vi.mock('@core/context/channels', () => ({
-  useChannelsContext: () => ({ channels: () => [] }),
-}));
-vi.mock('@property/editors/selectors/entityUtils', () => ({
-  useQuickAccessEntities: () => ({ items: () => [] }),
-}));
 
 describe('routine AI composer', () => {
   it('drops a draft that arrives after the composer closed', async () => {

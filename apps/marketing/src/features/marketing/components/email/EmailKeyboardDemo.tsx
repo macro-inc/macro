@@ -1,5 +1,5 @@
-import ArrowLeft from '@phosphor/arrow-left.svg';
-import Check from '@phosphor/check.svg';
+import ArrowLeft from '@icon/system/regular/arrow-left.svg';
+import Check from '@icon/system/regular/check.svg';
 import { Button } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { emailPageInbox } from '../../core/email-demo-story';

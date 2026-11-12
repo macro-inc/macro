@@ -562,6 +562,62 @@ describe('review deck', () => {
     expect(screen.queryByText('Second email')).toBeNull();
     expect(decide).not.toHaveBeenCalled();
   });
+  it('shows a draft the agent edited in place when nothing local is unsaved', async () => {
+    const initial: EmailReview = {
+      id: 'review',
+      sessionId: 'session',
+      actingUser: 'macro|owner@macro.local',
+      executionId: null,
+      decision: null,
+      kind: 'email',
+      title: 'Agent edits',
+      revision: 1,
+      updatedAt: 0,
+      presentedAt: 1,
+      items: [
+        {
+          id: 'first',
+          status: 'pending',
+          error: null,
+          result: null,
+          draft: {
+            subject: 'QA draft',
+            body: 'test, please ignore',
+            to: [{ email: 'first@example.com' }],
+          },
+        },
+      ],
+    };
+    const [review, setReview] = createSignal(initial);
+    const decide = vi.fn(async () => review());
+    render(() => (
+      <ReviewStack
+        review={review()}
+        canAct
+        actions={{ decide, reload: async () => review() }}
+      />
+    ));
+    await screen.findByText('QA draft');
+    setReview({
+      ...initial,
+      revision: 2,
+      items: [
+        {
+          ...initial.items[0],
+          draft: { ...initial.items[0].draft, subject: 'QA draft v2' },
+        },
+      ],
+    });
+    await screen.findByText('QA draft v2');
+    expect(screen.queryByText('QA draft')).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: 'Reload saved review' })
+    ).toBeNull();
+    expect(
+      screen.getByLabelText<HTMLTextAreaElement>('Draft body').disabled
+    ).toBe(false);
+    expect(decide).not.toHaveBeenCalled();
+  });
   it('says when the agent started a review at the account holder’s request', async () => {
     render(() => (
       <ReviewStack

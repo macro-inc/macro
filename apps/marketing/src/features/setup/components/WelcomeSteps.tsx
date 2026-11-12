@@ -6,7 +6,7 @@ import MeetIcon from '@icon/onboarding-googlemeet.svg';
 import HubSpotIcon from '@icon/onboarding-hubspot.svg';
 import SuperhumanIcon from '@icon/onboarding-superhuman.svg';
 import ZoomIcon from '@icon/onboarding-zoom.svg';
-import PlayIcon from '@phosphor/play.svg';
+import PlayIcon from '@icon/system/regular/play.svg';
 import { For, type JSX } from 'solid-js';
 import { ContinueButton, SkipButton } from '../flow/shared';
 import { MODULE_LOGOS } from '../moduleLogos';

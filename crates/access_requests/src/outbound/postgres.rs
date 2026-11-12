@@ -43,6 +43,7 @@ struct StoredRequest {
     resolved_at: Option<DateTime<Utc>>,
     granted_level: Option<AccessLevel>,
     retry_after: Option<DateTime<Utc>>,
+    requested_by_agent: Option<Uuid>,
 }
 impl TryFrom<StoredRequest> for AccessRequest {
     type Error = RequestError;
@@ -70,6 +71,7 @@ impl TryFrom<StoredRequest> for AccessRequest {
             resolved_at: r.resolved_at,
             granted_level: r.granted_level,
             retry_after: r.retry_after,
+            requested_by_agent: r.requested_by_agent,
         })
     }
 }
@@ -127,7 +129,7 @@ impl PgRequestTransaction {
         id: Option<Uuid>,
     ) -> Result<Option<AccessRequest>, RequestError> {
         let kind = model_entity::EntityType::from(self.entity.entity_type);
-        let row = sqlx::query_as!(StoredRequest, r#"SELECT id, requester_id, requested_level AS "requested_level: AccessLevel", status, revision, created_at, updated_at, resolved_at, granted_level AS "granted_level: AccessLevel", retry_after
+        let row = sqlx::query_as!(StoredRequest, r#"SELECT id, requester_id, requested_level AS "requested_level: AccessLevel", status, revision, created_at, updated_at, resolved_at, granted_level AS "granted_level: AccessLevel", retry_after, requested_by_agent
             FROM entity_access_request WHERE entity_type = $1 AND entity_id = $2 AND ($3::text IS NULL OR requester_id = $3) AND ($4::uuid IS NULL OR id = $4) LIMIT 1"#,
             kind.as_ref(), self.entity.entity_id, user, id).fetch_optional(self.tx.as_mut()).await?;
         row.map(TryInto::try_into).transpose()
@@ -153,7 +155,7 @@ impl RequestTransaction for PgRequestTransaction {
     ) -> Result<(Vec<AccessRequest>, i64), RequestError> {
         let kind = model_entity::EntityType::from(self.entity.entity_type);
         let total = sqlx::query_scalar!("SELECT count(*) AS \"count!\" FROM entity_access_request WHERE entity_type = $1 AND entity_id = $2 AND status = 'pending'", kind.as_ref(), self.entity.entity_id).fetch_one(self.tx.as_mut()).await?;
-        let rows = sqlx::query_as!(StoredRequest, r#"SELECT id, requester_id, requested_level AS "requested_level: AccessLevel", status, revision, created_at, updated_at, resolved_at, granted_level AS "granted_level: AccessLevel", retry_after
+        let rows = sqlx::query_as!(StoredRequest, r#"SELECT id, requester_id, requested_level AS "requested_level: AccessLevel", status, revision, created_at, updated_at, resolved_at, granted_level AS "granted_level: AccessLevel", retry_after, requested_by_agent
             FROM entity_access_request WHERE entity_type = $1 AND entity_id = $2 AND status = 'pending' ORDER BY created_at, id LIMIT $3 OFFSET $4"#,
             kind.as_ref(), self.entity.entity_id, i64::from(limit), i64::from(offset)).fetch_all(self.tx.as_mut()).await?;
         Ok((
@@ -171,11 +173,29 @@ impl RequestTransaction for PgRequestTransaction {
             RequestStatus::Denied => "denied",
             RequestStatus::Cancelled => "cancelled",
         };
-        sqlx::query!(r#"INSERT INTO entity_access_request(id, entity_type, entity_id, requester_id, requested_level, status, revision, created_at, updated_at, resolved_at, granted_level, retry_after)
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
-            ON CONFLICT(id) DO UPDATE SET requested_level = EXCLUDED.requested_level, status = EXCLUDED.status, revision = EXCLUDED.revision, created_at = EXCLUDED.created_at, updated_at = EXCLUDED.updated_at, resolved_at = EXCLUDED.resolved_at, granted_level = EXCLUDED.granted_level, retry_after = EXCLUDED.retry_after"#,
-            r.id, kind.as_ref(), self.entity.entity_id, r.requester_id.as_ref(), r.requested_level as _, status, r.revision, r.created_at, r.updated_at, r.resolved_at, r.granted_level as _, r.retry_after).execute(self.tx.as_mut()).await?;
+        sqlx::query!(r#"INSERT INTO entity_access_request(id, entity_type, entity_id, requester_id, requested_level, status, revision, created_at, updated_at, resolved_at, granted_level, retry_after, requested_by_agent)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+            ON CONFLICT(id) DO UPDATE SET requested_level = EXCLUDED.requested_level, status = EXCLUDED.status, revision = EXCLUDED.revision, created_at = EXCLUDED.created_at, updated_at = EXCLUDED.updated_at, resolved_at = EXCLUDED.resolved_at, granted_level = EXCLUDED.granted_level, retry_after = EXCLUDED.retry_after, requested_by_agent = EXCLUDED.requested_by_agent"#,
+            r.id, kind.as_ref(), self.entity.entity_id, r.requester_id.as_ref(), r.requested_level as _, status, r.revision, r.created_at, r.updated_at, r.resolved_at, r.granted_level as _, r.retry_after, r.requested_by_agent).execute(self.tx.as_mut()).await?;
         Ok(())
+    }
+    async fn shares_team(
+        &mut self,
+        a: &MacroUserIdStr<'_>,
+        b: &MacroUserIdStr<'_>,
+    ) -> Result<bool, RequestError> {
+        let shared = sqlx::query_scalar!(
+            r#"SELECT EXISTS (
+                SELECT 1 FROM team_user mine
+                JOIN team_user theirs ON theirs.team_id = mine.team_id
+                WHERE mine.user_id = $1 AND theirs.user_id = $2
+            ) AS "shared!""#,
+            a.as_ref(),
+            b.as_ref(),
+        )
+        .fetch_one(self.tx.as_mut())
+        .await?;
+        Ok(shared)
     }
     async fn direct_access(&mut self) -> Result<Vec<DirectAccess>, RequestError> {
         Ok(entity_access_db_utils::direct_share::list(
@@ -208,6 +228,39 @@ impl RequestTransaction for PgRequestTransaction {
         )
         .await
         .map_err(|error| RequestError::Internal(error.into_rootcause()))
+    }
+    async fn stopped_residents(
+        &mut self,
+        owner: &MacroUserIdStr<'_>,
+    ) -> Result<Vec<Resident>, RequestError> {
+        if self.entity.entity_type != ShareEntityType::Harness {
+            return Ok(Vec::new());
+        }
+        let rows = sqlx::query!(
+            r#"
+            SELECT b.id, b.name
+            FROM agent_configs ac
+            JOIN bots b ON b.id = ac.bot_id
+            WHERE ac.harness_id = $1
+              AND b.owner_user_id = $2
+              AND b.deleted_at IS NULL
+              AND b.has_agent
+              AND NOT ac.is_coding
+              AND NOT agent_owner_can_run(b.id)
+            ORDER BY b.created_at
+            "#,
+            self.entity.entity_id,
+            owner.as_ref(),
+        )
+        .fetch_all(self.tx.as_mut())
+        .await?;
+        Ok(rows
+            .into_iter()
+            .map(|row| Resident {
+                bot_id: row.id,
+                name: row.name,
+            })
+            .collect())
     }
     async fn enqueue(&mut self, mut event: RequestEvent) -> Result<(), RequestError> {
         opentelemetry::global::get_text_map_propagator(|propagator| {

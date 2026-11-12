@@ -63,6 +63,12 @@
 /* References: avatar, sender, "in", source chip, relative time, quoted body. */
 .doc-ref-row { display: flex; min-width: 0; flex-direction: column; padding: 4px 0; border-radius: 8px; }
 .doc-ref-row + .doc-ref-row { margin-top: 6px; }
+.doc-reference-link { width: 100%; text-align: left; cursor: pointer; }
+.doc-reference-link:hover { background: var(--color-hover); }
+.doc-reference-link:focus-visible { outline: 2px solid var(--color-ink-muted); outline-offset: 2px; }
+@container sample-main (min-width: 600px) {
+  .doc-references-demo .sample-detail-layout[data-panel-open='true'] .sample-details { position: relative; inset: auto; width: 300px; min-width: 300px; max-width: 300px; background: transparent; border-left: 1px solid var(--color-edge-muted); }
+}
 .doc-ref-head { display: flex; min-width: 0; min-height: 24px; align-items: center; gap: 6px; font-size: 12px; line-height: 20px; }
 .doc-ref-head > img { width: 16px; height: 16px; flex: none; border-radius: 50%; object-fit: cover; }
 .doc-ref-head > b { flex: none; font-weight: 500; color: var(--color-ink); }
@@ -210,12 +216,8 @@
 .doc-agent-conversation .homepage-conversation { margin-bottom: 0; }
 .doc-agent-conversation .homepage-message { max-width: 100%; }
 .doc-agent-tools { max-width: 700px; min-height: 228px; margin: 0 auto 8px; padding-inline: 16px; text-align: left; }
-.product-page .docs-jump-links { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 @media (max-width: 699px) {
   .doc-agent-tools { min-height: 248px; padding-inline: 0; }
-  .product-page .docs-jump-links { gap: 12px; }
-  .docs-jump-links .email-feature-graphic { width: 100%; height: 78px; }
-  .docs-jump-links a { min-width: 0; font-size: 12px; }
 }
 
 /* Keep the prompt still and reserve the final paragraph's line wrapping. */
@@ -244,11 +246,9 @@
 .doc-agent-tools[data-open=false] { min-height: 32px; }
 @media (prefers-reduced-motion: reduce) { .doc-agent-tools { transition: none; } }
 
-.docs-page .email-page-hero-description { white-space:nowrap; }
-.docs-page .email-page-hero-break { display:block; }
-@media(max-width:699px) {
-  .docs-page .email-page-hero > .email-page-hero-description { font-size:clamp(10px, 2.9vw, 14px); }
-}
+
+
+
 
 /* ForwardToChannel recipient selection, using the existing share form surface. */
 .doc-share-to { position:relative; }

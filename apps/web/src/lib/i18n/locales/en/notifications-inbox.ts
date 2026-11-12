@@ -43,6 +43,11 @@ export default {
     one: 'and {{count}} more',
     other: 'and {{count}} more',
   },
+  stackShowMore: {
+    one: '{{count}} more',
+    other: '{{count}} more',
+  },
+  stackHideShort: 'Hide',
   markedDone: {
     one: 'Marked as done',
     other: 'Marked {{count}} notifications as done',

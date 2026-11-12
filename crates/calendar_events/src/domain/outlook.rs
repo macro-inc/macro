@@ -34,6 +34,9 @@ pub struct OutlookCalendarLease {
     pub page_loaded: bool,
     /// Opaque current-page URL.
     pub page_cursor: Option<String>,
+    /// [`OutlookCalendarReader::READER_REVISION`] of the worker holding the
+    /// lease, which every event it reads is stamped with.
+    pub reader_revision: i16,
 }
 
 /// Complete discovery result for a provider calendar.
@@ -79,7 +82,8 @@ pub enum OutlookCalendarProgress {
     },
     /// The event exists but Macro cannot read it. Retire any copy stored
     /// before, which would show a version Microsoft no longer has, but keep
-    /// the event's page membership so later tombstones still resolve.
+    /// the event's page membership so later tombstones still resolve. A
+    /// reader of a later revision reads it again on its next delta round.
     Unreadable {
         /// Master/single ID from this lease's pending work.
         id: String,
@@ -92,8 +96,15 @@ pub enum OutlookCalendarProgress {
 
 /// One provider event read back for synchronization.
 pub enum OutlookEventRefresh {
-    /// The current event or complete series, normalized.
-    Refreshed(Box<CalendarEventUpsert>),
+    /// The current event or series, normalized.
+    Refreshed {
+        /// What the calendar stores.
+        upsert: Box<CalendarEventUpsert>,
+        /// Occurrences of the series Macro could not read and left out, as
+        /// Google sync never shows what it cannot normalize. The rest of the
+        /// series is still imported.
+        skipped: Vec<SkippedOccurrence>,
+    },
     /// Microsoft no longer has the event on this calendar.
     Gone,
     /// Microsoft has the event, but Macro cannot represent it. The sync skips
@@ -106,8 +117,22 @@ pub enum OutlookEventRefresh {
     },
 }
 
+/// An occurrence left out of an imported series.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SkippedOccurrence {
+    /// Graph's id of the occurrence.
+    pub provider_id: String,
+    /// Path of the Graph property Macro rejected, such as
+    /// `instances.originalStart.missing`.
+    pub field: String,
+}
+
 /// Provider reads with normalized results and no persistence policy.
 pub trait OutlookCalendarReader: Send + Sync + 'static {
+    /// Revision of the normalization. Raise it with a change that lets Macro
+    /// read events an older revision skipped: each delta calendar then reads
+    /// those events again once, on its next round.
+    const READER_REVISION: i16;
     /// Discover all visible calendars, following every page.
     fn calendars(
         &self,
@@ -133,11 +158,13 @@ pub trait OutlookCalendarReader: Send + Sync + 'static {
 
 /// Calendar-owned persistence and exact-generation leases.
 pub trait OutlookCalendarRepository: CalendarRepository {
-    /// Reconcile grant capability and claim one due job atomically.
+    /// Reconcile grant capability and claim one due job atomically for a
+    /// worker reading at `reader_revision`.
     fn claim_outlook_calendar(
         &self,
         lease_id: Uuid,
         range: OccurrenceRange,
+        reader_revision: i16,
     ) -> impl Future<Output = Result<Option<OutlookCalendarLease>, Report>> + Send;
     /// Extend a live lease, failing after disconnect or custody change.
     fn renew_outlook_calendar(
@@ -210,6 +237,7 @@ impl<
             .claim_outlook_calendar(
                 Uuid::now_v7(),
                 OccurrenceRange::maintenance_horizon(chrono::Utc::now()),
+                P::READER_REVISION,
             )
             .await?
         else {
@@ -240,6 +268,7 @@ impl<
             provider_event_id = tracing::field::Empty,
             outcome = tracing::field::Empty,
             rejected_field = tracing::field::Empty,
+            skipped_occurrences = tracing::field::Empty,
             unmapped_time_zone = tracing::field::Empty,
             error_kind = tracing::field::Empty,
         ),
@@ -274,8 +303,21 @@ impl<
                         .refresh_calendar_event(&token, target, &id)
                         .await?
                     {
-                        OutlookEventRefresh::Refreshed(upsert) => {
+                        OutlookEventRefresh::Refreshed { upsert, skipped } => {
                             span.record("outcome", "refreshed");
+                            if let Some(first) = skipped.first() {
+                                span.record("rejected_field", first.field.as_str());
+                                span.record("skipped_occurrences", skipped.len() as i64);
+                            }
+                            for occurrence in &skipped {
+                                tracing::warn!(
+                                    calendar_id = %target.calendar_id,
+                                    provider_event_id = %id,
+                                    occurrence_id = %occurrence.provider_id,
+                                    rejected_field = %occurrence.field,
+                                    "skipping an Outlook occurrence Macro cannot read"
+                                );
+                            }
                             self.repository
                                 .upsert_event(CalendarEventWrite::OutlookSync {
                                     lease: Box::new(lease.clone()),

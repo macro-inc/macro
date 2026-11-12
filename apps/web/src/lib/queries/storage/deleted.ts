@@ -69,17 +69,6 @@ export function invalidateDeletedItems() {
 }
 
 /**
- * Get the current deleted items from the query cache.
- * For use in standalone functions outside component context.
- */
-export function getDeletedItems(): Item[] {
-  const data = queryClient.getQueryData<DeletedItemsQueryResponse>(
-    storageKeys.deleted.list.queryKey
-  );
-  return data ? transformItems(data.items) : [];
-}
-
-/**
  * Get the deleted tree from the query cache.
  * For use in standalone functions outside component context.
  */
@@ -90,38 +79,4 @@ export function getDeletedTree(): FileTree {
   return data
     ? buildFileTree(transformItems(data.items))
     : { rootItems: [], itemMap: {} };
-}
-
-/**
- * Optimistically remove an item from the deleted items cache.
- */
-export function optimisticallyRemoveDeletedItem(itemId: string): boolean {
-  const data = queryClient.getQueryData<DeletedItemsQueryResponse>(
-    storageKeys.deleted.list.queryKey
-  );
-  if (!data) return false;
-
-  queryClient.setQueryData<DeletedItemsQueryResponse>(
-    storageKeys.deleted.list.queryKey,
-    {
-      items: data.items.filter((item) => item.id !== itemId),
-    }
-  );
-
-  return true;
-}
-
-/**
- * Set the deleted items in the cache.
- * Used for optimistic updates.
- */
-export function setDeletedItems(
-  updater: (
-    old: DeletedItemsQueryResponse | undefined
-  ) => DeletedItemsQueryResponse
-) {
-  queryClient.setQueryData<DeletedItemsQueryResponse>(
-    storageKeys.deleted.list.queryKey,
-    updater
-  );
 }

@@ -30,6 +30,10 @@ pub enum DocumentError {
     /// The requested document was not found.
     #[error("document not found: {0}")]
     NotFound(String),
+    /// The email attachment an import names no longer exists, e.g. its
+    /// message was deleted after the attachment was queued.
+    #[error("email attachment not found")]
+    EmailAttachmentNotFound,
     /// The user is not authorized to perform this action.
     #[error("unauthorized")]
     Unauthorized,

@@ -6,6 +6,9 @@ import { CrmSidebar } from './crm-sidebar';
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => ({ enabled: false, loading: false }),
 }));
+vi.mock('@app/features/routine-suggestions/routine-suggestions', () => ({
+  SidebarRoutineSuggestions: () => null,
+}));
 vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => false }));
 vi.mock('@solid-primitives/resize-observer', () => ({
   createResizeObserver: () => {},

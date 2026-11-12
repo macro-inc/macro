@@ -34,6 +34,11 @@ fn stack_frontend_uses_same_origin_with_an_instance_specific_server_target() {
             } else {
                 assert!(!env.contains_key("VITE_AI_EDITING_WORKER_URL"));
             }
+            if mode == Mode::Local {
+                assert_eq!(env["VITE_LOCAL_STACK"], "true");
+            } else {
+                assert!(!env.contains_key("VITE_LOCAL_STACK"));
+            }
         }
         let env: std::collections::HashMap<_, _> = dev_env(&instance, Mode::Local, false)
             .unwrap()
@@ -49,6 +54,7 @@ fn test_frontend(stage: &Stage) -> Frontend {
     let port = listener.local_addr().unwrap().port();
     drop(listener);
 
+    let log = std::env::temp_dir().join(format!("frontend-test-{port}.log"));
     let mut command = Command::new("python3");
     command
         .args([
@@ -60,14 +66,14 @@ fn test_frontend(stage: &Stage) -> Frontend {
         .current_dir(app_dir())
         .env("VITE_LOCAL_BACKEND_ORIGIN", "http://localhost:18090")
         .process_group(0)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    let process = spawn(stage, &mut command, port).unwrap();
+        .stdin(Stdio::piped());
+    let process = spawn(stage, &mut command, port, &log).unwrap();
     Frontend {
         process,
         command,
         port,
+        pid_file: log.with_extension("pid"),
+        log,
     }
 }
 
@@ -118,11 +124,30 @@ fn failed_restart_reports_output_and_releases_the_port() {
     frontend
         .command
         .args(["-c", "echo vite-startup-failed >&2; exit 1"])
-        .process_group(0)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+        .process_group(0);
 
     let error = frontend.restart(&stage).unwrap_err();
     assert!(error.to_string().contains("vite-startup-failed"));
     assert!(TcpStream::connect(("127.0.0.1", frontend.port)).is_err());
+}
+
+#[test]
+fn a_second_frontend_build_in_a_checkout_waits_for_the_first() {
+    let dir = tempfile::tempdir().unwrap();
+    let first = lock_build_in(dir.path(), || panic!("nothing holds the lock yet")).unwrap();
+    let (waiting_tx, waiting_rx) = std::sync::mpsc::channel();
+    let (locked_tx, locked_rx) = std::sync::mpsc::channel();
+    let path = dir.path().to_path_buf();
+    let second = std::thread::spawn(move || {
+        let _lock = lock_build_in(&path, || waiting_tx.send(()).unwrap()).unwrap();
+        locked_tx.send(()).unwrap();
+    });
+    waiting_rx.recv().unwrap();
+    assert!(
+        locked_rx.try_recv().is_err(),
+        "the second build ran while the first held the lock"
+    );
+    drop(first);
+    locked_rx.recv().unwrap();
+    second.join().unwrap();
 }

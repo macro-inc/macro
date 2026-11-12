@@ -52,6 +52,7 @@ export default defineConfig({
         '@service-storage/client',
         '@service-storage/crm-contacts',
         '@service-storage/crm-visibility',
+        '@service-storage/crm-contact-edit',
         '@app/lib/analytics',
         '@app/lib/analytics/posthog',
         '@app/features/next-soup/filters/filter-store',
@@ -59,6 +60,16 @@ export default defineConfig({
       ].map((find) => ({
         find: new RegExp(`^${find}$`),
         replacement: `${directory}/preview-adapters.ts`,
+      })),
+      ...[
+        '@core/context/quickAccess',
+        '@core/context/user',
+        '@core/user',
+        '@queries/soup/search',
+        '@core/component/UserIcon',
+      ].map((find) => ({
+        find: new RegExp(`^${find}$`),
+        replacement: `${directory}/picker-preview.tsx`,
       })),
       { find: /^@entity$/, replacement: `${directory}/entity-preview.tsx` },
       {

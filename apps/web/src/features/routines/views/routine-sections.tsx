@@ -36,6 +36,12 @@ export function routineSections(props: {
   unsupported?: JSX.Element;
 }) {
   const triggers = () => props.draft()?.triggers ?? [];
+  const hasCodeStep = () => {
+    const draft = props.draft();
+    return draft
+      ? draftSteps(draft).some((step) => step.kind === 'code')
+      : false;
+  };
   const setTriggers = (next: ScheduleDraft['triggers']) =>
     props.onChange((current) => ({ ...current, triggers: next }));
   return {
@@ -157,6 +163,26 @@ export function routineSections(props: {
             {props.runsAs()}
           </span>
         </RoutineSettingRow>
+        {/* Only code steps change who writes; Ask AI steps stay the agent's. */}
+        <Show when={hasCodeStep()}>
+          <RoutineSettingRow
+            label="Act as me"
+            description="Posts, emails and comments from code steps will appear as written by you, with no Agent badge."
+          >
+            <ToggleSwitch
+              size="md"
+              label="Act as me"
+              labelClass="sr-only"
+              checked={props.draft()?.dangerouslyOperateAsUser ?? false}
+              onChange={(dangerouslyOperateAsUser) =>
+                props.onChange((draft) => ({
+                  ...draft,
+                  dangerouslyOperateAsUser,
+                }))
+              }
+            />
+          </RoutineSettingRow>
+        </Show>
       </>
     ),
   };

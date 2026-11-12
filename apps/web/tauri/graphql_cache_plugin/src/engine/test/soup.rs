@@ -101,6 +101,7 @@ fn hydrate(handle: &EngineHandle) {
         Variables::new(),
         seed(),
         Some(VIEWER.into()),
+        None,
     ))
     .unwrap();
     assert_eq!(
@@ -420,6 +421,7 @@ fn native_identity_switch_does_not_borrow_old_mail_projection_inputs() {
                 Variables::new(),
                 data,
                 Some("macro|new@example.com".into()),
+                None,
             ))
             .unwrap()
             .write_result

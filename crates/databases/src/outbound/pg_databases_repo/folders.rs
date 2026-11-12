@@ -57,3 +57,39 @@ pub(super) async fn move_database(
     transaction.commit().await?;
     Ok(true)
 }
+
+/// Return the databases filed directly in any of `project_ids` to the root,
+/// dropping the grants each inherited from its folder and the folders above.
+#[tracing::instrument(skip(pool), err)]
+pub(super) async fn unfile_from_projects(
+    pool: &PgPool,
+    project_ids: &[String],
+) -> Result<(), PgDatabasesRepoError> {
+    let mut transaction = pool.begin().await?;
+    // The team-share guard comes before any row lock, as its writer requires.
+    team_share::acquire_guard(&mut transaction).await?;
+    let unfiled = sqlx::query!(
+        r#"
+        UPDATE database_entities AS current
+        SET project_id = NULL, updated_at = now()
+        FROM database_entities AS previous
+        WHERE previous.database_id = current.database_id
+          AND previous.project_id = ANY($1)
+        RETURNING current.database_id, previous.project_id AS "project_id!"
+        "#,
+        project_ids,
+    )
+    .fetch_all(&mut *transaction)
+    .await?;
+    for row in unfiled {
+        drop_project_grants(
+            &mut transaction,
+            &row.database_id,
+            EntityType::Database,
+            &Uuid::parse_str(&row.project_id)?,
+        )
+        .await?;
+    }
+    transaction.commit().await?;
+    Ok(())
+}

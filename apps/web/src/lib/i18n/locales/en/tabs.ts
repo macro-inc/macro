@@ -5,6 +5,8 @@ export default {
   closeTab: 'Close Tab',
   nextTab: 'Next Tab',
   previousTab: 'Previous Tab',
+  goToTab: 'Go to Tab {{number}}',
+  goToLastTab: 'Go to Last Tab',
   splitCount: {
     one: '{{count}} split',
     other: '{{count}} splits',

@@ -1,0 +1,22 @@
+[package]
+description = "Opt-in run_local telemetry: buffered events sent to Loki (and Tempo) as OTLP"
+edition = "2024"
+name = "xtask_local_telemetry"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+flate2 = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["rt", "time"] }
+toml = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+wiremock = { workspace = true }

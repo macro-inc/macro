@@ -10,11 +10,14 @@ const useSoupAstItemsQuery = vi.hoisted(() =>
       ..._args: Parameters<
         typeof import('@queries/soup/items').useSoupAstItemsQuery
       >
-    ) => ({
-      isEnabled: true,
-      isLoading: false,
-      data: { entities: [] },
-    })
+    ) => {
+      const entities: ChannelEntity[] = [];
+      return {
+        isEnabled: true,
+        isLoading: false,
+        data: { entities },
+      };
+    }
   )
 );
 
@@ -51,6 +54,7 @@ vi.mock('@entity', () => ({
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'user-1' }));
 
 import { useChannelByIdQuery } from '@channel/Channel/channel-entity';
+import { useCachedChannelsByIds } from '@queries/channel/by-ids';
 import {
   fetchChannelGroupIds,
   resolveReferencedChannels,
@@ -309,6 +313,43 @@ describe('channels resolved by id', () => {
     }
   });
 
+  it('retains section members during notification refresh without reading pending data', () => {
+    const { dispose, result, setPending, setEntities, setIds } = createRoot(
+      (dispose) => {
+        const [pending, setPending] = createSignal(false);
+        const [entities, setEntities] = createSignal(resolved);
+        const [ids, setIds] = createSignal(['design', 'support']);
+        useSoupAstItemsQuery.mockImplementation(() => ({
+          isEnabled: true,
+          isLoading: false,
+          get isPending() {
+            return pending();
+          },
+          get data() {
+            if (pending()) throw new Error('A pending query resource was read');
+            return { entities: entities() };
+          },
+        }));
+        const result = useCachedChannelsByIds(ids, () => true);
+        return { dispose, result, setPending, setEntities, setIds };
+      }
+    );
+    try {
+      expect(result.channels()).toEqual(resolved);
+      setPending(true);
+      expect(result.channels()).toEqual(resolved);
+      expect([...result.pendingIds()]).toEqual([]);
+      setEntities([channelEntity('support')]);
+      setPending(false);
+      expect(result.channels()).toEqual([channelEntity('support')]);
+      setPending(true);
+      setIds(['another-channel']);
+      expect(result.channels()).toEqual([]);
+    } finally {
+      dispose();
+      useSoupAstItemsQuery.mockReset();
+    }
+  });
   it('keeps the previous answer when a settled lookup has no data', () => {
     expect(resolveReferencedChannels(resolved, settled)).toBe(resolved);
   });

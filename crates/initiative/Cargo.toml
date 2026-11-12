@@ -23,7 +23,6 @@ postgres = [
   "dep:entity_access_db_utils",
   "dep:share_permission_db_utils",
   "dep:model-entity",
-  "dep:macro_uuid",
   "outbound",
 ]
 
@@ -45,7 +44,6 @@ macro_authorization = { path = "../macro_authorization", optional = true, defaul
 macro_event_broker = { path = "../macro_event_broker", default-features = false }
 macro_event_topics = { path = "../macro_event_topics" }
 macro_user_id = { path = "../macro_user_id" }
-macro_uuid = { path = "../macro_uuid", optional = true }
 model-entity = { path = "../model-entity", optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
 models_permissions = { path = "../models_permissions" }

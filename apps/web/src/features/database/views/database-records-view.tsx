@@ -48,6 +48,7 @@ import type {
   DatabaseColumnCastsSource,
   DatabaseColumnConversion,
   DatabaseColumnTypeChange,
+  DatabaseRelationTargets,
   DatabaseSchemaChange,
 } from '../core/column-schema';
 import type {
@@ -136,7 +137,7 @@ export type DatabaseRecordsViewProps = {
   /** Opens what a record's title mentions, such as a pipeline row's company, in place of editing it. */
   onOpenTitleMention?: (id: string, type: DatabaseEntityType) => void;
   renderRelationCell?: (props: RelationCellProps) => JSX.Element;
-  relationTables?: { id: string; name: string }[];
+  relationTables?: DatabaseRelationTargets;
   columnCasts?: DatabaseColumnCastsSource;
   onCellFocus?: (cell: DatabaseCellFocus | undefined) => void;
   remoteUsers?: DatabaseCellPresence[];

@@ -1,9 +1,12 @@
 <div align="center">
+  <a href="https://macro.com">
+    <img width="256" height="35" alt="Macro" src=".github/readme/logo.png" />
+  </a>
+  <p>The unified workspace for your team</p>
   <a target="_blank" href="https://macro.com">
-    <img width="2700" height="1050" alt="Macro — Sheets Improvements project board with work grouped by status" src=".github/readme/header.png" />
+    <img width="2400" height="1350" alt="Macro — three equal panes showing a team request, linked code changes, and the matching agent session" src=".github/readme/header.png" />
   </a>
 
-  <br />
   <br />
 
   <p>
@@ -70,7 +73,7 @@ Macro Mail is inspired by Superhuman's keyboard-first interface with a few key a
 2. Unified inbox: emails, messages, @mentions, and tasks to complete, all in the same list. Use `j` `k` and `e` to navigate everything.
 3. Better AI, with a tools/MCP surface designed to work across inboxes and to help your agents more accurately retrieve information. For example, we expose a unified search tool that allows agents to search all file attachment PDFs (parsed out of email) directly, rather than pulling email threads then attachments. You can also draft, edit and send emails right from AI chats, without opening your email.
 
-![An internal team email thread with the email navigation sidebar open](.github/readme/framed/email.png)
+![Macro Signal inbox with fictional demo correspondence and email navigation visible](.github/readme/framed/email.png)
 
 4. Multitasking ability — Macro has a built-in window manager that lets you create 3+ splits (scales with monitor size) so you can draft emails while reviewing prior threads.
 5. Company/Contact objects. Macro has native CRM capability so you can `cmd+k` to a contact, like tim@acme.com to see all emails between you and that person, or companies, to see all emails and files between everyone on your team and everyone at that company, e.g. `@acme.com`. All of this right from your email without having to open a heavyweight CRM like HubSpot or Salesforce. Email aggregation by contact or company is also available to your agents so they can better assist with CRM-type queries and actions.
@@ -105,7 +108,7 @@ The core problem with traditional issue trackers or project management tools is 
 
 The solution isn't to forgo tracking entirely. We tried that and it was a different form of chaos. **The solution we've found is lightweight issues tightly coupled to your channels and DMs, so that issue tracking naturally occurs where the conversation itself happens.**
 
-![Macro search project tasks grouped by assignee, with statuses, priorities, and project links](.github/readme/framed/tasks.png)
+![Tasks with varied statuses and assignees beside a completed task, linked discussion, and code change](.github/readme/framed/tasks.png)
 
 Creating tasks in Macro is easy. Where possible, tasks created are bidirectionally linked to the creating context (e.g. a customer email) so the full chain is auditable from "why are we doing this" → task → agent → pull request, all in one system.
 
@@ -160,7 +163,7 @@ The problem with standalone CRM is the same as with task trackers: it's not up t
 
 **Macro fixes this by colocating your CRM with your team chat and email, instead of having a separate system.** When you @mention a company record in a message, your team can click that record to see the latest — it's much faster than navigating to your CRM to find the record, going back to Slack and pasting it in, and this speed difference makes all the difference. Secondly, @mentioning a Company/Contact creates a bidirectional link between that message and the record, so from the record later you can trace the conversations that happened. This fixes the core issue we had with Attio/HubSpot/Salesforce: the actual important conversation about a deal happens not in the CRM but over messages. Macro makes this a feature rather than making you feel disorganized about it. It's not your fault, it was the CRM's fault!
 
-![Macro Sales Demo pipeline with nine visible fictional company cards across three stages and its navigation sidebar open](.github/readme/framed/crm.png)
+![Macro CRM board with demo company names, active pipeline stages, assigned owners, and deal revenue](.github/readme/framed/crm.png)
 
 - Customizable sales pipelines and deal stages with board and list views.
 - Company and contact records have their own discussions where your team can leave notes and @mention people and work.
@@ -208,7 +211,7 @@ Since Macro already has your CRM, chats, DMs, booking links, and calendar, calls
 - Calls are automatically recorded and transcribed, with speaker labels and AI summaries.
 - Agents can use the call context to write follow-ups, create tasks, and update documents.
 
-![A recorded design-review call showing screen sharing, participant video, playback controls, and a speaker-labelled transcript](.github/readme/framed/calls.png)
+![An internal group call recording with people on camera, playback controls, and a speaker-labelled transcript](.github/readme/framed/calls.png)
 
 [Calls docs &rarr;](https://docs.macro.com/product/calls)
 

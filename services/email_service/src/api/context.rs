@@ -112,6 +112,15 @@ pub(crate) type MessageSourceSvc = email::domain::message_source::MessageSourceS
     EmailEntityAccessService,
 >;
 
+pub(crate) type RecentInboxSvc = email::domain::recent_inbox::RecentInboxService<
+    crate::outbound::recent_inbox::PgRecentInboxes,
+    crate::outbound::recent_inbox::ProviderRecentInbox<
+        email_api_client::OutlookApiClientRepository,
+        MicrosoftTokens,
+        email_api_client::domain::ports::AlwaysAllowRateLimiter,
+    >,
+>;
+
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
     pub mailbox_notifications: Arc<
@@ -140,6 +149,8 @@ pub(crate) struct ApiContext {
     pub inbox_health: Arc<crate::composition::InboxHealth>,
     pub attachment_reads: Arc<AttachmentReadSvc>,
     pub message_sources: Arc<MessageSourceSvc>,
+    /// Reads the top of a user's inboxes straight from the providers.
+    pub recent_inbox: Arc<RecentInboxSvc>,
     pub draft_attachments: Arc<DraftAttachmentSvc>,
     pub event_forward_sender: Arc<EventForwardSender>,
     pub draft_transfers: Arc<

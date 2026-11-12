@@ -1,9 +1,10 @@
+import type { RoutineStep } from '@service-scheduled-action/generated/schemas';
 import { describe, expect, it } from 'vitest';
-import { stepsFromTask } from './routine-steps';
+import { stepsFromWire } from './routine-steps';
 import { instructionsGist, summarizeWork } from './routine-summary';
 
-const steps = (wire: unknown[]) => stepsFromTask({ steps: wire }) ?? [];
-const code = (title: string) => ({
+const steps = (wire: RoutineStep[]) => stepsFromWire(wire) ?? [];
+const code = (title: string): RoutineStep => ({
   type: 'code',
   title,
   source: 'export async function main() {}',

@@ -61,6 +61,17 @@ impl PgFormsRepo {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
+
+    /// Return the forms filed directly in any of `project_ids` to the root,
+    /// without the grants those folders passed down. A form is not trashed
+    /// with its folder, so trashing the folder files it at the root, as
+    /// purging the folder does.
+    pub async fn unfile_from_projects(
+        &self,
+        project_ids: &[String],
+    ) -> Result<(), PgFormsRepoError> {
+        folders::unfile_from_projects(&self.pool, project_ids).await
+    }
 }
 
 /// The UUIDs of typed ids, for a statement's `ANY($n)`.

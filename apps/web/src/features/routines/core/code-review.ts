@@ -1,8 +1,8 @@
-import { z } from 'zod';
+import type { RoutineTask } from '@service-scheduled-action/generated/schemas';
 import {
   type CodeStepDraft,
   codeSteps as codeStepsOf,
-  stepsFromTask,
+  programSteps,
 } from './routine-steps';
 
 /** One way a routine's code was brought to a new SDK, as the scheduler lists it. */
@@ -10,8 +10,8 @@ export type CodeUpgradeRecord = {
   toSdk: string;
   outcome: 'running' | 'checked' | 'rewritten' | 'needs_update';
   reason?: string | null;
-  previousTask: unknown;
-  task?: unknown;
+  previousTask: RoutineTask;
+  task?: RoutineTask | null;
 };
 
 /** A code step the proposed update changes: its code before and after. */
@@ -23,19 +23,16 @@ export type CodeReview = {
   /** The SDK the update is for. */
   sdk: string;
   /** The update a model proposed, when there is one to approve. */
-  proposal?: { task: unknown; changes: CodeChange[] };
+  proposal?: { task: RoutineTask; changes: CodeChange[] };
 };
 
-const taskSdkSchema = z.looseObject({ sdk: z.string().optional() });
-
 /** The SDK a stored task's code was last checked against. */
-export function taskSdk(task: unknown): string | undefined {
-  const parsed = taskSdkSchema.safeParse(task);
-  return parsed.success ? parsed.data.sdk : undefined;
+export function taskSdk(task: RoutineTask): string | undefined {
+  return 'steps' in task ? (task.sdk ?? undefined) : undefined;
 }
 
-function codeSteps(task: unknown): CodeStepDraft[] {
-  return codeStepsOf(stepsFromTask(task) ?? []);
+function codeSteps(task: RoutineTask | null | undefined): CodeStepDraft[] {
+  return codeStepsOf((task && programSteps(task)) ?? []);
 }
 
 /**

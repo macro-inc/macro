@@ -187,6 +187,8 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
     }
 
     const toastId = toast.success('Moved to Trash', {
+      dismissStyle: 'icon',
+      actionLayout: 'inline',
       actions: [
         {
           label: 'Undo',

@@ -1,8 +1,7 @@
+import { PostProductGraphic } from '../../PostProductGraphic';
 import './MacroVsNotion.css';
 import { featureNavGlyphs } from '../../../../app/components/graphics/FeatureNavGlyphs';
 import avatarJacob from '../../../../assets/people/jacob.webp';
-import docEditor from '../../../../assets/posts/macro-vs-notion/doc-editor.jpg';
-import docMention from '../../../../assets/posts/macro-vs-notion/doc-mention.jpg';
 import {
   type ComparisonRow,
   ComparisonTable,
@@ -94,42 +93,6 @@ function SectionGlyph(props: { route: string }) {
   );
 }
 
-function PostScreenshot(props: {
-  src: string;
-  alt: string;
-  width: number;
-  height: number;
-  phone?: boolean;
-  fadeRight?: boolean;
-}) {
-  return (
-    <figure
-      classList={{
-        'mvn-graphic': true,
-        'mvn-graphic--phone': !!props.phone,
-        'mvn-graphic--fade-right': !!props.fadeRight,
-      }}
-    >
-      <div class="mvn-graphic-frame">
-        <div class="mvn-graphic-inner">
-          <img
-            src={props.src}
-            alt={props.alt}
-            loading="lazy"
-            width={props.width}
-            height={props.height}
-            style={{
-              width: '100%',
-              height: 'auto',
-              'aspect-ratio': `${props.width} / ${props.height}`,
-            }}
-          />
-        </div>
-      </div>
-    </figure>
-  );
-}
-
 export const postMeta: PostMeta = {
   slug: 'notion-alternative',
   title: 'Macro vs Notion',
@@ -142,6 +105,12 @@ export const postMeta: PostMeta = {
   preview: ARTICLE_PREVIEW,
   tags: ['macro', 'notion', 'comparison'],
   category: 'Comparison',
+  heroVideo: {
+    id: NOTION_VIDEO_ID,
+    title: 'What we learned from Notion',
+    caption:
+      'Why we admire Notion, and where we think a notes-first product runs out of room.',
+  },
   coverBrand: 'notion',
   image: '/og/notion-alternative.png',
   showTOC: true,
@@ -163,20 +132,6 @@ export default function MacroVsNotionPost() {
           the correct decision for our company at the time, I felt a big sense
           of loss. And of disorganization. We were now at 17+ different SaaS
           apps.
-        </p>
-
-        <div class="mvn-video">
-          <iframe
-            src={`https://www.youtube.com/embed/${NOTION_VIDEO_ID}?rel=0`}
-            title="What we learned from Notion"
-            loading="lazy"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-            allowfullscreen
-          />
-        </div>
-        <p class="mvn-figcaption">
-          Why we admire Notion, and where we think a notes-first product runs
-          out of room.
         </p>
 
         <p class="mvn-hl">
@@ -324,16 +279,10 @@ export default function MacroVsNotionPost() {
           we know, nothing else gives you all three, which is why we think it is
           the best editor in this category.
         </p>
-        <PostScreenshot
-          src={docEditor}
-          alt="A markdown spec open in Macro's editor with headings, inline code, to-do checkboxes and a details panel"
-          width={1400}
-          height={585}
-        />
+        <PostProductGraphic kind="document" />
         <p class="mvn-figcaption">
-          Plain markdown underneath, a real editor on top: headings, inline
-          code, to-do boxes you can turn into tasks, and properties on the
-          right.
+          The brief, its linked work and the discussion stay together. Edit the
+          document and your team sees the changes.
         </p>
         <p>
           Collaboration is where the architecture shows. Notion resolves edits
@@ -371,16 +320,10 @@ export default function MacroVsNotionPost() {
           other, and your workspace becomes a web of context you can navigate in
           either direction.
         </p>
-        <PostScreenshot
-          src={docMention}
-          alt="Typing @ in a Macro doc opens a picker listing documents, agent chats, tasks and emails to mention"
-          width={1200}
-          height={528}
-        />
+        <PostProductGraphic kind="doc-mentions" />
         <p class="mvn-figcaption">
-          Type <code>@</code> in any doc and pull in a task, another doc, an
-          agent conversation or an email — the mention is a live, bidirectional
-          link.
+          Open a mentioned email or task beside the brief, without losing your
+          place in the document.
         </p>
         <p>
           That web is also how permissions work, which removes a whole category
@@ -468,12 +411,8 @@ export default function MacroVsNotionPost() {
 
         <p class="post-footnote">
           For the editor, @mentions, collaboration and shortcuts, see the{' '}
-          <a
-            href="https://docs.macro.com/product/docs"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Macro documents documentation
+          <a href="/documents#guide" target="_blank" rel="noreferrer">
+            Macro Docs documentation
           </a>
           .
         </p>

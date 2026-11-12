@@ -47,9 +47,12 @@ export function snoozePresets(now: Date): SnoozeOption[] {
   ];
 }
 
-export function formatSnoozeDeadline(until: Date | string): string {
+export function formatSnoozeDeadline(
+  until: Date | string,
+  locale?: string
+): string {
   const date = new Date(until);
-  return new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat(locale, {
     year:
       date.getFullYear() === new Date().getFullYear() ? undefined : 'numeric',
     weekday: 'short',

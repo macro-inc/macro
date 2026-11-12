@@ -12,12 +12,20 @@ export class TeamNamespace {
     return Team.byId(this.client, id);
   }
 
-  /** The caller's current team. */
+  /**
+   * The caller's current team.
+   *
+   * @readonly
+   */
   current(): Promise<Team> {
     return Team.current(this.client);
   }
 
-  /** The teams the caller belongs to. */
+  /**
+   * The teams the caller belongs to.
+   *
+   * @readonly
+   */
   list(): Promise<Team[]> {
     return Team.list(this.client);
   }

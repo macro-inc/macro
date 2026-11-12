@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS (\n                SELECT 1 FROM team_user mine\n                JOIN team_user theirs ON theirs.team_id = mine.team_id\n                WHERE mine.user_id = $1 AND theirs.user_id = $2\n            ) AS \"shared!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "shared!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "35ed107591223aa3226684415e19b2228951dfc5c0baf1d91e52ab0aee9fa7fd"
+}

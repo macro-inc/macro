@@ -1,5 +1,6 @@
 /* Frozen website styling. Do not import application styles here. */
 @import "tailwindcss" source(none);
+@import "./site-icons.css";
 
 
 
@@ -178,7 +179,8 @@
   --layer-inset: var(--color-surface-0);
 
   ::selection {
-    background-color: oklch(from var(--color-ink) l c h / 0.1);
+    background-color: #b8d5ff;
+    color: #101820;
   }
 
 }
@@ -1168,15 +1170,6 @@ html[data-touch-device='true'] :is(
     width: 100dvw;
   }
 
-
-  /* scuffed: stops text from being selectable by default for mobile usage */
-  :where(*, ::before, ::after) {
-    user-select: none;
-  }
-
-  :where(input, textarea, select, p *, p span, .pdfViewer *, .markdown-content *, [contenteditable], .md *) {
-    user-select: text;
-  }
 
   /* iOS answers a long-press on an image with its own callout ("Share", "Save
      to Photos", "Copy"), which preempts the app's own long-press affordances

@@ -14,7 +14,7 @@ use std::time::Duration;
 use uuid::Uuid;
 
 /// Handles non-retryable errors by updating the appropriate status in the database and cleaning up the SQS message
-#[tracing::instrument(skip(ctx, message))]
+#[tracing::instrument(skip_all)]
 pub async fn handle_non_retryable_error(
     ctx: &PubSubContext,
     message: &aws_sdk_sqs::types::Message,
@@ -212,25 +212,22 @@ pub async fn handle_retryable_error(
         }
         BackfillOperation::PopulateCrmContact(scope) => {
             tracing::warn!(
-                contact_email = %scope.payload.contact_email,
+                link_id = %scope.link_id,
                 "Retryable error populating CRM contact"
             )
         }
         BackfillOperation::DepopulateCrmContact(scope) => {
             tracing::warn!(
-                contact_email = %scope.payload.contact_email,
+                link_id = %scope.link_id,
                 "Retryable error depopulating CRM contact"
             )
         }
-        BackfillOperation::PopulateCrmForUser(payload) => {
-            tracing::warn!(
-                macro_id = %payload.macro_id,
-                "Retryable error populating CRM for user"
-            )
+        BackfillOperation::PopulateCrmForUser(_) => {
+            tracing::warn!("Retryable error populating CRM for user")
         }
         BackfillOperation::DepopulateCrmForUser(payload) => {
             tracing::warn!(
-                macro_id = %payload.macro_id,
+                team_id = %payload.team_id,
                 "Retryable error depopulating CRM for user"
             )
         }

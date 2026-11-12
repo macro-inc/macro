@@ -1,8 +1,8 @@
+import IconChannel from '@icon/system/regular/hash-straight.svg';
+import IconTask from '@icon/system/regular/list-checks.svg';
+import IconChat from '@icon/system/regular/sparkle.svg';
+import IconStar from '@icon/system/regular/star.svg';
 import type { JSX } from 'solid-js';
-import IconChannel from '../../../assets/icons/wide-channel.svg';
-import IconChat from '../../../assets/icons/wide-chat.svg';
-import IconStar from '../../../assets/icons/wide-star.svg';
-import IconTask from '../../../assets/icons/wide-task.svg';
 import { viewportWidth } from '../../utils/utilBreakpoint';
 import { PreviewWindow } from './PreviewWindow';
 

@@ -49,6 +49,9 @@ if [ -d "$entry" ]; then
   echo "$package: unchanged inputs, reusing the cached wasm package ($key)"
   restore "$entry"
   touch "$entry"
+  # The dev `ensure-*` recipes compare the output's mtime with its sources'.
+  # The inputs match, so mark the output as current.
+  find "$out_dir" -exec touch {} +
   exit 0
 fi
 

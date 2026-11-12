@@ -6,13 +6,25 @@ import {
   joinColumns,
   parseRange,
   renderTable,
+  SPECS,
   type Spec,
   type Table,
 } from './ci-report';
 
-const spec: Spec = JSON.parse(
-  readFileSync(new URL('../nixos/ci-report.json', import.meta.url), 'utf8')
-);
+/** Each spec with the one Loki stream all its queries read. */
+const specs: [string, Spec, string][] = [
+  ['ci', 'ci-telemetry'],
+  ['local', 'local-telemetry'],
+].map(([name, stream]) => [
+  name,
+  JSON.parse(
+    readFileSync(
+      new URL(`../nixos/${SPECS[name].file}`, import.meta.url),
+      'utf8'
+    )
+  ),
+  stream,
+]);
 
 const table: Table = {
   id: 'jobs',
@@ -27,13 +39,13 @@ const table: Table = {
   ],
 };
 
-describe('the shared spec', () => {
+describe.each(specs)('the shared %s spec', (_name, spec, stream) => {
   test('expands every query to LogQL with no placeholder left', () => {
     for (const entry of spec.tables) {
       for (const column of entry.columns) {
         const query = expand(column.expr, spec.filters, '1d');
         expect(query).not.toContain('$');
-        expect(query).toContain('{service_name="ci-telemetry"}');
+        expect(query).toContain(`{service_name="${stream}"}`);
       }
     }
   });
@@ -43,7 +55,7 @@ describe('the shared spec', () => {
       for (const column of entry.columns) {
         const grouping = entry.by.length
           ? `by (${entry.by.join(', ')})`
-          : /by \(\)|^\(?sum\(/;
+          : /by \(\)|^\(?sum\(|^count\(/;
         if (typeof grouping === 'string')
           expect(column.expr).toContain(grouping);
         else expect(column.expr).toMatch(grouping);

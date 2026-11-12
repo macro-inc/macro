@@ -8,7 +8,7 @@ use super::{
         Agent, AgentChannelScope, AgentMcpServer, AgentMcpServers, AuthenticatedBot, Bot,
         BotChannel, BotChannelListCaller, BotId, BotKind, BotOwner, BotOwnerProfile, BotToken,
         BotTokenCandidate, CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest,
-        CreateChannelScopedBotRequest, CreateChannelScopedBotResponse, HarnessId, HarnessOwner,
+        CreateChannelScopedBotRequest, CreateChannelScopedBotResponse, HarnessId,
         MAX_BOT_OWNER_PROFILE_IDS, PatchAgentRequest, PatchBotRequest, UpdateAgentRequest,
     },
     ports::{BotError, BotRepo, BotService, McpAppCatalog},
@@ -127,8 +127,6 @@ fn validate_handle(handle: &str) -> Result<(), BotError> {
 struct AgentFields<'a> {
     name: &'a str,
     handle: &'a str,
-    harness: &'a str,
-    harness_id: Option<HarnessId>,
     default_model: &'a str,
     channel_scope: AgentChannelScope,
     channel_ids: &'a [Uuid],
@@ -140,8 +138,6 @@ impl<'a> From<&'a CreateAgentRequest> for AgentFields<'a> {
         Self {
             name: &req.name,
             handle: &req.handle,
-            harness: &req.harness,
-            harness_id: req.harness_id,
             default_model: &req.default_model,
             channel_scope: req.channel_scope,
             channel_ids: &req.channel_ids,
@@ -155,8 +151,6 @@ impl<'a> From<&'a UpdateAgentRequest> for AgentFields<'a> {
         Self {
             name: &req.name,
             handle: &req.handle,
-            harness: &req.harness,
-            harness_id: req.harness_id,
             default_model: &req.default_model,
             channel_scope: req.channel_scope,
             channel_ids: &req.channel_ids,
@@ -169,8 +163,6 @@ fn validate_agent_fields(
     AgentFields {
         name,
         handle,
-        harness,
-        harness_id,
         default_model,
         channel_scope,
         channel_ids,
@@ -183,26 +175,6 @@ fn validate_agent_fields(
         return Err(BotError::BadRequest(
             "agent name must not be empty".to_string(),
         ));
-    }
-    if harness.trim().is_empty() {
-        return Err(BotError::BadRequest(
-            "agent harness must not be empty".to_string(),
-        ));
-    }
-    // The `macrod` slug and a registered harness travel together: the slug
-    // selects the external runtime path, the id says whose daemon serves it.
-    match (harness == harness_id::MACROD_HARNESS_SLUG, harness_id) {
-        (true, None) => {
-            return Err(BotError::BadRequest(
-                "agents on the macrod harness must reference a registered harness".to_string(),
-            ));
-        }
-        (false, Some(_)) => {
-            return Err(BotError::BadRequest(
-                "harness_id applies only to the macrod harness".to_string(),
-            ));
-        }
-        _ => {}
     }
     if default_model.trim().is_empty() {
         return Err(BotError::BadRequest(
@@ -232,7 +204,29 @@ fn validate_agent_fields(
     }
 }
 
+/// Check a runtime someone chose. The `macrod` slug and a registered harness
+/// travel together: the slug selects the external runtime path, the id says
+/// whose daemon serves it. A binding a patch leaves alone is not re-checked,
+/// so an agent whose harness was deleted stays editable until it is rebound.
+fn validate_runtime(harness: &str, harness_id: Option<HarnessId>) -> Result<(), BotError> {
+    if harness.trim().is_empty() {
+        return Err(BotError::BadRequest(
+            "agent harness must not be empty".to_string(),
+        ));
+    }
+    match (harness == harness_id::MACROD_HARNESS_SLUG, harness_id) {
+        (true, None) => Err(BotError::BadRequest(
+            "agents on the macrod harness must reference a registered harness".to_string(),
+        )),
+        (false, Some(_)) => Err(BotError::BadRequest(
+            "harness_id applies only to the macrod harness".to_string(),
+        )),
+        _ => Ok(()),
+    }
+}
+
 fn validate_agent_request(req: &CreateAgentRequest) -> Result<(), BotError> {
+    validate_runtime(&req.harness, req.harness_id)?;
     validate_agent_fields(req.into())
 }
 
@@ -311,13 +305,11 @@ where
 
     /// Ensure the resolved agent owner may run agents on a registered harness.
     ///
-    /// A team agent must run on its own team's harness - never on a private
-    /// one, so a teammate's mention can never execute on a machine only one
-    /// person controls. A private agent may run on the caller's own harness
-    /// or on a team harness of a team the caller belongs to.
+    /// A team agent must run on a harness open to its whole team, so a
+    /// teammate's mention can never execute on a machine shared only with some
+    /// of them. A private agent may run on any harness its owner may use.
     async fn ensure_harness_usable(
         &self,
-        caller: MacroUserIdStr<'static>,
         owner: &BotOwner,
         harness_id: Option<HarnessId>,
         auto_accept_permissions: Option<bool>,
@@ -336,28 +328,15 @@ where
             harness_owner.allow_permission_bypass,
             auto_accept_permissions,
         )?;
-        let usable = match (owner, harness_owner.owner) {
-            (
-                BotOwner::Team { team_id },
-                HarnessOwner::Team {
-                    team_id: harness_team,
-                },
-            ) => *team_id == harness_team,
-            (BotOwner::Team { .. }, HarnessOwner::User { .. }) => false,
-            (
-                BotOwner::User { user_id },
-                HarnessOwner::User {
-                    user_id: harness_user,
-                },
-            ) => *user_id == harness_user,
-            (
-                BotOwner::User { .. },
-                HarnessOwner::Team {
-                    team_id: harness_team,
-                },
-            ) => self
+        let usable = match owner {
+            BotOwner::Team { team_id } => self
                 .repo
-                .user_has_team(caller, harness_team)
+                .harness_granted_to_team(harness_id, *team_id)
+                .await
+                .map_err(|err| BotError::Repo(err.into()))?,
+            BotOwner::User { user_id } => self
+                .repo
+                .user_may_use_harness(harness_id, user_id)
                 .await
                 .map_err(|err| BotError::Repo(err.into()))?,
         };
@@ -453,13 +432,8 @@ where
         let owner = self
             .owner_for_agent_update(caller.clone(), current, req.team_id)
             .await?;
-        self.ensure_harness_usable(
-            caller.clone(),
-            &owner,
-            req.harness_id,
-            req.auto_accept_permissions,
-        )
-        .await?;
+        self.ensure_harness_usable(&owner, req.harness_id, req.auto_accept_permissions)
+            .await?;
         let requested_name = req.name.clone();
         let requested_handle = req.handle.clone();
         let requested_description = req.description.clone();
@@ -540,13 +514,8 @@ where
         let owner = self
             .agent_owner_for_request(caller.clone(), req.team_id)
             .await?;
-        self.ensure_harness_usable(
-            caller.clone(),
-            &owner,
-            req.harness_id,
-            req.auto_accept_permissions,
-        )
-        .await?;
+        self.ensure_harness_usable(&owner, req.harness_id, req.auto_accept_permissions)
+            .await?;
         let created_by_user_id = caller.clone();
         let agent = self
             .repo
@@ -587,6 +556,7 @@ where
             .await
             .map_err(|err| BotError::Repo(err.into()))?
             .ok_or_else(|| BotError::NotFound("agent not found".to_string()))?;
+        validate_runtime(&req.harness, req.harness_id)?;
         validate_update_agent_request(&req)?;
         reject_unknown_mcp_apps(&self.mcp_apps, &req.mcp, existing.mcp.servers()).await?;
         self.replace_agent(caller, &current, req).await
@@ -618,6 +588,9 @@ where
             .await
             .map_err(|err| BotError::Repo(err.into()))?
             .ok_or_else(|| BotError::NotFound("agent not found".to_string()))?;
+        if let Some(selection) = &req.harness {
+            validate_runtime(&selection.harness, selection.harness_id)?;
+        }
         let update = req.apply_to(&agent);
         validate_update_agent_request(&update)?;
         reject_unknown_mcp_apps(&self.mcp_apps, &update.mcp, agent.mcp.servers()).await?;

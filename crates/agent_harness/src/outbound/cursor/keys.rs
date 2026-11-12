@@ -17,13 +17,16 @@ use sqlx::PgPool;
 use crate::domain::error::{HarnessError, Result};
 
 /// A user's resolved Cursor configuration: the decrypted key their sessions
-/// run on, and the model those sessions start on.
+/// run on, and the model and effort those sessions start on.
 pub struct ResolvedCursorConfig {
     /// The decrypted key.
     pub key: CursorApiKey,
     /// The Cursor model id the user chose for their sessions, or `None` to
     /// leave the choice to the deployment default and then Cursor's own.
     pub default_model_id: Option<String>,
+    /// The reasoning effort sessions on [`Self::default_model_id`] start on,
+    /// or `None` for that model's own default.
+    pub default_effort: Option<String>,
 }
 
 /// Resolves a user's Cursor configuration.
@@ -80,6 +83,7 @@ where
         Ok(ResolvedCursorConfig {
             key,
             default_model_id: stored.default_model_id,
+            default_effort: stored.default_effort,
         })
     }
 }

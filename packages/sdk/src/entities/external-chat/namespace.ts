@@ -13,7 +13,11 @@ export class ExternalChatsNamespace {
   /** Bind external chat operations to this authenticated client. */
   constructor(private readonly client: MacroClient) {}
 
-  /** Added chats the caller can view, including without a provider account of their own. */
+  /**
+   * Added chats the caller can view, including without a provider account of their own.
+   *
+   * @readonly
+   */
   async list(): Promise<ExternalChat[]> {
     return unwrap(await this.client.storage.externalChats()).map((record) =>
       ExternalChat.byId(this.client, record.id),

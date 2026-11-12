@@ -38,7 +38,9 @@ export function EmailControls(props: EmailControlsProps) {
               groups={filters.groups()}
               isSelected={filters.isSelected}
               selectedIds={filters.selectedIds}
+              isGroupActive={filters.isGroupActive}
               onSelectionChange={filters.setSelected}
+              onGroupSelectionChange={filters.setGroupSelection}
               onClear={filters.clear}
             />
             <Show when={filters.activeCount() > 0}>

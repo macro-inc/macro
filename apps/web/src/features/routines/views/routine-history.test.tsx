@@ -527,6 +527,49 @@ describe('routine history steps', () => {
     expect(details.getByText(/"important": 3/)).toBeTruthy();
   });
 
+  it('says whom a run’s code acted as, only when it ran code', () => {
+    const run = (steps: object[], codeActsAs?: string) =>
+      toHistoryRecord({
+        id: `run-${codeActsAs}-${steps.length}`,
+        result: {
+          version: 1,
+          resource: null,
+          steps,
+          run: {
+            at: '2026-11-01T09:00:00Z',
+            started_by: { kind: 'manual', by: 'macro|owner@example.com' },
+            ...(codeActsAs ? { code_acts_as: codeActsAs } : {}),
+          },
+        },
+        start_time: '2026-11-01T09:00:00Z',
+        is_success: true,
+      });
+    const code = { path: '0', kind: 'code' };
+    const details = (record: HistoryRecord) => {
+      cleanup();
+      render(() => (
+        <RoutineHistory
+          {...sources()}
+          records={[record]}
+          isPending={false}
+          describeStep={() => 'Posted'}
+        />
+      ));
+      // A run that only asked AI opens its conversation instead of details.
+      return (
+        screen.queryByRole('region', { name: 'Run details' })?.textContent ?? ''
+      );
+    };
+    expect(details(run([code], 'owner'))).toContain('Code acted as you');
+    expect(details(run([code], 'agent'))).toContain('Code acted as the agent');
+    // Older runs, runs without code, and unknown values say nothing.
+    expect(details(run([code]))).not.toContain('Code acted as');
+    expect(details(run([{ path: '0', kind: 'agent' }], 'owner'))).not.toContain(
+      'Code acted as'
+    );
+    expect(details(run([code], 'someone'))).not.toContain('Code acted as');
+  });
+
   it('opens an agent step’s conversation from the run', () => {
     const source = sources();
     const program = record('agent', 'program', {

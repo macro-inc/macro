@@ -19,16 +19,13 @@ macro_entrypoint = { path = "../../crates/macro_entrypoint" }
 macro_queues = { path = "../../crates/macro_queues" }
 macro_service_urls = { path = "../../crates/macro_service_urls" }
 macro_user_id = { path = "../../crates/macro_user_id" }
-mention_utils = { path = "../../crates/mention_utils" }
 messages = { path = "../../crates/messages", features = ["outbound"] }
 rootcause = { workspace = true }
-serde = { workspace = true }
 serde_json = { workspace = true }
 slack_integration = { path = "../../crates/slack_integration", features = ["postgres", "s3", "sqs", "search", "worker"] }
 sqlx = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }
-tracing = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 

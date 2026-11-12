@@ -8,7 +8,7 @@ import type { MacroUserIdStr } from './macroUserIdStr';
 import type { TriggerOriginOneOfNineOrigin } from './triggerOriginOneOfNineOrigin';
 
 /**
- * A person opened the session directly, from the composer.
+ * A person opened the session directly: from the composer, or by asking for a routine draft.
  */
 export type TriggerOriginOneOfNine = {
   /** Who opened it. */

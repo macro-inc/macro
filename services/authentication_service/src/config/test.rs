@@ -307,29 +307,71 @@ const ALLOWLIST_SETTING_CASES: [Option<&str>; 5] = [
 const UNLISTED_PUBLIC_EMAIL: &str = "unlisted.user@example.test";
 
 #[test]
-fn develop_config_temporarily_allows_unlisted_signups_regardless_of_bypass() {
-    for bypass in [None, Some(false), Some(true)] {
-        for allowlist in ALLOWLIST_SETTING_CASES {
-            let mut values = config_values();
-            values["ENVIRONMENT"] = serde_json::json!("develop");
-            if let Some(bypass) = bypass {
-                values["DEVELOPMENT_BYPASS_SIGNUP_ALLOWLIST"] = serde_json::json!(bypass);
-            }
-            if let Some(allowlist) = allowlist {
-                values["DEVELOPMENT_SIGNUP_ALLOWLIST_JSON"] = serde_json::json!(allowlist);
-            }
-            let config: Config = serde_json::from_value(values).unwrap();
+fn develop_config_enforces_allowlist_unless_bypassed() {
+    for bypass in [None, Some(false)] {
+        let mut values = config_values();
+        values["ENVIRONMENT"] = serde_json::json!("develop");
+        values["DEVELOPMENT_SIGNUP_ALLOWLIST_JSON"] =
+            serde_json::json!(r#"["allowed.user@example.test"]"#);
+        if let Some(bypass) = bypass {
+            values["DEVELOPMENT_BYPASS_SIGNUP_ALLOWLIST"] = serde_json::json!(bypass);
+        }
+        let config: Config = serde_json::from_value(values).unwrap();
 
-            // Exercise both runtime startup and the Doppler validator's entry point.
-            for policy in [
-                config.signup_policy().unwrap(),
-                config
-                    .signup_policy_for_environment(Environment::Develop)
-                    .unwrap(),
-            ] {
-                assert_eq!(policy.allowed_email_count(), None);
-                assert_eq!(policy.authorize_public_email(UNLISTED_PUBLIC_EMAIL), Ok(()));
-            }
+        // Exercise both runtime startup and the Doppler validator's entry point.
+        for policy in [
+            config.signup_policy().unwrap(),
+            config
+                .signup_policy_for_environment(Environment::Develop)
+                .unwrap(),
+        ] {
+            assert_eq!(
+                policy.authorize_public_email(UNLISTED_PUBLIC_EMAIL),
+                Err(SignupPolicyDenial::PublicEmailNotAllowed)
+            );
+            assert_eq!(policy.authorize_public_email("new.user@macro.com"), Ok(()));
+            assert_eq!(
+                policy.authorize_public_email("allowed.user@example.test"),
+                Ok(())
+            );
+        }
+    }
+}
+
+#[test]
+fn develop_config_without_allowlist_fails_unless_bypassed() {
+    for bypass in [None, Some(false)] {
+        let mut values = config_values();
+        values["ENVIRONMENT"] = serde_json::json!("develop");
+        if let Some(bypass) = bypass {
+            values["DEVELOPMENT_BYPASS_SIGNUP_ALLOWLIST"] = serde_json::json!(bypass);
+        }
+        let config: Config = serde_json::from_value(values).unwrap();
+
+        assert!(config.signup_policy().is_err());
+        assert!(
+            config
+                .signup_policy_for_environment(Environment::Develop)
+                .is_err()
+        );
+    }
+}
+
+#[test]
+fn production_and_local_config_allow_unlisted_signups() {
+    for (environment_name, environment) in [
+        ("production", Environment::Production),
+        ("local", Environment::Local),
+    ] {
+        let mut values = config_values();
+        values["ENVIRONMENT"] = serde_json::json!(environment_name);
+        let config: Config = serde_json::from_value(values).unwrap();
+
+        for policy in [
+            config.signup_policy().unwrap(),
+            config.signup_policy_for_environment(environment).unwrap(),
+        ] {
+            assert_eq!(policy.authorize_public_email(UNLISTED_PUBLIC_EMAIL), Ok(()));
         }
     }
 }

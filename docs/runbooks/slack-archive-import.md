@@ -239,7 +239,7 @@ separate live probes below.
 For a **new disposable** browser instance, use the local launcher and seed an admin
 team against that named instance. For an existing instance, follow
 [non-destructive recovery](../development/running-locally.md#recover-an-existing-instance-without-resetting-data)
-instead: neither `run_local` nor `stack up` is a data-preserving restart. Enable
+instead: an attached `run_local` and `stack up` both wipe. Enable
 DSS/worker admission and the frontend override, and use the local E2E backend
 origin/JWT setup without invoking a stack-resetting harness. No-Doppler default
 Macro API signing keys are placeholders: supply a local-only generated RSA key

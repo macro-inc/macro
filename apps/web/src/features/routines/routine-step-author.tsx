@@ -12,9 +12,8 @@ import { composeStep, reviseStep } from './queries/compose-step';
 import { useComposerContext } from './routine-ai-composer';
 
 /**
- * AI that adds and changes the steps of `routine`, with the same workspace
- * names the routine drafter uses; Ask AI steps it writes run on the plan's
- * default model.
+ * AI that adds and changes the steps of `routine`, with the same context the
+ * routine drafter uses; Ask AI steps it writes run on the plan's default model.
  */
 export function createRoutineStepAuthor(
   routine: Accessor<RoutineSoFar>

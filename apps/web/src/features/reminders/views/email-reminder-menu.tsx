@@ -1,3 +1,4 @@
+import { createNaturalTime } from '@core/natural-time/create-natural-time';
 import { type ComponentProps, createSignal } from 'solid-js';
 import { EmailReminderForm } from '../components/email-reminder-form';
 import type { EmailReminderCondition } from '../core/email-reminder';
@@ -5,7 +6,12 @@ import { createReminderTimeOptions } from '../primitives/create-reminder-time-op
 
 type Props = Omit<
   ComponentProps<typeof EmailReminderForm>,
-  'query' | 'onQueryChange' | 'condition' | 'onConditionChange' | 'times'
+  | 'query'
+  | 'onQueryChange'
+  | 'condition'
+  | 'onConditionChange'
+  | 'times'
+  | 'reason'
 > & {
   initialCondition?: EmailReminderCondition;
 };
@@ -13,7 +19,7 @@ type Props = Omit<
 export function EmailReminderMenu(props: Props) {
   const [query, setQuery] = createSignal('');
   const [condition, setCondition] = createSignal<EmailReminderCondition>();
-  const times = createReminderTimeOptions(query);
+  const choices = createReminderTimeOptions(query, createNaturalTime());
   return (
     <EmailReminderForm
       {...props}
@@ -21,7 +27,8 @@ export function EmailReminderMenu(props: Props) {
       onQueryChange={setQuery}
       condition={condition() ?? props.initialCondition ?? 'if_no_reply'}
       onConditionChange={setCondition}
-      times={times()}
+      times={choices().times}
+      reason={choices().reason}
     />
   );
 }

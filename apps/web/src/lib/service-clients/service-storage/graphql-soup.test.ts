@@ -391,6 +391,13 @@ const mocks = vi.hoisted(() => {
         host,
       })
     ),
+    registerCacheHost: vi.fn(
+      (
+        _host: CacheHost,
+        _recover?: (error: unknown) => CacheHost | undefined
+      ) =>
+        () => {}
+    ),
     createWorkerCacheHost: vi.fn(
       (options: {
         onInitializationError?: (error: Error) => void;
@@ -458,7 +465,7 @@ vi.mock('@graphql-cache/index', () => ({
   entityFromArgument: () => () => undefined,
 }));
 vi.mock('@graphql-cache/lifecycle', () => ({
-  registerCacheHost: () => () => undefined,
+  registerCacheHost: mocks.registerCacheHost,
 }));
 vi.mock('@graphql-cache/scope', () => ({
   getOrCreateCacheScope: () => 'anonymous-scope',
@@ -812,6 +819,39 @@ describe('GraphQL Soup browser cache session gate', () => {
     soup.setGraphqlSoupSessionActive(false);
     vi.unstubAllGlobals();
   });
+
+  it.each([false, true])(
+    'binds contact cleanup recovery to its original backend and scope (native=%s)',
+    async (native) => {
+      mocks.tauri = native;
+      const soup = await import('./graphql-soup');
+      soup.getGraphqlSoupClient();
+      const recover = mocks.registerCacheHost.mock.calls[0]?.[1];
+      expect(recover).toBeDefined();
+      soup.setGraphqlSoupSessionActive(false);
+      mocks.tauri = !native;
+      expect(recover?.(new Error('unknown storage failure'))).toBeUndefined();
+      expect(mocks.createWorkerCacheHost).toHaveBeenCalledTimes(native ? 0 : 1);
+      expect(mocks.createTauriCacheHost).toHaveBeenCalledTimes(native ? 1 : 0);
+      const ownerLost = Object.assign(new Error('Owner unavailable'), {
+        errorCode: 'owner-lock-unavailable',
+      });
+      const repaired = recover?.(ownerLost);
+      expect(repaired).toBeDefined();
+      expect(mocks.createWorkerCacheHost).toHaveBeenCalledTimes(native ? 0 : 2);
+      expect(mocks.createTauriCacheHost).toHaveBeenCalledTimes(native ? 2 : 0);
+      const createHost = native
+        ? mocks.createTauriCacheHost
+        : mocks.createWorkerCacheHost;
+      expect(createHost.mock.calls[1]?.[0]).toMatchObject({
+        scope: 'anonymous-scope',
+        onInitializationError: undefined,
+      });
+      expect(mocks.normalizedCacheExchange).toHaveBeenCalledOnce();
+      expect(soup.graphqlCacheEnabled()).toBe(false);
+      repaired?.dispose();
+    }
+  );
 
   it('passes caller cancellation through auth refresh and retries a live session', async () => {
     const controller = new AbortController();

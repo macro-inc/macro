@@ -1,9 +1,9 @@
+import IconCheck from '@icon/system/regular/check.svg';
+import IconFunnel from '@icon/system/regular/funnel-simple.svg';
+import IconSearch from '@icon/system/regular/magnifying-glass.svg';
+import IconSparkle from '@icon/system/regular/sparkle.svg';
 import { createSignal, For, type JSX, onCleanup, Show } from 'solid-js';
-import IconCheck from '../../../assets/icons/phosphor/check.svg';
-import IconFunnel from '../../../assets/icons/phosphor/funnel-simple.svg';
-import IconSearch from '../../../assets/icons/phosphor/magnifying-glass.svg';
 import IconPaperPlaneTilt from '../../../assets/icons/phosphor/paper-plane-tilt-fill.svg';
-import IconSparkle from '../../../assets/icons/phosphor/sparkle.svg';
 import avatarJacobWork from '../../../assets/people/jacob-work.webp';
 import { PhoneFrame, PhoneScreenContent } from '../utils/UtilPhoneFrame';
 

@@ -474,6 +474,71 @@ describe('durable email working copies', () => {
     await second.save(session, snapshot('Keep this draft', 1));
     expect(await second.file(session, 'local', 'file')).toBeUndefined();
   });
+  it('keeps the working-copy version a sent intent carried after removing the intent', async () => {
+    const store = open();
+    const owner = await store.activate('owner');
+    const local = await store.save(owner, snapshot());
+    const row = await store.putSend(
+      owner,
+      {
+        uuid: 'attempt',
+        dispatchVersion: 2,
+        phase: 'pending',
+        locallyCancelled: false,
+        metadata: {
+          kind: 'email-send-v1',
+          payload: {
+            workingCopy: {
+              key: local.key,
+              generation: local.generation,
+              revision: local.revision,
+              attachments: [],
+            },
+            input: {
+              attempt: { attemptId: 'attempt', linkId: 'inbox' },
+              message: { draftId: 'server-draft', subject: 'Keep this draft' },
+              attachmentIds: [],
+              forwardedAttachmentIds: [],
+            },
+            draft: {
+              draftId: 'server-draft',
+              threadDbId: 'thread',
+              subject: 'Keep this draft',
+              senderEmail: 'owner@example.invalid',
+              senderLinkId: 'inbox',
+              optimisticBodyHtml: null,
+            },
+          },
+        },
+      },
+      true
+    );
+    const claim = await store.claimSend(owner, row.uuid, 'tab', Date.now());
+    await store.settleSend(
+      owner,
+      row.uuid,
+      'tab',
+      claim!.dispatch!.generation,
+      {
+        attempt: {
+          attemptId: 'attempt',
+          status: 'SENT',
+          message: null,
+          threadId: 'thread',
+          sendTime: '2026-10-20T20:00:00Z',
+        },
+        nextAttemptAt: 0,
+      }
+    );
+
+    await store.removeSend(owner, row.uuid);
+
+    expect(await store.sends(owner)).toEqual([]);
+    expect(await store.sentCopy(owner, 'server-draft')).toEqual({
+      generation: 'generation',
+      revision: 1,
+    });
+  });
   it('rejects stale snapshots inside the transaction across tabs', async () => {
     const name = crypto.randomUUID();
     const first = open(name);

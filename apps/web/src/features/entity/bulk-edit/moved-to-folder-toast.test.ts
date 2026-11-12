@@ -46,9 +46,9 @@ describe('toastMovedToFolder', () => {
 
   it('offers both opens on desktop, dismissing before it opens', () => {
     toastMovedToFolder(1, 'folder');
-    const [open, openInNewSplit] = shownToast().actions;
+    const [openSplit, open] = shownToast().actions;
+    expect(openSplit?.label).toBe('Open split');
     expect(open?.label).toBe('Open');
-    expect(openInNewSplit?.label).toBe('Open in new split');
 
     open?.onClick();
     expect(mocks.toast.dismiss).toHaveBeenCalledWith(7);
@@ -58,7 +58,7 @@ describe('toastMovedToFolder', () => {
       { newSplit: false }
     );
 
-    openInNewSplit?.onClick();
+    openSplit?.onClick();
     expect(mocks.openFolder).toHaveBeenLastCalledWith(
       expect.anything(),
       'folder',

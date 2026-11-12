@@ -1000,12 +1000,15 @@ as core functionality;
 check with `adb shell appops get <package> USE_FULL_SCREEN_INTENT`. Once
 notifications are on, Macro shows a toast while the setting is off; **Allow**
 opens Android's per-app setting, and the toast stays until returning to Macro
-finds access granted; **Hide** stops the prompt on that device. The
+finds access granted; **Dismiss** stops the prompt on that device. The return
+check runs when the page becomes visible again: the Android WebView fires no
+window `focus` when the app comes back from Settings. The
 call notification is public, so the lock screen shows the call and its actions.
-Test both permission states. Microphone access is required to join;
-camera access is requested when enabling video, and Bluetooth access when selecting
-that route on Android 12 or newer. A denied permission does not silently enable
-capture.
+Test both permission states. Microphone access is required to join: a denied
+join shows the **Microphone access is off** toast with **Open Settings**, and a
+denied Answer leaves **Open settings** on the call screen. Camera access is
+requested when enabling video, and Bluetooth access when selecting that route on
+Android 12 or newer. A denied permission does not silently enable capture.
 
 While ringing, the native call activity fills the screen with an opaque themed
 background, caller initials and name (or channel name when unavailable), channel

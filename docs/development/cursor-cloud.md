@@ -38,8 +38,8 @@ walkthrough, frontend restarts, and login troubleshooting.
 - `stack.sh` leaves a healthy backend running. After Rust edits, use `rebuild.sh`:
   it builds Nix binaries and remounts them via `just stack update --binaries-dir`,
   preserving volumes. `cargo build` alone does not update running containers.
-- Do not replace the scripts with `just run_local`, hand-rolled Compose, or
-  `just stack up`. **`stack.sh --fresh` deliberately wipes and recreates the
+- Do not replace the scripts with `just run_local` (it would compile every service
+  instead of using the baked binaries), hand-rolled Compose, or `just stack up`. **`stack.sh --fresh` deliberately wipes and recreates the
   stack**; use it only with explicit approval, never to pick up code edits.
 - Sign in with any email; passwordless login creates the user on demand. The
   auth service is built with `return_passwordless_code`, so the login API returns

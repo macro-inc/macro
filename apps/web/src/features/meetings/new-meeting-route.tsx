@@ -88,6 +88,7 @@ function NewMeetingSetup(props: {
   return (
     <MeetingPage
       source={source}
+      startedAt={() => (record.isSuccess ? record.data.startedAt : undefined)}
       onLeave={props.onLeave}
       onBack={() => navigate('/app')}
       onCallStateChange={(connected) =>

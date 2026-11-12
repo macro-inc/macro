@@ -38,7 +38,7 @@ async fn render_mints_view_access_and_does_not_admit_or_meter_a_model() {
         .render(
             receipt(AccessLevel::View),
             &user(),
-            "macro|ai@macro.com",
+            Some("macro|ai@macro.com"),
             None,
             None,
         )
@@ -62,7 +62,7 @@ async fn invalid_render_crop_never_starts_storage_or_worker_access() {
             .render(
                 receipt(AccessLevel::View),
                 &user(),
-                "macro|ai@macro.com",
+                Some("macro|ai@macro.com"),
                 None,
                 Some(CanvasBounds {
                     x: 0.0,
@@ -166,7 +166,7 @@ async fn read_mints_only_view_access_and_preserves_actor_without_admission_or_us
             .read(
                 receipt(AccessLevel::View),
                 &user(),
-                "macro|ai@macro.com",
+                Some("macro|ai@macro.com"),
                 None,
                 None
             )
@@ -197,18 +197,21 @@ async fn invalid_file_type_and_denied_admission_never_start_worker() {
             Arc::new(Admission(admission)),
             recorder.clone(),
         );
-        assert!(
-            service
-                .edit(
-                    receipt(AccessLevel::Edit),
-                    &user(),
-                    "macro|ai@macro.com",
-                    "Make a flowchart".into(),
-                    None
-                )
-                .await
-                .is_err()
-        );
+        let error = service
+            .edit(
+                receipt(AccessLevel::Edit),
+                &user(),
+                Some("macro|ai@macro.com"),
+                "Make a flowchart".into(),
+                None,
+            )
+            .await
+            .unwrap_err();
+        if file_type == "md" {
+            assert!(matches!(error, CanvasError::Invalid(_)));
+        } else {
+            assert!(matches!(error, CanvasError::Admission(_)));
+        }
         assert!(recorder.0.lock().unwrap().is_empty());
     }
 }
@@ -236,7 +239,7 @@ async fn admitted_edit_mints_edit_access_and_records_actual_worker_usage() {
             .edit(
                 receipt(AccessLevel::Edit),
                 &user(),
-                "macro|ai@macro.com",
+                Some("macro|ai@macro.com"),
                 "Make a flowchart".into(),
                 None
             )
@@ -312,7 +315,7 @@ async fn failed_later_step_still_records_completed_provider_usage() {
         .edit(
             receipt(AccessLevel::Edit),
             &user(),
-            "macro|ai@macro.com",
+            Some("macro|ai@macro.com"),
             "Make a flowchart".into(),
             None,
         )
@@ -356,7 +359,7 @@ async fn direct_batch_has_edit_capability_without_a_second_model_or_admission() 
         .apply(
             receipt(AccessLevel::Edit),
             &user(),
-            "macro|ai@macro.com",
+            Some("macro|ai@macro.com"),
             CanvasRequest::Apply {
                 expected_revision: "a".repeat(64),
                 code: "editor.move(['a'],0,20)".into(),
@@ -379,22 +382,21 @@ async fn invalid_direct_revision_never_reads_storage_or_calls_worker() {
         Arc::new(Admission(Ok(()))),
         Arc::new(Recorder::default()),
     );
-    assert!(
-        service
-            .apply(
-                receipt(AccessLevel::Edit),
-                &user(),
-                "macro|ai@macro.com",
-                CanvasRequest::Apply {
-                    expected_revision: "stale".into(),
-                    code: "editor.move(['a'],0,20)".into(),
-                    snippets: None,
-                    editor_name: None,
-                }
-            )
-            .await
-            .is_err()
-    );
+    let error = service
+        .apply(
+            receipt(AccessLevel::Edit),
+            &user(),
+            Some("macro|ai@macro.com"),
+            CanvasRequest::Apply {
+                expected_revision: "stale".into(),
+                code: "editor.move(['a'],0,20)".into(),
+                snippets: None,
+                editor_name: None,
+            },
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(error, CanvasError::Invalid(_)));
 }
 
 #[tokio::test]
@@ -435,11 +437,160 @@ async fn the_artifacts_rollout_reaches_the_worker_only_when_set() {
             .read(
                 receipt(AccessLevel::View),
                 &user(),
-                "macro|ai@macro.com",
+                Some("macro|ai@macro.com"),
                 None,
                 None,
             )
             .await
             .unwrap();
     }
+}
+
+#[tokio::test]
+async fn a_user_without_a_bot_mints_a_token_with_no_actor() {
+    let mut worker = MockEditingWorkerService::new();
+    worker.expect_canvas().times(1).returning(|_, token, _, _| {
+        let claims: serde_json::Value =
+            macro_sync_service_jwt::decode(token.as_str(), SECRET).unwrap();
+        assert_eq!(claims["user_id"], "macro|canvas@example.com");
+        assert!(claims.get("actor").is_none_or(serde_json::Value::is_null));
+        Box::pin(async {
+            Ok(CanvasResult {
+                failure: None,
+                response: CanvasResponse {
+                    render: None,
+                    canvas: Some("{}".into()),
+                    operations_applied: 0,
+                    summary: "Read".into(),
+                    clarification: None,
+                },
+                usage: vec![],
+            })
+        })
+    });
+    let service = CanvasService::new(
+        Arc::new(documents("canvas")),
+        Arc::new(worker),
+        SECRET.into(),
+        Arc::new(Admission(Err(AiAdmissionError::Unavailable))),
+        Arc::new(Recorder::default()),
+    );
+    service
+        .read(receipt(AccessLevel::View), &user(), None, None, None)
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn worker_conflicts_and_rejections_reach_the_caller_as_their_own_errors() {
+    for (worker_error, conflict) in [
+        (
+            CanvasError::Conflict("Canvas revision changed.".into()),
+            true,
+        ),
+        (
+            CanvasError::Rejected("Item a no longer exists.".into()),
+            false,
+        ),
+    ] {
+        let mut worker = MockEditingWorkerService::new();
+        let worker_error = Mutex::new(Some(worker_error));
+        worker
+            .expect_canvas()
+            .times(1)
+            .returning(move |_, _, _, _| {
+                let error = worker_error.lock().unwrap().take().unwrap();
+                Box::pin(async move { Err(error) })
+            });
+        let service = CanvasService::new(
+            Arc::new(documents("canvas")),
+            Arc::new(worker),
+            SECRET.into(),
+            Arc::new(Admission(Err(AiAdmissionError::Unavailable))),
+            Arc::new(Recorder::default()),
+        );
+        let error = service
+            .apply(
+                receipt(AccessLevel::Edit),
+                &user(),
+                None,
+                CanvasRequest::Apply {
+                    expected_revision: "a".repeat(64),
+                    code: "editor.move(['a'],0,20)".into(),
+                    snippets: None,
+                    editor_name: None,
+                },
+            )
+            .await
+            .unwrap_err();
+        if conflict {
+            assert!(
+                matches!(error, CanvasError::Conflict(message) if message == "Canvas revision changed.")
+            );
+        } else {
+            assert!(
+                matches!(error, CanvasError::Rejected(message) if message == "Item a no longer exists.")
+            );
+        }
+    }
+}
+
+#[derive(Default)]
+struct Images(Mutex<Vec<(String, String, Vec<u8>)>>);
+#[async_trait::async_trait]
+impl CanvasImageStore for Images {
+    async fn save_png(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        name: &str,
+        png: Vec<u8>,
+    ) -> anyhow::Result<StoredCanvasImage> {
+        self.0
+            .lock()
+            .unwrap()
+            .push((owner.to_string(), name.to_owned(), png));
+        Ok(StoredCanvasImage {
+            file_id: "0199d6b2-7c8e-7b0e-9a6f-3c2f4a1b5d6e".into(),
+            url: "https://static.test/file/0199d6b2-7c8e-7b0e-9a6f-3c2f4a1b5d6e".into(),
+        })
+    }
+}
+
+#[tokio::test]
+async fn a_stored_render_keeps_the_png_as_the_callers_file_and_drops_inline_media() {
+    let mut worker = MockEditingWorkerService::new();
+    worker.expect_canvas().times(1).returning(|_, _, _, _| {
+        Box::pin(async { Ok(CanvasResult { failure: None, usage: vec![], response: CanvasResponse {
+            render: Some(serde_json::from_value(serde_json::json!({"revision":"snapshot-1","clock":{},"crop":{"x":0,"y":0,"width":100,"height":80},"width":200,"height":160,"objects":[{"id":"box","bounds":{"x":0,"y":0,"width":10,"height":10}}],"unavailable":[],"modelMedia":[{"type":"image","mediaType":"image/png","data":"iVBORw0KGgo="}]})).unwrap()),
+            canvas: None, operations_applied: 0, summary: "Rendered".into(), clarification: None,
+        } }) })
+    });
+    let service = CanvasService::new(
+        Arc::new(documents("canvas")),
+        Arc::new(worker),
+        SECRET.into(),
+        Arc::new(Admission(Err(AiAdmissionError::Unavailable))),
+        Arc::new(Recorder::default()),
+    );
+    let images = Images::default();
+    let stored = service
+        .render_to_file(
+            receipt(AccessLevel::View),
+            &user(),
+            None,
+            Some(vec!["box".into()]),
+            None,
+            &images,
+        )
+        .await
+        .unwrap();
+    assert_eq!(stored.image.file_id, "0199d6b2-7c8e-7b0e-9a6f-3c2f4a1b5d6e");
+    assert_eq!(stored.render.revision, "snapshot-1");
+    assert!(stored.render.model_media.is_empty());
+    assert_eq!(stored.render.objects[0].id, "box");
+    let saved = images.0.lock().unwrap();
+    assert_eq!(saved.len(), 1);
+    assert_eq!(saved[0].0, "macro|canvas@example.com");
+    assert_eq!(saved[0].1, format!("canvas-{DOCUMENT}.png"));
+    assert_eq!(saved[0].2, b"\x89PNG\r\n\x1a\n");
 }

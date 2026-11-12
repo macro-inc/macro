@@ -115,7 +115,9 @@ sqlx = { workspace = true, optional = true }
 strum = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "time"], optional = true }
+opentelemetry = { workspace = true, features = ["trace"] }
 tracing = { workspace = true }
+tracing-opentelemetry = { workspace = true }
 utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
@@ -128,4 +130,5 @@ crm = { path = "../crm", features = ["outbound"] }
 frecency = { path = "../frecency", features = ["outbound", "postgres"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
 serde_json = { workspace = true }
+opentelemetry_sdk = { workspace = true, features = ["trace", "testing"] }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }

@@ -17,6 +17,7 @@ import { buildSimpleEntityUrl } from '@core/util/url';
 import { Telemetry } from '@macro-inc/observability';
 import type {
   ActionTrigger,
+  RoutineTask,
   RoutineTemplate,
   TemplateVariable,
 } from '@service-scheduled-action/generated/schemas';
@@ -34,7 +35,7 @@ import {
 } from 'solid-js';
 import { StepsOutline } from './components/routine-steps-outline';
 import { TemplateCard } from './components/template-card';
-import { stepsFromTask } from './core/routine-steps';
+import { programSteps } from './core/routine-steps';
 import { describeTrigger } from './core/routine-triggers';
 import type { Activator } from './core/template';
 import {
@@ -62,8 +63,8 @@ function triggerLines(trigger: ActionTrigger): string[] {
  * What a template's routine does: its steps for a routine with steps, else
  * its instructions, read-only.
  */
-function TemplateWork(props: { task: unknown; prompt: string }) {
-  const steps = () => stepsFromTask(props.task);
+function TemplateWork(props: { task: RoutineTask; prompt: string }) {
+  const steps = () => programSteps(props.task);
   return (
     <Show
       when={steps()?.some((step) => step.kind !== 'agent') && steps()}

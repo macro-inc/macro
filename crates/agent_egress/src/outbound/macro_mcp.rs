@@ -241,7 +241,7 @@ pub struct MacroApiTokenSigner {
 /// How long a minted token lives. Short on purpose - the cache re-mints
 /// freely - so a token that leaks out of a response somewhere is stale before
 /// anyone can do much with it.
-const MINTED_TOKEN_LIFETIME_SECONDS: usize = 900;
+pub const MINTED_TOKEN_LIFETIME_SECONDS: usize = 900;
 
 impl MacroApiTokenSigner {
     /// Build the signer over the database holding user rows, the token
@@ -283,6 +283,50 @@ impl MacroApiTokenSigner {
         agent_session_id: Option<uuid::Uuid>,
         agent_correlation_id: Option<uuid::Uuid>,
     ) -> Result<String, EgressError> {
+        let claims = SignedClaims {
+            agent_id,
+            agent_via,
+            agent_session_id,
+            agent_correlation_id,
+            routine_id: None,
+        };
+        self.sign(owner, lifetime_seconds, claims).await
+    }
+
+    /// Mint an owner credential for one run of `routine_id`, signed with that
+    /// routine so the events its writes produce never trigger routines.
+    /// `agent_id` attributes writes to an agent; `None` writes as the owner.
+    #[tracing::instrument(skip_all, err, fields(?agent_id, %routine_id))]
+    pub async fn mint_for_routine(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        lifetime_seconds: usize,
+        agent_id: Option<macro_uuid::Uuid>,
+        routine_id: macro_uuid::Uuid,
+    ) -> Result<String, EgressError> {
+        let claims = SignedClaims {
+            agent_id,
+            agent_via: None,
+            agent_session_id: None,
+            agent_correlation_id: None,
+            routine_id: Some(routine_id),
+        };
+        self.sign(owner, lifetime_seconds, claims).await
+    }
+
+    async fn sign(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        lifetime_seconds: usize,
+        claims: SignedClaims,
+    ) -> Result<String, EgressError> {
+        let SignedClaims {
+            agent_id,
+            agent_via,
+            agent_session_id,
+            agent_correlation_id,
+            routine_id,
+        } = claims;
         if !(1..=MINTED_TOKEN_LIFETIME_SECONDS).contains(&lifetime_seconds) {
             return Err(EgressError::Internal(rootcause::report!(
                 "invalid token lifetime"
@@ -326,6 +370,7 @@ impl MacroApiTokenSigner {
             expiry_seconds: lifetime_seconds,
             agent_id,
             agent_via,
+            routine_id,
         })
         .map_err(|error| {
             EgressError::Internal(rootcause::report!(
@@ -333,6 +378,15 @@ impl MacroApiTokenSigner {
             ))
         })
     }
+}
+
+/// The optional claims a minted token signs besides the owner.
+struct SignedClaims {
+    agent_id: Option<macro_uuid::Uuid>,
+    agent_via: Option<String>,
+    agent_session_id: Option<uuid::Uuid>,
+    agent_correlation_id: Option<uuid::Uuid>,
+    routine_id: Option<macro_uuid::Uuid>,
 }
 
 impl MacroApiTokens for MacroApiTokenSigner {

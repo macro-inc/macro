@@ -1,20 +1,27 @@
+import type { SearchableOptionSourceFactory } from '@app/features/next-soup/soup-view/filters-bar/option-source';
+import { SearchableSourceStatus } from '@app/features/next-soup/soup-view/filters-bar/searchable-multi-select';
+import { t } from '@app/lib/i18n';
 import {
   MobileDrawer,
   scrollToFocusedInput,
 } from '@components/app/mobile/MobileDrawer';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
+import { fireAndForget } from '@core/util/fireAndForget';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import SlidersHorizontalIcon from '@icon/system/regular/sliders-horizontal.svg?component-solid';
 import XIcon from '@icon/system/regular/x.svg';
-import { Accordion } from '@kobalte/core/accordion';
+import { Accordion, useAccordionContext } from '@kobalte/core/accordion';
 import { createElementSize } from '@solid-primitives/resize-observer';
-import { Button, cn } from '@ui';
+import { Button, cn, inputClasses } from '@ui';
 import {
   type Accessor,
   children,
   createContext,
+  createEffect,
+  createMemo,
   createSignal,
+  For,
   type JSX,
   Show,
   useContext,
@@ -227,6 +234,7 @@ function Option(props: {
   children: JSX.Element;
   icon?: JSX.Element;
   checked: boolean;
+  disabled?: boolean;
   onChange: (checked: boolean) => void;
   selectionMode?: 'single' | 'multiple';
   class?: string;
@@ -241,6 +249,7 @@ function Option(props: {
       data-checked-checkbox={
         props.selectionMode !== 'single' && props.checked ? '' : undefined
       }
+      disabled={props.disabled}
       class={cn(
         '[&[data-checked-checkbox]:has(+[data-checked-checkbox])]:rounded-b-none [&[data-checked-checkbox]+[data-checked-checkbox]]:rounded-t-none',
         props.class
@@ -249,7 +258,10 @@ function Option(props: {
     >
       <Show when={props.icon}>
         {(icon) => (
-          <span class="flex size-5 shrink-0 items-center justify-center text-ink-muted [&>svg]:size-5">
+          <span
+            aria-hidden="true"
+            class="flex size-5 shrink-0 items-center justify-center text-ink-muted [&>svg]:size-5"
+          >
             {icon()}
           </span>
         )}
@@ -264,4 +276,82 @@ function Option(props: {
   );
 }
 
-export const MobileFilterDrawer = Object.assign(Root, { Section, Option });
+function SourceOptions<TId extends string>(props: {
+  groupId: string;
+  createSource: SearchableOptionSourceFactory<TId>;
+  activeIds: Accessor<readonly TId[]>;
+  enabled: Accessor<boolean>;
+  placeholder?: string;
+  onChange: (id: TId, checked: boolean) => void;
+}) {
+  const accordion = useAccordionContext();
+  const source = props.createSource(
+    props.activeIds,
+    () =>
+      props.enabled() &&
+      accordion.listState().selectionManager().isSelected(props.groupId)
+  );
+  let input: HTMLInputElement | undefined;
+  const committedWindow = createMemo(source.windowKey);
+  createEffect(() => {
+    if (committedWindow() !== undefined)
+      input?.scrollIntoView({ block: 'nearest' });
+  });
+  const visible = createMemo(() => {
+    const ids = new Set(source.visibleIds());
+    return source.options().filter((option) => ids.has(option.id));
+  });
+  return (
+    <>
+      <div class="px-3 py-2">
+        <input
+          ref={input}
+          class={inputClasses({ class: 'w-full' })}
+          value={source.search()}
+          placeholder={props.placeholder}
+          aria-label={props.placeholder}
+          onInput={(event) => source.setSearch(event.currentTarget.value)}
+        />
+      </div>
+      <SearchableSourceStatus source={source} />
+      <For each={visible()}>
+        {(option) => (
+          <Option
+            checked={props.activeIds().includes(option.id)}
+            disabled={option.disabled}
+            onChange={(checked) => props.onChange(option.id, checked)}
+            icon={option.icon?.()}
+          >
+            {option.content?.() ?? option.label}
+          </Option>
+        )}
+      </For>
+      <Show
+        when={source.error()}
+        fallback={
+          <Show when={source.hasNext()}>
+            <MobileDrawer.Item
+              disabled={source.loading()}
+              onClick={source.next}
+            >
+              {t('viewMenus.nextOptions')}
+            </MobileDrawer.Item>
+          </Show>
+        }
+      >
+        <MobileDrawer.Item
+          disabled={source.loading()}
+          onClick={() => fireAndForget(source.retry(), 'filter-options')}
+        >
+          {t('viewMenus.retryOptions')}
+        </MobileDrawer.Item>
+      </Show>
+    </>
+  );
+}
+
+export const MobileFilterDrawer = Object.assign(Root, {
+  Section,
+  Option,
+  SourceOptions,
+});

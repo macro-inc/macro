@@ -38,6 +38,7 @@ jobs:
             - 'crates/database_sql/**'
             - 'crates/filter_ast/**'
             - 'crates/item_filters/**'
+            - 'crates/natural_time/**'
             - 'static_assets/schema.graphql'
             - 'Cargo.toml'
             - 'Cargo.lock'
@@ -46,6 +47,7 @@ jobs:
             - 'packages/sdk/**'
             - 'packages/sdk-docs/**'
             - 'services/ai-editing-worker/**'
+            - 'services/mcp-chatgpt-worker/**'
             - 'packages/code-mode-sdk/**'
             - 'crates/agent_code_mode/SKILL.md'
             - '.github/actions/setup-reqs-web/**'
@@ -63,6 +65,7 @@ jobs:
             - 'crates/database_sql/**'
             - 'crates/filter_ast/**'
             - 'crates/item_filters/**'
+            - 'crates/natural_time/**'
             - 'static_assets/schema.graphql'
             - 'Cargo.toml'
             - 'Cargo.lock'
@@ -367,6 +370,8 @@ jobs:
         check 'Check SDK Documentation' 'packages/sdk-docs' 'bun run type-check && bun run test'
         check 'Check Editing Worker' 'services/ai-editing-worker' 'bun run type-check'
         check 'Check Code Mode SDK' 'packages/code-mode-sdk' 'bun run type-check && bun run test'
+        check 'Check SDK MCP Tools' 'packages/sdk-mcp' 'bun run type-check && bun run test'
+        check 'Check MCP ChatGPT Worker' 'services/mcp-chatgpt-worker' 'bun run type-check && bun run test'
         failed=0
         for index in "${!names[@]}"; do
           status=0
@@ -531,17 +536,6 @@ jobs:
           git diff -- packages/sdk | head -200
           exit 1
         fi
-    - name: Regenerate MCP tool pages
-      run: bun run generate:tools
-      working-directory: apps/docs
-    - name: Verify docs tool reference is fresh
-      run: |
-        if [ -n "$(git status --porcelain -- apps/docs)" ]; then
-          echo "apps/docs tool reference is stale. Run 'bun run generate:tools' in apps/docs and commit the result."
-          git status --porcelain -- apps/docs
-          git diff -- apps/docs | head -200
-          exit 1
-        fi
     - name: Check Specta Types
       run: |
         just gen-agent-fold-types
@@ -666,6 +660,12 @@ jobs:
         fi
     - name: Build agent-fold WASM for tests
       run: just build-agent-fold-wasm
+      env:
+        WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
+      timeout-minutes: 15
+      working-directory: apps/web
+    - name: Build natural-time WASM for tests
+      run: just build-natural-time-wasm
       env:
         WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
       timeout-minutes: 15

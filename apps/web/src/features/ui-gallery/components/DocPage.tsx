@@ -109,7 +109,13 @@ export function DocPage(props: { entry: DocEntry; showCode: boolean }) {
   };
 
   return (
-    <article class="flex flex-col gap-10 max-w-3xl mx-auto">
+    <article
+      class="flex flex-col gap-10 mx-auto"
+      classList={{
+        'max-w-3xl': !props.entry.doc.wide,
+        'max-w-5xl': props.entry.doc.wide,
+      }}
+    >
       <header class="flex flex-col gap-3">
         <div class="flex items-center gap-2">
           <h1 class="text-2xl font-semibold text-ink">

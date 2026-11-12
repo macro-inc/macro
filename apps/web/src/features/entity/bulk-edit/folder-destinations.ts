@@ -58,14 +58,17 @@ export const indexFolders = (
   new Map(folders.map((folder) => [folder.id, folder]));
 
 /**
- * The entities a move into the folder would change. Empty when there is
- * nothing to do, or when a folder would land inside itself.
+ * The entities a move into the folder (null: Drive's root) would change.
+ * Empty when there is nothing to do, or when a folder would land inside itself.
  */
 export function entitiesToMove<TEntity extends EntityData>(
   entities: readonly TEntity[],
-  folderId: string,
+  folderId: string | null,
   folders: ReadonlyMap<string, FolderRow>
 ): TEntity[] {
+  if (folderId === null) {
+    return entities.filter((entity) => getEntityProjectId(entity) !== false);
+  }
   const ancestors = new Set(
     folderAncestry(folders, folderId).map((folder) => folder.id)
   ).add(folderId);

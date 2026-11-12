@@ -1,11 +1,13 @@
 import path from 'node:path';
 import { chromium, expect } from '@playwright/test';
-import { verifyCrmMotion } from './verifyCrmMotion';
 import { verifyDemo } from './verifyDemo';
 import { verifyProductPages } from './verifyProductPages';
 
 /** Verify the prerendered homepage keeps its first paint while becoming interactive. */
-export async function verifyHomepage(directory: string): Promise<void> {
+export async function verifyHomepage(
+  directory: string,
+  browserType: typeof chromium = chromium
+): Promise<void> {
   const server = Bun.serve({
     hostname: '127.0.0.1',
     port: 0,
@@ -26,15 +28,15 @@ export async function verifyHomepage(directory: string): Promise<void> {
   });
   let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
   try {
-    browser = await chromium.launch();
+    browser = await browserType.launch();
     const origin = `http://127.0.0.1:${server.port}`;
-    await verifyDemo(browser, origin);
-    // Light mode renders the cream palette (src/features/setup/sitePalette.ts).
+    if (browserType === chromium) await verifyDemo(browser, origin);
+    // Verify both neutral homepage palettes before and after hydration.
     for (const [viewport, colorScheme] of [
       [{ width: 1440, height: 1000 }, 'dark'],
       [{ width: 390, height: 844 }, 'light'],
     ] as const) {
-      const label = `${viewport.width}×${viewport.height} ${colorScheme}`;
+      const label = `${browserType.name()} ${viewport.width}×${viewport.height} ${colorScheme}`;
       const page = await browser.newPage({
         viewport,
         colorScheme,
@@ -42,6 +44,7 @@ export async function verifyHomepage(directory: string): Promise<void> {
         hasTouch: viewport.width < 768,
         reducedMotion: 'reduce',
       });
+      page.setDefaultTimeout(15000);
       let releaseScripts!: () => void;
       const scriptsReady = new Promise<void>((resolve) => {
         releaseScripts = resolve;
@@ -59,14 +62,25 @@ export async function verifyHomepage(directory: string): Promise<void> {
       const errors: string[] = [];
       page.on('pageerror', (error) => errors.push(error.message));
       page.on('console', (message) => {
-        if (/hydration mismatch/i.test(message.text()))
+        if (
+          /hydration mismatch|Unable to initialize the public website/i.test(
+            message.text()
+          )
+        )
           errors.push(message.text());
       });
       try {
         await page.goto(origin, { waitUntil: 'commit' });
         const headingLocator = page.locator('[data-welcome-heading]');
         await headingLocator.waitFor({ state: 'visible' });
-        await page.evaluate(() => document.fonts.ready);
+        // WebKit's fonts.ready can wait for the load event, which our held
+        // module scripts deliberately prevent. Load the first-paint fonts directly.
+        await page.evaluate(() =>
+          Promise.all([
+            document.fonts.load('32px "Roboto Slab Variable"'),
+            document.fonts.load('16px "Inter Variable"'),
+          ])
+        );
         const heading = await headingLocator.elementHandle();
         if (!heading) throw new Error(`Homepage has no SSR heading (${label})`);
         const before = await heading.boundingBox();
@@ -79,11 +93,25 @@ export async function verifyHomepage(directory: string): Promise<void> {
             `Homepage SSR root height is ${rootHeight}, expected viewport height ${viewport.height} (${label})`
           );
 
-        // The SSR fallback is desktop, but CSS must hide it on phones before
-        // hydration replaces it with the mobile story. Otherwise it flashes in.
-        const desktopDemo = page.locator('.homepage-embedded-demo');
-        if (viewport.width < 800) await expect(desktopDemo).toBeHidden();
-        else await expect(desktopDemo).toBeVisible();
+        await expect(page.locator('.homepage-feature')).toHaveCount(5);
+        await expect(page.locator('#app-scroll-root')).toHaveCSS(
+          'background-color',
+          'rgb(0, 0, 0)'
+        );
+
+        // Lower sections are prerendered too: their lazy chunk's CSS must be
+        // available before scripts run, or the GitHub SVG fills the page.
+        const githubMark = page.locator('.homepage-github-mark');
+        await expect(githubMark).toHaveCSS(
+          'background-color',
+          'rgb(30, 30, 30)'
+        );
+        const markBounds = await githubMark.boundingBox();
+        const iconBounds = await githubMark.locator('svg').boundingBox();
+        expect(markBounds?.width).toBeGreaterThan(100);
+        expect(markBounds?.width).toBeLessThanOrEqual(152);
+        expect(iconBounds?.width).toBeGreaterThan(50);
+        expect(iconBounds?.width).toBeLessThanOrEqual(76);
 
         releaseScripts();
         await page.waitForLoadState('load');
@@ -98,59 +126,68 @@ export async function verifyHomepage(directory: string): Promise<void> {
             timeout: 10000,
           }
         );
-        if (viewport.width < 800) {
-          await expect(desktopDemo).toHaveCount(0);
-          await expect(page.locator('.homepage-mobile-story')).toBeVisible();
-          const featureGap = await page
-            .locator('#coding-agents .homepage-feature-title')
-            .evaluate((heading) => {
-              const links = document.querySelector(
-                '#documents .homepage-feature-more-group'
-              );
-              if (!links) throw new Error('Missing document feature links');
-              return (
-                heading.getBoundingClientRect().top -
-                links.getBoundingClientRect().bottom
-              );
-            });
-          expect(featureGap).toBeGreaterThanOrEqual(32);
-          expect(featureGap).toBeLessThanOrEqual(56);
-        } else await expect(desktopDemo).toBeVisible();
         await page.evaluate(async () => {
           await document.fonts.ready;
           await new Promise<void>((resolve) =>
             requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
           );
         });
-        if (!(await heading.evaluate((element) => element.isConnected)))
-          throw new Error(
-            `Homepage replaced its first-painted heading during hydration (${label})`
-          );
-        if ((await heading.textContent()) !== initialText)
-          throw new Error(
-            `Homepage changed heading text during hydration (${label})`
-          );
-        const after = await heading.boundingBox();
-        if (
-          !before ||
-          !after ||
-          (['x', 'y', 'width', 'height'] as const).some(
-            (key) => Math.abs(before[key] - after[key]) > 1
+        if (viewport.width >= 700) {
+          if (!(await heading.evaluate((element) => element.isConnected)))
+            throw new Error(
+              `Homepage replaced its first-painted heading during hydration (${label})`
+            );
+          if ((await heading.textContent()) !== initialText)
+            throw new Error(
+              `Homepage changed heading text during hydration (${label})`
+            );
+          const after = await heading.boundingBox();
+          if (
+            !before ||
+            !after ||
+            (['x', 'y', 'width', 'height'] as const).some(
+              (key) => Math.abs(before[key] - after[key]) > 1
+            )
           )
-        )
-          throw new Error(
-            `Homepage heading moved during hydration (${label}): ${JSON.stringify({ before, after })}`
+            throw new Error(
+              `Homepage heading moved during hydration (${label}): ${JSON.stringify({ before, after })}`
+            );
+        } else {
+          // Mobile replaces the desktop SSR fallback with its landing composition.
+          await expect(page.locator('.ob-welcome')).toHaveCSS(
+            'display',
+            'flex'
           );
+          await expect(page.locator('[data-onboarding-hero]')).toHaveCSS(
+            'display',
+            'flex'
+          );
+          await expect(page.locator('.ob-welcome-logo')).toHaveCSS(
+            'width',
+            '96px'
+          );
+          await expect(page.locator('.ob-welcome-logo svg')).toHaveCSS(
+            'width',
+            '48px'
+          );
+          await expect(page.locator('.ob-welcome h1')).toHaveCSS(
+            'font-family',
+            /Roboto Slab Variable/
+          );
+          await expect(
+            page.locator('.ob-welcome [data-welcome-heading]')
+          ).toBeVisible();
+          await expect(
+            page.locator('.ob-welcome [data-welcome-heading]')
+          ).toHaveText(/The unified workspace\s*for your company\./);
+          await expect(page.locator('.homepage-hero-cta')).toBeVisible();
+        }
         await heading.dispose();
 
-        if (viewport.width >= 768)
-          await page
-            .getByRole('link', { name: 'Macro home', exact: true })
-            .hover();
-        else
+        if (viewport.width < 768)
           await page
             .getByRole('button', { name: 'Open navigation', exact: true })
-            .tap();
+            .click();
         await page
           .getByRole('navigation', { name: 'Main navigation' })
           .waitFor({ state: 'visible' });
@@ -159,107 +196,57 @@ export async function verifyHomepage(directory: string): Promise<void> {
           await page
             .getByRole('button', { name: 'Close navigation', exact: true })
             .tap();
-        if (viewport.width >= 800) {
-          await page.locator('#interactive-demo').scrollIntoViewIfNeeded();
-          await page
-            .getByRole('button', {
-              name: /^Interact with Macro sample workspace/,
-            })
-            .click();
-          const workspace = page.frameLocator(
-            'iframe[title="Embedded Macro sample workspace"]'
-          );
-          // Prerendered buttons can paint before they have handlers. Also wait
-          // for iframe load, whose carousel listener selects the initial view.
-          await expect(page.locator('.homepage-embedded-loading')).toHaveCount(
-            0
-          );
-          await workspace.locator('.dummy-route:not([data-hk])').waitFor();
-          const chat = workspace
-            .getByRole('navigation', { name: 'Workspace navigation' })
-            .getByRole('button', { name: 'Chat', exact: true });
-          await chat.click();
-          await expect(chat).toHaveAttribute('aria-current', 'page');
-          await expect(
-            workspace.getByRole('complementary', { name: 'Chat navigation' })
-          ).toBeVisible();
-          await page
-            .getByRole('button', { name: 'Show Docs highlight', exact: true })
-            .click();
-          await expect(
-            workspace
-              .getByRole('navigation', { name: 'Workspace navigation' })
-              .getByRole('button', { name: 'Drive', exact: true })
-          ).toHaveAttribute('aria-current', 'page');
-        }
         await page.locator('#email').scrollIntoViewIfNeeded();
-        await page
-          .locator('[data-email-demo-body]')
-          .waitFor({ state: 'visible' });
-        const entry = page.getByRole('button', {
-          name: /^Interact with Email and chat/,
+        // Native previews stay dark across live system theme changes.
+        await page.emulateMedia({ reducedMotion: 'reduce' });
+        const previewBody = page
+          .locator('#email .homepage-email-body p')
+          .first();
+        await expect(previewBody).toHaveCSS('opacity', '1');
+        await expect(previewBody).toHaveText(/\S+/);
+        await expect(previewBody).toHaveCSS('color', 'rgb(255, 255, 255)');
+        await page.emulateMedia({
+          colorScheme: colorScheme === 'light' ? 'dark' : 'light',
         });
-        if (viewport.width < 768) await entry.tap();
-        else await entry.click();
-        await expect(
-          page.getByRole('textbox', { name: 'Email body', exact: true })
-        ).toBeEditable();
-        if (colorScheme === 'light') {
-          await page.locator('#documents').scrollIntoViewIfNeeded();
-          await page.locator('#documents .mds-chip-person').first().waitFor();
-          await page.locator('#coding-agents').scrollIntoViewIfNeeded();
-          await page
-            .locator('#coding-agents .homepage-person-mention')
-            .waitFor();
-          for (const selector of [
-            '#email .demo-inline-mention.mention-person',
-            '#documents .mds-chip-person',
-            '#coding-agents .homepage-person-mention',
-          ]) {
-            const tint = await page
-              .locator(selector)
-              .first()
-              .evaluate((node) => {
-                const canvas = document.createElement('canvas');
-                canvas.width = canvas.height = 1;
-                const context = canvas.getContext('2d');
-                if (!context) throw new Error('Missing color test context');
-                context.fillStyle = '#fff';
-                context.fillRect(0, 0, 1, 1);
-                context.fillStyle = getComputedStyle(node).backgroundColor;
-                context.fillRect(0, 0, 1, 1);
-                const [red, , blue] = context.getImageData(0, 0, 1, 1).data;
-                return blue - red;
-              });
-            // The old neutral accent produced grey chips in the cream palette.
-            expect(
-              tint,
-              `${selector} needs a visible blue tint`
-            ).toBeGreaterThan(10);
-          }
+        await expect(previewBody).toHaveCSS('color', 'rgb(255, 255, 255)');
+        await page.emulateMedia({ colorScheme });
+        const overflow = await page
+          .locator('[data-onboarding-scroll]')
+          .evaluate((scroller) => scroller.scrollWidth > scroller.clientWidth);
+        expect(overflow).toBe(false);
+        if (viewport.width >= 700) {
+          const graphic = await page
+            .locator('.homepage-feature-links .feature-flow')
+            .boundingBox();
+          expect(graphic).not.toBeNull();
+          expect(graphic!.x).toBeGreaterThanOrEqual(0);
+          expect(graphic!.x + graphic!.width).toBeLessThanOrEqual(
+            viewport.width
+          );
         }
-        await page.locator('#documents').scrollIntoViewIfNeeded();
-        const comment = page.getByRole('img', {
-          name: '1 comment on the launch date: Please check the date against Valentina’s email.',
-        });
-        await expect(comment).toBeVisible();
-        await expect(
-          page.locator('#documents .mds-line.h2 .mds-mark')
-        ).toHaveCount(0);
+        await page
+          .locator('#email')
+          .getByRole('link', { name: 'Learn about email', exact: true })
+          .click();
+        await expect(page).toHaveURL(`${origin}/email`);
+        await page.goBack();
+        await page.locator('.homepage-hero-cta').click();
+        await expect(page).toHaveURL(
+          `${origin}${viewport.width < 640 ? '/mobile-signup' : '/app/signup'}`
+        );
         if (errors.length)
           throw new Error(
             `Homepage demo failed (${label}): ${errors.join('; ')}`
           );
         console.log(
-          `[prerender] Homepage ${label}: SSR heading identity and layout, hydration, navigation, sample workspace, and email demo verified`
+          `[prerender] Homepage ${label}: SSR content, responsive hydration, navigation, feature links, animation, and signup routing verified`
         );
       } finally {
         releaseScripts();
         await page.close();
       }
     }
-    await verifyCrmMotion(browser, origin);
-    await verifyProductPages(browser, origin);
+    if (browserType === chromium) await verifyProductPages(browser, origin);
   } finally {
     await browser?.close();
     server.stop(true);

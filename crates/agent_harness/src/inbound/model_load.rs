@@ -185,7 +185,7 @@ where
         (status = 400, description = "Invalid target"),
         (status = 401, description = "Unauthenticated"),
         (status = 403, description = "Harness is not visible to caller"),
-        (status = 409, description = "Macrod runtime or Cursor account is not connected"),
+        (status = 409, description = "Macrod machine or Cursor account is not connected"),
         (status = 504, description = "Macrod probe timed out"),
         (status = 502, description = "Provider probe failed"),
     )

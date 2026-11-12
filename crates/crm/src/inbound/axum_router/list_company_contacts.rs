@@ -32,6 +32,10 @@ pub struct CrmContactResponse {
     /// The contact's email address; absent for contacts added by name
     /// alone.
     pub email: Option<String>,
+    /// Whether the address uses a known personal provider and permits company edits.
+    /// Older servers omit this classification; clients must then keep it read-only.
+    #[schema(required = false)]
+    pub personal_email: bool,
     /// Display name observed for the contact, if any.
     pub name: Option<String>,
     /// Whether the contact is hidden from CRM listings for the
@@ -54,6 +58,7 @@ impl From<CrmContact> for CrmContactResponse {
         Self {
             id: c.id,
             company_id: c.company_id,
+            personal_email: c.has_personal_email(),
             email: c.email,
             name: c.name,
             hidden: c.hidden,

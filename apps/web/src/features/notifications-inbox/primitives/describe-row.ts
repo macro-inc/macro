@@ -150,7 +150,12 @@ function describeNotification(
       subject: metadata.content.taskName ?? entityName,
     }))
     .with({ tag: 'entity_access_requested' }, (metadata) => ({
-      action: join(actor, `requested ${metadata.content.accessLevel} access`),
+      action: join(
+        actor,
+        latest.entity_type === 'harness'
+          ? 'requested to use'
+          : `requested ${metadata.content.accessLevel} access`
+      ),
       subject: metadata.content.entityName || entityName,
     }))
     .with({ tag: 'entity_access_granted' }, (metadata) => ({
@@ -412,6 +417,7 @@ export function describeInboxCard(
       'calendar_join_request',
       'access_requested',
       'access_granted',
+      'access_removed',
       () => ({ who: single.action, what: single.subject })
     )
     .with('other', () => ({ who: single.action, body: single.subject }))
@@ -447,7 +453,12 @@ export function inboxCardKind(row: NotificationInboxRow): InboxCardKind {
     .with('task', () => 'task')
     .with('pull_request', () => 'pull_request')
     .with('calendar_event', 'calendar_join_request', () => 'event')
-    .with('access_requested', 'access_granted', () => 'access')
+    .with(
+      'access_requested',
+      'access_granted',
+      'access_removed',
+      () => 'access'
+    )
     .with('other', () =>
       metadata?.tag === 'invite_to_team' ? 'invite' : 'other'
     )

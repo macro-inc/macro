@@ -53,6 +53,11 @@ import { type EntityData, getEntityProjectId } from '../types/entity';
 import { BulkDeleteFailure } from './bulk-delete-result';
 
 function invalidateDeletedDssItems(entities: EntityData[]): void {
+  // A deleted folder's databases and forms return to the root on the server.
+  if (entities.some((e) => e.type === 'project')) {
+    queryClient.invalidateQueries({ queryKey: databasesKeys.list.queryKey });
+    queryClient.invalidateQueries({ queryKey: formsKeys.list.queryKey });
+  }
   if (entities.some((e) => e.type === 'channel')) {
     queryClient.invalidateQueries({ queryKey: channelKeys._def });
   }

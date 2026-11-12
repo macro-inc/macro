@@ -1,0 +1,33 @@
+.paper-email-task-flow {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  width: 100%;
+  height: 544px;
+  padding: 40px;
+  color: var(--color-ui-content-primary);
+  font: 370 16px/1.5 var(--font-sans);
+}
+.paper-email-task-flow svg { width: 22px; height: 22px; flex: none; }
+.paper-email-task-flow strong { font-weight: 500; }
+.paper-email-task-source { display: flex; align-items: center; gap: 14px; padding: 0 24px; }
+.paper-email-task-source strong { display: block; font-size: 20px; }
+.paper-email-task-caption { color: var(--color-ui-content-tertiary); font-size: 12px; }
+.paper-email-task-connector { display: flex; align-items: center; gap: 10px; padding: 28px 24px; color: var(--color-ui-content-secondary); font-size: 13px; }
+.paper-email-task-flow .paper-email-task-card {
+  padding: 26px;
+  border-radius: 24px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--color-ink) 9%, transparent), color-mix(in srgb, var(--color-ink) 3%, transparent));
+  border: 1px solid color-mix(in srgb, var(--color-ink) 9%, transparent);
+  box-shadow: inset 0 1px color-mix(in srgb, var(--color-ink) 7%, transparent);
+  backdrop-filter: blur(16px);
+}
+.paper-email-task-title { display: flex; align-items: center; gap: 12px; font-size: 20px; }
+.paper-email-task-details { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 26px 34px; color: var(--color-ui-content-secondary); font-size: 12px; }
+.paper-email-task-details span { padding: 3px 10px; border-radius: 999px; background: color-mix(in srgb, var(--color-ink) 6%, transparent); }
+.paper-email-task-link { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-top: 18px; border-top: 1px solid color-mix(in srgb, var(--color-ink) 9%, transparent); font-size: 14px; }
+.paper-email-task-link svg { width: 16px; height: 16px; }
+.paper-email-task-link .paper-email-task-caption { margin-left: auto; }
+.paper-feature-art[data-compact=true] .paper-email-task-flow { padding: 16px; }
+.paper-feature-art[data-compact=true] .paper-email-task-card { padding: 20px; }
+.paper-feature-art[data-compact=true] .paper-email-task-title { font-size: 17px; }

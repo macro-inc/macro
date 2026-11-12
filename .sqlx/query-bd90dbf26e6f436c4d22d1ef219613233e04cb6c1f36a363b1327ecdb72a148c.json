@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH matching_messages AS (\n    SELECT m.id, m.thread_id, m.is_sent, COALESCE(m.internal_date_ts, m.created_at) AS occurred_at\n    FROM email_messages m\n    JOIN email_message_recipients r ON r.message_id = m.id\n    JOIN email_contacts ec ON ec.id = r.contact_id\n    WHERE m.link_id = $2 AND ec.link_id = $2 AND m.is_sent AND NOT m.is_draft AND lower(ec.email_address) = $3\n    UNION\n    SELECT m.id, m.thread_id, m.is_sent, COALESCE(m.internal_date_ts, m.created_at)\n    FROM email_messages m\n    JOIN email_contacts ec ON ec.id = m.from_contact_id\n    WHERE m.link_id = $2 AND ec.link_id = $2 AND NOT m.is_sent AND NOT m.is_draft AND lower(ec.email_address) = $3\n), thread_interactions AS MATERIALIZED (\n    -- Evaluate whole-thread privacy once per conversation, not per message.\n    SELECT thread_id,\n           min(occurred_at) FILTER (WHERE is_sent) AS first_sent_at,\n           min(occurred_at) AS first_at,\n           max(occurred_at) AS last_at,\n           bool_or(is_sent) AS is_sent\n    FROM matching_messages\n    GROUP BY thread_id\n)\nSELECT COALESCE(min(first_sent_at), min(first_at)) AS first_at,\n       max(last_at) AS last_at, bool_or(is_sent) AS is_sent\nFROM thread_interactions\nWHERE crm_email_thread_allowed($1, thread_id)\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "first_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 1,
+        "name": "last_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "is_sent",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "bd90dbf26e6f436c4d22d1ef219613233e04cb6c1f36a363b1327ecdb72a148c"
+}

@@ -262,6 +262,12 @@ impl IntoResponse for CreateTeamError {
                     message: "invalid team name".into(),
                 }),
             ),
+            CreateTeamError::AlreadyOnTeam => (
+                StatusCode::CONFLICT,
+                Json(ErrorResponse {
+                    message: "you are already on a team; leave it before creating a new one".into(),
+                }),
+            ),
             CreateTeamError::StorageLayerError(_) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {

@@ -61,7 +61,8 @@ impl OutlookApiClientRepository {
     }
     /// Build a public-cloud Graph adapter with redirects and automatic retries disabled.
     pub fn new() -> Result<Self, EmailApiError> {
-        let root = Url::parse(GRAPH_ROOT).map_err(|_| transport::invalid_response())?;
+        let root = Url::parse(GRAPH_ROOT)
+            .map_err(|_| transport::invalid_response("Graph root is not a URL"))?;
         Self::with_root(root)
     }
 

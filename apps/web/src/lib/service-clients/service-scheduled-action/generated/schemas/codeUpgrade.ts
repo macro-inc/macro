@@ -6,9 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CodeUpgradeFromSdk } from './codeUpgradeFromSdk';
-import type { CodeUpgradePreviousTask } from './codeUpgradePreviousTask';
 import type { CodeUpgradeReason } from './codeUpgradeReason';
 import type { CodeUpgradeTask } from './codeUpgradeTask';
+import type { RoutineTask } from './routineTask';
 import type { UpgradeOutcome } from './upgradeOutcome';
 
 /**
@@ -21,10 +21,9 @@ export interface CodeUpgrade {
   id: string;
   outcome: UpgradeOutcome;
   /** The task before. */
-  previousTask: CodeUpgradePreviousTask;
+  previousTask: RoutineTask;
   /** Why the routine needs its owner. */
   reason?: CodeUpgradeReason;
-  /** The saved rewrite, or the rewrite that failed its checks. */
   task?: CodeUpgradeTask;
   /** The SDK it was brought to. */
   toSdk: string;

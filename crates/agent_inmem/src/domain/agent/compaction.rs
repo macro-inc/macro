@@ -585,6 +585,7 @@ async fn complete(
         session_id: state.session_id,
         awaiting: Arc::new(AwaitingUser::default()),
         owner: state.owner.clone(),
+        feature: state.feature,
         model: SUMMARY_MODEL.to_owned(),
         reasoning_effort: ReasoningEffort::default(),
         speed: ModelSpeed::Standard,

@@ -12,6 +12,9 @@ let observedOrchestrator:
   | ReturnType<typeof useGlobalBlockOrchestrator>
   | undefined;
 
+vi.mock('@app/features/agent-navigation/views/agent-navigation', () => ({
+  AgentNavigationProvider: (props: { children: unknown }) => props.children,
+}));
 vi.mock('@app/features/meetings/incoming-meeting-invitations', () => ({
   IncomingMeetingInvitationsProvider: (props: { children: unknown }) =>
     props.children,

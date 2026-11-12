@@ -718,15 +718,17 @@ async fn contact_pipelines_and_lifecycle_preserve_crm_records(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn disabled_crm_cannot_create_pipeline_storage(pool: PgPool) {
+async fn pipeline_storage_is_available_without_email_consent(pool: PgPool) {
     let (s, _, _, team, _) = fixture(&pool).await;
-    sqlx::query!(
-        r#"UPDATE team_crm_settings SET crm_enabled=false WHERE team_id=$1"#,
-        team
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+    assert!(
+        !sqlx::query_scalar!(
+            "SELECT crm_enabled FROM team_crm_settings WHERE team_id=$1",
+            team
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap()
+    );
     let result = s
         .create(
             team_receipt(team, OWNER),
@@ -737,15 +739,12 @@ async fn disabled_crm_cannot_create_pipeline_storage(pool: PgPool) {
             },
         )
         .await;
-    assert!(matches!(
-        result,
-        Err(PipelineError::Crm(CrmError::CrmDisabledForTeam))
-    ));
+    assert!(result.is_ok());
     let count: i64 = sqlx::query_scalar!(r#"SELECT count(*) AS "count!" FROM databases"#)
         .fetch_one(&pool)
         .await
         .unwrap();
-    assert_eq!(count, 0);
+    assert_eq!(count, 1);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

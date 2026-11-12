@@ -80,6 +80,8 @@ export function createThreadCompletionAdapter(
       const showToast = () => {
         if (params.silent) return;
         toastId = toast.success(message, {
+          dismissStyle: 'icon',
+          actionLayout: 'inline',
           actions: [
             {
               label: 'Undo',

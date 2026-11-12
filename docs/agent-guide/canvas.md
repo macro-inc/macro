@@ -1,5 +1,7 @@
 # Canvas
 
+An editable canvas with nothing on it shows the Canvas `TutorialPill` (from `features/video-tutorials`) in the middle of the board, once that video is in its catalog. It goes away when the first item is added or a drawing tool is picked, and read-only and embedded canvases never show it.
+
 ## Canvas colors
 
 To check the default canvas color, create a rectangle and a text box without

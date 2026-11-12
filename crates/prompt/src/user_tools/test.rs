@@ -14,3 +14,12 @@ fn code_mode_thread_prompts_send_email_through_the_confirmed_sdk_method() {
     assert!(!instructions.contains("SendConfirmedEmail"));
     assert!(!instructions.contains("CreateConfirmedCalendarEvent"));
 }
+
+#[test]
+fn code_mode_reviews_skip_the_offer_when_the_user_held_the_send() {
+    let instructions = crate::CODE_MODE_SESSION_TOOL_USE_PROMPT.to_string();
+    assert!(instructions.contains("\"Should I kick it off?\""));
+    assert!(instructions.contains(
+        "If they said not to send, create or import it yet, do not ask; say it is waiting on the card for them."
+    ));
+}

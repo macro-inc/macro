@@ -23,6 +23,7 @@ import type {
   SavedViewsSource,
 } from '../context/saved-views-source';
 import type { SavedView } from '../core/saved-view';
+import { refreshOnSavedViewChanges } from './saved-view-changes';
 
 export function toSavedView(view: SavedViewFieldsFragment): SavedView {
   return {
@@ -35,11 +36,16 @@ export function toSavedView(view: SavedViewFieldsFragment): SavedView {
   };
 }
 
-/** Revalidate server-side access when returning to a view or changing accounts. */
+/**
+ * Revalidate server-side access when returning to a view or changing accounts,
+ * and re-read when views of `kind` (any kind when omitted) change elsewhere.
+ */
 function revalidateSavedViewQuery(
   viewerId: Accessor<string | undefined>,
-  refresh: () => Promise<unknown>
+  refresh: () => Promise<unknown>,
+  kind?: string
 ) {
+  refreshOnSavedViewChanges(kind, refresh);
   let lastViewer = viewerId();
   createEffect(
     on(viewerId, (viewer) => {
@@ -105,7 +111,7 @@ export function useSavedViews(options: {
   const refresh = async () => {
     await list.refetch({ requestPolicy: 'network-only' });
   };
-  revalidateSavedViewQuery(options.viewerId, refresh);
+  revalidateSavedViewQuery(options.viewerId, refresh, options.kind);
   return {
     items: () =>
       list.data?.viewerId === options.viewerId() ? list.data?.items : undefined,

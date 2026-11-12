@@ -4,6 +4,7 @@
  */
 
 import { match } from 'ts-pattern';
+import { executePeopleRequest } from '../people/worker';
 import type {
   AffectedOperationsResult,
   CachePush,
@@ -118,6 +119,7 @@ function isAuthoritativeWrite(request: CacheRequest): boolean {
   return (
     request.kind === 'write' ||
     request.kind === 'hydrate' ||
+    request.kind === 'people-update' ||
     request.kind === 'commit-optimistic-write' ||
     request.kind === 'delete-records' ||
     request.kind === 'calendar-commit'
@@ -139,6 +141,7 @@ function revisionAdvancementCategory(
     .with(
       'write',
       'hydrate',
+      'people-update',
       'calendar-commit',
       () => 'authoritative-write' as const
     )
@@ -152,7 +155,8 @@ function revisionAdvancementCategory(
 }
 
 function requestPriority(request: CacheRequest): number {
-  if (request.kind === 'hydrate') return BACKGROUND_HYDRATION_PRIORITY;
+  if (request.kind === 'hydrate' || request.kind === 'people-update')
+    return BACKGROUND_HYDRATION_PRIORITY;
   if (request.kind === 'read') {
     return request.priority === 'user-visible'
       ? USER_VISIBLE_READ_PRIORITY
@@ -526,6 +530,22 @@ export class CacheWorkerCore {
           revision: parseCacheRevision(result.revision),
         };
       })
+      .with(
+        { kind: 'people-context' },
+        { kind: 'people-update' },
+        { kind: 'people-search' },
+        { kind: 'people-references' },
+        { kind: 'people-sql' },
+        { kind: 'contact-snapshot' },
+        { kind: 'contact-reconcile' },
+        (request) =>
+          executePeopleRequest(
+            this.requireEngine(),
+            request,
+            (message) => this.push(message),
+            (result) => this.fanOut(result, true)
+          )
+      )
       .with({ kind: 'search' }, async (request) => {
         const result: SearchCachePage = await this.requireEngine().search(
           request.request
@@ -582,7 +602,8 @@ export class CacheWorkerCore {
           request.operationName,
           request.variables,
           request.data,
-          request.identity
+          request.identity,
+          request.hydrationScope
         );
         result.revision = parseCacheRevision(result.revision);
         // Only cache-only consumers opt into hydration. Do not invalidate

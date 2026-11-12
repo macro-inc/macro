@@ -624,6 +624,7 @@ fn entity_filter_ast(entities: &[Entity<'static>]) -> Result<EntityFilterAst, So
             | EntityType::CrmPipeline
             | EntityType::Database
             | EntityType::Form
+            | EntityType::Harness
             | EntityType::ExternalChat => {
                 return Err(rootcause::report!(
                     "entity type {} is not represented in Soup",

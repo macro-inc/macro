@@ -50,6 +50,8 @@ mod utils;
 
 #[cfg(test)]
 mod test;
+#[cfg(test)]
+pub(crate) mod trace_capture;
 
 /// Path prefix the shared gateway ALB forwards unmodified. Dual-mounted
 /// alongside `/` so the dedicated ALB keeps working during cutover.

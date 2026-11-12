@@ -178,6 +178,8 @@ export class Task extends Document {
   /**
    * Whether the task is completed (its Status property is "Completed");
    * `undefined` if the document is not a task.
+   *
+   * @readonly
    */
   async completed(): Promise<boolean | undefined> {
     const { subType } = await this.detail.get();
@@ -192,7 +194,11 @@ export class Task extends Document {
     );
   }
 
-  /** The task's URL in the Macro web app. */
+  /**
+   * The task's URL in the Macro web app.
+   *
+   * @readonly
+   */
   override webUrl(): string {
     return `${this.client.webAppUrl}/app/task/${this.id}`;
   }

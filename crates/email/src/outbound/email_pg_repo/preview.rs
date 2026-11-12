@@ -108,33 +108,22 @@ pub(super) async fn previews_for_view_cursor(
     .collect())
 }
 
-#[tracing::instrument(err, skip(pool, thread_ids))]
+/// Attachments of the given threads, oldest first.
+///
+/// The query walks thread ids to messages and messages to attachments
+/// through their indexes. Each step is a lateral subquery with `OFFSET 0`
+/// so the planner can't hash-join `email_attachments`: with a plain join,
+/// a thread-id set whose estimated message count is high enough switched
+/// the plan to reading the whole attachments table, about 2.6M blocks per
+/// call, to return a few dozen rows.
+#[tracing::instrument(err, skip(pool, thread_ids), fields(thread_count = thread_ids.len()))]
 pub(super) async fn attachments_by_thread_ids(
     pool: &PgPool,
     thread_ids: &[Uuid],
 ) -> Result<Vec<Attachment>, sqlx::Error> {
-    Ok(sqlx::query_as!(
+    Ok(sqlx::query_file_as!(
         AttachmentDbRow,
-        r#"
-        SELECT
-            a.id,
-            a.message_id,
-            a.provider_attachment_id,
-            a.filename,
-            a.mime_type,
-            a.size_bytes,
-            a.content_id,
-            a.created_at,
-            m.thread_id
-        FROM
-            email_attachments a
-        JOIN
-            email_messages m ON a.message_id = m.id
-        WHERE
-            m.thread_id = ANY($1)
-        ORDER BY
-            a.created_at ASC
-        "#,
+        "src/outbound/email_pg_repo/preview/attachments_by_thread_ids.sql",
         thread_ids
     )
     .fetch_all(pool)

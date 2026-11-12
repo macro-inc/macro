@@ -1,5 +1,6 @@
 import { handleAiUsageLimitError } from '@app/features/paywall/ai-usage-limit-handling';
 import { isAiUsageLimitError } from '@app/lib/service-clients/ai-usage-limit';
+import type { ResultError } from '@core/util/result';
 import { Telemetry } from '@macro-inc/observability';
 import { scheduledActionClient } from '@service-scheduled-action/client';
 import type {
@@ -10,20 +11,17 @@ import type {
 } from '@service-scheduled-action/generated/schemas';
 import type { ScheduleDraft } from '../core/draft';
 import { createEmptyDraft } from '../core/routine-draft';
-import { stepsFromTask } from '../core/routine-steps';
+import { stepsFromWire } from '../core/routine-steps';
 import { parseRoutineTriggers } from './routine-trigger-mapping';
 
-/** What the drafter may write, and the user's workspace by name and id. */
+/**
+ * What the drafter may write. It finds the channels, people and other items
+ * the description names itself, with the user's access.
+ */
 export type ComposerContext = {
   timezone: string;
   /** The model Ask AI steps it writes run on. */
   defaultModel: string;
-  labels: string[];
-  tags: { label: string; definitionId: string; optionId: string }[];
-  channels: { name: string; id: string }[];
-  folders: { name: string; id: string }[];
-  people: { name: string; id: string }[];
-  agents: { name: string; botId: string }[];
   /** Whether triggers may ask AI before a run. */
   decisions: boolean;
   /** Whether AI may write code steps; otherwise it writes Ask AI steps. */
@@ -31,6 +29,10 @@ export type ComposerContext = {
 };
 
 const COMPOSE_FAILED = 'Couldn’t draft that routine. Please try again.';
+const TOO_LARGE =
+  'This routine is too large for AI to draft. Shorten it and try again.';
+const TIMED_OUT =
+  'Drafting took too long. Try again, or describe the routine more simply.';
 
 function draftContext(context: ComposerContext): DraftContext {
   return {
@@ -38,15 +40,21 @@ function draftContext(context: ComposerContext): DraftContext {
     agentModel: context.defaultModel,
     code: context.codeSteps,
     conditions: context.decisions,
-    workspace: {
-      labels: context.labels,
-      tags: context.tags,
-      channels: context.channels,
-      folders: context.folders,
-      people: context.people,
-      agents: context.agents,
-    },
   };
+}
+
+/** Why a draft request failed, for the dialog; `failure` when it's no known reason. */
+function requestFailure(
+  errors: ResultError<string>[],
+  failure: string
+): string {
+  const usageLimit = errors.find(isAiUsageLimitError);
+  if (usageLimit) return usageLimit.message;
+  if (errors.some((error) => error.code === 'PAYLOAD_TOO_LARGE')) {
+    return TOO_LARGE;
+  }
+  if (errors.some((error) => error.code === 'TIMEOUT')) return TIMED_OUT;
+  return failure;
 }
 
 /**
@@ -68,9 +76,10 @@ export async function requestDraft(
     });
     if (response.isErr()) {
       span.setAttr('routine.draft.outcome', 'request_failed');
+      span.setAttr('routine.draft.error', response.error[0]?.code ?? 'unknown');
       span.error('Routine draft request failed');
       handleAiUsageLimitError(response.error);
-      return response.error.find(isAiUsageLimitError)?.message ?? failure;
+      return requestFailure(response.error, failure);
     }
     span.setAttr('routine.draft.outcome', response.value.outcome);
     return response.value.outcome === 'failed'
@@ -84,7 +93,7 @@ export function draftFromRoutine(
   routine: DraftedRoutine,
   defaultModel: string
 ): ScheduleDraft | string {
-  const steps = stepsFromTask({ steps: routine.steps });
+  const steps = stepsFromWire(routine.steps);
   if (!steps) return 'The draft used steps Macro can’t run. Try rephrasing.';
   const drafted = steps.map((step, index) => {
     const problems = routine.problems.find(
@@ -96,6 +105,7 @@ export function draftFromRoutine(
   });
   const base = {
     ...createEmptyDraft(defaultModel),
+    created: routine.created,
     name: routine.name,
     triggers: (routine.trigger && parseRoutineTriggers(routine.trigger)) ?? [],
     enabled: true,

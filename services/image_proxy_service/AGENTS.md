@@ -31,6 +31,10 @@ remote image URLs through an authenticated, SSRF-guarded fetch.
 
 - Never bypass or weaken `PrivateIpFilteringResolver` — it is the only thing
   stopping this service from being an SSRF vector into internal infra.
+- Serve only image types (`ALLOWED_MEDIA_TYPES`). Every `/proxy` response
+  gets `nosniff` and a sandboxing CSP from `sandbox_headers`, and SVG is also
+  sent as an attachment: an SVG opened from this origin would otherwise run its
+  script here. Never drop those headers or add document types like HTML.
 
 ## Related
 

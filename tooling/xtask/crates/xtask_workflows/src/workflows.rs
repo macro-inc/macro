@@ -39,6 +39,8 @@ mod deploy_ai_editing_worker;
 mod deploy_all_services;
 mod deploy_cla_worker;
 mod deploy_fusionauth_instance;
+mod deploy_mcp_chatgpt_worker;
+mod deploy_observability;
 mod deploy_on_push;
 mod deploy_sdk_docs;
 mod deploy_sync_service;
@@ -52,6 +54,7 @@ mod ios_preview;
 mod ios_release_drift;
 mod ios_release_watch;
 mod native_check_label;
+mod observability_image;
 mod path_validation;
 mod pr_ci;
 mod pr_privacy_check;
@@ -124,6 +127,21 @@ fn job_mut<'a>(root: &'a mut serde_yaml::Value, id: &str) -> Result<&'a mut serd
 
 /// Every workflow we generate. Add new workflows here.
 const WORKFLOWS: &[WorkflowFile] = &[
+    WorkflowFile {
+        slug: "observability_image",
+        file_name: "observability_image.yml",
+        render_yaml: || render_gh_workflow(observability_image::observability_image)(),
+    },
+    WorkflowFile {
+        slug: "deploy_observability",
+        file_name: "deploy-observability.yml",
+        render_yaml: || {
+            render_patched(
+                deploy_observability::deploy_observability,
+                deploy_observability::patch,
+            )
+        },
+    },
     WorkflowFile {
         slug: "export_ci_telemetry",
         file_name: "export-ci-telemetry.yml",
@@ -223,6 +241,16 @@ const WORKFLOWS: &[WorkflowFile] = &[
             render_patched(
                 deploy_ai_editing_worker::deploy_ai_editing_worker,
                 deploy_ai_editing_worker::patch,
+            )
+        },
+    },
+    WorkflowFile {
+        slug: "deploy_mcp_chatgpt_worker",
+        file_name: "deploy_mcp_chatgpt_worker.yml",
+        render_yaml: || {
+            render_patched(
+                deploy_mcp_chatgpt_worker::deploy_mcp_chatgpt_worker,
+                deploy_mcp_chatgpt_worker::patch,
             )
         },
     },
@@ -504,4 +532,58 @@ fn workflows_dir() -> Result<PathBuf> {
         bail!("expected a workflows directory at {}", dir.display());
     }
     Ok(dir)
+}
+
+#[cfg(test)]
+mod handoff_tests {
+    #[test]
+    fn every_handoff_has_a_runtime_bound_and_attempt_scoped_destination() {
+        for workflow in [
+            super::deploy_all_services::deploy_all_services(),
+            super::reusable_deploy_service::reusable_deploy_service(),
+        ] {
+            let workflow = serde_json::to_value(workflow).unwrap();
+            for job in ["build-service-binaries", "build-lambda-artifacts"] {
+                let steps = workflow["jobs"][job]["steps"].as_array().unwrap();
+                let upload_index = steps
+                    .iter()
+                    .position(|step| step["name"] == "Upload handoff artifact")
+                    .unwrap();
+                let upload = &steps[upload_index];
+                assert!(steps[..upload_index].iter().any(|step| {
+                    step["uses"] == "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6"
+                        && step["with"]["bun-version"] == "1.3.13"
+                }));
+                assert_eq!(upload["timeout-minutes"], 20);
+                assert!(upload.get("continue-on-error").is_none());
+                let command = upload["run"].as_str().unwrap();
+                assert!(command.starts_with("bun .github/scripts/upload-handoff-artifact.ts "));
+                assert!(command.ends_with("\"$DEST\""));
+                let destination = upload["env"]["DEST"].as_str().unwrap();
+                assert!(
+                    destination
+                        .starts_with("handoff/${{ github.run_id }}-${{ github.run_attempt }}/")
+                );
+                assert!(destination.ends_with(if job == "build-service-binaries" {
+                    "/prebuilt-binaries.tar.gz"
+                } else {
+                    "/lambda-artifacts.tar.gz"
+                }));
+            }
+        }
+    }
+
+    #[test]
+    fn upload_retry_contract_and_process_lifecycle() {
+        let output = std::process::Command::new("bun")
+            .args(["test", "./.github/scripts/upload-handoff-artifact.test.ts"])
+            .current_dir(xtask_paths::repo_root())
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
 }

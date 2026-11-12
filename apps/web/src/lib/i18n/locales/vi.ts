@@ -735,7 +735,7 @@ export default {
     tabMobileApp: 'Ứng dụng di động',
     tabTags: 'Thẻ',
     tabIntegrations: 'Tích hợp',
-    tabRuntimes: 'Môi trường chạy',
+    tabRuntimes: 'Máy',
     tabMcpServer: 'Máy chủ MCP',
     tabApiKeys: 'Khóa API',
     tabBots: 'Bot',

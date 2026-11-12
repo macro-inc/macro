@@ -423,6 +423,9 @@ export function createEmailSendSchedule(options: {
               {
                 label: 'View message',
                 kind: 'open' as const,
+                ...(action === 'schedule'
+                  ? { variant: 'secondary' as const }
+                  : {}),
                 onClick: () => {
                   if (toastId != null) notices.feedback.dismiss(toastId);
                   onViewScheduled({
@@ -439,6 +442,7 @@ export function createEmailSendSchedule(options: {
             ? [
                 {
                   label: 'Undo',
+                  kind: 'undo' as const,
                   onClick: () => {
                     // A dismissing notice stays clickable; only the live one undoes.
                     if (
@@ -465,7 +469,7 @@ export function createEmailSendSchedule(options: {
                 },
               ]
             : [];
-        const actions = [...undoAction, ...viewAction];
+        const actions = [...viewAction, ...undoAction];
         dismissScheduledNotice();
         toastId = notices.feedback.success(
           action === 'update' ? 'Email rescheduled' : 'Email scheduled',

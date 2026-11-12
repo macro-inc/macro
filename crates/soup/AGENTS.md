@@ -19,6 +19,7 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   query logic layered onto the core service.
 - `src/outbound/pg_soup_repo.rs`: the Postgres repo, split by entity kind
   (`database_row.rs`, `calendar_event.rs`, `agent_session.rs`, `initiative.rs`,
+  `harness.rs`,
   `attention.rs`, `notified.rs`, `touched.rs`) and by shape
   (`expanded/` hydrated, `unexpanded/` id-only).
 - `src/inbound/axum_router.rs` + `src/inbound/toolset/list_entities.rs`: the
@@ -55,6 +56,10 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   (`attention/query.sql`). Channel-thread keying applies only to
   `AttentionKeying::ThreadScoped`; keep it in step with `attention_feed`'s
   `keying.rs`.
+- Give a kind with no list of its own (runtimes) inbox rows: an
+  attention-only kind like `pg_soup_repo/harness.rs`, a gate in
+  `attention/query.sql`'s attention stream only, a by-ids leg, and the type in
+  `requested_types` (as CRM records are).
 
 ## Tool contracts
 
@@ -79,6 +84,9 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   read); REST group meta and GraphQL bins carry the result as `GroupLabels`,
   and a key it leaves out keeps itself as its label.
 
+- Attention feeds admit visible CRM records through current team membership,
+  independently of mailbox contribution consent or the retired team CRM switch.
+  Hidden companies, their contacts, and hidden company-less contacts stay out.
 - `crm_association.rs` resolves CRM scope before filtering, sorting, and paging.
   Activity uses property edges rather than references and matches email within
   the caller's mailbox. Keep browser requests bounded; never expand every CRM

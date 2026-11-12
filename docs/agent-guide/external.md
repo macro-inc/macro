@@ -15,8 +15,10 @@ The WhatsApp page opens with the WhatsApp `TutorialSidebarItem` (from `features/
   the command menu.
 - Mobile: **External** in the bottom dock (or **More views → External** when
   the dock is full). It has no back button, like other navigation views; the
-  External sidebar is hidden on touch, so the WhatsApp page fills the pane with its **In Macro** chats first. Opening a
-  chat drills in full-screen; its **Back to WhatsApp** button returns.
+  External sidebar is hidden on touch. Like Channels, the account list omits the floating split
+  header; the WhatsApp title uses the shared collection header directly below
+  the safe area on phones and tablets, above the scrollable **In Macro** chats.
+  Opening a chat drills in full-screen; its **Back to WhatsApp** button returns.
 
 ## Sidebar
 
@@ -85,7 +87,7 @@ channels in **Share** and can remove them.
 
 The timeline pages newest-first from
 `GET /external-chats/<id>/messages`, including verified sender names,
-replies, grouped reactions, edit/delete flags, attachment states, and delivery
+replies, reactions grouped by emoji with their reactors, edit/delete flags, attachment states, and delivery
 for the caller's own sends. Entering the view marks messages read through `/read`.
 The timeline uses Chat's layout: rows and the composer share Chat's centered
 message column (`macro-message-width`) and custom scrollbar, and the view
@@ -98,9 +100,13 @@ timeline opens at the bottom. Stickers show small and unframed, GIFs loop muted
 in place, voice notes read **Voice note · 0:42** above an inline player; bytes
 come from the attachment's static file, like Chat's media. Other ready files
 (PDF, text) show as file chips that open the stored file in a new tab; other
-states show loading, unavailable or unsupported. Senders
-show their WhatsApp name. `@<number>` in a body shows the person: a verified
-Macro user as Chat's mention chip, anyone else their WhatsApp name in bold.
+states show loading, unavailable or unsupported. Senders, reactors (the
+reaction chip's tooltip), poll voters, members and mentioned people who are
+not Macro users go by the chat owner's contact name for them, else their
+WhatsApp name, else their phone number; "WhatsApp participant" only when
+WhatsApp gave neither (a LID with no number). `@<number>` in a body shows the
+person: a verified Macro user as Chat's mention chip, anyone else that name in
+bold.
 Bare URLs are links with Chat's hover preview. **Forwarded** marks forwarded
 messages. Polls (read-only tallies, "Vote in WhatsApp"), locations (**Open in
 Maps**, no map tiles), contact cards and WhatsApp events render as small cards
@@ -112,8 +118,10 @@ media; unknown types keep DSS's placeholder text. The header has the provider's 
 for a community's group), a timer icon when WhatsApp's disappearing messages
 are on (the timeline's start also says "Disappearing messages are on in
 WhatsApp (7 days). Macro keeps them."), **Share**, and the standard side panel
-toggle (**Show Side Panel**, `]`; **Show details** on touch). Like an in-view
-email thread, the details float over the timeline (`aside[aria-label="Block
+toggle (**Show Side Panel**, `]`; **Show details** on touch). On phones and
+tablets, Back, the provider badge/name, Share and details occupy the shared
+floating split-header islands, positioned at the safe area like an open channel.
+Like an in-view email thread, the details float over the timeline (`aside[aria-label="Block
 details"]`, outside click or the toggle closes them, starts closed; on a
 pane 900px or wider the timeline and composer move left to make room) and are a
 bottom sheet on touch. Sections: **Members (n)** (groups only; list
@@ -150,8 +158,8 @@ owner's phone only when they press Import. While a chat is
 `waiting_for_phone`, its owner sees a bar under the chat header ("Open
 WhatsApp on your phone to import earlier messages." with **Import**), and on desktop and
 tablets a closable bottom-right prompt **Import WhatsApp history** with
-**Import** covers all their waiting chats (never on phones, where it would
-cover the composer; a close sticks until another chat needs it). Both post
+**Import** and **Not now** covers all their waiting chats (never on phones, where it would
+cover the composer; a close sticks until another chat needs it). Both Import actions post
 `/whatsapp/history-import`. The detail's `backfill` drives the header's
 subtitle: **WhatsApp · Importing history…** while `pending`/`running`, and
 *Earlier messages wait for the owner's phone* for shared viewers while

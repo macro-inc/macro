@@ -11,7 +11,9 @@ persona/model to run later.
 - `src/domain.rs`: `RoutineConfiguration` — name, `triggers`
   (`RoutineTrigger`: `Once`, `Cron` or activity `Event`s) and `steps` (a
   [`routine_program`](../routine_program/AGENTS.md) program, sent as a JSON
-  string) — the validated command shape. `deserialize_configuration` still
+  string) — the validated command shape. `requiredApps` and
+  `dangerouslyOperateAsUser` (code steps write as the user; set only when the
+  user explicitly asks) keep their saved values when an update omits them. `deserialize_configuration` still
   accepts the old single-agent input (`instructions`, `target`, `schedule`)
   and turns it into one agent step.
 - `src/inbound.rs`: the AI toolset exposed to MCP and embedded agents.

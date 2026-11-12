@@ -35,7 +35,7 @@ const connection = await call.join();
 ```
 
 ```ts
-import { connectRoom } from '@macro-inc/sdk-calls/node';
+import { connectRoom } from '@macro-inc/sdk/calls/node';
 
 const { room, connection } = await connectRoom(call); // a real @livekit/rtc-node Room
 await session.start({ agent, room });                 // LiveKit AgentSession, unchanged
@@ -48,10 +48,11 @@ So there are two levels, and a program can use either:
 | Level | Package | Returns | Runs in |
 | --- | --- | --- | --- |
 | Token | `@macro-inc/sdk` | `CallConnection`: URL, token, identity, room name | Anywhere except code mode |
-| Room | `@macro-inc/sdk-calls`, exports `/node` and `/browser` | A LiveKit `Room`, already connected and with Macro's defaults | Node, Bun or a browser |
+| Room | `@macro-inc/sdk/calls/node` and `@macro-inc/sdk/calls/browser` | A LiveKit `Room`, already connected and with Macro's defaults | Node, Bun or a browser |
 
-A `Room` cannot come from the core SDK: that would put a native media library in every
-SDK install and in the code-mode bundle.
+Keep room helpers out of the core entry point so ordinary SDK imports and the
+code-mode bundle never load a media runtime. Optional peers avoid installing it
+for callers that only use the core API.
 
 ## Why the current path isn't good enough
 
@@ -127,7 +128,7 @@ interface CallConnection {
 }
 ```
 
-The room package adds only what a program would otherwise get wrong:
+The call helpers add only what a program would otherwise get wrong:
 
 ```ts
 connectRoom(target, opts?): Promise<{ room: Room; connection: CallConnection }>
@@ -140,6 +141,12 @@ clips quiet speech after noise suppression), and calls `leave()` when the room c
 browser, with the browser picker as its default. Capture itself is up to the caller:
 `rtc-node` has no capture engine, so a page screencast or `ffmpeg` output goes in as
 frames.
+
+The room helpers ship inside the SDK as separate `calls/node` and `calls/browser`
+exports. The core entry point never imports them. Their build is separate from
+core, and LiveKit runtimes are external optional peers, installed only by callers
+that need media. Dynamic imports let browser applications load calls on demand.
+There is one SDK version, package, and release workflow.
 
 ## Parity: everything a person can do
 
@@ -237,14 +244,14 @@ show it as an ordinary participant, as they already do for these accounts today,
 has to ship first. Being a participant, a program is recorded and transcribed like anyone
 else, under the existing call notice.
 
-The web app and native plugins do not move onto the new package. They share the routes and
+The web app and native plugins do not move onto the call helpers. They share the routes and
 the contract, not code.
 
 ## Observability
 
 - Backend: `call.join` and `call.start` with `call.id`, principal kind, `call.client`, and
   outcome (`in_other_call`, `already_connected`, `ended`).
-- `@macro-inc/sdk-calls`: `call.sdk.connect`, `call.sdk.publish_screen` (source kind,
+- `@macro-inc/sdk/calls`: `call.sdk.connect`, `call.sdk.publish_screen` (source kind,
   resolution, fps, outcome), `call.sdk.disconnected` (reason), sent through the SDK's
   existing observer, searchable by `call.id`.
 - Never: tokens, display names, share links.
@@ -282,9 +289,9 @@ Python has (`is_screencast`), which affects text legibility.
 
 Each phase updates `docs/agent-guide/calls.md`, `crates/call/AGENTS.md` and
 `packages/sdk/AGENTS.md`, adds a `@routing` sentence and `@agent` rules to the call
-namespace, and releases through `release-sdk`. `@macro-inc/sdk-calls` gets its own
-`AGENTS.md`. Connections sit behind a server flag so they can be turned off without an SDK
-release.
+namespace, and releases through `release-sdk`. The optional room entry points are
+documented in `packages/sdk/CALLS.md`. Connections sit behind a server flag so
+they can be turned off without an SDK release.
 
 ## Decisions needed
 
@@ -306,5 +313,5 @@ release.
 
 - Moderation and recording controls, until the app has them.
 - Mobile or native SDKs.
-- Moving the web app or native plugins onto the new package.
+- Moving the web app or native plugins onto the call helpers.
 - SIP or phone dial-in.

@@ -30,6 +30,10 @@ const mocks = vi.hoisted(() => ({
   bots: [] as Array<{ id: string }>,
 }));
 
+vi.mock('@app/features/runtime-sharing/views/AgentRuntime', () => ({
+  AgentRuntime: () => null,
+}));
+
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: (flag: { key: string }) => () => ({
     enabled: flag.key === 'enable-crm' ? mocks.crmFlagEnabled : true,
@@ -231,14 +235,14 @@ describe('UserTooltip CRM contact action', () => {
     expect(screen.queryByRole('button', { name: 'Open contact' })).toBeNull();
   });
 
-  it('hides the contact action when CRM is disabled for the team', () => {
+  it('shows the contact action without legacy team email enrollment', () => {
     mocks.teamCrmEnabled = false;
 
     render(() => (
       <UserTooltip displayName="Jane Doe" email="jane.doe@example.com" />
     ));
 
-    expect(screen.queryByRole('button', { name: 'Open contact' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Open contact' })).toBeTruthy();
   });
 
   it('hides the contact action when the user has no team', () => {

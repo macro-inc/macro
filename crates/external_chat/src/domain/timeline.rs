@@ -89,6 +89,9 @@ pub struct ExternalChatParticipant {
     pub alternate_jid: Option<String>,
     /// Their name at the provider, untrusted.
     pub display_name: Option<String>,
+    /// What to call them: their provider name, else their phone number,
+    /// else a generic name.
+    pub name: String,
     /// Group admin.
     pub admin: bool,
 }
@@ -112,8 +115,8 @@ pub struct ExternalChatSender {
 pub struct ExternalChatReaction {
     /// Emoji.
     pub emoji: String,
-    /// Number of reacting people.
-    pub count: i64,
+    /// The people who reacted with it, earliest first.
+    pub reactors: Vec<ExternalChatPersonRef>,
     /// Caller has this reaction.
     pub mine: bool,
 }
@@ -340,6 +343,26 @@ pub struct VisibleChat {
     pub chat: ChatRef,
 }
 
+/// A person of a chat as stored, before the provider names them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StoredPerson {
+    /// External person identity.
+    pub person_id: Uuid,
+    /// Verified Macro user association, if present.
+    pub user_id: Option<String>,
+}
+
+/// One emoji's reactions on a stored message.
+#[derive(Debug, Clone)]
+pub struct StoredReaction {
+    /// Emoji.
+    pub emoji: String,
+    /// The people who reacted with it, earliest first.
+    pub reactors: Vec<StoredPerson>,
+    /// Caller has this reaction.
+    pub mine: bool,
+}
+
 /// One stored message of a timeline page, before the provider names the
 /// people in it and the viewer's delivery state is added.
 #[derive(Debug, Clone)]
@@ -347,7 +370,7 @@ pub struct StoredMessage {
     /// Stable message id.
     pub id: Uuid,
     /// Sender.
-    pub sender: ExternalChatSender,
+    pub sender: StoredPerson,
     /// Plain text; empty once deleted.
     pub body: String,
     /// Message quoted by this one.
@@ -361,7 +384,7 @@ pub struct StoredMessage {
     /// Deleted for everyone.
     pub deleted: bool,
     /// Reactions grouped by emoji.
-    pub reactions: Vec<ExternalChatReaction>,
+    pub reactions: Vec<StoredReaction>,
     /// Imported or pending attachments.
     pub attachments: Vec<Attachment>,
     /// A message, or a system line.

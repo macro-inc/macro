@@ -29,3 +29,16 @@ export {
   formatDateAndTime,
   formatRelativeTimestamp,
 } from '../../../entity/utils/timestamp';
+
+export const createEmailsInfiniteQuery = () => ({
+  data: [],
+  isLoading: false,
+  isPending: false,
+});
+export const Entity = {
+  Icon: () => <span aria-hidden="true">▣</span>,
+  Title: (props: { entity: { name: string } }) => <>{props.entity.name}</>,
+};
+
+export const isTaskEntity = (entity: { type: string }) =>
+  entity.type === 'task';

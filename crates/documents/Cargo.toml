@@ -20,6 +20,7 @@ purge = [
 ]
 ai_tools = [
   "dep:ai_billing",
+  "dep:base64",
   "dep:ai_engine",
   "dep:ai_toolset",
   "dep:ai_usage",
@@ -61,6 +62,7 @@ axum = [
   "dep:utoipa",
   "entity_access/axum",
   "entity_registry/axum",
+  "messages?/inbound",
   "schema",
 ]
 backfill_binary = [
@@ -215,7 +217,6 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 channel_sender = { path = "../channel_sender" }
 messages = { path = "../messages", features = ["ports", "test-utils"] }
 bot_id = { path = "../bot_id", features = ["test-utils"] }
-dotenvy = { workspace = true }
 embedding = { path = "../embedding" }
 http-body-util = { workspace = true }
 kafka_util = { path = "../kafka_util" }
@@ -228,3 +229,4 @@ serde_json = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal", "test-util"] }
 tower = { workspace = true }
 tracing-subscriber = { workspace = true }
+wiremock = { workspace = true }

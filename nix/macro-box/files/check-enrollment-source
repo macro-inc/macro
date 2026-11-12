@@ -1,0 +1,40 @@
+# Fails macrod-enroll with a readable reason before macrod runs. With no
+# source but an enrollment marker, the computer is already enrolled and
+# `macrod enroll` decides.
+enrolled() {
+  [ -s "$MACRO_ENROLLED_MARKER" ]
+}
+
+case "${MACRO_ENROLL_FROM:-}" in
+  incus)
+    if [ ! -S /dev/incus/sock ]; then
+      if enrolled; then exit 0; fi
+      echo "macrod-enroll: /dev/incus/sock is missing; is incus-agent running and security.guestapi on?" >&2
+      exit 1
+    fi
+    status=$(curl --silent --show-error --max-time 2 --unix-socket /dev/incus/sock \
+      --output /dev/null --write-out '%{http_code}' \
+      http://custom.socket/1.0/config/user.macro.enrollment)
+    if [ "$status" = 404 ]; then
+      if enrolled; then exit 0; fi
+      echo "macrod-enroll: missing enrollment; set the user.macro.enrollment Incus instance config key to the Enrollment JSON" >&2
+      exit 1
+    fi
+    if [ "$status" != 200 ]; then
+      echo "macrod-enroll: Incus enrollment source returned HTTP $status" >&2
+      exit 1
+    fi
+    ;;
+  file:*)
+    path="${MACRO_ENROLL_FROM#file:}"
+    if [ ! -s "$path" ]; then
+      if enrolled; then exit 0; fi
+      echo "macrod-enroll: enrollment file $path is missing or empty; bind-mount the Enrollment JSON there (docker run -v <file>:$path:ro)" >&2
+      exit 1
+    fi
+    ;;
+  *)
+    echo "macrod-enroll: MACRO_ENROLL_FROM='${MACRO_ENROLL_FROM:-}' (macro.box.enrollFrom) is not 'incus' or 'file:<path>'" >&2
+    exit 1
+    ;;
+esac

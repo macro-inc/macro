@@ -315,6 +315,14 @@ function mapChannelType(
   }
 }
 
+function mapEmailAttachment(value: unknown) {
+  return match(value)
+    .with('pdf', () => 'PDF' as const)
+    .with('image', () => 'IMAGE' as const)
+    .with('document', () => 'DOCUMENT' as const)
+    .otherwise(() => unsupported(`email attachment kind ${String(value)}`));
+}
+
 function mapEmailShared(value: unknown): 'EXCLUDE' | 'INCLUDE' | 'ONLY' {
   const shared = mapString(value, 'shared');
   switch (shared) {
@@ -479,6 +487,8 @@ function mapEmailLiteral(literal: unknown): GraphqlEmailLiteralInput {
       return { cc: mapEmailValue(value) };
     case 'Bcc':
       return { bcc: mapEmailValue(value) };
+    case 'Subject':
+      return { subject: mapString(value, 'subject') };
     case 'ThreadId':
       return { threadId: mapString(value, 'threadId') };
     case 'Owner':
@@ -497,6 +507,8 @@ function mapEmailLiteral(literal: unknown): GraphqlEmailLiteralInput {
       return { shared: mapEmailShared(value) };
     case 'CalendarOnly':
       return { calendarOnly: mapBoolean(value, 'calendarOnly') };
+    case 'Attachment':
+      return { attachment: mapEmailAttachment(value) };
     case 'ca':
       return { createdAt: mapDateLiteral(value) };
     case 'ua':

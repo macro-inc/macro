@@ -175,7 +175,7 @@ pub async fn fetch_received_sender_contacts_by_link(
 /// now track interactions in both directions, so the source row must
 /// stay until both directions are gone. `email` is matched
 /// case-insensitively.
-#[tracing::instrument(skip(pool), err)]
+#[tracing::instrument(skip(pool, email), err)]
 pub async fn link_has_any_message_with(
     pool: &PgPool,
     link_id: Uuid,
@@ -325,7 +325,7 @@ where
 }
 
 /// Fetch UUID for a given email address
-#[tracing::instrument(skip(pool), err)]
+#[tracing::instrument(skip(pool, email_address), err)]
 pub async fn fetch_id_by_email(
     pool: &mut sqlx::PgConnection,
     link_id: Uuid,
@@ -346,7 +346,7 @@ pub async fn fetch_id_by_email(
 }
 
 /// Fetch contact for a given email address
-#[tracing::instrument(skip(pool), err)]
+#[tracing::instrument(skip(pool, email_address), err)]
 pub async fn fetch_contact_by_email(
     pool: &PgPool,
     link_id: Uuid,

@@ -516,7 +516,10 @@ pub fn nix_build(name: &str, targets: &str, done_msg: &str) -> Step<Run> {
 /// stale uploads; the deploy job logs the same hash on read.
 pub fn upload_handoff_artifact(file: &str, service_expr: &str) -> Step<Run> {
     Step::new("Upload handoff artifact")
-        .run(format!("nsc artifact upload {file} \"$DEST\" --expires_in=24h"))
+        .run(format!(
+            "bun .github/scripts/upload-handoff-artifact.ts {file} \"$DEST\""
+        ))
+        .timeout_minutes(20u32)
         .shell("bash")
         .add_env(Env::new(
             "DEST",

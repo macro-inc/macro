@@ -58,7 +58,6 @@ vi.mock('@service-storage/graphql-soup', () => ({
 }));
 const getRestEntityPropertiesMock = vi.hoisted(() => vi.fn());
 const deleteEntityPropertyMock = vi.hoisted(() => vi.fn());
-const addEntityPropertyOptionMock = vi.hoisted(() => vi.fn());
 const bulkUpdateEntityPropertyOptionsMock = vi.hoisted(() => vi.fn());
 const updateGraphqlEntityPropertyOptionsMock = vi.hoisted(() => vi.fn());
 const setRestEntityPropertyMock = vi.hoisted(() => vi.fn());
@@ -111,7 +110,6 @@ vi.mock('../../service-clients/service-properties/client', () => ({
     getEntityProperties: getRestEntityPropertiesMock,
     setEntityProperty: setRestEntityPropertyMock,
     deleteEntityProperty: deleteEntityPropertyMock,
-    addEntityPropertyOption: addEntityPropertyOptionMock,
     bulkUpdateEntityPropertyOptions: bulkUpdateEntityPropertyOptionsMock,
   },
 }));
@@ -164,7 +162,6 @@ vi.mock('../soup/cache', () => ({
 
 import {
   useAddEntityPropertyMutation,
-  useAddEntityPropertyOptionMutation,
   useBulkSaveEntityPropertiesMutation,
   useBulkUpdateEntityPropertyOptionsMutation,
   useDeleteEntityPropertyMutation,
@@ -175,7 +172,6 @@ let testQueryClient: QueryClient;
 let mutation: ReturnType<typeof useBulkSaveEntityPropertiesMutation>;
 let addMutation: ReturnType<typeof useAddEntityPropertyMutation>;
 let deleteMutation: ReturnType<typeof useDeleteEntityPropertyMutation>;
-let addOptionMutation: ReturnType<typeof useAddEntityPropertyOptionMutation>;
 let bulkOptionsMutation: ReturnType<
   typeof useBulkUpdateEntityPropertyOptionsMutation
 >;
@@ -230,7 +226,6 @@ function renderMutation(): void {
     mutation = useBulkSaveEntityPropertiesMutation();
     addMutation = useAddEntityPropertyMutation();
     deleteMutation = useDeleteEntityPropertyMutation();
-    addOptionMutation = useAddEntityPropertyOptionMutation();
     bulkOptionsMutation = useBulkUpdateEntityPropertyOptionsMutation('task-1');
   });
 }
@@ -660,7 +655,6 @@ describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
     setRestEntityPropertyMock.mockResolvedValue(ok({ success: true }));
     graphqlSoupEnabledMock.mockReturnValue(true);
     deleteEntityPropertyMock.mockResolvedValue(ok(undefined));
-    addEntityPropertyOptionMock.mockResolvedValue(ok(undefined));
     bulkUpdateEntityPropertyOptionsMock.mockResolvedValue(
       ok({ properties: [{ property_id: 'status-def', option_ids: ['doing'] }] })
     );
@@ -828,24 +822,16 @@ describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
     expect(refreshPropertyQueriesMock).toHaveBeenCalledOnce();
   });
 
-  it('invalidates REST projections after delete and option writes', async () => {
+  it('invalidates REST projections after delete writes', async () => {
     await deleteMutation.mutateAsync({
       entityPropertyId: 'assignment-1',
       entityType: 'TASK',
       entityId: 'task-1',
     });
-    await addOptionMutation.mutateAsync({
-      entityId: 'task-1',
-      entityType: 'TASK',
-      property,
-      optionId: 'doing',
-      optimisticOptionIds: ['doing'],
-    });
 
-    expect(testQueryClient.invalidateQueries).toHaveBeenCalledTimes(2);
+    expect(testQueryClient.invalidateQueries).toHaveBeenCalledTimes(1);
     expect(invalidateSoupEntityMock).toHaveBeenCalledWith('task-1');
-    expect(refreshPropertyQueriesMock).toHaveBeenCalledTimes(2);
-    expect(refreshPropertyQueriesMock).toHaveBeenCalledWith('status-def');
+    expect(refreshPropertyQueriesMock).toHaveBeenCalledTimes(1);
   });
 
   it('invalidates REST after a failed attachment write', async () => {
@@ -880,19 +866,6 @@ describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
       })
     ).rejects.toThrow('delete failed');
 
-    addEntityPropertyOptionMock.mockResolvedValue(
-      err([{ code: 'SERVER_ERROR', message: 'option failed' }])
-    );
-    await expect(
-      addOptionMutation.mutateAsync({
-        entityId: 'task-1',
-        entityType: 'TASK',
-        property,
-        optionId: 'doing',
-        optimisticOptionIds: ['doing'],
-      })
-    ).rejects.toThrow('option failed');
-
     bulkUpdateEntityPropertyOptionsMock.mockResolvedValue(
       err([{ code: 'SERVER_ERROR', message: 'bulk failed' }])
     );
@@ -910,7 +883,7 @@ describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
       })
     ).rejects.toThrow('bulk failed');
 
-    expect(testQueryClient.invalidateQueries).toHaveBeenCalledTimes(3);
+    expect(testQueryClient.invalidateQueries).toHaveBeenCalledTimes(2);
   });
 
   it('keeps the existing TanStack lifecycle when GraphQL Soup is disabled', async () => {

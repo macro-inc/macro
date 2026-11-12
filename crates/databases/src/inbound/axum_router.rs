@@ -142,11 +142,8 @@ where
             "/",
             post(create_database_handler::<Service, EntityAccess, Authorization>),
         )
-        // Static segments win over `/{id}`, so these never read as a database.
-        .route(
-            "/queries",
-            post(saved_queries::save_query_handler::<Service, EntityAccess, Authorization>),
-        )
+        // Static segments win over `/{id}`, so this never reads as a database.
+        // Saving a query compiles it, so that route is `databases_sql`'s.
         .route(
             "/queries/{query_id}",
             get(saved_queries::get_query_handler::<Service, EntityAccess, Authorization>),

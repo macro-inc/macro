@@ -9,15 +9,16 @@ import { createPersistenceKey, type PersistScope } from './persistence';
 import { createPerQueryIDBStore } from './persistence/per-query-idb';
 import { soupKeys } from './soup/keys';
 
-const persistedChannelQueryPrefixes = [
-  channelKeys.mentions._def,
-  channelKeys.activity.queryKey,
-  channelKeys.listChannels.queryKey,
-] as const;
-
 export function shouldPersistChannelQuery(queryKey: QueryKey): boolean {
-  return persistedChannelQueryPrefixes.some((prefix) =>
-    partialMatchKey(queryKey, prefix)
+  if (partialMatchKey(queryKey, channelKeys.mentions._def)) return true;
+  // Legacy unscoped payloads and disabled (unknown-account) queries cannot
+  // establish ownership, so neither is eligible for persistence.
+  return [channelKeys.activity._def, channelKeys.listChannels._def].some(
+    (prefix) =>
+      partialMatchKey(queryKey, prefix) &&
+      queryKey.length === prefix.length + 1 &&
+      typeof queryKey[prefix.length] === 'string' &&
+      queryKey[prefix.length] !== ''
   );
 }
 

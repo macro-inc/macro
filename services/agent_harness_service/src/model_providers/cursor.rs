@@ -93,13 +93,19 @@ impl<Keys: CursorApiKeys> agent_harness::domain::capability_discovery::Capabilit
             .map_err(|error| CapabilityProbeError::Failed(error.to_string()))?;
         let selected = model.or(config.default_model_id.as_deref());
         let current = match selected {
-            Some(id) => Some(
-                models
+            Some(id) => {
+                let model = models
                     .iter()
                     .find(|model| model.id == id)
-                    .ok_or_else(|| CapabilityProbeError::Failed("unsupported model".to_owned()))?
-                    .default_choice(),
-            ),
+                    .ok_or_else(|| CapabilityProbeError::Failed("unsupported model".to_owned()))?;
+                // What a new session on this model starts on: the account's
+                // effort applies to the account's model alone.
+                let default_effort = config
+                    .default_effort
+                    .as_deref()
+                    .filter(|_| config.default_model_id.as_deref() == Some(id));
+                Some(model.choice_with_preferred_effort(default_effort))
+            }
             None => models
                 .iter()
                 .find(|model| model.id == "default")

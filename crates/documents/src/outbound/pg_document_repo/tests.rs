@@ -13,6 +13,8 @@ use models_permissions::share_permission::{
 };
 use sqlx::{Pool, Postgres, Row};
 
+mod email_import_deleted;
+
 use crate::domain::models::{
     CopyDocumentRepoArgs, CreateDocumentRepoArgs, EditDocumentRepoArgs, EmailImportRepoOutcome,
     FileTypeUpdate, GithubPullRequest, GithubPullRequestsResponse, ImportEmailAttachmentRepoArgs,

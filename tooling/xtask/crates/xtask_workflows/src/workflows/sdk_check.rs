@@ -18,8 +18,7 @@ pub const PATHS: &[RepoGlob<'static>] = &[
 pub fn sdk_check() -> Workflow {
     Workflow::new("SDK Check")
         .on(Event::default()
-            // `Release SDK` publishes from `main` without re-checking the
-            // package, so the same suite has to guard what lands there.
+            // Guard SDK changes with the same validation used before publishing.
             .push(
                 PATHS
                     .iter()
@@ -33,17 +32,31 @@ pub fn sdk_check() -> Workflow {
 }
 
 /// Typecheck, test, and coverage-check the package as committed. Needs nothing
-/// but Bun, so it stays a cheap gate that can run on every SDK change.
+/// but Bun and Node, including isolated consumers of the packed SDK.
 fn check_package() -> Job {
     Job::default()
         .name("SDK Package Check")
         .runs_on("ubuntu-latest")
         .add_step(steps::checkout(false, false))
         .add_step(steps::setup_bun().add_with(("bun-version", "1.3.5")))
+        .add_step(
+            Step::new("Setup Node")
+                .uses(
+                    "actions",
+                    "setup-node",
+                    "49933ea5288caeca8642d1e84afbd3f7d6820020",
+                )
+                .add_with(("node-version", "24")),
+        )
         .add_step(install_dependencies())
         .add_step(typecheck())
         .add_step(run_tests())
         .add_step(check_coverage())
+        .add_step(
+            Step::new("Check packed SDK")
+                .run("bun run build && bun run check:pack")
+                .working_directory(xtask_paths::repo_dir!("packages/sdk")),
+        )
 }
 
 fn install_dependencies() -> Step<Run> {

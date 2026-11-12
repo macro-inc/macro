@@ -14,3 +14,6 @@ apps/web/src/lib/service-clients/**/openapi.json linguist-generated=true
 # sqlx keys its offline cache (.sqlx) on the exact query text, so a CRLF
 # checkout (Git for Windows) of a `query_file!` source misses the cache.
 *.sql text eol=lf
+
+# MCP tool-list snapshots generated from the SDK by packages/sdk-mcp.
+packages/sdk-mcp/src/__snapshots__/** linguist-generated=true

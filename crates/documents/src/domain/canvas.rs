@@ -7,9 +7,11 @@ use super::{
         editing::{EditUsage, EditingWorkerService, EditorName},
     },
 };
-use ai_billing::domain::admission::AiAdmissionService;
+use ai_billing::domain::admission::{AiAdmissionError, AiAdmissionService};
 use ai_usage::{AiFeature, UsageAmount, UsageContext, UsageRecorder};
-use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, ViewAccessLevel};
+use entity_access::domain::models::{
+    EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, RequiredPermission, ViewAccessLevel,
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_permissions::share_permission::access_level::AccessLevel;
 use schemars::JsonSchema;
@@ -76,6 +78,7 @@ pub type CanvasArtifactsRollout = std::sync::Arc<
 
 /// Scene representation requested by a reader.
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, JsonSchema)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 #[serde(rename_all = "lowercase")]
 pub enum CanvasReadFormat {
     /// Exact object data and geometry.
@@ -86,6 +89,7 @@ pub enum CanvasReadFormat {
 
 /// World-space crop or object bounds.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 pub struct CanvasBounds {
     /// World x coordinate.
     pub x: f64,
@@ -111,6 +115,7 @@ pub struct CanvasImage {
 
 /// Stable object-to-image mapping.
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 pub struct CanvasRenderObject {
     /// Canvas item ID.
     pub id: String,
@@ -120,6 +125,7 @@ pub struct CanvasRenderObject {
 
 /// Explicitly unavailable referenced content.
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 pub struct CanvasUnavailable {
     /// Canvas item ID.
     pub id: String,
@@ -129,6 +135,7 @@ pub struct CanvasUnavailable {
 
 /// Actual browser text bounds and overflow for a read-only render.
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 pub struct CanvasTextLayout {
     /// Stable item ID.
     pub id: String,
@@ -178,6 +185,92 @@ pub struct CanvasResponse {
     pub summary: String,
     /// Missing information or unsupported operation, if any.
     pub clarification: Option<String>,
+}
+
+/// Why a Canvas read, render or edit did not complete.
+#[derive(Debug, thiserror::Error)]
+pub enum CanvasError {
+    /// The request or document does not fit this workflow; nothing ran.
+    #[error("{0}")]
+    Invalid(String),
+    /// AI admission refused the caller; no model ran.
+    #[error("{code}: {0}", code = .0.code())]
+    Admission(AiAdmissionError),
+    /// The scene changed since the batch's expected revision; nothing was committed.
+    #[error("{0}")]
+    Conflict(String),
+    /// The batch failed validation or planning before it committed; nothing changed.
+    #[error("{0}")]
+    Rejected(String),
+    /// Looking up the document or preparing the call failed before the worker ran.
+    #[error(transparent)]
+    Internal(anyhow::Error),
+    /// The worker failed. A write may have partly applied.
+    #[error(transparent)]
+    Failed(anyhow::Error),
+}
+
+/// A rendered Canvas PNG kept in static file storage.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StoredCanvasImage {
+    /// Static file id.
+    pub file_id: String,
+    /// Permanent URL of the image bytes.
+    pub url: String,
+}
+
+/// Keeps rendered Canvas images as static files owned by the caller.
+// async_trait: the router holds the store as `Arc<dyn CanvasImageStore>`.
+#[async_trait::async_trait]
+pub trait CanvasImageStore: Send + Sync + 'static {
+    /// Store PNG bytes for `owner` and return where they live.
+    async fn save_png(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        name: &str,
+        png: Vec<u8>,
+    ) -> anyhow::Result<StoredCanvasImage>;
+}
+
+/// A render whose image was stored rather than returned inline.
+#[derive(Debug)]
+pub struct StoredCanvasRender {
+    /// The stored PNG.
+    pub image: StoredCanvasImage,
+    /// The render's metadata; its `model_media` is empty.
+    pub render: CanvasRender,
+}
+
+/// Who a Canvas call outside an agent turn runs as: the acting user, and the
+/// bot acting for them when there is one, which attributes edits the way the
+/// Canvas tools do.
+#[derive(Debug, Clone)]
+pub struct CanvasCaller {
+    /// The user whose access, billing and file ownership apply.
+    pub user: MacroUserIdStr<'static>,
+    /// The bot's storage id, as the token's attribution actor.
+    pub actor: Option<String>,
+    /// The bot's display name for AI presence, when it is a system bot.
+    pub editor: Option<EditorName>,
+}
+
+impl CanvasCaller {
+    /// The caller behind a receipt; `None` when no user acts, such as a bot
+    /// with no acting user or an internal call, which have no one to bill.
+    pub fn of<T: RequiredPermission>(receipt: &EntityAccessReceipt<T>) -> Option<Self> {
+        let bot = match receipt.auth() {
+            EntityAccessAuth::Bot(bot) => Some(bot.bot_id()),
+            EntityAccessAuth::Authenticated(_)
+            | EntityAccessAuth::Unauthenticated
+            | EntityAccessAuth::Internal => None,
+        };
+        Some(Self {
+            user: receipt.acting_user_id()?.clone(),
+            actor: bot.map(|bot| bot.into_storage_id().to_string()),
+            editor: bot
+                .and_then(|bot| bot_id::system_bot(bot).and_then(|bot| EditorName::new(bot.name))),
+        })
+    }
 }
 
 /// Internal worker result including billable per-model usage.
@@ -249,16 +342,16 @@ impl<D: CanvasDocumentLookup, W: EditingWorkerService> CanvasService<D, W> {
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
         user: &MacroUserIdStr<'static>,
-        actor: &str,
+        actor: Option<&str>,
         item_ids: Option<Vec<String>>,
         format: Option<CanvasReadFormat>,
-    ) -> anyhow::Result<CanvasResponse> {
-        anyhow::ensure!(
+    ) -> Result<CanvasResponse, CanvasError> {
+        ensure(
             item_ids
                 .as_ref()
                 .is_none_or(|ids| ids.len() <= 100 && ids.iter().all(|id| id.len() <= 200)),
-            "Read at most 100 Canvas item IDs of at most 200 bytes each."
-        );
+            "Read at most 100 Canvas item IDs of at most 200 bytes each.",
+        )?;
         self.ensure_canvas(&receipt.entity().entity_id).await?;
         Ok(self
             .run(
@@ -278,25 +371,27 @@ impl<D: CanvasDocumentLookup, W: EditingWorkerService> CanvasService<D, W> {
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
         user: &MacroUserIdStr<'static>,
-        actor: &str,
+        actor: Option<&str>,
         item_ids: Option<Vec<String>>,
         crop: Option<CanvasBounds>,
-    ) -> anyhow::Result<CanvasRender> {
-        anyhow::ensure!(
-            item_ids.as_ref().is_none_or(|ids| !ids.is_empty()
-                && ids.len() <= 100
-                && ids.iter().all(|id| !id.is_empty() && id.len() <= 200)),
-            "Render at most 100 nonempty item IDs."
-        );
+    ) -> Result<CanvasRender, CanvasError> {
+        ensure(
+            item_ids.as_ref().is_none_or(|ids| {
+                !ids.is_empty()
+                    && ids.len() <= 100
+                    && ids.iter().all(|id| !id.is_empty() && id.len() <= 200)
+            }),
+            "Render at most 100 nonempty item IDs.",
+        )?;
         if let Some(crop) = &crop {
-            anyhow::ensure!(
+            ensure(
                 [crop.x, crop.y, crop.width, crop.height]
                     .iter()
                     .all(|value| value.is_finite() && value.abs() <= 1_000_000.0)
                     && crop.width > 0.0
                     && crop.height > 0.0,
-                "Invalid bounded Canvas crop."
-            );
+                "Invalid bounded Canvas crop.",
+            )?;
         }
         self.ensure_canvas(&receipt.entity().entity_id).await?;
         let result = self
@@ -308,22 +403,53 @@ impl<D: CanvasDocumentLookup, W: EditingWorkerService> CanvasService<D, W> {
                 CanvasRequest::Render { item_ids, crop },
             )
             .await?;
-        let render = result
-            .response
-            .render
-            .ok_or_else(|| anyhow::anyhow!("Canvas renderer returned no image."))?;
-        anyhow::ensure!(
-            render.model_media.len() == 1
-                && render
-                    .model_media
-                    .iter()
-                    .all(|image| image.r#type == "image"
-                        && image.media_type == "image/png"
-                        && image.data.len() <= 4_000_000
-                        && image.data.starts_with("iVBORw0KGgo")),
-            "Invalid Canvas render image."
-        );
+        let render = result.response.render.ok_or_else(|| {
+            CanvasError::Failed(anyhow::anyhow!("Canvas renderer returned no image."))
+        })?;
+        if !(render.model_media.len() == 1
+            && render.model_media.iter().all(|image| {
+                image.r#type == "image"
+                    && image.media_type == "image/png"
+                    && image.data.len() <= 4_000_000
+                    && image.data.starts_with("iVBORw0KGgo")
+            }))
+        {
+            return Err(CanvasError::Failed(anyhow::anyhow!(
+                "Invalid Canvas render image."
+            )));
+        }
         Ok(render)
+    }
+
+    /// Render like [`Self::render`] and keep the PNG as a static file owned by
+    /// `user`, for callers that pass images by reference rather than inline.
+    #[tracing::instrument(skip_all, fields(document_id = %receipt.entity().entity_id, file_id), err)]
+    pub async fn render_to_file(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+        user: &MacroUserIdStr<'static>,
+        actor: Option<&str>,
+        item_ids: Option<Vec<String>>,
+        crop: Option<CanvasBounds>,
+        images: &dyn CanvasImageStore,
+    ) -> Result<StoredCanvasRender, CanvasError> {
+        use base64::Engine as _;
+        let document_id = receipt.entity().entity_id.clone();
+        let mut render = self.render(receipt, user, actor, item_ids, crop).await?;
+        let media = std::mem::take(&mut render.model_media);
+        let png = media
+            .into_iter()
+            .next()
+            .map(|image| base64::engine::general_purpose::STANDARD.decode(image.data))
+            .transpose()
+            .map_err(|error| CanvasError::Failed(error.into()))?
+            .ok_or_else(|| CanvasError::Failed(anyhow::anyhow!("Canvas render had no image.")))?;
+        let image = images
+            .save_png(user, &format!("canvas-{document_id}.png"), png)
+            .await
+            .map_err(CanvasError::Internal)?;
+        tracing::Span::current().record("file_id", image.file_id.as_str());
+        Ok(StoredCanvasRender { image, render })
     }
 
     /// Authorize, admit, run and meter one natural-language edit.
@@ -332,20 +458,20 @@ impl<D: CanvasDocumentLookup, W: EditingWorkerService> CanvasService<D, W> {
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
         user: &MacroUserIdStr<'static>,
-        actor: &str,
+        actor: Option<&str>,
         instructions: String,
         editor_name: Option<EditorName>,
-    ) -> anyhow::Result<CanvasResponse> {
-        anyhow::ensure!(
+    ) -> Result<CanvasResponse, CanvasError> {
+        ensure(
             !instructions.trim().is_empty() && instructions.len() <= 20000,
-            "Canvas instructions must contain 1–20000 bytes."
-        );
+            "Canvas instructions must contain 1–20000 bytes.",
+        )?;
         // Type validation happens before admission and before the model can start.
         self.ensure_canvas(&receipt.entity().entity_id).await?;
         self.admission
             .admit(user, AiFeature::AiEditing)
             .await
-            .map_err(|error| anyhow::anyhow!("{}: {error}", error.code()))?;
+            .map_err(CanvasError::Admission)?;
         let result = self
             .run(
                 &receipt.entity().entity_id,
@@ -372,10 +498,10 @@ impl<D: CanvasDocumentLookup, W: EditingWorkerService> CanvasService<D, W> {
             ));
         }
         if let Some(error) = result.failure {
-            anyhow::bail!(
+            return Err(CanvasError::Failed(anyhow::anyhow!(
                 "Canvas editing stopped after {} acknowledged operations: {error}. Further partial edits may have applied. ReadCanvas before retrying.",
                 result.response.operations_applied
-            );
+            )));
         }
         Ok(result.response)
     }
@@ -386,9 +512,9 @@ impl<D: CanvasDocumentLookup, W: EditingWorkerService> CanvasService<D, W> {
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
         user: &MacroUserIdStr<'static>,
-        actor: &str,
+        actor: Option<&str>,
         request: CanvasRequest,
-    ) -> anyhow::Result<CanvasResponse> {
+    ) -> Result<CanvasResponse, CanvasError> {
         let CanvasRequest::Apply {
             expected_revision,
             code,
@@ -396,25 +522,29 @@ impl<D: CanvasDocumentLookup, W: EditingWorkerService> CanvasService<D, W> {
             ..
         } = &request
         else {
-            anyhow::bail!("Expected a direct Canvas SDK batch.");
+            return Err(CanvasError::Invalid(
+                "Expected a direct Canvas SDK batch.".to_owned(),
+            ));
         };
-        anyhow::ensure!(
+        ensure(
             expected_revision.len() == 64
                 && expected_revision.bytes().all(|b| b.is_ascii_hexdigit()),
-            "Use the immutable revision from a fresh ReadCanvas."
-        );
-        anyhow::ensure!(
+            "Use the immutable revision from a fresh ReadCanvas.",
+        )?;
+        ensure(
             !code.trim().is_empty() && code.len() <= 50000,
-            "Canvas code must contain 1–50000 bytes."
-        );
-        anyhow::ensure!(
-            snippets.as_ref().is_none_or(|values| values.len() <= 100
-                && values
-                    .iter()
-                    .all(|(key, value)| key.len() <= 200 && value.len() <= 20000)
-                && values.values().map(String::len).sum::<usize>() <= 50000),
-            "Canvas snippets exceed the bounded text budget."
-        );
+            "Canvas code must contain 1–50000 bytes.",
+        )?;
+        ensure(
+            snippets.as_ref().is_none_or(|values| {
+                values.len() <= 100
+                    && values
+                        .iter()
+                        .all(|(key, value)| key.len() <= 200 && value.len() <= 20000)
+                    && values.values().map(String::len).sum::<usize>() <= 50000
+            }),
+            "Canvas snippets exceed the bounded text budget.",
+        )?;
         self.ensure_canvas(&receipt.entity().entity_id).await?;
         let result = self
             .run(
@@ -425,46 +555,59 @@ impl<D: CanvasDocumentLookup, W: EditingWorkerService> CanvasService<D, W> {
                 request,
             )
             .await?;
-        anyhow::ensure!(
-            result.usage.is_empty(),
-            "Direct Canvas edits must not invoke a model."
-        );
+        if !result.usage.is_empty() {
+            return Err(CanvasError::Failed(anyhow::anyhow!(
+                "Direct Canvas edits must not invoke a model."
+            )));
+        }
         if let Some(error) = result.failure {
-            anyhow::bail!(
+            return Err(CanvasError::Failed(anyhow::anyhow!(
                 "Canvas batch stopped after {} acknowledged operations: {error}. ReadCanvas before retrying; a lost acknowledgement is uncertain.",
                 result.response.operations_applied
-            );
+            )));
         }
         Ok(result.response)
     }
 
-    async fn ensure_canvas(&self, document_id: &str) -> anyhow::Result<()> {
-        let file_type = self.documents.file_type(document_id).await?;
-        anyhow::ensure!(
+    async fn ensure_canvas(&self, document_id: &str) -> Result<(), CanvasError> {
+        let file_type = self
+            .documents
+            .file_type(document_id)
+            .await
+            .map_err(CanvasError::Internal)?;
+        ensure(
             file_type.as_deref() == Some("canvas"),
-            "This tool requires a Macro canvas. Use the matching document tool for other file types."
-        );
-        Ok(())
+            "This tool requires a Macro canvas. Use the matching document tool for other file types.",
+        )
     }
 
     async fn run(
         &self,
         document_id: &str,
         user: &MacroUserIdStr<'static>,
-        actor: &str,
+        actor: Option<&str>,
         access: AccessLevel,
         request: CanvasRequest,
-    ) -> anyhow::Result<CanvasResult> {
+    ) -> Result<CanvasResult, CanvasError> {
         let token = encode_permission_token(
             Some(user.to_string()),
             document_id.to_owned(),
             access,
             &self.token_secret,
-            Some(actor.to_owned()),
-        )?;
+            actor.map(str::to_owned),
+        )
+        .map_err(|error| CanvasError::Internal(error.into()))?;
         self.worker
             .canvas(document_id, &token, &request, self.artifacts)
             .await
+    }
+}
+
+fn ensure(condition: bool, message: &str) -> Result<(), CanvasError> {
+    if condition {
+        Ok(())
+    } else {
+        Err(CanvasError::Invalid(message.to_owned()))
     }
 }
 

@@ -10,13 +10,12 @@ import {
 import { Property } from '../property';
 import type { PropertyApiValues, Property as PropertyT } from '../types';
 
-// Seed mock display names so user properties render real first names.
-seedMockDisplayNames([
+const MOCK_NAMES = [
   { id: 'macro|alex@example.com', firstName: 'Alex', lastName: 'Owner' },
   { id: 'macro|sam@example.com', firstName: 'Sam', lastName: 'Shared' },
   { id: 'macro|jordan@example.com', firstName: 'Jordan', lastName: 'Team' },
   { id: 'macro|current@example.com', firstName: 'Current', lastName: 'User' },
-]);
+];
 
 const Section: Component<{ title: string; children: JSX.Element }> = (
   props
@@ -70,6 +69,7 @@ const Grid: Component<{
  * Mounted at /props-debug via componentRegistry (LOCAL_ONLY).
  */
 const PropertyDebug: Component = () => {
+  seedMockDisplayNames(MOCK_NAMES);
   // For now the demo renders straight from the fixtures. A future enhancement
   // could make edits round-trip through a local store so save/clear visibly
   // mutate state.

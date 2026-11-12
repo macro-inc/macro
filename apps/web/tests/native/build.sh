@@ -16,6 +16,7 @@ export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$out/prepare-target}"
 just ensure-cache-wasm
 just ensure-agent-fold-wasm
 just ensure-database-sql-wasm
+just ensure-natural-time-wasm
 just ensure-pptx-engine-wasm
 just ensure-docx-engine-wasm
 just ensure-fig-engine-wasm

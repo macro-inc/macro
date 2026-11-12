@@ -17,6 +17,7 @@ rootcause = { workspace = true }
 serde = { workspace = true }
 serde_urlencoded = { workspace = true, optional = true }
 sqlx = { workspace = true, optional = true }
+strum = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["rt", "macros"] }
 tracing = { workspace = true }
@@ -27,4 +28,5 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 macro_auth = { path = "../macro_auth", features = ["testing"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
 serde_json = { workspace = true }
+tower = { workspace = true, features = ["util"] }
 

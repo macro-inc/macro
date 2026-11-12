@@ -67,10 +67,15 @@ current, ingests the traffic of added chats (`external_chat`) through `whatsapp_
   `events::complete_addresses` fills the other half of a sender's and a
   direct chat's phone-number/LID pair from the account's LID store (pairing,
   group participant lists, message addressing); `from_me` carries WhatsApp's
-  own-message flag. `whatsapp.inbound.ingest` records the sender's shape
+  own-message flag. A sender with no push name (history pages rarely carry
+  one; `-` means none) is named from the contact store
+  (`events::complete_sender_name`: push name for either address, else
+  address book, else business name), and roster reads name participants the
+  same way (`complete_participant_names`, one `get_all_contacts` per read).
+  `whatsapp.inbound.ingest` records the sender's shape
   (`chat_kind`, `sender_address`, `sender_alternate`, `sender_named`,
   `history`; never an address or a name) and `whatsapp.history.page` counts
-  senders `push_named` / `contact_named` (the contact store knows a name) /
+  senders `push_named` / `contact_named` (named from the contact store) /
   `unnamed`. If the LID store can't be read, the event is left
   unacknowledged (WhatsApp redelivers it) rather than gated without its
   other address. History requests name a direct chat by LID

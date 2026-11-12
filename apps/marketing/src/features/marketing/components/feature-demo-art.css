@@ -1,0 +1,195 @@
+/* Upright workspace cards with open conversation bubbles, as on the homepage. */
+.feature-demo-art {
+  --feature-glow: #7abde5;
+  position: relative;
+  isolation: isolate;
+  padding: 36px 0 28px;
+}
+.feature-demo-art[data-tone=chat] { --feature-glow: #8d9de9; }
+.feature-demo-art[data-tone=documents] { --feature-glow: #b8a1ed; }
+.feature-demo-art[data-tone=tasks] { --feature-glow: #65d8ac; }
+.feature-demo-art[data-tone=agents], .feature-demo-art[data-tone=github] { --feature-glow: #f77d67; }
+.feature-demo-art[data-tone=calls] { --feature-glow: #e99cbb; }
+.feature-demo-art[data-tone=crm] { --feature-glow: #f4c65c; }
+.feature-demo-art > .feature-demo-backdrop { inset: -50px -80px; }
+.feature-demo-art { display: flex; flex-direction: column; gap: 28px; }
+.feature-demo-primary { position: relative; width: 100%; order: 1; }
+.feature-page .feature-demo-primary .feature-page-visual { width: 100%; margin: 0; }
+.feature-demo-context {
+  position: relative;
+  width: min(680px, 100%);
+  margin: 0 auto;
+  order: 0;
+  pointer-events: none;
+}
+.feature-demo-context .homepage-conversation { margin: 0; font-size: 16px; line-height: 1.65; }
+.feature-demo-context .homepage-message { max-width: 100%; width: 100%; }
+.feature-demo-context .homepage-enter { opacity: 1; transform: none; animation: none; }
+.feature-demo-context .homepage-message [data-user-message-bubble] { font-size: inherit; line-height: inherit; }
+
+/* The same quiet surface and edge as the homepage email composer. */
+.feature-page .feature-demo-art .product-demo,
+.feature-demo-art .mail-sharing-splits > .mail-sharing-email {
+  --product-demo-fade-tail: 0px;
+  padding-bottom: 0;
+  border: 0;
+  border-radius: 26.25px;
+  mask-image: none;
+  -webkit-mask-image: none;
+  background: linear-gradient(135deg, #ffffff07, transparent 55%), rgb(16 16 18 / 64%);
+  box-shadow: inset 0 1px 0 #ffffff12, inset 0 0 0 1px #ffffff07, 0 14px 32px -24px #0009;
+}
+.feature-page .feature-demo-art .product-demo-stage::before,
+.feature-page .feature-demo-art .product-demo-stage::after { display: none; }
+.feature-demo-primary:has(.feature-page-visual[data-demo-active=true]) { z-index: 3; }
+
+/* Let live email sharing keep its conversation outside the email card. */
+.feature-page .feature-demo-art .mail-sharing-stage .mail-app {
+  height: auto;
+  overflow: visible;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  mask-image: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.feature-demo-art .mail-sharing-stage .mail-app::before { display: none; }
+.feature-demo-art .mail-sharing-splits { display: flex; flex-direction: column; height: auto; gap: 28px; }
+.feature-demo-art .mail-sharing-splits > section { display: block; position: relative; width: 100%; }
+.feature-demo-art .mail-sharing-splits > .mail-sharing-email { height: 450px; overflow: hidden; }
+.feature-demo-art .mail-sharing-splits > .mail-sharing-chat {
+  width: min(680px, 100%);
+  height: 340px;
+  margin: 0 auto;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+.feature-demo-art .mail-sharing-stage .mail-share-scrim { padding: 66px 24px 24px; z-index: 3; }
+.feature-demo-art .mail-sharing-stage .mail-share-form { border-radius: 22px; }
+.feature-demo-art .mail-sharing-stage .mail-channel-messages .homepage-conversation { font-size: 16px; }
+.feature-demo-art .mail-sharing-email .mail-thread-body { font-size: 16px; }
+
+/* Agent messages and tool activity lead into the upright document card. */
+.feature-demo-art .doc-agent-rebuilt { display: flex; flex-direction: column; }
+.feature-demo-art .doc-agent-rebuilt > .product-demo-stage { order: 2; width: 100%; }
+.feature-demo-art .doc-agent-conversation {
+  order: 0;
+  width: min(680px, 100%);
+  max-width: none;
+  margin: 0 auto 12px;
+}
+.feature-demo-art .doc-agent-tools {
+  order: 1;
+  width: min(680px, 100%);
+  max-width: none;
+  margin: 0 auto 28px;
+  padding-inline: 16px;
+}
+@media (max-width: 699px) {
+  .feature-demo-art { padding: 24px 0; gap: 24px; }
+  .feature-demo-art > .feature-demo-backdrop { inset: -20px -12px; }
+  .feature-demo-context .homepage-conversation { font-size: 15px; }
+  .feature-demo-art .doc-agent-tools { padding-inline: 0; margin-bottom: 24px; }
+  .feature-demo-art .mail-sharing-splits > .mail-sharing-email { height: 470px; }
+  .feature-demo-art .mail-sharing-splits > .mail-sharing-chat { height: 370px; }
+  .feature-demo-art .mail-sharing-stage .mail-share-scrim { padding: 58px 12px 12px; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .feature-page .feature-demo-art .product-demo,
+  .feature-demo-art .mail-sharing-splits > .mail-sharing-email { background: #111113; }
+}
+
+/* A 12px glass surround keeps the onboarding texture outside the UI. */
+.feature-demo-art[data-glass-frame] > .feature-demo-primary {
+  box-sizing: border-box;
+  width: calc(100% + 24px);
+  margin: -12px;
+  padding: 12px;
+  border-radius: 38px;
+  background: linear-gradient(135deg, #ffffff0c, #ffffff03 55%, #65d8ac08);
+  box-shadow: inset 0 0 0 1px #ffffff14, 0 16px 48px -24px #0008;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.feature-page .feature-demo-art[data-glass-frame] .product-demo,
+.feature-page .product-page .feature-page-section .product-demo {
+  background: linear-gradient(135deg, #ffffff0b, transparent 55%), rgb(16 16 18 / 64%);
+  backdrop-filter: blur(16px) saturate(115%);
+  -webkit-backdrop-filter: blur(16px) saturate(115%);
+  box-shadow: inset 0 1px 0 #ffffff18, inset 0 0 0 1px #ffffff0c, 0 14px 32px -24px #0009;
+}
+.feature-demo-art[data-glass-frame] > .feature-demo-backdrop {
+  inset: -108px -120px;
+  --workspace-dots-opacity: .4;
+  --workspace-grain-opacity: .24;
+  --workspace-texture-mask: radial-gradient(ellipse 42% 45% at 18% 30%, #000b, transparent 85%), radial-gradient(ellipse 38% 48% at 82% 70%, #0009, transparent 85%);
+}
+.feature-demo-art[data-glass-frame] > .feature-demo-backdrop::before {
+  opacity: .7;
+  background:
+    radial-gradient(ellipse 42% 42% at 18% 30%, color-mix(in srgb, var(--feature-glow) 18%, transparent), transparent 80%),
+    radial-gradient(ellipse 38% 48% at 82% 70%, color-mix(in srgb, var(--feature-glow) 13%, transparent), transparent 82%);
+}
+@media (prefers-reduced-transparency: reduce) {
+  .feature-page .feature-demo-art[data-glass-frame] .product-demo { backdrop-filter: none; -webkit-backdrop-filter: none; background: #101012; }
+  .feature-demo-art[data-glass-frame] > .feature-demo-primary { backdrop-filter: none; -webkit-backdrop-filter: none; background: #141917; }
+}
+
+.feature-page .feature-page-section .product-demo-stage::before,
+.feature-page .feature-page-section .product-demo-stage::after { display: none; }
+.feature-page .product-page .feature-page-section .product-demo {
+  --product-demo-fade-tail: 0px;
+  padding-bottom: 0; border: 0; border-radius: 26.25px;
+  mask-image: none; -webkit-mask-image: none;
+}
+/* Compact channel controls retain the normal top-bar height. */
+.feature-page-section [data-view-shell-top-bar] > .sample-tabs-inset { margin-left: 12px; }
+.feature-page-section .sample-chat-composer .mail-channel-input,
+.feature-page-section .sample-thread-editor .mail-channel-input {
+  min-height: 24px; max-height: 24px; white-space: pre;
+  overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
+}
+.feature-page-section :is(.sample-task-properties .review-pr-mention, .review-pr-pill, [data-slot='property-pill']:not(.sample-list-property), [aria-label^='Change tag'], [aria-label='Checklist progress'], .task-pr-pill) {
+  background: linear-gradient(135deg, #ffffff09, #ffffff02), rgb(30 32 32 / 54%);
+  border: 0;
+  box-shadow: inset 0 1px 0 #ffffff0c, inset 0 0 0 1px #ffffff06;
+  backdrop-filter: blur(10px) saturate(110%);
+}
+/* Status labels must not change where the remaining badges wrap. */
+.feature-page-section .sample-task-properties [aria-label='Change status'] { width: 120px; }
+@media (prefers-reduced-transparency: reduce) {
+  .feature-page-section :is(.sample-task-properties .review-pr-mention, .review-pr-pill, [data-slot='property-pill']:not(.sample-list-property), [aria-label^='Change tag'], [aria-label='Checklist progress'], .task-pr-pill) {
+    background: #202222;
+    backdrop-filter: none;
+  }
+}
+
+/* A single spine owns the vertical stroke; branches only draw the turn. */
+.feature-page-section .sample-channel-thread[data-thread-open=true]::before {
+  width: 0;
+  background: none;
+  border-left: 1px solid var(--color-edge);
+}
+.feature-page-section .sample-thread-replies .sample-message-row::before {
+  clip-path: inset(0 0 0 1px);
+}
+.feature-page-section .sample-thread-reply-button::before {
+  clip-path: inset(16px 0 0 0);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .feature-page .product-page .feature-page-section .product-demo { background: #101012; backdrop-filter: none; }
+}
+
+/* Custom email demos and homepage document scenes use the same inner material. */
+.feature-page .feature-demo-art :is(.mail-app, .macro-preview-back, .mds-card) {
+  background: linear-gradient(135deg, #ffffff0b, transparent 55%), rgb(16 16 18 / 64%);
+  backdrop-filter: blur(16px) saturate(115%);
+  -webkit-backdrop-filter: blur(16px) saturate(115%);
+}
+@media (prefers-reduced-transparency: reduce) {
+  .feature-page .feature-demo-art :is(.mail-app, .macro-preview-back, .mds-card) { background: #101012; backdrop-filter: none; -webkit-backdrop-filter: none; }
+}

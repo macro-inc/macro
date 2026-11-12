@@ -1,3 +1,4 @@
+pub mod catalog;
 pub mod code_check;
 pub mod code_upgrade;
 pub mod drafts;
@@ -10,6 +11,7 @@ pub mod ports;
 pub mod program_runner;
 pub mod read_service;
 pub mod service;
+pub mod suggestions;
 pub mod target_runner;
 pub mod target_validation;
 pub mod templates;

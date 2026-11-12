@@ -185,6 +185,10 @@ pub struct CreateDocumentResponseData {
 
 pub type CreateDocumentResponse = TypedSuccessResponse<CreateDocumentResponseData>;
 
+/// Error `code` of the 404 body returned when a create names an
+/// `email_attachment_id` that no longer exists.
+pub const EMAIL_ATTACHMENT_NOT_FOUND_CODE: &str = "EMAIL_ATTACHMENT_NOT_FOUND";
+
 #[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateDocumentRequest {

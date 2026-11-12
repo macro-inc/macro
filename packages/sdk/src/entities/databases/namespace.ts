@@ -64,12 +64,16 @@ import {
  *
  * **Verify.** After a change, read back the affected schema or rows before claiming success. After an ambiguous failure, inspect the current state before retrying a create or insert. Never describe a proposed change as saved.
  *
- * **Answers.** Answer a question about the data, or a request for a chart, with a saved live query block beside a sentence stating the answer, never with a block you wrote or edited yourself. A query result, a saved question, and a document containing its block are different outcomes: say which happened.
+ * **Answers.** Answer a question about the data, or a request for a chart, with a saved live query block beside a sentence stating the answer, never with a block you wrote or edited yourself: run the `SELECT` with `database.query`, save exactly that SQL with `database.saveQuery`, and put its `toBlock()` in the document. Restyle an answer with `withView`; to ask something else, save a new question. A query result, a saved question, and a document containing its block are different outcomes: say which happened.
  */
 export class DatabaseNamespace {
   constructor(private readonly client: MacroClient) {}
 
-  /** Run one SQL statement over the caller's visible databases. Writes execute once. */
+  /**
+   * Run one SQL statement over the caller's visible databases. Writes execute once.
+   *
+   * @destructive
+   */
   query(
     sql: string,
     options?: DatabaseQueryOptions,
@@ -82,12 +86,20 @@ export class DatabaseNamespace {
     return Database.byId(this.client, id);
   }
 
-  /** Create a database owned by the caller. */
+  /**
+   * Create a database owned by the caller.
+   *
+   * @write
+   */
   create(options: { name: string }): Promise<Database> {
     return Database.create(this.client, options);
   }
 
-  /** The databases the caller can see. */
+  /**
+   * The databases the caller can see.
+   *
+   * @readonly
+   */
   list(): Promise<Database[]> {
     return Database.list(this.client);
   }

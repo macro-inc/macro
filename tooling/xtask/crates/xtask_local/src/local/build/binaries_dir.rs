@@ -1,4 +1,4 @@
-//! Provenance-agnostic binary directory: host zigbuild output or a Nix/crane
+//! Provenance-agnostic binary directory: host cargo output or a Nix/crane
 //! store path. The orchestrator only cares about the resulting `/app/out`
 //! mount, not how the binaries were produced.
 
@@ -10,11 +10,9 @@ use anyhow::{Context, Result, bail};
 /// Where the service binaries live on the host.
 #[derive(Clone, Debug)]
 pub enum BinariesDir {
-    /// A cargo target dir (host zigbuild output). Dynamically links against the
-    /// runtime image's own glibc; no `/nix/store` needed.
+    /// A cargo target dir (host output from the Nix dev shell).
     TargetDir(PathBuf),
-    /// A Nix/crane `…/bin` dir. The binaries link the nix dynamic linker, so
-    /// the host `/nix/store` must also be mounted read-only.
+    /// A Nix/crane `…/bin` dir, kept alive by a GC root while containers mount it.
     NixStore(PathBuf),
 }
 
@@ -56,19 +54,14 @@ impl BinariesDir {
         }
     }
 
-    fn needs_nix_store(&self) -> bool {
-        matches!(self, BinariesDir::NixStore(_))
-    }
-
-    /// The compose `volumes:` entries every Rust service needs. Always the
-    /// `/app/out` mount; plus `/nix/store` read-only when the binaries are
-    /// nix-linked.
+    /// The compose `volumes:` entries every Rust service needs: `/app/out`, and
+    /// `/nix/store` because both kinds of binary use Nix's dynamic linker and
+    /// libraries rather than the runtime image's.
     pub fn compose_mounts(&self) -> Vec<String> {
-        let mut mounts = vec![format!("{}:/app/out:ro", self.host_dir().display())];
-        if self.needs_nix_store() {
-            mounts.push("/nix/store:/nix/store:ro".to_string());
-        }
-        mounts
+        vec![
+            format!("{}:/app/out:ro", self.host_dir().display()),
+            "/nix/store:/nix/store:ro".to_string(),
+        ]
     }
 
     /// Assert every expected binary exists in the directory.
@@ -80,7 +73,7 @@ impl BinariesDir {
             .collect();
         if !missing.is_empty() {
             bail!(
-                "binaries dir {} is missing: {}\n  build with `cargo x zigbuild` \
+                "binaries dir {} is missing: {}\n  build with `cargo x build-services` \
                  (or pass --binaries-dir / drop --no-build)",
                 self.host_dir().display(),
                 missing.join(", ")

@@ -1,5 +1,5 @@
-import Envelope from '@phosphor/envelope.svg';
-import X from '@phosphor/x.svg';
+import Envelope from '@icon/system/regular/envelope.svg';
+import X from '@icon/system/regular/x.svg';
 import { Button } from '@ui';
 import {
   createEffect,

@@ -5,7 +5,10 @@ use thiserror::Error;
 use tokio::sync::mpsc::{Receiver, channel};
 use url::Url;
 
-use super::ports::FsRepo;
+use super::{
+    ports::FsRepo,
+    startup::{BundleRejection, SavedSelection, SavedSelectionRead},
+};
 
 /// Name of the file used to persist the bundle root path across restarts.
 const BUNDLE_ROOT_FILE: &str = "bundle_root";
@@ -32,34 +35,68 @@ impl BundleRoot {
         Self::Ota(path)
     }
 
-    /// Load persisted bundle root from the given cache directory.
-    pub(crate) async fn load(cache_dir: &Path, fs: &impl FsRepo) -> Self {
+    /// Load persisted bundle root from the given cache directory, with what
+    /// the persisted selection held.
+    pub(crate) async fn load(cache_dir: &Path, fs: &impl FsRepo) -> (Self, SavedSelectionRead) {
         let persist_path = cache_dir.join(BUNDLE_ROOT_FILE);
         tracing::debug!("Loading bundle root from {persist_path:?}");
-        match fs.read_to_string(&persist_path).await {
-            Ok(contents) => {
-                if contents.trim() == EMBEDDED_BUNDLE_MARKER {
-                    return Self::Embedded;
-                }
-                // Preserve compatibility with the original absolute-path marker.
-                let path = PathBuf::from(contents.trim());
-                let index = path.join("index.html");
-                if fs.read_to_string(&index).await.is_ok() {
-                    tracing::debug!("Restored bundle root: {path:?}");
-                    Self::Ota(path)
-                } else {
-                    tracing::warn!(
-                        "Persisted bundle root {path:?} missing index.html at {index:?}"
-                    );
-                    if let Err(e) = fs.remove_file(&persist_path).await {
-                        tracing::debug!("Failed to remove stale bundle_root file: {e}");
-                    }
-                    Self::Uninitialized
-                }
-            }
+        let contents = match fs.read_to_string(&persist_path).await {
+            Ok(contents) => contents,
             Err(e) => {
                 tracing::debug!("No persisted bundle root: {e}");
-                Self::Uninitialized
+                let read = if e.kind() == std::io::ErrorKind::NotFound {
+                    SavedSelectionRead {
+                        selection: SavedSelection::None,
+                        rejection: None,
+                        read_error: None,
+                    }
+                } else {
+                    SavedSelectionRead {
+                        selection: SavedSelection::Unreadable,
+                        rejection: None,
+                        read_error: Some(e.kind()),
+                    }
+                };
+                return (Self::Uninitialized, read);
+            }
+        };
+
+        if contents.trim() == EMBEDDED_BUNDLE_MARKER {
+            let read = SavedSelectionRead {
+                selection: SavedSelection::Embedded,
+                rejection: None,
+                read_error: None,
+            };
+            return (Self::Embedded, read);
+        }
+
+        // Preserve compatibility with the original absolute-path marker.
+        let path = PathBuf::from(contents.trim());
+        let index = path.join("index.html");
+        match fs.read_to_string(&index).await {
+            Ok(_) => {
+                tracing::debug!("Restored bundle root: {path:?}");
+                let read = SavedSelectionRead {
+                    selection: SavedSelection::Ota,
+                    rejection: None,
+                    read_error: None,
+                };
+                (Self::Ota(path), read)
+            }
+            Err(e) => {
+                tracing::warn!(
+                    error_kind = ?e.kind(),
+                    "Persisted bundle root {path:?} missing index.html at {index:?}"
+                );
+                if let Err(e) = fs.remove_file(&persist_path).await {
+                    tracing::debug!("Failed to remove stale bundle_root file: {e}");
+                }
+                let read = SavedSelectionRead {
+                    selection: SavedSelection::Ota,
+                    rejection: Some(BundleRejection::EntrypointUnreadable),
+                    read_error: Some(e.kind()),
+                };
+                (Self::Uninitialized, read)
             }
         }
     }

@@ -1,3 +1,4 @@
+import { TutorialPill } from '@app/features/video-tutorials';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSidePanel } from '@components/app/side-panel';
 import { createImageActions } from '@core/component/ImageActions';
@@ -135,6 +136,12 @@ export function CanvasView(props: {
     src: imageSource.url,
     imageId: () => selectedImage()?.id ?? '',
   });
+  // Only the root surface: nothing drawn or placed yet. Stops at the first item.
+  const emptyBoard = () => {
+    const { items, rootId } = state.snapshot();
+    for (const id in items) if (id !== rootId) return false;
+    return true;
+  };
   const imageActionsDisabled = () =>
     !imageSource.url() || imageActions.isPrefetching() || imageActions.isBusy();
   const styleKinds = () =>
@@ -861,6 +868,12 @@ export function CanvasView(props: {
             onClose={focus}
           />
         </ContextMenu>
+        {/* A new board's empty state, until something is on it or a drawing tool is picked. */}
+        <Show when={emptyBoard() && state.tool() === 'select'}>
+          <div class="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
+            <TutorialPill tutorial="canvas" class="pointer-events-auto" />
+          </div>
+        </Show>
         <CanvasDrawingToolbar
           onAttach={props.insert.openFromToolbar}
           attachOpen={!!props.insert.location()}

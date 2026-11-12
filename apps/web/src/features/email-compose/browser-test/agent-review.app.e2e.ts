@@ -167,7 +167,7 @@ test('a status saved elsewhere replaces the open draft card', async ({
   await expect(page.locator('[contenteditable="true"]')).toHaveCount(0);
 });
 
-test('a draft edited elsewhere offers to reload the saved review', async ({
+test('a draft edited elsewhere replaces the open draft when nothing is unsaved', async ({
   page,
 }) => {
   const server = await serveReview(page, initial);
@@ -188,9 +188,12 @@ test('a draft edited elsewhere offers to reload the saved review', async ({
       draft: { ...item.draft, body: 'Changed by a teammate' },
     })),
   };
+  await expect(page.locator('[contenteditable="true"]')).toHaveText(
+    'Changed by a teammate'
+  );
   await expect(
     page.getByRole('button', { name: 'Reload saved review' })
-  ).toBeVisible();
+  ).toHaveCount(0);
 });
 
 test('a review loaded before presentation becomes editable once presented', async ({

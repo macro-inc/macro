@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   moveEntities: vi.fn(),
+  removeFromFolder: vi.fn(),
   toast: { success: vi.fn(), failure: vi.fn(), dismiss: vi.fn() },
 }));
 
@@ -35,6 +36,9 @@ vi.mock('@queries/storage/folder-list', () => ({
   }),
 }));
 vi.mock('../utils', () => ({ restoreSoupFocus: vi.fn() }));
+vi.mock('./make-remove-from-project-action', () => ({
+  makeRemoveFromProjectAction: () => ({ execute: mocks.removeFromFolder }),
+}));
 
 import {
   createFolderDropTargets,
@@ -124,6 +128,18 @@ function FolderRows() {
         );
       }}
     </For>
+  );
+}
+
+/** Drive's sidebar root row, where rows leave their folder. */
+function DriveRootRow() {
+  const target = createFolderDropTargets()?.(() => null);
+  return (
+    <div
+      ref={(element) => target?.ref(element)}
+      data-testid="drive-root"
+      data-over={target?.isOver()}
+    />
   );
 }
 
@@ -434,6 +450,50 @@ describe('FolderDropZone', () => {
 
     await vi.waitFor(() => expect(mocks.toast.failure).toHaveBeenCalled());
     expect(mocks.toast.success).not.toHaveBeenCalled();
+    expect(clear).not.toHaveBeenCalled();
+  });
+
+  it('takes a row out of its folder when dropped on the Drive root', async () => {
+    mocks.removeFromFolder.mockResolvedValue(true);
+    const clear = vi.fn();
+    const filed = { ...doc('filed'), projectId: 'folder' };
+    const { start, drop } = setup(
+      dragData(filed, { selected: [filed], clear }),
+      DriveRootRow
+    );
+
+    start();
+    expect(screen.getByTestId('drive-root').dataset.over).toBe('true');
+    drop();
+    await vi.waitFor(() => expect(clear).toHaveBeenCalled());
+
+    expect(mocks.removeFromFolder).toHaveBeenCalledWith([filed]);
+    expect(mocks.moveEntities).not.toHaveBeenCalled();
+  });
+
+  it('refuses a row already at the Drive root', () => {
+    const { start, drop } = setup(dragData(doc('loose'), {}), DriveRootRow);
+
+    start();
+    expect(screen.getByTestId('drive-root').dataset.over).toBe('false');
+    drop();
+
+    expect(mocks.removeFromFolder).not.toHaveBeenCalled();
+  });
+
+  it('keeps the selection when leaving the folder fails', async () => {
+    mocks.removeFromFolder.mockResolvedValue(false);
+    const clear = vi.fn();
+    const filed = { ...doc('filed'), projectId: 'folder' };
+    const { start, drop } = setup(
+      dragData(filed, { selected: [filed], clear }),
+      DriveRootRow
+    );
+
+    start();
+    drop();
+    await vi.waitFor(() => expect(mocks.removeFromFolder).toHaveBeenCalled());
+
     expect(clear).not.toHaveBeenCalled();
   });
 });

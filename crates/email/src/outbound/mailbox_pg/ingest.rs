@@ -15,6 +15,7 @@ impl MailboxIngest for PgMailboxSync {
             folder_id,
             tags,
             version,
+            ..
         } = snapshot;
         let mut message = content.message;
         if message.link_id != lease.mailbox.link_id
@@ -245,7 +246,7 @@ impl MailboxIngest for PgMailboxSync {
         )
         .await
         .map_err(db_error)?;
-        email_db_client::threads::update::sync_thread_calendar_flag(&mut tx, thread_id)
+        email_db_client::threads::update::sync_thread_attachment_flags(&mut tx, thread_id)
             .await
             .map_err(wrapped_db_error)?;
         email_db_client::messages::replying_to_id::update_thread_messages_replying_to(

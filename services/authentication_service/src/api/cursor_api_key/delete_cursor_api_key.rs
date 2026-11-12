@@ -40,6 +40,7 @@ pub async fn handler(
         registered: false,
         // The row is gone, model choice with it: disconnecting is a clean slate.
         default_model_id: None,
+        default_effort: None,
         updated_at: None,
     }))
 }

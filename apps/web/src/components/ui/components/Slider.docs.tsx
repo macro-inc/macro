@@ -20,7 +20,10 @@ function SingleDemo() {
       </div>
       <Slider.Track>
         <Slider.Fill />
-        <Slider.Thumb aria-valuetext={`${value()[0]} minutes`}>
+        <Slider.Thumb
+          appearance="switch"
+          aria-valuetext={`${value()[0]} minutes`}
+        >
           <Slider.Input />
         </Slider.Thumb>
       </Slider.Track>
@@ -60,7 +63,7 @@ export default defineDoc({
   category: 'Inputs',
   status: 'stable',
   description:
-    'Keyboard and pointer range selection with one or multiple thumbs. Compose labels, inputs, and track segments as slots.',
+    'Keyboard and pointer range selection with one or multiple thumbs. Compose labels, inputs, and track segments as slots. Use Thumb appearance="switch" for the shared white selection thumb.',
   exports: ['Slider'],
   propTypes: [
     'SliderRootProps',

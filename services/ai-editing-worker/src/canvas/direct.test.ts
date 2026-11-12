@@ -1,7 +1,11 @@
 import { fitTextLayout } from '@macro-inc/graphics';
 import { describe, expect, it, vi } from 'vitest';
 import { canvasRevision } from './revision';
-import { withCanvasSession } from './session';
+import {
+  CanvasConflictError,
+  CanvasRejectedError,
+  withCanvasSession,
+} from './session';
 import { liveScene } from './test-fixtures';
 
 vi.mock('../sandbox', async () => {
@@ -56,7 +60,7 @@ describe('main agent direct batches', () => {
             async (snapshot) => ({ document: snapshot.document, effects: [] }),
             signal
           )
-        ).rejects.toThrow('revision changed');
+        ).rejects.toBeInstanceOf(CanvasConflictError);
         expect(scene.writes()).toBe(1);
       });
     } finally {
@@ -82,7 +86,7 @@ describe('main agent direct batches', () => {
             measure,
             signal
           )
-        ).rejects.toThrow();
+        ).rejects.toBeInstanceOf(CanvasRejectedError);
         await expect(
           applyCanvasCode(
             session,
@@ -90,7 +94,7 @@ describe('main agent direct batches', () => {
             measure,
             signal
           )
-        ).rejects.toThrow();
+        ).rejects.toBeInstanceOf(CanvasRejectedError);
         expect(scene.writes()).toBe(0);
       });
     } finally {

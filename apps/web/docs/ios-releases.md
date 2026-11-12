@@ -14,7 +14,10 @@ release; see [file exports](../tauri/file_export_plugin/AGENTS.md).
 Play as the source of truth — is described in `docs/development/android.md`.)
 
 Web bundles ship to installed apps over the air (see
-`tauri/macro_bundle_updater_plugin`), but native code — anything under
+`tauri/macro_bundle_updater_plugin`). On iOS they persist in a backup-excluded
+Application Support directory so storage pressure cannot purge them; the
+updater ignores legacy cache contents (see
+`tauri/src-tauri/README.md#ota-bundle-storage`). Native code — anything under
 `apps/web/tauri/` — only reaches users through the App Store. A bundle that
 depends on new native code must therefore only reach native builds that have
 it, and users on older native builds must be pushed to update instead of
@@ -98,10 +101,12 @@ icon and app-name branding are Android-only.
    (`.github/workflows/ios-release-watch.yml`, every 30 minutes) notices: for
    each open PR labeled `ios-update` it asks App Store Connect whether Apple
    approved the version + build at the PR head and, when it did, re-runs the
-   failed jobs of the PR's latest `PR CI` run and comments. The
-   gate turns green on its own and the PR merges if auto-merge is on.
+   failed jobs of the PR's latest `PR CI` run and comments. It also checks
+   the latest standalone web workflow run on that same head, so failed checks
+   from before the CI migration get refreshed even when a newer `PR CI` run
+   passes. The gate turns green on its own and the PR merges if auto-merge is on.
    (Re-running the job by hand works too. The watcher stops after two
-   automatic re-runs — counted by its own comments on the PR — so a check
+   automatic re-runs per run — counted by its own comments on the PR — so a check
    failing for another reason doesn't retry forever, and GitHub refuses to
    re-run runs older than 30 days: after a review that long, add the `run-ci`
    label to get a fresh run.)

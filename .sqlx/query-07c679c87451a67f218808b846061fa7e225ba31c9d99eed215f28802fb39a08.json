@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT COALESCE(\n                turn_state IN ('starting', 'running', 'stopping', 'blocked')\n                    OR (turn_state = 'disconnected' AND turn_interrupted),\n                false\n            ) AS \"unfinished!\"\n            FROM agent_session\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "unfinished!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "07c679c87451a67f218808b846061fa7e225ba31c9d99eed215f28802fb39a08"
+}

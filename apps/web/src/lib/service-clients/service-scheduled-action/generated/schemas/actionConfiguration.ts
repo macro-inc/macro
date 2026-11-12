@@ -5,10 +5,9 @@
  * API for managing scheduled actions
  * OpenAPI spec version: 0.1.0
  */
-
-import type { ActionConfigurationTask } from './actionConfigurationTask';
 import type { ActionKind } from './actionKind';
 import type { ActionTrigger } from './actionTrigger';
+import type { RoutineTask } from './routineTask';
 import type { RunVisibility } from './runVisibility';
 
 /**
@@ -23,6 +22,6 @@ export interface ActionConfiguration {
   name: string;
   /** Omitted by clients that predate the setting; runs then start unlisted. */
   run_visibility?: RunVisibility;
-  task: ActionConfigurationTask;
+  task: RoutineTask;
   trigger: ActionTrigger;
 }

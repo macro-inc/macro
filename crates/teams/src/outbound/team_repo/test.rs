@@ -207,6 +207,66 @@ async fn test_create_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("teams"))
 )]
+async fn test_create_team_rejects_a_user_already_on_a_team(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool.clone());
+
+    let team1_user = |role: &'static str| {
+        sqlx::query_scalar::<_, String>(
+            r#"
+            SELECT user_id FROM team_user
+            WHERE team_id = '11111111-1111-1111-1111-111111111111' AND team_role = $1::team_role
+            "#,
+        )
+        .bind(role)
+        .fetch_one(&pool)
+    };
+
+    // A member of team1 who owns no team.
+    let member_id = team1_user("member").await?;
+    let member = MacroUserIdStr::parse_from_str(&member_id)?;
+    let error = team_repo
+        .create_team(
+            &member,
+            "Second Team",
+            "SECOND_TEAM",
+            None,
+            SeatPlan::Premium,
+            None,
+        )
+        .await
+        .expect_err("a team member cannot create another team");
+    assert!(matches!(error, CreateTeamError::AlreadyOnTeam));
+
+    let owner_id = team1_user("owner").await?;
+    let owner = MacroUserIdStr::parse_from_str(&owner_id)?;
+    let error = team_repo
+        .create_team(
+            &owner,
+            "Second Team",
+            "SECOND_TEAM",
+            None,
+            SeatPlan::Premium,
+            None,
+        )
+        .await
+        .expect_err("a team owner cannot create another team");
+    assert!(matches!(error, CreateTeamError::AlreadyOnTeam));
+
+    let second_team_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM team WHERE name = 'Second Team'")
+            .fetch_one(&pool)
+            .await?;
+    assert_eq!(second_team_count, 0);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
 async fn test_move_github_app_installation_to_team_moves_existing_user_rows(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {

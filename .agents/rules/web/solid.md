@@ -22,6 +22,7 @@ State ownership, reactivity, and async error handling.
   setter over `createEffect(() => { if (signal()) sideEffect() })` when setting
   a value should also clear related UI, blur a control, or scroll.
 - **FE-11** Check `solid-primitives` before writing a custom reactive utility.
+- **FE-70** Keep related state that changes together in one createStore, not parallel signals.
 - **FE-12** `async`/`await`, not `.then()`/`.catch()` chains; fallible calls
   return `Result` (FE-36) rather than being wrapped in `try`/`catch`. Enforced
   by oxlint `promise/prefer-await-to-then` — `bun run lint:oxlint` from the

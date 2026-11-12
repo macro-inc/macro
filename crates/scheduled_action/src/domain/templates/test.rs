@@ -2,6 +2,7 @@ use super::*;
 use crate::domain::service::test::{
     TestService, USER, configuration, service, stored_actions, user,
 };
+use entity_access::domain::models::EntityType;
 use feature_flags::{FlagSnapshot, FlagValue, outbound::fake::FakeFeatureFlags};
 use macro_user_id::user_id::MacroUserIdStr;
 use std::collections::HashMap;
@@ -125,6 +126,35 @@ async fn sharing_snapshots_the_routine_and_activation_points_back_at_it() {
         .unwrap();
     assert_eq!(activated.template_id, Some(id));
     assert!(activated.owner.is_user(&other_user()));
+}
+
+#[tokio::test]
+async fn a_shared_routine_never_operates_as_whoever_activates_it() {
+    let actions = service(false);
+    let templates = templates(&actions);
+    let mut routine = configuration(false);
+    routine.task = serde_json::json!({
+        "steps": [{ "type": "agent", "model": "model", "instructions": "Summarize" }],
+        "dangerously_operate_as_user": true,
+    });
+    let id = actions
+        .create_action(&CreationPrincipal::User(user()), routine)
+        .await
+        .unwrap()
+        .id
+        .unwrap();
+
+    let shared = templates
+        .share_template(owner_receipt(user(), id), share_input())
+        .await
+        .unwrap();
+
+    assert_eq!(
+        shared.task,
+        serde_json::json!({
+            "steps": [{ "type": "agent", "model": "model", "instructions": "Summarize" }],
+        })
+    );
 }
 
 #[tokio::test]
@@ -281,7 +311,7 @@ async fn disabled_missing_or_failed_flags_block_templates_but_preserve_routines_
         assert_eq!(copies.len(), 1);
         assert_eq!(copies[0].id, activated.id);
         assert_eq!(copies[0].enabled, activated.enabled);
-        assert!(actions.get_action(id).await.is_ok());
+        assert!(actions.get_action(&owner_receipt(user(), id)).await.is_ok());
 
         templates
             .unshare_template(owner_receipt(user(), id))
@@ -295,7 +325,12 @@ async fn disabled_missing_or_failed_flags_block_templates_but_preserve_routines_
                 .unwrap()
                 .is_none()
         );
-        assert!(actions.get_action(activated.id.unwrap()).await.is_ok());
+        assert!(
+            actions
+                .get_action(&owner_receipt(other_user(), activated.id.unwrap()))
+                .await
+                .is_ok()
+        );
     }
 }
 

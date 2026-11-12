@@ -7,48 +7,45 @@ import type {
 import type { LocalDraft } from '../core/local-draft';
 import type { DraftSession } from './draft-session';
 
+type DraftIdentityOptions = {
+  storage: EmailDraftStorage;
+  session: DraftSession;
+  notices: Pick<EmailComposeFeedback, 'feedback' | 'reportError'>;
+  /** Keeps the editor's text as a new draft after a rejected queued save. */
+  recover(): void;
+  onAlreadySent(): void;
+  /** The server confirmed the draft; false lets the next read hand off again. */
+  onConfirmed?(): Promise<boolean | void>;
+  /** The server holds the working copy. Runs before the session confirms. */
+  onAcknowledged?(local: LocalDraft): void;
+};
+
 /** Refresh identity only: a cache settlement must never reseed a dirty editor. */
-export function observeDraftIdentity(
-  storage: EmailDraftStorage,
-  session: DraftSession,
-  notices: Pick<EmailComposeFeedback, 'feedback' | 'reportError'>,
-  recover: () => void,
-  onAlreadySent: () => void,
-  onConfirmed?: () => Promise<boolean | void>,
-  onAcknowledged?: (local: LocalDraft) => void
-) {
+export function observeDraftIdentity(options: DraftIdentityOptions) {
   createEffect(
     on(
-      () => [storage.readDraft, storage.watchDrafts] as const,
+      () => [options.storage.readDraft, options.storage.watchDrafts] as const,
       ([read, watch]) => {
-        if (read && watch)
-          observeAvailableDraftIdentity(
-            read,
-            watch,
-            session,
-            notices,
-            recover,
-            onAlreadySent,
-            !!storage.retryDraft,
-            onConfirmed,
-            onAcknowledged
-          );
+        if (read && watch) observeAvailableDraftIdentity(options, read, watch);
       }
     )
   );
 }
 
 function observeAvailableDraftIdentity(
+  {
+    storage,
+    session,
+    notices,
+    recover,
+    onAlreadySent,
+    onConfirmed,
+    onAcknowledged,
+  }: DraftIdentityOptions,
   read: NonNullable<EmailDraftStorage['readDraft']>,
-  watch: NonNullable<EmailDraftStorage['watchDrafts']>,
-  session: DraftSession,
-  notices: Pick<EmailComposeFeedback, 'feedback' | 'reportError'>,
-  recover: () => void,
-  onAlreadySent: () => void,
-  durableRecovery: boolean,
-  onConfirmed?: () => Promise<boolean | void>,
-  onAcknowledged?: (local: LocalDraft) => void
+  watch: NonNullable<EmailDraftStorage['watchDrafts']>
 ) {
+  const durableRecovery = !!storage.retryDraft;
   let generation = 0;
   let mutationUuid: string | undefined;
   let disposed = false;
@@ -86,8 +83,8 @@ function observeAvailableDraftIdentity(
       if (!result.draft) return;
       const current = session.identity();
       const confirmed = result.persistence === 'committed';
-      // Before the session confirms: a confirmed session lets delivery
-      // observers compare edits, and a queued save's edits must count by then.
+      // Count the edits before confirming: confirmation lets delivery
+      // observers act, and they compare edits.
       if (confirmed && result.local) onAcknowledged?.(result.local);
       const handoff = async () => {
         const version = `${result.draft!.db_id}:${result.local?.generation ?? ''}:${result.local?.acknowledgedRevision ?? result.draft!.updated_at}`;
@@ -170,6 +167,7 @@ function observeAvailableDraftIdentity(
               actions: [
                 {
                   label: 'Save as new draft',
+                  kind: 'save',
                   onClick: () => {
                     if (
                       disposed ||

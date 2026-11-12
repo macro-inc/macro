@@ -10,5 +10,5 @@ export function useRelatedDatabaseSync(
   refreshRows: () => void
 ) {
   useDatabaseTableChangedSync(() => databaseId);
-  useDatabaseSubscription(databaseId, refreshRows);
+  useDatabaseSubscription(databaseId, refreshRows, 'cached');
 }

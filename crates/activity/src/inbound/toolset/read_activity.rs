@@ -14,7 +14,9 @@ use super::ActivityToolContext;
 use crate::domain::{
     models::{Action, ActivityRecord, RecordedAction},
     ports::{ActivityPropertyMetadata, ActivityReads},
+    service::ActivityReadService,
 };
+use macro_user_id::user_id::MacroUserIdStr;
 
 const MAX_ACTIVITY_RESULTS: u32 = 100;
 
@@ -42,6 +44,7 @@ impl ToolAnnotated for ReadActivity {
 
 /// One activity action returned to the AI.
 #[derive(Debug, Clone, PartialEq, Serialize, JsonSchema)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(
     tag = "type",
     rename_all = "camelCase",
@@ -188,6 +191,7 @@ fn option_labels(
 
 /// One activity event returned by [`ReadActivity`].
 #[derive(Debug, Clone, PartialEq, Serialize, JsonSchema)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct ToolActivityEvent {
     /// The principal that mechanically performed the action.
@@ -219,6 +223,7 @@ impl ToolActivityEvent {
 
 /// Response from [`ReadActivity`].
 #[derive(Debug, Clone, PartialEq, Serialize, JsonSchema)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct ReadActivityResponse {
     /// Matching activity events, newest first.
@@ -244,36 +249,62 @@ where
         service_context: ServiceContext<ActivityToolContext<R>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
-        if self.from >= self.to {
-            return Err(ToolCallError {
-                description: "activity range `from` must be before `to`".to_string(),
-                internal_error: std::io::Error::new(
-                    std::io::ErrorKind::InvalidInput,
-                    "invalid activity time range",
-                )
-                .into(),
-            });
+        ReadActivityResponse::read(
+            &service_context.service,
+            &request_context.user_id,
+            self.from,
+            self.to,
+        )
+        .await
+        .map_err(|error| ToolCallError {
+            description: error.to_string(),
+            internal_error: error.into(),
+        })
+    }
+}
+
+/// Why a bounded activity range could not be read.
+#[derive(Debug, thiserror::Error)]
+pub enum ReadActivityError {
+    /// `from` was not before `to`.
+    #[error("activity range `from` must be before `to`")]
+    InvalidRange,
+    /// The activity store failed.
+    #[error("unable to read activity for the requested time range")]
+    Store(#[source] Box<dyn std::error::Error + Send + Sync>),
+}
+
+impl ReadActivityResponse {
+    /// Read the subject's newest activity in `[from, to)`, at most 100 events,
+    /// with property changes resolved for the subject as viewer.
+    pub async fn read<R>(
+        service: &ActivityReadService<R>,
+        subject: &MacroUserIdStr<'_>,
+        from: DateTime<Utc>,
+        to: DateTime<Utc>,
+    ) -> Result<Self, ReadActivityError>
+    where
+        R: ActivityReads,
+    {
+        if from >= to {
+            return Err(ReadActivityError::InvalidRange);
         }
 
-        let range = service_context
-            .service
+        let range = service
             .subject_activity_range(
-                &request_context.user_id,
-                self.from,
-                self.to,
+                subject,
+                from,
+                to,
                 NonZeroU32::new(MAX_ACTIVITY_RESULTS).expect("activity result limit is non-zero"),
             )
             .await
-            .map_err(|error| ToolCallError {
-                description: "unable to read activity for the requested time range".to_string(),
-                internal_error: error.into(),
-            })?;
+            .map_err(|error| ReadActivityError::Store(error.into()))?;
 
         let crate::domain::service::ResolvedActivityRange {
             activity,
             properties,
         } = range;
-        Ok(ReadActivityResponse {
+        Ok(Self {
             activities: activity
                 .records
                 .into_iter()

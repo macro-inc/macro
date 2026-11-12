@@ -1,4 +1,4 @@
-import { Macro, gateRequests, observeRequests } from "@macro-inc/sdk";
+import { Macro, gateRequests, observeRequests, sendVerbHeaders } from "@macro-inc/sdk";
 
 // Trusted bootstrap: credentials arrive once on stdin, then user code is imported
 // dynamically so module reads are checked against the scratch-only read grant.
@@ -86,6 +86,7 @@ try {
   if (dryRun) gateRequests(({service, operation}) =>
     catalog.get(`${service}.${operation}`)?.write === false ? undefined : {skip: {data: {}}});
   const originalFetch = globalThis.fetch.bind(globalThis);
+  sendVerbHeaders(true);
   const origins = new Set(Object.values(context.hosts).map(host => new URL(host).origin));
   globalThis.fetch = (input, init) => {
     const request = new Request(input, init);
@@ -119,7 +120,7 @@ try {
     } else if (!activeRequests.delete(value.id)) return;
     emit({type: "progress", value});
   });
-  const macro = new Macro({token: context.token, hosts: context.hosts});
+  const macro = new Macro({token: context.token, hosts: context.hosts, webAppUrl: context.webAppUrl});
   // A literal dynamic import joins Deno's initial static graph, bypassing read
   // permissions. Compute this specifier so the entire generated graph is loaded
   // at runtime and every local module read requires the scratch permission.

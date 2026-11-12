@@ -35,7 +35,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { lazyNamed } from '@core/util/lazyNamed';
 import { isTauri } from '@core/util/platform';
 import { transformShortIdInUrlPathname } from '@core/util/url';
-import { lazy } from 'solid-js';
+import { type JSX, lazy } from 'solid-js';
 import { paneRoute } from './app-route';
 import { BasePathComponent } from './BasePath';
 import {
@@ -227,34 +227,17 @@ function debugView(componentId: string) {
   });
 }
 
-export function AppRouterView() {
+/**
+ * The app's routes, as `<SplitRouter.Route>` elements; read once by the
+ * router, and by tests that need the real route table.
+ */
+export function appRouteElements(): JSX.Element {
   const debugRouteElements = debugRoutes.map(({ componentId, route }) => (
     <Route definition={route} component={debugView(componentId)} />
   ));
 
   return (
-    <Router
-      history={(routes) =>
-        useSolidRouterHistory({
-          base: ROUTER_BASE,
-          mode: isTauri() ? 'hash' : 'path',
-          transformPath: (path) =>
-            upgradeLegacyPath(routes, transformShortIdInUrlPathname(path)),
-        })
-      }
-      paneStore={createMemoryPaneStore()}
-      policy={createAppPanePolicy({
-        manager: globalSplitManager,
-        toContent: splitContentFromLocation,
-        defaultLocation: () => ({
-          route: paneRoute({ id: 'view-home', params: {} }),
-        }),
-        stacked: isNativeMobilePlatform,
-      })}
-      middleware={createAppSplitRouterMiddleware({ isTouchDevice })}
-      globalSearch={['referral_code']}
-      defaultRoute={() => ({ matches: [{ id: baseRoute.id, params: {} }] })}
-    >
+    <>
       <Route definition={baseRoute} component={BasePathComponent} />
       <Route definition={publicRoute} component={FocusedShell}>
         <Route
@@ -514,6 +497,35 @@ export function AppRouterView() {
         <Route definition={legacyContentRoute} />
         <Route definition={notFoundRoute} component={NotFound} />
       </Route>
+    </>
+  );
+}
+
+export function AppRouterView() {
+  return (
+    <Router
+      history={(routes) =>
+        useSolidRouterHistory({
+          base: ROUTER_BASE,
+          mode: isTauri() ? 'hash' : 'path',
+          transformPath: (path) =>
+            upgradeLegacyPath(routes, transformShortIdInUrlPathname(path)),
+        })
+      }
+      paneStore={createMemoryPaneStore()}
+      policy={createAppPanePolicy({
+        manager: globalSplitManager,
+        toContent: splitContentFromLocation,
+        defaultLocation: () => ({
+          route: paneRoute({ id: 'view-home', params: {} }),
+        }),
+        stacked: isNativeMobilePlatform,
+      })}
+      middleware={createAppSplitRouterMiddleware({ isTouchDevice })}
+      globalSearch={['referral_code']}
+      defaultRoute={() => ({ matches: [{ id: baseRoute.id, params: {} }] })}
+    >
+      {appRouteElements()}
     </Router>
   );
 }

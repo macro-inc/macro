@@ -180,3 +180,98 @@ fn sql_openapi_statement_fields_match_the_actual_camel_case_response() {
         );
     }
 }
+
+async fn save(router: Router, token: Option<&str>, body: Value) -> (StatusCode, Value) {
+    let mut request =
+        Request::post("/databases/queries").header("content-type", "application/json");
+    if let Some(token) = token {
+        request = request.header("authorization", format!("Bearer {token}"));
+    }
+    let response = router
+        .oneshot(request.body(Body::from(body.to_string())).unwrap())
+        .await
+        .unwrap();
+    let status = response.status();
+    let body = to_bytes(response.into_body(), 1024 * 1024).await.unwrap();
+    (status, serde_json::from_slice(&body).unwrap())
+}
+
+#[tokio::test]
+async fn saving_a_question_over_http_requires_authentication() {
+    let world = world();
+    let (status, _) = save(
+        app(&world),
+        None,
+        json!({"definition":{"version":1,"query":"SELECT COUNT(*) FROM \"Guests\""}}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert!(world.lock().unwrap().saved.is_empty());
+}
+
+#[tokio::test]
+async fn saving_a_question_over_http_stores_a_select_whose_chart_columns_it_returns() {
+    let world = world();
+    let (status, response) = save(
+        app(&world),
+        Some("viewer"),
+        json!({
+            "definition":{"version":1,"query":"SELECT \"Status\", COUNT(*) AS guests FROM \"Guests\" GROUP BY \"Status\""},
+            "databaseId":OFFSITE,
+            "chart":{"x":"Status","y":["guests"]},
+        }),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{response}");
+    assert_eq!(response["databaseId"], json!(OFFSITE));
+    assert_eq!(
+        response["definition"]["query"],
+        "SELECT \"Status\", COUNT(*) AS guests FROM \"Guests\" GROUP BY \"Status\""
+    );
+    assert_eq!(world.lock().unwrap().saved.len(), 1);
+}
+
+#[tokio::test]
+async fn saving_a_question_over_http_refuses_writes_broken_sql_and_unreturned_chart_columns() {
+    let world = world();
+    for (body, expected) in [
+        (
+            json!({"definition":{"version":1,"query":"DELETE FROM \"Guests\" WHERE \"Name\" = 'Sam'"},"databaseId":OFFSITE}),
+            "a saved query must be a SELECT; it cannot change data",
+        ),
+        (
+            json!({"definition":{"version":1,"query":"SELECT statuz FROM \"Guests\""},"databaseId":OFFSITE}),
+            "statuz",
+        ),
+        (
+            json!({
+                "definition":{"version":1,"query":"SELECT \"Status\", COUNT(*) AS guests FROM \"Guests\" GROUP BY \"Status\""},
+                "databaseId":OFFSITE,
+                "chart":{"x":"Status","y":["invites"]},
+            }),
+            "the chart names \"invites\"",
+        ),
+        (
+            json!({
+                "definition":{"version":1,"query":"SELECT \"Name\", \"Status\" FROM \"Guests\""},
+                "databaseId":OFFSITE,
+                "chart":{"x":"Name","y":["Status"]},
+            }),
+            "the chart plots \"Status\", which is not a number",
+        ),
+    ] {
+        let (status, response) = save(app(&world), Some("owner"), body).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{response}");
+        let message = response["message"].as_str().unwrap();
+        assert!(message.contains(expected), "{message}");
+    }
+
+    let (status, _) = save(
+        app(&world),
+        Some("owner"),
+        json!({"definition":{"version":1,"query":"SELECT COUNT(*) FROM \"Plans\""},"databaseId":SECRET}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert!(world.lock().unwrap().saved.is_empty());
+}

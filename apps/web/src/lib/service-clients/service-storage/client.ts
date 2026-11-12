@@ -24,10 +24,11 @@ import { registerClient } from '@core/util/mockClient';
 import { isTauri } from '@core/util/platform';
 import { platformFetch } from '@core/util/platformFetch';
 import type { ResultError } from '@core/util/result';
-import type { SafeFetchInit } from '@core/util/safeFetch';
+import { type SafeFetchInit, statusError } from '@core/util/safeFetch';
 import type { IDocumentStorageServiceFile } from '@filesystem/file';
 import type { SerializedEditorState } from 'lexical';
 import { err, ok, type Result } from 'neverthrow';
+import { createChannelLabelsClient } from './channel-labels';
 import type { ApiChannelListPage } from './channel-list-types';
 import { fetchDatabaseOps } from './databases';
 import type { AccessiblePipeline as PipelineResponse } from './generated/schemas/accessiblePipeline';
@@ -59,10 +60,6 @@ import type { ChannelAccessDecision } from './generated/schemas/channelAccessDec
 import type { ChannelAccessRequest } from './generated/schemas/channelAccessRequest';
 import type { ChannelAccessRequestState } from './generated/schemas/channelAccessRequestState';
 import type { ChannelJoinCodeResponse } from './generated/schemas/channelJoinCodeResponse';
-import type { ChannelLabel } from './generated/schemas/channelLabel';
-import type { ChannelLabelRule } from './generated/schemas/channelLabelRule';
-import type { ChannelLabelScopeSelection } from './generated/schemas/channelLabelScopeSelection';
-import type { ChannelLabelsList } from './generated/schemas/channelLabelsList';
 import { ChannelType } from './generated/schemas/channelType';
 import type { ClaimedAccountManagerToken } from './generated/schemas/claimedAccountManagerToken';
 import {
@@ -72,7 +69,6 @@ import {
 import type { CreateAgentRequest } from './generated/schemas/createAgentRequest';
 import type { CreateCanvasDocumentRequest } from './generated/schemas/createCanvasDocumentRequest';
 import type { CreateCanvasDocumentResponse } from './generated/schemas/createCanvasDocumentResponse';
-import type { CreateChannelLabelRequest } from './generated/schemas/createChannelLabelRequest';
 import type { CreateChannelRequest } from './generated/schemas/createChannelRequest';
 import type { CreateChannelResponse } from './generated/schemas/createChannelResponse';
 import type { CreateChannelScopedBotRequest } from './generated/schemas/createChannelScopedBotRequest';
@@ -161,7 +157,6 @@ import type { PostSoupAstRequest } from './generated/schemas/postSoupAstRequest'
 import type { PostSoupRequest } from './generated/schemas/postSoupRequest';
 import type { Project } from './generated/schemas/project';
 import type { RemoveParticipantsRequest } from './generated/schemas/removeParticipantsRequest';
-import type { RenameChannelLabelRequest } from './generated/schemas/renameChannelLabelRequest';
 import type { ReorderFavoritesRequest } from './generated/schemas/reorderFavoritesRequest';
 import type { ReorderPinRequest } from './generated/schemas/reorderPinRequest';
 import type { ReplaceCrmStagesRequest } from './generated/schemas/replaceCrmStagesRequest';
@@ -169,16 +164,16 @@ import type { RequestAccountManagerBody } from './generated/schemas/requestAccou
 import type { SaveDocumentResponseData } from './generated/schemas/saveDocumentResponseData';
 import type { SearchContactsParams } from './generated/schemas/searchContactsParams';
 import type { SearchContactsResponse } from './generated/schemas/searchContactsResponse';
-import type { SetChannelLabelRequest } from './generated/schemas/setChannelLabelRequest';
 import type { SetChannelPictureRequest } from './generated/schemas/setChannelPictureRequest';
 import type { SetCompanyNameRequest } from './generated/schemas/setCompanyNameRequest';
+import type { SetContactCompanyRequest } from './generated/schemas/setContactCompanyRequest';
+import type { SetContactEmailRequest } from './generated/schemas/setContactEmailRequest';
 import type { SetContactNameRequest } from './generated/schemas/setContactNameRequest';
 import type { SharePermissionV2 } from './generated/schemas/sharePermissionV2';
 import type { SkillDescriptionBody } from './generated/schemas/skillDescriptionBody';
 import type { SlackCompleteRequest } from './generated/schemas/slackCompleteRequest';
 import type { SlackCreateRequest } from './generated/schemas/slackCreateRequest';
 import type { SlackRegisterRequest } from './generated/schemas/slackRegisterRequest';
-import type { SmartTagPreview } from './generated/schemas/smartTagPreview';
 import type { SoupPage } from './generated/schemas/soupPage';
 import type { StageRequirement } from './generated/schemas/stageRequirement';
 import type { StorageRows } from './generated/schemas/storageRows';
@@ -278,6 +273,16 @@ async function calendarJoinRequestErrorHandler(response: Response) {
   };
 }
 
+async function contactEditErrorHandler(response: Response) {
+  if (response.status === 400) {
+    return {
+      code: 'BAD_REQUEST' as const,
+      message: 'Contact change unavailable',
+    };
+  }
+  return statusError(response.status);
+}
+
 export async function getDocumentPermissionToken(
   documentId: string
 ): Promise<string> {
@@ -339,10 +344,16 @@ type WithBotId = { bot_id: string };
 type WithAgentId = { agent_id: string };
 type WithChannelId = { channel_id: string };
 
-/** Who owns a registered harness: the registering user or their team. */
-export type HarnessOwner =
-  | { type: 'user'; user_id: string }
-  | { type: 'team'; team_id: string };
+/** Who owns a registered harness: always one person. */
+export type HarnessOwner = { type: 'user'; user_id: string };
+
+/** An agent living on a runtime. */
+export type HarnessResident = {
+  bot_id: string;
+  name: string;
+  owner_user_id?: string | null;
+  team_id?: string | null;
+};
 
 /** A macrod harness registered with the workspace. */
 export type Harness = {
@@ -351,6 +362,10 @@ export type Harness = {
   kind: 'macrod';
   name: string;
   owner: HarnessOwner;
+  /** The viewer's role. Only `owner` and `user` can run agents on it. */
+  access: 'owner' | 'user' | 'read' | 'none';
+  /** Teams it is a team machine for: their every member is a user of it. */
+  shared_team_ids: string[];
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -856,6 +871,34 @@ export const storageServiceClient = {
         method: 'GET',
       })
     ).map((result) => result);
+  },
+
+  async getHarnessDirectory() {
+    return (
+      await dssFetch<Harness[]>(`/harnesses/directory`, {
+        method: 'GET',
+      })
+    ).map((result) => result);
+  },
+
+  async getHarnessResidents(args: { harness_id: string }) {
+    return (
+      await dssFetch<HarnessResident[]>(
+        `/harnesses/${args.harness_id}/residents`,
+        { method: 'GET' }
+      )
+    ).map((result) => result);
+  },
+
+  async setHarnessTeamAccess(args: {
+    harness_id: string;
+    team_id: string;
+    enabled: boolean;
+  }) {
+    return await dssFetch(`/harnesses/${args.harness_id}/team-access`, {
+      method: 'PUT',
+      body: JSON.stringify({ team_id: args.team_id, enabled: args.enabled }),
+    });
   },
 
   async getHarnessPairing(args: { code: string }) {
@@ -2764,59 +2807,8 @@ export const storageServiceClient = {
     },
   },
 
-  channelLabels: {
-    async preview(
-      rule: ChannelLabelRule,
-      signal?: AbortSignal,
-      scope?: ChannelLabelScopeSelection
-    ) {
-      return await dssFetch<SmartTagPreview>(
-        `/channel-labels/preview${scope ? `?scope=${scope}` : ''}`,
-        { method: 'POST', body: JSON.stringify(rule), signal }
-      );
-    },
-    /** Omitted scope selects the caller's team when available, otherwise personal labels. */
-    async list(scope?: ChannelLabelScopeSelection) {
-      return await dssFetch<ChannelLabelsList>(
-        `/channel-labels${scope ? `?scope=${scope}` : ''}`
-      );
-    },
-    async create(
-      params: CreateChannelLabelRequest,
-      scope?: ChannelLabelScopeSelection
-    ) {
-      return await dssFetch<ChannelLabel>(
-        `/channel-labels${scope ? `?scope=${scope}` : ''}`,
-        { method: 'POST', body: JSON.stringify(params) }
-      );
-    },
-    async rename(
-      labelId: string,
-      params: RenameChannelLabelRequest,
-      scope?: ChannelLabelScopeSelection
-    ) {
-      return await dssFetch<ChannelLabel>(
-        `/channel-labels/${encodeURIComponent(labelId)}${scope ? `?scope=${scope}` : ''}`,
-        { method: 'PATCH', body: JSON.stringify(params) }
-      );
-    },
-    async remove(labelId: string, scope?: ChannelLabelScopeSelection) {
-      return await dssFetch(
-        `/channel-labels/${encodeURIComponent(labelId)}${scope ? `?scope=${scope}` : ''}`,
-        { method: 'DELETE' }
-      );
-    },
-    async setChannelLabel(
-      channelId: string,
-      params: SetChannelLabelRequest,
-      scope?: ChannelLabelScopeSelection
-    ) {
-      return await dssFetch(
-        `/channel-labels/channels/${encodeURIComponent(channelId)}${scope ? `?scope=${scope}` : ''}`,
-        { method: 'PUT', body: JSON.stringify(params) }
-      );
-    },
-  },
+  channelLabels: createChannelLabelsClient(dssFetch, '/channel-labels'),
+  channelSections: createChannelLabelsClient(dssFetch, '/channel-sections'),
   favorites: {
     async getFavorites(params?: ListFavoritesParams) {
       const query = new URLSearchParams();
@@ -2979,6 +2971,32 @@ export const storageServiceClient = {
       method: 'PUT',
       body: JSON.stringify(body),
     });
+  },
+  async setContactEmail({
+    contactId,
+    ...body
+  }: { contactId: string } & SetContactEmailRequest) {
+    return await fetchWithToken<CrmContactResponse, 'BAD_REQUEST'>(
+      `${dssHost}/crm/contacts/${contactId}/email`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(body),
+        errorResponseHandler: contactEditErrorHandler,
+      }
+    );
+  },
+  async setContactCompany({
+    contactId,
+    ...body
+  }: { contactId: string } & SetContactCompanyRequest) {
+    return await fetchWithToken<CrmContactResponse, 'BAD_REQUEST'>(
+      `${dssHost}/crm/contacts/${contactId}/company`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(body),
+        errorResponseHandler: contactEditErrorHandler,
+      }
+    );
   },
   async setContactHidden({
     contactId,

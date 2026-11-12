@@ -13,10 +13,21 @@ test('create a generic pipeline that tracks no company or contact', async ({
   const dialog = page.getByRole('dialog');
   await dialog.getByRole('textbox', { name: 'Pipeline name' }).fill('Launch');
   await dialog.getByRole('button', { name: 'Track Companies' }).click();
-  await page.getByRole('menuitemradio', { name: 'Generic' }).click();
+  await expect(
+    page.getByRole('menuitemradio', { name: 'Companies' })
+  ).toBeChecked();
+  const generic = page.getByRole('menuitemradio', { name: 'Generic' });
+  await expect(generic).toHaveAccessibleDescription(/\S/);
+  await generic.click();
   await expect(
     dialog.getByRole('button', { name: 'Track Generic' })
   ).toBeVisible();
+  await dialog.getByRole('button', { name: 'Track Generic' }).click();
+  await expect(
+    page.getByRole('menuitemradio', { name: 'Generic' })
+  ).toBeChecked();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeVisible();
   await dialog.getByRole('button', { name: 'Create pipeline' }).click();
   await expect(dialog).not.toBeVisible();
   await expect(

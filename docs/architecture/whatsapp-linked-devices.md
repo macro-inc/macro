@@ -180,6 +180,16 @@ account's LID store (ingest also from the account's roster). Identities still
 ambiguous are quarantined and retried. Missing reaction/revision targets
 are deferred. Edits follow source revision order; deletes are permanent tombstones.
 Reactions and media live in `external_chat_reaction` and `external_chat_attachment`.
+A sender's WhatsApp name (`external_chat_person.display_name`) comes from the
+message, else from the account's contact store, which keeps the names WhatsApp
+sends with history sync and earlier messages (history messages carry none).
+Contact-store failures log a warning and leave the sender unnamed; they do not
+prevent ingestion. Roster reads complete missing participant names from contacts.
+Reads name people (senders, reactors, voters, members, mentions) in
+`whatsapp_linked`'s `domain::people::ChatNames`: the chat owner's chat-list
+name for any of their aliases (their address book), else that WhatsApp name,
+else their phone number, so nothing needs backfilling when a contact is saved
+or renamed.
 
 Besides text and media, a message may carry structured content in
 `external_chat_message.rich` (`external_chat::domain::rich::RichContent`):

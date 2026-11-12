@@ -1,6 +1,7 @@
 import { toast } from '@core/component/Toast/Toast';
 import type {
   CodeUpgrade,
+  RoutineTask,
   ScheduledAction,
 } from '@service-scheduled-action/generated/schemas';
 import {
@@ -494,9 +495,9 @@ describe('routine execution target autosave', () => {
     fireEvent.keyDown(screen.getByRole('menuitem', { name: 'Duplicate' }), {
       key: 'Enter',
     });
-    expect(mocks.create).toHaveBeenCalledWith(
-      expect.objectContaining({ task: saved.task })
-    );
+    expect(mocks.create).toHaveBeenCalledWith({
+      body: expect.objectContaining({ task: saved.task }),
+    });
   });
 
   it('disables immediate Run now until the latest target has saved', async () => {
@@ -543,7 +544,8 @@ describe('routine execution target autosave', () => {
     const firstSaved = {
       ...cron,
       task: {
-        ...(cron.task as object),
+        user_prompt: 'Summarize updates',
+        prompt: '',
         agent: { bot_id: agentTarget.agentId },
         model: 'runtime-model',
       },
@@ -878,12 +880,14 @@ describe('routine editor triggers', () => {
       key: 'Enter',
     });
     expect(mocks.create).toHaveBeenCalledExactlyOnceWith({
-      name: 'Summary copy',
-      kind: 'Agent',
-      enabled: true,
-      task: cron.task,
-      trigger: cron.trigger,
-      run_visibility: 'unlisted',
+      body: {
+        name: 'Summary copy',
+        kind: 'Agent',
+        enabled: true,
+        task: cron.task,
+        trigger: cron.trigger,
+        run_visibility: 'unlisted',
+      },
     });
     await vi.advanceTimersByTimeAsync(300);
     fireEvent.click(screen.getByText('Run now'));
@@ -929,6 +933,41 @@ describe('routine editor triggers', () => {
       body: expect.objectContaining({
         task: cron.task,
         run_visibility: 'listed',
+      }),
+    });
+  });
+
+  it('offers acting as the owner only for routines with code, off by default', async () => {
+    render(() => <Routine />);
+    // An Ask AI routine stays the agent's, so there is nothing to choose.
+    expect(screen.queryByRole('switch', { name: 'Act as me' })).toBeNull();
+    cleanup();
+
+    const task: RoutineTask = {
+      steps: [
+        {
+          type: 'code',
+          title: 'Post the summary',
+          source: 'export async function main() {}',
+        },
+      ],
+    };
+    const program: ScheduledAction = { ...events, task };
+    setSchedules([program]);
+    render(() => <Routine />);
+    const actAsMe = screen.getByRole('switch', { name: 'Act as me' });
+    expect((actAsMe as HTMLInputElement).checked).toBe(false);
+    expect(
+      screen.getByText(
+        'Posts, emails and comments from code steps will appear as written by you, with no Agent badge.'
+      )
+    ).toBeTruthy();
+    fireEvent.click(actAsMe);
+    await vi.advanceTimersByTimeAsync(300);
+    expect(mocks.update).toHaveBeenCalledExactlyOnceWith({
+      scheduleId: 'routine-id',
+      body: expect.objectContaining({
+        task: { ...task, dangerously_operate_as_user: true },
       }),
     });
   });
@@ -1020,7 +1059,7 @@ describe('routine editor triggers', () => {
 });
 
 describe('routine code that needs an update', () => {
-  const code = (source: string, sdk: string) => ({
+  const code = (source: string, sdk: string): RoutineTask => ({
     steps: [{ type: 'code', title: 'File invoices', source }],
     sdk,
   });
@@ -1029,7 +1068,7 @@ describe('routine code that needs an update', () => {
     enabled: false,
     task: code('macro.tasks.create(x)', '0.2.0+old'),
   };
-  const upgrade = (task?: Record<string, unknown>): CodeUpgrade => ({
+  const upgrade = (task?: RoutineTask): CodeUpgrade => ({
     id: 'upgrade',
     fromSdk: '0.2.0+old',
     toSdk: '0.3.0+new',

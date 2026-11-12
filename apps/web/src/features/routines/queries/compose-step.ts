@@ -9,7 +9,7 @@ import {
   type RoutineSoFar,
   type StepDraft,
   type StepKind,
-  stepsFromTask,
+  stepsFromWire,
   stepsToWire,
 } from '../core/routine-steps';
 import { type ComposerContext, requestDraft } from './compose-routine';
@@ -34,7 +34,7 @@ function routineSoFar(routine: RoutineSoFar): WireRoutine {
 
 /** A drafted step for the editor, with the problems its code still has. */
 function stepFromDraft(drafted: DraftedStep): StepDraft | undefined {
-  const step = stepsFromTask({ steps: [drafted.step] })?.[0];
+  const step = stepsFromWire([drafted.step])?.[0];
   if (!step || step.kind !== 'code' || !drafted.problems.length) return step;
   return { ...step, problems: drafted.problems };
 }

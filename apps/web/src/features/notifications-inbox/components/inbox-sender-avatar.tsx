@@ -73,9 +73,9 @@ export function InboxSenderAvatar(props: {
             role="img"
             aria-label={inboxKindLabel(props.kind)}
             data-kind-badge={props.kind}
-            // Cuts the badge out of the avatar, in the color of the card behind it.
+            // Cuts the badge out of the avatar, in the color of the row behind it.
             class={cn(
-              'flex size-[18px] items-center justify-center rounded-full bg-control-raised ring-2 ring-(--inbox-card-surface) mobile:size-6',
+              'flex size-[18px] items-center justify-center rounded-full bg-control-raised ring-2 ring-(--inbox-row-surface) mobile:size-6',
               inboxEntityColor(props.entity)
             )}
           >

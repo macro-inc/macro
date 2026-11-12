@@ -148,6 +148,8 @@ function delegatedDoneUndoLifecycle(
   const showToast = () => {
     if (variables.silent) return;
     toastId = toast.success(message, {
+      dismissStyle: 'icon',
+      actionLayout: 'inline',
       actions: [
         {
           label: t('entityActions.undo'),
@@ -262,6 +264,8 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
           ? t('entityActions.toastMarkedDoneCount', { count: total })
           : t('entityActions.toastMarkedDone');
       toastId = (partial ? toast.alert : toast.success)(message, {
+        dismissStyle: 'icon',
+        actionLayout: 'inline',
         actions: [
           {
             label: t('entityActions.undo'),

@@ -31,11 +31,13 @@ use messages::outbound::broker::MessageTopicEvent;
 use std::future::Future;
 use std::sync::Arc;
 use tracing::Instrument as _;
+use user_events::UserTopicEvent;
 use uuid::Uuid;
 
 const DOCUMENT_ENTITY_TYPE: &str = "document";
 const CHANNEL_ENTITY_TYPE: &str = "channel";
 const CALL_ENTITY_TYPE: &str = "call";
+const USER_ENTITY_TYPE: &str = "user";
 const WEBHOOK_ENTITY_TYPE: &str = "webhook";
 const AGENT_SESSION_ENTITY_TYPE: &str = "agent_session";
 
@@ -134,6 +136,12 @@ pub trait WebhookEventIngestionService: Clone + Send + Sync + 'static {
     fn ingest_agent_session_lifecycle_event(
         &self,
         event: Event<AgentSessionLifecycleEvent>,
+    ) -> impl Future<Output = Result<(), WebhookEventIngestionError>> + Send;
+
+    /// Ingest one `macro.users` event envelope.
+    fn ingest_user_event(
+        &self,
+        event: Event<UserTopicEvent>,
     ) -> impl Future<Output = Result<(), WebhookEventIngestionError>> + Send;
 }
 
@@ -367,6 +375,38 @@ pub(crate) fn normalized_channel_event(
         CHANNEL_ENTITY_TYPE,
         &entity_id,
         broker_envelope,
+    ))
+}
+
+/// The user a user fact is about.
+pub(crate) fn user_event_subject(event: &Event<UserTopicEvent>) -> MacroUserIdStr<'static> {
+    match &event.event {
+        UserTopicEvent::PictureChanged(metadata) => metadata.user_id.clone(),
+    }
+}
+
+/// Normalize one user fact. The entity is the user whose profile changed, and
+/// they are also the only audience.
+pub(crate) fn normalized_user_event(
+    event: &Event<UserTopicEvent>,
+) -> Result<(NormalizedWebhookEvent, MacroUserIdStr<'static>), WebhookEventIngestionError> {
+    let (event_name, user_id) = match &event.event {
+        UserTopicEvent::PictureChanged(metadata) => {
+            ("user.picture_changed", metadata.user_id.clone())
+        }
+    };
+
+    let broker_envelope = serde_json::to_value(event)?;
+    Ok((
+        normalized_event(
+            event.event_id,
+            event.schema_version,
+            event_name,
+            USER_ENTITY_TYPE,
+            user_id.as_ref(),
+            broker_envelope,
+        ),
+        user_id,
     ))
 }
 
@@ -755,5 +795,26 @@ where
                 self.match_and_enqueue(normalized, workspace_ids).await
             }
         }
+    }
+
+    #[tracing::instrument(
+        name = "webhook.ingest_user_event",
+        skip(self, event),
+        fields(event_id = %event.event_id),
+        err
+    )]
+    async fn ingest_user_event(
+        &self,
+        event: Event<UserTopicEvent>,
+    ) -> Result<(), WebhookEventIngestionError> {
+        let (normalized, user_id) = normalized_user_event(&event)?;
+        // Only the changed user's own workspaces see their profile change;
+        // contacts and entity access are deliberately not resolved.
+        let workspace_ids = self
+            .repository
+            .resolve_workspace_ids(vec![user_id])
+            .await
+            .map_err(|error| WebhookEventIngestionError::WorkspaceResolution(error.into()))?;
+        self.match_and_enqueue(normalized, workspace_ids).await
     }
 }

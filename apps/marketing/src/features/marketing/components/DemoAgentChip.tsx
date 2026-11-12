@@ -1,5 +1,5 @@
-import ArrowUpRight from '@phosphor/arrow-up-right.svg';
-import Check from '@phosphor/check.svg';
+import ArrowUpRight from '@icon/system/regular/arrow-up-right.svg';
+import Check from '@icon/system/regular/check.svg';
 import { Button, Layer } from '@ui';
 import { type JSX, Show } from 'solid-js';
 import './demo-agent-chip.css';

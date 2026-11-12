@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { useNavigate, usePaneHistory } from '@app/lib/split-router';
 import { projectDetailRoute, tasksProjectsRoute } from '@app/routes/routes';
 import { useSplitLayout } from '@components/app/split-layout/layout';
@@ -96,12 +97,20 @@ async function settleProjectSubmission(
       { referredFrom: null, preferNewSplit }
     );
   toast.success('Project created', {
+    dismissStyle: 'icon',
     actions: [
-      { label: 'Open', icon: ArrowSquareOutIcon, onClick: () => open(false) },
       {
-        label: 'Open (New Split)',
+        label: t('entityActions.toastOpenSplit'),
         icon: SplitIcon,
+        trailingIcon: true,
+        variant: 'secondary',
         onClick: () => open(true),
+      },
+      {
+        label: t('entityActions.open'),
+        icon: ArrowSquareOutIcon,
+        trailingIcon: true,
+        onClick: () => open(false),
       },
     ],
   });

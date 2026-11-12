@@ -195,13 +195,18 @@ impl ProgramChecker for NoChecks {
     }
 }
 
-/// Counts the credentials it mints.
+/// Records the credentials it mints: who they act as, and for which routine.
 #[derive(Default)]
-struct CountedTokens(std::sync::atomic::AtomicUsize);
+struct RecordedTokens(std::sync::Mutex<Vec<(CodeIdentity, Uuid)>>);
 
-impl RoutineCredentials for CountedTokens {
-    async fn mint(&self, _: &MacroUserIdStr<'static>) -> anyhow::Result<String> {
-        self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+impl RoutineCredentials for RecordedTokens {
+    async fn mint(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        acts_as: CodeIdentity,
+        routine_id: Uuid,
+    ) -> anyhow::Result<String> {
+        self.0.lock().unwrap().push((acts_as, routine_id));
         Ok("fixture-routine-token".into())
     }
 }
@@ -213,8 +218,8 @@ async fn a_step_waits_for_a_free_slot_before_its_credential_and_gives_up_after_f
         SdkRoutineCode::new(
             Arc::clone(&programs) as Arc<dyn ProgramExecutor>,
             Arc::new(NoChecks),
-            CountedTokens::default(),
-            BTreeMap::new(),
+            RecordedTokens::default(),
+            code_execution::domain::SdkEndpoints::default(),
             Arc::new(ai_usage::NoOpUsageRecorder),
             None,
             Arc::new(NoTimeZones),
@@ -231,7 +236,8 @@ async fn a_step_waits_for_a_free_slot_before_its_credential_and_gives_up_after_f
         sentence: None,
     };
     let context = json!({ "run": {} });
-    let run = |code: Arc<SdkRoutineCode<CountedTokens>>| {
+    let routine_id = Uuid::from_u128(7);
+    let run = |code: Arc<SdkRoutineCode<RecordedTokens>>| {
         let (owner, step, context) = (owner.clone(), step.clone(), context.clone());
         async move {
             code.run(
@@ -241,6 +247,8 @@ async fn a_step_waits_for_a_free_slot_before_its_credential_and_gives_up_after_f
                     context: &context,
                     steps: &json!({}),
                     dry_run: false,
+                    acts_as: CodeIdentity::Owner,
+                    routine_id,
                 },
             )
             .await
@@ -251,16 +259,18 @@ async fn a_step_waits_for_a_free_slot_before_its_credential_and_gives_up_after_f
     let held = Arc::clone(&code.slots).acquire_owned().await.unwrap();
     let waiting = tokio::spawn(run(Arc::clone(&code)));
     tokio::time::sleep(Duration::from_secs(60)).await;
-    assert_eq!(
-        code.credentials.0.load(std::sync::atomic::Ordering::SeqCst),
-        0
-    );
+    assert!(code.credentials.0.lock().unwrap().is_empty());
     // A slot that frees up within five minutes runs it, and the wait is kept.
     drop(held);
     let ran = waiting.await.unwrap();
     assert_eq!(ran.result, Ok(json!({})));
     assert_eq!(ran.waited_ms, Some(60_000));
     assert_eq!(*programs.0.lock().unwrap(), 1);
+    // Its credential acts as the run said, stamped with its routine.
+    assert_eq!(
+        *code.credentials.0.lock().unwrap(),
+        [(CodeIdentity::Owner, routine_id)]
+    );
 
     // One that doesn't fails the step with the reason, and never runs it.
     let _held = Arc::clone(&code.slots).acquire_owned().await.unwrap();
@@ -304,7 +314,12 @@ mod real_deno {
     struct FixedToken;
 
     impl RoutineCredentials for FixedToken {
-        async fn mint(&self, _: &MacroUserIdStr<'static>) -> anyhow::Result<String> {
+        async fn mint(
+            &self,
+            _: &MacroUserIdStr<'static>,
+            _: CodeIdentity,
+            _: Uuid,
+        ) -> anyhow::Result<String> {
             Ok("fixture-routine-token".into())
         }
     }
@@ -325,14 +340,17 @@ mod real_deno {
         let checker = DenoChecker::new(deno, root.path().join("checks"), 1, 64 * 1024)
             .await
             .unwrap();
-        let hosts = ["cognition", "email", "storage"]
-            .map(|name| (name.to_owned(), host.to_owned()))
-            .into();
+        let endpoints = code_execution::domain::SdkEndpoints {
+            hosts: ["cognition", "email", "storage"]
+                .map(|name| (name.to_owned(), host.to_owned()))
+                .into(),
+            ..Default::default()
+        };
         let code = SdkRoutineCode::new(
             Arc::new(executor),
             Arc::new(checker),
             FixedToken,
-            hosts,
+            endpoints,
             Arc::new(ai_usage::NoOpUsageRecorder),
             None,
             Arc::new(NoTimeZones),
@@ -535,6 +553,8 @@ export async function main({ macro, trigger, steps, run }: StepContext) {
                     context: &context,
                     steps: &json!({ "first": { "count": 2 } }),
                     dry_run: false,
+                    acts_as: CodeIdentity::Agent,
+                    routine_id: Uuid::from_u128(1),
                 },
             )
             .await;
@@ -601,6 +621,8 @@ export async function main({ macro, trigger, steps, run }: StepContext) {
                     context: &json!({ "run": {} }),
                     steps: &json!({}),
                     dry_run: false,
+                    acts_as: CodeIdentity::Agent,
+                    routine_id: Uuid::from_u128(1),
                 },
             )
             .await;
@@ -639,6 +661,8 @@ export async function main({ macro, trigger, steps, run }: StepContext) {
                     context: &context,
                     steps: &json!({}),
                     dry_run: true,
+                    acts_as: CodeIdentity::Agent,
+                    routine_id: Uuid::from_u128(1),
                 },
             )
             .await;
@@ -655,16 +679,17 @@ export async function main({ macro, trigger, steps, run }: StepContext) {
         server.await.unwrap();
     }
 
-    /// Starters are offered as they are, and the CreateRoutine example is
+    /// Catalog routines are offered as they are, and the CreateRoutine example is
     /// copied by agents, so both must check against today's SDK.
     #[tokio::test]
     #[ignore = "requires pinned Deno runtime"]
-    async fn every_starter_and_the_create_routine_example_type_check() {
+    async fn every_catalog_routine_and_the_create_routine_example_type_check() {
         let (_root, code) = code("http://127.0.0.1:9").await;
-        for starter in routine_program::STARTERS.iter() {
-            let routine = program(json!([routine_program::Step::Code(starter.step.clone())]));
-            let problems = code.check_program(&routine).await.unwrap();
-            assert_eq!(problems, Vec::new(), "starter {}", starter.key);
+        for routine in routine_program::CATALOG.iter() {
+            let Some(step) = &routine.code else { continue };
+            let program = program(json!([routine_program::Step::Code(step.clone())]));
+            let problems = code.check_program(&program).await.unwrap();
+            assert_eq!(problems, Vec::new(), "catalog routine {}", routine.key);
         }
         let doc = include_str!("../../../../crates/routines/src/create_routine.md");
         let (_, example) = doc.split_once("Its `steps` string holds:\n").unwrap();

@@ -89,6 +89,50 @@ struct OwnerOnlyStorage(InMemoryStorage);
 impl Storage for OwnerOnlyStorage {
     type Error = std::convert::Infallible;
 
+    async fn read_people_sql(
+        &self,
+        viewer: &str,
+        plan: &cache_core::people::sql::PeopleSqlPlan,
+    ) -> Result<cache_core::people::sql::PeopleSqlResult, Self::Error> {
+        self.0.read_people_sql(viewer, plan).await
+    }
+
+    async fn scan_contact_records(
+        &self,
+        after: Option<&str>,
+        limit: usize,
+        visit: impl FnMut(&EntityKey<'_>, &Record) + maybe_send::MaybeSend,
+    ) -> Result<Option<String>, Self::Error> {
+        self.0.scan_contact_records(after, limit, visit).await
+    }
+
+    async fn visit_name_search(
+        &self,
+        read: &mut cache_core::people::name_search::reader::NameSearchRead<'_>,
+    ) -> Result<(), Self::Error> {
+        self.0.visit_name_search(read).await
+    }
+
+    async fn visit_contact_records(
+        &self,
+        query: &cache_core::search::SearchQuery,
+        visit: impl FnMut(&EntityKey<'_>, &Record) + maybe_send::MaybeSend,
+    ) -> Result<(), Self::Error> {
+        self.0.visit_contact_records(query, visit).await
+    }
+
+    async fn visit_search_documents(
+        &self,
+        profile: cache_core::search::SearchProfile,
+        bucket: &str,
+        query: &cache_core::search::SearchQuery,
+        visit: impl FnMut(cache_core::search::SearchDocumentRef<'_>) + maybe_send::MaybeSend,
+    ) -> Result<(), Self::Error> {
+        self.0
+            .visit_search_documents(profile, bucket, query, visit)
+            .await
+    }
+
     async fn get_batch(&self, keys: &[EntityKey<'_>]) -> Result<Vec<Option<Record>>, Self::Error> {
         assert!(
             keys.iter()

@@ -7,6 +7,9 @@
 use crate::domain::{model::TeamError, team_crm_settings_repo::TeamCrmSettingsRepository};
 use sqlx::PgPool;
 
+#[cfg(test)]
+mod test;
+
 /// Macrodb-backed [`TeamCrmSettingsRepository`].
 #[derive(Clone, Debug)]
 pub struct TeamCrmSettingsRepositoryImpl {

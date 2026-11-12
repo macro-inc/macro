@@ -21,7 +21,7 @@ use xtask_paths::RepoGlob;
 
 use crate::workflows::{
     cargo_deny, cargo_workspace_dependency_check, check_generated, check_node_modules_nix,
-    check_tauri_lockfiles, sdk_check, steps, test_macrod_update,
+    check_tauri_lockfiles, observability_image, runners, sdk_check, steps, test_macrod_update,
 };
 
 #[cfg(test)]
@@ -115,6 +115,12 @@ const CALLS: &[Call] = &[
         paths: Some(sdk_check::PATHS),
     },
     Call {
+        id: "observability-image",
+        name: "Observability image",
+        file: "observability_image.yml",
+        paths: Some(observability_image::PATHS),
+    },
+    Call {
         id: "macrod-update",
         name: "macrod update",
         file: "test_macrod_update.yml",
@@ -192,7 +198,7 @@ fn start() -> Job {
     let job = Job::default()
         .name(START_JOB)
         .cond(Expression::new(REQUESTED))
-        .runs_on("ubuntu-latest")
+        .runs_on(runners::Runner::TinyNoCache.to_string())
         .timeout_minutes(5u32)
         .permissions(Permissions {
             contents: Some(Level::Read),
@@ -273,7 +279,7 @@ fn gate() -> Job {
         .cond(Expression::new(
             "!cancelled() && needs.start.result != 'skipped'",
         ))
-        .runs_on("ubuntu-latest")
+        .runs_on(runners::Runner::TinyNoCache.to_string())
         .timeout_minutes(5u32)
         .permissions(Permissions {
             statuses: Some(Level::Write),

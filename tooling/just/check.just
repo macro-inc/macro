@@ -6,7 +6,7 @@
 # the run, warnings/hints only print). oxlint's only error rule is
 # typescript/no-floating-promises, so apps/web files are linted --type-aware.
 #
-#   just check        fast: rustfmt + biome + oxlint + ast-grep + PII   (~seconds)
+#   just check        fast: rustfmt + cargo shear + biome + oxlint + ast-grep + PII   (~seconds)
 #   just check full   also runs tsc + clippy                      (~minutes)
 #
 # Override the diff base with CHECK_BASE=<ref> (useful in shallow clones,
@@ -29,6 +29,7 @@ check *ARGS:
     if [ -z "$changed" ]; then echo "no changed files — nothing to check"; exit 0; fi
 
     rs=$(grep -E '^(crates|services|tooling)/.*\.rs$' <<<"$changed" || true)
+    manifests=$(grep -E '(^|/)Cargo\.toml$' <<<"$changed" || true)
     # Match the SDK and collaboration Biome configs: preserve generator output verbatim.
     js=$(grep -E '^(apps/(web|marketing)|packages|services/(analytics-proxy|ai-editing-worker|lexical-service|websocket-service))/.*\.(ts|tsx)$' <<<"$changed" | grep -Ev '^packages/(sdk/generated|collaboration/src/sync-service/generated)/' || true)
     sg=$(grep -E '^(apps|crates|packages|services|tooling)/.*\.(rs|ts|tsx|plist)$' <<<"$changed" || true)
@@ -38,6 +39,11 @@ check *ARGS:
       echo "── cargo fmt (root workspace)"
       cargo fmt --check \
         || { echo "   fix: cargo fmt"; fail=1; }
+    fi
+    if [ -n "$rs$manifests" ]; then
+      echo "── cargo shear (unused dependencies)"
+      cargo shear \
+        || { echo "   fix: cargo shear --fix, or list a side-effect dependency in [package.metadata.cargo-shear] ignored"; fail=1; }
     fi
     if [ -n "$js" ]; then
       # The SDK has its own Biome config and version. Running its files from

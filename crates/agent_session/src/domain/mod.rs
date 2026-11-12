@@ -1,5 +1,7 @@
 pub mod action_history;
 pub mod activity;
+#[cfg(feature = "admission")]
+pub mod activity_summary;
 pub mod agent_conversation;
 /// Current authorization for agent session streams.
 pub mod audience;

@@ -5,12 +5,15 @@
  * API for managing scheduled actions
  * OpenAPI spec version: 0.1.0
  */
+import type { DraftCreated } from './draftCreated';
 import type { DraftOneOfSevenOutcome } from './draftOneOfSevenOutcome';
 
 /**
- * Why there's no draft, for the person.
+ * Why there's no draft, for the person, and anything AI created before
+it gave up.
  */
 export type DraftOneOfSeven = {
+  created?: DraftCreated[];
   message: string;
   outcome: DraftOneOfSevenOutcome;
 };

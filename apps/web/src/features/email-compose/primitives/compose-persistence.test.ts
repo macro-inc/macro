@@ -580,8 +580,12 @@ it('only commits a selected time through the primary action', async () => {
       // The year appears only when the send is not this year.
       subtext: expect.stringMatching(/^Sends Tue, Dec 1(, 2026)? at 12:00 PM$/),
       actions: [
+        expect.objectContaining({
+          label: 'View message',
+          kind: 'open',
+          variant: 'secondary',
+        }),
         expect.objectContaining({ label: 'Undo' }),
-        expect.objectContaining({ label: 'View message', kind: 'open' }),
       ],
       duration: 8_000,
     })
@@ -595,7 +599,7 @@ it('only commits a selected time through the primary action', async () => {
     .mocked(composeContext.notices.feedback.success)
     .mock.calls.find(([message]) => message === 'Email scheduled');
   host.showThread.mockClear();
-  scheduledNotice?.[1]?.actions?.[1].onClick();
+  scheduledNotice?.[1]?.actions?.find(({ kind }) => kind === 'open')?.onClick();
   expect(host.showThread).toHaveBeenCalledExactlyOnceWith('thread');
   // Showing the thread mounts its own composer on the scheduled draft.
   const threadView = mountEmailComposer(composeContext, host, {
@@ -604,7 +608,7 @@ it('only commits a selected time through the primary action', async () => {
       scheduled_send_time: firstTime.toISOString(),
     }),
   });
-  scheduledNotice?.[1]?.actions?.[0].onClick();
+  scheduledNotice?.[1]?.actions?.find(({ kind }) => kind === 'undo')?.onClick();
   await vi.advanceTimersByTimeAsync(1);
   threadView.dispose();
   expect(composeContext.delivery.unschedule).toHaveBeenCalledExactlyOnceWith({
@@ -668,7 +672,7 @@ it('retires the scheduled notice when the thread view cancels the schedule', asy
   expect(await threadView.state.context.schedule.onCancel()).toBe(true);
   expect(composeContext.notices.feedback.dismiss).toHaveBeenCalledWith(7);
   // A click that lands during the dismissal must not undo the newer draft.
-  scheduledNotice?.[1]?.actions?.[0].onClick();
+  scheduledNotice?.[1]?.actions?.find(({ kind }) => kind === 'undo')?.onClick();
   await vi.advanceTimersByTimeAsync(1);
   expect(composeContext.delivery.unschedule).toHaveBeenCalledOnce();
   expect(composeContext.drafts.restoreDraft).not.toHaveBeenCalled();

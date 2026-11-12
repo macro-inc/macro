@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { stepsFromTask } from './routine-steps';
+import { stepsFromWire } from './routine-steps';
 import {
   describeHistoryStep,
   runDays,
@@ -10,16 +10,14 @@ import {
 } from './step-history';
 
 const steps =
-  stepsFromTask({
-    steps: [
-      {
-        type: 'code',
-        title: 'Label invoices',
-        source: 'export async function main() {}',
-      },
-      { type: 'agent', model: 'm', instructions: 'Go' },
-    ],
-  }) ?? [];
+  stepsFromWire([
+    {
+      type: 'code',
+      title: 'Label invoices',
+      source: 'export async function main() {}',
+    },
+    { type: 'agent', model: 'm', instructions: 'Go' },
+  ]) ?? [];
 
 const call = (write: boolean) => ({
   operation: 'email.addLabel',

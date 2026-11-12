@@ -77,6 +77,8 @@ in-call chat.
   participant events; an archived call's recreated room evicts the bot.
 - `enable-programmatic-calls` fails closed for the explicit start, join, and
   leave routes. Meeting join ignores optional join settings while disabled.
+- Accept bodyless meeting joins even with `Content-Type: application/json`;
+  shipped app clients send that header, while nonempty SDK bodies retain JSON validation and body limits.
 - `GET /call/{channel_id}` remains the shipped get-or-create path. New callers
   start with `POST /call/{channel_id}` and join a specific live session with
   `POST /call/record/{call_id}/join`; the latter never creates a call.

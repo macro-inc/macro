@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, render } from '@solidjs/testing-library';
 import type { JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { HomeChatStart } from './HomeChatStart';
@@ -6,7 +6,6 @@ import { HomeChatStart } from './HomeChatStart';
 type ChildrenProps = { children?: JSX.Element };
 
 const mocks = vi.hoisted(() => ({
-  agentsEnabled: true,
   asideCollapsed: false,
   asideOverlay: false,
 }));
@@ -27,12 +26,8 @@ vi.mock('@app/components/view-shell', () => ({
     Title: (props: ChildrenProps) => <span>{props.children}</span>,
   },
 }));
-vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => () => ({ enabled: mocks.agentsEnabled }),
-}));
-vi.mock('@core/constant/featureFlags', () => ({ enableChatV3Agents: {} }));
-vi.mock('@app/features/settings/components/local-runtime-prompt', () => ({
-  LocalRuntimePrompt: () => null,
+vi.mock('@channel/DebugSuspense', () => ({
+  DebugSuspense: (props: ChildrenProps) => props.children,
 }));
 vi.mock('@core/component/AI/component/DragDrop', () => ({
   DragDropWrapper: (props: ChildrenProps & { class?: string }) => (
@@ -44,15 +39,14 @@ vi.mock('@core/component/AI/component/DragDrop', () => ({
 vi.mock('@core/component/AI/context', () => ({
   ChatInputProvider: (props: ChildrenProps) => props.children,
 }));
-vi.mock('../home-chat-input', () => ({
-  HomeChatInput: () => <div data-testid="home-chat-input" />,
+vi.mock('../home-agent-composer', () => ({
+  HomeAgentComposer: () => <div data-testid="home-agent-composer" />,
 }));
 vi.mock('./home-recommended-actions', () => ({
   HomeRecommendedActions: () => <div data-testid="home-suggestions" />,
 }));
 
 beforeEach(() => {
-  mocks.agentsEnabled = true;
   mocks.asideCollapsed = false;
   mocks.asideOverlay = false;
 });
@@ -85,18 +79,5 @@ describe('Home agent composer alignment', () => {
     expect(
       document.querySelector('[data-home-composer-align="agents"]')
     ).toBeTruthy();
-  });
-
-  it('keeps the legacy 32px-above-center composer when agents are disabled', () => {
-    mocks.agentsEnabled = false;
-    renderHome();
-    const grid = document.querySelector('[data-home-composer-align="legacy"]');
-    expect(grid).toBeTruthy();
-    expect(grid?.className).toContain('pb-16');
-    expect(grid?.className).not.toContain('pt-6');
-    expect(
-      document.querySelector('[data-home-composer-topbar-align]')
-    ).toBeNull();
-    expect(screen.getByText('What should we get done in Macro?')).toBeTruthy();
   });
 });

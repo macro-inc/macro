@@ -2,7 +2,6 @@ use super::*;
 use crate::domain::engine::{AwaitingUser, TurnPurpose};
 use mcp_toolset::{ListedServer, RemoteMcpToolSet};
 use rmcp::{ServerHandler, ServiceExt};
-use std::{future::Future, pin::Pin};
 use tokio_util::sync::CancellationToken;
 
 struct StubServer;
@@ -47,6 +46,7 @@ async fn remote(
 
 fn request(mcp_tools: Option<RemoteMcpToolSet>) -> TurnRequest {
     TurnRequest {
+        feature: ai_usage::AiFeature::AgentSession,
         delivery: crate::domain::engine::ReplyDelivery::Streamed,
         purpose: TurnPurpose::Conversation,
         session_id: AgentSessionId::new(),
@@ -66,26 +66,9 @@ fn request(mcp_tools: Option<RemoteMcpToolSet>) -> TurnRequest {
     }
 }
 
-#[derive(Default)]
-struct RecordingSelector(Mutex<Vec<String>>);
-
-impl ToolModeSelector for RecordingSelector {
-    fn select<'a>(
-        &'a self,
-        owner: &'a MacroUserIdStr<'_>,
-    ) -> Pin<Box<dyn Future<Output = ToolMode> + Send + 'a>> {
-        self.0.lock().unwrap().push(owner.to_string());
-        Box::pin(async { ToolMode::Code })
-    }
-}
-
 #[tokio::test]
-async fn requires_every_code_tool_and_loads_once_as_the_session_owner() {
-    let selector = RecordingSelector::default();
-    assert_eq!(
-        select_tool_mode(&selector, &request(None)).await,
-        Some(ToolMode::Standard)
-    );
+async fn conversation_turns_run_code_mode_whenever_every_code_tool_is_listed() {
+    assert_eq!(tool_mode(&request(None)), ToolMode::Standard);
     for names in [
         vec![],
         vec!["ExecuteCode"],
@@ -93,57 +76,14 @@ async fn requires_every_code_tool_and_loads_once_as_the_session_owner() {
         vec!["ExecuteCode", "DescribeCodeTools"],
     ] {
         let (server, tools) = remote(&names).await;
-        assert_eq!(
-            select_tool_mode(&selector, &request(Some(tools))).await,
-            Some(ToolMode::Standard)
-        );
+        assert_eq!(tool_mode(&request(Some(tools))), ToolMode::Standard);
         server.cancel().await.unwrap();
     }
-    assert!(selector.0.lock().unwrap().is_empty());
     let (server, tools) = remote(&["ExecuteCode", "DescribeCodeTools", "ReadCodeDocs"]).await;
     let mut turn = request(Some(tools));
     turn.purpose = TurnPurpose::Summary;
-    assert_eq!(
-        select_tool_mode(&selector, &turn).await,
-        Some(ToolMode::Standard)
-    );
-    assert!(selector.0.lock().unwrap().is_empty());
+    assert_eq!(tool_mode(&turn), ToolMode::Standard);
     turn.purpose = TurnPurpose::Conversation;
-    assert_eq!(
-        select_tool_mode(&selector, &turn).await,
-        Some(ToolMode::Code)
-    );
-    assert_eq!(*selector.0.lock().unwrap(), ["macro|owner@example.com"]);
-    server.cancel().await.unwrap();
-}
-
-struct PendingSelector(tokio::sync::Notify);
-
-impl ToolModeSelector for PendingSelector {
-    fn select<'a>(
-        &'a self,
-        _: &'a MacroUserIdStr<'_>,
-    ) -> Pin<Box<dyn Future<Output = ToolMode> + Send + 'a>> {
-        Box::pin(async {
-            self.0.notify_one();
-            std::future::pending().await
-        })
-    }
-}
-
-#[tokio::test]
-async fn stopping_during_flag_loading_does_not_start_a_turn() {
-    let (server, tools) = remote(&["ExecuteCode", "DescribeCodeTools", "ReadCodeDocs"]).await;
-    let turn = request(Some(tools));
-    let selector = PendingSelector(tokio::sync::Notify::new());
-    let (selected, ()) = tokio::time::timeout(std::time::Duration::from_secs(1), async {
-        tokio::join!(select_tool_mode(&selector, &turn), async {
-            selector.0.notified().await;
-            turn.cancel.cancel();
-        })
-    })
-    .await
-    .unwrap();
-    assert_eq!(selected, None);
+    assert_eq!(tool_mode(&turn), ToolMode::Code);
     server.cancel().await.unwrap();
 }

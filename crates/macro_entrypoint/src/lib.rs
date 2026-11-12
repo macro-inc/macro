@@ -17,6 +17,7 @@ use opentelemetry::trace::TracerProvider as _;
 use opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge;
 use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_sdk::logs::SdkLoggerProvider;
+use opentelemetry_sdk::metrics::SdkMeterProvider;
 use opentelemetry_sdk::trace::SdkTracerProvider;
 use rootcause::hooks::Hooks;
 use rootcause_tracing::{RootcauseLayer, SpanCollector};
@@ -120,6 +121,7 @@ impl Default for MacroEntrypoint {
 pub struct InitializedEntrypoint {
     tracer_provider: Option<SdkTracerProvider>,
     logger_provider: Option<SdkLoggerProvider>,
+    meter_provider: Option<SdkMeterProvider>,
 }
 
 /// Failure to flush telemetry before a serverless runtime freezes.
@@ -134,6 +136,9 @@ pub enum TelemetryFlushError {
     /// The log exporter could not flush.
     #[error("log flush failed")]
     Logs(#[source] opentelemetry_sdk::error::OTelSdkError),
+    /// The metric exporter could not flush.
+    #[error("metric flush failed")]
+    Metrics(#[source] opentelemetry_sdk::error::OTelSdkError),
 }
 
 impl InitializedEntrypoint {
@@ -145,15 +150,18 @@ impl InitializedEntrypoint {
     pub async fn force_flush(&self) -> Result<(), TelemetryFlushError> {
         let tracer = self.tracer_provider.clone();
         let logger = self.logger_provider.clone();
-        let (traces, logs) = tokio::task::spawn_blocking(move || {
+        let meter = self.meter_provider.clone();
+        let (traces, logs, metrics) = tokio::task::spawn_blocking(move || {
             (
                 tracer.map(|provider| provider.force_flush()),
                 logger.map(|provider| provider.force_flush()),
+                meter.map(|provider| provider.force_flush()),
             )
         })
         .await?;
         traces.transpose().map_err(TelemetryFlushError::Traces)?;
         logs.transpose().map_err(TelemetryFlushError::Logs)?;
+        metrics.transpose().map_err(TelemetryFlushError::Metrics)?;
         Ok(())
     }
 
@@ -169,6 +177,11 @@ impl InitializedEntrypoint {
             && let Err(e) = provider.shutdown()
         {
             tracing::error!(error=?e, "failed to shutdown logger provider");
+        }
+        if let Some(ref provider) = self.meter_provider
+            && let Err(e) = provider.shutdown()
+        {
+            tracing::error!(error=?e, "failed to shutdown meter provider");
         }
     }
 }
@@ -206,6 +219,7 @@ impl MacroEntrypoint {
                 let tracer_provider =
                     export_otel.then(|| init_opentelemetry("local".to_string(), None));
                 let logger_provider = export_otel.then(|| init_otel_logs("local".to_string()));
+                let meter_provider = export_otel.then(|| init_otel_metrics("local".to_string()));
 
                 if let Some(provider) = tracer_provider.as_ref() {
                     let otel_filter = otel_env_filter();
@@ -252,6 +266,7 @@ impl MacroEntrypoint {
                 InitializedEntrypoint {
                     tracer_provider,
                     logger_provider,
+                    meter_provider,
                 }
             }
             (
@@ -271,6 +286,7 @@ impl MacroEntrypoint {
                 InitializedEntrypoint {
                     tracer_provider: None,
                     logger_provider: None,
+                    meter_provider: None,
                 }
             }
             (Environment::Production | Environment::Develop, _) => {
@@ -281,6 +297,7 @@ impl MacroEntrypoint {
                 let grafana_endpoint = matches!(self.env, Environment::Develop)
                     .then(GrafanaOtlpEndpoint::new)
                     .flatten();
+                let meter_provider = init_otel_metrics(env.clone());
                 let tracer_provider = init_opentelemetry(env, grafana_endpoint.as_deref());
 
                 let tracer = tracer_provider.tracer(service_name());
@@ -320,6 +337,7 @@ impl MacroEntrypoint {
                 InitializedEntrypoint {
                     tracer_provider: Some(tracer_provider),
                     logger_provider: None,
+                    meter_provider: Some(meter_provider),
                 }
             }
         }
@@ -457,6 +475,25 @@ fn init_otel_logs(deployment_environment: String) -> SdkLoggerProvider {
         .with_batch_exporter(exporter)
         .with_resource(otel_resource(deployment_environment))
         .build()
+}
+
+/// OTLP metric export at the same endpoint the spans go to, installed as the
+/// global meter provider so a service's `opentelemetry::global::meter`
+/// instruments reach it. The SDK's periodic reader collects and exports every
+/// 60 seconds; a service that records nothing exports nothing.
+fn init_otel_metrics(deployment_environment: String) -> SdkMeterProvider {
+    let exporter = opentelemetry_otlp::MetricExporter::builder()
+        .with_tonic()
+        .with_endpoint(otel_endpoint())
+        .build()
+        .expect("failed to create OTLP metric exporter");
+
+    let provider = SdkMeterProvider::builder()
+        .with_periodic_exporter(exporter)
+        .with_resource(otel_resource(deployment_environment))
+        .build();
+    opentelemetry::global::set_meter_provider(provider.clone());
+    provider
 }
 
 /// Filter for the log bridge: mirror `RUST_LOG` verbosity, but never feed the

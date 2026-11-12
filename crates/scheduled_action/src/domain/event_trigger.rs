@@ -875,6 +875,9 @@ fn channel_parent(parent: &MessageParent) -> Result<Uuid, EventRejection> {
 pub struct IncomingEvent {
     pub event_id: Uuid,
     pub schema_version: u8,
+    /// The routine whose run wrote this, from the signed token behind the
+    /// write; set even when the routine wrote as its owner.
+    pub routine_id: Option<Uuid>,
     pub payload: EventPayload,
 }
 
@@ -893,6 +896,8 @@ pub enum EventRejection {
     InvalidEntityId,
     #[error("event context does not match its event name")]
     InvalidContext,
+    #[error("event was written by a routine run")]
+    RoutineWrite,
 }
 
 fn require_human(actor: Option<&Actor<'static>>, delegated: bool) -> Result<(), EventRejection> {
@@ -943,6 +948,11 @@ impl IncomingEvent {
         // version change requires reviewing eligibility before accepting it.
         if self.schema_version != 1 {
             return Err(EventRejection::UnsupportedSchema);
+        }
+        // Like agents' writes, a routine's never start routines, even when it
+        // writes as its owner: any routine, so two can't trigger each other.
+        if self.routine_id.is_some() {
+            return Err(EventRejection::RoutineWrite);
         }
         let event_id = EventId::try_from(self.event_id)?;
         let mut change_source = None;

@@ -77,7 +77,7 @@ const TURN_IDLE_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 
 /// What a failed turn says to the person it answers, wherever its reply is
 /// read. The failure itself goes to the prompt's error, not to them.
-const TURN_FAILED_REPLY: &str = "I ran into an error and stopped before finishing.";
+pub(crate) const TURN_FAILED_REPLY: &str = "I ran into an error and stopped before finishing.";
 
 /// Whole milliseconds since `started`, saturating; a span field, not a clock.
 fn elapsed_ms(started: Instant) -> u64 {
@@ -90,10 +90,7 @@ pub const AGENT_NAME: &str = "macro-inmem";
 
 /// The `_meta` namespace this agent writes its own keys under, mirroring
 /// Claude Code's `claudeCode` layout so the fold reads both the same way.
-pub const META_NAMESPACE: &str = "macro";
-
-/// The one tool in the Macro toolset that delegates to another agent.
-const SUBAGENT_TOOL: &str = "Subagent";
+pub const META_NAMESPACE: &str = agent_session::domain::model::META_NAMESPACE;
 
 /// Slash command that asks the user a question through `elicitation/create`
 /// instead of running the model: `/ask <question>` for free text, or
@@ -129,6 +126,8 @@ pub struct AgentState {
     pub session_id: AgentSessionId,
     /// The session's owner; turns run on their behalf.
     pub owner: Owner,
+    /// What the session's turns are admitted and metered as.
+    pub feature: ai_usage::AiFeature,
     /// How the session's replies reach their reader.
     pub delivery: ReplyDelivery,
     /// Runs the actual turns.
@@ -952,7 +951,7 @@ async fn run_turn(
         tokio::select! {
             biased;
             _ = cancel.cancelled() => return Ok(StopReason::Cancelled),
-            result = admit_turn(state.admission.as_ref(), &state.owner) => result.map_err(|error|
+            result = admit_turn(state.admission.as_ref(), &state.owner, state.feature) => result.map_err(|error|
                 AcpError::new(-32603, error.to_string()).data(serde_json::json!({
                     "code": error.code(), "retryable": error.is_retryable(),
                 }))
@@ -1027,6 +1026,7 @@ async fn run_turn(
         session_id: state.session_id,
         awaiting: Arc::clone(&awaiting),
         owner: state.owner.clone(),
+        feature: state.feature,
         model,
         reasoning_effort,
         speed,
@@ -1402,8 +1402,7 @@ fn update_for_part(
 
 /// The `_meta` this agent stamps on a tool call so the fold can read it by
 /// name rather than guess from the title: `macro.toolName` (an MCP tool as
-/// `mcp__<server>__<tool>`, the convention Claude Code set) and
-/// `macro.subagent` on a delegation.
+/// `mcp__<server>__<tool>`, the convention Claude Code set).
 fn tool_call_meta(name: &str, mcp: Option<&McpInfo>) -> Meta {
     let tool_name = match mcp {
         Some(mcp) => format!("mcp__{}__{}", mcp.service, mcp.tool_name),
@@ -1411,9 +1410,6 @@ fn tool_call_meta(name: &str, mcp: Option<&McpInfo>) -> Meta {
     };
     let mut ours = serde_json::Map::new();
     ours.insert("toolName".to_owned(), serde_json::Value::String(tool_name));
-    if mcp.is_none() && name == SUBAGENT_TOOL {
-        ours.insert("subagent".to_owned(), serde_json::Value::Bool(true));
-    }
     let mut meta = Meta::new();
     meta.insert(META_NAMESPACE.to_owned(), serde_json::Value::Object(ours));
     meta

@@ -14,6 +14,8 @@ mod test;
 /// number of days, a question it asks AI. Its type is part of the step's
 /// type-checked contract; its value is not, so changing it needs no check.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = RoutineKnob))]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Knob {
     /// Free text, such as a label or channel name.
@@ -135,6 +137,7 @@ impl Knob {
 /// How code reads a knob: a lowercase letter, then up to 31 letters or
 /// digits, e.g. `dueWithinDays`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(try_from = "String", into = "String")]
 pub struct KnobName(String);
 

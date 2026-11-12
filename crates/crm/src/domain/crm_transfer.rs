@@ -35,7 +35,7 @@ use super::{
 };
 
 pub use models::{
-    CompanyImportOutcome, Created, CsvFile, CsvFiles, CsvInput, PipelineDestination,
+    CompanyImportOutcome, Created, CsvFile, CsvFiles, CsvInput, PipelineCsv, PipelineDestination,
     PipelineExport, PipelineImportOutcome, SkippedRecord, TransferError, TransferRecords,
 };
 pub use records::CrmTransferRecords;
@@ -71,6 +71,13 @@ pub trait CrmTransferService: Send + Sync + 'static {
         pipeline: Uuid,
         csv: CsvInput,
     ) -> impl Future<Output = Result<PipelineImportOutcome, TransferError>> + Send;
+
+    /// Every entry of a pipeline as CSV text, named after the pipeline.
+    fn pipeline_csv(
+        &self,
+        viewer: &Viewer,
+        pipeline: Uuid,
+    ) -> impl Future<Output = Result<PipelineCsv, TransferError>> + Send;
 
     /// Save every entry of a pipeline as a CSV file in the viewer's files.
     fn export_pipeline(
@@ -708,11 +715,11 @@ where
     }
 
     #[tracing::instrument(skip_all, fields(pipeline = %pipeline), err)]
-    async fn export_pipeline(
+    async fn pipeline_csv(
         &self,
         viewer: &Viewer,
         pipeline: Uuid,
-    ) -> Result<PipelineExport, TransferError> {
+    ) -> Result<PipelineCsv, TransferError> {
         let found = self
             .workflows
             .find(
@@ -762,16 +769,27 @@ where
                     .collect()
             })
             .collect();
-        let file_name = overview.pipeline.pipeline.name.clone();
-        let document_id = self
-            .files
-            .save(viewer, &file_name, encode_csv(&headers, &rows))
-            .await?;
-        Ok(PipelineExport {
-            document_id,
-            file_name,
+        Ok(PipelineCsv {
+            name: overview.pipeline.pipeline.name.clone(),
+            text: encode_csv(&headers, &rows),
             rows: rows.len(),
             complete: found.complete,
+        })
+    }
+
+    #[tracing::instrument(skip_all, fields(pipeline = %pipeline), err)]
+    async fn export_pipeline(
+        &self,
+        viewer: &Viewer,
+        pipeline: Uuid,
+    ) -> Result<PipelineExport, TransferError> {
+        let csv = self.pipeline_csv(viewer, pipeline).await?;
+        let document_id = self.files.save(viewer, &csv.name, csv.text).await?;
+        Ok(PipelineExport {
+            document_id,
+            file_name: csv.name,
+            rows: csv.rows,
+            complete: csv.complete,
         })
     }
 }

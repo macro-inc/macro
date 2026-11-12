@@ -302,7 +302,17 @@ export const CalculateSpreadsheet = z.object({
           .object({
             sheetId: z.string(),
             cells: z.array(
-              z.object({ address: z.string(), value: z.string() }).strict()
+              z
+                .object({
+                  address: z.string(),
+                  value: z.union([
+                    z.boolean(),
+                    z.number(),
+                    z.string(),
+                    z.null(),
+                  ]),
+                })
+                .strict()
             ),
           })
           .strict()
@@ -5445,6 +5455,7 @@ export const CreateRoutine = z.object({
         z.null(),
       ])
       .optional(),
+    dangerouslyOperateAsUser: z.union([z.boolean(), z.null()]).optional(),
   }),
 });
 
@@ -5533,6 +5544,7 @@ export const RoutineInfo = z.object({
             z.null(),
           ])
           .optional(),
+        dangerouslyOperateAsUser: z.union([z.boolean(), z.null()]).optional(),
       }),
       z.null(),
     ])
@@ -10060,7 +10072,17 @@ export const EditSpreadsheet = z.object({
           .object({
             sheetId: z.string(),
             cells: z.array(
-              z.object({ address: z.string(), value: z.string() }).strict()
+              z
+                .object({
+                  address: z.string(),
+                  value: z.union([
+                    z.boolean(),
+                    z.number(),
+                    z.string(),
+                    z.null(),
+                  ]),
+                })
+                .strict()
             ),
             type: z.literal('set_cells'),
           })
@@ -12113,6 +12135,8 @@ export const ListCalendarEventsResponse = z.object({
       title: z.string(),
       start: z.string(),
       end: z.string(),
+      startLocal: z.string(),
+      endLocal: z.string(),
       isAllDay: z.boolean(),
       timeZone: z.union([z.string(), z.null()]).optional(),
       location: z.union([z.string(), z.null()]).optional(),
@@ -13399,6 +13423,9 @@ export const RoutineList = z.object({
                 z.null(),
               ])
               .optional(),
+            dangerouslyOperateAsUser: z
+              .union([z.boolean(), z.null()])
+              .optional(),
           }),
           z.null(),
         ])
@@ -14511,6 +14538,8 @@ export const ReadCalendarEventResponse = z.object({
   title: z.string(),
   start: z.string(),
   end: z.string(),
+  startLocal: z.string(),
+  endLocal: z.string(),
   isAllDay: z.boolean(),
   timeZone: z.union([z.string(), z.null()]).optional(),
   isRecurring: z.boolean(),
@@ -18015,6 +18044,7 @@ export const RoutineDetails = z.object({
               z.null(),
             ])
             .optional(),
+          dangerouslyOperateAsUser: z.union([z.boolean(), z.null()]).optional(),
         }),
         z.null(),
       ])
@@ -18697,6 +18727,7 @@ export const SearchToolsResponse = z.object({
   additional_matches: z.array(
     z.object({ name: z.string(), description: z.string() })
   ),
+  already_available: z.array(z.string()).optional(),
 });
 
 export const SelfKnowledge = z.record(z.any());
@@ -19281,10 +19312,6 @@ export const ShareWithChannelResponse = z.object({
   }),
   summary: z.string(),
 });
-
-export const Subagent = z.object({ task: z.string() });
-
-export const SubagentResponse = z.object({ result: z.string() });
 
 export const TextEditorCodeExecution = z.object({ input: z.string() });
 
@@ -20097,6 +20124,7 @@ export const UpdateRoutine = z.object({
               z.null(),
             ])
             .optional(),
+          dangerouslyOperateAsUser: z.union([z.boolean(), z.null()]).optional(),
         }),
         type: z.literal('configuration'),
       }),
@@ -20656,3 +20684,7 @@ export const ReadResponse = z.object({
     }
   }),
 });
+
+export const Subagent = z.object({ task: z.string() });
+
+export const SubagentResponse = z.object({ result: z.string() });

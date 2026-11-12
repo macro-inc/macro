@@ -22,6 +22,7 @@ use std::sync::Arc;
 use ai_toolset::{AsyncToolCollection, ToolCallError};
 use chrono::NaiveDate;
 use chrono::{DateTime, Utc};
+use chrono_tz::Tz;
 use email_validator::EmailAddress;
 use rootcause::compat::boxed_error::IntoBoxedError;
 use schemars::JsonSchema;
@@ -466,6 +467,8 @@ async fn confirm_copy<O: CalendarOccurrenceService>(
 
 const DESCRIPTION_PREVIEW_CHARS: usize = 280;
 const ATTENDEES_SHOWN_MAX: usize = 20;
+const LOCAL_DATE_FORMAT: &str = "%A, %B %-d, %Y";
+const LOCAL_DATE_TIME_FORMAT: &str = "%A, %B %-d, %Y, %-I:%M %p";
 
 /// Truncate an event description to a context-friendly preview.
 fn description_preview(description: Option<&str>) -> Option<String> {
@@ -500,6 +503,54 @@ fn time_fields(time: &EventTime) -> (String, String, bool, Option<String>) {
             end_date,
         } => (start_date.to_string(), end_date.to_string(), true, None),
     }
+}
+
+/// Event start and end spelled out with their weekdays, so a model copies the
+/// day instead of working it out from an ISO date. Timed events read in the
+/// user's time zone when known, else the event's, else UTC, and name that zone.
+/// All-day events keep their calendar dates, which have no zone.
+fn local_time_fields(time: &EventTime, user_time_zone: Option<&str>) -> (String, String) {
+    match time {
+        EventTime::Timed {
+            starts_at,
+            ends_at,
+            time_zone,
+        } => {
+            let zone = user_time_zone
+                .into_iter()
+                .chain(time_zone.as_deref())
+                .find_map(|name| name.parse::<Tz>().ok())
+                .unwrap_or(Tz::UTC);
+            let local = |instant: &DateTime<Utc>| {
+                let formatted = instant.with_timezone(&zone).format(LOCAL_DATE_TIME_FORMAT);
+                format!("{formatted} {}", zone.name())
+            };
+            (local(starts_at), local(ends_at))
+        }
+        EventTime::AllDay {
+            start_date,
+            end_date,
+        } => (
+            start_date.format(LOCAL_DATE_FORMAT).to_string(),
+            end_date.format(LOCAL_DATE_FORMAT).to_string(),
+        ),
+    }
+}
+
+/// The requester's time zone for labeling a result. Labels only describe it,
+/// so a failed lookup falls back to the event's zone rather than failing a read.
+async fn user_time_zone<O: CalendarOccurrenceService>(
+    occurrences: &O,
+    requester_id: &str,
+) -> Option<String> {
+    occurrences
+        .primary_time_zone(requester_id)
+        .await
+        .inspect_err(|error| {
+            tracing::warn!(error = ?error, "failed to load the time zone for a tool result");
+        })
+        .ok()
+        .flatten()
 }
 
 impl ToolCalendarEvent {

@@ -5,10 +5,10 @@
  * API for managing scheduled actions
  * OpenAPI spec version: 0.1.0
  */
-import type { Workspace } from './workspace';
 
 /**
- * What the drafter may write, and the person's workspace by name and id.
+ * What the drafter may write. It looks up the items the person's words
+name itself, with their access.
  */
 export interface DraftContext {
   /** The model Ask AI steps it writes run on. */
@@ -21,5 +21,4 @@ must also be able to answer it. */
   conditions?: boolean;
   /** IANA time zone schedules are written in, e.g. `America/New_York`. */
   timezone: string;
-  workspace?: Workspace;
 }

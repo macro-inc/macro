@@ -20,6 +20,7 @@ pub fn incoming() -> IncomingEvent {
     IncomingEvent {
         event_id: generate_uuid_v7(),
         schema_version: 1,
+        routine_id: None,
         payload: EventPayload::Document(
             serde_json::from_value(json!({
                 "event_type":"document.updated", "metadata": {
@@ -325,6 +326,7 @@ impl EventRunRepository for Repo {
                 claimed: Some(started_at),
                 run_visibility: RunVisibility::Unlisted,
                 template_id: None,
+                suggestion_id: None,
                 description: String::new(),
             },
         }))

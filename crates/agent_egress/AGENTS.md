@@ -73,12 +73,18 @@ agent, and session. The bot
 never comes from the request. `MacroApiTokenSigner::mint_for_agent` callers
 (code mode) choose the claim themselves, plus an optional signed `agent_via`
 client label (public MCP code mode signs the MCP client's name); `mint_for`
-signs none of these claims.
+signs none of these claims. `mint_for_routine` signs the routine whose run the
+token acts for (and optionally an agent; `None` writes as the owner).
 
 ## Gotchas
 
 - Never let the sandbox see an upstream credential directly; every egress
   path must go through a port here, not a bypass in the harness.
+- `ReqwestForwarder` and `HttpActorMcpTransport` build their clients from
+  `mcp_client::outbound::guarded_http::client_builder` and check IP-literal
+  URLs before sending: a custom server's URL is whatever its owner typed.
+  Their `AddressPolicy` comes from the environment, so only a local stack
+  reaches private addresses.
 
 ## Related
 

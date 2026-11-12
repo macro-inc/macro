@@ -1,12 +1,14 @@
 //! User-invoked explicit memory edits and authorized professional activity reads.
-use crate::domain::{models::*, ports::ComposedMemoryRepo, service::MemoryServiceImpl};
+use crate::domain::{
+    MemoryService, models::*, ports::ComposedMemoryRepo, service::MemoryServiceImpl,
+};
 use ai_toolset::{
     AsyncTool, AsyncToolCollection, RequestContext, ServiceContext, ToolAnnotated, ToolAnnotations,
     ToolCallError, ToolResult,
 };
 use chrono::NaiveDate;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::sync::Arc;
 
 pub struct MemoryToolContext<R> {
@@ -124,11 +126,6 @@ impl<R: ComposedMemoryRepo> AsyncTool<MemoryToolContext<R>> for GetUserActivity 
             .map(|reports| ActivityReports { reports })
             .map_err(memory_error)
     }
-}
-
-#[derive(Serialize, JsonSchema)]
-pub struct ActivityReports {
-    pub reports: Vec<Activity>,
 }
 
 fn memory_error(error: crate::domain::MemoryError) -> ToolCallError {

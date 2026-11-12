@@ -9,6 +9,7 @@ import type { hydrateCallEvent } from './hydrate/call';
 import type { hydrateChannelEvent } from './hydrate/channel';
 import type { hydrateDocumentEvent } from './hydrate/document';
 import type { hydrateMessageEvent } from './hydrate/message';
+import type { hydrateUserEvent } from './hydrate/user';
 
 /** A webhook delivery body, exactly as Macro serializes it. */
 export type MacroEvent = WebhookEvent;
@@ -34,7 +35,8 @@ type HydratedEvent =
   | ReturnType<typeof hydrateChannelEvent>
   | ReturnType<typeof hydrateCallEvent>
   | ReturnType<typeof hydrateDocumentEvent>
-  | ReturnType<typeof hydrateMessageEvent>;
+  | ReturnType<typeof hydrateMessageEvent>
+  | ReturnType<typeof hydrateUserEvent>;
 
 /**
  * What a handler receives, per event: the raw `metadata` plus the ORM handles

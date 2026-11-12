@@ -1,0 +1,91 @@
+/* A mostly opaque reading surface, with just a little of the page color beneath. */
+:is(.feature-page, .macro-homepage)
+  :is(.product-page, .feature-page-visual, .homepage-sections)
+  :is(.product-demo.glass, .feature-demo-context.glass, .workspace-feature-scene.glass, .macro-preview-back, .mds-card, .mail-app, .homepage-spreadsheet, .homepage-email-surface, .email-desktop-window) {
+  --glass-rim-background: linear-gradient(135deg, #ffffff16, #ffffff08 35%, #ffffff04 65%, #ffffff09);
+  background: linear-gradient(135deg, #ffffff07, transparent 55%), rgb(16 16 18 / 64%);
+  backdrop-filter: blur(16px) saturate(115%);
+  -webkit-backdrop-filter: blur(16px) saturate(115%);
+  box-shadow: inset 0 1px 0 #ffffff12, inset 0 0 0 1px #ffffff07, 0 14px 32px -24px #0009;
+}
+
+/* Keep nested full-window canvases from covering the outer glass surface. */
+:is(.feature-page, .macro-homepage)
+  :is(.product-page, .feature-page-visual, .homepage-sections)
+  :is(.mds-card, .product-demo.glass, .homepage-spreadsheet)
+  .homepage-sheet-editor {
+  background: transparent;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :is(.feature-page, .macro-homepage)
+    :is(.product-page, .feature-page-visual, .homepage-sections)
+    :is(.product-demo.glass, .feature-demo-context.glass, .workspace-feature-scene.glass, .macro-preview-back, .mds-card, .mail-app, .homepage-spreadsheet, .homepage-email-surface, .email-desktop-window) {
+    background: #111113;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+/* Feature illustrations share the Tasks surface; homepage styling stays independent. */
+.feature-page .feature-page-section :is(.calendar-story-glass, .forms-card, .booking-story-card, .benefit-glass, .workspace-feature-scene, .mail-sharing-email) {
+  position: relative;
+  isolation: isolate;
+  background: linear-gradient(135deg, #ffffff0b, transparent 55%), rgb(16 16 18 / 64%);
+  backdrop-filter: blur(16px) saturate(115%);
+  -webkit-backdrop-filter: blur(16px) saturate(115%);
+  box-shadow: inset 0 1px 0 #ffffff18, inset 0 0 0 1px #ffffff0c;
+}
+.feature-page .feature-page-section :is(.calendar-story-glass, .forms-card, .booking-story-card, .benefit-glass, .mail-sharing-email)::before {
+  content: '';
+  position: absolute;
+  inset: -12px;
+  z-index: -1;
+  border: 1px solid #ffffff14;
+  border-radius: 38px;
+  background: linear-gradient(135deg, #ffffff0c, #ffffff03 55%, #ffffff06);
+  pointer-events: none;
+}
+/* Keep diagrams and external chat bubbles unframed. */
+.feature-page-section .demo-reserved-badge { display: inline-flex; max-width: 100%; min-width: 0; }
+.feature-page-section .demo-reserved-badge[data-visible=false] { visibility: hidden; pointer-events: none; }
+.feature-page-section :is(.benefit-tag, .calendar-story-choice) {
+  background: linear-gradient(135deg, #ffffff09, #ffffff02), rgb(30 32 32 / 54%);
+  box-shadow: inset 0 1px 0 #ffffff0c, inset 0 0 0 1px #ffffff06;
+  backdrop-filter: blur(10px);
+}
+@media (prefers-reduced-transparency: reduce) {
+  .feature-page .feature-page-section :is(.calendar-story-glass, .forms-card, .booking-story-card, .benefit-glass, .workspace-feature-scene, .mail-sharing-email) {
+    background: #101012;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+.feature-demo-art[data-glass-frame] :is(.booking-story-card, .workspace-feature-scene)::before { display: none; }
+/* This email window clips its contents; draw its outer lip outside the clip. */
+.feature-page .feature-page-section .mail-sharing-email {
+  box-shadow: inset 0 1px 0 #ffffff18, inset 0 0 0 1px #ffffff0c,
+    0 0 0 11px #ffffff04, 0 0 0 12px #ffffff14;
+}
+.feature-page .feature-page-section .mail-sharing-email::before { display: none; }
+
+/* A window owns the glass. Its inset canvases must not paint it opaque again. */
+:is(.feature-page, .macro-homepage)
+  :is(.product-demo, .macro-preview-back, .mds-card, .mail-app, .homepage-email-surface, .email-desktop-window)
+  :is(.dummy-workspace:not(.product-demo), .workspace-demo-panel, .workspace-demo-panel [data-view-shell-top-bar], .homepage-sheet-editor, .github-changes) {
+  background: transparent;
+}
+
+:is(.feature-page, .macro-homepage)
+  :is(.product-demo, .macro-preview-back, .mds-card, .mail-app, .email-desktop-window)
+  :is([data-view-sidebar], .review-home > .dummy-rail) {
+  background: color-mix(in srgb, var(--color-panel) 12%, transparent);
+}
+
+/* Overlaid mobile navigation still needs its own readable backing. */
+@media (max-width: 699px) {
+  :is(.feature-page, .macro-homepage) .product-sidebared-scene > [data-view-sidebar] {
+    background: var(--color-panel);
+  }
+}

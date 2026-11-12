@@ -389,8 +389,9 @@ function DropdownCheckboxItem(props: DropdownCheckboxItemProps) {
 }
 
 /**
- * Checkbox/Space toggles without closing; row/Enter adds and closes.
- * Shift activation and Only replace the group selection without closing.
+ * Clicking a row or its checkbox, or Space, toggles without closing; Enter
+ * adds and closes. Shift activation and Only replace the group selection
+ * without closing.
  *
  * @do Use for options in a multiselect filter, not independent settings.
  * @do Replace only this item's group in `onOnly`, preserving other filters.

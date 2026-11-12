@@ -10,25 +10,6 @@ pub use bot_id::BotId;
 /// Shared harness id used by agent-harness bindings.
 pub use harness_id::HarnessId;
 
-/// Owner of a registered harness an agent wants to run on.
-///
-/// Kept minimal on purpose: the bots domain only needs enough to decide
-/// whether a caller may bind an agent to the harness. Mirrors the harnesses
-/// domain's `HarnessOwner`, whose table enforces exactly one owner.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum HarnessOwner {
-    /// User-owned (private) harness.
-    User {
-        /// Owner user id.
-        user_id: String,
-    },
-    /// Team-owned harness, usable by every team member.
-    Team {
-        /// Owner team id.
-        team_id: Uuid,
-    },
-}
-
 /// Bot kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
@@ -358,6 +339,20 @@ pub struct Agent {
     /// session, a chat agent replies in the thread. Chosen in the agent's
     /// settings; the persona's word, not the runtime's.
     pub is_coding: bool,
+    /// Why the agent cannot run right now, or `None` while it can.
+    #[serde(default)]
+    pub stopped_reason: Option<AgentStoppedReason>,
+}
+
+/// Why an agent cannot run right now.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum AgentStoppedReason {
+    /// A resident (a bound non-coding agent) whose owner no longer has User
+    /// access to its runtime. Its binding stays, so access given back
+    /// restores it.
+    NoRuntimeAccess,
 }
 
 /// Request to create a persisted AI agent.
@@ -448,22 +443,28 @@ mod test;
 /// The runtime an agent runs on: a harness slug and, for `macrod`, the
 /// registered harness serving it. Travel together because one without the
 /// other is never a valid choice.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(deny_unknown_fields)]
 pub struct AgentHarnessSelection {
     /// Harness slug, e.g. `in-memory`, `cursor`, or `macrod`.
     pub harness: String,
     /// Registered harness to run on. Required when `harness` is `macrod`,
     /// forbidden otherwise.
+    #[serde(default)]
     pub harness_id: Option<HarnessId>,
 }
 
 /// Where an agent can be mentioned: everywhere its owner can use it, or
 /// exactly the listed channels.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(deny_unknown_fields)]
 pub struct AgentChannelSelection {
     /// Whether the agent is global or channel-specific.
     pub channel_scope: AgentChannelScope,
     /// Selected channels. Must be non-empty only for `selected` scope.
+    #[serde(default)]
     pub channel_ids: Vec<Uuid>,
 }
 
@@ -472,24 +473,34 @@ pub struct AgentChannelSelection {
 /// Every field is optional; an absent field keeps the agent's current value.
 /// Ownership and the bot profile (name, handle, description, avatar) are not
 /// patchable here: the profile has [`PatchBotRequest`], and ownership changes
-/// go through [`UpdateAgentRequest`].
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+/// go through [`UpdateAgentRequest`]. Unknown fields are refused, so a
+/// misspelled or flattened setting is never silently ignored.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(deny_unknown_fields)]
 pub struct PatchAgentRequest {
     /// Replacement instructions, whole.
+    #[serde(default)]
     pub instructions: Option<String>,
     /// Replacement runtime.
+    #[serde(default)]
     pub harness: Option<AgentHarnessSelection>,
     /// Replacement model.
+    #[serde(default)]
     pub default_model: Option<String>,
     /// Replacement channel availability.
+    #[serde(default)]
     pub channels: Option<AgentChannelSelection>,
     /// Replacement MCP server selection.
+    #[serde(default)]
     pub mcp: Option<AgentMcpServers>,
     /// Replacement permission choice: approve without asking (`true`) or
     /// prompt (`false`). A patch cannot clear the choice back to unset; an
     /// explicit `false` prompts exactly as unset does.
+    #[serde(default)]
     pub auto_accept_permissions: Option<bool>,
     /// Replacement coding choice.
+    #[serde(default)]
     pub is_coding: Option<bool>,
 }
 
@@ -715,8 +726,6 @@ pub struct ChannelWebhookResponse {
 
 /// Facts about a registered harness used to validate a persona.
 pub struct HarnessFacts {
-    /// Who may use the harness.
-    pub owner: HarnessOwner,
     /// Whether the harness operator permits unattended tool approvals.
     pub allow_permission_bypass: bool,
 }

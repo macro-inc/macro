@@ -6,8 +6,8 @@ import {
 } from '../core/routine-draft';
 import {
   firstAgent,
+  programSteps,
   type StepDraft,
-  stepsFromTask,
   stepsToWire,
 } from '../core/routine-steps';
 import {
@@ -25,60 +25,45 @@ import { getDefaultTimezone } from '@core/util/cron';
 import type {
   ActionConfiguration,
   ActionConfigurationUpdate,
+  AgentTask,
+  RoutineTask,
   ScheduledAction,
 } from '@service-scheduled-action/generated/schemas';
-import { z } from 'zod';
 import { DEFAULT_RUN_VISIBILITY, type ScheduleDraft } from '../core/draft';
 import {
   type RoutineTarget,
-  routineAgentIdSchema,
-  routineModelSchema,
   routineTargetSchema,
   routineTargetsEqual,
 } from '../core/routine-target';
 import { getCronTrigger } from './triggers';
 
-const routineAppsSchema = z
-  .array(z.object({ app_slug: z.string(), server_name: z.string() }))
-  .optional();
-
-const agentTaskSchema = z
-  .looseObject({
-    agent: z.looseObject({ bot_id: routineAgentIdSchema }).nullish(),
-    model: routineModelSchema.nullish(),
-    mcp_servers: routineAppsSchema,
-    prompt: z.string(),
-    user_prompt: z.string(),
-  })
-  .refine((task) => task.agent != null || task.model != null);
-
-type RoutineTask = z.infer<typeof agentTaskSchema>;
-
 /** The apps a program requires, stored beside its steps. */
-const programAppsSchema = z.looseObject({ mcp_servers: routineAppsSchema });
-
-function programApps(task: unknown): ScheduleDraft['apps'] {
-  const parsed = programAppsSchema.safeParse(task);
-  return parsed.success ? (parsed.data.mcp_servers ?? []) : [];
+function programApps(task: RoutineTask): ScheduleDraft['apps'] {
+  return 'steps' in task ? (task.mcp_servers ?? []) : [];
 }
 
-function getAgentTask(schedule: ScheduledAction): RoutineTask | undefined {
-  if (schedule.kind !== 'Agent') return undefined;
-  const result = agentTaskSchema.safeParse(schedule.task);
-  return result.success ? result.data : undefined;
+/** Whether a program's code steps write as its owner; absent means as the agent. */
+function programOperatesAsUser(task: RoutineTask): boolean {
+  return 'steps' in task && (task.dangerously_operate_as_user ?? false);
+}
+
+function getAgentTask(schedule: ScheduledAction): AgentTask | undefined {
+  if (schedule.kind !== 'Agent' || 'steps' in schedule.task) return undefined;
+  return schedule.task;
 }
 
 /** Whether a routine runs an agent or a bare model; undefined when its task is unreadable. */
 export function routineTargetKind(
   schedule: ScheduledAction
 ): RoutineTarget['kind'] | 'steps' | undefined {
-  if (stepsFromTask(schedule.task)) return 'steps';
+  if (programSteps(schedule.task)) return 'steps';
   const task = getAgentTask(schedule);
-  if (!task) return undefined;
-  return task.agent ? 'agent' : 'model';
+  const target = task && targetFromTask(task);
+  return target?.kind;
 }
 
-function targetFromTask(task: RoutineTask): RoutineTarget {
+/** The task's model or agent; undefined when it has neither, which saving rejects. */
+function targetFromTask(task: AgentTask): RoutineTarget | undefined {
   if (task.agent) {
     if (task.model != null) {
       return {
@@ -89,8 +74,7 @@ function targetFromTask(task: RoutineTask): RoutineTarget {
     }
     return { kind: 'agent', agentId: task.agent.bot_id };
   }
-  // The task schema guarantees a model when there is no agent.
-  return { kind: 'model', model: routineModelSchema.parse(task.model) };
+  return task.model != null ? { kind: 'model', model: task.model } : undefined;
 }
 
 /** A routine with steps, edited as its program. */
@@ -115,6 +99,7 @@ function programDraft(
     runVisibility: schedule.run_visibility,
     description: schedule.description ?? '',
     apps: programApps(schedule.task),
+    dangerouslyOperateAsUser: programOperatesAsUser(schedule.task),
     triggers,
     steps,
   };
@@ -130,13 +115,14 @@ export function draftFromSchedule(
     : undefined;
   if (!trigger && !triggers) return undefined;
   const steps =
-    schedule.kind === 'Agent' ? stepsFromTask(schedule.task) : undefined;
+    schedule.kind === 'Agent' ? programSteps(schedule.task) : undefined;
   if (steps) return programDraft(schedule, steps, triggers);
   const parsed = trigger
     ? parseCron(trigger.schedule)
     : parseCron('0 0 9 * * *');
   const task = getAgentTask(schedule);
-  if (!task) return undefined;
+  const target = task && targetFromTask(task);
+  if (!task || !target) return undefined;
 
   return {
     id: schedule.id ?? undefined,
@@ -147,7 +133,7 @@ export function draftFromSchedule(
     time: parsed.time,
     daysOfWeek: parsed.daysOfWeek,
     dayOfMonth: parsed.dayOfMonth,
-    target: targetFromTask(task),
+    target,
     runVisibility: schedule.run_visibility,
     description: schedule.description ?? '',
     apps: task.mcp_servers ?? [],
@@ -157,7 +143,7 @@ export function draftFromSchedule(
   };
 }
 
-function applyTarget(task: RoutineTask, target: RoutineTarget): void {
+function applyTarget(task: AgentTask, target: RoutineTarget): void {
   if (target.kind === 'model') {
     if (task.agent != null) task.agent = null;
     task.model = target.model;
@@ -173,9 +159,9 @@ function applyTarget(task: RoutineTask, target: RoutineTarget): void {
   }
 }
 
-function buildAgentTask(draft: ScheduleDraft): RoutineTask {
+function buildAgentTask(draft: ScheduleDraft): AgentTask {
   const target = routineTargetSchema.parse(draft.target);
-  const task: RoutineTask = {
+  const task: AgentTask = {
     prompt: '',
     user_prompt: draft.prompt.trim(),
     mcp_servers: draft.apps,
@@ -184,7 +170,7 @@ function buildAgentTask(draft: ScheduleDraft): RoutineTask {
   return task;
 }
 
-function buildTask(draft: ScheduleDraft) {
+function buildTask(draft: ScheduleDraft): RoutineTask {
   const [only, ...rest] = draft.steps ?? [];
   // A routine that is only an agent saves in the simple form, however its
   // step was added.
@@ -195,22 +181,35 @@ function buildTask(draft: ScheduleDraft) {
       target: only.target,
     });
   return draft.steps
-    ? programTaskFor(draft.steps, draft.apps)
+    ? programTaskFor(draft.steps, {
+        apps: draft.apps,
+        operatesAsUser: draft.dangerouslyOperateAsUser ?? false,
+      })
     : buildAgentTask(draft);
 }
 
 /**
  * A program task. Apps are sent when there are some, or when `clearsApps`:
  * the scheduler rejects an update that drops stored apps without saying so.
+ * Operating as the user is sent when on, or as `false` when it turns off.
  */
 function programTaskFor(
   steps: StepDraft[],
-  apps: ScheduleDraft['apps'],
-  clearsApps = false
+  options: {
+    apps: ScheduleDraft['apps'];
+    operatesAsUser: boolean;
+    clearsApps?: boolean;
+    clearsOperatesAsUser?: boolean;
+  }
 ) {
   return {
     steps: stepsToWire(steps),
-    ...(apps.length || clearsApps ? { mcp_servers: apps } : {}),
+    ...(options.apps.length || options.clearsApps
+      ? { mcp_servers: options.apps }
+      : {}),
+    ...(options.operatesAsUser || options.clearsOperatesAsUser
+      ? { dangerously_operate_as_user: options.operatesAsUser }
+      : {}),
   };
 }
 
@@ -240,14 +239,28 @@ function descriptionField(draft: ScheduleDraft, previous: ScheduledAction) {
 /** Keep the stored task when the edited steps write the same program. */
 function programTask(draft: ScheduleDraft, previous: ScheduledAction) {
   const previousApps = programApps(previous.task);
-  const clearsApps = previousApps.length > 0;
+  const previousOperatesAsUser = programOperatesAsUser(previous.task);
+  const clears = {
+    clearsApps: previousApps.length > 0,
+    clearsOperatesAsUser: previousOperatesAsUser,
+  };
   const task = draft.steps
-    ? programTaskFor(draft.steps, draft.apps, clearsApps)
+    ? programTaskFor(draft.steps, {
+        apps: draft.apps,
+        operatesAsUser: draft.dangerouslyOperateAsUser ?? false,
+        ...clears,
+      })
     : buildTask(draft);
-  const previousSteps = stepsFromTask(previous.task);
+  const previousSteps = programSteps(previous.task);
   return previousSteps &&
     JSON.stringify(task) ===
-      JSON.stringify(programTaskFor(previousSteps, previousApps, clearsApps))
+      JSON.stringify(
+        programTaskFor(previousSteps, {
+          apps: previousApps,
+          operatesAsUser: previousOperatesAsUser,
+          ...clears,
+        })
+      )
     ? previous.task
     : task;
 }
@@ -314,21 +327,24 @@ export function draftToUpdateBody(
   if (draft.steps) return programUpdateBody(draft, previous);
   const trigger = getCronTrigger(previous);
   const previousTask = getAgentTask(previous);
+  const previousTarget = previousTask && targetFromTask(previousTask);
   const target = routineTargetSchema.safeParse(draft.target);
-  if ((!trigger && !draft.triggers) || !previousTask || !target.success)
+  if (
+    (!trigger && !draft.triggers) ||
+    !previousTask ||
+    !previousTarget ||
+    !target.success
+  )
     return undefined;
 
-  const targetChanged = !routineTargetsEqual(
-    target.data,
-    targetFromTask(previousTask)
-  );
+  const targetChanged = !routineTargetsEqual(target.data, previousTarget);
   const promptChanged = draft.prompt !== previousTask.user_prompt;
   const appsChanged =
     draft.apps.map((app) => app.app_slug).join(',') !==
     (previousTask.mcp_servers ?? []).map((app) => app.app_slug).join(',');
   let task = previous.task;
   if (targetChanged || promptChanged || appsChanged) {
-    const editedTask = { ...previousTask };
+    const editedTask: AgentTask = { ...previousTask };
     if (targetChanged) applyTarget(editedTask, target.data);
     if (promptChanged) editedTask.user_prompt = draft.prompt.trim();
     if (appsChanged) editedTask.mcp_servers = draft.apps;

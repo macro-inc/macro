@@ -8,7 +8,7 @@ import {
   sentenceText,
   withKnobValue,
 } from './knobs';
-import { stepsFromTask, stepsToWire } from './routine-steps';
+import { stepsFromWire, stepsToWire } from './routine-steps';
 
 const label: Knob = {
   type: 'text',
@@ -116,7 +116,7 @@ describe('knob values', () => {
         sentence: 'Label it {label}.',
       },
     ];
-    const steps = stepsFromTask({ steps: stored });
+    const steps = stepsFromWire(stored);
     expect(steps?.[0]).toMatchObject({
       knobs: stored[0]!.knobs,
       sentence: 'Label it {label}.',

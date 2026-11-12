@@ -20,25 +20,38 @@ pub struct GraphqlActivityEvent {
     /// Whose activity this is: the delegating user when the actor acted on
     /// someone's behalf, otherwise the actor itself.
     pub subject_id: String,
+    /// Originating code-mode invocation, when present.
+    pub agent_correlation_id: Option<ID>,
+    /// Display verb supplied by a validated code-mode invocation.
+    pub agent_verb: Option<String>,
     /// The kind of entity acted on.
     pub entity_type: GraphqlEntityType,
     /// The entity acted on.
     pub entity_id: ID,
     /// What the principal did.
     pub action: GraphqlActivityAction,
+    /// The stored action tag, for clients that do not need its typed payload.
+    pub action_tag: String,
     /// When it happened, in RFC 3339 format.
     pub occurred_at: String,
 }
 
 impl From<ActivityRecord> for GraphqlActivityEvent {
     fn from(record: ActivityRecord) -> Self {
+        let action_tag = match &record.action {
+            RecordedAction::Known(action) => action.to_columns().0.to_owned(),
+            RecordedAction::Unknown { tag, .. } => tag.clone(),
+        };
         Self {
             id: ID(record.id.to_string()),
             actor_id: record.actor.as_ref().to_owned(),
             subject_id: record.subject_id,
+            agent_correlation_id: record.agent_correlation_id.map(|id| ID(id.to_string())),
+            agent_verb: record.agent_verb.map(|verb| verb.to_string()),
             entity_type: GraphqlEntityType::new(record.entity_type),
             entity_id: ID(record.entity_id),
             action: record.action.into(),
+            action_tag,
             occurred_at: record.occurred_at.to_rfc3339(),
         }
     }

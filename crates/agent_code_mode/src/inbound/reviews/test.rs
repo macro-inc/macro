@@ -44,3 +44,18 @@ fn present_review_still_decodes_kind_tagged_drafts() {
     }));
     assert!(mismatched.is_err());
 }
+
+#[test]
+fn present_review_skips_the_offer_when_the_user_held_the_send() {
+    let schema = serde_json::to_value(
+        generate_validated_input_schema::<PresentReview>()
+            .unwrap()
+            .schema,
+    )
+    .unwrap();
+    let description = schema["description"].as_str().unwrap();
+    assert!(description.contains("\"Should I kick it off?\""));
+    assert!(description.contains(
+        "If they said not to send, create or import it yet, do not ask; say it is waiting on the card for them."
+    ));
+}

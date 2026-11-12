@@ -1,3 +1,4 @@
+import type { RoutineTask } from '@service-scheduled-action/generated/schemas';
 import { describe, expect, it } from 'vitest';
 import {
   type CodeUpgradeRecord,
@@ -5,7 +6,7 @@ import {
   taskSdk,
 } from './code-review';
 
-const task = (source: string, sdk?: string) => ({
+const task = (source: string, sdk?: string): RoutineTask => ({
   steps: [
     { type: 'code', title: 'File invoices', source },
     { type: 'agent', model: 'm', instructions: 'Summarize' },
@@ -13,7 +14,7 @@ const task = (source: string, sdk?: string) => ({
   ...(sdk ? { sdk } : {}),
 });
 
-const needsUpdate = (proposal?: unknown): CodeUpgradeRecord => ({
+const needsUpdate = (proposal?: RoutineTask): CodeUpgradeRecord => ({
   toSdk: '0.3.0+new',
   outcome: 'needs_update',
   reason: '“File invoices” failed a dry run.',
@@ -63,6 +64,8 @@ describe('code review', () => {
   it('reads the SDK a stored task was checked against', () => {
     expect(taskSdk(task('x', '0.2.0+old'))).toBe('0.2.0+old');
     expect(taskSdk({ steps: [] })).toBeUndefined();
-    expect(taskSdk(null)).toBeUndefined();
+    expect(
+      taskSdk({ prompt: '', user_prompt: 'Summarize', model: 'm' })
+    ).toBeUndefined();
   });
 });

@@ -10,9 +10,7 @@ local = []
 [dependencies]
 anyhow = { workspace = true }
 aws-sdk-s3 = { workspace = true }
-aws-sdk-sqs = { workspace = true }
 aws_lambda_events = { workspace = true, features = ["sqs"] }
-chrono = { workspace = true }
 connection_gateway_client = { path = "../../crates/connection_gateway_client" }
 document_storage_service_client = { path = "../../crates/document_storage_service_client" }
 dynamodb_client = { path = "../../crates/dynamodb_client" }
@@ -24,7 +22,6 @@ macro_env_var = { path = "../../crates/macro_env_var" }
 model = { path = "../../crates/model" }
 model-entity = { path = "../../crates/model-entity" }
 models_bulk_upload = { path = "../../crates/models_bulk_upload" }
-serde = { workspace = true }
 serde_json = { workspace = true }
 macro_service_urls = { path = "../../crates/macro_service_urls" }
 sha2 = { workspace = true }

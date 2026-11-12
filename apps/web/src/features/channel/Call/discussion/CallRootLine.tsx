@@ -4,8 +4,7 @@ import { useChannelTab } from '@channel/Channel/ChannelTabContext';
 import { callDuration } from '@channel/core/system-activity';
 import { UserGroup } from '@core/component/UserGroup';
 import { fireAndForget } from '@core/util/fireAndForget';
-import PhoneFillIcon from '@icon/system/fill/phone-fill.svg';
-import PhoneIcon from '@icon/system/regular/phone-call.svg';
+import PhoneIcon from '@icon/system/regular/phone.svg';
 import { useLiveCallRecordQuery } from '@queries/call/call';
 import type { CallEntryStatus, Message } from '@service-storage/messages';
 import { Button } from '@ui';
@@ -18,6 +17,8 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import { CallWaveform } from '../components/CallWaveform';
+import { useParticipantSpeaking } from '../primitives/use-call-speaking';
 import { formatCallElapsed } from './format-call-elapsed';
 import { callerName, PastCallLine } from './PastCallLine';
 
@@ -28,6 +29,9 @@ function LiveCallLine(props: {
   ref?: (element: HTMLElement) => void;
 }) {
   const record = useLiveCallRecordQuery(() => props.message.id);
+  const isSpeaking = useParticipantSpeaking(() => ({
+    callId: props.message.id,
+  }));
   const [nowMs, setNowMs] = createSignal(Date.now());
   const timer = globalThis.setInterval(() => setNowMs(Date.now()), 1000);
   onCleanup(() => globalThis.clearInterval(timer));
@@ -52,21 +56,18 @@ function LiveCallLine(props: {
         class="flex w-(--user-icon-width) shrink-0 justify-center"
         aria-hidden="true"
       >
-        <PhoneFillIcon class="size-4.5 text-success" />
+        <CallWaveform class="size-4.5" callId={props.message.id} />
       </span>
       <span class="min-w-0 truncate">
         <span class="font-medium text-ink">{callerName(props.message)}</span>{' '}
         started a call
       </span>
       <span class="flex shrink-0 items-center gap-1.5 font-mono text-xs tabular-nums text-success">
-        <span
-          class="size-1.5 rounded-full bg-success animate-pulse"
-          aria-hidden="true"
-        />
         {elapsed()}
       </span>
       <Show when={liveParticipants().length > 0}>
         <UserGroup
+          isHighlighted={isSpeaking}
           userIds={liveParticipants()}
           maxUsers={4}
           size="sm"
@@ -107,27 +108,15 @@ function LiveChannelCallLine(props: {
         observer.observe(element);
       }}
       action={
-        <Show
-          when={call.isInThisChannel()}
-          fallback={
-            <Button
-              variant="success"
-              size="sm"
-              disabled={call.isJoining()}
-              onClick={() => fireAndForget(call.joinCall(), 'channel-call')}
-            >
-              <PhoneIcon class="size-3.5" />
-              Join
-            </Button>
-          }
-        >
+        <Show when={!call.isInThisChannel()}>
           <Button
             variant="success"
             size="sm"
-            onClick={() => setActiveTab('call')}
+            disabled={call.isJoining()}
+            onClick={() => fireAndForget(call.joinCall(), 'channel-call')}
           >
             <PhoneIcon class="size-3.5" />
-            Return to call
+            Join
           </Button>
         </Show>
       }

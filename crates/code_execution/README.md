@@ -20,8 +20,10 @@ export async function main({ macro, session, execution }) {
 }
 ```
 
-The context also exposes `token` and `hosts` for explicitly constructing
-`new Macro({ token, hosts })` after importing `Macro` from `@macro-inc/sdk`.
+The context also exposes `token`, `hosts` and `webAppUrl` for explicitly
+constructing `new Macro({ token, hosts, webAppUrl })` after importing `Macro`
+from `@macro-inc/sdk`. `webAppUrl` is the deployment's web app origin, so
+`webUrl()` links point at the environment the run is in.
 `session` and `execution` are handles supplied by the authenticated host.
 SDK methods perform normal authenticated HTTP requests. Promise concurrency is
 ordinary JavaScript concurrency: there is no per-call Rust tool dispatch or

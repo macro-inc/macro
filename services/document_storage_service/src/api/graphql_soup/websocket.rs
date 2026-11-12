@@ -89,7 +89,9 @@ impl<S: Send + Sync> FromRequestParts<S> for GraphqlWebSocketUpgrade {
 impl GraphqlWebSocketUpgrade {
     /// Start the subscription transport with the handler's authorized context.
     pub(super) fn serve(self, executor: impl Executor, data: Data) -> Response {
-        tokio::spawn(async move {
+        // The socket outlives the upgrade request's task; capture its
+        // attribution so mutations sent over the socket stamp their events too.
+        tokio::spawn(agent_correlation::context::capture(async move {
             let upgraded = match self.on_upgrade.await {
                 Ok(upgraded) => upgraded,
                 Err(error) => {
@@ -106,7 +108,7 @@ impl GraphqlWebSocketUpgrade {
             )
             .await;
             serve(socket, executor, data, self.protocol).await;
-        });
+        }));
         self.response
     }
 }

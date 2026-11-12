@@ -136,9 +136,13 @@ export function TutorialPillView(props: EntryProps & { class?: string }) {
 
 /**
  * For a sidebar: a sidebar item like the block's own (Inbox, Favorites), with
- * the length in the trailing lane, swapped for the dismiss X on hover.
+ * the length in the trailing lane, swapped for the dismiss X on hover. A
+ * sidebar that lists several tutorials labels each with its block instead of
+ * "Watch tutorial".
  */
-export function TutorialSidebarItemView(props: EntryProps) {
+export function TutorialSidebarItemView(
+  props: EntryProps & { label?: string }
+) {
   return (
     <div class="group/tutorial relative">
       <ViewSidebar.Item
@@ -149,7 +153,9 @@ export function TutorialSidebarItemView(props: EntryProps) {
         <ViewSidebar.Icon>
           <PlayCircleIcon />
         </ViewSidebar.Icon>
-        <span class="truncate">{t('tutorials.watchTutorial')}</span>
+        <span class="truncate">
+          {props.label ?? t('tutorials.watchTutorial')}
+        </span>
         <span
           class={cn(
             'ml-auto shrink-0 pr-1 text-xs text-ink-extra-muted',

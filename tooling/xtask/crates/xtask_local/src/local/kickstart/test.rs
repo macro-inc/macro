@@ -40,9 +40,7 @@ fn google_idp_requires_a_real_client_secret() {
 #[test]
 fn kickstart_without_google_has_no_idp_requests() {
     let doc = build(
-        3000,
-        8080,
-        &["https://localhost:8085".to_string()],
+        redirect_urls(3000, 8080, &["https://localhost:8085".to_string()]),
         "function populate() {}",
         "function reconcile() {}",
         None,
@@ -67,9 +65,7 @@ fn kickstart_with_google_adds_lambda_and_both_idps_after_the_application() {
         client_secret: "GOCSPX-real".into(),
     };
     let doc = build(
-        3000,
-        8080,
-        &["https://localhost:8085".to_string()],
+        redirect_urls(3000, 8080, &["https://localhost:8085".to_string()]),
         "function populate() {}",
         "function reconcile() {}",
         Some(&google),
@@ -119,9 +115,7 @@ fn kickstart_with_google_adds_lambda_and_both_idps_after_the_application() {
 #[test]
 fn kickstart_adopts_the_default_tenant() {
     let doc = build(
-        3000,
-        8080,
-        &["https://localhost:8085".to_string()],
+        redirect_urls(3000, 8080, &["https://localhost:8085".to_string()]),
         "function populate() {}",
         "function reconcile() {}",
         None,
@@ -199,9 +193,7 @@ fn the_github_idp_id_follows_the_env_the_service_reads() {
     assert_eq!(github.idp_id, "c8014fe7-aeb4-4898-a460-4047e0fdf6d8");
 
     let doc = build(
-        3000,
-        8080,
-        &["https://localhost:8085".to_string()],
+        redirect_urls(3000, 8080, &["https://localhost:8085".to_string()]),
         "function populate() {}",
         "function reconcile() {}",
         None,
@@ -228,9 +220,7 @@ fn the_github_idp_is_created_under_both_the_name_and_the_id_the_service_uses() {
         idp_id: identity::GITHUB_IDP_ID.to_string(),
     };
     let doc = build(
-        3000,
-        8080,
-        &["https://localhost:8085".to_string()],
+        redirect_urls(3000, 8080, &["https://localhost:8085".to_string()]),
         "function populate() {}",
         "function reconcile() {}",
         None,
@@ -266,9 +256,7 @@ fn the_github_idp_is_created_under_both_the_name_and_the_id_the_service_uses() {
 #[test]
 fn kickstart_without_github_creates_no_github_idp() {
     let doc = build(
-        3000,
-        8080,
-        &["https://localhost:8085".to_string()],
+        redirect_urls(3000, 8080, &["https://localhost:8085".to_string()]),
         "function populate() {}",
         "function reconcile() {}",
         None,
@@ -288,9 +276,11 @@ fn kickstart_without_github_creates_no_github_idp() {
 
 fn authorized_redirects(frontend_port: u16, auth_port: u16, proxy_port: u16) -> Vec<String> {
     let doc = build(
-        frontend_port,
-        auth_port,
-        &[format!("https://localhost:{proxy_port}")],
+        redirect_urls(
+            frontend_port,
+            auth_port,
+            &[format!("https://localhost:{proxy_port}")],
+        ),
         "function populate() {}",
         "function reconcile() {}",
         None,
@@ -337,12 +327,14 @@ fn agent_oauth_redirects_follow_the_instance_proxy_port() {
 #[test]
 fn agent_oauth_redirects_authorize_the_machine_hostname_and_loopback() {
     let doc = build(
-        3000,
-        8080,
-        &[
-            "https://localhost:8090".to_string(),
-            "https://devbox.example:8090".to_string(),
-        ],
+        redirect_urls(
+            3000,
+            8080,
+            &[
+                "https://localhost:8090".to_string(),
+                "https://devbox.example:8090".to_string(),
+            ],
+        ),
         "function populate() {}",
         "function reconcile() {}",
         None,

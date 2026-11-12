@@ -156,7 +156,7 @@ function BlockedDomainsRows() {
     <>
       <SettingsRow
         label="Blocked domains"
-        description="Email sync skips these domains and hides their companies and people. A company stays hidden until all its blocked domains are removed."
+        description="These team exclusions stop email contributions and hide matching CRM email threads. Companies, people, and their archive state stay unchanged."
         stackOnNarrow
       />
       <Switch>

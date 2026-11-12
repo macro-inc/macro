@@ -10,12 +10,17 @@ export const MAX_PINNED_CHANNELS = 6;
  * Pinned conversations three across, like iMessage: a short last row
  * centers rather than hugging the left edge. Each child takes a third.
  */
-export function ChannelPinGrid(props: ParentProps) {
+export function ChannelPinGrid(props: ParentProps<{ horizontal?: boolean }>) {
   return (
     <div
       role="group"
       aria-label="Pinned conversations"
-      class="flex flex-wrap justify-center gap-y-4 px-(--mobile-chrome-gutter) pt-2 pb-5"
+      class={cn(
+        'flex gap-y-4 px-(--mobile-chrome-gutter) pt-2 pb-5',
+        props.horizontal
+          ? 'scrollbar-hidden gap-2 overflow-x-auto overscroll-x-contain'
+          : 'flex-wrap justify-center'
+      )}
     >
       {props.children}
     </div>

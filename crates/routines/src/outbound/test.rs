@@ -25,6 +25,7 @@ fn agent_steps_do_not_silently_become_model_steps_or_override_defaults() {
             app_slug: "linear".into(),
             name: "Linear".into(),
         }]),
+        dangerously_operate_as_user: None,
     };
     let body = configuration_body(&config, Utc::now(), None).unwrap();
     // A lone agent is stored as the single agent task every scheduler reads.
@@ -156,6 +157,7 @@ async fn requests_forward_authenticated_identity_and_preserve_target_and_activat
         }],
         steps: agent(id),
         required_apps: None,
+        dangerously_operate_as_user: None,
     };
     client.create(&user, &config).await.unwrap();
     client.update(&user, id, &config).await.unwrap();
@@ -375,6 +377,7 @@ async fn create_rejections_carry_the_scheduler_reason() {
         }],
         steps: agent(Uuid::from_u128(1)),
         required_apps: None,
+        dangerously_operate_as_user: None,
     };
 
     for (_, reason) in rejections {

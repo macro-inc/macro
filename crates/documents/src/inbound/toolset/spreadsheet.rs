@@ -3,8 +3,8 @@ use super::DocumentToolContext;
 use crate::domain::{
     ports::{DocumentService, create::DocumentCreationService, editing::EditingWorkerService},
     spreadsheet::{
-        SpreadsheetFormula, SpreadsheetOperation, SpreadsheetOverride, SpreadsheetRequest,
-        SpreadsheetResponse,
+        SpreadsheetCaller, SpreadsheetError, SpreadsheetFormula, SpreadsheetOperation,
+        SpreadsheetOverride, SpreadsheetRequest, SpreadsheetResponse,
     },
 };
 use ai_toolset::{
@@ -93,7 +93,7 @@ fn failure(error: impl Into<anyhow::Error>) -> ToolCallError {
 
 async fn cancellable<T>(
     req: &RequestContext,
-    operation: impl Future<Output = anyhow::Result<T>>,
+    operation: impl Future<Output = Result<T, SpreadsheetError>>,
 ) -> ToolResult<T> {
     tokio::select! {
         biased;
@@ -131,8 +131,10 @@ where
             &req,
             ctx.spreadsheet.read(
                 receipt,
-                &req.user_id,
-                ctx.actor.into_storage_id().as_ref(),
+                SpreadsheetCaller::Agent {
+                    user: &req.user_id,
+                    actor: ctx.actor.into_storage_id().as_ref(),
+                },
                 SpreadsheetRequest::Read {
                     sheet_id: self.sheet_id.clone(),
                     ranges: self.ranges.clone(),
@@ -170,8 +172,10 @@ where
             &req,
             ctx.spreadsheet.read(
                 receipt,
-                &req.user_id,
-                ctx.actor.into_storage_id().as_ref(),
+                SpreadsheetCaller::Agent {
+                    user: &req.user_id,
+                    actor: ctx.actor.into_storage_id().as_ref(),
+                },
                 SpreadsheetRequest::Calculate {
                     sheet_id: self.sheet_id.clone(),
                     formulas: self.formulas.clone(),
@@ -209,8 +213,10 @@ where
             &req,
             ctx.spreadsheet.edit(
                 receipt,
-                &req.user_id,
-                ctx.actor.into_storage_id().as_ref(),
+                SpreadsheetCaller::Agent {
+                    user: &req.user_id,
+                    actor: ctx.actor.into_storage_id().as_ref(),
+                },
                 self.expected_revision.clone(),
                 self.operations.clone(),
             ),

@@ -32,6 +32,7 @@ export function announceQueuedSend(options: {
           ? [
               {
                 label: 'Undo',
+                kind: 'undo',
                 onClick: () => {
                   undoRequested = true;
                   withdrawUndo();

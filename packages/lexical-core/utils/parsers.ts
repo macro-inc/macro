@@ -1,5 +1,6 @@
 import { isAgentContextData } from '../nodes/AgentContextNode';
 import { parseDatabaseQueryJson } from '../nodes/DatabaseQueryNode';
+import { parseDateMentionBody } from '../nodes/DateMentionNode';
 
 type UserMentionData = {
   userId?: string;
@@ -70,9 +71,12 @@ export function parseContactMentions(text: string): string {
 }
 
 export function parseDateMentions(text: string): string {
-  return text.replace(/<m-date-mention>(.*?)<\/m-date-mention>/g, (_, json) => {
+  return text.replace(/<m-date-mention>(.*?)<\/m-date-mention>/g, (_, body) => {
+    if (!body.trim().startsWith('{')) {
+      return parseDateMentionBody(body)?.displayFormat ?? '';
+    }
     try {
-      const data = JSON.parse(json);
+      const data = JSON.parse(body);
       return data.displayFormat || '';
     } catch {
       return '';

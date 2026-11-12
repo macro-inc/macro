@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE routine_suggestion_session SET closed_at = now()\n               WHERE session_id = $1 AND closed_at IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f8b13930cab0f0ce9f9fb83d4a7361eeba2f0cb05e8f6bc320f7ff23d92cd715"
+}

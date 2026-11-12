@@ -15,10 +15,18 @@ use std::time::Duration;
 use uuid::Uuid;
 
 // Process a single message from the backfill queue
+#[tracing::instrument(name = "email.backfill.process", skip_all, err)]
 pub async fn process_message(
     ctx: PubSubContext,
     message: &aws_sdk_sqs::types::Message,
 ) -> anyhow::Result<()> {
+    sqs_client::email::trace_context::adopt(
+        &tracing::Span::current(),
+        message
+            .message_attributes()
+            .and_then(|attributes| attributes.get(sqs_client::email::trace_context::ATTRIBUTE))
+            .and_then(|attribute| attribute.string_value()),
+    );
     // Malformed JSON is NOT retryable.
     let data = match extract_backfill_message(message) {
         Ok(data) => data,
@@ -98,7 +106,7 @@ async fn keep_invisible<F: Future>(
     }
 }
 
-#[tracing::instrument(skip(ctx))]
+#[tracing::instrument(skip_all)]
 async fn inner_process_message(
     ctx: &PubSubContext,
     data: &BackfillPubsubMessage,

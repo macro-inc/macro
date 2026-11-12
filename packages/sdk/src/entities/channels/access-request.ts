@@ -68,12 +68,20 @@ export class ChannelAccessRequest extends MacroEntity<RequestRecord> {
     id ? User.byId(this.client, id) : undefined,
   );
 
-  /** Add the requester to the channel. Fails if someone answered first. */
+  /**
+   * Add the requester to the channel. Fails if someone answered first.
+   *
+   * @write
+   */
   async approve(): Promise<void> {
     await this.resolve('approve');
   }
 
-  /** Decline the request; the requester can ask again after a day. */
+  /**
+   * Decline the request; the requester can ask again after a day.
+   *
+   * @destructive
+   */
   async deny(): Promise<void> {
     await this.resolve('deny');
   }

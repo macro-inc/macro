@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    SELECT EXISTS (\n                        SELECT 1\n                        FROM crm_contacts ct\n                        LEFT JOIN crm_companies co ON co.id = ct.company_id\n                        JOIN team_user tu ON tu.team_id = ct.team_id AND tu.user_id = $1\n                        WHERE ct.id = $2\n                          AND (NOT (ct.hidden OR co.hidden IS TRUE) OR tu.team_role <> 'member')\n                    ) AS \"visible!\"\n                    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "visible!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "871564dd848808b8b45ac60aba66595b720923f79ac813fc0e706608c455a655"
+}
