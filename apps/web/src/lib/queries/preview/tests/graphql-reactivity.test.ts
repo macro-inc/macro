@@ -28,6 +28,7 @@ vi.mock('@app/lib/graphql-cache', () => ({
 }));
 vi.mock('@tanstack/solid-query', () => ({
   useQuery: () => ({ isPending: false, isSuccess: false }),
+  useMutationState: () => () => [],
 }));
 vi.mock('@queries/client', () => ({ queryClient: {} }));
 vi.mock('../dataloader', () => ({ previewDataLoader: {} }));
@@ -64,6 +65,7 @@ describe('GraphQL preview hover reactivity', () => {
       { __typename: 'GraphqlSoupDocument' }
     > = {
       __typename: 'GraphqlSoupDocument',
+      appearance: null,
       id,
       displayName: 'Roadmap',
       documentName: 'Roadmap',

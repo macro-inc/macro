@@ -51,6 +51,7 @@ export type FormRefusal =
   | 'file-upload-needs-sign-in'
   | 'invalid-layout'
   | 'invalid-name'
+  | 'invalid-appearance'
   | 'invalid-sharing'
   | 'tally-hidden'
   | 'invalid-branding'

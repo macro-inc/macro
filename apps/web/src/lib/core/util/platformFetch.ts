@@ -5,9 +5,15 @@ import { isTauri } from './platform';
 const nativeServices = NATIVE_SESSION_SERVICE_URLS.map((url) => new URL(url));
 let originalFetch: typeof fetch | undefined;
 
-// Third-party APIs that allow any origin and require requests from the user's
+// Third-party hosts that allow any origin and require requests from the user's
 // browser. The native HTTP client's scope doesn't list them and rejects them.
-const WEBVIEW_FETCH_HOSTS = new Set(['api.klipy.com']);
+// Call background effects fetch MediaPipe's WASM from jsDelivr and its
+// segmentation model from Google Cloud Storage (`@livekit/track-processors`).
+const WEBVIEW_FETCH_HOSTS = new Set([
+  'api.klipy.com',
+  'cdn.jsdelivr.net',
+  'storage.googleapis.com',
+]);
 
 /**
  * Called once by the entry point: routes Tauri's global fetch through

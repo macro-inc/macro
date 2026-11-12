@@ -156,6 +156,20 @@ it('routes the installed global fetch to the native transport without recursing'
   expect(browser).toHaveBeenCalledTimes(1);
 });
 
+it.each([
+  'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm/vision_wasm_internal.wasm',
+  'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/latest/selfie_segmenter.tflite',
+])('keeps call background effect assets on the webview %s', async (url) => {
+  const browser = vi
+    .fn<typeof fetch>()
+    .mockResolvedValue(new Response('browser'));
+  vi.stubGlobal('fetch', browser);
+  installPlatformFetch();
+  await fetch(url);
+  expect(nativeFetch).not.toHaveBeenCalled();
+  expect(browser).toHaveBeenCalledTimes(1);
+});
+
 it('routes installed loopback and localhost-named URLs by service and origin', async () => {
   const browser = vi
     .fn<typeof fetch>()
