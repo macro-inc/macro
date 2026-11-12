@@ -38,6 +38,9 @@ impl PerCallUsage {
                             .get("service_tier")
                             .is_none_or(|tier| tier == "default")
                 }
+                ModelSpeed::Priority => body
+                    .get("service_tier")
+                    .is_some_and(|tier| tier == "priority"),
                 ModelSpeed::Fast => body.get("speed").is_some_and(|speed| speed == "fast"),
                 ModelSpeed::Ultrafast => body
                     .get("service_tier")
@@ -56,6 +59,10 @@ impl PerCallUsage {
         let speed = match delivered {
             Some("default" | "standard") => ModelSpeed::Standard,
             Some("fast") if self.model.starts_with("anthropic/") => ModelSpeed::Fast,
+            // OpenAI renamed priority processing to Fast mode and reports either name.
+            Some("priority" | "fast") if self.model.starts_with("openai/") => {
+                ModelSpeed::Priority
+            }
             Some("ultrafast") if self.model.starts_with("openai/") => ModelSpeed::Ultrafast,
             None if self.requested == ModelSpeed::Standard => ModelSpeed::Standard,
             _ => {
@@ -74,6 +81,7 @@ impl PerCallUsage {
         let mut price_key = bare.to_owned();
         match speed {
             ModelSpeed::Standard => {}
+            ModelSpeed::Priority => price_key.push_str(":priority"),
             ModelSpeed::Fast => price_key.push_str(":fast"),
             ModelSpeed::Ultrafast => price_key.push_str(":ultrafast"),
         }

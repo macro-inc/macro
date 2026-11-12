@@ -55,27 +55,35 @@ pub fn session_config_options(
     config
 }
 
-/// ACP option for inference speed, available only for supported native models.
+/// ACP option for the processing tier, offered only when the native model has
+/// a tier beyond standard. The option id stays `speed` for existing clients.
 pub fn speed_config_option(model: &str, current: ModelSpeed) -> Option<SessionConfigOption> {
-    let accelerated = [ModelSpeed::Fast, ModelSpeed::Ultrafast]
-        .into_iter()
-        .find(|speed| speed.supported(model))?;
+    let offered = ModelSpeed::offered(model);
+    if offered.len() < 2 {
+        return None;
+    }
     Some(SessionConfigOption::select(
-        "speed",
-        "Speed",
+        SPEED_CONFIG_ID,
+        "Priority tier",
         SessionConfigValueId::new(current.as_str()),
-        vec![
-            SessionConfigSelectOption::new("standard", "Standard"),
-            SessionConfigSelectOption::new(
-                accelerated.as_str(),
-                if accelerated == ModelSpeed::Fast {
-                    "Fast · 2× usage"
-                } else {
-                    "Ultrafast · 6× usage"
-                },
-            ),
-        ],
+        offered
+            .into_iter()
+            .map(|speed| SessionConfigSelectOption::new(speed.as_str(), speed_label(speed)))
+            .collect::<Vec<_>>(),
     ))
+}
+
+/// ACP id for the processing tier selector.
+pub const SPEED_CONFIG_ID: &str = "speed";
+
+/// The tier's name and its usage multiplier against standard pricing.
+fn speed_label(speed: ModelSpeed) -> &'static str {
+    match speed {
+        ModelSpeed::Standard => "Standard",
+        ModelSpeed::Priority => "Priority · 2× usage",
+        ModelSpeed::Fast => "Fast · 2× usage",
+        ModelSpeed::Ultrafast => "Ultrafast · 6× usage",
+    }
 }
 
 /// ACP id for Macro's portable reasoning-effort selector.
