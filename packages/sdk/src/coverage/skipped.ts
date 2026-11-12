@@ -237,6 +237,7 @@ export const connectionBacklog =
 
 export const contactsExcluded = [
   'addContact',
+  'getContacts',
 ] as const satisfies readonly (keyof ContactsSdk)[];
 
 export const contactsBacklog =
