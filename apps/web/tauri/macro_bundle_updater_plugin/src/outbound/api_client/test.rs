@@ -29,7 +29,7 @@ fn update_check_url_joins_gateway_prefix_with_or_without_trailing_slash() {
 
         assert_eq!(
             url.as_str(),
-            "https://gateway.macro.com/auth/update/bundle/ios/aarch64?current_bundle_build=1790022571617&native_build=183",
+            "https://gateway.macro.com/auth/update/bundle/ios/aarch64?current_bundle_build=1790022571617&native_build=183&manifest_schema=3",
             "incorrect update URL for base {base}"
         );
     }
@@ -43,7 +43,7 @@ fn update_check_url_still_supports_gateway_root_base() {
 
     assert_eq!(
         url.as_str(),
-        "https://gateway.macro.com/update/bundle/ios/aarch64?current_bundle_build=42&native_build=7"
+        "https://gateway.macro.com/update/bundle/ios/aarch64?current_bundle_build=42&native_build=7&manifest_schema=3"
     );
 }
 
@@ -59,6 +59,6 @@ fn update_check_url_strips_base_query_and_fragment() {
 
     assert_eq!(
         url.as_str(),
-        "https://gateway.macro.com/auth/update/bundle/ios/aarch64?current_bundle_build=42&native_build=7"
+        "https://gateway.macro.com/auth/update/bundle/ios/aarch64?current_bundle_build=42&native_build=7&manifest_schema=3"
     );
 }

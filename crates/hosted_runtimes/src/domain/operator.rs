@@ -446,7 +446,8 @@ where
 
     /// Compare the fleet with the rows: a missing or stopped instance of an
     /// awake computer is a crash; a missing stopped or failed guest is recreated.
-    /// Only owned orphans older than the grace period are removed.
+    /// Only owned orphans older than the grace period are removed. Each pass
+    /// also gauges the fleet's allocation (`computer.capacity.*`).
     #[tracing::instrument(skip(self), err)]
     pub async fn reconcile(&self) -> Result<(), ComputerError> {
         let host = self.host_id().await?;
@@ -454,6 +455,11 @@ where
             .heartbeat_host(host, self.clock.now())
             .await
             .map_err(internal)?;
+        // Before fleet calls, so an unreachable host still reports what it holds.
+        match self.repo.allocation().await {
+            Ok(allocations) => super::telemetry::record_capacity(&allocations),
+            Err(error) => tracing::warn!(error = ?error, "could not read computer capacity"),
+        }
         let instances: HashMap<ComputerId, FleetInstance> = self
             .fleet
             .instances()
