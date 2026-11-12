@@ -185,6 +185,36 @@ struct CodeModeTools {
     context: UserCodeModeToolContext,
 }
 
+/// Where a code-mode reply's tool call goes.
+#[derive(Debug, PartialEq, Eq)]
+enum Route {
+    Code,
+    Direct,
+    Refused,
+}
+
+impl CodeModeTools {
+    fn route(&self, tool_name: &str) -> Route {
+        if self.code.tools.contains_key(tool_name) {
+            Route::Code
+        } else if self.direct.tools.contains_key(tool_name) {
+            Route::Direct
+        } else {
+            Route::Refused
+        }
+    }
+}
+
+fn hidden_tool_refusal(tool_name: &str) -> ToolCallError {
+    ToolCallError {
+        internal_error: anyhow::anyhow!("{tool_name} is not offered in code mode"),
+        description: format!(
+            "{tool_name} is not available here. Do this with ExecuteCode and the Macro SDK \
+             (find the method with DescribeCodeTools)."
+        ),
+    }
+}
+
 impl ToolSet<ToolServiceContext> for CodeModeTools {
     fn dispatch_tool_call<'a>(
         &'a self,
@@ -193,12 +223,21 @@ impl ToolSet<ToolServiceContext> for CodeModeTools {
         tool_name: &'a str,
         json: &'a serde_json::Value,
     ) -> ToolCallFuture<'a> {
-        if self.code.tools.contains_key(tool_name) {
-            self.code
-                .dispatch_tool_call(self.context.clone(), request_context, tool_name, json)
-        } else {
-            self.direct
-                .dispatch_tool_call(context, request_context, tool_name, json)
+        match self.route(tool_name) {
+            Route::Code => {
+                self.code
+                    .dispatch_tool_call(self.context.clone(), request_context, tool_name, json)
+            }
+            Route::Direct => {
+                self.direct
+                    .dispatch_tool_call(context, request_context, tool_name, json)
+            }
+            // Hidden means not callable: a name the reply was not offered is
+            // refused here, never dispatched.
+            Route::Refused => {
+                let refusal = hidden_tool_refusal(tool_name);
+                Box::pin(async move { Ok(Err(refusal)) })
+            }
         }
     }
 

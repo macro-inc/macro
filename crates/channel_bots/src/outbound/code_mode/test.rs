@@ -139,3 +139,52 @@ async fn code_tools_with_the_flag_on() {
     assert!(tools.system_prompt.contains("Code Mode"));
     assert!(!tools.system_prompt.contains("execution.views.present"));
 }
+
+fn code_mode_tools() -> CodeModeTools {
+    CodeModeTools {
+        direct: ai_tools::tools_for_channel_bot_code_mode().toolset,
+        code: Arc::new(agent_code_mode::inbound::toolset::user_toolset()),
+        context: UserCodeModeToolContext {
+            service: Arc::new(MentionPrograms {
+                executions: Arc::new(NeverRuns),
+                mention: MentionContext {
+                    message_id: uuid::Uuid::from_u128(1),
+                    root_id: uuid::Uuid::from_u128(2),
+                },
+            }),
+            cognition: None,
+            caller: ToolCaller::Agent(bot_id::MACRO_AI_BOT_ID),
+            session: None,
+        },
+    }
+}
+
+#[test]
+fn with_the_flag_on_a_hidden_native_tool_is_refused_not_dispatched() {
+    let tools = code_mode_tools();
+    assert_eq!(tools.route("ExecuteCode"), Route::Code);
+    assert_eq!(tools.route("RenderCanvas"), Route::Direct);
+    for hidden in [
+        "ReadContent",
+        "SendChannelMessage",
+        "BashCodeExecution",
+        "NoSuchTool",
+    ] {
+        assert_eq!(tools.route(hidden), Route::Refused, "{hidden}");
+    }
+    let refusal = hidden_tool_refusal("ReadContent");
+    assert!(
+        refusal
+            .description
+            .contains("ReadContent is not available here")
+    );
+    assert!(refusal.description.contains("ExecuteCode"));
+}
+
+#[test]
+fn with_the_flag_off_native_tools_stay_callable() {
+    let direct = ai_tools::tools_for(ai_tools::AiHost::ChannelBot).toolset;
+    for name in ["ReadContent", "SendChannelMessage", "BashCodeExecution"] {
+        assert!(direct.tools.contains_key(name), "{name}");
+    }
+}

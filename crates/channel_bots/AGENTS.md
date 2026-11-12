@@ -21,7 +21,8 @@ decides whether to trigger, authorizes, and delivers a reply.
   sandbox tools dropped) plus `agent_code_mode`'s user `ExecuteCode`,
   `DescribeCodeTools` and `ReadCodeDocs`. Programs run on the agent harness
   (`POST /internal/code-mode/user-executions`, internal key) as the mentioning
-  user attributed to Macro AI, the same identity as the direct tools.
+  user attributed to Macro AI, the same identity as the direct tools. A call to
+  a tool the code-mode reply was not offered is refused, never dispatched.
 - `src/outbound/lexical_comment_marks.rs`: comment-mark delivery for document bots.
 - `src/inbound/bot_trigger_router.rs`: wires channel/document message events in.
 
