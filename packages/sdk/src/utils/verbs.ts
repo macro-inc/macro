@@ -155,7 +155,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     generated: 'generateImage',
     stopped: 'stopChatStream',
   },
-  contacts: { listed: 'getContacts' },
+  contacts: { searched: 'searchPeople' },
   email: {
     read: `
       getAttachment getAttachmentDocumentId messageOperationStatus resolveMessageOperation
