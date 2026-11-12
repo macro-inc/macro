@@ -1,0 +1,5 @@
+name: openbao
+runtime: nodejs
+description: Hosted OpenBao for Passwords (dev only)
+config:
+  aws:region: us-east-1

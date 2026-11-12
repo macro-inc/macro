@@ -1,0 +1,561 @@
+// Hosted OpenBao for Passwords, dev only. See AGENTS.md and README.md.
+import * as aws from '@pulumi/aws';
+import * as awsx from '@pulumi/awsx';
+import * as pulumi from '@pulumi/pulumi';
+import {
+  DATADOG_API_KEY,
+  DEFAULT_CONTINUE_BEFORE_STEADY_STATE,
+  EcsDeploymentFailureAlarm,
+  withTelemetry,
+} from '../../packages/resources';
+import { cloudStorageClusterArn } from '../../packages/service/src/cluster';
+import {
+  CLOUD_TRAIL_SNS_TOPIC_ARN,
+  grafanaIngestSecretArn,
+  stack,
+} from '../../packages/shared';
+import { get_coparse_api_vpc } from '../../packages/vpc';
+import { API_PORT, DATA_MOUNT_PATH, renderServerConfig } from './server-config';
+
+const region = aws.config.requireRegion();
+if (stack !== 'dev' || region !== 'us-east-1') {
+  throw new Error(
+    'Hosted OpenBao is dev-only in us-east-1; prod is a separate design'
+  );
+}
+
+const BASE_NAME = pulumi.getProject();
+// Upstream 2.7.2 (the local stack's version), pinned by digest; Quay avoids
+// Docker Hub pull limits. No custom image: config arrives as BAO_LOCAL_CONFIG.
+const IMAGE =
+  'quay.io/openbao/openbao:2.7.2@sha256:5046911075e137e154ce49ab051502f4ec7cf367d484ae4a4dce665d9b90561f';
+// The `openbao` user in that image.
+const OPENBAO_UID = 100;
+const OPENBAO_GID = 1000;
+const HOSTNAME = 'openbao-dev.macro-internal.com';
+const API_ADDRESS = `https://${HOSTNAME}`;
+
+const tags = { project: BASE_NAME, environment: stack, tech_lead: 'wolf' };
+const durable = { protect: true, retainOnDelete: true };
+const vpc = get_coparse_api_vpc();
+
+// Only the document storage service (which hosts Passwords) may call the vault.
+const cloudStorageService = new pulumi.StackReference('cloud-storage-service', {
+  name: `macro-inc/cloud-storage-service/${stack}`,
+});
+const documentStorageSgId = cloudStorageService.requireOutput(
+  'cloudStorageServiceSgId'
+) as pulumi.Output<string>;
+
+// --- Task role and seal key -------------------------------------------------
+
+const taskRole = new aws.iam.Role(`${BASE_NAME}-task-role`, {
+  name: `${BASE_NAME}-task-role-${stack}`,
+  assumeRolePolicy: aws.iam.assumeRolePolicyForPrincipal({
+    Service: 'ecs-tasks.amazonaws.com',
+  }),
+  tags,
+});
+const executionRole = new aws.iam.Role(`${BASE_NAME}-execution-role`, {
+  name: `${BASE_NAME}-execution-role-${stack}`,
+  assumeRolePolicy: aws.iam.assumeRolePolicyForPrincipal({
+    Service: 'ecs-tasks.amazonaws.com',
+  }),
+  managedPolicyArns: [
+    'arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy',
+  ],
+  tags,
+});
+
+// The vault needs no app config, so there is no Doppler environment; the dev
+// Grafana sidecar from withTelemetry still reads its ingest token.
+if (grafanaIngestSecretArn) {
+  new aws.iam.RolePolicy(`${BASE_NAME}-execution-secrets`, {
+    role: executionRole.id,
+    policy: {
+      Version: '2012-10-17',
+      Statement: [
+        {
+          Effect: 'Allow',
+          Action: 'secretsmanager:GetSecretValue',
+          Resource: grafanaIngestSecretArn,
+        },
+      ],
+    },
+  });
+}
+
+const SEAL_ACTIONS = ['kms:Encrypt', 'kms:Decrypt', 'kms:DescribeKey'];
+const accountRootArn = pulumi.interpolate`arn:aws:iam::${aws.getCallerIdentityOutput().accountId}:root`;
+const sealKey = new aws.kms.Key(
+  `${BASE_NAME}-seal-key`,
+  {
+    description: `OpenBao auto-unseal for ${stack}`,
+    deletionWindowInDays: 30,
+    enableKeyRotation: true,
+    policy: aws.iam.getPolicyDocumentOutput({
+      statements: [
+        {
+          sid: 'AllowAccountKeyAdministration',
+          effect: 'Allow',
+          principals: [{ type: 'AWS', identifiers: [accountRootArn] }],
+          actions: [
+            'kms:CancelKeyDeletion',
+            'kms:Create*',
+            'kms:Delete*',
+            'kms:Describe*',
+            'kms:Disable*',
+            'kms:Enable*',
+            'kms:Get*',
+            'kms:List*',
+            'kms:Put*',
+            'kms:Revoke*',
+            'kms:ScheduleKeyDeletion',
+            'kms:TagResource',
+            'kms:UntagResource',
+            'kms:Update*',
+          ],
+          resources: ['*'],
+        },
+        {
+          sid: 'AllowOpenBaoSeal',
+          effect: 'Allow',
+          principals: [{ type: 'AWS', identifiers: [taskRole.arn] }],
+          actions: SEAL_ACTIONS,
+          resources: ['*'],
+        },
+      ],
+    }).json,
+    tags,
+  },
+  // Losing this key makes the Raft data unrecoverable.
+  durable
+);
+new aws.kms.Alias(`${BASE_NAME}-seal-key-alias`, {
+  name: `alias/${BASE_NAME}-${stack}`,
+  targetKeyId: sealKey.keyId,
+});
+new aws.iam.RolePolicy(`${BASE_NAME}-seal`, {
+  role: taskRole.id,
+  policy: {
+    Version: '2012-10-17',
+    Statement: [
+      { Effect: 'Allow', Action: SEAL_ACTIONS, Resource: sealKey.arn },
+    ],
+  },
+});
+// ECS Exec: the one-time `bao operator init` and the provisioning port-forward.
+new aws.iam.RolePolicy(`${BASE_NAME}-exec`, {
+  role: taskRole.id,
+  policy: {
+    Version: '2012-10-17',
+    Statement: [
+      {
+        Effect: 'Allow',
+        Action: [
+          'ssmmessages:CreateControlChannel',
+          'ssmmessages:CreateDataChannel',
+          'ssmmessages:OpenControlChannel',
+          'ssmmessages:OpenDataChannel',
+        ],
+        Resource: '*',
+      },
+    ],
+  },
+});
+
+// --- Security groups ------------------------------------------------------
+
+const albSg = new aws.ec2.SecurityGroup(`${BASE_NAME}-alb-sg`, {
+  name: `${BASE_NAME}-alb-sg-${stack}`,
+  vpcId: vpc.vpcId,
+  description: 'OpenBao internal ALB: HTTPS from the document storage service',
+  tags,
+});
+const taskSg = new aws.ec2.SecurityGroup(`${BASE_NAME}-task-sg`, {
+  name: `${BASE_NAME}-task-sg-${stack}`,
+  vpcId: vpc.vpcId,
+  description: 'OpenBao task: API from its ALB only',
+  tags,
+});
+const efsSg = new aws.ec2.SecurityGroup(`${BASE_NAME}-efs-sg`, {
+  name: `${BASE_NAME}-efs-sg-${stack}`,
+  vpcId: vpc.vpcId,
+  description: 'OpenBao Raft volume: NFS from the OpenBao task only',
+  tags,
+});
+
+new aws.vpc.SecurityGroupIngressRule(`${BASE_NAME}-alb-in-dss`, {
+  securityGroupId: albSg.id,
+  description: 'HTTPS from the document storage service',
+  referencedSecurityGroupId: documentStorageSgId,
+  ipProtocol: 'tcp',
+  fromPort: 443,
+  toPort: 443,
+  tags,
+});
+new aws.vpc.SecurityGroupEgressRule(`${BASE_NAME}-alb-out-task`, {
+  securityGroupId: albSg.id,
+  description: 'OpenBao API',
+  referencedSecurityGroupId: taskSg.id,
+  ipProtocol: 'tcp',
+  fromPort: API_PORT,
+  toPort: API_PORT,
+  tags,
+});
+const taskIngress = new aws.vpc.SecurityGroupIngressRule(
+  `${BASE_NAME}-task-in-alb`,
+  {
+    securityGroupId: taskSg.id,
+    description: 'OpenBao API from the ALB',
+    referencedSecurityGroupId: albSg.id,
+    ipProtocol: 'tcp',
+    fromPort: API_PORT,
+    toPort: API_PORT,
+    tags,
+  }
+);
+// KMS, ECR/Quay, SSM, and the Datadog intake are all HTTPS.
+const taskHttpsEgress = new aws.vpc.SecurityGroupEgressRule(
+  `${BASE_NAME}-task-https-out`,
+  {
+    securityGroupId: taskSg.id,
+    description: 'HTTPS to AWS APIs, the image registry, and Datadog',
+    cidrIpv4: '0.0.0.0/0',
+    ipProtocol: 'tcp',
+    fromPort: 443,
+    toPort: 443,
+    tags,
+  }
+);
+const taskNfsEgress = new aws.vpc.SecurityGroupEgressRule(
+  `${BASE_NAME}-task-nfs-out`,
+  {
+    securityGroupId: taskSg.id,
+    description: 'NFS to the Raft volume',
+    referencedSecurityGroupId: efsSg.id,
+    ipProtocol: 'tcp',
+    fromPort: 2049,
+    toPort: 2049,
+    tags,
+  }
+);
+const efsIngress = new aws.vpc.SecurityGroupIngressRule(
+  `${BASE_NAME}-efs-in-task`,
+  {
+    securityGroupId: efsSg.id,
+    description: 'NFS from the OpenBao task',
+    referencedSecurityGroupId: taskSg.id,
+    ipProtocol: 'tcp',
+    fromPort: 2049,
+    toPort: 2049,
+    tags,
+  }
+);
+
+// --- Raft volume and backup -------------------------------------------------
+
+// EFS is the only durable volume Fargate mounts. One node, low traffic: fine
+// for dev; prod moves to EBS-backed HA Raft (see README).
+const fileSystem = new aws.efs.FileSystem(
+  `${BASE_NAME}-data`,
+  {
+    encrypted: true,
+    throughputMode: 'elastic',
+    tags: { ...tags, Name: `${BASE_NAME}-data-${stack}` },
+  },
+  durable
+);
+const mountTargets = vpc.privateSubnetIds.map(
+  (subnetId, index) =>
+    new aws.efs.MountTarget(`${BASE_NAME}-data-${index}`, {
+      fileSystemId: fileSystem.id,
+      subnetId,
+      securityGroups: [efsSg.id],
+    })
+);
+const accessPoint = new aws.efs.AccessPoint(`${BASE_NAME}-data`, {
+  fileSystemId: fileSystem.id,
+  posixUser: { uid: OPENBAO_UID, gid: OPENBAO_GID },
+  rootDirectory: {
+    path: '/openbao',
+    creationInfo: {
+      ownerUid: OPENBAO_UID,
+      ownerGid: OPENBAO_GID,
+      permissions: '700',
+    },
+  },
+  tags,
+});
+new aws.efs.FileSystemPolicy(`${BASE_NAME}-data`, {
+  fileSystemId: fileSystem.id,
+  policy: pulumi.jsonStringify({
+    Version: '2012-10-17',
+    Statement: [
+      {
+        Sid: 'TaskRoleThroughAccessPointOverTls',
+        Effect: 'Allow',
+        Principal: { AWS: taskRole.arn },
+        Action: [
+          'elasticfilesystem:ClientMount',
+          'elasticfilesystem:ClientWrite',
+        ],
+        Resource: fileSystem.arn,
+        Condition: {
+          Bool: { 'aws:SecureTransport': 'true' },
+          StringEquals: { 'elasticfilesystem:AccessPointArn': accessPoint.arn },
+        },
+      },
+    ],
+  }),
+});
+
+const backupVault = new aws.backup.Vault(
+  `${BASE_NAME}-backup`,
+  { name: `${BASE_NAME}-${stack}`, tags },
+  durable
+);
+const backupPlan = new aws.backup.Plan(`${BASE_NAME}-backup`, {
+  name: `${BASE_NAME}-${stack}`,
+  rules: [
+    {
+      ruleName: 'daily',
+      targetVaultName: backupVault.name,
+      schedule: 'cron(0 5 * * ? *)',
+      lifecycle: { deleteAfter: 14 },
+    },
+  ],
+  tags,
+});
+const backupRole = new aws.iam.Role(`${BASE_NAME}-backup-role`, {
+  name: `${BASE_NAME}-backup-role-${stack}`,
+  assumeRolePolicy: aws.iam.assumeRolePolicyForPrincipal({
+    Service: 'backup.amazonaws.com',
+  }),
+  managedPolicyArns: [
+    'arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup',
+    'arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForRestores',
+  ],
+  tags,
+});
+new aws.backup.Selection(`${BASE_NAME}-backup`, {
+  name: `${BASE_NAME}-data`,
+  planId: backupPlan.id,
+  iamRoleArn: backupRole.arn,
+  resources: [fileSystem.arn],
+});
+
+// --- TLS, DNS, and the internal ALB ----------------------------------------
+
+const zone = aws.route53.getZoneOutput({
+  name: 'macro-internal.com',
+  privateZone: false,
+});
+const certificate = new aws.acm.Certificate(`${BASE_NAME}-certificate`, {
+  domainName: HOSTNAME,
+  validationMethod: 'DNS',
+  tags,
+});
+const validation = certificate.domainValidationOptions[0];
+const validationRecord = new aws.route53.Record(
+  `${BASE_NAME}-certificate-validation`,
+  {
+    zoneId: zone.zoneId,
+    name: validation.resourceRecordName,
+    type: validation.resourceRecordType,
+    records: [validation.resourceRecordValue],
+    ttl: 300,
+  }
+);
+const validatedCertificate = new aws.acm.CertificateValidation(
+  `${BASE_NAME}-certificate`,
+  {
+    certificateArn: certificate.arn,
+    validationRecordFqdns: [validationRecord.fqdn],
+  }
+);
+
+// Not the public gateway: the vault API must never be reachable from outside
+// the VPC, so it gets its own internal ALB.
+const alb = new aws.lb.LoadBalancer(`${BASE_NAME}-alb`, {
+  name: `${BASE_NAME}-${stack}`,
+  internal: true,
+  loadBalancerType: 'application',
+  subnets: vpc.privateSubnetIds,
+  securityGroups: [albSg.id],
+  dropInvalidHeaderFields: true,
+  tags,
+});
+const targetGroup = new aws.lb.TargetGroup(`${BASE_NAME}-tg`, {
+  name: `${BASE_NAME}-${stack}-tg`,
+  vpcId: vpc.vpcId,
+  targetType: 'ip',
+  protocol: 'HTTP',
+  port: API_PORT,
+  // One task: a new one starts only after the old one stops.
+  deregistrationDelay: 5,
+  healthCheck: {
+    path: '/v1/sys/health',
+    interval: 10,
+    timeout: 5,
+    healthyThreshold: 2,
+    unhealthyThreshold: 3,
+    // 200 active; 501 not yet initialized (first deploy, before `operator
+    // init`). Sealed (503) is unhealthy, so ECS replaces the task.
+    matcher: '200,501',
+  },
+  tags,
+});
+const listener = new aws.lb.Listener(`${BASE_NAME}-https`, {
+  loadBalancerArn: alb.arn,
+  port: 443,
+  protocol: 'HTTPS',
+  sslPolicy: 'ELBSecurityPolicy-TLS13-1-2-2021-06',
+  certificateArn: validatedCertificate.certificateArn,
+  defaultActions: [{ type: 'forward', targetGroupArn: targetGroup.arn }],
+  tags,
+});
+new aws.route53.Record(`${BASE_NAME}-dns`, {
+  zoneId: zone.zoneId,
+  name: HOSTNAME,
+  type: 'A',
+  aliases: [
+    { name: alb.dnsName, zoneId: alb.zoneId, evaluateTargetHealth: false },
+  ],
+});
+
+// --- Service ------------------------------------------------------------------
+
+const serverConfig = sealKey.arn.apply((sealKeyArn) =>
+  renderServerConfig({ apiAddress: API_ADDRESS, region, sealKeyArn })
+);
+
+const service = new awsx.ecs.FargateService(
+  BASE_NAME,
+  {
+    name: BASE_NAME,
+    cluster: cloudStorageClusterArn,
+    desiredCount: 1,
+    // Raft data must never be open in two tasks: stop the old one first.
+    deploymentMinimumHealthyPercent: 0,
+    deploymentMaximumPercent: 100,
+    continueBeforeSteadyState: DEFAULT_CONTINUE_BEFORE_STEADY_STATE,
+    deploymentCircuitBreaker: { enable: true, rollback: true },
+    enableExecuteCommand: true,
+    networkConfiguration: {
+      subnets: vpc.privateSubnetIds,
+      securityGroups: [taskSg.id],
+      assignPublicIp: false,
+    },
+    loadBalancers: [
+      {
+        targetGroupArn: targetGroup.arn,
+        containerName: 'openbao',
+        containerPort: API_PORT,
+      },
+    ],
+    taskDefinitionArgs: {
+      // Logs go through FireLens; awsx's default log group would stay empty.
+      logGroup: { skip: true },
+      cpu: '512',
+      memory: '1024',
+      taskRole: { roleArn: taskRole.arn },
+      executionRole: { roleArn: executionRole.arn },
+      runtimePlatform: {
+        operatingSystemFamily: 'LINUX',
+        cpuArchitecture: 'X86_64',
+      },
+      volumes: [
+        {
+          name: 'data',
+          efsVolumeConfiguration: {
+            fileSystemId: fileSystem.id,
+            transitEncryption: 'ENABLED',
+            authorizationConfig: {
+              accessPointId: accessPoint.id,
+              iam: 'ENABLED',
+            },
+          },
+        },
+      ],
+      containers: withTelemetry(BASE_NAME, {
+        openbao: {
+          name: 'openbao',
+          image: IMAGE,
+          essential: true,
+          command: ['server'],
+          dependsOn: [{ containerName: 'log_router', condition: 'START' }],
+          environment: [
+            { name: 'BAO_LOCAL_CONFIG', value: serverConfig },
+            // The access point already owns the volume as `openbao`.
+            { name: 'SKIP_CHOWN', value: 'true' },
+          ],
+          portMappings: [{ containerPort: API_PORT, hostPort: API_PORT }],
+          mountPoints: [
+            { sourceVolume: 'data', containerPath: DATA_MOUNT_PATH },
+          ],
+          linuxParameters: { initProcessEnabled: true },
+          logConfiguration: {
+            logDriver: 'awsfirelens',
+            options: {
+              Name: 'datadog',
+              Host: 'http-intake.logs.us5.datadoghq.com',
+              // Egress allows only 443; Fluent Bit defaults to plain 80.
+              TLS: 'on',
+              Port: '443',
+              apikey: DATADOG_API_KEY,
+              dd_service: BASE_NAME,
+              dd_source: 'openbao',
+              dd_tags: `env:${stack}`,
+              provider: 'ecs',
+            },
+          },
+        },
+      }),
+    },
+    tags,
+  },
+  {
+    dependsOn: [
+      listener,
+      taskIngress,
+      taskHttpsEgress,
+      taskNfsEgress,
+      efsIngress,
+      ...mountTargets,
+    ],
+  }
+);
+
+// --- Alarms -------------------------------------------------------------------
+
+new EcsDeploymentFailureAlarm(`${BASE_NAME}-deployment-failure-alarm`, {
+  serviceName: BASE_NAME,
+  serviceArn: service.service.arn,
+  tags,
+});
+new aws.cloudwatch.MetricAlarm(`${BASE_NAME}-unhealthy-alarm`, {
+  name: `${BASE_NAME}-unhealthy-${stack}`,
+  namespace: 'AWS/ApplicationELB',
+  metricName: 'HealthyHostCount',
+  statistic: 'Minimum',
+  period: 60,
+  evaluationPeriods: 5,
+  threshold: 1,
+  comparisonOperator: 'LessThanThreshold',
+  treatMissingData: 'breaching',
+  dimensions: {
+    LoadBalancer: alb.arnSuffix,
+    TargetGroup: targetGroup.arnSuffix,
+  },
+  alarmDescription: 'OpenBao has no healthy (unsealed, active) task.',
+  alarmActions: [CLOUD_TRAIL_SNS_TOPIC_ARN],
+  okActions: [CLOUD_TRAIL_SNS_TOPIC_ARN],
+  tags,
+});
+
+export const address = API_ADDRESS;
+export const serviceName = service.service.name;
+export const sealKeyArn = sealKey.arn;
+export const fileSystemId = fileSystem.id;
+export const backupVaultName = backupVault.name;
