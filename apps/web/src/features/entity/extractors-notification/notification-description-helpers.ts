@@ -133,6 +133,7 @@ export function getActionVerb(type: NotificationType): string {
       .with('calendar_event_reminder', () => 'upcoming event')
       .with('calendar_event_join_request', () => 'asked to join')
       .with('inbox_reauth_required', () => 'needs reconnection')
+      .with('external_chat_account_ended', () => 'disconnected')
       .with('agent_session_settled', () => 'finished')
       .with('agent_session_waiting_for_input', () => 'needs your answer')
       .with('agent_session_mentioned', () => 'mentioned you')
@@ -203,6 +204,9 @@ export function getTypeNoun(type: NotificationType, count: number): string {
       count === 1 ? 'request to join' : 'requests to join'
     )
     .with('inbox_reauth_required', () => (count === 1 ? 'inbox' : 'inboxes'))
+    .with('external_chat_account_ended', () =>
+      count === 1 ? 'account' : 'accounts'
+    )
     .with('agent_session_settled', () =>
       count === 1 ? 'agent run' : 'agent runs'
     )

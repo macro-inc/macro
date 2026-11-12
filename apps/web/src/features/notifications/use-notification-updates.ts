@@ -172,6 +172,7 @@ export function handleNotificationUpdate(notification: UnifiedNotification) {
         'notifications'
       );
     })
+    .with({ tag: 'external_chat_account_ended' }, () => {})
     .with({ tag: 'inbox_reauth_required' }, () => {
       invalidateEmailLinks();
     })

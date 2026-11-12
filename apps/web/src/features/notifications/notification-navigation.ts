@@ -673,6 +673,7 @@ function getSupportedHandler(
         };
       })
       .with('inbox_reauth_required', () => null)
+      .with('external_chat_account_ended', () => null)
       .with('routine_run_finished', () => {
         return async (lm: SplitManager, newSplit: boolean = false) =>
           openContent(lm, routineContent(notification.entity_id), {
