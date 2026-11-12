@@ -25,6 +25,9 @@ persona/model to run later.
 - `CreateRoutine` tells agents to use `m-document-mention` with the routine ID,
   name, and `blockName: "routine"` in replies.
 - `src/outbound.rs`: the HTTP client to the owning scheduled-action service.
+  A 402 is either the scheduler's `routine_limit_reached` (the plan's
+  active-routine limit) or an exhausted AI allowance; it reads the body to
+  tell the model which.
 
 ## Scope
 

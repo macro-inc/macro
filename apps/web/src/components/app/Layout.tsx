@@ -26,6 +26,7 @@ import { MacroMcpSetupModal } from '@app/features/integrations/mcp-setup/MacroMc
 import { onboardingRedirectPath } from '@app/features/onboarding/core/next-target';
 import { AiUsageLimitDialog } from '@app/features/paywall/AiUsageLimitDialog';
 import { observeAiUsageLimitMutations } from '@app/features/paywall/ai-usage-limit-handling';
+import { observeRoutineLimitMutations } from '@app/features/paywall/routine-limit-handling';
 import { MobileSettingsProvider } from '@app/features/settings/context/mobile-settings';
 import { NativeShareSheet } from '@app/features/sharing/native-share-sheet/NativeShareSheet';
 import { StatusBanner } from '@app/features/system-status/components/StatusBanner';
@@ -144,6 +145,7 @@ export function RootFrame(props: ParentProps) {
   const location = useLocation();
 
   onCleanup(observeAiUsageLimitMutations(queryClient));
+  onCleanup(observeRoutineLimitMutations(queryClient));
 
   useAppSquishHandlers();
   // Here rather than in GlobalShortcuts so zoom also works on the pages that

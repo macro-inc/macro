@@ -1,4 +1,4 @@
-import { PLAN_USAGE_LABELS } from '../../paywall/plans';
+import { PLAN_ACTIVE_ROUTINES, PLAN_USAGE_LABELS } from '../../paywall/plans';
 
 /** Feature comparison shown below the unchanged trial offer. */
 export const PLAN_COMPARISON = [
@@ -19,6 +19,7 @@ export const PLAN_COMPARISON = [
     feature: 'AI models',
     values: { free: 'Gemini Flash', premium: 'All models', max: 'All models' },
   },
+  { feature: 'Active routines', values: PLAN_ACTIVE_ROUTINES },
   {
     feature: 'Storage',
     values: { free: '5 GB', premium: '100 GB', max: '1 TB' },

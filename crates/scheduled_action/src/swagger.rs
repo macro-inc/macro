@@ -7,8 +7,8 @@ use utoipa::OpenApi;
 use crate::inbound::axum_router::{
     __path_check_action, __path_create_action, __path_delete_action, __path_execute_action,
     __path_get_action, __path_health, __path_list_actions, __path_list_history,
-    __path_set_action_enabled, __path_update_action, ScheduledActionResponse,
-    SetScheduledActionEnabled,
+    __path_set_action_enabled, __path_update_action, RoutineLimitCode, RoutineLimitErrorBody,
+    ScheduledActionResponse, SetScheduledActionEnabled,
 };
 #[expect(
     unused_imports,
@@ -68,6 +68,9 @@ use model::response::EmptyResponse;
     components(
         schemas(
             AiAdmissionErrorBody,
+            RoutineLimitErrorBody,
+            RoutineLimitCode,
+            ai_billing::PlanTier,
             crate::domain::catalog::CatalogEntry,
             routine_program::Surface,
             routine_program::NamedItemKind,

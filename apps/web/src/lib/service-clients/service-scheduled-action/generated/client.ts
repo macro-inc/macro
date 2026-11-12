@@ -23,6 +23,7 @@ import type {
   ListScheduledActionsParams,
   RoutineCatalogParams,
   RoutineCheck,
+  RoutineLimitErrorBody,
   RoutineSuggestions,
   RoutineTemplate,
   ScheduledActionResponse,
@@ -159,6 +160,11 @@ export type createScheduledActionResponse401 = {
   status: 401;
 };
 
+export type createScheduledActionResponse402 = {
+  data: RoutineLimitErrorBody;
+  status: 402;
+};
+
 export type createScheduledActionResponse403 = {
   data: string;
   status: 403;
@@ -176,6 +182,7 @@ export type createScheduledActionResponseSuccess =
 export type createScheduledActionResponseError = (
   | createScheduledActionResponse400
   | createScheduledActionResponse401
+  | createScheduledActionResponse402
   | createScheduledActionResponse403
   | createScheduledActionResponse500
 ) & {
@@ -800,6 +807,11 @@ export type updateScheduledActionResponse401 = {
   status: 401;
 };
 
+export type updateScheduledActionResponse402 = {
+  data: RoutineLimitErrorBody;
+  status: 402;
+};
+
 export type updateScheduledActionResponse404 = {
   data: string;
   status: 404;
@@ -822,6 +834,7 @@ export type updateScheduledActionResponseSuccess =
 export type updateScheduledActionResponseError = (
   | updateScheduledActionResponse400
   | updateScheduledActionResponse401
+  | updateScheduledActionResponse402
   | updateScheduledActionResponse404
   | updateScheduledActionResponse409
   | updateScheduledActionResponse500
@@ -998,6 +1011,11 @@ export type setScheduledActionEnabledResponse401 = {
   status: 401;
 };
 
+export type setScheduledActionEnabledResponse402 = {
+  data: RoutineLimitErrorBody;
+  status: 402;
+};
+
 export type setScheduledActionEnabledResponse404 = {
   data: string;
   status: 404;
@@ -1020,6 +1038,7 @@ export type setScheduledActionEnabledResponseSuccess =
 export type setScheduledActionEnabledResponseError = (
   | setScheduledActionEnabledResponse400
   | setScheduledActionEnabledResponse401
+  | setScheduledActionEnabledResponse402
   | setScheduledActionEnabledResponse404
   | setScheduledActionEnabledResponse409
   | setScheduledActionEnabledResponse500
@@ -1412,6 +1431,11 @@ export type activateScheduledActionTemplateResponse401 = {
   status: 401;
 };
 
+export type activateScheduledActionTemplateResponse402 = {
+  data: RoutineLimitErrorBody;
+  status: 402;
+};
+
 export type activateScheduledActionTemplateResponse403 = {
   data: string;
   status: 403;
@@ -1434,6 +1458,7 @@ export type activateScheduledActionTemplateResponseSuccess =
 export type activateScheduledActionTemplateResponseError = (
   | activateScheduledActionTemplateResponse400
   | activateScheduledActionTemplateResponse401
+  | activateScheduledActionTemplateResponse402
   | activateScheduledActionTemplateResponse403
   | activateScheduledActionTemplateResponse404
   | activateScheduledActionTemplateResponse500

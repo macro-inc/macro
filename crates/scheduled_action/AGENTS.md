@@ -144,13 +144,24 @@ each run.
   missing configuration, and failed evaluations return 404. Owner unsharing
   stays available. Activating creates the caller's own routine with `template_id`
   pointing back. Filling variables happens in the client.
+- Active routines are capped by the owner's plan (`domain/routine_limit.rs`):
+  Free 10, Pro 1,000, Max 10,000, enterprise teams as Max. Active means
+  `ScheduledAction::is_active`: enabled, and watching events or holding a
+  next run. Only a write that makes a routine active is checked (create,
+  enable, or an edit that reschedules a finished one-off), so pausing,
+  deleting, and editing an active routine never need a plan lookup. The repo
+  counts under a per-owner advisory lock in the write's transaction (an
+  update opens one only to activate) and refuses with `RoutineLimitReached`,
+  a 402 `{code: "routine_limit_reached", limit, plan}`. This cap is the
+  bound on routines that create routines.
 - Not here: the target being run (an agent turn, a routine's tool logic) →
   `crates/agent_session`, `ai_tools`; Jev condition evaluation → `crates/jev`.
 
 ## Boundaries
 
 - Depends on: `agent_session`, `trigger_context`, `jev`, `channels`, `crm`,
-  `documents`, `github` (delivery fact and installation claims only),
+  `documents`, `ai_billing` (run admission and owners' plans),
+  `github` (delivery fact and installation claims only),
   `macro_event_broker`/`macro_event_topics` (Kafka), `macro_db_client`.
 - Used by: the web app's automations/routines UI and agent tooling, through
   the gateway.

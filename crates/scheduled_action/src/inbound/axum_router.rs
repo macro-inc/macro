@@ -14,7 +14,7 @@ use crate::domain::ports::ScheduledActionService;
 use crate::domain::target_validation::TargetValidationError;
 use crate::domain::templates::TemplateInputError;
 use agent_session::domain::routines::RoutineSessionError;
-use ai_billing::{AiAdmissionError, inbound::admission::AiAdmissionErrorBody};
+use ai_billing::{AiAdmissionError, PlanTier, inbound::admission::AiAdmissionErrorBody};
 use axum::extract::{FromRef, Path, Query, State, rejection::JsonRejection};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
@@ -318,6 +318,7 @@ where
     responses(
         (status = 201, body = ScheduledActionResponse),
         (status = 400, body = String),
+        (status = 402, body = RoutineLimitErrorBody, description = "The owner's plan allows no more active routines"),
         (status = 401, body = String),
         (status = 403, body = String),
         (status = 500, body = String),
@@ -426,6 +427,7 @@ where
     responses(
         (status = 200, body = ScheduledActionResponse),
         (status = 400, body = String),
+        (status = 402, body = RoutineLimitErrorBody, description = "The owner's plan allows no more active routines"),
         (status = 409, body = String, description = "Configuration changed or execution is active"),
         (status = 401, body = String),
         (status = 404, body = String),
@@ -463,6 +465,7 @@ where
     responses(
         (status = 200, body = ScheduledActionResponse),
         (status = 400, body = String),
+        (status = 402, body = RoutineLimitErrorBody, description = "The owner's plan allows no more active routines"),
         (status = 409, body = String, description = "Configuration changed or execution is active"),
         (status = 401, body = String),
         (status = 404, body = String),
@@ -664,6 +667,25 @@ impl From<anyhow::Error> for ScheduledActionApiError {
     }
 }
 
+/// A write that would activate more routines than the owner's plan allows.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct RoutineLimitErrorBody {
+    /// Human-readable explanation.
+    pub error: String,
+    pub code: RoutineLimitCode,
+    /// How many routines the plan allows to be active at once.
+    pub limit: u32,
+    /// The plan the limit comes from.
+    pub plan: PlanTier,
+}
+
+/// Stable code clients match on, distinct from AI allowance codes.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum RoutineLimitCode {
+    RoutineLimitReached,
+}
+
 impl IntoResponse for ScheduledActionApiError {
     fn into_response(self) -> axum::response::Response {
         let error = match self {
@@ -683,6 +705,18 @@ impl IntoResponse for ScheduledActionApiError {
         }
         if let Some(policy) = error.downcast_ref::<ActionPolicyError>() {
             let status = match policy {
+                ActionPolicyError::RoutineLimitReached(limit) => {
+                    return (
+                        StatusCode::PAYMENT_REQUIRED,
+                        Json(RoutineLimitErrorBody {
+                            error: policy.to_string(),
+                            code: RoutineLimitCode::RoutineLimitReached,
+                            limit: limit.max_active(),
+                            plan: limit.plan(),
+                        }),
+                    )
+                        .into_response();
+                }
                 ActionPolicyError::NotFound => StatusCode::NOT_FOUND,
                 ActionPolicyError::UpdateConflict => StatusCode::CONFLICT,
                 ActionPolicyError::NotSuggesting => StatusCode::FORBIDDEN,

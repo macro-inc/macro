@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { getUpgradePlans, PLAN_BY_TIER, PLANS, planFeatures } from './plans';
+import {
+  getUpgradePlans,
+  PLAN_BY_TIER,
+  PLANS,
+  planBenefits,
+  planFeatures,
+} from './plans';
 
 describe('plan catalogs', () => {
   it('offers both paid plans to Free accounts, only Max to Pro, and no downgrade to Max', () => {
@@ -34,7 +40,17 @@ describe('plan catalogs', () => {
   it('hides the usage rows without AI usage billing', () => {
     expect(planFeatures(false).map((row) => row.label)).toEqual([
       'AI Agent',
+      'Active routines',
       'Storage',
     ]);
+  });
+
+  it('lists the active routines each plan allows', () => {
+    expect(
+      planFeatures(false).find((row) => row.label === 'Active routines')?.values
+    ).toEqual({ free: '10', premium: '1,000', max: '10,000' });
+    expect(planBenefits('free', false)).toContain('10 active routines');
+    expect(planBenefits('premium', false)).toContain('1,000 active routines');
+    expect(planBenefits('max', false)).toContain('10,000 active routines');
   });
 });

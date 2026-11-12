@@ -11,7 +11,7 @@ use macro_uuid::{Uuid, generate_uuid_v7};
 use model_entity::EntityType;
 use model_owner::Owner;
 use serde_json::Value;
-use sqlx::PgPool;
+use sqlx::{PgConnection, PgPool};
 use std::collections::HashMap;
 use std::str::FromStr;
 
@@ -22,6 +22,7 @@ use crate::domain::models::{
     RunHistory, Schedule, ScheduledAction,
 };
 use crate::domain::ports::ScheduledActionRepo;
+use crate::domain::routine_limit::RoutineLimit;
 
 #[cfg(test)]
 pub(crate) mod test;
@@ -41,6 +42,113 @@ impl<B: BotFacts> PgScheduledActionRepo<B> {
     pub fn new(pool: PgPool, registrar: OwnedEntityRegistrar<B>) -> Self {
         Self { pool, registrar }
     }
+}
+
+/// Refuse a write that would make routine `id` one more active routine than
+/// `owner`'s limit allows. The transaction-scoped lock serializes one owner's
+/// activations, so two concurrent writes can't both take the last slot. The
+/// count matches [`ScheduledAction::is_active`]: `event_filters` is set
+/// exactly when the trigger watches events.
+async fn check_active_limit(
+    conn: &mut PgConnection,
+    owner: &str,
+    id: Uuid,
+    limit: RoutineLimit,
+) -> Result<()> {
+    sqlx::query!(
+        "SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended($1, 0))",
+        format!("scheduled-action-active:{owner}")
+    )
+    .fetch_one(&mut *conn)
+    .await?;
+    let active = sqlx::query_scalar!(
+        r#"
+        SELECT count(*) AS "active!"
+        FROM scheduled_action
+        WHERE owner = $1
+          AND id <> $2
+          AND enabled
+          AND (event_filters IS NOT NULL OR next_run_at IS NOT NULL)
+        "#,
+        owner,
+        id,
+    )
+    .fetch_one(&mut *conn)
+    .await?;
+    if active >= i64::from(limit.max_active()) {
+        return Err(ActionPolicyError::RoutineLimitReached(limit).into());
+    }
+    Ok(())
+}
+
+/// Write `action`'s configuration over row `id`, fenced to the revision it
+/// was read at and to runs no longer in flight.
+async fn update_row(
+    conn: &mut PgConnection,
+    action: &ScheduledAction,
+    id: Uuid,
+) -> Result<ActionRow> {
+    let trigger = TriggerColumns::try_from(&action.trigger)?;
+    let row = sqlx::query_as!(
+        ActionRow,
+        r#"
+            UPDATE scheduled_action
+            SET name = $1,
+                schedule = $2,
+                kind = $3,
+                timezone = $4,
+                task = $5,
+                next_run_at = $6,
+                enabled = $7,
+                trigger_type = $8,
+                event_filters = $9,
+                configuration_revision = $10,
+                event_activated_at = $11,
+                trigger_config = $14,
+                run_visibility = $15,
+                description = $16,
+                updated_at = now()
+            WHERE id = $12
+              AND configuration_revision = $10::bigint - 1
+              AND (
+                  claimed IS NULL OR claimed < $13
+                  OR (
+                      NOT $7 AND name = $1 AND kind = $3 AND task = $5
+                      AND trigger_type = $8
+                      AND schedule IS NOT DISTINCT FROM $2
+                      AND timezone IS NOT DISTINCT FROM $4
+                      AND event_filters IS NOT DISTINCT FROM $9
+                      AND trigger_config IS NOT DISTINCT FROM $14
+                      AND run_visibility = $15
+                      AND description = $16
+                  )
+              )
+            RETURNING id, owner, name, schedule, kind, timezone, task, claimed, created_at,
+                      updated_at, next_run_at, enabled, trigger_type, event_filters,
+                      configuration_revision, event_activated_at, trigger_config, run_visibility, template_id, suggestion_id,
+                   description
+            "#,
+        action.name,
+        trigger.schedule,
+        kind_to_str(&action.kind),
+        trigger.timezone,
+        action.task,
+        action.next_run_at,
+        action.enabled,
+        trigger.trigger_type,
+        trigger.event_filters,
+        action.configuration_revision.get(),
+        action.event_activated_at,
+        id,
+        Utc::now() - MAX_ACTION_TIME,
+        trigger.trigger_config,
+        <&str>::from(action.run_visibility),
+        action.description,
+    )
+    .fetch_optional(conn)
+    .await?
+    .ok_or(ActionPolicyError::UpdateConflict)?;
+    Ok(row)
 }
 
 fn parse_timezone(s: &str) -> Result<Tz> {
@@ -180,13 +288,20 @@ impl TryFrom<&ActionTrigger> for TriggerColumns {
 }
 
 impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
-    async fn create_action(&self, action: ScheduledAction) -> Result<ScheduledAction> {
+    async fn create_action(
+        &self,
+        action: ScheduledAction,
+        activation: Option<RoutineLimit>,
+    ) -> Result<ScheduledAction> {
         let id = generate_uuid_v7();
         let owner = action.owner.principal_id();
         let trigger = TriggerColumns::try_from(&action.trigger)?;
         let kind = kind_to_str(&action.kind);
 
         let mut tx = self.pool.begin().await?;
+        if let Some(limit) = activation {
+            check_active_limit(&mut tx, &owner, id, limit).await?;
+        }
         let row = sqlx::query_as!(
             ActionRow,
             r#"
@@ -325,71 +440,26 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
         rows.into_iter().map(ScheduledAction::try_from).collect()
     }
 
-    async fn update_action(&self, action: ScheduledAction) -> Result<ScheduledAction> {
+    async fn update_action(
+        &self,
+        action: ScheduledAction,
+        activation: Option<RoutineLimit>,
+    ) -> Result<ScheduledAction> {
         let Some(id) = action.id else {
             bail!("cannot update action without id");
         };
-        let trigger = TriggerColumns::try_from(&action.trigger)?;
-        let kind = kind_to_str(&action.kind);
-        let row = sqlx::query_as!(
-            ActionRow,
-            r#"
-            UPDATE scheduled_action
-            SET name = $1,
-                schedule = $2,
-                kind = $3,
-                timezone = $4,
-                task = $5,
-                next_run_at = $6,
-                enabled = $7,
-                trigger_type = $8,
-                event_filters = $9,
-                configuration_revision = $10,
-                event_activated_at = $11,
-                trigger_config = $14,
-                run_visibility = $15,
-                description = $16,
-                updated_at = now()
-            WHERE id = $12
-              AND configuration_revision = $10::bigint - 1
-              AND (
-                  claimed IS NULL OR claimed < $13
-                  OR (
-                      NOT $7 AND name = $1 AND kind = $3 AND task = $5
-                      AND trigger_type = $8
-                      AND schedule IS NOT DISTINCT FROM $2
-                      AND timezone IS NOT DISTINCT FROM $4
-                      AND event_filters IS NOT DISTINCT FROM $9
-                      AND trigger_config IS NOT DISTINCT FROM $14
-                      AND run_visibility = $15
-                      AND description = $16
-                  )
-              )
-            RETURNING id, owner, name, schedule, kind, timezone, task, claimed, created_at,
-                      updated_at, next_run_at, enabled, trigger_type, event_filters,
-                      configuration_revision, event_activated_at, trigger_config, run_visibility, template_id, suggestion_id,
-                   description
-            "#,
-            action.name,
-            trigger.schedule,
-            kind,
-            trigger.timezone,
-            action.task,
-            action.next_run_at,
-            action.enabled,
-            trigger.trigger_type,
-            trigger.event_filters,
-            action.configuration_revision.get(),
-            action.event_activated_at,
-            id,
-            Utc::now() - MAX_ACTION_TIME,
-            trigger.trigger_config,
-            <&str>::from(action.run_visibility),
-            action.description,
-        )
-        .fetch_optional(&self.pool)
-        .await?
-        .ok_or(ActionPolicyError::UpdateConflict)?;
+        // Only an activation needs the locked count; any other update stays a
+        // single autocommitted statement.
+        let row = match activation {
+            Some(limit) => {
+                let mut tx = self.pool.begin().await?;
+                check_active_limit(&mut tx, &action.owner.principal_id(), id, limit).await?;
+                let row = update_row(&mut tx, &action, id).await?;
+                tx.commit().await?;
+                row
+            }
+            None => update_row(&mut *self.pool.acquire().await?, &action, id).await?,
+        };
         ScheduledAction::try_from(row)
     }
 

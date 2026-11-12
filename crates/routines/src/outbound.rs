@@ -97,24 +97,7 @@ impl RoutineClient {
         let mut response = request.send().await.context("Routine request failed. Check ListRoutines before retrying a creation; the write may have succeeded.")?;
         let status = response.status().as_u16();
         match status {
-            200..=299 => {
-                const MAX_RESPONSE_BYTES: usize = 2 * 1024 * 1024;
-                ensure!(
-                    response
-                        .content_length()
-                        .is_none_or(|length| length <= MAX_RESPONSE_BYTES as u64),
-                    "Routine response is too large."
-                );
-                let mut body = Vec::new();
-                while let Some(chunk) = response.chunk().await? {
-                    ensure!(
-                        body.len() + chunk.len() <= MAX_RESPONSE_BYTES,
-                        "Routine response is too large."
-                    );
-                    body.extend_from_slice(&chunk);
-                }
-                Ok(body)
-            }
+            200..=299 => read_bounded(&mut response, MAX_RESPONSE_BYTES).await,
             400 => bail!(
                 "Invalid routine ({}). Check the triggers and steps; select agents from ListAgents using their bot.botId.",
                 rejection_reason(response).await
@@ -127,7 +110,22 @@ impl RoutineClient {
                 "Routine or target is unavailable to this user ({}).",
                 rejection_reason(response).await
             ),
-            402 => bail!("The user's AI allowance is exhausted, so the routine cannot run now."),
+            402 => {
+                let body = read_bounded(&mut response, MAX_REFUSAL_BYTES)
+                    .await
+                    .unwrap_or_default();
+                match serde_json::from_slice::<PlanRefusal>(&body) {
+                    Ok(PlanRefusal {
+                        error,
+                        code: PlanRefusalCode::RoutineLimitReached,
+                    }) => bail!(
+                        "Routine not saved as active: {error} Tell the user. They can pause or delete routines they no longer need, or upgrade their plan. Do not pause or delete routines to make room unless they ask."
+                    ),
+                    Err(_) => bail!(
+                        "The user's AI allowance is exhausted, so the routine cannot run now."
+                    ),
+                }
+            }
             409 => bail!("Routine is running or changed. Read it again before editing."),
             _ => bail!(
                 "Routine service is unavailable. Check ListRoutines before retrying a creation."
@@ -135,6 +133,42 @@ impl RoutineClient {
         }
     }
 }
+
+const MAX_RESPONSE_BYTES: usize = 2 * 1024 * 1024;
+/// Refusal bodies are short; a longer one is not read.
+const MAX_REFUSAL_BYTES: usize = 16 * 1024;
+
+async fn read_bounded(response: &mut reqwest::Response, max: usize) -> Result<Vec<u8>> {
+    ensure!(
+        response
+            .content_length()
+            .is_none_or(|length| length <= max as u64),
+        "Routine response is too large."
+    );
+    let mut body = Vec::new();
+    while let Some(chunk) = response.chunk().await? {
+        ensure!(
+            body.len() + chunk.len() <= max,
+            "Routine response is too large."
+        );
+        body.extend_from_slice(&chunk);
+    }
+    Ok(body)
+}
+
+/// A 402 the scheduler sends for a plan limit rather than an AI allowance.
+#[derive(Deserialize)]
+struct PlanRefusal {
+    error: String,
+    code: PlanRefusalCode,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum PlanRefusalCode {
+    RoutineLimitReached,
+}
+
 #[derive(Deserialize)]
 struct WireRoutine {
     id: Uuid,

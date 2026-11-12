@@ -163,9 +163,9 @@ async fn suggestions_round_trip_and_dismissals_and_saves_are_the_persons(pool: P
     let actions = test_repo(pool);
     let mut saved = sample_action(user_owner(USER_A), "Weekly planning");
     saved.suggestion_id = Some(written);
-    actions.create_action(saved).await.unwrap();
+    actions.create_action(saved, None).await.unwrap();
     let mut theirs = sample_action(user_owner(USER_B), "Digest");
     theirs.suggestion_id = Some(picked);
-    actions.create_action(theirs).await.unwrap();
+    actions.create_action(theirs, None).await.unwrap();
     assert_eq!(repo.saved_from(&a).await.unwrap(), [written]);
 }
