@@ -1395,11 +1395,7 @@ async fn run() -> anyhow::Result<()> {
     let anthropic_gateway = anthropic_gateway::router(
         anthropic_gateway::GatewayState::new(
             Arc::new(session_repo.clone()),
-            Arc::new(anthropic_gateway::PgBotComputers(pool.clone())),
-            feature_flags
-                .clone()
-                .map(hosted_runtimes::domain::rollout::ComputerRollout::new)
-                .unwrap_or_default(),
+            anthropic_gateway::PgBotComputers(pool.clone()),
             admission.clone(),
             recorder.clone(),
             anthropic_gateway::ANTHROPIC_API_URL,

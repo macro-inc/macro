@@ -39,10 +39,11 @@ Pulumi stacks; they do not host extra agent processes.
   `ANTHROPIC_BASE_URL` is its URL with `/mcp/internal` replaced by
   `/anthropic`, and `ANTHROPIC_AUTH_TOKEN` is the session egress token from
   its `Authorization: Bearer` header (re-minted on every attach, so restart
-  the runtime with the latest one). Only sessions whose bot runs on a Macro
-  computer (`harnesses.computer_id`), for an owner with
-  `enable-macro-computers`, are served; anything else, a failed lookup
-  included, is a 403 with nothing forwarded. Requests pass through unchanged with
+  the runtime with the latest one). Only sessions whose bot runs on a live Macro
+  computer harness (`harnesses.computer_id`) are served; anything else, a
+  failed lookup included, is a 403 with nothing forwarded. The
+  `enable-macro-computers` rollout is not checked: it limits selling
+  computers, not using them. Requests pass through unchanged with
   `ANTHROPIC_API_KEY`; only `anthropic-version`/`anthropic-beta` are
   forwarded. Models are a const allowlist (`ALLOWED_MODELS`, each mapped to
   its `ai_pricing` id, including the image’s bundled Claude Code Opus 4.8 and Sonnet 4.6
@@ -114,9 +115,12 @@ Pulumi stacks; they do not host extra agent processes.
   `POST /harnesses/{id}/claude-sign-in` → `{url}`,
   `POST /harnesses/{id}/claude-sign-in/complete` `{code}` → `{signedIn}`
   (a rejected code returns 422 with `code: "invalid_code"`),
-  `POST /harnesses/{id}/claude-sign-in/cancel` → 204 (interrupts a start or
-  completion), `POST /harnesses/{id}/claude-sign-out` → `{mode}`, and
+  `POST /harnesses/{id}/claude-sign-out` → `{mode}`, and
   `GET /harnesses/{id}/claude-mode` → `{mode, account?}` (all manage rights).
+  The sign-in link must be `https://claude.com` or `claude.ai` at exactly
+  `/cai/oauth/authorize` or `/oauth/authorize`. A reported login needs a
+  credential id of at most 100 `[A-Za-z0-9:._-]` bytes and an expiry no more
+  than 400 days out (past expiries are real and allowed).
   The account has a signer, sign-in time and expiry, never an email or plan:
   Claude's setup-token credential names no account. Each route runs in a
   tracked task, so a completion whose caller left still records its signer.
@@ -125,7 +129,9 @@ Pulumi stacks; they do not host extra agent processes.
   answer line on stdout) and writes the computer's Claude login rows from
   harnessd's status, under a per-computer Postgres advisory lock held from the
   command through the status read to the write; the cancel goes straight
-  through so it can interrupt a completion holding the lock. The
+  through so it can interrupt a completion holding the lock. The lock lives on
+  a dedicated pool of 4 connections (5 s acquire timeout) with a 30 s
+  `lock_timeout`; a request past either wait gets 409 Busy. The
   `ClaudeStatus` pass (every 60 s) refreshes every awake computer under the
   same lock (a sign-in nobody finished ends there once it is ten minutes old), and `sign_in_ahead.rs` refreshes on connect and then starts a
   sign-in when setup is unfinished or the credential expired. Spans:
@@ -133,8 +139,9 @@ Pulumi stacks; they do not host extra agent processes.
 - `src/computers/claude_expiry.rs`: the notices of the operator's
   `ClaudeSignIns` pass (every 60 s), whose sign-ins come from
   `hosted_runtimes::outbound::pg_sign_ins::PgClaudeSignIns` (active Claude
-  logins with signer, `expires_at` and last notice; it also lists the awake
-  computers for the status pass); `IngressClaudeSignInNotices` addresses the team's owner and
+  logins with signer, `expires_at` and last notice, through harnesses'
+  repository; the status pass lists awake computers with
+  `ComputerOperator::awake_computers`); `IngressClaudeSignInNotices` addresses the team's owner and
   admins (`teams`) and sends `agent_sign_in_expiry` (agent `claude`; inbox, gateway, push)
   on the harness entity, with an id derived from harness, sign-in, stage and
   expiry so replicas and retries never notify twice.

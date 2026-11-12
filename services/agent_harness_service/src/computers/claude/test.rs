@@ -252,7 +252,6 @@ async fn computer_route_access(
         ("POST", "claude-sign-in", ""),
         ("POST", "claude-sign-in/complete", r#"{"code":"test-code"}"#),
         ("POST", "claude-sign-out", ""),
-        ("POST", "claude-sign-in/cancel", ""),
     ] {
         if only_route.is_some_and(|route| route != suffix) {
             continue;
@@ -350,16 +349,6 @@ async fn computer_invalid_code_is_a_typed_retryable_response() {
 }
 
 #[tokio::test]
-async fn computer_claude_cancel_refuses_flag_off() {
-    computer_route_access(
-        false,
-        Some("claude-sign-in/cancel"),
-        FleetAttachment::Detached,
-    )
-    .await;
-}
-
-#[tokio::test]
 async fn a_completion_whose_caller_left_still_records_its_signer() {
     use harness_id::HarnessId;
     use harnessd_protocol::{AgentProvider, ClaudeAccount, Request, Response};
@@ -451,6 +440,8 @@ fn only_claudes_own_https_sign_in_links_are_handed_out() {
         "https://claude.com.evil.test/cai/oauth/authorize?state=abc",
         "https://evil.test/cai/oauth/authorize?state=abc",
         "https://claude.com/somewhere/else",
+        "https://claude.com/evil/oauth/authorize?state=abc",
+        "https://claude.ai/x/cai/oauth/authorize?state=abc",
         "not a url",
     ] {
         assert!(
@@ -572,9 +563,21 @@ async fn claude_sign_in_follows_the_computer_teams_admins_not_its_buyer() {
 
     let admin = app.clone().oneshot(sign_in("other")).await.unwrap();
     assert_eq!(admin.status(), StatusCode::OK);
+    let reached = transport.requests.lock().unwrap().len();
+    assert!(reached > 0);
     let buyer = app.oneshot(sign_in("owner")).await.unwrap();
     assert_eq!(buyer.status(), StatusCode::FORBIDDEN);
-    assert_eq!(transport.requests.lock().unwrap().len(), 1);
+    // The buyer's request never reached the computer.
+    assert_eq!(transport.requests.lock().unwrap().len(), reached);
     tasks.close();
     tasks.wait().await;
+}
+
+#[test]
+fn the_pasted_code_never_reaches_debug_output() {
+    let body = super::ClaudeSignInComplete {
+        code: "abc#def".to_owned(),
+    };
+    let shown = format!("{body:?}");
+    assert!(!shown.contains("abc#def"), "{shown}");
 }

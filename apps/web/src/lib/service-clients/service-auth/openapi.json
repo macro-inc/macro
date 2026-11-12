@@ -4530,7 +4530,7 @@
     "/team/computers/{computer_id}/setup-complete": {
       "post": {
         "tags": ["hosted_runtimes::inbound::axum_router"],
-        "summary": "Mark the guided setup after buying the computer finished. Idempotent;\nallowed to the computer's buyer and the team owner.",
+        "summary": "Mark the guided setup after buying the computer finished. Idempotent;\nallowed to the team's owner and admins, like Claude sign-in.",
         "operationId": "complete_team_computer_setup",
         "parameters": [
           {
@@ -7857,7 +7857,7 @@
           },
           "purchasedBy": {
             "type": "string",
-            "description": "The Macro user who bought it; with the team owner, the one who may\nfinish its setup and manage its Claude account."
+            "description": "The Macro user who bought it. The team's owner and admins, not the\nbuyer, finish its setup and manage its Claude account."
           },
           "retainedUntil": {
             "type": ["string", "null"],
@@ -7881,7 +7881,7 @@
             "description": "When the team finished the guided setup; null while it is unfinished."
           },
           "size": {
-            "type": "string",
+            "$ref": "#/components/schemas/ComputerSize",
             "description": "Purchased catalog size."
           },
           "status": {

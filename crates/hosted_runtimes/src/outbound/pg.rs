@@ -450,6 +450,27 @@ impl ComputerRepo for PgComputerRepo {
         .map_err(PgComputerError::from)
     }
 
+    async fn awake_computers(&self) -> Result<Vec<(HarnessId, ComputerId)>, PgComputerError> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT id, harness_id AS "harness_id!"
+            FROM hosted_runtime
+            WHERE awake AND harness_id IS NOT NULL
+            "#,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows
+            .into_iter()
+            .map(|row| {
+                (
+                    HarnessId::new_from_uuid(row.harness_id),
+                    ComputerId::new_from_uuid(row.id),
+                )
+            })
+            .collect())
+    }
+
     async fn set_harness(
         &self,
         computer_id: ComputerId,

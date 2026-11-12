@@ -79,8 +79,9 @@ impl MacroAuthorizationService for Authorization {
     }
 }
 
+/// The caller's role on the team.
 #[derive(Clone)]
-struct TeamAccess;
+struct TeamAccess(TeamRole);
 impl EntityAccessService for TeamAccess {
     async fn generate_entity_access_receipt<T: RequiredPermission>(
         &self,
@@ -177,7 +178,7 @@ impl EntityAccessService for TeamAccess {
     ) -> Result<Option<UserTeamInfo>, AccessError> {
         Ok(Some(UserTeamInfo {
             team_id: TEAM,
-            role: TeamRole::Admin,
+            role: self.0,
         }))
     }
 }
@@ -188,7 +189,7 @@ async fn registered_routes_reject_detached_fleet_without_side_effects() {
         let (service, id) = detached_router_service(comped, true).await;
         let state = ComputerRouterState {
             service: service.clone(),
-            entity_access_service: Arc::new(TeamAccess),
+            entity_access_service: Arc::new(TeamAccess(TeamRole::Admin)),
             authorization_state: MacroAuthorizationState::new(Arc::new(Authorization)),
         };
         let router: Router = team_router(state);
@@ -264,7 +265,7 @@ async fn registered_routes_preserve_rollout_denials() {
     let (service, _) = detached_router_service(false, false).await;
     let state = ComputerRouterState {
         service: service.clone(),
-        entity_access_service: Arc::new(TeamAccess),
+        entity_access_service: Arc::new(TeamAccess(TeamRole::Admin)),
         authorization_state: MacroAuthorizationState::new(Arc::new(Authorization)),
     };
     let router: Router = team_router(state);
@@ -312,7 +313,7 @@ async fn listing_answers_with_the_teams_rows_while_the_fleet_is_detached() {
     for (service, expected) in [(without, vec![]), (with_computer, vec![id.to_string()])] {
         let state = ComputerRouterState {
             service,
-            entity_access_service: Arc::new(TeamAccess),
+            entity_access_service: Arc::new(TeamAccess(TeamRole::Admin)),
             authorization_state: MacroAuthorizationState::new(Arc::new(Authorization)),
         };
         let router: Router = team_router(state);
@@ -341,5 +342,73 @@ async fn listing_answers_with_the_teams_rows_while_the_fleet_is_detached() {
             .map(|computer| computer["id"].as_str().unwrap().to_owned())
             .collect();
         assert_eq!(ids, expected);
+    }
+}
+
+/// Finishing setup is for the team's owner and admins, like Claude sign-in:
+/// an admin who did not buy the computer may, and its buyer may not once only
+/// a member.
+#[tokio::test]
+async fn finishing_setup_follows_the_team_admin_role_not_the_buyer() {
+    for (role, buyer, expected) in [
+        (
+            TeamRole::Admin,
+            "macro|someone-else@example.com",
+            StatusCode::OK,
+        ),
+        // The admin-only extractor refuses as every admin route does.
+        (
+            TeamRole::Member,
+            "macro|admin@example.com",
+            StatusCode::UNAUTHORIZED,
+        ),
+    ] {
+        let repo = crate::domain::fakes::FakeRepo {
+            sold_units: 9,
+            ..crate::domain::fakes::FakeRepo::default()
+        };
+        let id = crate::domain::ids::ComputerId::new_from_uuid(Uuid::now_v7());
+        repo.computers.lock().unwrap().insert(
+            id,
+            crate::domain::models::Computer {
+                created_by: macro_user_id::user_id::MacroUserIdStr::try_from(buyer.to_owned())
+                    .unwrap(),
+                ..crate::domain::service::test::computer(
+                    id,
+                    crate::domain::lifecycle::Phase::Running,
+                    crate::domain::lifecycle::Billing::Active {
+                        subscription_item: crate::domain::service::test::item("si_1"),
+                    },
+                )
+            },
+        );
+        let service = Arc::new(
+            ComputerService::new(
+                repo,
+                crate::domain::service::test::FakeBilling::default(),
+                crate::domain::fakes::FixedClock,
+                crate::domain::ports::StaticFleetAttachment(
+                    crate::domain::models::FleetAttachment::Attached,
+                ),
+            )
+            .with_comp_policy(crate::domain::service::test::availability::RouterCompPolicy(false)),
+        );
+        let router: Router = team_router(ComputerRouterState {
+            service: service.clone(),
+            entity_access_service: Arc::new(TeamAccess(role)),
+            authorization_state: MacroAuthorizationState::new(Arc::new(Authorization)),
+        });
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .method(Method::POST)
+                    .uri(format!("/team/computers/{id}/setup-complete"))
+                    .header("authorization", "Bearer test-user")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), expected, "{role:?}");
     }
 }

@@ -39,6 +39,10 @@ pub enum Event {
     CapacityChanged,
     /// Retry a computer that gave up restarting.
     OperatorRetry,
+    /// The team retried a computer that gave up. Like [`Self::OperatorRetry`],
+    /// but a give-up before the computer next boots is not paged: a team
+    /// retrying repeatedly must not page on-call each time.
+    TeamRetry,
     /// A fleet effect failed after its retries; an operator looks.
     EffectFailed {
         /// Reason for this decision or failure.

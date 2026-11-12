@@ -77,12 +77,18 @@ pub async fn list_subscription_items(
     let mut items = Vec::new();
     loop {
         let page = stripe::SubscriptionItem::list(client, &params).await?;
-        let more = page.has_more;
-        items.extend(page.data);
-        params.starting_after = items.last().map(|item| item.id.clone());
-        if !more || params.starting_after.is_none() {
+        if !page.has_more {
+            items.extend(page.data);
             return Ok(items);
         }
+        // More to read needs a cursor; an empty page has none to give.
+        let Some(last) = page.data.last() else {
+            return Err(stripe::StripeError::ClientError(
+                "missing subscription item cursor".to_owned(),
+            ));
+        };
+        params.starting_after = Some(last.id.clone());
+        items.extend(page.data);
     }
 }
 

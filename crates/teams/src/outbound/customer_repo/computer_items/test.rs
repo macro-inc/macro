@@ -279,6 +279,22 @@ async fn subscription_items_name_their_computer_from_item_or_price_metadata(pool
     );
 }
 
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_empty_page_that_claims_more_items_is_an_error(pool: sqlx::PgPool) {
+    let server = MockServer::start().await;
+    let mut empty = items_page(vec![]);
+    empty.has_more = true;
+    mount(&server, "GET", "/v1/subscription_items", &empty, 1).await;
+
+    let listed = repo(&server, pool)
+        .subscription_items(&"sub_team".parse().unwrap())
+        .await;
+
+    assert!(listed.is_err());
+    // Read once, never looped on.
+    assert_eq!(server.received_requests().await.unwrap().len(), 1);
+}
+
 /// A change whose outcome stayed unknown is applied when its marker landed,
 /// and abandoned otherwise, so no later replay can charge it.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

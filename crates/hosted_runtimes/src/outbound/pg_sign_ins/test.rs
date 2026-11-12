@@ -2,6 +2,8 @@ use chrono::{TimeZone, Utc};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
 use super::*;
+use crate::domain::ids::ComputerId;
+use harness_id::HarnessId;
 
 const TEAM: Uuid = Uuid::from_u128(0x0000_0000_0000_7000_8000_0000_0000_7ea4);
 

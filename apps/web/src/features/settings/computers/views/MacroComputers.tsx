@@ -3,7 +3,6 @@ import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import { enableMacroComputers } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
-import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { thrownResultErrorHasCode } from '@core/util/result';
 import HardDrivesIcon from '@icon/system/regular/hard-drives.svg';
@@ -22,7 +21,7 @@ import {
   useSetComputerPowerMutation,
   useUndoCancelComputerMutation,
 } from '@queries/computers/computers';
-import { useIsTeamAdmin, useIsTeamOwner } from '@queries/team/teams';
+import { useIsTeamAdmin } from '@queries/team/teams';
 import {
   type ComputerStatus,
   type SizeOffer,
@@ -142,7 +141,7 @@ function ManagedComputerRow(props: {
   harness?: RegisteredHarness;
   canManage: boolean;
   canManageClaude: boolean;
-  /** The buyer or the team owner, whom the server lets finish setup. */
+  /** A team owner or admin, whom the server lets finish setup. */
   canFinishSetup: boolean;
   onFinishSetup: () => void;
   onSignIn: () => void;
@@ -407,8 +406,6 @@ export function MacroComputers(props: {
   harnesses: readonly RegisteredHarness[];
 }) {
   const isAdmin = useIsTeamAdmin();
-  const isTeamOwner = useIsTeamOwner();
-  const userId = useUserId();
   const { enabled, canPurchase, computers, failed } = useTeamComputers();
   const offers = useComputerOffersQuery(() => canPurchase() && isAdmin());
   const release = useReleaseComputerMutation();
@@ -483,9 +480,7 @@ export function MacroComputers(props: {
                   harness={harnessFor(computer)}
                   canManage={isAdmin()}
                   canManageClaude={canManageClaude(computer)}
-                  canFinishSetup={
-                    computer.purchasedBy === userId() || isTeamOwner()
-                  }
+                  canFinishSetup={isAdmin()}
                   onFinishSetup={() => setSettingUp(computer.id)}
                   onSignIn={() => setSigningIn(computer.id)}
                   onRelease={() => {

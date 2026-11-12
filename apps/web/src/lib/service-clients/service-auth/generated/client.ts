@@ -5279,7 +5279,7 @@ export const retryTeamComputer = async (
 
 /**
  * @summary Mark the guided setup after buying the computer finished. Idempotent;
-allowed to the computer's buyer and the team owner.
+allowed to the team's owner and admins, like Claude sign-in.
  */
 export type completeTeamComputerSetupResponse200 = {
   data: ComputerStatus;

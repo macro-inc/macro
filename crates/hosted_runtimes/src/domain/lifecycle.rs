@@ -188,6 +188,10 @@ pub struct ComputerState {
     /// Absent until a start first waits for room.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub capacity_wait: Option<Retry>,
+    /// The team retried it and it has not booted since; a give-up then is
+    /// logged, not paged. Absent in rows written before it existed.
+    #[serde(default)]
+    pub retried_by_team: bool,
 }
 
 impl ComputerState {
@@ -272,6 +276,7 @@ pub fn provision(
         recent_crashes: Vec::new(),
         power_on_requested: !start,
         capacity_wait: None,
+        retried_by_team: false,
     };
     let mut effects = Vec::new();
     schedule_create(
@@ -303,6 +308,7 @@ pub fn transition(
             Event::PowerOn
             | Event::PowerOff
             | Event::OperatorRetry
+            | Event::TeamRetry
             | Event::CancelAtPeriodEnd { .. }
             | Event::UndoCancel { .. }
             | Event::Restore { .. }
@@ -366,6 +372,7 @@ pub fn transition(
                 if state.power == Power::On {
                     next.phase = Phase::Running;
                     next.power_on_requested = false;
+                    next.retried_by_team = false;
                 } else {
                     stop(&mut next, &mut effects, host);
                 }
@@ -463,11 +470,12 @@ pub fn transition(
             power_down(&mut next, &mut effects, host);
         }
 
-        Event::OperatorRetry => {
+        Event::OperatorRetry | Event::TeamRetry => {
             let Phase::Crashed { retry: None, .. } = state.phase else {
                 return Err(Rejected::NotFailed);
             };
             next.recent_crashes.clear();
+            next.retried_by_team = matches!(event, Event::TeamRetry);
             if state.power == Power::On {
                 if context.host_has_room {
                     boot(&mut next, &mut effects, now, Some(Effect::Restart { host }));
@@ -731,7 +739,11 @@ fn give_up(next: &mut ComputerState, effects: &mut Vec<Effect>, reason: String) 
     };
     next.power_on_requested = false;
     next.macrod_connected = false;
-    effects.push(Effect::PageOperator { reason });
+    if next.retried_by_team {
+        tracing::warn!(reason = %reason, "a computer the team retried gave up again; not paging");
+    } else {
+        effects.push(Effect::PageOperator { reason });
+    }
 }
 
 fn stop(next: &mut ComputerState, effects: &mut Vec<Effect>, host: HostId) {

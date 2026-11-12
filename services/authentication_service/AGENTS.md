@@ -80,7 +80,7 @@ access, webhook reconciliation and billing workers remain independent of attachm
   `settle_computer_add` ends an unknown outcome for good (fencing a charge
   never sent); `charge_status` reads a key's receipt. Removing an item already
   gone, or from a deleted team, succeeds.
-- With no computer prices, quote and purchase return 503 `computers are not available in this environment` through the shared computer router, before contacting Stripe.
+- With no computer prices, purchase returns 503 `computers are not available in this environment` through the shared computer router, before contacting Stripe.
 - Every team subscription webhook re-reads the complete subscription (all item
   pages) and only reports a `SubscriptionObserved` (status, items with their
   `computer_id`, period end, read time) to `ComputerBillingObserver`

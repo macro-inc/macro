@@ -4,6 +4,7 @@ use chrono::Duration;
 use macro_user_id::user_id::MacroUserIdStr;
 
 use super::*;
+use crate::domain::account_logins::{AccountLoginNotice, ComputerAccountLogin};
 use crate::domain::models::ClaudeMode;
 use crate::domain::{
     models::PairingClaimFacts,
@@ -206,6 +207,21 @@ impl HarnessRepo for FakeRepo {
         _provider: AgentProvider,
     ) -> Result<Option<HarnessAccountLogin>, Self::Err> {
         Ok(None)
+    }
+
+    async fn computer_account_logins(
+        &self,
+        _provider: AgentProvider,
+    ) -> Result<Vec<ComputerAccountLogin>, Self::Err> {
+        Ok(Vec::new())
+    }
+
+    async fn record_login_notice(
+        &self,
+        _login_id: Uuid,
+        _notice: AccountLoginNotice,
+    ) -> Result<(), Self::Err> {
+        Ok(())
     }
 
     async fn pairing_claim_facts(

@@ -19,7 +19,7 @@ read it before changing behaviour.
 ## Start here
 
 - `src/domain/lifecycle.rs` + `lifecycle/test.rs`: states, events, effects, invariants.
-- `src/domain/service.rs`: the team-facing `ComputerService` (purchase, offers, status, power, retry, cancel, release).
+- `src/domain/service.rs`: the team-facing `ComputerService` (purchase, offers, list, power, retry, cancel, release).
 - `src/domain/enrollment.rs`: the first-boot contract with `macrod enroll`.
 - `src/domain/image.rs`: versioned images and the root/data disk split.
 - `src/domain/operator.rs`: the control plane (fleet effects, timers, reconcile,
@@ -39,7 +39,8 @@ read it before changing behaviour.
 ## Boundaries
 
 - Depends on: `incus_client` (fleet), `feature_flags` (rollout),
-  `entity_access`, `macro_authorization`.
+  `entity_access`, `macro_authorization`; with `outbound`, `harnesses` (its
+  repository for Claude logins, never its tables).
 - Used by: authentication_service (routes, billing worker), agent_harness_service
   (operator, harnessd), `coding_agent_worker` (enrollment).
 

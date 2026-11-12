@@ -5046,33 +5046,6 @@ export type StartClaudeSignInResponses = {
 
 export type StartClaudeSignInResponse = StartClaudeSignInResponses[keyof StartClaudeSignInResponses];
 
-export type CancelClaudeSignInData = {
-    body?: never;
-    path: {
-        /**
-         * Harness ID
-         */
-        harness_id: string;
-    };
-    query?: never;
-    url: '/harnesses/{harness_id}/claude-sign-in/cancel';
-};
-
-export type CancelClaudeSignInErrors = {
-    403: unknown;
-    404: unknown;
-    409: unknown;
-    422: unknown;
-    503: unknown;
-    504: unknown;
-};
-
-export type CancelClaudeSignInResponses = {
-    204: void;
-};
-
-export type CancelClaudeSignInResponse = CancelClaudeSignInResponses[keyof CancelClaudeSignInResponses];
-
 export type CompleteClaudeSignInData = {
     body: ClaudeSignInComplete;
     path: {

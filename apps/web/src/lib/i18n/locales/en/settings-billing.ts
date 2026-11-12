@@ -1,14 +1,11 @@
 export default {
   priceBreakdown: 'Price breakdown',
   catalogPrice: 'New computers: {{price}}. Your subscribed price is retained.',
-  purchaseDescription: 'A dedicated cloud computer for your team.',
   proration:
     'Added to your team subscription, prorated for the rest of this billing period.',
   noCharge: 'No charge is added to your team subscription.',
   invoiceNote:
     'Current recurring charges. Proration, credits and taxes may change your next invoice.',
-  invitePriced: 'Invite {{name}} · {{price}}',
-  inviteIncluded: 'Invite {{name}}',
   buyPriced: 'Buy · {{price}}',
   buyIncluded: 'Buy',
   breakdown: 'Subscription breakdown',
@@ -16,11 +13,6 @@ export default {
   humanSeats: 'Human seats',
   paidSeats: { one: '{{count}} paid seat', other: '{{count}} paid seats' },
   computer: 'Computer',
-  computers: 'Computers',
-  computerCount: {
-    one: '{{count}} dedicated computer',
-    other: '{{count}} dedicated computers',
-  },
   sizedComputer: '{{size}} computer',
   computerName: '{{name}} · {{size}}',
   included: 'Included for Macro',

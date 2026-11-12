@@ -92,7 +92,10 @@ before acting"); paired machines keep it off until their owner turns it on.
   active login per provider per machine (partial unique index). `claude_mode`
   is derived (an active `claude` login means `own_account`), never stored.
   The control plane's Claude sign-in
-  notices go to the login's signer (`signed_in_by`, NULL once deleted).
+  notices go to the login's signer (`signed_in_by`, NULL once deleted); it
+  reads computer harnesses' active logins with `computer_account_logins` and
+  stamps the notice it sent with `record_login_notice` (`notice_stage`,
+  `notice_expires_at`). Nothing else reads or writes these tables.
 - `patch_harness` lets managers change the name and permission bypass while
   preserving computer identity and Claude billing mode.
 - Harness rows carry `computer_id` (set only for Macro computers; unique

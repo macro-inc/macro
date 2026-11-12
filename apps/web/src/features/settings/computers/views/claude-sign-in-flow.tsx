@@ -81,7 +81,11 @@ export function ClaudeSignInFlow(props: {
       if (current !== generation) return;
       if (!isHttpsUrl(result.url)) throw new Error('untrusted sign-in link');
       setUrl(result.url);
-      if (waitingTab) waitingTab.location.href = result.url;
+      if (waitingTab) {
+        // The Claude page gets no handle back to Macro.
+        waitingTab.opener = null;
+        waitingTab.location.href = result.url;
+      }
       waitingTab = undefined;
     } catch (failure) {
       if (current !== generation) return;
