@@ -566,7 +566,7 @@ External (plug icon, `g x`) appears on the rail only with the
   on **Settings → Account**, and the command menu is `Ctrl K`.
 
 Above Settings, the question-mark **Help** button opens a menu: **Message
-support** opens your support channel (hidden when you have none), **Book a demo**
+support** opens your support channel (hidden when you have none), **Book a call**
 opens the booking page, and **Email** starts an email to support.
 
 The rail highlights the workspace shown by the **active split**, not every app

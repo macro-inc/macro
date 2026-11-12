@@ -47,7 +47,7 @@ export function HelpMenu() {
             onSelect={() => openExternalUrl(DEMO_URL)}
           >
             <CalendarIcon class="size-4 shrink-0 text-ink-muted" />
-            {t('nav.helpDemo')}
+            {t('nav.helpCall')}
           </Dropdown.Item>
           <Dropdown.Item
             class="gap-2"

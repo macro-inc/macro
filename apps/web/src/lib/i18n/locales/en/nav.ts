@@ -49,7 +49,7 @@ export default {
   getMobileApp: 'Get the mobile app',
   help: 'Help',
   helpMessage: 'Message support',
-  helpDemo: 'Book a demo',
+  helpCall: 'Book a call',
   helpEmail: 'Email {{email}}',
   signedInAs: 'Signed in as {{name}}',
   commandMenu: 'Command Menu',
