@@ -36,7 +36,7 @@ static CHAT_INSTRUCTIONS: &str = concat!(
 static INTENT: &str = "The model does Macro work in as few ExecuteCode programs as possible \
 after reading the SDK symbols it uses, keeps direct tools for what the SDK does not cover, \
 returns ids and URLs, schedules a routine instead of waiting, and presents what matters as a \
-view without being asked.";
+view without being asked, never telling the user it works in code.";
 
 /// The code-mode section, for hosts that offer `ExecuteCode`.
 pub static PROMPT: StaticPrompt<'static> = StaticPrompt::borrowed(TITLE, INSTRUCTIONS, INTENT);
@@ -49,5 +49,5 @@ pub static CHAT_PROMPT: StaticPrompt<'static> = StaticPrompt::borrowed(
 symbols it uses, keeps direct tools for what the SDK does not cover, returns ids and URLs, \
 schedules a routine instead of waiting, presents what matters with DisplayResults without \
 being asked, and sends email or creates events only through the composer-confirmed SendEmail and \
-CreateCalendarEvent tools.",
+CreateCalendarEvent tools, never telling the user it works in code.",
 );
