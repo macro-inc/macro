@@ -635,7 +635,18 @@ fn the_unified_search_span_carries_the_mode_and_not_the_request() {
         record_term_counts(&tracing::Span::current(), 3, 0);
         tracing::Span::current().record(
             "search.entity_types",
-            entity_types_label(&[("chats", true), ("documents", false), ("emails", true)]),
+            searched_entity_types(
+                &[
+                    models_opensearch::OpenSearchEntityType::Emails,
+                    models_opensearch::OpenSearchEntityType::Chats,
+                ]
+                .into(),
+                &[
+                    ("chats", true),
+                    ("channels", false),
+                    ("crm_companies", true),
+                ],
+            ),
         );
     });
 
@@ -645,7 +656,7 @@ fn the_unified_search_span_carries_the_mode_and_not_the_request() {
     assert_eq!(span["search.search_on"], "name_content");
     assert_eq!(span["search.match_type"], "partial");
     assert_eq!(span["search.page_size"], "25");
-    assert_eq!(span["search.entity_types"], "chats,emails");
+    assert_eq!(span["search.entity_types"], "chats,crm_companies,emails");
     assert_eq!(span["search.terms"], "3");
     assert_eq!(span["search.dropped_terms"], "0");
     assert_eq!(

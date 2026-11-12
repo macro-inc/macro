@@ -217,12 +217,24 @@ fn unified_search_span(
     )
 }
 
-/// The entity types a search covers as one span value, in the order given.
-fn entity_types_label(types: &[(&'static str, bool)]) -> String {
-    types
+/// The entity types a search reaches, as one sorted span value: the
+/// OpenSearch indices it queries plus the sources name-searched outside
+/// OpenSearch that run.
+fn searched_entity_types(
+    indices: &std::collections::HashSet<models_opensearch::OpenSearchEntityType>,
+    name_sources: &[(&'static str, bool)],
+) -> String {
+    indices
         .iter()
-        .filter(|(_, included)| *included)
-        .map(|(name, _)| *name)
+        .map(|index| index.query_name())
+        .chain(
+            name_sources
+                .iter()
+                .filter(|(_, searched)| *searched)
+                .map(|(name, _)| *name),
+        )
+        .collect::<std::collections::BTreeSet<_>>()
+        .into_iter()
         .collect::<Vec<_>>()
         .join(",")
 }
@@ -379,23 +391,6 @@ async fn search_unified_sources(
         search_filters.should_include_calendar_events,
         ctx.calendar_search_enabled,
     );
-    tracing::Span::current().record(
-        "search.entity_types",
-        entity_types_label(&[
-            (
-                "agent_sessions",
-                search_filters.should_include_agent_sessions,
-            ),
-            ("calendar_events", should_include_calendar_events),
-            ("call_records", should_include_call_records),
-            ("channels", should_include_channels),
-            ("chats", should_include_chats),
-            ("crm_companies", should_include_crm),
-            ("documents", should_include_documents),
-            ("emails", should_include_emails),
-            ("projects", should_include_projects),
-        ]),
-    );
     let email_terms = search_terms.clone();
 
     // Await all tasks in parallel
@@ -530,7 +525,7 @@ async fn search_unified_sources(
     let crm_cursor_for_search = crm_cursor.clone();
     let channel_name_cursor_for_search = channel_name_cursor.clone();
 
-    let unified_search_args = UnifiedSearchArgs {
+    let mut unified_search_args = UnifiedSearchArgs {
         agent_session_search_args: AgentSessionSearchArgs {
             terms: search_terms.clone(),
             session_ids: agent_sessions
@@ -599,6 +594,54 @@ async fn search_unified_sources(
         calendar_event_search_args: filter_calendar_event_response,
     };
 
+    // Documents, email subjects, project names, call names, and
+    // calendar event titles are name-searched in OpenSearch. In Name
+    // mode keep only those indices: chats and channels name-search in
+    // Postgres below. Documents match `document_name`, emails their
+    // subject, projects their `name`, calls their `name`, calendar
+    // events their `title`. Projects and calendar events have no
+    // content, so a content-only search drops them.
+    match search_on {
+        SearchOn::Name => {
+            unified_search_args.document_search_args.mode = DocumentSearchMode::Name;
+            unified_search_args.call_record_search_args.mode = CallRecordSearchMode::Name;
+            unified_search_args.email_search_args.subject_only = true;
+            unified_search_args.search_indices.retain(|i| {
+                *i == models_opensearch::OpenSearchEntityType::Documents
+                    || *i == models_opensearch::OpenSearchEntityType::AgentSessions
+                    || *i == models_opensearch::OpenSearchEntityType::Emails
+                    || *i == models_opensearch::OpenSearchEntityType::Projects
+                    || *i == models_opensearch::OpenSearchEntityType::CallRecords
+                    || *i == models_opensearch::OpenSearchEntityType::CalendarEvents
+            });
+        }
+        SearchOn::NameContent => {
+            unified_search_args.document_search_args.mode = DocumentSearchMode::NameContent;
+            unified_search_args.call_record_search_args.mode = CallRecordSearchMode::NameContent;
+        }
+        SearchOn::Content => {
+            unified_search_args.document_search_args.mode = DocumentSearchMode::Content;
+            unified_search_args
+                .search_indices
+                .remove(&models_opensearch::OpenSearchEntityType::Projects);
+            unified_search_args
+                .search_indices
+                .remove(&models_opensearch::OpenSearchEntityType::CalendarEvents);
+        }
+    }
+    let searches_names = matches!(search_on, SearchOn::Name | SearchOn::NameContent);
+    tracing::Span::current().record(
+        "search.entity_types",
+        searched_entity_types(
+            &unified_search_args.search_indices,
+            &[
+                ("chats", should_include_chats && searches_names),
+                ("channels", should_include_channels && searches_names),
+                ("crm_companies", should_include_crm && searches_names),
+            ],
+        ),
+    );
+
     // Call search functions in parallel for included entity types
     // search_names handles Done cursors internally by returning early
     let (chat_results, channel_results, content_results, crm_results) = tokio::join!(
@@ -648,40 +691,7 @@ async fn search_unified_sources(
             }
         },
         async {
-            // Documents, email subjects, project names, call names, and
-            // calendar event titles are name-searched in OpenSearch. In Name
-            // mode keep only those indices: chats and channels name-search in
-            // Postgres above. Documents match `document_name`, emails their
-            // subject, projects their `name`, calls their `name`, calendar
-            // events their `title`. Projects and calendar events have no
-            // content, so a content-only search drops them.
-            let mut args = unified_search_args;
-            match search_on {
-                SearchOn::Name => {
-                    args.document_search_args.mode = DocumentSearchMode::Name;
-                    args.call_record_search_args.mode = CallRecordSearchMode::Name;
-                    args.email_search_args.subject_only = true;
-                    args.search_indices.retain(|i| {
-                        *i == models_opensearch::OpenSearchEntityType::Documents
-                            || *i == models_opensearch::OpenSearchEntityType::AgentSessions
-                            || *i == models_opensearch::OpenSearchEntityType::Emails
-                            || *i == models_opensearch::OpenSearchEntityType::Projects
-                            || *i == models_opensearch::OpenSearchEntityType::CallRecords
-                            || *i == models_opensearch::OpenSearchEntityType::CalendarEvents
-                    });
-                }
-                SearchOn::NameContent => {
-                    args.document_search_args.mode = DocumentSearchMode::NameContent;
-                    args.call_record_search_args.mode = CallRecordSearchMode::NameContent;
-                }
-                SearchOn::Content => {
-                    args.document_search_args.mode = DocumentSearchMode::Content;
-                    args.search_indices
-                        .remove(&models_opensearch::OpenSearchEntityType::Projects);
-                    args.search_indices
-                        .remove(&models_opensearch::OpenSearchEntityType::CalendarEvents);
-                }
-            }
+            let args = unified_search_args;
             if args.search_indices.is_empty() {
                 Ok((vec![], SearchCursorOption::Done))
             } else if let SearchCursorOption::Done = args.cursor {
