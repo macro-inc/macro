@@ -7,6 +7,7 @@ mod timeline;
 
 mod agent_activity;
 mod entity_history;
+mod ids;
 
 use std::collections::HashMap;
 use std::num::{NonZeroU32, NonZeroU64};

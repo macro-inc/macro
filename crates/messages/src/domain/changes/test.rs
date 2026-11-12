@@ -1,6 +1,26 @@
 use super::*;
 use std::sync::{Arc, Mutex};
 
+#[test]
+fn channel_reset_boundaries_preserve_the_last_replayable_position() {
+    let mut log = ChannelChangeLog {
+        seq: 1005,
+        floor: 5,
+        changes: Vec::new(),
+    };
+    assert!(!requires_reset(&log, 5));
+    assert!(requires_reset(&log, 4));
+    assert!(!requires_reset(&log, 1005));
+    assert!(requires_reset(&log, 1006));
+    log.floor = 0;
+    assert!(requires_reset(&log, 4));
+    log.changes = vec![ChannelChange {
+        seq: 1005,
+        kind: ChannelChangeKind::Reset,
+    }];
+    assert!(requires_reset(&log, 1004));
+}
+
 struct Pruner {
     calls: Arc<Mutex<Vec<(DateTime<Utc>, usize)>>>,
     counts: Mutex<std::collections::VecDeque<usize>>,

@@ -6,7 +6,7 @@ pub mod annotations;
 /// Common application boundary used by HTTP, agents, and channel adapters.
 #[cfg(feature = "ports")]
 pub mod api;
-/// Per-channel committed change targets.
+/// Per-channel committed changes and retention policy.
 #[cfg(feature = "ports")]
 pub mod changes;
 /// Contextual notifications and permission-aware realtime delivery.

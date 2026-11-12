@@ -432,6 +432,26 @@ impl PgMessageRepository {
 }
 
 impl MessageRepository for PgMessageRepository {
+    async fn channel_seq(&self, channel_id: Uuid) -> Result<i64, MessageError> {
+        self.read_channel_seq(channel_id).await
+    }
+
+    async fn channel_change_log(
+        &self,
+        channel_id: Uuid,
+        after: i64,
+    ) -> Result<crate::domain::changes::ChannelChangeLog, MessageError> {
+        self.read_channel_change_log(channel_id, after).await
+    }
+
+    async fn load_channel_message_changes(
+        &self,
+        channel_id: Uuid,
+        ids: &[Uuid],
+    ) -> Result<Vec<crate::domain::changes::ChannelMessageChange>, MessageError> {
+        self.read_channel_message_changes(channel_id, ids).await
+    }
+
     async fn call_thread_facts(
         &self,
         call_id: Uuid,

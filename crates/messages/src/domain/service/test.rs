@@ -6,6 +6,7 @@ use std::sync::{Arc, Mutex};
 
 mod call_retries;
 mod call_roots;
+mod changes;
 mod event_posts;
 mod guest_chat;
 mod initiative;
@@ -13,6 +14,9 @@ mod sequences;
 
 #[derive(Clone)]
 struct Repo {
+    change_log: crate::domain::changes::ChannelChangeLog,
+    changed_messages: Vec<crate::domain::changes::ChannelMessageChange>,
+    change_reads: Arc<Mutex<Vec<Vec<Uuid>>>>,
     message: Message,
     replies: Vec<Message>,
     state: ThreadState,
@@ -45,6 +49,45 @@ impl Repo {
 }
 
 impl MessageRepository for Repo {
+    async fn channel_seq(&self, _: Uuid) -> Result<i64, MessageError> {
+        Ok(self.change_log.seq)
+    }
+
+    async fn channel_change_log(
+        &self,
+        _: Uuid,
+        after: i64,
+    ) -> Result<crate::domain::changes::ChannelChangeLog, MessageError> {
+        let mut log = self.change_log.clone();
+        log.changes.retain(|change| change.seq > after);
+        Ok(log)
+    }
+
+    async fn load_channel_message_changes(
+        &self,
+        _: Uuid,
+        ids: &[Uuid],
+    ) -> Result<Vec<crate::domain::changes::ChannelMessageChange>, MessageError> {
+        use crate::domain::changes::ChannelMessageChange;
+        self.change_reads.lock().unwrap().push(ids.to_vec());
+        let roots: Vec<_> = self
+            .changed_messages
+            .iter()
+            .filter_map(|change| match change {
+                ChannelMessageChange::Reply { message } if ids.contains(&message.id) => {
+                    message.thread_id
+                }
+                _ => None,
+            })
+            .collect();
+        Ok(self
+            .changed_messages
+            .iter()
+            .filter(|change| ids.contains(&change.id()) || roots.contains(&change.id()))
+            .cloned()
+            .collect())
+    }
+
     async fn call_thread_facts(&self, _: Uuid) -> Result<Option<CallThreadFacts>, MessageError> {
         Ok(self.call_thread.clone())
     }
@@ -279,6 +322,9 @@ fn fixture() -> Repo {
     let id = Uuid::from_u128(1);
     let user = "macro|author@example.com";
     Repo {
+        change_log: Default::default(),
+        changed_messages: Vec::new(),
+        change_reads: Arc::default(),
         message: Message {
             kind: MessageKind::Message,
             id,
@@ -1353,6 +1399,26 @@ struct StrictRepo {
 }
 
 impl MessageRepository for StrictRepo {
+    async fn channel_seq(&self, id: Uuid) -> Result<i64, MessageError> {
+        self.inner.channel_seq(id).await
+    }
+
+    async fn channel_change_log(
+        &self,
+        id: Uuid,
+        after: i64,
+    ) -> Result<crate::domain::changes::ChannelChangeLog, MessageError> {
+        self.inner.channel_change_log(id, after).await
+    }
+
+    async fn load_channel_message_changes(
+        &self,
+        id: Uuid,
+        ids: &[Uuid],
+    ) -> Result<Vec<crate::domain::changes::ChannelMessageChange>, MessageError> {
+        self.inner.load_channel_message_changes(id, ids).await
+    }
+
     async fn call_thread_facts(&self, id: Uuid) -> Result<Option<CallThreadFacts>, MessageError> {
         self.inner.call_thread_facts(id).await
     }
@@ -1669,6 +1735,33 @@ async fn display_only_mention_kinds_are_stored_without_authorization() {
 #[derive(Clone)]
 struct TimelineFacts(Vec<activity::domain::timeline::TimelineActivity>);
 impl activity::domain::timeline::ActivityTimeline for TimelineFacts {
+    fn read_ids<'a>(
+        &'a self,
+        query: activity::domain::timeline::ActivityTimelineIdsQuery,
+    ) -> std::pin::Pin<
+        Box<
+            dyn Future<
+                    Output = Result<
+                        Vec<activity::domain::timeline::TimelineActivity>,
+                        activity::domain::timeline::TimelineReadError,
+                    >,
+                > + Send
+                + 'a,
+        >,
+    > {
+        Box::pin(async move {
+            assert_eq!(query.entity_type, activity::EntityType::Channel);
+            assert_eq!(query.entity_id, Uuid::from_u128(20).to_string());
+            assert_eq!(query.selection, CHANNEL_TIMELINE);
+            Ok(self
+                .0
+                .iter()
+                .filter(|row| query.ids.contains(&row.id))
+                .cloned()
+                .collect())
+        })
+    }
+
     fn read<'a>(
         &'a self,
         query: activity::domain::timeline::ActivityTimelineQuery,
@@ -1716,6 +1809,23 @@ impl activity::domain::timeline::ActivityTimeline for TimelineFacts {
 #[derive(Clone)]
 struct CountedFacts(TimelineFacts, Arc<Mutex<Vec<u16>>>);
 impl activity::domain::timeline::ActivityTimeline for CountedFacts {
+    fn read_ids<'a>(
+        &'a self,
+        query: activity::domain::timeline::ActivityTimelineIdsQuery,
+    ) -> std::pin::Pin<
+        Box<
+            dyn Future<
+                    Output = Result<
+                        Vec<activity::domain::timeline::TimelineActivity>,
+                        activity::domain::timeline::TimelineReadError,
+                    >,
+                > + Send
+                + 'a,
+        >,
+    > {
+        self.0.read_ids(query)
+    }
+
     fn read<'a>(
         &'a self,
         query: activity::domain::timeline::ActivityTimelineQuery,

@@ -7,6 +7,7 @@ use entity_access::domain::models::{
 };
 use uuid::Uuid;
 
+mod changes;
 #[cfg(test)]
 mod test;
 mod timeline;
