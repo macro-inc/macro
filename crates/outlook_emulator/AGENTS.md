@@ -17,7 +17,10 @@ standalone process, without Microsoft accounts.
 - Every change (delivery, send, update, move, delete) gets the mailbox's next
   sequence number. A folder's delta round reads the changes after its delta
   token, in pages linked by skip tokens; a message that left the folder is
-  reported `@removed`. A token from before `expire_delta_tokens`, or older
+  reported `@removed`. As measured against Graph, a page holds as many
+  entries as the request's `Prefer: odata.maxpagesize` asks for (10 without
+  it), the round ends on the first short page, and `$top` caps the whole
+  round. A token from before `expire_delta_tokens`, or older
   than the mailbox's `delta_token_lifetime_days`, answers 410
   `SyncStateNotFound`.
 - `POST /subscriptions` posts a validation token to the notification URL and

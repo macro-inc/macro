@@ -46,6 +46,8 @@ pub(crate) struct Call {
     pub(crate) pairs: Vec<(String, String)>,
     pub(crate) if_match: Option<String>,
     pub(crate) content_range: Option<String>,
+    /// The `odata.maxpagesize` of the request's `Prefer` headers.
+    pub(crate) max_page_size: Option<usize>,
     pub(crate) body: Vec<u8>,
     /// The API root links are built on, such as `http://127.0.0.1:1/v1.0`.
     pub(crate) root: String,
@@ -72,6 +74,7 @@ impl Call {
             pairs: serde_urlencoded::from_str(raw_query.unwrap_or_default()).unwrap_or_default(),
             if_match: text(header::IF_MATCH),
             content_range: text(header::CONTENT_RANGE),
+            max_page_size: max_page_size(headers),
             body,
             root,
         }
@@ -218,6 +221,17 @@ pub(crate) struct Served {
     pub(crate) mailbox: Option<String>,
     pub(crate) delay: Option<Duration>,
     pub(crate) result: Handled,
+}
+
+/// The page size a request's `Prefer: odata.maxpagesize=N` asks for.
+fn max_page_size(headers: &HeaderMap) -> Option<usize> {
+    headers
+        .get_all("prefer")
+        .iter()
+        .filter_map(|value| value.to_str().ok())
+        .flat_map(|value| value.split(','))
+        .find_map(|preference| preference.trim().strip_prefix("odata.maxpagesize="))
+        .and_then(|size| size.trim().parse().ok())
 }
 
 pub(crate) fn bearer(headers: &HeaderMap) -> Option<&str> {

@@ -123,9 +123,15 @@ fn decode_cursor(token: &str) -> Option<DeltaCursor> {
 /// A folder's message changes. The first request starts a round; its pages
 /// are linked by skip tokens and it ends with a delta token, which starts
 /// the next round. Links name the folder in OData key form, as Graph's do.
+///
+/// A page holds as many entries as the request's `Prefer:
+/// odata.maxpagesize` asks for, 10 without it; the links do not carry it, so
+/// every page of a round must send it. `$top` caps the whole round, not a
+/// page.
 pub(crate) fn delta(ctx: &mut Ctx<'_>, folder: &str) -> Handled {
     let now_ms = ctx.state.now_ms();
     let query = ctx.query.clone();
+    let page_size = ctx.call.max_page_size.unwrap_or(DEFAULT_DELTA_PAGE_SIZE);
     let mailbox = ctx.mailbox()?;
     let folder = folder_id(mailbox, folder)?;
 
@@ -145,8 +151,7 @@ pub(crate) fn delta(ctx: &mut Ctx<'_>, folder: &str) -> Handled {
                     "The emulator's delta query supports only $select and $top.",
                 ));
             }
-            let page_size = query.top.unwrap_or(DEFAULT_DELTA_PAGE_SIZE);
-            mailbox.delta_start(&folder, query.select_text(), page_size, now_ms)
+            mailbox.delta_start(&folder, query.select_text(), query.top, now_ms)
         }
     };
 
@@ -157,7 +162,7 @@ pub(crate) fn delta(ctx: &mut Ctx<'_>, folder: &str) -> Handled {
             .map(|select| select.split(',').map(str::to_string).collect()),
         ..Query::default()
     };
-    let page = mailbox.folder_delta(cursor, now_ms);
+    let page = mailbox.folder_delta(cursor, page_size, now_ms);
     let mut values = Vec::new();
     for entry in &page.entries {
         values.push(match entry {

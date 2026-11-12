@@ -5,7 +5,7 @@ use email_api_client::domain::ports::{FolderChangeReader, MailboxContentReader};
 use uuid::Uuid;
 
 use super::{ADA, id, message_id, start, token};
-use crate::{MessageChange, NewMessage};
+use crate::{MessageChange, NewMessage, OutlookEmulator};
 
 fn seed_with_inbox(count: usize) -> String {
     let mut seed = format!("mailboxes:\n  - email: {ADA}\n    messages:\n");
@@ -53,6 +53,69 @@ async fn first_delta_round_pages_through_the_folder_with_skip_tokens() {
     seen.dedup();
     assert_eq!(seen.len(), 250);
     assert!(pages.iter().all(|page| page.removed.is_empty()));
+}
+
+#[tokio::test]
+async fn a_round_that_fills_its_last_page_ends_with_an_empty_one() {
+    let (emulator, api) = start(&seed_with_inbox(200)).await;
+    let token = token(&emulator, ADA);
+
+    let (pages, _checkpoint) = round(&api, &token, &id("inbox"), None).await;
+
+    let sizes: Vec<usize> = pages.iter().map(|page| page.changed.len()).collect();
+    assert_eq!(sizes, vec![100, 100, 0]);
+}
+
+/// The delta pages a plain HTTP client reads by following the links, and the
+/// delta link the round ends with.
+async fn raw_round(
+    emulator: &OutlookEmulator,
+    first: String,
+    prefer: Option<&str>,
+) -> (Vec<usize>, String) {
+    let http = reqwest::Client::new();
+    let access_token = emulator.access_token(ADA).unwrap();
+    let mut url = first;
+    let mut sizes = Vec::new();
+    loop {
+        let mut request = http.get(&url).bearer_auth(&access_token);
+        if let Some(prefer) = prefer {
+            request = request.header("Prefer", prefer);
+        }
+        let page: serde_json::Value = request.send().await.unwrap().json().await.unwrap();
+        sizes.push(page["value"].as_array().unwrap().len());
+        match page["@odata.nextLink"].as_str() {
+            Some(next) => url = next.to_string(),
+            None => {
+                return (
+                    sizes,
+                    page["@odata.deltaLink"].as_str().unwrap().to_string(),
+                );
+            }
+        }
+    }
+}
+
+#[tokio::test]
+async fn delta_pages_are_sized_by_the_prefer_header_and_top_caps_the_round() {
+    let (emulator, _api) = start(&seed_with_inbox(45)).await;
+    let delta = format!(
+        "{}/v1.0/me/mailFolders/inbox/messages/delta",
+        emulator.base_url()
+    );
+
+    let (unsized_pages, _) = raw_round(&emulator, delta.clone(), None).await;
+    assert_eq!(unsized_pages, vec![10, 10, 10, 10, 5]);
+
+    let (sized, _) = raw_round(&emulator, delta.clone(), Some("odata.maxpagesize=20")).await;
+    assert_eq!(sized, vec![20, 20, 5]);
+
+    // `$top` ends the round at 25 entries, and the next round does not
+    // report the 20 it left out.
+    let (capped, checkpoint) = raw_round(&emulator, format!("{delta}?$top=25"), None).await;
+    assert_eq!(capped, vec![10, 10, 5]);
+    let (after, _) = raw_round(&emulator, checkpoint, None).await;
+    assert_eq!(after, vec![0]);
 }
 
 #[tokio::test]

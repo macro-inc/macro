@@ -24,8 +24,9 @@ pub(crate) struct DeltaCursor {
     pub(crate) t: i64,
     /// The round's `$select`.
     pub(crate) q: Option<String>,
-    /// The round's page size.
-    pub(crate) p: usize,
+    /// How many more entries the round may report, when its `$top` capped
+    /// it.
+    pub(crate) c: Option<usize>,
 }
 
 pub(crate) enum DeltaEntry<'a> {
@@ -46,7 +47,7 @@ impl Mailbox {
         &self,
         folder: &str,
         select: Option<String>,
-        page_size: usize,
+        cap: Option<usize>,
         now_ms: i64,
     ) -> DeltaCursor {
         DeltaCursor {
@@ -57,7 +58,7 @@ impl Mailbox {
             e: self.delta_epoch,
             t: now_ms,
             q: select,
-            p: page_size,
+            c: cap,
         }
     }
 
@@ -74,9 +75,24 @@ impl Mailbox {
         self.delta_epoch += 1;
     }
 
-    /// One page of a folder's changes. A cursor without a position starts a
-    /// new round from its delta token, reading up to the present.
-    pub(crate) fn folder_delta(&self, mut cursor: DeltaCursor, now_ms: i64) -> DeltaPage<'_> {
+    /// One page of a folder's changes, of up to `page_size` entries. A cursor
+    /// without a position starts a new round from its delta token, reading up
+    /// to the present.
+    ///
+    /// As Graph does, the round ends on the first page that comes back short,
+    /// so a round whose entries fill its last page ends with an empty one. A
+    /// round capped by `$top` ends at the cap, and its delta token does not
+    /// report what the cap left out.
+    pub(crate) fn folder_delta(
+        &self,
+        mut cursor: DeltaCursor,
+        page_size: usize,
+        now_ms: i64,
+    ) -> DeltaPage<'_> {
+        let page_size = page_size.max(1);
+        if cursor.a.is_none() && cursor.n < self.seq && cursor.s == cursor.n {
+            cursor.c = None;
+        }
         if cursor.a.is_none() && cursor.n < self.seq && cursor.s == cursor.n {
             cursor.n = self.seq;
             cursor.t = now_ms;
@@ -105,21 +121,16 @@ impl Mailbox {
         entries.sort_by(|a, b| (a.0, a.1).cmp(&(b.0, b.1)));
 
         let after = cursor.a.clone();
-        let mut remaining = entries
-            .into_iter()
-            .filter(|(seq, id, _)| {
-                after
-                    .as_ref()
-                    .is_none_or(|(last_seq, last_id)| (*seq, *id) > (*last_seq, last_id.as_str()))
-            })
-            .peekable();
+        let remaining = entries.into_iter().filter(|(seq, id, _)| {
+            after
+                .as_ref()
+                .is_none_or(|(last_seq, last_id)| (*seq, *id) > (*last_seq, last_id.as_str()))
+        });
 
         let mut page = Vec::new();
         let mut last = None;
-        while page.len() < cursor.p.max(1) {
-            let Some((seq, id, message)) = remaining.next() else {
-                break;
-            };
+        let limit = cursor.c.map_or(page_size, |cap| cap.min(page_size));
+        for (seq, id, message) in remaining.take(limit) {
             last = Some((seq, id.to_string()));
             page.push(match message {
                 Some(message) => DeltaEntry::Changed(message),
@@ -127,12 +138,14 @@ impl Mailbox {
             });
         }
 
-        let done = remaining.peek().is_none();
+        let done = page.len() < page_size;
         if done {
             cursor.s = cursor.n;
             cursor.a = None;
+            cursor.c = None;
         } else {
             cursor.a = last;
+            cursor.c = cursor.c.map(|cap| cap - page.len());
         }
         DeltaPage {
             entries: page,
