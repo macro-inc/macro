@@ -11,7 +11,7 @@ use entity_access::domain::models::{
     Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
 };
 use external_chat::domain::{
-    ports::{ChatEffect, ChatPublisher, EffectsRepository, Origin, SendRateLimiter},
+    ports::{ChatEffect, ChatProviders, ChatPublisher, EffectsRepository, Origin, SendRateLimiter},
     service::ExternalChatService,
     timeline::TimelineRepository,
 };
@@ -47,7 +47,7 @@ struct Allow;
 /// external chats with WhatsApp as their provider.
 struct Linked {
     whatsapp: WhatsAppService,
-    chats: ExternalChatService<WhatsAppProvider>,
+    chats: ExternalChatService,
     /// The external chat tables.
     store: Arc<PgExternalChatRepository>,
 }
@@ -59,7 +59,9 @@ fn services(pool: &PgPool) -> (Linked, SessionService, Arc<PgWhatsAppRepository>
         Linked {
             whatsapp: WhatsAppService::new(repository.clone()),
             chats: ExternalChatService::new(
-                Arc::new(WhatsAppProvider::new(repository.clone())),
+                ChatProviders {
+                    whatsapp: Arc::new(WhatsAppProvider::new(repository.clone())),
+                },
                 store.clone(),
                 Arc::new(Allow),
             ),
@@ -1103,7 +1105,9 @@ async fn rate_limited_send_never_creates_a_dispatchable_intent(pool: PgPool) {
 
     let (linked, session, repository, binding, alice, _) = adopted(&pool).await;
     let chats = ExternalChatService::new(
-        Arc::new(WhatsAppProvider::new(repository)),
+        ChatProviders {
+            whatsapp: Arc::new(WhatsAppProvider::new(repository)),
+        },
         linked.store,
         Arc::new(Denied),
     );

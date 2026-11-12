@@ -11,6 +11,7 @@ use super::{models::*, timeline::view::People};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
+use std::sync::Arc;
 use uuid::Uuid;
 
 /// Result of every port and service call.
@@ -86,9 +87,10 @@ pub struct Members {
     pub disappearing_seconds: Option<u32>,
 }
 
-/// One provider of external chats (WhatsApp). The generic use cases decide
-/// access, validation and what to show; the provider owns its accounts,
-/// membership and the outbox that sends.
+/// One provider of external chats, such as WhatsApp. The generic use cases
+/// decide access, validation and what to show; the provider owns its
+/// accounts, membership and the outbox that sends. Every `chat` and `chat_id`
+/// passed in is one of this provider's chats.
 #[async_trait]
 pub trait ChatProvider: Send + Sync + 'static {
     /// Operations and limits of a chat.
@@ -98,6 +100,8 @@ pub trait ChatProvider: Send + Sync + 'static {
     fn validate_mentions(&self, text: &str, mentions: &[String]) -> ExternalChatResult<()>;
     /// The person's own account at the provider, in any state.
     async fn account(&self, user: &MacroUserIdStr<'_>) -> ExternalChatResult<Option<AccountRef>>;
+    /// The Macro user who linked this provider account.
+    async fn account_owner(&self, account: Uuid) -> ExternalChatResult<Option<String>>;
     /// Whether `account` can send in each of `chats` now, in order.
     async fn sending_facts(
         &self,
@@ -171,6 +175,23 @@ pub trait ChatProvider: Send + Sync + 'static {
         viewer: &str,
         messages: &[Uuid],
     ) -> ExternalChatResult<Vec<(Uuid, DeliveryState)>>;
+}
+
+/// Every provider DSS serves, one per [`ExternalChatProvider`]. A new
+/// provider is a field here and an arm in [`ChatProviders::get`].
+#[derive(Clone)]
+pub struct ChatProviders {
+    /// WhatsApp linked devices.
+    pub whatsapp: Arc<dyn ChatProvider>,
+}
+
+impl ChatProviders {
+    /// The provider that owns chats of `provider`.
+    pub fn get(&self, provider: ExternalChatProvider) -> &dyn ChatProvider {
+        match provider {
+            ExternalChatProvider::WhatsApp => self.whatsapp.as_ref(),
+        }
+    }
 }
 
 /// Shared request budget for deliberate sends, keyed by authenticated person.

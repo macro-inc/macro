@@ -18,22 +18,18 @@ pub struct People {
     by_id: HashMap<String, ExternalChatPersonRef>,
     by_person: HashMap<Uuid, String>,
     unnamed: fn(&str) -> Option<String>,
-}
-
-impl Default for People {
-    fn default() -> Self {
-        Self::new(|_| None)
-    }
+    unknown: &'static str,
 }
 
 impl People {
     /// Nobody known yet; `unnamed` names an id nobody named (WhatsApp: its
-    /// phone number).
-    pub fn new(unnamed: fn(&str) -> Option<String>) -> Self {
+    /// phone number), and `unknown` is what anyone else is called.
+    pub fn new(unnamed: fn(&str) -> Option<String>, unknown: &'static str) -> Self {
         Self {
             by_id: HashMap::new(),
             by_person: HashMap::new(),
             unnamed,
+            unknown,
         }
     }
 
@@ -55,7 +51,7 @@ impl People {
             return person.clone();
         }
         ExternalChatPersonRef {
-            name: (self.unnamed)(id).unwrap_or_else(|| UNKNOWN_PERSON.to_owned()),
+            name: (self.unnamed)(id).unwrap_or_else(|| self.unknown.to_owned()),
             user_id: None,
         }
     }
@@ -68,14 +64,11 @@ impl People {
                 .by_person
                 .get(&person.person_id)
                 .cloned()
-                .unwrap_or_else(|| UNKNOWN_PERSON.to_owned()),
+                .unwrap_or_else(|| self.unknown.to_owned()),
             user_id: person.user_id.clone(),
         }
     }
 }
-
-/// Name for someone WhatsApp only knows by a private id.
-pub const UNKNOWN_PERSON: &str = "WhatsApp participant";
 
 /// One person's current vote on a poll.
 #[derive(Debug, Clone)]
@@ -130,7 +123,7 @@ fn system_view(
 ) -> ExternalChatSystemLine {
     ExternalChatSystemLine {
         action: line.action,
-        actor: (!line.by_whatsapp).then(|| sender.clone()),
+        actor: (!line.by_provider).then(|| sender.clone()),
         participants: line
             .participants
             .iter()

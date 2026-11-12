@@ -90,11 +90,11 @@ impl CommunityReference {
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq, thiserror::Error)]
 #[serde(rename_all = "snake_case")]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-#[cfg_attr(feature = "schema", schema(as = WhatsAppCannotAdd))]
+#[cfg_attr(feature = "schema", schema(as = ExternalChatCannotAdd))]
 pub enum CannotAdd {
-    /// The account's WhatsApp left the group or was removed.
-    #[error("your WhatsApp is not in this group any more")]
-    NotInGroup,
+    /// The person's account isn't in the conversation: it left or was removed.
+    #[error("your account is not in this conversation")]
+    NotMember,
     /// A community itself has no messages; its groups can be added.
     #[error("a community has no messages of its own; add one of its groups")]
     Community,
@@ -102,8 +102,14 @@ pub enum CannotAdd {
     #[error("your chat with yourself can't be added to Macro")]
     OwnChat,
     /// A direct chat that is not in the account's chat list.
-    #[error("this chat is not in your WhatsApp chat list")]
+    #[error("this chat is not in your chat list")]
     NotInChatList,
+    /// Archived at the provider.
+    #[error("this conversation is archived")]
+    Archived,
+    /// Disconnected from the other organization (Slack Connect).
+    #[error("this conversation was disconnected from the other organization")]
+    Frozen,
 }
 
 /// Where importing a group's earlier messages stands.
@@ -527,7 +533,7 @@ pub enum SendAuthority {
     UserApiToken,
     /// Acting for the person without being them: a session carrying an agent
     /// attribution. Bots, harnesses and internal callers never reach these use
-    /// cases (`UserOnly` rejects them). Never sends to WhatsApp.
+    /// cases (`UserOnly` rejects them). Never sends to the provider.
     Automation,
 }
 
@@ -544,13 +550,13 @@ pub enum ExternalChatError {
     #[error("not found")]
     NotFound,
     /// The caller lacks authority for this operation.
-    #[error("you do not have permission for this WhatsApp operation")]
+    #[error("you do not have permission for this operation")]
     Forbidden,
     /// Conflicts with an existing identity, transaction or idempotency key.
-    #[error("this conflicts with an existing WhatsApp connection or request")]
+    #[error("this conflicts with an existing connection or request")]
     Conflict,
     /// The account is not connected.
-    #[error("connect your WhatsApp account first")]
+    #[error("connect your account first")]
     Disconnected,
     /// The intent expired before it was attempted.
     #[error("send_expired")]
@@ -559,18 +565,18 @@ pub enum ExternalChatError {
     #[error("lease_fenced")]
     Fenced,
     /// The person's deliberate send request budget is exhausted.
-    #[error("wait one second before sending another WhatsApp request")]
+    #[error("wait one second before sending another request")]
     RateLimited,
     /// Retryable infrastructure failure.
-    #[error("WhatsApp is temporarily unavailable; retry shortly")]
+    #[error("the chat service is temporarily unavailable; retry shortly")]
     Unavailable,
     /// The account has too many events waiting to be stored; the session
-    /// service leaves the event unacknowledged and WhatsApp redelivers it.
-    #[error("too many WhatsApp events are waiting for this account")]
+    /// service leaves the event unacknowledged and the provider redelivers it.
+    #[error("too many events are waiting for this account")]
     Backlogged,
     /// Stored data broke an invariant; retrying does not help. The report
     /// carries the cause.
-    #[error("something went wrong with this WhatsApp chat")]
+    #[error("something went wrong with this chat")]
     Internal,
 }
 
@@ -579,10 +585,12 @@ impl ExternalChatError {
     pub const fn code(&self) -> &'static str {
         match self {
             Self::Invalid(_) => "invalid_input",
-            Self::CannotAdd(CannotAdd::NotInGroup) => "cannot_add_not_in_group",
             Self::CannotAdd(CannotAdd::Community) => "cannot_add_community",
             Self::CannotAdd(CannotAdd::OwnChat) => "cannot_add_own_chat",
             Self::CannotAdd(CannotAdd::NotInChatList) => "cannot_add_not_in_chat_list",
+            Self::CannotAdd(CannotAdd::NotMember) => "cannot_add_not_member",
+            Self::CannotAdd(CannotAdd::Archived) => "cannot_add_archived",
+            Self::CannotAdd(CannotAdd::Frozen) => "cannot_add_frozen",
             Self::NotFound => "not_found",
             Self::Forbidden => "forbidden",
             Self::Conflict => "conflict",
@@ -619,4 +627,30 @@ pub struct AttachmentRef {
     pub source_id: String,
     /// Position within the message.
     pub ordinal: i16,
+}
+
+/// An external chat entity bound to a remote chat.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = ExternalChatReference))]
+pub struct ChatReference {
+    /// External chat entity id.
+    pub id: Uuid,
+    /// Display name, following the provider.
+    pub name: String,
+}
+
+/// Another person's external chat entity the caller can view.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = SharedExternalChatReference))]
+pub struct SharedChatReference {
+    /// External chat entity id.
+    pub id: Uuid,
+    /// Display name, following the provider.
+    pub name: String,
+    /// Macro user who added the chat and shared it.
+    pub owner_id: String,
 }

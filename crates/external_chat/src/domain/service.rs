@@ -12,29 +12,20 @@ use uuid::Uuid;
 mod test;
 mod timeline;
 
-/// DSS use cases for external chats of one provider.
-pub struct ExternalChatService<P> {
-    provider: Arc<P>,
+/// DSS use cases for external chats of every provider; each call goes to the
+/// provider of the chat, or of the request.
+#[derive(Clone)]
+pub struct ExternalChatService {
+    providers: ChatProviders,
     chats: Arc<dyn ChatRepository>,
     timeline: Arc<dyn TimelineRepository>,
     send_rate_limiter: Arc<dyn SendRateLimiter>,
 }
 
-impl<P> Clone for ExternalChatService<P> {
-    fn clone(&self) -> Self {
-        Self {
-            provider: self.provider.clone(),
-            chats: self.chats.clone(),
-            timeline: self.timeline.clone(),
-            send_rate_limiter: self.send_rate_limiter.clone(),
-        }
-    }
-}
-
-impl<P: ChatProvider> ExternalChatService<P> {
+impl ExternalChatService {
     /// Wire adapters at the composition root.
     pub fn new<R>(
-        provider: Arc<P>,
+        providers: ChatProviders,
         repository: Arc<R>,
         send_rate_limiter: Arc<dyn SendRateLimiter>,
     ) -> Self
@@ -42,11 +33,20 @@ impl<P: ChatProvider> ExternalChatService<P> {
         R: ChatRepository + TimelineRepository + 'static,
     {
         Self {
-            provider,
+            providers,
             chats: repository.clone(),
             timeline: repository,
             send_rate_limiter,
         }
+    }
+
+    /// The chat behind an external chat entity.
+    async fn chat(&self, chat_id: Uuid) -> ExternalChatResult<ChatRef> {
+        Ok(self
+            .chats
+            .chat(chat_id)
+            .await?
+            .ok_or(ExternalChatError::NotFound)?)
     }
 
     /// Add an existing chat of the person's provider account, such as a
@@ -60,12 +60,15 @@ impl<P: ChatProvider> ExternalChatService<P> {
         authority: SendAuthority,
     ) -> ExternalChatResult<ChatRef> {
         human(authority)?;
-        self.provider.adopt(user, request).await
+        self.providers
+            .get(request.provider)
+            .adopt(user, request)
+            .await
     }
 
     /// Detach locally; nothing changes at the provider. Only the person who
     /// added the chat, in their own session, stops syncing it.
-    #[tracing::instrument(name = "whatsapp.linked.detach", skip_all, err, fields(chat_id))]
+    #[tracing::instrument(name = "external_chat.detach", skip_all, err, fields(chat_id))]
     pub async fn detach<T: RequiredPermission>(
         &self,
         access: &EntityAccessReceipt<T>,
@@ -74,15 +77,11 @@ impl<P: ChatProvider> ExternalChatService<P> {
         human(authority)?;
         let (user, chat_id) = receipt_scope(access)?;
         tracing::Span::current().record("chat_id", tracing::field::display(chat_id));
-        let chat = self
-            .chats
-            .chat(chat_id)
-            .await?
-            .ok_or(ExternalChatError::NotFound)?;
+        let chat = self.chat(chat_id).await?;
         if chat.user_id != user.as_ref() {
             return Err(ExternalChatError::Forbidden.into());
         }
-        self.provider.detach(&chat).await
+        self.providers.get(chat.provider).detach(&chat).await
     }
 
     async fn reply_block(
@@ -92,7 +91,8 @@ impl<P: ChatProvider> ExternalChatService<P> {
     ) -> ExternalChatResult<Option<ReplyBlock>> {
         let facts = match account {
             Some(account) if account.connected => self
-                .provider
+                .providers
+                .get(chat.provider)
                 .sending_facts(account, std::slice::from_ref(chat))
                 .await?
                 .pop(),
@@ -104,10 +104,10 @@ impl<P: ChatProvider> ExternalChatService<P> {
     /// Record a deliberate send for the person's own account. The provider
     /// dispatches it; uncertain outcomes are never resent.
     #[tracing::instrument(
-        name = "whatsapp.linked.send",
+        name = "external_chat.send",
         skip_all,
         err,
-        fields(chat_id, send_id, kind)
+        fields(chat_id, provider, send_id, kind)
     )]
     pub async fn send_reply<T: RequiredPermission>(
         &self,
@@ -117,9 +117,13 @@ impl<P: ChatProvider> ExternalChatService<P> {
     ) -> ExternalChatResult<SendProgress> {
         sender(authority)?;
         let (user, chat_id) = receipt_scope(access)?;
-        tracing::Span::current().record("chat_id", tracing::field::display(chat_id));
+        let span = tracing::Span::current();
+        span.record("chat_id", tracing::field::display(chat_id));
+        let chat = self.chat(chat_id).await?;
+        span.record("provider", chat.provider.as_ref());
+        let provider = self.providers.get(chat.provider);
         validate_request(request, |text, mentions| {
-            self.provider.validate_mentions(text, mentions)
+            provider.validate_mentions(text, mentions)
         })?;
         let digest: [u8; 32] = Sha256::digest(
             serde_json::to_vec(request)
@@ -131,24 +135,18 @@ impl<P: ChatProvider> ExternalChatService<P> {
         if let Some(StoredSend {
             request_sha256,
             progress,
-        }) = self
-            .provider
+        }) = provider
             .stored_send(chat_id, user, request.idempotency_key)
             .await?
         {
             if request_sha256 != digest {
                 return Err(ExternalChatError::Conflict.into());
             }
-            tracing::Span::current().record("send_id", tracing::field::display(progress.id));
+            span.record("send_id", tracing::field::display(progress.id));
             return Ok(progress);
         }
         self.send_rate_limiter.check(user).await?;
-        let chat = self
-            .chats
-            .chat(chat_id)
-            .await?
-            .ok_or(ExternalChatError::NotFound)?;
-        let account = self.provider.account(user).await?;
+        let account = provider.account(user).await?;
         if let Some(block) = self.reply_block(account.as_ref(), &chat).await? {
             return Err(refusal(block).into());
         }
@@ -158,7 +156,7 @@ impl<P: ChatProvider> ExternalChatService<P> {
             .as_deref()
             .ok_or(ExternalChatError::Disconnected)?;
         if let Some(quoted) = request.reply_to {
-            self.provider
+            provider
                 .mutation_target(&chat, quoted)
                 .await?
                 .filter(|target| !target.deleted)
@@ -183,17 +181,15 @@ impl<P: ChatProvider> ExternalChatService<P> {
             ..
         } = &request.message
         {
-            tracing::Span::current().record("kind", tracing::field::debug(operation));
-            let target = self
-                .provider
+            span.record("kind", tracing::field::debug(operation));
+            let target = provider
                 .mutation_target(&chat, *message_id)
                 .await?
                 .filter(|target| !target.deleted)
                 .ok_or(ExternalChatError::NotFound)?;
             authorize_mutation(*operation, &target, identity, Utc::now())?;
         }
-        let progress = self
-            .provider
+        let progress = provider
             .enqueue_send(SendIntent {
                 user,
                 account: &account,
@@ -202,13 +198,13 @@ impl<P: ChatProvider> ExternalChatService<P> {
                 digest,
             })
             .await?;
-        tracing::Span::current().record("send_id", tracing::field::display(progress.id));
+        span.record("send_id", tracing::field::display(progress.id));
         Ok(progress)
     }
 
     /// Stage one attachment for a later deliberate send in this chat. Nothing
     /// is sent until a media reply names it.
-    #[tracing::instrument(name = "whatsapp.linked.upload", skip_all, err, fields(chat_id, size = bytes.len()))]
+    #[tracing::instrument(name = "external_chat.upload", skip_all, err, fields(chat_id, size = bytes.len()))]
     pub async fn upload_attachment<T: RequiredPermission>(
         &self,
         access: &EntityAccessReceipt<T>,
@@ -221,7 +217,7 @@ impl<P: ChatProvider> ExternalChatService<P> {
         let (user, chat_id) = receipt_scope(access)?;
         tracing::Span::current().record("chat_id", tracing::field::display(chat_id));
         let kind = MediaKind::of(mime).ok_or(ExternalChatError::Invalid(
-            "this file type cannot be sent to WhatsApp",
+            "this file type cannot be sent",
         ))?;
         let filename = filename.trim();
         if bytes.is_empty()
@@ -237,12 +233,8 @@ impl<P: ChatProvider> ExternalChatService<P> {
             )
             .into());
         }
-        let chat = self
-            .chats
-            .chat(chat_id)
-            .await?
-            .ok_or(ExternalChatError::NotFound)?;
-        let account = self.provider.account(user).await?;
+        let chat = self.chat(chat_id).await?;
+        let account = self.providers.get(chat.provider).account(user).await?;
         if let Some(block) = self.reply_block(account.as_ref(), &chat).await? {
             return Err(refusal(block).into());
         }
@@ -276,11 +268,7 @@ impl<P: ChatProvider> ExternalChatService<P> {
         if messages.len() > BATCH_LIMIT {
             return Err(ExternalChatError::Invalid("too many messages in one request").into());
         }
-        let chat = self
-            .chats
-            .chat(chat_id)
-            .await?
-            .ok_or(ExternalChatError::NotFound)?;
+        let chat = self.chat(chat_id).await?;
         self.chats.message_attachments(&chat, messages).await
     }
 
@@ -294,7 +282,11 @@ impl<P: ChatProvider> ExternalChatService<P> {
         if ids.len() > BATCH_LIMIT {
             return Err(ExternalChatError::Invalid("too many messages in one request").into());
         }
-        self.provider.sends_for(chat_id, user, ids).await
+        let chat = self.chat(chat_id).await?;
+        self.providers
+            .get(chat.provider)
+            .sends_for(chat_id, user, ids)
+            .await
     }
 }
 

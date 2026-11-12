@@ -38,7 +38,7 @@ async fn a_system_line_names_people_and_never_notifies_or_counts_as_unread(pool:
             participants: vec![BOB_JID.to_owned()],
             value: None,
             call: None,
-            by_whatsapp: false,
+            by_provider: false,
         })),
         None,
     );
@@ -247,7 +247,7 @@ async fn a_change_whatsapp_made_without_naming_anyone_is_the_groups_own_line(poo
             participants: vec![],
             value: Some("Launch".to_owned()),
             call: None,
-            by_whatsapp: true,
+            by_provider: true,
         })),
         None,
     );

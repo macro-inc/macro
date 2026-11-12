@@ -1,7 +1,8 @@
 use super::*;
 use crate::domain::models::{Identity, Participant};
 use chrono::Utc;
-use external_chat::domain::timeline::{ExternalChatPersonRef, StoredPerson, view::UNKNOWN_PERSON};
+use super::UNKNOWN_PERSON;
+use external_chat::domain::timeline::{ExternalChatPersonRef, StoredPerson};
 
 const ANA_LID: &str = "900000000001@lid";
 const BEN_LID: &str = "900000000002@lid";

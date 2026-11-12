@@ -48,7 +48,7 @@ impl MediaService {
                         attempts = import.attempts,
                         code = error.current_context().code(),
                         error = %error,
-                        "WhatsApp attachment import will retry"
+                        "External chat attachment import will retry"
                     );
                     self.repository
                         .import_failed(import, import.attempts + 1 >= MAX_IMPORT_ATTEMPTS)
@@ -80,7 +80,7 @@ impl MediaService {
                     file_id = %file_id,
                     code = error.current_context().code(),
                     error = %error,
-                    "Deleting a WhatsApp attachment file will retry"
+                    "Deleting an external chat attachment file will retry"
                 ),
             }
         }

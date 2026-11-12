@@ -2,10 +2,9 @@
 //! to [`ExternalChatService`]. DSS mounts [`external_chats_router`] at
 //! `/external-chats` (any provider's added chats); each provider mounts its
 //! own routes (WhatsApp: `/whatsapp`), sharing [`ApiError`], [`authority`]
-//! and [`no_store`]. The OpenAPI tag keeps the routes' original module name,
-//! which the generated clients group by.
+//! and [`no_store`]. The OpenAPI tag is this module's path.
 
-use crate::domain::{models::*, ports::ChatProvider, service::ExternalChatService, timeline::*};
+use crate::domain::{models::*, service::ExternalChatService, timeline::*};
 use axum::extract::Query;
 use axum::{
     Json, Router,
@@ -28,16 +27,16 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 /// Capabilities supplied by DSS.
-pub struct ExternalChatRouterState<P, Eas, Auth> {
+pub struct ExternalChatRouterState<Eas, Auth> {
     /// Use cases.
-    pub service: Arc<ExternalChatService<P>>,
+    pub service: Arc<ExternalChatService>,
     /// Standard chat receipt provider.
     pub entity_access_service: Arc<Eas>,
     /// Standard authentication provider.
     pub authorization_state: MacroAuthorizationState<Auth>,
 }
 
-impl<P, Eas, Auth> Clone for ExternalChatRouterState<P, Eas, Auth> {
+impl<Eas, Auth> Clone for ExternalChatRouterState<Eas, Auth> {
     fn clone(&self) -> Self {
         Self {
             service: self.service.clone(),
@@ -47,16 +46,16 @@ impl<P, Eas, Auth> Clone for ExternalChatRouterState<P, Eas, Auth> {
     }
 }
 
-impl<P, Eas, Auth> FromRef<ExternalChatRouterState<P, Eas, Auth>> for Arc<Eas> {
-    fn from_ref(state: &ExternalChatRouterState<P, Eas, Auth>) -> Self {
+impl<Eas, Auth> FromRef<ExternalChatRouterState<Eas, Auth>> for Arc<Eas> {
+    fn from_ref(state: &ExternalChatRouterState<Eas, Auth>) -> Self {
         state.entity_access_service.clone()
     }
 }
 
-impl<P, Eas, Auth> FromRef<ExternalChatRouterState<P, Eas, Auth>>
+impl<Eas, Auth> FromRef<ExternalChatRouterState<Eas, Auth>>
     for MacroAuthorizationState<Auth>
 {
-    fn from_ref(state: &ExternalChatRouterState<P, Eas, Auth>) -> Self {
+    fn from_ref(state: &ExternalChatRouterState<Eas, Auth>) -> Self {
         state.authorization_state.clone()
     }
 }
@@ -72,7 +71,7 @@ impl From<rootcause::Report<ExternalChatError>> for ApiError {
                 | ExternalChatError::Fenced
                 | ExternalChatError::Internal
         ) {
-            tracing::error!(error = ?error, "WhatsApp linked request failed");
+            tracing::error!(error = ?error, "External chat request failed");
         }
         Self(error.current_context().clone())
     }
@@ -141,54 +140,53 @@ pub fn no_store<S: Clone + Send + Sync + 'static>(router: Router<S>) -> Router<S
 }
 
 /// Added chats of any provider, under `/external-chats`.
-pub fn external_chats_router<P, Eas, Auth, S>(
-    state: ExternalChatRouterState<P, Eas, Auth>,
+pub fn external_chats_router<Eas, Auth, S>(
+    state: ExternalChatRouterState<Eas, Auth>,
 ) -> Router<S>
 where
-    P: ChatProvider,
     Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
     S: Send + Sync + 'static,
 {
     no_store(
         Router::new()
-            .route("/", get(list::<P, Eas, Auth>).post(add::<P, Eas, Auth>))
+            .route("/", get(list::<Eas, Auth>).post(add::<Eas, Auth>))
             .route(
                 "/{chat_id}",
-                get(chat::<P, Eas, Auth>).delete(remove::<P, Eas, Auth>),
+                get(chat::<Eas, Auth>).delete(remove::<Eas, Auth>),
             )
-            .route("/{chat_id}/messages", get(messages::<P, Eas, Auth>))
+            .route("/{chat_id}/messages", get(messages::<Eas, Auth>))
             .route(
                 "/{chat_id}/messages/{message_id}",
-                get(message::<P, Eas, Auth>),
+                get(message::<Eas, Auth>),
             )
             .route(
                 "/{chat_id}/messages/attachments",
-                post(message_attachments::<P, Eas, Auth>),
+                post(message_attachments::<Eas, Auth>),
             )
-            .route("/{chat_id}/read", post(mark_read::<P, Eas, Auth>))
+            .route("/{chat_id}/read", post(mark_read::<Eas, Auth>))
             .route(
                 "/{chat_id}/permissions",
-                get(permissions::<P, Eas, Auth>).patch(update_permissions::<P, Eas, Auth>),
+                get(permissions::<Eas, Auth>).patch(update_permissions::<Eas, Auth>),
             )
             .route(
                 "/{chat_id}/sends",
-                get(open_sends::<P, Eas, Auth>).post(send::<P, Eas, Auth>),
+                get(open_sends::<Eas, Auth>).post(send::<Eas, Auth>),
             )
             .route(
                 "/{chat_id}/attachments",
-                post(upload::<P, Eas, Auth>)
+                post(upload::<Eas, Auth>)
                     .layer(DefaultBodyLimit::max(MEDIA_LIMIT_BYTES + 64 * 1024)),
             )
-            .route("/{chat_id}/delivery", post(delivery::<P, Eas, Auth>)),
+            .route("/{chat_id}/delivery", post(delivery::<Eas, Auth>)),
     )
     .with_state(state)
 }
 
 /// List external chats the caller can view, including without a provider account.
-#[utoipa::path(get, tag = "whatsapp_linked::inbound::router", path = "/external-chats", operation_id = "external_chats", responses((status = 200, body = Vec<ExternalChatSummary>)))]
-pub async fn list<P: ChatProvider, Eas, Auth: MacroAuthorizationService>(
-    State(state): State<ExternalChatRouterState<P, Eas, Auth>>,
+#[utoipa::path(get, tag = "external_chat::inbound::router", path = "/external-chats", operation_id = "external_chats", responses((status = 200, body = Vec<ExternalChatSummary>)))]
+pub async fn list<Eas, Auth: MacroAuthorizationService>(
+    State(state): State<ExternalChatRouterState<Eas, Auth>>,
     auth: MacroAuthorizationExtractor<Auth, UserOnly>,
 ) -> Result<Json<Vec<ExternalChatSummary>>, ApiError> {
     Ok(Json(
@@ -200,9 +198,9 @@ pub async fn list<P: ChatProvider, Eas, Auth: MacroAuthorizationService>(
 }
 
 /// Add one of the caller's provider chats as their own external chat.
-#[utoipa::path(post, tag = "whatsapp_linked::inbound::router", path = "/external-chats", operation_id = "external_chat_add", request_body = AddChat, responses((status = 200, body = AddedChat)))]
-pub async fn add<P: ChatProvider, Eas, Auth: MacroAuthorizationService>(
-    State(state): State<ExternalChatRouterState<P, Eas, Auth>>,
+#[utoipa::path(post, tag = "external_chat::inbound::router", path = "/external-chats", operation_id = "external_chat_add", request_body = AddChat, responses((status = 200, body = AddedChat)))]
+pub async fn add<Eas, Auth: MacroAuthorizationService>(
+    State(state): State<ExternalChatRouterState<Eas, Auth>>,
     auth: MacroAuthorizationExtractor<Auth, UserOnly>,
     Json(body): Json<AddChat>,
 ) -> Result<Json<AddedChat>, ApiError> {
@@ -218,9 +216,9 @@ pub async fn add<P: ChatProvider, Eas, Auth: MacroAuthorizationService>(
 }
 
 /// An external chat the caller can read.
-#[utoipa::path(get, tag = "whatsapp_linked::inbound::router", path = "/external-chats/{chat_id}", operation_id = "external_chat", params(("chat_id" = Uuid, Path)), responses((status = 200, body = ExternalChatDetail)))]
-pub async fn chat<P: ChatProvider, Eas: EntityAccessService, Auth: MacroAuthorizationService>(
-    State(state): State<ExternalChatRouterState<P, Eas, Auth>>,
+#[utoipa::path(get, tag = "external_chat::inbound::router", path = "/external-chats/{chat_id}", operation_id = "external_chat", params(("chat_id" = Uuid, Path)), responses((status = 200, body = ExternalChatDetail)))]
+pub async fn chat<Eas: EntityAccessService, Auth: MacroAuthorizationService>(
+    State(state): State<ExternalChatRouterState<Eas, Auth>>,
     access: ExternalChatAccessLevelExtractor<ViewAccessLevel, Eas, Auth>,
 ) -> Result<Json<ExternalChatDetail>, ApiError> {
     Ok(Json(
@@ -229,9 +227,9 @@ pub async fn chat<P: ChatProvider, Eas: EntityAccessService, Auth: MacroAuthoriz
 }
 
 /// Stop syncing the chat, locally. Owner only, in their own session.
-#[utoipa::path(delete, tag = "whatsapp_linked::inbound::router", path = "/external-chats/{chat_id}", operation_id = "external_chat_remove", params(("chat_id" = Uuid, Path)), responses((status = 204)))]
-pub async fn remove<P: ChatProvider, Eas: EntityAccessService, Auth: MacroAuthorizationService>(
-    State(state): State<ExternalChatRouterState<P, Eas, Auth>>,
+#[utoipa::path(delete, tag = "external_chat::inbound::router", path = "/external-chats/{chat_id}", operation_id = "external_chat_remove", params(("chat_id" = Uuid, Path)), responses((status = 204)))]
+pub async fn remove<Eas: EntityAccessService, Auth: MacroAuthorizationService>(
+    State(state): State<ExternalChatRouterState<Eas, Auth>>,
     auth: MacroAuthorizationExtractor<Auth, UserOnly>,
     access: ExternalChatAccessLevelExtractor<OwnerAccessLevel, Eas, Auth>,
 ) -> Result<StatusCode, ApiError> {
@@ -256,13 +254,12 @@ pub struct TimelineQuery {
 }
 
 /// Newest-first timeline through ordinary view access.
-#[utoipa::path(get, tag = "whatsapp_linked::inbound::router", path = "/external-chats/{chat_id}/messages", operation_id = "external_chat_messages", params(("chat_id" = Uuid, Path), TimelineQuery), responses((status = 200, body = ExternalChatMessages)))]
+#[utoipa::path(get, tag = "external_chat::inbound::router", path = "/external-chats/{chat_id}/messages", operation_id = "external_chat_messages", params(("chat_id" = Uuid, Path), TimelineQuery), responses((status = 200, body = ExternalChatMessages)))]
 pub async fn messages<
-    P: ChatProvider,
     Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
 >(
-    State(state): State<ExternalChatRouterState<P, Eas, Auth>>,
+    State(state): State<ExternalChatRouterState<Eas, Auth>>,
     access: ExternalChatAccessLevelExtractor<ViewAccessLevel, Eas, Auth>,
     Query(query): Query<TimelineQuery>,
 ) -> Result<Json<ExternalChatMessages>, ApiError> {
@@ -284,9 +281,9 @@ pub struct MessagePath {
 }
 
 /// One message of the timeline, as the timeline shows it.
-#[utoipa::path(get, tag = "whatsapp_linked::inbound::router", path = "/external-chats/{chat_id}/messages/{message_id}", operation_id = "external_chat_message", params(("chat_id" = Uuid, Path), ("message_id" = Uuid, Path)), responses((status = 200, body = ExternalChatMessage)))]
-pub async fn message<P: ChatProvider, Eas: EntityAccessService, Auth: MacroAuthorizationService>(
-    State(state): State<ExternalChatRouterState<P, Eas, Auth>>,
+#[utoipa::path(get, tag = "external_chat::inbound::router", path = "/external-chats/{chat_id}/messages/{message_id}", operation_id = "external_chat_message", params(("chat_id" = Uuid, Path), ("message_id" = Uuid, Path)), responses((status = 200, body = ExternalChatMessage)))]
+pub async fn message<Eas: EntityAccessService, Auth: MacroAuthorizationService>(
+    State(state): State<ExternalChatRouterState<Eas, Auth>>,
     access: ExternalChatAccessLevelExtractor<ViewAccessLevel, Eas, Auth>,
     Path(path): Path<MessagePath>,
 ) -> Result<Json<ExternalChatMessage>, ApiError> {
@@ -299,13 +296,12 @@ pub async fn message<P: ChatProvider, Eas: EntityAccessService, Auth: MacroAutho
 }
 
 /// Attachment states of messages, by message id (at most 100).
-#[utoipa::path(post, tag = "whatsapp_linked::inbound::router", path = "/external-chats/{chat_id}/messages/attachments", operation_id = "external_chat_message_attachments", params(("chat_id" = Uuid, Path)), request_body = Vec<Uuid>, responses((status = 200, body = Vec<MessageAttachments>)))]
+#[utoipa::path(post, tag = "external_chat::inbound::router", path = "/external-chats/{chat_id}/messages/attachments", operation_id = "external_chat_message_attachments", params(("chat_id" = Uuid, Path)), request_body = Vec<Uuid>, responses((status = 200, body = Vec<MessageAttachments>)))]
 pub async fn message_attachments<
-    P: ChatProvider,
     Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
 >(
-    State(state): State<ExternalChatRouterState<P, Eas, Auth>>,
+    State(state): State<ExternalChatRouterState<Eas, Auth>>,
     access: ExternalChatAccessLevelExtractor<ViewAccessLevel, Eas, Auth>,
     Json(ids): Json<Vec<Uuid>>,
 ) -> Result<Json<Vec<MessageAttachments>>, ApiError> {
@@ -318,13 +314,12 @@ pub async fn message_attachments<
 }
 
 /// Advance this viewer's read position.
-#[utoipa::path(post, tag = "whatsapp_linked::inbound::router", path = "/external-chats/{chat_id}/read", operation_id = "external_chat_read", params(("chat_id" = Uuid, Path)), request_body = MarkRead, responses((status = 204)))]
+#[utoipa::path(post, tag = "external_chat::inbound::router", path = "/external-chats/{chat_id}/read", operation_id = "external_chat_read", params(("chat_id" = Uuid, Path)), request_body = MarkRead, responses((status = 204)))]
 pub async fn mark_read<
-    P: ChatProvider,
     Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
 >(
-    State(state): State<ExternalChatRouterState<P, Eas, Auth>>,
+    State(state): State<ExternalChatRouterState<Eas, Auth>>,
     access: ExternalChatAccessLevelExtractor<ViewAccessLevel, Eas, Auth>,
     Json(body): Json<MarkRead>,
 ) -> Result<StatusCode, ApiError> {
@@ -336,13 +331,12 @@ pub async fn mark_read<
 }
 
 /// Generic Share dialog policy.
-#[utoipa::path(get, tag = "whatsapp_linked::inbound::router", path = "/external-chats/{chat_id}/permissions", operation_id = "external_chat_permissions", params(("chat_id" = Uuid, Path)), responses((status = 200, body = SharePermissionV2)))]
+#[utoipa::path(get, tag = "external_chat::inbound::router", path = "/external-chats/{chat_id}/permissions", operation_id = "external_chat_permissions", params(("chat_id" = Uuid, Path)), responses((status = 200, body = SharePermissionV2)))]
 pub async fn permissions<
-    P: ChatProvider,
     Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
 >(
-    State(state): State<ExternalChatRouterState<P, Eas, Auth>>,
+    State(state): State<ExternalChatRouterState<Eas, Auth>>,
     access: ExternalChatAccessLevelExtractor<ViewAccessLevel, Eas, Auth>,
 ) -> Result<Json<SharePermissionV2>, ApiError> {
     Ok(Json(
@@ -354,13 +348,12 @@ pub async fn permissions<
 }
 
 /// The owner, in their own session, updates link, team and channel sharing.
-#[utoipa::path(patch, tag = "whatsapp_linked::inbound::router", path = "/external-chats/{chat_id}/permissions", operation_id = "external_chat_update_permissions", params(("chat_id" = Uuid, Path)), request_body = UpdateSharePermissionRequestV2, responses((status = 204)))]
+#[utoipa::path(patch, tag = "external_chat::inbound::router", path = "/external-chats/{chat_id}/permissions", operation_id = "external_chat_update_permissions", params(("chat_id" = Uuid, Path)), request_body = UpdateSharePermissionRequestV2, responses((status = 204)))]
 pub async fn update_permissions<
-    P: ChatProvider,
     Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
 >(
-    State(state): State<ExternalChatRouterState<P, Eas, Auth>>,
+    State(state): State<ExternalChatRouterState<Eas, Auth>>,
     auth: MacroAuthorizationExtractor<Auth, UserOnly>,
     access: ExternalChatAccessLevelExtractor<OwnerAccessLevel, Eas, Auth>,
     Json(body): Json<UpdateSharePermissionRequestV2>,
@@ -377,13 +370,12 @@ pub async fn update_permissions<
 }
 
 /// Caller-owned pending, failed and uncertain sends.
-#[utoipa::path(get, tag = "whatsapp_linked::inbound::router", path = "/external-chats/{chat_id}/sends", operation_id = "external_chat_sends", params(("chat_id" = Uuid, Path)), responses((status = 200, body = Vec<SendProgress>)))]
+#[utoipa::path(get, tag = "external_chat::inbound::router", path = "/external-chats/{chat_id}/sends", operation_id = "external_chat_sends", params(("chat_id" = Uuid, Path)), responses((status = 200, body = Vec<SendProgress>)))]
 pub async fn open_sends<
-    P: ChatProvider,
     Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
 >(
-    State(state): State<ExternalChatRouterState<P, Eas, Auth>>,
+    State(state): State<ExternalChatRouterState<Eas, Auth>>,
     access: ExternalChatAccessLevelExtractor<ViewAccessLevel, Eas, Auth>,
 ) -> Result<Json<Vec<SendProgress>>, ApiError> {
     Ok(Json(
@@ -395,9 +387,9 @@ pub async fn open_sends<
 }
 
 /// Send to the chat from the caller's own provider account (one request per second per user).
-#[utoipa::path(post, tag = "whatsapp_linked::inbound::router", path = "/external-chats/{chat_id}/sends", operation_id = "external_chat_send", params(("chat_id" = Uuid, Path)), request_body = SendReply, responses((status = 200, body = SendProgress), (status = 429, description = "One send request per second per user; Retry-After: 1")))]
-pub async fn send<P: ChatProvider, Eas: EntityAccessService, Auth: MacroAuthorizationService>(
-    State(state): State<ExternalChatRouterState<P, Eas, Auth>>,
+#[utoipa::path(post, tag = "external_chat::inbound::router", path = "/external-chats/{chat_id}/sends", operation_id = "external_chat_send", params(("chat_id" = Uuid, Path)), request_body = SendReply, responses((status = 200, body = SendProgress), (status = 429, description = "One send request per second per user; Retry-After: 1")))]
+pub async fn send<Eas: EntityAccessService, Auth: MacroAuthorizationService>(
+    State(state): State<ExternalChatRouterState<Eas, Auth>>,
     auth: MacroAuthorizationExtractor<Auth, UserOnly>,
     access: ExternalChatAccessLevelExtractor<ViewAccessLevel, Eas, Auth>,
     Json(body): Json<SendReply>,
@@ -424,9 +416,9 @@ pub struct UploadRequest {
 }
 
 /// Stage one attachment for a later media send in this chat.
-#[utoipa::path(post, tag = "whatsapp_linked::inbound::router", path = "/external-chats/{chat_id}/attachments", operation_id = "external_chat_upload", params(("chat_id" = Uuid, Path)), request_body(content = UploadRequest, content_type = "multipart/form-data"), responses((status = 200, body = UploadedAttachment)))]
-pub async fn upload<P: ChatProvider, Eas: EntityAccessService, Auth: MacroAuthorizationService>(
-    State(state): State<ExternalChatRouterState<P, Eas, Auth>>,
+#[utoipa::path(post, tag = "external_chat::inbound::router", path = "/external-chats/{chat_id}/attachments", operation_id = "external_chat_upload", params(("chat_id" = Uuid, Path)), request_body(content = UploadRequest, content_type = "multipart/form-data"), responses((status = 200, body = UploadedAttachment)))]
+pub async fn upload<Eas: EntityAccessService, Auth: MacroAuthorizationService>(
+    State(state): State<ExternalChatRouterState<Eas, Auth>>,
     auth: MacroAuthorizationExtractor<Auth, UserOnly>,
     access: ExternalChatAccessLevelExtractor<ViewAccessLevel, Eas, Auth>,
     mut input: Multipart,
@@ -467,13 +459,12 @@ pub async fn upload<P: ChatProvider, Eas: EntityAccessService, Auth: MacroAuthor
 }
 
 /// The caller's send progress for intents or messages.
-#[utoipa::path(post, tag = "whatsapp_linked::inbound::router", path = "/external-chats/{chat_id}/delivery", operation_id = "external_chat_delivery", params(("chat_id" = Uuid, Path)), request_body = Vec<Uuid>, responses((status = 200, body = Vec<SendProgress>)))]
+#[utoipa::path(post, tag = "external_chat::inbound::router", path = "/external-chats/{chat_id}/delivery", operation_id = "external_chat_delivery", params(("chat_id" = Uuid, Path)), request_body = Vec<Uuid>, responses((status = 200, body = Vec<SendProgress>)))]
 pub async fn delivery<
-    P: ChatProvider,
     Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
 >(
-    State(state): State<ExternalChatRouterState<P, Eas, Auth>>,
+    State(state): State<ExternalChatRouterState<Eas, Auth>>,
     access: ExternalChatAccessLevelExtractor<ViewAccessLevel, Eas, Auth>,
     Json(ids): Json<Vec<Uuid>>,
 ) -> Result<Json<Vec<SendProgress>>, ApiError> {

@@ -13,7 +13,7 @@ use external_chat::domain::models::{
     AddChat, ChatRef, ExternalChatKind, ExternalChatProvider, ReplyContent, SendAuthority,
     SendReply,
 };
-use external_chat::domain::ports::ExternalChatResult;
+use external_chat::domain::ports::{ChatProviders, ExternalChatResult};
 use external_chat::domain::service::ExternalChatService;
 use external_chat::outbound::pg::PgExternalChatRepository;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
@@ -69,7 +69,7 @@ struct World {
     _fleet_slot: PgConnection,
     pool: PgPool,
     linked: WhatsAppService,
-    external: ExternalChatService<WhatsAppProvider>,
+    external: ExternalChatService,
     whatsapp: FakeWhatsApp,
     kms: SharedKms,
     alice: FakePhone,
@@ -88,7 +88,9 @@ impl World {
         let repository = Arc::new(PgWhatsAppRepository::new(pool.clone()));
         let linked = WhatsAppService::new(repository.clone());
         let external = ExternalChatService::new(
-            Arc::new(WhatsAppProvider::new(repository)),
+            ChatProviders {
+                whatsapp: Arc::new(WhatsAppProvider::new(repository)),
+            },
             Arc::new(PgExternalChatRepository::new(pool.clone())),
             Arc::new(Allow),
         );
@@ -904,14 +906,14 @@ async fn group_renames_and_removals_in_whatsapp_reach_macro_live(pool: PgPool) {
     // WhatsApp did not say who renamed it: a system line without an actor.
     let line = wait_for_rows(&world.pool, TIMEOUT, || async {
         sqlx::query!(
-            r#"SELECT rich->>'action' AS "action!", rich->>'value' AS value, (rich->>'byWhatsapp')::boolean AS "by_whatsapp!"
+            r#"SELECT rich->>'action' AS "action!", rich->>'value' AS value, (rich->>'byProvider')::boolean AS "by_provider!"
             FROM external_chat_message WHERE chat_id = $1 AND kind = 'system' AND message_id IS NOT NULL"#,
             binding.id
         )
         .fetch_optional(&world.pool)
         .await
         .unwrap()
-        .map(|row| (row.action, row.value, row.by_whatsapp))
+        .map(|row| (row.action, row.value, row.by_provider))
     })
     .await;
     assert_eq!(

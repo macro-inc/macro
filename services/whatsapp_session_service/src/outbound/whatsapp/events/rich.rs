@@ -227,7 +227,7 @@ fn line(action: SystemAction) -> SystemLine {
         participants: vec![],
         value: None,
         call: None,
-        by_whatsapp: false,
+        by_provider: false,
     }
 }
 

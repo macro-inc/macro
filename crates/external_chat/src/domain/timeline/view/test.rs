@@ -7,6 +7,9 @@ fn phone_number(id: &str) -> Option<String> {
         .map(|number| format!("+{number}"))
 }
 
+/// What a provider calls someone it can't name.
+const UNKNOWN_PERSON: &str = "Participant";
+
 fn person(name: &str, user: Option<&str>) -> ExternalChatPersonRef {
     ExternalChatPersonRef {
         name: name.to_owned(),
@@ -16,7 +19,7 @@ fn person(name: &str, user: Option<&str>) -> ExternalChatPersonRef {
 
 #[test]
 fn mentions_name_people_seen_in_the_group_else_their_number() {
-    let mut people = People::new(phone_number);
+    let mut people = People::new(phone_number, UNKNOWN_PERSON);
     people.learn(
         "15550001111@s.whatsapp.net",
         person("Ana", Some("macro|ana@example.com")),
@@ -83,7 +86,7 @@ fn a_poll_tallies_current_votes_per_option_and_marks_the_viewers() {
             user_id: None,
         },
     };
-    let mut people = People::default();
+    let mut people = People::new(|_| None, UNKNOWN_PERSON);
     people.name_person(Uuid::from_u128(10), "Ana".to_owned());
     people.name_person(Uuid::from_u128(11), "Ben".to_owned());
 
@@ -124,7 +127,7 @@ fn a_poll_tallies_current_votes_per_option_and_marks_the_viewers() {
 
 #[test]
 fn a_system_line_names_who_did_it_and_to_whom() {
-    let mut people = People::new(phone_number);
+    let mut people = People::new(phone_number, UNKNOWN_PERSON);
     people.learn("15550002222@s.whatsapp.net", person("Ben", None));
     let added = RichContent::System(SystemLine {
         action: SystemAction::ParticipantsAdded,
@@ -134,14 +137,14 @@ fn a_system_line_names_who_did_it_and_to_whom() {
         ],
         value: None,
         call: None,
-        by_whatsapp: false,
+        by_provider: false,
     });
-    let renamed_by_whatsapp = RichContent::System(SystemLine {
+    let renamed_by_provider = RichContent::System(SystemLine {
         action: SystemAction::SubjectChanged,
         participants: vec![],
         value: Some("Launch".to_owned()),
         call: None,
-        by_whatsapp: true,
+        by_provider: true,
     });
     let call = RichContent::System(SystemLine {
         action: SystemAction::Call,
@@ -152,7 +155,7 @@ fn a_system_line_names_who_did_it_and_to_whom() {
             outcome: CallOutcome::Missed,
             duration_seconds: None,
         }),
-        by_whatsapp: false,
+        by_provider: false,
     });
     let ana = person("Ana", None);
 
@@ -167,7 +170,7 @@ fn a_system_line_names_who_did_it_and_to_whom() {
         }))
     );
     assert_eq!(
-        rich_view(renamed_by_whatsapp, &ana, &[], "viewer", &people),
+        rich_view(renamed_by_provider, &ana, &[], "viewer", &people),
         Some(ExternalChatRichContent::System(ExternalChatSystemLine {
             action: SystemAction::SubjectChanged,
             actor: None,
@@ -202,7 +205,7 @@ fn a_poll_vote_is_never_shown_on_its_own() {
             &person("Ana", None),
             &[],
             "viewer",
-            &People::default()
+            &People::new(|_| None, UNKNOWN_PERSON)
         ),
         None
     );
@@ -218,12 +221,12 @@ fn a_stored_group_created_line_holding_creation_metadata_names_no_subject() {
                 .to_owned(),
         ),
         call: None,
-        by_whatsapp: false,
+        by_provider: false,
     });
     let ana = person("Ana", Some("macro|ana@example.com"));
 
     assert_eq!(
-        rich_view(created, &ana, &[], "viewer", &People::default()),
+        rich_view(created, &ana, &[], "viewer", &People::new(|_| None, UNKNOWN_PERSON)),
         Some(ExternalChatRichContent::System(ExternalChatSystemLine {
             action: SystemAction::GroupCreated,
             actor: Some(ana.clone()),

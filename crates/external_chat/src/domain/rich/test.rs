@@ -36,3 +36,10 @@ fn a_group_created_line_names_the_subject_never_the_creation_metadata() {
     assert_eq!(created_subject("2026").as_deref(), Some("2026"));
     assert_eq!(created_subject("  "), None);
 }
+
+#[test]
+fn a_system_line_stored_before_the_rename_still_reads_who_did_it() {
+    let stored = r#"{"action":"subject_changed","participants":[],"value":"Launch","byWhatsapp":true}"#;
+    let line: SystemLine = serde_json::from_str(stored).unwrap();
+    assert!(line.by_provider);
+}

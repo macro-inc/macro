@@ -1,7 +1,7 @@
 //! What senders are called in the timeline and members list: their WhatsApp
 //! or contact name, else their phone number, else a generic name.
 use super::*;
-use external_chat::domain::timeline::view::UNKNOWN_PERSON;
+use crate::domain::people::UNKNOWN_PERSON;
 
 const CUSTOMER_LID: &str = "987654321@lid";
 

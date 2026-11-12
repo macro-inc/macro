@@ -1,5 +1,5 @@
-//! External chats (WhatsApp is the one provider): composition of the
-//! `external_chat` crate, with `whatsapp_linked` as its provider, and DSS's
+//! External chats: composition of the `external_chat` crate, with its
+//! providers (`whatsapp_linked`) in one `ChatProviders`, and DSS's
 //! entity access, notification and static file clients; the notification
 //! outbox worker, and the `external_chat_changed` pushes to open pages. The
 //! session service runs the WhatsApp sockets; it reaches DSS only through
@@ -15,8 +15,8 @@ use external_chat::{
         media::MediaService,
         models::ExternalChatError,
         ports::{
-            AudienceRepository, ChatEffect, ChatPublisher, ExternalChatResult, FileImport,
-            FileStore, Origin, SendRateLimiter,
+            AudienceRepository, ChatEffect, ChatProviders, ChatPublisher, ExternalChatResult,
+            FileImport, FileStore, Origin, SendRateLimiter,
         },
         service::ExternalChatService,
     },
@@ -43,7 +43,7 @@ use whatsapp_linked::{
 #[derive(Clone)]
 pub(crate) struct State {
     /// Added chats of every provider.
-    pub chats: ExternalChatRouterState<WhatsAppProvider, EntityAccessService, AuthorizationService>,
+    pub chats: ExternalChatRouterState<EntityAccessService, AuthorizationService>,
     /// The caller's WhatsApp account, pairing and chat list.
     pub whatsapp: WhatsAppRouterState<AuthorizationService>,
 }
@@ -83,8 +83,11 @@ pub(crate) fn build(dependencies: Dependencies) -> State {
     });
     let media = MediaService::new(repository.clone(), Arc::new(StaticFiles(static_files)));
     let whatsapp = Arc::new(WhatsAppService::new(whatsapp_repository.clone()));
+    let providers = ChatProviders {
+        whatsapp: Arc::new(WhatsAppProvider::new(whatsapp_repository)),
+    };
     let service = ExternalChatService::new(
-        Arc::new(WhatsAppProvider::new(whatsapp_repository)),
+        providers.clone(),
         repository.clone(),
         Arc::new(SendRequestLimiter(rate_limit::RateLimitServiceImpl {
             repo: rate_limit::RedisRateLimitAdapter { redis },
@@ -94,7 +97,7 @@ pub(crate) fn build(dependencies: Dependencies) -> State {
         ChangePusher {
             pool: pool.clone(),
             audience: repository.clone(),
-            whatsapp: whatsapp.clone(),
+            providers,
             access: access.clone(),
             gateway: connection_gateway,
         },
@@ -150,7 +153,7 @@ async fn publish(
                     signals::Signal::parse(notification.payload()).and_then(|signal| signal.traceparent)
                 }
                 Err(error) => {
-                    tracing::warn!(error = ?error, "WhatsApp notification/import listener reconnecting");
+                    tracing::warn!(error = ?error, "External chat notification/import listener reconnecting");
                     None
                 }
             }
@@ -178,7 +181,7 @@ async fn listen(
         match listening.await {
             Ok(listener) => return Some(listener),
             Err(error) => {
-                tracing::warn!(error = %error, channels = ?channels, "WhatsApp listener will retry");
+                tracing::warn!(error = %error, channels = ?channels, "External chat listener will retry");
                 tokio::select! {
                     _ = cancellation.cancelled() => return None,
                     _ = tokio::time::sleep(Duration::from_secs(5)) => {}
@@ -198,7 +201,7 @@ async fn drain(effects: &EffectsService, media: &MediaService, whatsapp: &WhatsA
             Err(error) => {
                 tracing::warn!(
                     code = error.current_context().code(),
-                    "WhatsApp attachment import will retry"
+                    "External chat attachment import will retry"
                 );
                 break;
             }
@@ -211,7 +214,7 @@ async fn drain(effects: &EffectsService, media: &MediaService, whatsapp: &WhatsA
             Err(error) => {
                 tracing::warn!(
                     code = error.current_context().code(),
-                    "Deleting WhatsApp attachment files will retry"
+                    "Deleting external chat attachment files will retry"
                 );
                 break;
             }
@@ -236,7 +239,7 @@ async fn drain(effects: &EffectsService, media: &MediaService, whatsapp: &WhatsA
             Err(error) => {
                 tracing::warn!(
                     code = error.current_context().code(),
-                    "WhatsApp notification/import will retry"
+                    "External chat notifications will retry"
                 );
                 break;
             }
@@ -253,7 +256,7 @@ const CHANGED_MESSAGE: &str = "external_chat_changed";
 struct ChangePusher {
     pool: PgPool,
     audience: Arc<PgExternalChatRepository>,
-    whatsapp: Arc<WhatsAppService>,
+    providers: ChatProviders,
     access: Arc<EntityAccessService>,
     gateway: Arc<ConnectionGatewayClient>,
 }
@@ -262,8 +265,12 @@ impl ChangePusher {
     /// Users who see this change.
     async fn recipients(&self, change: Change) -> ExternalChatResult<Vec<String>> {
         match change {
-            Change::Chats { account_id } => Ok(self
-                .whatsapp
+            Change::Chats {
+                provider,
+                account_id,
+            } => Ok(self
+                .providers
+                .get(provider)
                 .account_owner(account_id)
                 .await?
                 .into_iter()
@@ -290,13 +297,17 @@ impl ChangePusher {
         name = "external_chat.changed.push",
         skip_all,
         err,
-        fields(scope, chat_id, account_id, recipients)
+        fields(scope, provider, chat_id, account_id, recipients)
     )]
     async fn push(&self, change: Change) -> ExternalChatResult<()> {
         let span = tracing::Span::current();
         let message = match change {
-            Change::Chats { account_id } => {
+            Change::Chats {
+                provider,
+                account_id,
+            } => {
                 span.record("scope", "chats");
+                span.record("provider", provider.as_ref());
                 span.record("account_id", tracing::field::display(account_id));
                 serde_json::json!({ "scope": "chats" })
             }
@@ -340,7 +351,7 @@ async fn push_changes(pusher: ChangePusher, cancellation: CancellationToken) {
         let mut batch = match first {
             Ok(notification) => vec![notification],
             Err(error) => {
-                tracing::warn!(error = ?error, "WhatsApp change listener reconnecting");
+                tracing::warn!(error = ?error, "External chat change listener reconnecting");
                 continue;
             }
         };
@@ -350,7 +361,7 @@ async fn push_changes(pusher: ChangePusher, cancellation: CancellationToken) {
         let mut seen = HashSet::new();
         for notification in batch {
             let Some(signal) = ChangeSignal::parse(notification.payload()) else {
-                tracing::warn!("Ignoring a malformed WhatsApp change signal");
+                tracing::warn!("Ignoring a malformed external chat change signal");
                 continue;
             };
             if !seen.insert(signal.change) {
@@ -484,7 +495,7 @@ struct SendRequestLimiter<R>(R);
 impl<R: rate_limit::RateLimitService> SendRateLimiter for SendRequestLimiter<R> {
     #[tracing::instrument(name = "external_chat.send_rate_limit", skip_all, err)]
     async fn check(&self, user: &MacroUserIdStr<'_>) -> ExternalChatResult<()> {
-        let key = rate_limit::RateLimitKey::builder(&"whatsapp-linked-send")
+        let key = rate_limit::RateLimitKey::builder(&"external-chat-send")
             .append(&user.as_ref())
             .finish();
         let result = self
