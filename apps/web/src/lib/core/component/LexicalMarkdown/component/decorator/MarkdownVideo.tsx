@@ -53,6 +53,7 @@ export type MarkdownVideoProps = Omit<
   VideoDecoratorProps,
   | 'srcType'
   | 'id'
+  | 'url'
   | 'width'
   | 'height'
   | 'constrainedWidth'
@@ -60,6 +61,7 @@ export type MarkdownVideoProps = Omit<
 > & {
   srcType?: string | null;
   id?: string | null;
+  url?: string | null;
   width?: number | null;
   height?: number | null;
   constrainedWidth?: number | null;
@@ -81,7 +83,9 @@ export function MarkdownVideo(props: MarkdownVideoProps) {
     props.width || 0,
     props.height || 0,
   ]);
-  const [videoUrl, setVideoUrl] = createSignal('');
+  const [videoUrl, setVideoUrl] = createSignal<string | null | undefined>('');
+  // Solid removes a null or undefined src alike, as Source's null url does.
+  const videoSrc = () => videoUrl() ?? undefined;
   const [state, setState] = createSignal<VideoState>('loading');
   const [videoError, setVideoError] = createSignal<VideoError | undefined>();
 
@@ -255,7 +259,7 @@ export function MarkdownVideo(props: MarkdownVideoProps) {
           )}
           draggable={true}
           ref={videoRef}
-          src={videoUrl()}
+          src={videoSrc()}
           controls={state() === 'ok'}
           style={{
             width: `${videoDims()[0] ? videoDims()[0] * scale() : 'auto'}px`,
@@ -305,7 +309,8 @@ export function MarkdownVideo(props: MarkdownVideoProps) {
             newTab={
               state() === 'ok'
                 ? () => {
-                    window.open(videoUrl(), '_blank');
+                    // The ok state needs a loaded src, so the url is text here.
+                    window.open(videoSrc(), '_blank');
                   }
                 : undefined
             }
@@ -329,7 +334,7 @@ export function MarkdownVideo(props: MarkdownVideoProps) {
               crossorigin="anonymous"
               class="max-w-full max-h-[80vh] size-auto object-contain"
               controls
-              src={videoUrl()}
+              src={videoSrc()}
             />
           </Dialog.Content>
         </div>

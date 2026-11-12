@@ -46,9 +46,14 @@ export type VideoUiKeepsNullWidth = Assert<
 export type VideoUiKeepsNullHeight = Assert<
   null extends MarkdownVideoProps['height'] ? true : false
 >;
-// Known gap blocking the native switch, not a Source behaviour.
-export type VideoUiUrlRemainsText = Assert<
-  MarkdownVideoProps['url'] extends string ? true : false
+export type VideoUiKeepsNullUrl = Assert<
+  null extends MarkdownVideoProps['url'] ? true : false
+>;
+export type VideoUiKeepsMissingUrl = Assert<
+  undefined extends MarkdownVideoProps['url'] ? true : false
+>;
+export type PublicVideoUrlRemainsText = Assert<
+  null extends VideoDecoratorProps['url'] ? false : true
 >;
 export type VideoUiControlsRemainFlag = Assert<
   MarkdownVideoProps['controls'] extends boolean ? true : false

@@ -34,7 +34,7 @@ export function createNativeVideoDecoratorViews(
       if (
         (srcType != null && typeof srcType !== 'string') ||
         (id != null && typeof id !== 'string') ||
-        typeof url !== 'string' ||
+        (url != null && typeof url !== 'string') ||
         typeof controls !== 'boolean' ||
         (width != null && typeof width !== 'number') ||
         (height != null && typeof height !== 'number') ||

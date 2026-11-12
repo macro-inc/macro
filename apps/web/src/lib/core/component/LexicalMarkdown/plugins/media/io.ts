@@ -25,13 +25,17 @@ export function validateMediaFile(
 /**
  * Resolve local, public, static-file and document-service media sources.
  * Stored media can carry a null or omitted source type and id; the id reaches
- * its endpoints by interpolation, as it always did.
+ * its endpoints by interpolation, as it always did. A local or public source
+ * resolves to its stored url as it is, so a stored video url comes back null
+ * or omitted when it was stored so.
  */
-export async function getMediaUrl(src: {
+export async function getMediaUrl<Url extends string | null | undefined>(src: {
   type: string | null | undefined;
   id: string | null | undefined;
-  url: string;
-}): Promise<Result<string, ResultError<FetchError | 'INVALID_DOCUMENT'>[]>> {
+  url: Url;
+}): Promise<
+  Result<string | Url, ResultError<FetchError | 'INVALID_DOCUMENT'>[]>
+> {
   if (src.type === 'local' || src.type === 'url') return ok(src.url);
   if (src.type === 'sfs') {
     const url = staticFileIdEndpoint(`${src.id}`);

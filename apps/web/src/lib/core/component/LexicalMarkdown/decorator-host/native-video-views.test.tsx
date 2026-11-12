@@ -204,17 +204,31 @@ test('the stored model applies Source import defaults to controls and scale', ()
   }
 });
 
-// Known gap blocking the native switch: a null or missing video url is refused
-// here because the component types it as text. This keeps that boundary; it is
-// not evidence of what Source does with the same stored data.
-test('a video without a text url is refused at the projector boundary (known gap)', () => {
-  for (const video of [
+// Source VideoNode.importJSON keeps a stored url as it is (MediaNode setUrl),
+// and MarkdownVideo renders a null or omitted url as an unloaded video.
+test('a stored null or missing video url reaches the component unchanged', () => {
+  const mounted = mount([
     { srcType: 'url', url: null, scale: 1 },
     { srcType: 'dss', id: 'd', scale: 1 },
-  ]) {
-    expect(() => mount([video]).close()).toThrow(
-      'Invalid native video decorator payload'
-    );
+  ]);
+  try {
+    expect(
+      mounted.received.map((props) => ({
+        srcType: props.srcType,
+        id: props.id,
+        hasUrl: Object.hasOwn(props, 'url'),
+        url: props.url,
+      }))
+    ).toStrictEqual([
+      { srcType: 'url', id: undefined, hasUrl: true, url: null },
+      { srcType: 'dss', id: 'd', hasUrl: true, url: undefined },
+    ]);
+    expect(
+      mounted.fixture.root.querySelectorAll('[data-recorded-video]')
+    ).toHaveLength(2);
+    expect(mounted.fixture.root.textContent).toContain('sibling stays');
+  } finally {
+    mounted.close();
   }
 });
 
