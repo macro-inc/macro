@@ -198,7 +198,7 @@ describe('onboarding flow', () => {
         .events()
         .filter((e) => e.event === 'onboarding_v4_step')
         .map((e) => e.data)
-    ).toContainEqual({ step: 'personal', index: 4, state: 'skipped' });
+    ).toContainEqual({ step: 'personal', index: 5, state: 'skipped' });
   });
 
   it('skips the personal account when the work account was skipped', async () => {

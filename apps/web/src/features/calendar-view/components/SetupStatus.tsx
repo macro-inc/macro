@@ -2,6 +2,7 @@ import { useCalendarPager } from '@app/features/calendar/components/CalendarPage
 import { isCalendarRangeSupported } from '@app/features/calendar/utils/calendar-supported-range';
 import { useUserId } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
+import { isExternalEmailLink } from '@core/email-link/consent';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
 import { useEmailLinksQuery } from '@queries/email/link';
@@ -57,9 +58,9 @@ export function SetupStatus() {
   // calendar settings, so setup counts and acts on the viewer's own alone.
   const ownLinks = () =>
     linksQuery.isSuccess
-      ? (linksQuery.data?.links ?? []).filter(
-          (link) => link.macro_id === userId()
-        )
+      ? (linksQuery.data?.links ?? [])
+          .filter(isExternalEmailLink)
+          .filter((link) => link.macro_id === userId())
       : [];
 
   const hasEvents = () =>

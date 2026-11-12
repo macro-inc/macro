@@ -105,6 +105,15 @@ describe('toCalendarAccounts', () => {
     ]);
   });
 
+  it('keeps first-party Rox links out of OAuth calendar actions', () => {
+    expect(
+      toCalendarAccounts(
+        [link('rox', { provider: 'ROX', is_primary: true })],
+        'macro|self'
+      )
+    ).toEqual([]);
+  });
+
   it('is empty when the user id is not yet known', () => {
     expect(toCalendarAccounts([link('a')], undefined)).toEqual([]);
   });

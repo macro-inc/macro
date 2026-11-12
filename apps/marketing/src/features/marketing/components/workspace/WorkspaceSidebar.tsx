@@ -364,7 +364,7 @@ function WorkspaceSidebarOther(props: {
                         active={w.selected() === session.id}
                         onClick={() => {
                           w.setAgentMode(
-                            session.runtime === 'Macro' ? 'work' : 'code'
+                            session.runtime === 'Rox' ? 'work' : 'code'
                           );
                           props.navigate('agents', session.id);
                         }}

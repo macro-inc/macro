@@ -18,12 +18,14 @@ import {
 } from '@core/email-link';
 import {
   calendarConsentScopes,
+  isExternalEmailLink,
   reconnectScopes,
 } from '@core/email-link/consent';
 import { OutlookBetaBadge } from '@core/email-link/OutlookBetaBadge';
 import type { EmailProvider } from '@core/email-link/ProviderDialog';
 import { fireAndForget } from '@core/util/fireAndForget';
 import GmailIcon from '@icon/gmail-color.svg';
+import RoxLogoIcon from '@icon/macro-logo.svg';
 import OutlookIcon from '@icon/outlook-color.svg';
 import ArrowsClockwiseIcon from '@icon/system/regular/arrows-clockwise.svg?component-solid';
 import CalendarSlashIcon from '@icon/system/regular/calendar-slash.svg?component-solid';
@@ -178,7 +180,7 @@ export function EmailCard(props: { class?: string } = {}) {
                   fireAndForget(
                     startAddInbox({
                       scopes: reconnectScopes(primary()),
-                      provider: primary().provider,
+                      provider: externalEmailProvider(primary()),
                       reconnectLinkId: primary().id,
                       emailAddress: primary().email_address,
                     }),
@@ -189,7 +191,7 @@ export function EmailCard(props: { class?: string } = {}) {
                   fireAndForget(
                     startAddInbox({
                       scopes: calendarConsentScopes(primary()),
-                      provider: primary().provider,
+                      provider: externalEmailProvider(primary()),
                       reconnectLinkId: primary().id,
                       emailAddress: primary().email_address,
                     }),
@@ -230,7 +232,7 @@ export function EmailCard(props: { class?: string } = {}) {
                   fireAndForget(
                     startAddInbox({
                       scopes: reconnectScopes(link),
-                      provider: link.provider,
+                      provider: externalEmailProvider(link),
                       reconnectLinkId: link.id,
                       emailAddress: link.email_address,
                     }),
@@ -241,7 +243,7 @@ export function EmailCard(props: { class?: string } = {}) {
                   fireAndForget(
                     startAddInbox({
                       scopes: calendarConsentScopes(link),
-                      provider: link.provider,
+                      provider: externalEmailProvider(link),
                       reconnectLinkId: link.id,
                       emailAddress: link.email_address,
                     }),
@@ -456,15 +458,24 @@ function DisabledPrimaryRow(props: { email: string; onEnable: () => void }) {
   );
 }
 
+function externalEmailProvider(link: EmailLink): EmailProvider | undefined {
+  return isExternalEmailLink(link) ? link.provider : undefined;
+}
+
 function ProviderIcon(props: { provider: EmailLink['provider'] }) {
   return (
     <span
       aria-hidden="true"
       class="flex size-9 shrink-0 items-center justify-center [&_svg]:size-6"
     >
-      <Show when={props.provider === 'OUTLOOK'} fallback={<GmailIcon />}>
-        <OutlookIcon />
-      </Show>
+      <Switch fallback={<GmailIcon />}>
+        <Match when={props.provider === 'OUTLOOK'}>
+          <OutlookIcon />
+        </Match>
+        <Match when={props.provider === 'ROX'}>
+          <RoxLogoIcon />
+        </Match>
+      </Switch>
     </span>
   );
 }
@@ -497,15 +508,17 @@ function InboxRow(props: {
               <Chip label="Shared" />
             </Show>
           </div>
-          <Show
-            when={props.link.provider === 'OUTLOOK'}
-            fallback={<span class="text-xs text-ink-muted">Gmail</span>}
-          >
-            <span class="flex items-center gap-2 text-xs text-ink-muted">
-              Outlook / Microsoft 365
-              <OutlookBetaBadge />
-            </span>
-          </Show>
+          <Switch fallback={<span class="text-xs text-ink-muted">Gmail</span>}>
+            <Match when={props.link.provider === 'OUTLOOK'}>
+              <span class="flex items-center gap-2 text-xs text-ink-muted">
+                Outlook / Microsoft 365
+                <OutlookBetaBadge />
+              </span>
+            </Match>
+            <Match when={props.link.provider === 'ROX'}>
+              <span class="text-xs text-ink-muted">Rox</span>
+            </Match>
+          </Switch>
           <Show when={ENABLE_INBOX_SYNC_STATUS}>
             <Switch
               fallback={
@@ -538,7 +551,7 @@ function InboxRow(props: {
           </Show>
         </div>
         <div class="flex max-w-full flex-wrap items-center gap-2 shrink-0">
-          <Show when={props.link.needs_reauth}>
+          <Show when={props.link.provider !== 'ROX' && props.link.needs_reauth}>
             <Button
               variant="primary"
               size="md"
@@ -551,7 +564,11 @@ function InboxRow(props: {
           {/* Explicitly enabling calendar also restores mailbox access when
               the Google grant has expired. */}
           <Show
-            when={calendarUiEnabled() && props.link.needs_calendar_permission}
+            when={
+              calendarUiEnabled() &&
+              props.link.provider !== 'ROX' &&
+              props.link.needs_calendar_permission
+            }
           >
             <Button
               variant="secondary"

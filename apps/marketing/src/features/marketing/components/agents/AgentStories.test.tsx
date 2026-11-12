@@ -257,7 +257,9 @@ it('shows both collaborators’ edits and preserves a visitor’s later writing'
   visible();
   vi.advanceTimersByTime(3900);
   const body = view.getByRole('textbox', { name: 'Document body' });
-  expect(body.textContent).toContain('Teo verifies sign-in before the pilot.');
+  expect(body.textContent).toContain(
+    'Teo verifies sign-in before the Friday pilot can start.'
+  );
   expect(body.textContent).toContain(
     'Marcus will send the names of the 10 pilot participants today.'
   );

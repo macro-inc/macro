@@ -1,5 +1,9 @@
 import { useUserId } from '@core/context/user';
-import { calendarConsentScopes } from '@core/email-link/consent';
+import {
+  calendarConsentScopes,
+  isExternalEmailLink,
+} from '@core/email-link/consent';
+import type { EmailProvider } from '@core/email-link/ProviderDialog';
 import { useEmailLinksQuery } from '@queries/email/link';
 import type { ConsentScopes } from '@service-auth/client';
 import type { Link as EmailLink } from '@service-email/generated/schemas';
@@ -11,7 +15,7 @@ type CalendarAccountAction = 'enable' | 'reconnect' | 'turnOff';
 /** A viewer-owned inbox rendered as a manageable calendar account. */
 export interface CalendarAccount {
   linkId: string;
-  provider: EmailLink['provider'];
+  provider: EmailProvider;
   emailAddress: string;
   action: CalendarAccountAction;
   consentScopes: ConsentScopes;
@@ -35,6 +39,7 @@ export function toCalendarAccounts(
   userId: string | undefined
 ): CalendarAccount[] {
   return links
+    .filter(isExternalEmailLink)
     .filter((link) => link.macro_id === userId)
     .sort((a, b) => Number(b.is_primary) - Number(a.is_primary))
     .map((link) => ({

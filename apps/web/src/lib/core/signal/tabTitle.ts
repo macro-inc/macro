@@ -1,3 +1,4 @@
+import { displayName } from '@core/constant/brand';
 import { DEV_MODE_ENV, LOCAL_ONLY } from '@core/constant/featureFlags';
 import { createSignal } from 'solid-js';
 
@@ -15,6 +16,6 @@ function getEnvPrefix(): string {
 const ENV_PREFIX = getEnvPrefix();
 
 export function formatTabTitle(title: string | undefined) {
-  if (title) return `${ENV_PREFIX}Macro - ${title}`;
-  return `${ENV_PREFIX}Macro`;
+  if (title) return `${ENV_PREFIX}${displayName} - ${title}`;
+  return `${ENV_PREFIX}${displayName}`;
 }
