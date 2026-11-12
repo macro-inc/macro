@@ -1,4 +1,4 @@
-import { ICON_SECTIONS } from './catalog.generated';
+import { ICON_SECTIONS } from '@macro-inc/entity-icons';
 
 export { ICON_SECTIONS };
 

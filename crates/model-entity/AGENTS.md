@@ -17,10 +17,10 @@ Shared entity identity and presentation vocabulary, without persistence or autho
 
 ## Recipes
 
-- Add SVGs only to `apps/web/src/components/icon/entity/`, regenerate with `bun tooling/icons/generate-entity-icons.ts`, and add picker names/nouns to `tooling/icons/entity-icon-sections.json`.
+- Add SVGs only to `packages/entity-icons/svg/`, update picker names/nouns in `packages/entity-icons/sections.json`, and regenerate with `bun tooling/icons/generate-entity-icons.ts`.
 - Deploy new server-allowed names before or with the web picker; the UI icon folder does not define stored names.
-- Redraw under existing names, retire by removing section entries, or alias old names in `tooling/icons/entity-icon-aliases.json`; never delete permanent names without a data migration.
-- Preserve the append-only `tooling/icons/entity-icon-names.json`; generation rejects missing names and identical geometry. See `docs/design/entity-appearance.md` for catalog maintenance.
+- Redraw under existing names, retire by removing section entries, or alias old names in `packages/entity-icons/aliases.json`; never delete permanent names without a data migration.
+- Preserve the append-only `packages/entity-icons/names.json`; generation checks its full history and the former manifest location. See `docs/design/entity-appearance.md` for catalog maintenance.
 - Validate emoji against the Unicode emoji lookup; never infer valid emoji from a Unicode block range.
 
 ## Checks

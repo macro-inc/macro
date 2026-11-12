@@ -1,12 +1,13 @@
+import { ENTITY_ICON_ALIASES } from '@macro-inc/entity-icons';
 import type { Component, JSX } from 'solid-js';
 import { children, lazy, Match, Suspense, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import type { EntityAppearance } from '../core/appearance';
-import { ENTITY_ICON_ALIASES } from '../core/catalog.generated';
 
+// Vite globs require a filesystem path rather than a package export.
 const GLYPH_MODULES = import.meta.glob<
   Component<JSX.SvgSVGAttributes<SVGSVGElement>>
->('/src/components/icon/entity/*.svg', { import: 'default' });
+>('../../../../../../packages/entity-icons/svg/*.svg', { import: 'default' });
 const GLYPHS = new Map(
   Object.entries(GLYPH_MODULES).map(([path, load]) => [
     path.split('/').at(-1)?.replace('.svg', ''),

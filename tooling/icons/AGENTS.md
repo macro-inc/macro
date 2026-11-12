@@ -9,11 +9,11 @@ The outputs serve frontend rendering and backend validation, not navigation icon
 
 - `generate-entity-icons.ts`: source/output path constants, validation, and generation.
 - `generate-entity-icons.test.ts`: permanence, aliases, sections, and duplicate-geometry regression coverage.
-- `entity-icon-sections.json`: picker order and display nouns.
+- `packages/entity-icons/AGENTS.md`: artwork, permanent names, aliases, and picker sections.
 
 ## Scope
 
-- Owns: permanent names, aliases, section metadata, and generated catalog validation.
+- Owns: generation and validation of the catalog in `packages/entity-icons/`.
 - Not here: picker state or rendering; see `apps/web/src/features/entity-appearance/AGENTS.md`.
 
 ## Recipes
@@ -33,5 +33,5 @@ Run from the repository root:
 ## Gotchas
 
 - Keep Git history paths repository-relative; filesystem access resolves the same constants against the repository root.
-- Preserve all committed names across every merge parent; use a full clone for permanence checks.
+- Preserve all committed names across every merge parent and both manifest locations; use a full clone for permanence checks.
 - Edit source SVGs and metadata, never generated catalogs or label files.

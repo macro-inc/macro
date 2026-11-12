@@ -12,7 +12,7 @@ snippets, task projects (initiatives), forms, and databases.
 - `components/appearance-glyph.tsx`: presentation without data fetching.
 - `primitives/create-appearance-editor.ts`: immediate picks with guarded async settlement.
 - `primitives/create-recent-icons.ts`: account-scoped recent picks through `makePersistedState` and schema-validated storage.
-- `core/catalog.ts`: picker projections of the dedicated `components/icon/entity/` SVG catalog; curate names and nouns in `tooling/icons/entity-icon-sections.json`.
+- `core/catalog.ts`: picker projections of `@macro-inc/entity-icons`; curate names and nouns in `packages/entity-icons/sections.json`.
 - `core/picker-grid.ts`: row projection and keyboard traversal independent of the virtual viewport.
 - `queries/appearance.ts`: domain writes and cache reconciliation.
 - `queries/appearance-readers.ts`: one typed entity adapter table for API routing, cancellation keys, and cache patches.

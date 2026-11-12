@@ -4,7 +4,7 @@ import { expect, it, vi } from 'vitest';
 import type { EntityAppearance } from '../core/appearance';
 import { AppearanceGlyph } from './appearance-glyph';
 
-vi.mock('../core/catalog.generated', () => ({
+vi.mock('@macro-inc/entity-icons', () => ({
   ENTITY_ICON_ALIASES: { 'former-idea': 'lightbulb' },
 }));
 

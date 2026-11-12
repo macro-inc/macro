@@ -41,26 +41,28 @@ retain valid colors.
 
 ## Icon catalog maintenance
 
-Entity artwork lives only in `apps/web/src/components/icon/entity/`, separate
+Entity artwork lives only in `packages/entity-icons/svg/`, separate
 from interface controls. The initial catalog contains 266 original drawings;
 its approved SVG bytes are preserved, including code-file drawings. The initial
 unreleased allowlist reset replaces the previous UI-folder-derived catalog.
 
-`tooling/icons/entity-icon-sections.json` owns picker order, section labels, and
+`packages/entity-icons/sections.json` owns picker order, section labels, and
 icon nouns. Tooltips show those nouns; search matches nouns and stored names.
-`tooling/icons/generate-entity-icons.ts` produces the Rust allowlist, web catalog,
-and English labels. `tooling/icons/entity-icon-names.json` records permanent
-names and grows when new drawings or aliases are added.
+`tooling/icons/generate-entity-icons.ts` produces the Rust allowlist, the package's
+framework-independent `catalog.generated.ts`, and English labels in the web app.
+`packages/entity-icons/names.json` records permanent names and grows when new
+drawings or aliases are added. The package exports metadata and raw SVG assets;
+Solid rendering, lazy loading, picker state, and translations remain in `apps/web`.
 
 ### Add an icon
 
-1. Add the approved SVG to `apps/web/src/components/icon/entity/` under a durable
+1. Add the approved SVG to `packages/entity-icons/svg/` under a durable
    kebab-case name; do not use third-party artwork or duplicate an existing drawing.
 2. Add its name and display noun to the appropriate section in
-   `tooling/icons/entity-icon-sections.json`.
+   `packages/entity-icons/sections.json`.
 3. From the repository root, run `bun tooling/icons/generate-entity-icons.ts`.
    Commit the SVG, section metadata, permanent name manifest, generated Rust
-   allowlist, generated web catalog, and generated English labels together.
+   allowlist, generated package catalog, and generated English labels together.
 4. Run the checks below; do not hand-edit generated outputs to make them pass.
 5. Deploy server support before or with the web picker that offers the new name.
 
@@ -70,11 +72,12 @@ names and grows when new drawings or aliases are added.
 - Retire a drawing by removing its section entry. It stays valid and renderable
   but never appears in the picker or Recent.
 - To rename, map the old name directly to an existing drawing in
-  `tooling/icons/entity-icon-aliases.json`. The server accepts both names; the
+  `packages/entity-icons/aliases.json`. The server accepts both names; the
   client renders the target. Alias chains and picker entries for aliases fail.
 - Never delete a permanent name without an explicit data migration. Generation
-  checks every committed name list, so trimming the manifest cannot bypass the
-  guard. Missing names require aliases; shallow clones must fetch full history.
+  checks every committed name list at both the current package path and the former
+  `tooling/icons/entity-icon-names.json` path. Moving or trimming the manifest cannot
+  bypass the guard. Missing names require aliases; shallow clones must fetch full history.
 
 ### Check a catalog change
 
