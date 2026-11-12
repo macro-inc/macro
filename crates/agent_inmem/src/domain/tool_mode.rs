@@ -12,7 +12,8 @@ mod test;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ToolMode {
     /// The direct Macro tools: turns that cannot run code (summaries,
-    /// sessions without a user owner, or no code runner reachable).
+    /// sessions without a user owner, or, unless the owner's turns are code
+    /// mode only, no code runner reachable).
     Standard,
     /// Code mode: the SDK replaces every direct tool it covers.
     Code,
@@ -21,8 +22,8 @@ pub enum ToolMode {
 /// PostHog key evaluated for the session owner.
 pub const AI_SESSION_CODE_MODE_ONLY: &str = "ai-session-code-mode-only";
 
-/// Whether an owner's turns never fall back to the direct tools: summaries
-/// run code mode too, and a turn whose code runner is missing fails.
+/// Whether an owner's conversation turns never fall back to the direct tools:
+/// a turn whose code runner is missing fails instead.
 pub trait CodeModeOnlyPolicy: Send + Sync {
     /// Whether `owner`'s turns are code mode only; unavailable flags are not.
     fn requires<'a>(

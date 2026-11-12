@@ -541,12 +541,14 @@ fn select_skills<'a>(
     ))
 }
 
-// Only a user's turns read the flag; other owners' turns are refused anyway.
+// Only a user's conversation turns read the flag: other owners' turns are
+// refused anyway, and summaries advertise no tools in either mode.
 async fn requires_code_mode(policy: &dyn CodeModeOnlyPolicy, request: &TurnRequest) -> bool {
     let Owner::User(owner) = &request.owner else {
         return false;
     };
-    policy.requires(owner).await
+    request.purpose == crate::domain::engine::TurnPurpose::Conversation
+        && policy.requires(owner).await
 }
 
 // Every conversation turn of a user's session runs code mode, and summaries
@@ -554,16 +556,12 @@ async fn requires_code_mode(policy: &dyn CodeModeOnlyPolicy, request: &TurnReque
 // back to the direct tools; with it, a turn whose code runner is missing fails
 // instead.
 fn tool_mode(request: &TurnRequest, only_code: bool) -> Result<ToolMode, AgentError> {
+    if request.purpose != crate::domain::engine::TurnPurpose::Conversation {
+        return Ok(ToolMode::Standard);
+    }
     let Owner::User(_) = &request.owner else {
         return Ok(ToolMode::Standard);
     };
-    if request.purpose != crate::domain::engine::TurnPurpose::Conversation {
-        return Ok(if only_code {
-            ToolMode::Code
-        } else {
-            ToolMode::Standard
-        });
-    }
     let listed = request.mcp_tools.as_ref().is_some_and(|mcp| {
         let catalog = mcp.searchable_catalog();
         CODE_MODE_MCP_TOOLS
@@ -575,7 +573,7 @@ fn tool_mode(request: &TurnRequest, only_code: bool) -> Result<ToolMode, AgentEr
     } else if only_code {
         tracing::error!("code-mode tools unavailable; refusing the turn");
         Err(AgentError::Other(anyhow::anyhow!(
-            "The code runner is unavailable, so this turn could not run. Please retry this message."
+            "The code runner is unavailable, so this turn could not run."
         )))
     } else {
         tracing::warn!("code-mode tools unavailable; running the turn with direct tools");

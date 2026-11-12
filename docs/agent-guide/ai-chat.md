@@ -1285,7 +1285,8 @@ server exposes `DescribeCodeTools`, `ReadCodeDocs` and `ExecuteCode`. The in-pro
 all three schemas on its first model call, without `SearchTools` or `LoadTools`.
 For Macro's in-process agent, every conversation turn of a user's session runs
 code mode whenever those three tools are listed (otherwise the turn falls back
-to the direct tools and logs a warning). Code mode has a smaller direct toolset:
+to the direct tools and logs a warning; for owners with the
+`ai-session-code-mode-only` flag the turn fails instead). Code mode has a smaller direct toolset:
 SDK-supported searches, reads, listing, and data operations run through the SDK
 (`macro.search`, `macro.workspace`), including AI document and task edits
 (`document.edit(instructions)`; `EditDocument` is hidden in code mode) and
@@ -1417,7 +1418,8 @@ again. Production builds do not print these console entries. Never log or return
 the execution's token.
 
 For local verification, run the harness with a configured Deno runner; without
-one, turns fall back to the direct tools. Supported
+one, turns fall back to the direct tools, or fail for owners with the
+`ai-session-code-mode-only` flag. Supported
 operations should move to code while unsupported creation, skill discovery,
 editing and interactive tools remain direct. Ask for a document lookup without
 mentioning tools; inspect its source and result, reload, and verify persistence.

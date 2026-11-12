@@ -102,7 +102,7 @@ async fn code_mode_only_turns_never_fall_back_to_direct_tools() {
     }
     let mut summary = request(None);
     summary.purpose = TurnPurpose::Summary;
-    assert_eq!(mode(&summary, true), Some(ToolMode::Code));
+    assert_eq!(mode(&summary, true), Some(ToolMode::Standard));
     let (server, tools) = remote(&["ExecuteCode", "DescribeCodeTools", "ReadCodeDocs"]).await;
     assert_eq!(mode(&request(Some(tools)), true), Some(ToolMode::Code));
     server.cancel().await.unwrap();
@@ -111,6 +111,6 @@ async fn code_mode_only_turns_never_fall_back_to_direct_tools() {
 #[tokio::test]
 async fn sessions_without_a_user_owner_keep_the_direct_tools() {
     let mut turn = request(None);
-    turn.owner = Owner::Team(uuid::Uuid::new_v4());
+    turn.owner = Owner::Team(uuid::Uuid::now_v7());
     assert_eq!(mode(&turn, true), Some(ToolMode::Standard));
 }

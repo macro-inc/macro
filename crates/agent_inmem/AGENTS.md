@@ -82,8 +82,9 @@ A user's conversation turns run code mode when the turn's MCP catalog lists
 every `mcp__macro_internal__` code tool, and otherwise fall back to the direct
 tools (`tool_mode` in `src/rig_engine.rs`). The owner's
 `ai-session-code-mode-only` PostHog flag (`domain/tool_mode.rs`) removes the
-fallback: summaries select code mode too, and a turn without the code tools
-fails. Unset, false or unreadable flags keep the fallback.
+fallback: a conversation turn without the code tools fails. Summaries advertise
+no tools in either mode and never read the flag. Unset, false or unreadable
+flags keep the fallback.
 
 - Owner memory is composed by the memory domain on each read; daily generation is hosted by cognition, not agent turns.
 
