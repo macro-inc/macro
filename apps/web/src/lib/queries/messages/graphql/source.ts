@@ -3,8 +3,15 @@ import {
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { ThrownResultError } from '@core/util/result';
-import type { CacheHost } from '@graphql-cache/host/types';
 import {
+  readRecordsByKeys,
+  selectRecords,
+} from '@graphql-cache/exchange/record-selection';
+import type { CacheHost } from '@graphql-cache/host/types';
+import { MAX_RECORD_SELECTION_PAGE_SIZE } from '@graphql-cache/protocol';
+import {
+  type ChannelCachedPageRowsFragment,
+  ChannelCachedPageRowsFragmentDoc,
   ChannelChangesDocument,
   type ChannelChangesQuery,
   ChannelTimelineDocument,
@@ -15,7 +22,10 @@ import {
   getGraphqlSoupCacheHost,
   getUncachedGraphqlSoupClient,
 } from '@service-storage/graphql-soup';
-import type { MessageCursor } from '@service-storage/messages';
+import type {
+  MessageCursor,
+  MessageTimelinePage,
+} from '@service-storage/messages';
 import {
   type AnyVariables,
   CombinedError,
@@ -31,6 +41,7 @@ import {
 
 const TIMELINE_QUERY = stringifyDocument(ChannelTimelineDocument);
 const TIMELINE_OPERATION = 'ChannelTimeline';
+const PAGE_ROWS = selectRecords(ChannelCachedPageRowsFragmentDoc);
 
 /** A latest page with the user record it hangs off, which a cache write names. */
 export type LatestChannelPage = ChannelTimelineRead & { userId: string };
@@ -172,12 +183,119 @@ export async function readCachedLatestPage(
   };
 }
 
-/** Replaces the latest page the cache holds for the channel. */
+function recordKey(typename: string, id: string): string {
+  return `${typename}:${id}`;
+}
+
+/**
+ * The records a latest page is stored in: the channel's own, which holds the
+ * page, and one per row it shows, thread previews included.
+ */
+export function latestPageRecordKeys(
+  channelId: string,
+  page: MessageTimelinePage
+): string[] {
+  const keys = [recordKey('GraphqlChannelMessages', channelId)];
+  for (const entry of page.entries) {
+    if (entry.type === 'activity') {
+      keys.push(recordKey('GraphqlChannelTimelineActivity', entry.activity.id));
+      continue;
+    }
+    keys.push(recordKey('GraphqlChannelMessage', entry.message.id));
+    for (const reply of entry.message.thread.preview) {
+      keys.push(recordKey('GraphqlChannelMessage', reply.id));
+    }
+  }
+  return keys;
+}
+
+function storedPageRecordKeys(page: ChannelCachedPageRowsFragment): string[] {
+  const keys = [recordKey('GraphqlChannelMessages', page.id)];
+  for (const entry of page.timeline.entries) {
+    keys.push(recordKey(entry.__typename, entry.id));
+    if (entry.__typename !== 'GraphqlChannelMessage') continue;
+    for (const reply of entry.thread?.preview ?? []) {
+      keys.push(recordKey('GraphqlChannelMessage', reply.id));
+    }
+  }
+  return keys;
+}
+
+/**
+ * The records each channel's cached latest page is stored in, for the
+ * channels that have one. They are read by the record that holds the page,
+ * not through the viewer, so a page whose viewer link the engine dropped is
+ * still found.
+ */
+export async function readCachedPageRecords(
+  host: Pick<CacheHost, 'readRecordsByKeys'>,
+  channelIds: readonly string[]
+): Promise<Map<string, string[]>> {
+  const pages = new Map<string, string[]>();
+  for (
+    let offset = 0;
+    offset < channelIds.length;
+    offset += MAX_RECORD_SELECTION_PAGE_SIZE
+  ) {
+    const keys = channelIds
+      .slice(offset, offset + MAX_RECORD_SELECTION_PAGE_SIZE)
+      .map((channelId) => recordKey('GraphqlChannelMessages', channelId));
+    const { records } = await readRecordsByKeys(host, PAGE_ROWS, keys);
+    for (const { record } of records) {
+      pages.set(record.id, storedPageRecordKeys(record));
+    }
+  }
+  return pages;
+}
+
+type PageWriteHost = Pick<
+  CacheHost,
+  'writeQuery' | 'readRecordsByKeys' | 'deleteRecords'
+>;
+
+/** Each channel's page write in progress; the next one waits for it. */
+const pageWrites = new Map<string, Promise<void>>();
+
+async function settled(write: Promise<void> | undefined): Promise<void> {
+  try {
+    await write;
+  } catch {
+    // Its own caller handles its failure; the next write still runs.
+  }
+}
+
+/**
+ * Replaces the latest page the cache holds for the channel, then deletes the
+ * rows the old page held that the new one does not. Nothing else links to a
+ * channel's rows, so a write that dropped them would leave them stored for
+ * good; this keeps a channel's records at one page. A channel's writes run one
+ * at a time: one that read the rows held before another's write would delete
+ * rows the other's page still shows.
+ */
 export async function writeCachedLatestPage(
-  host: Pick<CacheHost, 'writeQuery'>,
+  host: PageWriteHost,
   channelId: string,
   latest: LatestChannelPage
 ): Promise<void> {
+  const previous = pageWrites.get(channelId);
+  const write = (async () => {
+    await settled(previous);
+    await replaceCachedLatestPage(host, channelId, latest);
+  })();
+  pageWrites.set(channelId, write);
+  try {
+    await write;
+  } finally {
+    if (pageWrites.get(channelId) === write) pageWrites.delete(channelId);
+  }
+}
+
+async function replaceCachedLatestPage(
+  host: PageWriteHost,
+  channelId: string,
+  latest: LatestChannelPage
+): Promise<void> {
+  const held = await readCachedPageRecords(host, [channelId]);
   await host.writeQuery({
     query: TIMELINE_QUERY,
     operationName: TIMELINE_OPERATION,
@@ -192,4 +310,7 @@ export async function writeCachedLatestPage(
       },
     } satisfies ChannelTimelineQuery,
   });
+  const kept = new Set(latestPageRecordKeys(channelId, latest.page));
+  const dropped = (held.get(channelId) ?? []).filter((key) => !kept.has(key));
+  if (dropped.length > 0) await host.deleteRecords(dropped);
 }
