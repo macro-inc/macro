@@ -1,6 +1,6 @@
-import Microphone from '@phosphor/microphone.svg';
-import Paperclip from '@phosphor/paperclip.svg';
-import X from '@phosphor/x.svg';
+import Microphone from '@icon/system/regular/microphone.svg';
+import Paperclip from '@icon/system/regular/paperclip.svg';
+import X from '@icon/system/regular/x.svg';
 import { ComposerSurface, SendButton } from '@ui';
 import {
   createSignal,

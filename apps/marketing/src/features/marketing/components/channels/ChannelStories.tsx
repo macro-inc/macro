@@ -214,7 +214,7 @@ export function ChannelPermissionsDemo() {
         ...all,
         {
           id,
-          person: 'jacob' as const,
+          person: 'peter' as const,
           time: '10:10 AM',
           body,
           documentId: 'plan',
@@ -400,31 +400,31 @@ export function ChannelPermissionsDemo() {
 const threadReplies = [
   {
     id: 'reply-1',
-    person: 'teo' as const,
+    person: 'rahul' as const,
     body: 'yep, 2pm',
     time: '9:32 AM',
   },
   {
     id: 'reply-2',
-    person: 'jacob' as const,
+    person: 'peter' as const,
     body: 'works for me',
     time: '9:34 AM',
   },
   {
     id: 'reply-3',
-    person: 'gabriel' as const,
+    person: 'wolf' as const,
     body: 'same. i’ll bring the mockups',
     time: '9:36 AM',
   },
   {
     id: 'reply-4',
-    person: 'teo' as const,
+    person: 'rahul' as const,
     body: 'meeting room or call?',
     time: '9:51 AM',
   },
   {
     id: 'reply-5',
-    person: 'julia' as const,
+    person: 'eric' as const,
     body: 'call, i’m working from home',
     time: '9:55 AM',
   },
@@ -437,33 +437,33 @@ export function ChannelThreadDemo() {
   w.setData('channels', (c) => c.id === 'launch', 'messages', [
     {
       id: 'root',
-      person: 'julia',
+      person: 'eric',
       body: 'still on for the design review today?',
       time: '9:30 AM',
     },
     ...threadReplies.map((reply) => ({ ...reply, replyTo: 'root' })),
     {
       id: 'next',
-      person: 'valentina',
+      person: 'austin',
       body: 'new icons are in the folder btw',
       time: '10:02 AM',
     },
     {
       id: 'icons-reply',
-      person: 'jacob',
+      person: 'peter',
       body: 'much sharper. let’s use these',
       time: '10:04 AM',
       replyTo: 'next',
     },
     {
       id: 'signup',
-      person: 'teo',
+      person: 'rahul',
       body: 'signup button is fixed on mobile now',
       time: '10:12 AM',
     },
     {
       id: 'signup-reply',
-      person: 'julia',
+      person: 'eric',
       body: 'just tried it. looks good on my phone too',
       time: '10:14 AM',
       replyTo: 'signup',
@@ -490,7 +490,7 @@ export function ChannelThreadDemo() {
   );
 }
 
-/** Macro creates the task; Julia brings Cursor into the same thread to investigate. */
+/** Macro creates the task; Eric brings Cursor into the same thread to investigate. */
 export function ChannelAgentDemo() {
   const [sessionOpen, setSessionOpen] = createSignal(false);
   let root!: HTMLDivElement;
@@ -501,21 +501,21 @@ export function ChannelAgentDemo() {
     ...structuredClone(channelHistory.slice(10)),
     {
       id: 'bug',
-      person: 'teo' as const,
+      person: 'rahul' as const,
       time: '9:26 AM',
       body: 'signup button is tiny on my phone. can someone fix it?',
     },
     {
       id: 'offer',
-      person: 'julia' as const,
+      person: 'eric' as const,
       time: '9:27 AM',
       body: 'i can take it',
     },
     {
       id: 'follow-up-request',
-      person: 'jacob' as const,
+      person: 'peter' as const,
       time: '9:28 AM',
-      body: '@[Macro](demo-mention:macro) make that a task for Julia',
+      body: '@[Macro](demo-mention:macro) make that a task for Eric',
     },
   ];
   w.setData('channels', (c) => c.id === 'launch', 'messages', initial);
@@ -526,8 +526,8 @@ export function ChannelAgentDemo() {
         id: 'training-invitations',
         title: FOLLOW_UP_TASK,
         description: 'Make the signup button easier to tap on a phone.',
-        owner: 'julia',
-        creator: 'jacob',
+        owner: 'eric',
+        creator: 'peter',
         channel: 'launch',
         status: 'Not Started',
         priority: 'Medium',
@@ -544,7 +544,7 @@ export function ChannelAgentDemo() {
         person: 'macro',
         time: '9:28 AM',
         replyTo: 'follow-up-request',
-        body: 'Made @[Fix the signup button](demo-mention:training-invitations) and assigned it to @[Julia](demo-mention:julia).',
+        body: 'Made @[Fix the signup button](demo-mention:training-invitations) and assigned it to @[Eric](demo-mention:julia).',
         taskId: 'training-invitations',
       },
     ]);
@@ -574,7 +574,7 @@ export function ChannelAgentDemo() {
   const bringCursor = () =>
     appendReply({
       id: 'julia-cursor',
-      person: 'julia',
+      person: 'eric',
       time: '9:29 AM',
       replyTo: 'follow-up-request',
       body: 'thanks. @[Cursor](demo-mention:cursor) can you look into this? check the mobile styles first',
@@ -636,7 +636,7 @@ export function ChannelAgentDemo() {
               message.id === 'cursor-finding' ? (
                 <DemoAgentChip
                   agentSessionId="signup-investigation"
-                  requester="Julia"
+                  requester="Eric"
                   request="@Cursor can you look into this? check the mobile styles first"
                   markdown="Found a mobile style shrinking the tap target."
                   pullRequest={null}
@@ -662,7 +662,7 @@ export function ChannelAgentDemo() {
             Cursor · Check the signup button
           </h3>
           <p class="text-sm text-ink-muted mb-4">
-            Julia: can you look into this? check the mobile styles first
+            Eric: can you look into this? check the mobile styles first
           </p>
           <p class="text-base">
             Found a mobile style shrinking the tap target. The mobile button
