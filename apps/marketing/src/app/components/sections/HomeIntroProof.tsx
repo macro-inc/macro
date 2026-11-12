@@ -168,7 +168,6 @@ export function HomeIntroProof() {
         </span>
         <span class="home-proof-caption">Full open source</span>
       </a>
-
     </section>
   );
 }

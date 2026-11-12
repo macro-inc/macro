@@ -33,8 +33,8 @@ export function SectionCta() {
           'max-width': '530px',
         }}
       >
-        Rox is built in Rust for speed. It's source-available and modular so
-        you can build your company around it.
+        Rox is built in Rust for speed. It's source-available and modular so you
+        can build your company around it.
       </div>
       <a
         href="https://github.com/macro-inc/macro"

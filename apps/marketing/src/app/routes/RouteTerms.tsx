@@ -4,7 +4,7 @@ import { UtilPlainText } from '../components/utils/UtilPlainText';
 import { setPageSeo } from '../utils/utilSeo';
 import './RouteLegal.css';
 
-const content = String.raw`Rox
+const content = `Rox
 
 # Terms of Service
 

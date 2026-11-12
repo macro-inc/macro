@@ -50,8 +50,7 @@ const cards: QuoteCard[] = [
     hatch: true,
   },
   {
-    quote:
-      'Rox did not help us get organized. Rox is why we are organized.',
+    quote: 'Rox did not help us get organized. Rox is why we are organized.',
     name: 'Mark Evgenev',
     role: 'Founder/CEO, Desync',
     background: 'var(--a0)',

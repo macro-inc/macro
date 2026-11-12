@@ -76,8 +76,8 @@ export function SectionDesyncCaseStudy() {
               'overflow-wrap': 'break-word',
             }}
           >
-            &ldquo;Rox did not help us get organized. Rox<em> is why</em> we
-            are organized.&rdquo;
+            &ldquo;Rox did not help us get organized. Rox<em> is why</em> we are
+            organized.&rdquo;
           </blockquote>
           <div
             style={{

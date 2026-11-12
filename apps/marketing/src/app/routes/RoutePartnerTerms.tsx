@@ -5,7 +5,7 @@ import { setPageSeo } from '../utils/utilSeo';
 import '../../routes/posts/posts-shell.css';
 import './RoutePartnerTerms.css';
 
-const content = String.raw`Rox
+const content = `Rox
 
 # Rox Partner Program Terms
 

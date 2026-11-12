@@ -73,12 +73,12 @@ export function MigrationPaths(props: { helpHref: string }) {
           </PathSection>
           <PathSection icon={<At />} title="Your email address">
             Send and receive from your existing address, with your mail and
-            labels available in Rox. This works whether you currently read
-            Gmail in a browser, Superhuman, or another email client.
+            labels available in Rox. This works whether you currently read Gmail
+            in a browser, Superhuman, or another email client.
           </PathSection>
           <PathSection icon={<Chat />} title="Other email providers">
-            Talk to our team about your email setup and the best way to use
-            Rox with it. {help()}
+            Talk to our team about your email setup and the best way to use Rox
+            with it. {help()}
           </PathSection>
         </PathContent>
       ),
@@ -98,8 +98,8 @@ export function MigrationPaths(props: { helpHref: string }) {
             Organize them in folders so your team can find and share them.
           </PathSection>
           <PathSection icon={<Database />} title="Tables and exported data">
-            Import a CSV into a Rox database. Review the rows and columns in
-            the import preview, then bring the records into your workspace.
+            Import a CSV into a Rox database. Review the rows and columns in the
+            import preview, then bring the records into your workspace.
           </PathSection>
           <PathSection icon={<Buildings />} title="Company records">
             In CRM, import a CSV with name and domain columns to create company
@@ -129,8 +129,8 @@ export function MigrationPaths(props: { helpHref: string }) {
             Connect Notion in Settings, then ask an agent to find the pages you
             want to bring over. Choose the suggested pages or provide a page
             link. Page text, headings, lists, checklists, and tables become
-            editable Rox docs. For database records, export a CSV and use
-            Rox’s database import.
+            editable Rox docs. For database records, export a CSV and use Rox’s
+            database import.
           </PathSection>
           <PathSection
             icon={<SwitchBrandIcon brand="linear" size={19} />}
@@ -169,8 +169,8 @@ export function MigrationPaths(props: { helpHref: string }) {
             title="Bring over Slack channels"
           >
             Connect Slack, find your channels, and select the ones to bring into
-            Rox. The channel import creates the corresponding channels for
-            your team.
+            Rox. The channel import creates the corresponding channels for your
+            team.
           </PathSection>
           <PathSection icon={<Folder />} title="Import conversation history">
             Upload a Slack export ZIP and select the conversations you want to
@@ -207,13 +207,12 @@ export function MigrationPaths(props: { helpHref: string }) {
           <PathSection icon={<Plugs />} title="Use connected information">
             Tell an agent which project, pages, or issues you need. It can use
             the tools available through your connection to find relevant work.
-            Choose what to import and manage the resulting docs or tasks in
-            Rox.
+            Choose what to import and manage the resulting docs or tasks in Rox.
           </PathSection>
           <PathSection icon={<Plugs />} title="Bring an export">
-            Files and CSV exports provide another route into Rox. Tell our
-            team what you want to move, and we’ll help you choose between an
-            import, a connection, or a file upload. {help()}
+            Files and CSV exports provide another route into Rox. Tell our team
+            what you want to move, and we’ll help you choose between an import,
+            a connection, or a file upload. {help()}
           </PathSection>
         </PathContent>
       ),

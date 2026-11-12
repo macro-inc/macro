@@ -1021,8 +1021,8 @@ function TaskManagementPanel() {
               'white-space': 'nowrap',
             }}
           >
-            <span style={{ color: 'var(--c2)' }}>Rox</span> added the
-            migration checklist
+            <span style={{ color: 'var(--c2)' }}>Rox</span> added the migration
+            checklist
           </span>
           <span
             style={{
