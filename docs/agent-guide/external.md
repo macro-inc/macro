@@ -70,6 +70,26 @@ routes and `entities/external_chat/<id>/…`, and flips the pairing to `success`
 to simulate the phone scanning. Never link a real account from an
 automated run.
 
+## Slack page
+
+Behind `enable-slack-linked` (`VITE_ENABLE_SLACK_LINKED=true` locally); code in
+`features/slack-linked`, routes under DSS `/slack-linked/*`
+(`docs/architecture/slack-linked.md`). v1 lists only **Slack Connect**
+conversations: channels shared with another organization and DMs with people
+outside the workspace.
+
+| State | What shows |
+| --- | --- |
+| Nothing signed in | Outlined Slack row and **Sign in to Slack**; outside Macro desktop it adds that SSO workspaces connect from Macro desktop. |
+| Sign-in dialog | **Sign in to Slack**: an **Email** field and **Continue** first (works on web, desktop and phones). Under it, Macro desktop offers **Sign in with browser** (Slack's own page in a separate Macro window with its own cookies, for SSO); a browser links **Sign in from Macro desktop** (`macro:///external?slackLogin=browser`). **Advanced → Paste token and cookie** takes one `xoxc-` token per line, the `d` cookie and optionally `d-s`. The dialog carries `ph-no-capture`. |
+| Sign-in steps | Each answer returns the next step; `working` is polled every second. **Verify with Slack** (captcha: **Verify on slack.com** in desktop, **Continue on Macro desktop** with `macro:///external?slackLogin=<attempt id>` in a browser), **Check your email** (**Confirmation code** `ABC-123`; a wrong one says so), **Choose workspaces** (checkboxes, new workspaces checked, **Enterprise Grid** badge and an admins-can-see note, "SSO: finish in Macro desktop"; **Connect n workspaces**), **Two-factor code** (six digits), **Finish with SSO** (desktop window or handoff), **Slack connected** (lists connected and still-to-finish workspaces; **Done**), and failures with **Start again**. Request failures (rate limits, expiry, conflicts) show inline. Closing cancels an attempt waiting on the person (`DELETE /slack-linked/login/<id>`); a handoff doesn't. |
+| Signed in | **Search conversations and organizations** and **Add workspace** above one section per workspace: a strip (name, domain, Connected/Connecting…, a **<workspace> options** menu with **Sign in again** and **Disconnect**, which asks to confirm and whether to also sign the session out of Slack), then **Slack Connect channels** and **Direct messages** (rows `data-slack-conversation="<id>"` with the other organizations as badges, "Slack Connect · Channel", last activity; **Add to Macro**, or **Added** with **Open**, or "Shared with you by <owner>"), and **Can't be added (n)** (archived, disconnected from the other organization, not a member). A conversation several workspaces see shows once. Adding toasts **Added <name>** with **Open**; Macro imports its last 90 days. |
+| Session ended | A warning row per workspace Slack signed out, with the reason and **Sign in again**; its chats stay in Macro. |
+
+`apps/web/tests/functional/slack-linked.spec.ts` is the reference mock for
+`/slack-linked/*`. Never sign a real Slack account in from an automated run.
+The page mounts in External once External picks a page per provider.
+
 ## External chat view
 
 A group and a direct (one-to-one) chat open in the same view
