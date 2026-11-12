@@ -644,6 +644,7 @@ pub(super) fn plan_for(mode: Mode, flags: &RunLocalFlags, run: &RunArgs, start: 
         share_app,
         infra_only: false,
         start,
+        computers: run.computers.fleet(super::computers::Fleet::Docker),
     }
 }
 
@@ -695,7 +696,7 @@ pub fn supervise(mode: Mode, flags: &RunLocalFlags, run: &RunArgs) -> Result<()>
             None
         };
         stage.print_timings("bring-up");
-        super::print_stack_summary(mode, &instance, &up, &plan)?;
+        super::print_stack_summary(&stage, mode, &instance, &up, &plan)?;
         Ok((frontend, up.tunnels))
     })();
     let (frontend, tunnels) = job.finish(result)?;

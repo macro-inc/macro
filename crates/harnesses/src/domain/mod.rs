@@ -1,5 +1,7 @@
 //! Harness domain.
 
+/// Provider accounts signed in on machines.
+pub mod account_logins;
 /// Domain models.
 pub mod models;
 /// Ports connecting the domain to its adapters.
