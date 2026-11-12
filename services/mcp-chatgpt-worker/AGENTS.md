@@ -43,10 +43,15 @@ own permission checks and agent attribution apply.
   change all of them together. Service hosts come from the SDK for
   `MACRO_ENV`; `MACRO_HOSTS` (JSON) only points a local run at a named stack.
 - Deploys are `workflow_dispatch` only (`Deploy MCP ChatGPT Worker`).
-- `chatgpt-app-submission.json` is the import file for OpenAI's app
-  submission form (schema `chatgpt-app-submission.v1`, built with OpenAI's
-  `chatgpt-app-submission` skill). Its `tools` copy the `entity` snapshot's
-  hints; refresh it when that snapshot or the prod `RESOURCE_URL` changes.
+- OpenAI submits the app as a plugin ZIP of `openai-plugin/` (Agent Plugins
+  `plugin.json` with listing and review cases, `mcp.json` with the prod
+  `RESOURCE_URL`, `assets/`). Build it with
+  `cd openai-plugin && python3 -m zipfile -c ../macro-openai-plugin.zip plugin.json mcp.json assets`;
+  never commit the ZIP. The demo video URL and reviewer account go in the
+  dashboard. `chatgpt-app-submission.json` (OpenAI's `chatgpt-app-submission`
+  skill format) holds each tool's hint justifications for the form; its
+  `tools` copy the `entity` snapshot's hints. Refresh both when that snapshot
+  or the prod `RESOURCE_URL` changes.
 - The SDK is imported by relative path from `packages/sdk/src`; SDK changes
   reach this Worker on its next deploy.
 
