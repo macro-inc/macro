@@ -48,7 +48,11 @@ pub async fn handler(
     let (access_token, refresh_token) = redeem_session_code(
         &ctx.macro_cache_client,
         &session_code,
-        async |refresh_token| ctx.auth_client.refresh_token("", refresh_token).await,
+        async |refresh_token| {
+            ctx.auth_client
+                .complete_session_login("", refresh_token)
+                .await
+        },
     )
     .await
     .map_err(IntoResponse::into_response)?;

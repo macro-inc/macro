@@ -11,6 +11,9 @@ pub mod google;
 pub mod identity_provider;
 /// JWT refresh operations.
 pub mod jwt;
+/// Login persistence and audit.
+pub mod login;
+pub use login::LoginAudit;
 /// Logout operations.
 pub mod logout;
 /// Microsoft identity provider and OAuth.
@@ -97,6 +100,8 @@ pub struct FusionAuthClient {
     google_client_secret: String,
     /// Optional Microsoft OAuth credentials.
     microsoft_credentials: Option<microsoft::MicrosoftOAuthCredentials>,
+    /// Credential-free observer invoked by each completed login persistence function.
+    login_audit: Option<std::sync::Arc<dyn LoginAudit>>,
 }
 
 impl FusionAuthClient {
@@ -125,7 +130,14 @@ impl FusionAuthClient {
             google_client_id,
             google_client_secret,
             microsoft_credentials: None,
+            login_audit: None,
         }
+    }
+
+    /// Attach the credential-free observer used by every login/session commit function.
+    pub fn with_login_audit(mut self, login_audit: std::sync::Arc<dyn LoginAudit>) -> Self {
+        self.login_audit = Some(login_audit);
+        self
     }
 
     /// Sets the browser-reachable FusionAuth base URL used to construct OAuth

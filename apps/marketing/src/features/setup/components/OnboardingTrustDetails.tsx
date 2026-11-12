@@ -27,12 +27,11 @@ export function OnboardingTrustDetails(props: {
             title: 'Why does Google ask for these permissions?',
             answer: (
               <>
-                Gmail access lets Rox read, send, organize, and move messages
-                to trash. Contacts help suggest recipients; mail settings
-                support your signature and filters. When you connect Calendar,
-                its permissions let Rox show your calendars and create or
-                update events. Google shows the exact permissions before you
-                approve.
+                Gmail access lets Rox read, send, organize, and move messages to
+                trash. Contacts help suggest recipients; mail settings support
+                your signature and filters. When you connect Calendar, its
+                permissions let Rox show your calendars and create or update
+                events. Google shows the exact permissions before you approve.
               </>
             ),
           },
@@ -51,9 +50,9 @@ export function OnboardingTrustDetails(props: {
             answer: (
               <>
                 Data received through Google Workspace APIs is not used to
-                develop or train generalized AI models. Rox also maintains
-                zero data retention agreements with OpenAI and Anthropic for
-                model processing.
+                develop or train generalized AI models. Rox also maintains zero
+                data retention agreements with OpenAI and Anthropic for model
+                processing.
               </>
             ),
           },
@@ -61,10 +60,10 @@ export function OnboardingTrustDetails(props: {
             title: 'How do I revoke access?',
             answer: (
               <>
-                You can disconnect in Rox’s Settings or revoke access from
-                your Google account. Revoking access and deleting data already
-                stored in Rox are separate actions. You can request account
-                and data deletion as described in our{' '}
+                You can disconnect in Rox’s Settings or revoke access from your
+                Google account. Revoking access and deleting data already stored
+                in Rox are separate actions. You can request account and data
+                deletion as described in our{' '}
                 <EvidenceLink href="https://macro.com/privacy/">
                   Privacy Policy
                 </EvidenceLink>
@@ -141,8 +140,8 @@ export function OnboardingTrustDetails(props: {
           fallback={
             <>
               <p>
-                Rox stores your workspace content to provide the service. We
-                do not sell your data.
+                Rox stores your workspace content to provide the service. We do
+                not sell your data.
               </p>
               <p>
                 Your data is encrypted in transit and at rest. Production access
@@ -158,9 +157,9 @@ export function OnboardingTrustDetails(props: {
           }
         >
           <p>
-            Rox requests Google account access to read, send, and organize
-            email and manage connected calendars. Google lists the permissions
-            before you approve the connection.
+            Rox requests Google account access to read, send, and organize email
+            and manage connected calendars. Google lists the permissions before
+            you approve the connection.
           </p>
           <p>
             Rox’s email agents show you the draft and ask for your approval
@@ -168,9 +167,9 @@ export function OnboardingTrustDetails(props: {
           </p>
           <p>
             You sign in through Google. Rox does not receive your Google
-            password. Your work Google account becomes your Rox sign-in;
-            adding a personal account is optional. You can disconnect in Rox’s
-            Settings or revoke access from your Google account.
+            password. Your work Google account becomes your Rox sign-in; adding
+            a personal account is optional. You can disconnect in Rox’s Settings
+            or revoke access from your Google account.
           </p>
         </Show>
       </div>

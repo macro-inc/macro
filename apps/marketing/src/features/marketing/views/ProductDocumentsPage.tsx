@@ -137,10 +137,7 @@ export function RouteDocuments() {
             render={() => <DocumentOrganizationDemo />}
           />
         </FeaturePageSection>
-        <section
-          id="documents-comparison"
-          aria-label="Compare Rox and Notion"
-        >
+        <section id="documents-comparison" aria-label="Compare Rox and Notion">
           <FeatureComparisons
             title="Compare Workspaces"
             comparisons={documentComparisons}

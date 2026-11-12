@@ -135,7 +135,7 @@ export function WorkspaceIntro(props: {
               'var(--onboarding-intro-shadow, inset .5px .5px 1px #ffffff1c, inset -.5px -.5px 1px #0008, 0 1px 1px #131313, 0 4px 10px #0005)',
           }}
         >
-          <MacroMarkIcon class="h-7 w-10 overflow-visible" />
+          <MacroMarkIcon class="size-12 overflow-visible" />
         </button>
       </div>
       <fieldset class="mt-6 w-full max-w-[270px]">

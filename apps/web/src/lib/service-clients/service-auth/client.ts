@@ -691,6 +691,7 @@ export const authServiceClient = {
       aiDataConsent: data.aiDataConsent,
       referralCode: data.referralCode,
       createdAt: data.createdAt,
+      handle: data.handle,
     }));
   },
 

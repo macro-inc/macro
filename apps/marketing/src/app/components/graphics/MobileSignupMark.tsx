@@ -26,7 +26,12 @@ export function MobileSignupMark() {
       `}</style>
       {/* `rel="external"` makes this a full page load: `/` is its own
           prerendered document, not a route in this router. */}
-      <a href="/" rel="external" class="mobile-signup-mark" aria-label="Rox home">
+      <a
+        href="/"
+        rel="external"
+        class="mobile-signup-mark"
+        aria-label="Rox home"
+      >
         <MacroMarkIcon style={{ height: '22px', width: '32px' }} />
       </a>
     </>

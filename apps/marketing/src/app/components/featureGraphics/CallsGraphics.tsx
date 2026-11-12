@@ -2901,10 +2901,10 @@ const faqItems: { q: string; a: JSX.Element }[] = [
     q: 'What happens after a call ends?',
     a: (
       <>
-        Rox auto-transcribes the call and generates an AI summary. The
-        recording and a readable, speaker-attributed transcript are always
-        available at the bottom of the call, and everything becomes searchable
-        from the calls tab.
+        Rox auto-transcribes the call and generates an AI summary. The recording
+        and a readable, speaker-attributed transcript are always available at
+        the bottom of the call, and everything becomes searchable from the calls
+        tab.
       </>
     ),
   },
@@ -2965,8 +2965,8 @@ const faqItems: { q: string; a: JSX.Element }[] = [
     q: 'Is Rox open source?',
     a: (
       <>
-        Yes. Rox is fully open source under the AGPLv3 (as of May 31 2026),
-        not "open core." Video is powered by LiveKit. To build on Rox under a
+        Yes. Rox is fully open source under the AGPLv3 (as of May 31 2026), not
+        "open core." Video is powered by LiveKit. To build on Rox under a
         different license, contact{' '}
         <a href="mailto:licensing@macro.com">licensing@macro.com</a>.
       </>

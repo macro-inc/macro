@@ -351,7 +351,26 @@ export const createAppViteConfig = (): UserConfigFn => {
         loroAsyncWasm(),
         htmlPreloads(),
         tailwind(),
-        solidSvg({ defaultAsComponent: true }),
+        solidSvg({
+          defaultAsComponent: true,
+          svgo: {
+            enabled: true,
+            svgoConfig: {
+              plugins: [
+                {
+                  name: 'preset-default',
+                  params: {
+                    overrides: {
+                      // CSS-sized SVGs need their original coordinate system;
+                      // raster-backed marks otherwise show only a blank corner.
+                      removeViewBox: false,
+                    },
+                  },
+                },
+              ],
+            },
+          },
+        }),
         tsconfigpaths({
           root: './',
         }),

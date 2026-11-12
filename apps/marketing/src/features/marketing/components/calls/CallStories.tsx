@@ -661,8 +661,8 @@ export function CallFollowupDemo() {
               </For>
               <Show when={followups().length > 0}>
                 <p class="text-sm text-ink-muted">
-                  This sample keeps your message here. Open Rox to work with
-                  an agent.
+                  This sample keeps your message here. Open Rox to work with an
+                  agent.
                 </p>
               </Show>
             </div>

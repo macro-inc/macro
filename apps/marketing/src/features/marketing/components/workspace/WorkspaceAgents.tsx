@@ -225,8 +225,8 @@ export function WorkspaceAgents(props: {
                       <h1 class="text-xl text-ink mb-6">Routines</h1>
                       <p>No routines yet</p>
                       <p class="mt-2">
-                        Create a routine to run an agent on a schedule or a
-                        Rox event.
+                        Create a routine to run an agent on a schedule or a Rox
+                        event.
                       </p>
                       <p class="mt-6 text-xs">
                         Scheduling is unavailable in this local sample.
@@ -255,9 +255,9 @@ export function WorkspaceAgents(props: {
                 <div class="sample-agent-catalog">
                   <h1 class="text-2xl font-semibold mb-2">Agents</h1>
                   <div class="text-sm text-ink-muted leading-6 mb-6">
-                    Agents let you customize your Rox AI experience by
-                    combining a unique name, specific instructions, default
-                    model, and harness.
+                    Agents let you customize your Rox AI experience by combining
+                    a unique name, specific instructions, default model, and
+                    harness.
                   </div>
                   <div class="rounded-xl border border-edge-muted bg-surface-2 p-6 mb-8">
                     <div class="mb-5 flex items-center gap-2 text-xs font-medium text-ink-muted">
@@ -265,8 +265,7 @@ export function WorkspaceAgents(props: {
                       Bring your own agent
                     </div>
                     <h2 class="text-xl font-medium tracking-tight mb-3">
-                      Bring <span class="text-accent">Claude Code</span> to
-                      Rox.
+                      Bring <span class="text-accent">Claude Code</span> to Rox.
                     </h2>
                     <p class="text-sm text-ink-muted leading-relaxed">
                       Your agent, on your machine. Connect a runtime with

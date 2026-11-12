@@ -45,6 +45,13 @@ class ScanLineTest(unittest.TestCase):
         self.assertEqual(values["address"], "100 Market Street")
         self.assertNotIn("2026-10-27", values.values())
 
+    def test_does_not_treat_requirement_ids_as_street_numbers(self):
+        empty = Exceptions(set(), set(), set())
+        self.assertEqual(
+            scan_line("spec.md", 1, "FR-006 Native Drive and import copy", empty),
+            [],
+        )
+
     def test_flags_private_key_and_github_token(self):
         empty = Exceptions(set(), set(), set())
         key = "-----BEGIN " + "RSA PRIVATE KEY-----"

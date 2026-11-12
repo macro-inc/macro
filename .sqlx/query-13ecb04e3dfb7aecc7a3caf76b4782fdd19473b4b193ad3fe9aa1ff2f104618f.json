@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO rox_identity_binding (macro_user_id, rox_account_id, handle)\n            VALUES ($1, $2, $3)\n            ON CONFLICT (macro_user_id) DO UPDATE SET bound_at = NOW()\n            WHERE rox_identity_binding.rox_account_id = EXCLUDED.rox_account_id\n              AND rox_identity_binding.handle = EXCLUDED.handle\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "13ecb04e3dfb7aecc7a3caf76b4782fdd19473b4b193ad3fe9aa1ff2f104618f"
+}

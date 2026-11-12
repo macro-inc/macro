@@ -931,11 +931,9 @@ function Parts(props: { parts: Part[] }) {
         <Show
           when={typeof part !== 'string'}
           fallback={
-            <>
-              {(part as string)
-                .split('\n')
-                .map((t, i) => (i ? [<br />, t] : t))}
-            </>
+            <For each={(part as string).split('\n')}>
+              {(t, i) => (i() === 0 ? t : [<br />, t])}
+            </For>
           }
         >
           <Show when={(part as { mention?: string }).mention} keyed>

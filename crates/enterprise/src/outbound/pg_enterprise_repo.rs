@@ -8,6 +8,9 @@ use sqlx::PgPool;
 use std::str::FromStr;
 use uuid::Uuid;
 
+#[cfg(test)]
+mod test;
+
 /// MacroDB adapter for the enterprise-owned tables.
 #[derive(Clone)]
 pub struct PgEnterpriseRepository {

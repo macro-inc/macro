@@ -59,24 +59,24 @@ export default function WhyMacroIsOpenSourcePost() {
 
         <p>
           Rox is open source despite most open source projects having poor
-          design. Product design is central to Rox. In my opinion, Apple
-          (circa 2010s, at least) is the pinnacle of product design. And Apple
-          is very closed source. One of the main pushbacks against going open
-          source I got from our team was that open source application software
-          (e.g. LibreOffice) is generally not well-designed. Why? I think this
-          is due to (i) the characteristics of the people that build open
-          source, i.e. engineers not designers, and (ii) the decentralized
-          nature of open source projects makes it hard to do good design. (Good
-          design requires consistency and taste and quality control, all of
-          which require centralization and power vested in a small number of
-          individuals to hold a high bar.)
+          design. Product design is central to Rox. In my opinion, Apple (circa
+          2010s, at least) is the pinnacle of product design. And Apple is very
+          closed source. One of the main pushbacks against going open source I
+          got from our team was that open source application software (e.g.
+          LibreOffice) is generally not well-designed. Why? I think this is due
+          to (i) the characteristics of the people that build open source, i.e.
+          engineers not designers, and (ii) the decentralized nature of open
+          source projects makes it hard to do good design. (Good design requires
+          consistency and taste and quality control, all of which require
+          centralization and power vested in a small number of individuals to
+          hold a high bar.)
         </p>
 
         <p>
-          Rox is open source despite limited early support from our team. When
-          I tell people Rox is open source they are surprised to learn this
-          was because I pushed for this strongly, against the advice of some of
-          our engineers, and without the resounding support of our company.
+          Rox is open source despite limited early support from our team. When I
+          tell people Rox is open source they are surprised to learn this was
+          because I pushed for this strongly, against the advice of some of our
+          engineers, and without the resounding support of our company.
         </p>
 
         <p>
@@ -88,10 +88,10 @@ export default function WhyMacroIsOpenSourcePost() {
         </p>
 
         <p>
-          Rox is open source because we want it to be as extensible and
-          modular as possible. It’s possible to have a great plugin system
-          without being open source, like Figma or Minecraft. But it’s easier to
-          build on top of something that’s fully open.
+          Rox is open source because we want it to be as extensible and modular
+          as possible. It’s possible to have a great plugin system without being
+          open source, like Figma or Minecraft. But it’s easier to build on top
+          of something that’s fully open.
         </p>
 
         <p>
@@ -132,26 +132,26 @@ export default function WhyMacroIsOpenSourcePost() {
         </p>
 
         <p>
-          Rox is fully open source, not “open core” nor “source available”.
-          Open core means that only a subset of the code is open source.
-          Companies use it to be partially open while preserving a closed
-          commercial offering. It’s a reasonable thing to do and we considered
-          it, but I didn’t feel it was necessary in our case. By the same logic,
-          we are now fully open source, not source-available — where the code
-          is public but the license restricts use, modification, redistribution,
-          or another freedom required by OSI’s definition of open source. When
-          we first made the repo available in 2025 we started with source
-          available, but this was always a short term strategy as we figured
-          out how to be even more open.
+          Rox is fully open source, not “open core” nor “source available”. Open
+          core means that only a subset of the code is open source. Companies
+          use it to be partially open while preserving a closed commercial
+          offering. It’s a reasonable thing to do and we considered it, but I
+          didn’t feel it was necessary in our case. By the same logic, we are
+          now fully open source, not source-available — where the code is public
+          but the license restricts use, modification, redistribution, or
+          another freedom required by OSI’s definition of open source. When we
+          first made the repo available in 2025 we started with source
+          available, but this was always a short term strategy as we figured out
+          how to be even more open.
         </p>
 
         <p>
           For now, Rox is AGPLv3. This is a good license for us for a few
           reasons, but mostly, it provides some protection against large
-          companies and hyperscalers using Rox without contributing back to
-          the ecosystem. Modified versions offered over a network must share
-          their source under the same license, which helps improvements flow
-          back to the ecosystem.
+          companies and hyperscalers using Rox without contributing back to the
+          ecosystem. Modified versions offered over a network must share their
+          source under the same license, which helps improvements flow back to
+          the ecosystem.
         </p>
 
         <p class="wos-repo">

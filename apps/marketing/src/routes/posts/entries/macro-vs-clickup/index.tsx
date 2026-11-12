@@ -197,10 +197,10 @@ export default function MacroVsClickUpPost() {
         <SectionGlyph route="/agents" />
         <h2>Why Rox is the best all-in-one workspace for startups</h2>
         <p>
-          We built Rox as a modern unified workspace with email, messages,
-          docs, tasks, calls and a CRM in a single app, at a single flat price
-          per seat — without asking you to assemble the product from a long list
-          of optional modules.
+          We built Rox as a modern unified workspace with email, messages, docs,
+          tasks, calls and a CRM in a single app, at a single flat price per
+          seat — without asking you to assemble the product from a long list of
+          optional modules.
         </p>
         <p>
           The platform has a modern AI-first interface and shared workspace
@@ -209,8 +209,8 @@ export default function MacroVsClickUpPost() {
         </p>
         <p>
           We also built in keyboard-first navigation, so it's extremely fast to
-          get around. Finally, Rox is open source, so you can audit how it
-          works and extend it.
+          get around. Finally, Rox is open source, so you can audit how it works
+          and extend it.
         </p>
 
         <h3>Rox brings a real email client into your workspace</h3>
@@ -320,8 +320,8 @@ export default function MacroVsClickUpPost() {
           height={937}
         />
         <p class="mvn-figcaption">
-          <code>@Rox</code> reads the thread, creates the task and links it
-          back — then asks if it should assign and prioritize it.
+          <code>@Rox</code> reads the thread, creates the task and links it back
+          — then asks if it should assign and prioritize it.
         </p>
         <p>
           Because agents take on the permissions of the person who created them,
@@ -340,10 +340,10 @@ export default function MacroVsClickUpPost() {
           shortcuts that let you navigate every option without touching a mouse.
         </p>
         <p>
-          Rox also has its own window manager, letting you open any new menu
-          in splitscreen. It's easy to keep email, channels and docs open side
-          by side, instead of switching back and forth between tabs to keep
-          track of everything.
+          Rox also has its own window manager, letting you open any new menu in
+          splitscreen. It's easy to keep email, channels and docs open side by
+          side, instead of switching back and forth between tabs to keep track
+          of everything.
         </p>
         <PostScreenshot
           src={splitScreen}
@@ -561,10 +561,10 @@ export default function MacroVsClickUpPost() {
 
         <h2>Rox vs. ClickUp: the verdict</h2>
         <p>
-          Rox and ClickUp solve different problems. ClickUp has more features
-          on the checklist. Rox is built so you can actually move through the
-          day without fighting the tool — email, chat, docs and tasks in one
-          fast, AI-first workspace, with agents that share one memory.
+          Rox and ClickUp solve different problems. ClickUp has more features on
+          the checklist. Rox is built so you can actually move through the day
+          without fighting the tool — email, chat, docs and tasks in one fast,
+          AI-first workspace, with agents that share one memory.
         </p>
         <p>
           If what you need is deep project mechanics and you're prepared for the

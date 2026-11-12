@@ -12,7 +12,7 @@ fn rejects_invalid_and_reserved_handles() {
     for handle in [
         "ab",
         "admin",
-        "ada@rox.one",
+        "ada@example.com",
         "..ada",
         ".ada",
         "ada.",
@@ -28,8 +28,9 @@ fn rejects_invalid_and_reserved_handles() {
 
 #[test]
 fn address_uses_the_first_party_domain() {
+    assert_eq!(ROX_MAIL_DOMAIN, "rox.one");
     assert_eq!(
         MailboxHandle::parse("ada").unwrap().email_address(),
-        "ada@rox.one"
+        format!("ada@{ROX_MAIL_DOMAIN}")
     );
 }

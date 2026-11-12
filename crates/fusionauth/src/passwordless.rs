@@ -216,7 +216,7 @@ impl FusionAuthClient {
         &self,
         code: &str,
     ) -> Result<PasswordlessLoginCompleteResponse> {
-        complete(
+        let response = complete(
             &self.auth_client,
             &self.fusion_auth_base_url,
             PasswordlessLoginCompleteRequest {
@@ -224,6 +224,8 @@ impl FusionAuthClient {
                 code: Cow::Borrowed(code),
             },
         )
-        .await
+        .await?;
+        self.audit_completed_login(&response.token).await?;
+        Ok(response)
     }
 }

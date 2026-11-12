@@ -3774,10 +3774,9 @@ const faqItems: { q: string; a: JSX.Element }[] = [
     a: (
       <>
         No, that's the whole point. Because your team's email already flows
-        through Rox, contact and company records are created and kept up to
-        date automatically as you work. There's no importer to run and no fields
-        to type in. Most CRMs die because nobody fills them in. Rox's fills
-        itself.
+        through Rox, contact and company records are created and kept up to date
+        automatically as you work. There's no importer to run and no fields to
+        type in. Most CRMs die because nobody fills them in. Rox's fills itself.
       </>
     ),
   },
@@ -3811,8 +3810,8 @@ const faqItems: { q: string; a: JSX.Element }[] = [
       <>
         Every company and contact has its own discussion thread, so deal notes
         and context live on the record itself instead of a side channel. Threads
-        work just like Rox channels, with inline replies, the same rich
-        editor, and @mentions of people, docs, tasks, and other records.
+        work just like Rox channels, with inline replies, the same rich editor,
+        and @mentions of people, docs, tasks, and other records.
       </>
     ),
   },
@@ -3820,12 +3819,12 @@ const faqItems: { q: string; a: JSX.Element }[] = [
     q: 'Can I @mention a company or contact elsewhere?',
     a: (
       <>
-        Yes. Like everything in Rox, CRM records are blocks. @mention a
-        company or contact in a doc, task, or channel and it becomes a live,
-        traceable link. From the record you can see everywhere it's been
-        referenced across channels, docs, and calls. Note that sharing of CRM
-        records is controlled by your team, so @mentioning a record doesn't
-        change who can see it.
+        Yes. Like everything in Rox, CRM records are blocks. @mention a company
+        or contact in a doc, task, or channel and it becomes a live, traceable
+        link. From the record you can see everywhere it's been referenced across
+        channels, docs, and calls. Note that sharing of CRM records is
+        controlled by your team, so @mentioning a record doesn't change who can
+        see it.
       </>
     ),
   },

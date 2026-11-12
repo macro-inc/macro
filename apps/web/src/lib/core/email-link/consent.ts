@@ -1,5 +1,13 @@
 import type { ConsentScopes } from '@service-auth/client';
 import type { Link } from '@service-email/generated/schemas';
+import type { EmailProvider } from './ProviderDialog';
+
+export type ExternalEmailLink = Link & { provider: EmailProvider };
+
+/** Only third-party mailbox links can enter OAuth consent and reconnect flows. */
+export function isExternalEmailLink(link: Link): link is ExternalEmailLink {
+  return link.provider === 'GMAIL' || link.provider === 'OUTLOOK';
+}
 
 type CalendarAccess = Pick<
   Link,

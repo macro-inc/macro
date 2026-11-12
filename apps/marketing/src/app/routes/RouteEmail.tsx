@@ -28,8 +28,8 @@ const faqItems = [
     q: 'Which email accounts can I connect?',
     a: (
       <>
-        Rox supports Gmail and Google Workspace. Connect an account in
-        Settings and keep using Gmail alongside Rox. See the{' '}
+        Rox supports Gmail and Google Workspace. Connect an account in Settings
+        and keep using Gmail alongside Rox. See the{' '}
         <a href="https://docs.macro.com/product/email">email setup guide</a>.
       </>
     ),
@@ -86,9 +86,9 @@ const faqItems = [
     q: 'How do I disconnect an account?',
     a: (
       <>
-        Disconnect in Rox’s Settings or revoke access from your Google
-        account. Disconnecting does not delete data already stored in Rox. See
-        the <a href="/privacy">Privacy Policy</a> for deletion details.
+        Disconnect in Rox’s Settings or revoke access from your Google account.
+        Disconnecting does not delete data already stored in Rox. See the{' '}
+        <a href="/privacy">Privacy Policy</a> for deletion details.
       </>
     ),
   },

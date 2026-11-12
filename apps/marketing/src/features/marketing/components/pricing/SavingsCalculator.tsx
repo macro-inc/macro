@@ -1,29 +1,29 @@
-import attioLogo from '@assets/icons/logo-attio.ico';
 import AsanaIcon from '@assets/icons/logo-asana.svg';
+import attioLogo from '@assets/icons/logo-attio.ico';
 import ClickUpIcon from '@assets/icons/logo-clickup.svg';
-import JiraIcon from '@assets/icons/logo-jira.svg';
 import GranolaIcon from '@assets/icons/logo-granola.svg';
+import JiraIcon from '@assets/icons/logo-jira.svg';
 import LinearIcon from '@icon/mcp-linear.svg';
 import NotionIcon from '@icon/mcp-notion.svg';
 import SlackIcon from '@icon/mcp-slack.svg';
+import CalendlyIcon from '@icon/onboarding-calendly.svg';
 import HubSpotIcon from '@icon/onboarding-hubspot.svg';
 import SuperhumanIcon from '@icon/onboarding-superhuman.svg';
-import CalendlyIcon from '@icon/onboarding-calendly.svg';
 import ZoomIcon from '@icon/onboarding-zoom.svg';
 import CheckIcon from '@phosphor/check.svg';
-import FilePdfIcon from '@phosphor/file-pdf.svg';
-import FolderIcon from '@phosphor/folder.svg';
-import TableIcon from '@phosphor/table.svg';
-import WaveformIcon from '@phosphor/waveform.svg';
 // The site has no Salesforce mark; a neutral cloud stands in for it.
 import SalesforceIcon from '@phosphor/cloud.svg';
+import FilePdfIcon from '@phosphor/file-pdf.svg';
+import FolderIcon from '@phosphor/folder.svg';
 import MinusIcon from '@phosphor/minus.svg';
 import PlusIcon from '@phosphor/plus.svg';
+import TableIcon from '@phosphor/table.svg';
+import WaveformIcon from '@phosphor/waveform.svg';
 import { createSignal, For, type JSX } from 'solid-js';
 import {
+  ADDITIONAL_COMPARISON_TOOLS,
   COMPARISON_TOOLS,
   DEFAULT_COMPARISON_TOOLS,
-  ADDITIONAL_COMPARISON_TOOLS,
   summarizeComparison,
 } from '../../core/pricing-comparison';
 import {
@@ -222,7 +222,8 @@ export function SavingsCalculator() {
         </div>
       </div>
       <p class="pricing-savings-note">
-        USD/user/month. Annual billing where available; same seat count for every selected tool.
+        USD/user/month. Annual billing where available; same seat count for
+        every selected tool.
       </p>
     </div>
   );

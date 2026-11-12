@@ -329,6 +329,24 @@ impl<B: BotFacts + 'static> ChatRepo for PgChatRepo<B> {
         .map_err(to_chat_err)?;
 
         if let Some(ref share_permission) = args.share_permission {
+            let share_link_created = if matches!(share_permission.link_share, Some(Some(_))) {
+                let existing = sqlx::query_scalar!(
+                    r#"
+                    SELECT sp."linkShare"
+                    FROM "ChatPermission" cp
+                    JOIN "SharePermission" sp ON sp.id = cp."sharePermissionId"
+                    WHERE cp."chatId" = $1
+                    "#,
+                    chat_id,
+                )
+                .fetch_one(&mut *tx)
+                .await
+                .map_err(|error| to_chat_err(error.into()))?;
+                existing.is_none()
+            } else {
+                false
+            };
+
             queries::edit_share_permission::edit_chat_permission(
                 &mut tx,
                 chat_id,
@@ -336,6 +354,20 @@ impl<B: BotFacts + 'static> ChatRepo for PgChatRepo<B> {
             )
             .await
             .map_err(to_chat_err)?;
+
+            if share_link_created {
+                enterprise::audit::append(
+                    &mut tx,
+                    &enterprise::audit::AuditRecord::new(
+                        &user_id,
+                        enterprise::audit::AuditAction::ShareLinkCreate,
+                        chat_id,
+                        enterprise::audit::AuditResult::Success,
+                    ),
+                )
+                .await
+                .map_err(|error| to_chat_err(error.into()))?;
+            }
         }
 
         tx.commit().await.map_err(|e| ChatErr::Unknown(e.into()))?;

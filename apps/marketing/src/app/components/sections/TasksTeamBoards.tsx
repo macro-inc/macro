@@ -117,8 +117,8 @@ export const taskTeams: TaskTeam[] = [
       desc: (
         <>
           They will not sign until the questionnaire is back. Send the security
-          overview first, then book the call. Opened from <Mention>sales</Mention>
-          .
+          overview first, then book the call. Opened from{' '}
+          <Mention>sales</Mention>.
         </>
       ),
       checks: [

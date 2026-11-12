@@ -3,6 +3,7 @@
 use entity_access::domain::models::{
     EntityAccessReceipt, EntityType, OwnerAccessLevel, RequiredPermission, ViewAccessLevel,
 };
+use macro_user_id::user_id::MacroUserIdStr;
 use models_permissions::share_permission::{
     SharePermissionV2, UpdateSharePermissionRequestV2,
     access_level::AccessLevel,
@@ -66,6 +67,7 @@ pub trait SessionSharingRepo: Send + Sync + 'static {
     fn update_permissions(
         &self,
         id: AgentSessionId,
+        actor: MacroUserIdStr<'static>,
         request: UpdateSharePermissionRequestV2,
         team_share: Option<AuthorizedTeamShareCommand>,
     ) -> impl Future<Output = Result<SharePermissionV2>> + Send;
@@ -153,7 +155,11 @@ impl<R: SessionSharingRepo> SessionSharing for SessionSharingService<R> {
         }
         validate(&request)?;
         let permissions = self.repo.permissions(id).await?;
-        if access.acting_user_id().map(|user| user.as_ref()) != Some(permissions.owner.as_str()) {
+        let actor = access
+            .acting_user_id()
+            .cloned()
+            .ok_or(AgentSessionError::Forbidden)?;
+        if actor.as_ref() != permissions.owner {
             return Err(AgentSessionError::Forbidden);
         }
         let team_share = if request.team_share_access_level.is_some() {
@@ -171,6 +177,8 @@ impl<R: SessionSharingRepo> SessionSharing for SessionSharingService<R> {
         } else {
             None
         };
-        self.repo.update_permissions(id, request, team_share).await
+        self.repo
+            .update_permissions(id, actor, request, team_share)
+            .await
     }
 }

@@ -119,8 +119,8 @@ export default function DopplerConfigPost() {
     <div class="dpl-post">
       <article>
         <p class="dpl-lede">
-          As Rox has grown, so has the number of services we run to deliver
-          the product experience our users expect.
+          As Rox has grown, so has the number of services we run to deliver the
+          product experience our users expect.
         </p>
         <p>
           One recurring headache has been keeping each service's configuration

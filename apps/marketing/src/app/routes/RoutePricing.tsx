@@ -548,8 +548,8 @@ function CaseStudyVideo() {
               'overflow-wrap': 'break-word',
             }}
           >
-            &ldquo;Rox did not help us get organized. Rox<em> is why</em> we
-            are organized.&rdquo;
+            &ldquo;Rox did not help us get organized. Rox<em> is why</em> we are
+            organized.&rdquo;
           </blockquote>
           <div
             style={{
@@ -718,8 +718,8 @@ const faqItems: Array<{ q: string; a: JSX.Element }> = [
     q: "What's the main purpose of Rox?",
     a: (
       <>
-        Rox combines email, chat, documents, tasks, calls, and agents. Read
-        them in one inbox, search across the workspace, and use agents to edit
+        Rox combines email, chat, documents, tasks, calls, and agents. Read them
+        in one inbox, search across the workspace, and use agents to edit
         documents, draft replies, and update tasks. Documents use CRDTs for live
         collaboration and offline sync.
       </>
@@ -747,10 +747,10 @@ const faqItems: Array<{ q: string; a: JSX.Element }> = [
     q: 'How does Rox compare to Superhuman?',
     a: (
       <>
-        Rox Mail uses familiar J / K / E shortcuts, combines your email
-        accounts in one inbox, and shares that inbox with messages, @mentions,
-        tasks, and agent responses. Agents can search indexed email, draft
-        replies, and share threads with your team.
+        Rox Mail uses familiar J / K / E shortcuts, combines your email accounts
+        in one inbox, and shares that inbox with messages, @mentions, tasks, and
+        agent responses. Agents can search indexed email, draft replies, and
+        share threads with your team.
       </>
     ),
   },
@@ -769,9 +769,9 @@ const faqItems: Array<{ q: string; a: JSX.Element }> = [
     q: 'Does Rox have its own email or integrate with my email?',
     a: (
       <>
-        Rox Mail is an email client, not an email server. We integrate with
-        your existing Google Workspace or Gmail account. Outlook and custom
-        IMAP/SMTP are a popular request and are coming soon.
+        Rox Mail is an email client, not an email server. We integrate with your
+        existing Google Workspace or Gmail account. Outlook and custom IMAP/SMTP
+        are a popular request and are coming soon.
       </>
     ),
   },

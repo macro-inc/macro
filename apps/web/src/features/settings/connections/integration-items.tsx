@@ -7,6 +7,7 @@ import {
 } from '@core/constant/featureFlags';
 import { useEmailLinks } from '@core/email-link';
 import { OutlookBetaBadge } from '@core/email-link/OutlookBetaBadge';
+import type { EmailProvider } from '@core/email-link/ProviderDialog';
 import { PipedreamConnectorIcon } from '@core/pipedream/ConnectorIcon';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { openExternalUrl } from '@core/util/url';
@@ -67,7 +68,7 @@ function agentToolStatus(
 }
 
 function emailItem(
-  provider: EmailLink['provider'],
+  provider: EmailProvider,
   links: Accessor<EmailLink[]>,
   actions: IntegrationItem['Actions']
 ): IntegrationItem {
@@ -112,16 +113,12 @@ export function useEmailItems(
   const multiInbox = useFeatureFlag(enableMultiInbox);
   const outlookOffered = useOutlookAvailable();
   const links = () => (query.isSuccess ? query.data.links : []);
-  const linksFor = (provider: EmailLink['provider']) =>
-    links().filter((link) =>
-      provider === 'OUTLOOK'
-        ? link.provider === 'OUTLOOK'
-        : link.provider !== 'OUTLOOK'
-    );
+  const linksFor = (provider: EmailProvider) =>
+    links().filter((link) => link.provider === provider);
   // Further inboxes are behind multi-inbox; the first is always offered.
   const canAdd = () => links().length === 0 || multiInbox().enabled;
 
-  const actionsFor = (provider: EmailLink['provider']) => () => (
+  const actionsFor = (provider: EmailProvider) => () => (
     <>
       <Show when={canAdd() && (provider !== 'OUTLOOK' || outlookOffered())}>
         <ConnectAction

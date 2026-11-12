@@ -1,4 +1,4 @@
-import type { Component } from 'solid-js';
+import { type Component, For } from 'solid-js';
 import { SectionMoreFeatures } from '../components/sections/SectionMoreFeatures';
 import { setPageSeo } from '../utils/utilSeo';
 import './RouteDpa.css';
@@ -105,11 +105,13 @@ export const RouteDpa: Component = () => {
             class="dpa-toc"
             style={{ 'grid-template-rows': `repeat(${TOC_ROWS}, auto)` }}
           >
-            {TOC.map((entry) => (
-              <li>
-                <a href={`#${entry.id}`}>{entry.title}</a>
-              </li>
-            ))}
+            <For each={TOC}>
+              {(entry) => (
+                <li>
+                  <a href={`#${entry.id}`}>{entry.title}</a>
+                </li>
+              )}
+            </For>
           </ol>
 
           {/* 1. Definitions ------------------------------------------------ */}
@@ -942,11 +944,11 @@ export const RouteDpa: Component = () => {
               Schedule 2: Technical and Organizational Measures
             </h2>
             <p class="dpa-para">
-              Rox will maintain technical and organizational safeguards for
-              the security, confidentiality, and integrity of Customer’s
-              Personal Data uploaded to the Cloud Service as maintained in the
-              Agreement. Rox will maintain a consistent overall security level
-              for the duration of the Service Term.
+              Rox will maintain technical and organizational safeguards for the
+              security, confidentiality, and integrity of Customer’s Personal
+              Data uploaded to the Cloud Service as maintained in the Agreement.
+              Rox will maintain a consistent overall security level for the
+              duration of the Service Term.
             </p>
             <p class="dpa-para">
               Aspects of current technical and organizational measures can be

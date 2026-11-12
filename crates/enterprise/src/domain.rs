@@ -8,8 +8,8 @@ mod service;
 pub use error::{EnterpriseError, Result};
 pub use model::{DisableMemberReport, RuntimePreset, RuntimePresetAllowlist, VerifiedRoxIdentity};
 pub use ports::{
-    AgentSessionAdmission, EnterpriseAdminService, EnterpriseRepository, HarnessRevoker,
-    IdentityBroker, MemberAccess, MemberDirectory, TeamDirectory, UserLifecycle,
+    AgentSessionAdmission, EnterpriseAdminService, EnterpriseFuture, EnterpriseRepository,
+    HarnessRevoker, IdentityBroker, MemberAccess, MemberDirectory, TeamDirectory, UserLifecycle,
 };
 pub use service::{
     EnterpriseService, MemberAccessService, ProductionIdentityBroker, RuntimePolicy,

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT preset_ids as \"preset_ids: Vec<String>\" FROM team_runtime_preset_allowlist WHERE team_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "preset_ids: Vec<String>",
+        "type_info": "TextArray"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "ee928c1d9e41fa879fc8b80b17cf89e93b5b9aafff9588db00c9d3d160c8b36e"
+}

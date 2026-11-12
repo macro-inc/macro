@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO enterprise_member_state (macro_user_id, disabled_at)\n                VALUES ($1, NOW())\n                ON CONFLICT (macro_user_id) DO UPDATE SET disabled_at = NOW()\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2d8fe3853fc00f20178ce51b095875b680582d4d44fa5fa56f4652c2d4260b7e"
+}

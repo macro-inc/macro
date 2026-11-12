@@ -30,8 +30,8 @@ const agentsFaq = [
     q: 'Can I use my existing AI client?',
     a: (
       <>
-        Yes. Connect an MCP-compatible client to your Rox account so it can
-        work with your workspace. Follow the{' '}
+        Yes. Connect an MCP-compatible client to your Rox account so it can work
+        with your workspace. Follow the{' '}
         <a href="https://docs.macro.com/AI/mcp/overview">MCP setup guide</a>.
         Running a local agent inside Rox is a separate feature; check the{' '}
         <a href="https://docs.macro.com/AI/bring-your-own">local agent guide</a>{' '}

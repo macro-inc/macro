@@ -19,8 +19,8 @@ async fn provisions_through_the_existing_contract_with_bearer_auth() {
                 Some("Bearer loopback-rox-token")
             );
             Json(serde_json::json!({
-                "address": "ada@rox.one",
-                "username": "ada@rox.one",
+                "address": "ada@example.com",
+                "username": "ada@example.com",
                 "password": "loopback-only-password",
                 "jmapUrl": "http://127.0.0.1/jmap"
             }))
@@ -35,8 +35,8 @@ async fn provisions_through_the_existing_contract_with_bearer_auth() {
     .await
     .unwrap();
 
-    assert_eq!(mailbox.address, "ada@rox.one");
-    assert_eq!(mailbox.username, "ada@rox.one");
+    assert_eq!(mailbox.address, "ada@example.com");
+    assert_eq!(mailbox.username, "ada@example.com");
     assert_eq!(mailbox.jmap_url, "http://127.0.0.1/jmap");
     assert_eq!(mailbox.password(), "loopback-only-password");
     server.abort();

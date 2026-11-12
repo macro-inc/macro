@@ -1,3 +1,4 @@
+import { For } from 'solid-js';
 import IconGithub from '../../../assets/icons/icon-github.svg';
 import { breakpoint } from '../../utils/utilBreakpoint';
 
@@ -77,60 +78,64 @@ export function SectionExtensibility() {
             : 'repeat(3, minmax(0, 1fr))',
         }}
       >
-        {items.map((item, index) => (
-          <div
-            style={{
-              'border-top': '1px solid var(--b2)',
-              'border-left':
-                breakpoint() || index === 0 ? 'none' : '1px solid var(--b2)',
-              display: 'grid',
-              gap: '14px',
-              'min-height': breakpoint() ? undefined : '180px',
-              padding: breakpoint() ? '18px 0 0' : '20px 24px 0 24px',
-            }}
-          >
+        <For each={items}>
+          {(item, index) => (
             <div
               style={{
-                color: 'var(--a0)',
-                'font-family': 'display',
-                'font-size': '18px',
-                'font-weight':
-                  'calc(315 + var(--cream-slab-weight-increase, 0))',
-                'letter-spacing': '-0.01em',
+                'border-top': '1px solid var(--b2)',
+                'border-left':
+                  breakpoint() || index() === 0
+                    ? 'none'
+                    : '1px solid var(--b2)',
+                display: 'grid',
+                gap: '14px',
+                'min-height': breakpoint() ? undefined : '180px',
+                padding: breakpoint() ? '18px 0 0' : '20px 24px 0 24px',
               }}
             >
-              {item.label}
-            </div>
-            <div
-              style={{
-                color: 'var(--c4)',
-                'font-size': breakpoint() ? '15px' : '17px',
-                'line-height': '1.6',
-                'max-width': '280px',
-              }}
-            >
-              {item.body}
-            </div>
-            {item.label === 'Source available' ? (
-              <a
-                href="https://github.com/macro-inc/macro"
-                target="_blank"
+              <div
                 style={{
-                  'align-items': 'center',
-                  color: 'var(--c2)',
-                  display: 'inline-flex',
-                  gap: '6px',
-                  'text-decoration': 'none',
-                  width: 'fit-content',
+                  color: 'var(--a0)',
+                  'font-family': 'display',
+                  'font-size': '18px',
+                  'font-weight':
+                    'calc(315 + var(--cream-slab-weight-increase, 0))',
+                  'letter-spacing': '-0.01em',
                 }}
-                rel="noopener"
               >
-                <span>View on GitHub</span>
-                <IconGithub style={{ width: '16px' }} />
-              </a>
-            ) : null}
-          </div>
-        ))}
+                {item.label}
+              </div>
+              <div
+                style={{
+                  color: 'var(--c4)',
+                  'font-size': breakpoint() ? '15px' : '17px',
+                  'line-height': '1.6',
+                  'max-width': '280px',
+                }}
+              >
+                {item.body}
+              </div>
+              {item.label === 'Source available' ? (
+                <a
+                  href="https://github.com/macro-inc/macro"
+                  target="_blank"
+                  style={{
+                    'align-items': 'center',
+                    color: 'var(--c2)',
+                    display: 'inline-flex',
+                    gap: '6px',
+                    'text-decoration': 'none',
+                    width: 'fit-content',
+                  }}
+                  rel="noopener"
+                >
+                  <span>View on GitHub</span>
+                  <IconGithub style={{ width: '16px' }} />
+                </a>
+              ) : null}
+            </div>
+          )}
+        </For>
       </div>
     </div>
   );

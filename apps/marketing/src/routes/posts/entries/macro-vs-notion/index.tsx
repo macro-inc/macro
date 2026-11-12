@@ -184,8 +184,8 @@ export default function MacroVsNotionPost() {
           in class?"
         </p>
         <p>
-          That's the goal of Rox: everything in one place, and each thing
-          (e.g. email, CRM, messaging) is better than the competitor — Slack,
+          That's the goal of Rox: everything in one place, and each thing (e.g.
+          email, CRM, messaging) is better than the competitor — Slack,
           Superhuman, Notion, and so on.
         </p>
         <p>
@@ -222,14 +222,14 @@ export default function MacroVsNotionPost() {
           become its own part-time job.
         </p>
         <p>
-          Rox does the opposite. We ship dedicated, purpose-built blocks for
-          the things you actually do: a real editor, a real email client,
-          channels, tasks, calls and a CRM, each one built to stand next to the
-          best dedicated tool in its category, and all of them designed together
-          as a single system. This is not a philosophical nicety. It is the
-          reason we moved our own company off Notion and onto Linear before we
-          ever built Rox. Purpose-built software that knows why it exists and
-          who it is for beats DIY blocks every time.
+          Rox does the opposite. We ship dedicated, purpose-built blocks for the
+          things you actually do: a real editor, a real email client, channels,
+          tasks, calls and a CRM, each one built to stand next to the best
+          dedicated tool in its category, and all of them designed together as a
+          single system. This is not a philosophical nicety. It is the reason we
+          moved our own company off Notion and onto Linear before we ever built
+          Rox. Purpose-built software that knows why it exists and who it is for
+          beats DIY blocks every time.
         </p>
         <p>
           The abstraction argument has only gotten stronger with AI. Markdown
@@ -250,8 +250,8 @@ export default function MacroVsNotionPost() {
           is a layer on top of Gmail rather than a replacement for your stack.
         </p>
         <p>
-          Rox has all of it, for real, and none of it is a bolt-on. Rox Mail
-          is Superhuman-fast and backed by your own database instead of being
+          Rox has all of it, for real, and none of it is a bolt-on. Rox Mail is
+          Superhuman-fast and backed by your own database instead of being
           throttled by Gmail's API. The channels are quieter than Slack and have
           a real inbox, so messages wait for you instead of scrolling away.
           Calls record, transcribe and feed your team's memory by default. The
@@ -337,8 +337,8 @@ export default function MacroVsNotionPost() {
         <p>
           Collaboration is where the architecture shows. Notion resolves edits
           last-write-wins on a per-block basis, where a block is roughly a
-          paragraph. Rox treats the whole document as one cohesive object
-          backed by a CRDT, with sync running on Cloudflare durable objects. The
+          paragraph. Rox treats the whole document as one cohesive object backed
+          by a CRDT, with sync running on Cloudflare durable objects. The
           practical effect is live collaboration and offline editing that does
           not conflict and stays fast no matter where in the world you and your
           collaborator are. Editing a doc with someone really feels like you are
@@ -394,10 +394,10 @@ export default function MacroVsNotionPost() {
         <p>
           This is the thing Notion, and frankly every tool built before this
           era, simply does not have. ChatGPT and Claude build memory from your
-          chats. Rox builds memory from everything: your docs, your email,
-          your tasks, your channels, your calls, and the deals moving through
-          your CRM, and it does it across your whole team, not just you. It
-          refreshes nightly.
+          chats. Rox builds memory from everything: your docs, your email, your
+          tasks, your channels, your calls, and the deals moving through your
+          CRM, and it does it across your whole team, not just you. It refreshes
+          nightly.
         </p>
         <p>
           Because the memory spans the company, the agents can do things a
@@ -416,8 +416,8 @@ export default function MacroVsNotionPost() {
               If your setup is Notion plus Slack plus a mail client plus a CRM,
               yes — that is four tools that do not share context. Run Rox
               alongside Notion for a week: move your active docs over, point
-              your mail and chat at Rox, and keep Notion open for the
-              long-tail database stuff while you decide what comes across.
+              your mail and chat at Rox, and keep Notion open for the long-tail
+              database stuff while you decide what comes across.
             </p>
           </PostFaqItem>
 

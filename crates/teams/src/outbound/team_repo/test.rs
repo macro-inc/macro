@@ -6,6 +6,29 @@ use sqlx::{Pool, Postgres, Row};
 use super::*;
 use crate::domain::model::SeatPlan;
 
+async fn migrate_for_test(pool: &Pool<Postgres>) {
+    // Apply both real migration bodies while remapping only the colliding
+    // mailbox migration version in the isolated test database.
+    let migrations = MACRO_DB_MIGRATIONS
+        .iter()
+        .map(|migration| {
+            let mut migration = migration.clone();
+            if migration.version == 20261110150956 && migration.description == "rox mailbox handles"
+            {
+                migration.version = 20261110150959;
+            }
+            migration
+        })
+        .collect::<Vec<_>>();
+    sqlx::migrate::Migrator {
+        migrations: std::borrow::Cow::Owned(migrations),
+        ..sqlx::migrate::Migrator::DEFAULT
+    }
+    .run(pool)
+    .await
+    .unwrap();
+}
+
 mod delete_team;
 mod invite_link;
 
@@ -399,6 +422,47 @@ async fn test_move_github_app_installation_to_team_noops_when_user_has_no_rows(
     );
     assert_eq!(unrelated_row.try_get::<String, _>("source_type")?, "user");
 
+    Ok(())
+}
+
+#[sqlx::test(migrations = false)]
+async fn invite_persists_one_audit_and_does_not_reaudit_a_duplicate(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    migrate_for_test(&pool).await;
+    sqlx::raw_sql(include_str!("../../../fixtures/teams.sql"))
+        .execute(&pool)
+        .await?;
+    let team_repo = TeamRepositoryImpl::new(pool.clone());
+    let user_id = MacroUserIdStr::parse_from_str("macro|user@user.com")?;
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+    let invites = vec![Email::parse_from_str("enterprise-audit@macro.com")?.lowercase()];
+    let invites = non_empty::NonEmpty::new(invites.as_slice())?;
+
+    let invited = team_repo
+        .invite_users_to_team(&team_id, &user_id, invites.clone(), false)
+        .await?;
+    assert_eq!(invited.len(), 1);
+    let invite_id = invited[0].team_invite_id;
+    let invited_again = team_repo
+        .invite_users_to_team(&team_id, &user_id, invites, false)
+        .await?;
+    assert!(invited_again.is_empty());
+
+    let audits = sqlx::query(
+        "SELECT actor_id, action, resource_id, result FROM enterprise_audit WHERE resource_id = $1",
+    )
+    .bind(invite_id.to_string())
+    .fetch_all(&pool)
+    .await?;
+    assert_eq!(audits.len(), 1);
+    assert_eq!(audits[0].get::<String, _>("actor_id"), user_id.as_ref());
+    assert_eq!(audits[0].get::<String, _>("action"), "invite");
+    assert_eq!(
+        audits[0].get::<String, _>("resource_id"),
+        invite_id.to_string()
+    );
+    assert_eq!(audits[0].get::<String, _>("result"), "success");
     Ok(())
 }
 

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT EXISTS (\n                SELECT 1 FROM enterprise_member_state\n                WHERE macro_user_id = $1 AND disabled_at IS NOT NULL\n            ) AS \"disabled!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "disabled!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "2d469125e3743aed2810a994b04e9c83668349936b9e8e40aae278c2907fea4b"
+}

@@ -4710,10 +4710,10 @@ const faqItems: { q: string; a: JSX.Element }[] = [
     a: (
       <>
         Notion asks you to build your own tools out of markdown pages and
-        databases. Rox gives you purpose-built blocks (docs, tasks, CRM,
-        email, and channels) that share one data model and one search index. You
-        give up some freeform database flexibility, but each block works like a
-        real product and agents can read all of it as one context. See our{' '}
+        databases. Rox gives you purpose-built blocks (docs, tasks, CRM, email,
+        and channels) that share one data model and one search index. You give
+        up some freeform database flexibility, but each block works like a real
+        product and agents can read all of it as one context. See our{' '}
         <a href="https://youtu.be/hyU1XYmxkYM" target="_blank" rel="noreferrer">
           comparison video
         </a>
@@ -4750,9 +4750,9 @@ const faqItems: { q: string; a: JSX.Element }[] = [
     a: (
       <>
         Edits from teammates appear almost instantly, as if you were on the same
-        machine, and edits to the same line resolve without thrashing. Rox
-        uses CRDTs so multiple people can type in the same doc simultaneously,
-        and you can keep working with no network connection.
+        machine, and edits to the same line resolve without thrashing. Rox uses
+        CRDTs so multiple people can type in the same doc simultaneously, and
+        you can keep working with no network connection.
       </>
     ),
   },
@@ -4774,9 +4774,9 @@ const faqItems: { q: string; a: JSX.Element }[] = [
     a: (
       <>
         Documents use standard access levels: owner, editor, commenter, and
-        viewer. You can share with people outside Rox by email, or with a
-        public URL link if you enable the Public Link. People who aren't signed
-        in see a preview without having to create an account.
+        viewer. You can share with people outside Rox by email, or with a public
+        URL link if you enable the Public Link. People who aren't signed in see
+        a preview without having to create an account.
       </>
     ),
   },
@@ -4784,8 +4784,8 @@ const faqItems: { q: string; a: JSX.Element }[] = [
     q: 'Is Rox open source?',
     a: (
       <>
-        Yes. Rox is fully open source under the AGPLv3 (as of May 31 2026),
-        not "open core." To build on Rox under a different license, contact{' '}
+        Yes. Rox is fully open source under the AGPLv3 (as of May 31 2026), not
+        "open core." To build on Rox under a different license, contact{' '}
         <a href="mailto:licensing@macro.com">licensing@macro.com</a>.
       </>
     ),

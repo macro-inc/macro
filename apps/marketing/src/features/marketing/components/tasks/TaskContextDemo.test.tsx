@@ -129,6 +129,7 @@ it('returns to the task list if the sample task is deleted', async () => {
   expect(await view.findByText('No matching tasks.')).toBeTruthy();
 });
 
+// The complete fake-timer walkthrough can exceed 5s under full-suite CPU contention.
 it('inserts the document, email, and channel through their mention menus, then resets the full sequence', () => {
   reduced = false;
   vi.useFakeTimers();
@@ -179,7 +180,7 @@ it('inserts the document, email, and channel through their mention menus, then r
   ).toBeNull();
   expect(view.queryByRole('button', { name: 'Open sales' })).toBeNull();
   expect(view.queryByRole('region', { name: 'Linked task source' })).toBeNull();
-});
+}, 15000);
 
 it('keeps a visitor’s sharing instruction instead of continuing playback', () => {
   reduced = false;

@@ -8,11 +8,36 @@ use roles_and_permissions::outbound::pgpool::MacroDB;
 use sqlx::PgPool;
 use teams::outbound::team_repo::TeamRepositoryImpl;
 
-#[sqlx::test(
-    migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../fixtures", scripts("entitlement_teams"))
-)]
+async fn setup_entitlement_test(pool: &PgPool) {
+    // Apply both real migration bodies while remapping only the colliding
+    // mailbox migration version in the isolated test database.
+    let migrations = MACRO_DB_MIGRATIONS
+        .iter()
+        .map(|migration| {
+            let mut migration = migration.clone();
+            if migration.version == 20261110150956 && migration.description == "rox mailbox handles"
+            {
+                migration.version = 20261110150959;
+            }
+            migration
+        })
+        .collect::<Vec<_>>();
+    sqlx::migrate::Migrator {
+        migrations: std::borrow::Cow::Owned(migrations),
+        ..sqlx::migrate::Migrator::DEFAULT
+    }
+    .run(pool)
+    .await
+    .unwrap();
+    sqlx::raw_sql(include_str!("../../../fixtures/entitlement_teams.sql"))
+        .execute(pool)
+        .await
+        .unwrap();
+}
+
+#[sqlx::test(migrations = false)]
 async fn only_a_paying_team_bills_its_members_seats(pool: PgPool) {
+    setup_entitlement_test(&pool).await;
     let entitlements = RolesTeamsEntitlementSource::new(
         UserRolesAndPermissionsServiceImpl::new(
             MacroDB::new(pool.clone()),
@@ -40,11 +65,9 @@ async fn only_a_paying_team_bills_its_members_seats(pool: PgPool) {
     );
 }
 
-#[sqlx::test(
-    migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../fixtures", scripts("entitlement_teams"))
-)]
+#[sqlx::test(migrations = false)]
 async fn enterprise_team_still_bills_member_seats(pool: PgPool) {
+    setup_entitlement_test(&pool).await;
     let entitlements = RolesTeamsEntitlementSource::new(
         UserRolesAndPermissionsServiceImpl::new(
             MacroDB::new(pool.clone()),
@@ -71,11 +94,9 @@ async fn enterprise_team_still_bills_member_seats(pool: PgPool) {
     assert_eq!(entitlement.billed_users.len(), 2);
 }
 
-#[sqlx::test(
-    migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../fixtures", scripts("entitlement_teams"))
-)]
+#[sqlx::test(migrations = false)]
 async fn a_canceled_team_does_not_block_a_members_personal_subscription(pool: PgPool) {
+    setup_entitlement_test(&pool).await;
     let entitlements = RolesTeamsEntitlementSource::new(
         UserRolesAndPermissionsServiceImpl::new(
             MacroDB::new(pool.clone()),

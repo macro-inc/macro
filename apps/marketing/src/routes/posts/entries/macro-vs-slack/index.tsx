@@ -225,9 +225,9 @@ export default function MacroVsSlackPost() {
         <SectionGlyph route="/email" />
         <h2>A Signal vs. Noise split to keep you sane</h2>
         <p>
-          The main innovation of Rox for making things quieter is the Signal
-          vs. Noise split. Important emails, messages and @mentions go into
-          Signal, and non-important things go into Noise.
+          The main innovation of Rox for making things quieter is the Signal vs.
+          Noise split. Important emails, messages and @mentions go into Signal,
+          and non-important things go into Noise.
         </p>
         <PostScreenshot
           src={signalNoise}
@@ -243,28 +243,27 @@ export default function MacroVsSlackPost() {
         <SectionGlyph route="/channels" />
         <h2>Unread on the side, not everything</h2>
         <p>
-          The second big thing that makes Rox less noisy than Slack is that
-          only your unread channels are on the side, not every channel (of
-          course, you can pin channels if you want them there). This
-          ever-so-slight bit of friction to open a channel, for everyone on your
-          team, creates less traffic. I know it doesn't sound like much, but
-          when I introspect on why our Rox Chat is quieter than our Slack was,
-          I think this is why.
+          The second big thing that makes Rox less noisy than Slack is that only
+          your unread channels are on the side, not every channel (of course,
+          you can pin channels if you want them there). This ever-so-slight bit
+          of friction to open a channel, for everyone on your team, creates less
+          traffic. I know it doesn't sound like much, but when I introspect on
+          why our Rox Chat is quieter than our Slack was, I think this is why.
         </p>
 
         <SectionGlyph route="/tasks" />
         <h2>Rox Chat tightly integrates with engineering tasks</h2>
         <p>
           If you read our{' '}
-          <a href="/posts/linear-alternative">post on Rox vs. Linear</a>,
-          you'll see me talk about how tightly channels are integrated with
-          Rox tasks. This has been really helpful for our engineering team
-          staying on track without needing a dedicated PM keeping track of
-          everything — which works well with our culture of agency and no
-          micromanaging. We no longer have to "stay on top" of everybody,
-          because everybody is creating tasks and marking them complete (or it
-          happens automatically with the GitHub integration) without me having
-          to prod them to keep things updated.
+          <a href="/posts/linear-alternative">post on Rox vs. Linear</a>, you'll
+          see me talk about how tightly channels are integrated with Rox tasks.
+          This has been really helpful for our engineering team staying on track
+          without needing a dedicated PM keeping track of everything — which
+          works well with our culture of agency and no micromanaging. We no
+          longer have to "stay on top" of everybody, because everybody is
+          creating tasks and marking them complete (or it happens automatically
+          with the GitHub integration) without me having to prod them to keep
+          things updated.
         </p>
         <PostScreenshot
           src={tasksIntegration}
@@ -281,9 +280,9 @@ export default function MacroVsSlackPost() {
         <h2>Split-screen channels in Rox Chat</h2>
         <p>
           Slack only lets you have one window open at a time, which makes it
-          hard to multitask. When I look at our team using Rox Chat, they
-          often have multiple splits open at a time, which wouldn't be possible
-          with Slack. This makes it easy to carry out multiple conversations in
+          hard to multitask. When I look at our team using Rox Chat, they often
+          have multiple splits open at a time, which wouldn't be possible with
+          Slack. This makes it easy to carry out multiple conversations in
           parallel.
         </p>
         <PostScreenshot
@@ -304,13 +303,13 @@ export default function MacroVsSlackPost() {
           I'd have to go looking through all the different channels to find it.
         </p>
         <p>
-          In Rox this is a lot easier because the first few replies to a
-          message show inline (like Reddit or forums), instead of being hidden
-          in a side flap like Slack that you need to expand to see the context
-          of the thread. Most threads are just people saying "okay" or one or
-          two more messages, and it's wasteful to have to stop and open the
-          thread just to see one additional message. Really long threads are
-          still perma-linked, and you can hit expand to view them fully.
+          In Rox this is a lot easier because the first few replies to a message
+          show inline (like Reddit or forums), instead of being hidden in a side
+          flap like Slack that you need to expand to see the context of the
+          thread. Most threads are just people saying "okay" or one or two more
+          messages, and it's wasteful to have to stop and open the thread just
+          to see one additional message. Really long threads are still
+          perma-linked, and you can hit expand to view them fully.
         </p>
         <p>
           For example, here's how I can read multiple threads at a time without
@@ -373,11 +372,11 @@ export default function MacroVsSlackPost() {
         <p>
           Slack and Rox both have agents in channels, @mentionable just like
           human users. Slack has a well-developed marketplace and a lead in
-          integrations compared to Rox (as of 2026), whereas Rox has a
-          stronger first-party agent with full-workspace context and the ability
-          to take action. When you <code>@Rox</code> in a channel, it gains
-          the permissions of the person sending the message, allowing it to
-          access everything, create tasks, send messages, and more.
+          integrations compared to Rox (as of 2026), whereas Rox has a stronger
+          first-party agent with full-workspace context and the ability to take
+          action. When you <code>@Rox</code> in a channel, it gains the
+          permissions of the person sending the message, allowing it to access
+          everything, create tasks, send messages, and more.
         </p>
         <PostScreenshot
           src={agentInChannel}
@@ -386,15 +385,15 @@ export default function MacroVsSlackPost() {
           height={937}
         />
         <p class="mvn-figcaption">
-          <code>@Rox</code> reads the thread, creates the task and links it
-          back — then asks if it should assign and prioritize it.
+          <code>@Rox</code> reads the thread, creates the task and links it back
+          — then asks if it should assign and prioritize it.
         </p>
 
         <h2>Conclusion</h2>
         <p>
           Slack is a mature chat platform with a big integration marketplace and
-          Slack Connect to chat across companies. Rox is quieter, has better
-          UX, and is a more powerful bedrock for agentic development.
+          Slack Connect to chat across companies. Rox is quieter, has better UX,
+          and is a more powerful bedrock for agentic development.
         </p>
 
         <h2 class="post-faq-title">Frequently asked questions</h2>
@@ -412,8 +411,8 @@ export default function MacroVsSlackPost() {
             <p>
               When you depend on Slack's enormous app directory or on Slack
               Connect channels with external companies. Those ecosystems took
-              years to build and we will not pretend Rox matches them yet;
-              some teams keep both during a transition.
+              years to build and we will not pretend Rox matches them yet; some
+              teams keep both during a transition.
             </p>
           </PostFaqItem>
 

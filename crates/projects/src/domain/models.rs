@@ -26,6 +26,8 @@ pub struct CreateProjectArgs {
 /// Arguments for editing a project.
 #[derive(Debug, Clone)]
 pub struct EditProjectArgs {
+    /// Authenticated actor, required when this edit enables a share link.
+    pub actor_id: Option<MacroUserIdStr<'static>>,
     /// Project identifier.
     pub project_id: String,
     /// Replacement name, or `None` to leave it unchanged.

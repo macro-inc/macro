@@ -3,7 +3,10 @@ import { toast } from '@core/component/Toast/Toast';
 import { enableMultiInbox } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
-import { calendarConsentScopes } from '@core/email-link/consent';
+import {
+  calendarConsentScopes,
+  isExternalEmailLink,
+} from '@core/email-link/consent';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useEmailLinksQuery } from '@queries/email/link';
 import { createSignal, Suspense } from 'solid-js';
@@ -33,9 +36,9 @@ function CalendarSettingsContent() {
   const [disconnect, setDisconnect] =
     createSignal<TurnOffCalendarTarget | null>(null);
   const ownedLinks = () =>
-    (links.isSuccess ? (links.data?.links ?? []) : []).filter(
-      (l) => l.macro_id === userId()
-    );
+    (links.isSuccess ? (links.data?.links ?? []) : [])
+      .filter(isExternalEmailLink)
+      .filter((l) => l.macro_id === userId());
   const accounts = (): ConnectedCalendarAccount[] => {
     const groups = groupCalendarSourcesByAccount(
       sources().filter((s) => s.emailLinkId)

@@ -70,7 +70,7 @@ impl FusionAuthClient {
         id_token: &str,
         code: &str,
     ) -> Result<(String, String)> {
-        login(
+        let tokens = login(
             &self.unauth_client,
             &self.fusion_auth_base_url,
             AppleLoginRequest {
@@ -84,6 +84,8 @@ impl FusionAuthClient {
                 identity_provider_id: Cow::Borrowed(apple_identity_provider_id),
             },
         )
-        .await
+        .await?;
+        self.audit_completed_login(&tokens.0).await?;
+        Ok(tokens)
     }
 }
