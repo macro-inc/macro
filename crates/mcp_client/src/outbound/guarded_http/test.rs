@@ -29,6 +29,8 @@ fn only_public_unicast_is_public() {
         "fe80::1",
         "ff02::1",
         "2001:db8::1",
+        "3fff::1",
+        "3fff:fff::1",
         "2001::1",
         "2002:a9fe:a9fe::1",
         // IPv6 wrapping an internal IPv4 address is judged as that address.
@@ -46,6 +48,7 @@ fn only_public_unicast_is_public() {
         "100.63.255.255",
         "100.128.0.1",
         "2606:4700:4700::1111",
+        "3fff:1000::1",
         "::ffff:8.8.8.8",
         "64:ff9b::808:808",
     ] {

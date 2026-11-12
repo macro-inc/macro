@@ -301,5 +301,6 @@ fn is_public_v6(address: Ipv6Addr) -> bool {
     (a & 0xe000) == 0x2000
         && !(a == 0x2001 && b < 0x0200) // IETF assignments: Teredo, benchmarking, ORCHID
         && !(a == 0x2001 && b == 0x0db8) // documentation
+        && !(a == 0x3fff && b < 0x1000) // documentation, 3fff::/20
         && a != 0x2002 // 6to4 wraps an arbitrary IPv4 address
 }
