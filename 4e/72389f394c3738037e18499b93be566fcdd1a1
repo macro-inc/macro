@@ -1,0 +1,40 @@
+services/mcp_auth_proxy/templates/broker_page.css
+  s_6a2ec6e521e617::t_6dd99aa9cc3292 1-51,55,59-64,68-105,108-115,118-133,137,139-143,145-148,150-152,155-159,162-186,194,196-202,204-205,207,209-216,219-221,223-229,231-234,238-250,252-266,270-273,276,278-281,283-290,292-299
+  s_6a2ec6e521e617::t_267c02812908cd 300-321
+services/mcp_auth_proxy/AGENTS.md
+  s_6a2ec6e521e617::t_03cc0b0492b9dd 26-28
+services/mcp_auth_proxy/src/inbound/axum_router.rs
+  s_6a2ec6e521e617::t_0f680575b2a2b3 110-113,115-117,357
+services/mcp_auth_proxy/src/inbound/axum_router/test.rs
+  s_6a2ec6e521e617::t_286d89554eed66 24-25,346,633,640-668
+services/mcp_auth_proxy/templates/consent.html
+  s_6a2ec6e521e617::t_79b5ce96de0d1c 13-17
+services/mcp_auth_proxy/templates/consent_declined.html
+  s_6a2ec6e521e617::t_0d55d20afd6799 9,14-18
+services/mcp_auth_proxy/templates/email_sign_in.html
+  s_6a2ec6e521e617::t_22aebaadce5841 15-19,25-29,37,40-44,49-53
+services/mcp_auth_proxy/templates/macro_mark.html
+  s_6a2ec6e521e617::t_2ff3b4b9d9d155 1-7
+services/mcp_auth_proxy/templates/manual_delivery.html
+  s_6a2ec6e521e617::t_fde64ce5435685 13-17
+services/mcp_auth_proxy/templates/roboto_slab_font.css
+  s_6a2ec6e521e617::t_60ce357594cf06 1-11
+services/mcp_auth_proxy/templates/sign_in_choice.html
+  s_6a2ec6e521e617::t_2dec2f16cfed75 14-18,24-32,46-50
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "4e72389f394c3738037e18499b93be566fcdd1a1",
+  "prompts": {},
+  "sessions": {
+    "s_6a2ec6e521e617": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "71cbf0c0-4c8b-4848-98d0-a43797857638",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
