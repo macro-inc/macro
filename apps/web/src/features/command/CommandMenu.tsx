@@ -11,6 +11,10 @@ import {
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import {
+  canOpenInNewTab,
+  openInNewTab,
+} from '@components/app/tab-layout/open-in-new-tab';
+import {
   enableProjects,
   USE_MACRO_PR_SUMMARY_BLOCK,
 } from '@core/constant/featureFlags';
@@ -25,10 +29,9 @@ import {
 import { TOKENS } from '@core/hotkey/tokens';
 import type { HotkeyCommand, RegisterHotkeyReturn } from '@core/hotkey/types';
 import { runCommand } from '@core/hotkey/utils';
-import { debouncedDependent } from '@core/util/debounce';
+import { flushableDebouncedDependent } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { lazyNamed } from '@core/util/lazyNamed';
-import { createRunWhenCurrent } from '@core/util/run-when-current';
 import { createSelectionAnchor } from '@core/util/selection-anchor';
 import { type EntityData, isGithubPrEntity } from '@entity';
 import { EntitySelectionBadge } from '@entity/components/EntitySelectionBadge';
@@ -463,7 +466,10 @@ function CommandSearchMenu(
 
   const [attachHotkeys, hotkeyScope] = useHotkeyDOMScope('command-menu');
 
-  const query = debouncedDependent(CommandState.query, 60);
+  const [query, flushQuery] = flushableDebouncedDependent(
+    CommandState.query,
+    60
+  );
 
   useDatabaseDiscoverySync(() => !props.items && CommandState.isOpen());
 
@@ -586,6 +592,13 @@ function CommandSearchMenu(
   const selectedIsEntity = () => {
     const item = selectedItem();
     return item && (isEntityItem(item) || isUserItem(item));
+  };
+  /** Entities Cmd+K opens in a split, so they can open in a new tab too. */
+  const selectedOpensInSplit = () => {
+    const item = selectedItem();
+    if (!item || !isEntityItem(item)) return false;
+    if (isGithubPrEntity(item.data)) return USE_MACRO_PR_SUMMARY_BLOCK;
+    return item.data.type !== 'foreign';
   };
   const selectedIsSearch = () => {
     const item = selectedItem();
@@ -718,18 +731,14 @@ function CommandSearchMenu(
     hide: true,
   });
 
-  // The list trails the typed text by the query debounce. Enter pressed in
-  // that gap waits for the list of the text on screen.
-  const runWhenCurrent = createRunWhenCurrent(
-    () => query() !== CommandState.query(),
-    CommandState.isOpen
-  );
+  // The list trails the typed text by the query debounce. Enter brings it up
+  // to date first, then acts at once: a deferred action would be lost if the
+  // person kept typing.
   const actOnSelected = (openInNewSplit: boolean) => {
-    if (query() === CommandState.query() && !selectedItem()) return false;
-    runWhenCurrent(() => {
-      const item = selectedItem();
-      if (item) handleItemAction(item, openInNewSplit);
-    });
+    flushQuery();
+    const item = selectedItem();
+    if (!item) return false;
+    handleItemAction(item, openInNewSplit);
     return true;
   };
 
@@ -753,6 +762,23 @@ function CommandSearchMenu(
     keyDownHandler: (event) => {
       if (event?.isComposing) return false;
       return actOnSelected(true);
+    },
+    runWithInputFocused: true,
+  });
+
+  const confirmTabHotkey = registerHotkey({
+    hotkey: 'cmd+enter',
+    scopeId: hotkeyScope,
+    description: () => t('commandMenu.openInNewTab'),
+    condition: () => canOpenInNewTab() && selectedOpensInSplit(),
+    keyDownHandler: (event) => {
+      if (event?.isComposing) return false;
+      if (query() === CommandState.query() && !selectedItem()) return false;
+      runWhenCurrent(() => {
+        const item = selectedItem();
+        if (item) openInNewTab(() => handleItemAction(item, false));
+      });
+      return true;
     },
     runWithInputFocused: true,
   });
@@ -1040,6 +1066,12 @@ function CommandSearchMenu(
               <HotkeyHint
                 command={confirmSplitHotkey}
                 label={t('commandMenu.openInNewSplit')}
+              />
+            </Show>
+            <Show when={canOpenInNewTab() && selectedOpensInSplit()}>
+              <HotkeyHint
+                command={confirmTabHotkey}
+                label={t('commandMenu.openInNewTab')}
               />
             </Show>
           </Match>
