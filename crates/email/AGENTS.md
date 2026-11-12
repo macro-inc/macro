@@ -336,6 +336,11 @@ tools — hexagonal, heavily feature-gated.
   owner, then actor id, retaining one binding per link and actor; the repository
   returns each binding's kind so custody cleanup runs before an owner disconnect
   can suppress it without processing a self-custodian twice.
+- `email_mailbox_folders.total_item_count` is Graph's `totalItemCount` from the
+  latest catalog discovery (every 5 minutes, from the listing discovery already
+  makes), and the discover span sums it as `outlook.provider_item_count`. It
+  counts what the folder holds at the provider, imported or not, so an import
+  is checked against it.
 - Import counts for the health snapshot stay in memory (`ImportTally`) and are
   flushed once a minute to `email_mailbox_import_minutes`; never write per
   imported message for telemetry.
