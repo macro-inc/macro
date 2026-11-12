@@ -338,6 +338,72 @@ async fn a_slack_connect_channel_syncs_both_ways_until_slack_ends_the_session(po
     .expect("the file is downloaded");
     assert_eq!(blob.bytes.as_deref(), Some(b"\x89PNG\r\n\x1a\n".as_slice()));
 
+    // The owner sends a file from Macro: it is uploaded and shared in the
+    // channel, and the echo converges on the same message.
+    let png = b"\x89PNG\r\n\x1a\nmacro".to_vec();
+    let staged = chats
+        .upload_attachment(
+            &receipt::<ViewAccessLevel>(chat.id),
+            "chart.png",
+            "image/png",
+            &png,
+            SendAuthority::Human,
+        )
+        .await
+        .unwrap();
+    chats
+        .send_reply(
+            &receipt::<ViewAccessLevel>(chat.id),
+            &SendReply {
+                idempotency_key: Uuid::now_v7(),
+                message: ReplyContent::Media {
+                    upload_id: staged.upload_id,
+                    caption: Some("the chart".to_owned()),
+                },
+                reply_to: None,
+                thread: None,
+            },
+            SendAuthority::Human,
+        )
+        .await
+        .unwrap();
+    let file_message = wait_for_rows(&pool, WAIT, || async {
+        sqlx::query!(
+            r#"SELECT m.origin, m.body, a.state FROM slack_send s
+            JOIN external_chat_message m ON m.id = s.message_id
+            JOIN external_chat_attachment a ON a.chat_id = m.chat_id AND a.source_id = m.source_id
+            WHERE s.chat_id = $1 AND s.payload->'message'->>'type' = 'media' AND s.state = 'accepted'"#,
+            chat.id
+        )
+        .fetch_optional(&pool)
+        .await
+        .unwrap()
+    })
+    .await;
+    let Some(file_message) = file_message else {
+        let sends = sqlx::query!("SELECT state, error_code, payload->'message'->>'type' AS kind FROM slack_send WHERE chat_id = $1", chat.id)
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+        let sends: Vec<_> = sends
+            .iter()
+            .map(|row| (row.state.clone(), row.error_code.clone(), row.kind.clone()))
+            .collect();
+        panic!("the file send is accepted with its attachment: {sends:?}");
+    };
+    assert_eq!(file_message.origin, "macro");
+    assert_eq!(file_message.body, "the chart");
+    assert_eq!(file_message.state, "downloaded");
+    assert_eq!(slack.calls_of("files.completeUploadExternal").len(), 1);
+    let rows_for_file = sqlx::query_scalar!(
+        r#"SELECT count(*) AS "count!" FROM external_chat_message WHERE chat_id = $1 AND body = 'the chart'"#,
+        chat.id
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(rows_for_file, 1);
+
     // A partner deletes their message: it becomes a tombstone.
     slack.push_event(
         ALICE_SLACK,

@@ -183,6 +183,15 @@ impl SessionService {
         self.repository.claim_sends(scope, limit).await
     }
 
+    /// The staged file of a claimed file send.
+    pub async fn outbound_file(
+        &self,
+        scope: SessionScope,
+        send: Uuid,
+    ) -> ExternalChatResult<OutboundFile> {
+        self.repository.outbound_file(scope, send).await
+    }
+
     /// The point of no return for one send.
     pub async fn begin_dispatch(
         &self,
@@ -347,7 +356,7 @@ pub fn catalogue_conversation(
         direct_user_id,
         last_activity_at: conversation
             .updated
-            .and_then(|millis| DateTime::<Utc>::from_timestamp_millis(millis)),
+            .and_then(DateTime::<Utc>::from_timestamp_millis),
         unread_count: conversation.unread_count.unwrap_or(0),
         last_read_ts: conversation.last_read.as_ref().map(|ts| ts.to_string()),
     })

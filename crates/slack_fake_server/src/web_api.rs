@@ -711,6 +711,24 @@ fn complete_upload(state: &mut State, fields: &Fields, caller: &Caller) -> Value
         shared.push(stored.info.clone());
     }
     let ts = state.next_ts();
+    let shared_in = if channel.starts_with('C') {
+        "public"
+    } else {
+        "private"
+    };
+    for file in &files {
+        if let Some(stored) = file
+            .get("id")
+            .and_then(Value::as_str)
+            .and_then(|id| state.files.get_mut(id))
+            && let Some(object) = stored.info.as_object_mut()
+        {
+            object.insert(
+                "shares".to_owned(),
+                json!({ shared_in: { channel.clone(): [{ "ts": ts, "thread_ts": field(fields, "thread_ts") }] } }),
+            );
+        }
+    }
     let mut message = json!({
         "type": "message",
         "subtype": "file_share",

@@ -425,6 +425,14 @@ impl SessionRepository for PgSlackRepository {
         super::sends::claim_sends(&self.pool, scope, limit).await
     }
 
+    async fn outbound_file(
+        &self,
+        scope: SessionScope,
+        send: Uuid,
+    ) -> ExternalChatResult<OutboundFile> {
+        super::sends::outbound_file(&self.pool, scope, send).await
+    }
+
     async fn begin_dispatch(
         &self,
         scope: SessionScope,

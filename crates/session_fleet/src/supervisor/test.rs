@@ -266,7 +266,7 @@ async fn a_forwarded_signal_carries_the_span_of_its_notification() {
     signals
         .send(Traced {
             signal: FleetSignal::Account {
-                account: account,
+                account,
                 signal: AccountSignal::Send,
                 take: false,
             },

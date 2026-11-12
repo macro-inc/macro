@@ -18,7 +18,6 @@ external_chat = { path = "../external_chat", features = ["outbound", "test-suppo
 whatsapp_linked = { path = "../whatsapp_linked", features = ["outbound"] }
 whatsapp_session_service = { path = "../../services/whatsapp_session_service" }
 kms_envelope = { path = "../kms_envelope", features = ["fake"] }
-whatsapp_store_pg = { path = "../whatsapp_store_pg" }
 whatsmeow = { path = "../whatsmeow" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 zeroize = { workspace = true }

@@ -327,6 +327,7 @@ async fn only_the_owners_advancing_reads_reach_the_provider(pool: PgPool) {
     let chats = ExternalChatService::new(
         ChatProviders {
             whatsapp: provider.clone(),
+            slack: Arc::new(UnconfiguredProvider),
         },
         linked.store.clone(),
         Arc::new(Allow),

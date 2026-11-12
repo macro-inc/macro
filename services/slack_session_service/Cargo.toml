@@ -45,5 +45,3 @@ zeroize = { workspace = true }
 
 [dev-dependencies]
 kms_envelope = { path = "../../crates/kms_envelope", features = ["fake"] }
-macro_db_migrator = { path = "../../crates/macro_db_migrator" }
-slack_fake_server = { path = "../../crates/slack_fake_server" }

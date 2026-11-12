@@ -372,16 +372,16 @@ pub(super) async fn claim_sends(
                     None => (None, None, true),
                 }
             }
-            // Files from Macro wait for the attachment pipeline's Slack upload.
-            ReplyContent::Media { .. } => (None, None, true),
             // Slack has no quotes: a reply is in the thread of its root.
-            ReplyContent::Text { .. } => match request.thread.or(request.reply_to) {
-                Some(root) => match slack_position_in(&mut tx, row.chat_id, root).await? {
-                    Some((ts, parent)) => (Some(parent.unwrap_or(ts)), None, false),
-                    None => (None, None, true),
-                },
-                None => (None, None, false),
-            },
+            ReplyContent::Text { .. } | ReplyContent::Media { .. } => {
+                match request.thread.or(request.reply_to) {
+                    Some(root) => match slack_position_in(&mut tx, row.chat_id, root).await? {
+                        Some((ts, parent)) => (Some(parent.unwrap_or(ts)), None, false),
+                        None => (None, None, true),
+                    },
+                    None => (None, None, false),
+                }
+            }
         };
         if missing {
             sqlx::query!(
@@ -602,8 +602,70 @@ pub(super) async fn record_send_outcome(
                         ingest::apply_in(&mut tx, &account, &chat, &change).await?;
                     }
                 }
-                ReplyContent::Media { .. } => {
-                    return Err(corrupt("a file send was dispatched"));
+                ReplyContent::Media { upload_id, caption } => {
+                    let thread_ts = match request.thread.or(request.reply_to) {
+                        Some(root) => slack_position_in(&mut tx, row.chat_id, root)
+                            .await?
+                            .map(|(target, root)| root.unwrap_or(target)),
+                        None => None,
+                    };
+                    let message = InboundMessage {
+                        ts: ts.clone(),
+                        sent_at: ts_time(ts),
+                        sender: Sender::User {
+                            slack_user_id: identity,
+                            team_id: None,
+                            display_name: None,
+                        },
+                        body: caption.clone().unwrap_or_default(),
+                        mentions: vec![],
+                        thread_ts,
+                        broadcast: false,
+                        system: false,
+                        files: vec![],
+                        edited_ts: None,
+                        client_msg_id: None,
+                    };
+                    ingest::store_message_in(
+                        &mut tx,
+                        row.chat_id,
+                        &message,
+                        ingest::StoredOrigin::Send {
+                            id: send,
+                            user_id: &row.user_id,
+                        },
+                        account.id,
+                    )
+                    .await?;
+                    // The staged upload becomes the attachment's static file; the
+                    // echo's own copy of the file is never downloaded.
+                    let blob = sqlx::query!(
+                        r#"SELECT mime, filename, sha256, octet_length(bytes) AS "size!" FROM external_chat_media_blob WHERE id = $1"#,
+                        upload_id
+                    )
+                    .fetch_one(&mut *tx)
+                    .await
+                    .map_err(failure)?;
+                    sqlx::query!(
+                        r#"INSERT INTO external_chat_attachment (chat_id, person_id, source_id, ordinal, blob_id, sha256, state,
+                            account_id, mime, filename, size)
+                        SELECT $1, m.person_id, $2, 0, $3, $4, 'downloaded', $5, $6, $7, $8
+                        FROM external_chat_message m WHERE m.id = $9
+                        ON CONFLICT (chat_id, person_id, source_id, ordinal) DO NOTHING"#,
+                        row.chat_id,
+                        ts,
+                        upload_id,
+                        blob.sha256,
+                        account.id,
+                        blob.mime,
+                        blob.filename,
+                        i64::from(blob.size),
+                        send
+                    )
+                    .execute(&mut *tx)
+                    .await
+                    .map_err(failure)?;
+                    notify(&mut tx, external_chat::signals::MEDIA_READY, *upload_id).await?;
                 }
             }
         }
@@ -632,6 +694,36 @@ async fn mark_accepted_in(
     .await
     .map_err(failure)?;
     Ok(())
+}
+
+pub(super) async fn outbound_file(
+    pool: &PgPool,
+    scope: SessionScope,
+    send: Uuid,
+) -> ExternalChatResult<OutboundFile> {
+    let mut tx = pool.begin().await.map_err(failure)?;
+    let account = fence_in(&mut tx, scope, false).await?;
+    let row = sqlx::query!(
+        r#"SELECT b.mime, b.filename, b.bytes, s.payload->'message'->>'caption' AS caption FROM slack_send s
+        JOIN external_chat_media_blob b ON b.id = (s.payload->'message'->>'uploadId')::uuid
+          AND b.user_id = s.user_id AND b.chat_id = s.chat_id
+        WHERE s.id = $1 AND s.account_id = $2 AND s.claimed_epoch = $3 AND s.state = 'sending'
+          AND s.payload->'message'->>'type' = 'media'"#,
+        send,
+        account.id,
+        scope.lease_epoch
+    )
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(failure)?
+    .ok_or(ExternalChatError::NotFound)?;
+    tx.commit().await.map_err(failure)?;
+    Ok(OutboundFile {
+        filename: row.filename,
+        mime: row.mime,
+        bytes: row.bytes,
+        caption: row.caption,
+    })
 }
 
 pub(super) async fn release_sends(pool: &PgPool, scope: SessionScope) -> ExternalChatResult<()> {

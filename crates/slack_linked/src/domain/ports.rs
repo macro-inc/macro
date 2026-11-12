@@ -408,6 +408,12 @@ pub trait SessionRepository: Send + Sync {
         scope: super::events::SessionScope,
         limit: i64,
     ) -> ExternalChatResult<Vec<super::events::ClaimedSend>>;
+    /// The staged file of a claimed file send.
+    async fn outbound_file(
+        &self,
+        scope: super::events::SessionScope,
+        send: Uuid,
+    ) -> ExternalChatResult<super::events::OutboundFile>;
     /// The point of no return: re-check every fact and record the
     /// `client_msg_id`. `false` means the send failed or expired instead.
     async fn begin_dispatch(

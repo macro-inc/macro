@@ -395,10 +395,17 @@ alias chosen from `ENVIRONMENT`.
   notification are generic (`external_chat`); see
   [External chats](external-chats.md).
 
+## Files
+
+Inbound files are reserved at ingest (one attachment per file, its Slack
+file id as the locator); the observing account's replica downloads them
+(`files.info`, then the authenticated download) into
+`external_chat_media_blob`, hashing what arrived, for DSS's import. A file
+sent from Macro is uploaded with `files.getUploadURLExternal` + the upload +
+`files.completeUploadExternal`; `files.info`'s `shares` names the share
+message's `ts`, so the send is stored under it with the staged upload as its
+attachment, and Slack's echo converges on the same message.
+
 ## Follow-ups
 
-- Files sent from Macro (`files.getUploadURLExternal` + upload +
-  `files.completeUploadExternal`). Inbound files are reserved at ingest, and
-  the observing account's replica downloads them (`files.info`, then the
-  authenticated download) into `external_chat_media_blob` for DSS's import.
 - `rich_text` blocks for messages whose `text` is empty.

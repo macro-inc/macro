@@ -223,16 +223,15 @@ async fn a_pasted_session_adds_a_slack_connect_channel_and_ingests_its_traffic(p
         .await
         .unwrap();
     assert_eq!(session.history_work(scope).await.unwrap().len(), 1);
-    assert_eq!(
+    assert!(
         provider
             .sending_facts(
                 &provider.account(&alice).await.unwrap().unwrap(),
-                &[chat.clone()]
+                std::slice::from_ref(&chat)
             )
             .await
             .unwrap()[0]
-            .can_post,
-        true
+            .can_post
     );
 
     let partner = Sender::User {

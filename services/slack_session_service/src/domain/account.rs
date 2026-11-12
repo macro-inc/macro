@@ -649,7 +649,22 @@ impl<Connector: SlackConnector, Keys: Secrets> Running<'_, Connector, Keys> {
                     .await
                     .map(|()| now_ts())
             }
-            (ReplyContent::Mutation { .. }, None) | (ReplyContent::Media { .. }, _) => {
+            (ReplyContent::Media { .. }, _) => {
+                let file = sessions
+                    .outbound_file(self.scope, send.id)
+                    .await
+                    .map_err(from_domain)?;
+                self.session
+                    .upload(
+                        conversation,
+                        thread_ts.as_ref(),
+                        &file.filename,
+                        file.bytes,
+                        file.caption.as_deref(),
+                    )
+                    .await
+            }
+            (ReplyContent::Mutation { .. }, None) => {
                 return self
                     .record(
                         send.id,

@@ -337,6 +337,33 @@ impl SlackSession for SlackClient {
         }
     }
 
+    async fn upload(
+        &self,
+        conversation: &ChannelId,
+        thread_ts: Option<&MessageTs>,
+        filename: &str,
+        bytes: Vec<u8>,
+        caption: Option<&str>,
+    ) -> Result<String, SlackError> {
+        let uploaded = self
+            .upload_file(&slack_client::api::FileUpload {
+                channel: conversation.clone(),
+                thread_ts: thread_ts.cloned(),
+                filename: filename.to_owned(),
+                title: None,
+                initial_comment: caption.map(str::to_owned),
+                body: bytes.into(),
+            })
+            .await?;
+        uploaded
+            .share_ts
+            .map(|ts| ts.to_string())
+            .ok_or(SlackError::InvalidRequest {
+                method: slack_client::SlackMethod::FilesCompleteUploadExternal,
+                reason: "Slack did not say where the file was shared".to_owned(),
+            })
+    }
+
     async fn download(&self, file: &slack_client::FileId) -> Result<Vec<u8>, SlackError> {
         let info = self.file_info(file).await?;
         let Some(url) = info

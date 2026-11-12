@@ -71,4 +71,3 @@ zeroize = { workspace = true, optional = true }
 [dev-dependencies]
 kms_envelope = { path = "../kms_envelope", features = ["fake"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }

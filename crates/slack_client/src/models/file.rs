@@ -2,7 +2,17 @@ use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
 
-use crate::ids::{FileId, TeamId, UserId};
+use crate::ids::{FileId, MessageTs, TeamId, UserId};
+
+/// One message a file was shared in.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+pub struct FileShare {
+    /// The share message's `ts`.
+    pub ts: MessageTs,
+    /// Its thread, for a share in a thread.
+    #[serde(default)]
+    pub thread_ts: Option<MessageTs>,
+}
 
 /// A file attached to a message.
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
@@ -53,6 +63,11 @@ pub struct File {
     /// Hosted outside Slack (Google Drive and friends).
     #[serde(default)]
     pub is_external: bool,
+    /// Where the file was shared: `public`/`private`, then channel id, then
+    /// the share messages.
+    #[serde(default)]
+    pub shares:
+        std::collections::BTreeMap<String, std::collections::BTreeMap<String, Vec<FileShare>>>,
 }
 
 /// Whether the file's metadata is visible.

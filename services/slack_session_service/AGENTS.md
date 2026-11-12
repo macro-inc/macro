@@ -62,9 +62,9 @@ cookies, emails or message text.
 
 - Unlock before announcing a release (`session_fleet`).
 - Never log `SessionCredentials`, `LoginState` or websocket URLs.
-- Files sent from Macro are not supported yet (the send fails
-  `target_unavailable`); inbound files download in `domain/account.rs`
-  `media` (`slack.media.import`).
+- Inbound files download in `domain/account.rs` `media`
+  (`slack.media.import`); a file sent from Macro is uploaded in `dispatch`
+  and stored under the share `ts` `upload_file` reports.
 
 ## Related
 

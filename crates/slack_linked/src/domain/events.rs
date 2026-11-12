@@ -377,6 +377,29 @@ pub struct ClaimedSend {
     pub traceparent: Option<String>,
 }
 
+/// The staged file of a claimed file send.
+#[derive(Clone, PartialEq, Eq)]
+pub struct OutboundFile {
+    /// Display filename.
+    pub filename: String,
+    /// MIME type.
+    pub mime: String,
+    /// The bytes.
+    pub bytes: Vec<u8>,
+    /// Text posted with it.
+    pub caption: Option<String>,
+}
+
+impl std::fmt::Debug for OutboundFile {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("OutboundFile")
+            .field("mime", &self.mime)
+            .field("bytes", &self.bytes.len())
+            .finish_non_exhaustive()
+    }
+}
+
 /// How a dispatched send ended.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SendOutcome {

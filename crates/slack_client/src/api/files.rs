@@ -34,6 +34,9 @@ pub struct UploadedFile {
     pub id: FileId,
     /// Its title.
     pub title: Option<String>,
+    /// The `ts` of the message that shared it in the conversation.
+    #[serde(skip)]
+    pub share_ts: Option<MessageTs>,
 }
 
 #[derive(Deserialize)]
@@ -89,11 +92,20 @@ impl SlackClient {
             form.push(("initial_comment", comment.clone()));
         }
         let completed: CompletedUpload = self.call(method, form).await?;
-        completed
-            .files
-            .into_iter()
-            .next()
-            .ok_or_else(|| invalid_request(method, "Slack completed the upload without a file"))
+        let mut uploaded =
+            completed.files.into_iter().next().ok_or_else(|| {
+                invalid_request(method, "Slack completed the upload without a file")
+            })?;
+        // The share message's ts is only in the file's metadata.
+        let info = self.file_info(&uploaded.id).await?;
+        uploaded.share_ts = info
+            .shares
+            .values()
+            .filter_map(|channels| channels.get(upload.channel.as_str()))
+            .flatten()
+            .map(|share| share.ts.clone())
+            .max();
+        Ok(uploaded)
     }
 
     /// Posts the bytes to the presigned upload URL. The URL carries its own
