@@ -33,6 +33,42 @@ export type UpdateSession = Pick<
   | 'updatedAt'
 >;
 
+/** The fields of a listed agent update that open its session's cards. */
+export type UpdateItem = {
+  sessionId: string;
+  sessionName: string;
+  harness: string;
+  kind: 'permission' | 'elicitation' | 'tool_approval' | 'stalled';
+  since: string;
+};
+
+/**
+ * One entry per session in a ListAgentUpdates result or an `agentUpdates`
+ * view. Waiting sessions are opened live, so their cards show the current
+ * request and leave once it is answered.
+ */
+export function sessionsOf(
+  updates: { items: readonly UpdateItem[] },
+  ownerId: string | undefined
+): UpdateSession[] {
+  if (!ownerId) return [];
+  const sessions = new Map<string, UpdateSession>();
+  for (const item of updates.items) {
+    if (sessions.has(item.sessionId)) continue;
+    sessions.set(item.sessionId, {
+      id: item.sessionId,
+      name: item.sessionName,
+      ownerId,
+      archivedBy: null,
+      harness: item.harness,
+      botId: '',
+      turnState: item.kind === 'stalled' ? 'running' : 'blocked',
+      updatedAt: item.since,
+    });
+  }
+  return [...sessions.values()];
+}
+
 export function eligibleSessions(
   sessions: readonly UpdateSession[],
   ownerId: string | undefined

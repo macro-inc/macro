@@ -400,8 +400,10 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "UpdateInitiative"
                 | "UpdateInitiativeSharing"
                 | "DeleteInitiative"
-                // macro.agents.list() and Agent.update(). ListAgentUpdates
-                // stays: its result renders the cards the user answers on.
+                // macro.agentSessions.updates(), whose cards an agentUpdates
+                // view draws.
+                | "ListAgentUpdates"
+                // macro.agents.list() and Agent.update().
                 | "ListAgents"
                 | "ConfigureAgent"
         )

@@ -439,7 +439,8 @@ and start it with `macro.agentSessions.createManaged({ agent, prompt, repoUrl })
 omitting `agent` for the default persona.
 
 Ask a chat agent what your coding agents need from you and it calls
-`ListAgentUpdates`: your non-archived coding sessions waiting on a permission,
+`ListAgentUpdates` (in code mode, `macro.agentSessions.updates()`, presented as
+an `agentUpdates` view): your non-archived coding sessions waiting on a permission,
 question, or tool approval, plus sessions running with no activity for 20
 minutes (at most 25 sessions; the result says when it was truncated). The
 result shows the same live cards as the Agents home, so you answer in place;

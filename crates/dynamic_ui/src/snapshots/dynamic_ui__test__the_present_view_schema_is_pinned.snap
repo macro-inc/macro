@@ -24,6 +24,56 @@ expression: schema
       ],
       "type": "object"
     },
+    "AgentSessionRef": {
+      "description": "The session an update is from.",
+      "properties": {
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    },
+    "AgentUpdateItem": {
+      "description": "One item of macro.agentSessions.updates(); its other fields are ignored.",
+      "properties": {
+        "harness": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/AgentUpdateKind"
+        },
+        "session": {
+          "$ref": "#/$defs/AgentSessionRef"
+        },
+        "sessionName": {
+          "type": "string"
+        },
+        "since": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "session",
+        "sessionName",
+        "harness",
+        "kind",
+        "since"
+      ],
+      "type": "object"
+    },
+    "AgentUpdateKind": {
+      "description": "What a coding agent's session is waiting for.",
+      "enum": [
+        "permission",
+        "elicitation",
+        "tool_approval",
+        "stalled"
+      ],
+      "type": "string"
+    },
     "Align": {
       "description": "How a container aligns its children across its axis.",
       "enum": [
@@ -1422,6 +1472,26 @@ expression: schema
           "required": [
             "type",
             "tags"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Live cards on which the user answers coding agents' waiting\npermission requests and questions, and sees stalled sessions. Pass the\nitems macro.agentSessions.updates() returned, unchanged, whenever it\nreturns any: these cards are the only place the user can answer them.",
+          "properties": {
+            "items": {
+              "items": {
+                "$ref": "#/$defs/AgentUpdateItem"
+              },
+              "type": "array"
+            },
+            "type": {
+              "const": "agentUpdates",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "items"
           ],
           "type": "object"
         },
