@@ -181,10 +181,11 @@ const HIDDEN_FROM_CHATGPT: [&str; 5] = [
 ];
 
 /// Whether an OAuth caller might be ChatGPT: registered under its name, or
-/// holding a token with no recorded client, which fails closed until the next
-/// refresh records one. The name is self-reported, which is fine here: this
-/// picks how tools are presented and grants nothing, and a client naming itself
-/// ChatGPT only loses code mode and the tools above.
+/// holding a token with no recorded client, which gets ChatGPT's surface until
+/// the next refresh records one. The name is self-reported, which is fine here:
+/// this picks how tools are presented and grants nothing. A client naming
+/// itself ChatGPT trades code mode for the direct native tools, which reach
+/// the same data the SDK does, and loses the tools above.
 fn may_be_chatgpt(caller: &ToolCaller) -> bool {
     match caller {
         ToolCaller::McpClient { name: None } => true,

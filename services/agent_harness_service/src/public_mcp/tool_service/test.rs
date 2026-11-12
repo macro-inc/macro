@@ -590,19 +590,24 @@ mod code_mode {
 
     #[tokio::test]
     async fn chatgpt_calls_native_tools_directly() {
-        let response = rpc_as(
-            app(Arc::new(Runs::default())),
-            USER,
+        for caller in [
             mcp_client("ChatGPT"),
-            "tools/call",
-            serde_json::json!({"name": "NameSearch", "arguments": {}}),
-        )
-        .await;
-        assert_eq!(
-            response["result"]["structuredContent"],
-            serde_json::json!({"ok": true}),
-            "{response}"
-        );
+            Some(ToolCaller::McpClient { name: None }),
+        ] {
+            let response = rpc_as(
+                app(Arc::new(Runs::default())),
+                USER,
+                caller,
+                "tools/call",
+                serde_json::json!({"name": "NameSearch", "arguments": {}}),
+            )
+            .await;
+            assert_eq!(
+                response["result"]["structuredContent"],
+                serde_json::json!({"ok": true}),
+                "{response}"
+            );
+        }
     }
 
     #[tokio::test]
@@ -769,6 +774,7 @@ mod code_mode {
             (mcp_client("Claude"), "NameSearch"),
             (mcp_client("Claude"), "ManageAgentSession"),
             (mcp_client("Claude"), "NoSuchTool"),
+            (Some(ToolCaller::Agent(BotId::TEST_A)), "NameSearch"),
         ] {
             let response = rpc_as(
                 app(Arc::new(Runs::default())),
