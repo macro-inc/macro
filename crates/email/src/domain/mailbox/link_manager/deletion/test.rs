@@ -7,7 +7,7 @@ use tracing::instrument::WithSubscriber;
 mod fakes;
 
 #[tokio::test]
-async fn deletion_keeps_effect_order_payloads_default_pacing_and_held_connection() {
+async fn deletion_keeps_effect_order_domain_arguments_default_pacing_and_held_connection() {
     let (service, fake) = service();
     service
         .delete(&link(), &DeletionReason::Unused)
