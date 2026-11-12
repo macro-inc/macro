@@ -57,9 +57,12 @@ export const diskWorker = (limits: DiskLimits = diskLimits): DiskWorker => {
   let dead = false;
   // The thread never keeps the process alive: the exit flush is what waits for it.
   worker.unref();
-  worker.on('error', (error) => {
+  // Typed `unknown` by the newer @types/node the computer's image installs.
+  worker.on('error', (error: unknown) => {
     dead = true;
-    console.error(`disk worker died: ${error.message}`);
+    console.error(
+      `disk worker died: ${error instanceof Error ? error.message : String(error)}`
+    );
   });
   const send = (job: Job, transfer: ArrayBuffer[] = []) => {
     if (dead) return;
