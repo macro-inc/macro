@@ -13732,6 +13732,7 @@ dependencies = [
  "chrono",
  "document_sub_type",
  "item_filters",
+ "macro_user_id",
  "model_file_type",
  "models_soup",
  "opensearch_client",
@@ -18127,8 +18128,11 @@ name = "search_service_client"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "macro_tower_layers",
  "models_search",
  "reqwest 0.13.4",
+ "thiserror 2.0.18",
+ "tracing",
  "workspace-hack",
 ]
 
