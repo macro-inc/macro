@@ -645,7 +645,6 @@ dependencies = [
  "harnesses",
  "http 1.4.0",
  "http-body-util",
- "ideas",
  "image_generation",
  "import",
  "import_jira",
@@ -722,6 +721,7 @@ dependencies = [
  "static_file_service_client",
  "stream",
  "strum 0.27.2",
+ "suggestions",
  "sync_service_client",
  "system_properties",
  "teams",
@@ -10645,37 +10645,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ideas"
-version = "0.1.0"
-dependencies = [
- "agent_correlation",
- "async-trait",
- "axum",
- "chrono",
- "entity_access",
- "entity_registry",
- "feature_flags",
- "futures",
- "macro_authorization",
- "macro_db_migrator",
- "macro_user_id",
- "macro_uuid",
- "model-entity",
- "model_owner",
- "rootcause",
- "serde",
- "serde_json",
- "shown_text",
- "sqlx",
- "strum 0.27.2",
- "thiserror 2.0.18",
- "tokio",
- "tracing",
- "utoipa",
- "workspace-hack",
-]
-
-[[package]]
 name = "ident_case"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -19833,6 +19802,37 @@ name = "subtle"
 version = "2.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
+
+[[package]]
+name = "suggestions"
+version = "0.1.0"
+dependencies = [
+ "agent_correlation",
+ "async-trait",
+ "axum",
+ "chrono",
+ "entity_access",
+ "entity_registry",
+ "feature_flags",
+ "futures",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_user_id",
+ "macro_uuid",
+ "model-entity",
+ "model_owner",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "shown_text",
+ "sqlx",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "utoipa",
+ "workspace-hack",
+]
 
 [[package]]
 name = "symphonia"
