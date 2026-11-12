@@ -63,6 +63,8 @@ pub mod html;
 pub mod plugins_group_a;
 /// Structure, list, table, media, clipboard and link surface policy.
 pub mod plugins_group_b;
+/// Native AI-edit operations applied through application commands.
+pub mod plugins_group_c;
 /// Application surface plugin registration.
 pub mod surface;
 

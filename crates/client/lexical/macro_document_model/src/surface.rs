@@ -16,7 +16,10 @@ pub fn preset_builder_with_mode(ty: EditorType, mode: EditorMode) -> EditorBuild
     };
 
     // WP-58 Group A: input shortcuts and native menu policy.
-    crate::plugins_group_a::register(builder, ty)
+    let builder = crate::plugins_group_a::register(builder, ty);
+
+    // Group C: AI-edit operations.
+    crate::plugins_group_c::register(builder)
 }
 
 /// Decode application command names through the registered migration groups.
@@ -39,6 +42,10 @@ pub fn decode_command(
         // Group A source menu insertion policy.
         |name, json, generation, _event| {
             crate::plugins_group_a::decode_command(name, json, generation)
+        },
+        // Group C AI-edit operations.
+        |name, json, generation, _event| {
+            crate::plugins_group_c::decode_command(name, json, generation)
         },
     ];
     for decode in decoders {
@@ -85,6 +92,8 @@ pub fn query(
         // WP-58 Group B bulk reads.
         crate::plugins_group_b::query,
         crate::plugins_group_a::menu::action_dependencies::query,
+        // Group C AI-edit reads.
+        crate::plugins_group_c::query,
     ];
     for query in queries {
         if let Some(reply) = query(name, data, generation, state)? {

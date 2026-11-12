@@ -794,6 +794,9 @@ mod routed_history_test;
 mod grouping_test;
 
 #[cfg(all(test, feature = "application"))]
+mod ai_ops_history_test;
+
+#[cfg(all(test, feature = "application"))]
 mod arrow_test;
 
 #[cfg(test)]
