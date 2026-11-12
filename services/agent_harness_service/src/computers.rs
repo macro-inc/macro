@@ -278,9 +278,9 @@ async fn run_pass<Ingress: notification::domain::service::NotificationIngress>(
                     .map_err(anyhow::Error::from),
                 Pass::ClaudeStatus => shutdown
                     .run_until_cancelled(async {
-                        let computers = claude_sign_ins.sign_ins.awake_computers().await?;
+                        let computers = operator.awake_computers().await?;
                         claude_sign_ins.harnessd.refresh_each(&computers).await;
-                        Ok::<_, hosted_runtimes::outbound::pg_sign_ins::ClaudeSignInsError>(())
+                        Ok::<_, hosted_runtimes::domain::service::ComputerError>(())
                     })
                     .await
                     .transpose()

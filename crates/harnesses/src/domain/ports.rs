@@ -10,7 +10,10 @@ use harness_token::HashedHarnessToken;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
-use super::account_logins::{AccountLoginChange, AgentProvider, HarnessAccountLogin};
+use super::account_logins::{
+    AccountLoginChange, AccountLoginNotice, AgentProvider, ComputerAccountLogin,
+    HarnessAccountLogin,
+};
 use super::models::{
     ApprovePairingRequest, ClaimOutcome, ClaimPairingRequest, CreateHostedPairing,
     CreatePairingRequest, CreatedPairing, Harness, HarnessAccess, HarnessAgent, HarnessOwner,
@@ -183,6 +186,19 @@ pub trait HarnessRepo: Send + Sync + 'static {
         harness_id: HarnessId,
         provider: AgentProvider,
     ) -> impl Future<Output = Result<Option<HarnessAccountLogin>, Self::Err>> + Send;
+
+    /// Every active login at `provider` on a live Macro computer's harness.
+    fn computer_account_logins(
+        &self,
+        provider: AgentProvider,
+    ) -> impl Future<Output = Result<Vec<ComputerAccountLogin>, Self::Err>> + Send;
+
+    /// Record the expiry notice sent for a login.
+    fn record_login_notice(
+        &self,
+        login_id: Uuid,
+        notice: AccountLoginNotice,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Get the facts the claim path verifies.
     fn pairing_claim_facts(

@@ -4,6 +4,7 @@
 //! login row, so history stays as signed-out rows.
 
 use chrono::{DateTime, Utc};
+use computer_id::ComputerId;
 use harness_id::HarnessId;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
@@ -79,4 +80,51 @@ impl AccountLoginChange {
             Self::SignedIn { provider, .. } | Self::SignedOut { provider } => *provider,
         }
     }
+}
+
+/// The last expiry notice sent for a login (`account_notice_stage`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "outbound", derive(sqlx::Type))]
+#[cfg_attr(
+    feature = "outbound",
+    sqlx(type_name = "account_notice_stage", rename_all = "snake_case")
+)]
+pub enum AccountNoticeStage {
+    /// The sign-in expires soon.
+    ExpiresSoon,
+    /// The sign-in expires today.
+    ExpiresToday,
+    /// The sign-in expired.
+    Expired,
+}
+
+/// The expiry notice last sent for a login and the expiry it warned about.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AccountLoginNotice {
+    /// How far along the notices are.
+    pub stage: AccountNoticeStage,
+    /// The expiry the notice warned about.
+    pub expires_at: Option<DateTime<Utc>>,
+}
+
+/// An active login on a Macro computer's harness, with the notice last sent
+/// for it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ComputerAccountLogin {
+    /// Login row id.
+    pub login_id: Uuid,
+    /// The computer's harness.
+    pub harness_id: HarnessId,
+    /// The harness's display name.
+    pub harness_name: String,
+    /// The computer the harness runs on.
+    pub computer_id: ComputerId,
+    /// Who signed it in, as stored; `None` once that user is deleted.
+    pub signed_in_by: Option<String>,
+    /// When the sign-in was recorded.
+    pub signed_in_at: DateTime<Utc>,
+    /// When the sign-in stops refreshing, as the machine last reported it.
+    pub expires_at: Option<DateTime<Utc>>,
+    /// The expiry notice last sent for it.
+    pub last_notice: Option<AccountLoginNotice>,
 }

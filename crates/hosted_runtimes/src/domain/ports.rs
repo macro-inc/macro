@@ -207,6 +207,11 @@ pub trait ComputerRepo: Send + Sync + 'static {
         harness_id: HarnessId,
     ) -> impl Future<Output = Result<Option<Computer>, Self::Err>> + Send;
 
+    /// Every awake computer that has a harness, as `(harness, computer)`.
+    fn awake_computers(
+        &self,
+    ) -> impl Future<Output = Result<Vec<(HarnessId, ComputerId)>, Self::Err>> + Send;
+
     /// Attach the guest harness to its computer.
     fn set_harness(
         &self,

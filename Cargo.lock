@@ -10213,6 +10213,7 @@ dependencies = [
  "entity_access",
  "feature_flags",
  "harness_id",
+ "harnesses",
  "incus_client",
  "macro_authorization",
  "macro_db_migrator",

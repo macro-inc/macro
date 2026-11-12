@@ -105,8 +105,9 @@ Pulumi stacks; they do not host extra agent processes.
 - `src/computers/claude_expiry.rs`: the notices of the operator's
   `ClaudeSignIns` pass (every 60 s), whose sign-ins come from
   `hosted_runtimes::outbound::pg_sign_ins::PgClaudeSignIns` (active Claude
-  logins with signer, `expires_at` and last notice; it also lists the awake
-  computers for the status pass); `IngressClaudeSignInNotices` addresses the team's owner and
+  logins with signer, `expires_at` and last notice, through harnesses'
+  repository; the status pass lists awake computers with
+  `ComputerOperator::awake_computers`); `IngressClaudeSignInNotices` addresses the team's owner and
   admins (`teams`) and sends `agent_sign_in_expiry` (agent `claude`; inbox, gateway, push)
   on the harness entity, with an id derived from harness, sign-in, stage and
   expiry so replicas and retries never notify twice.

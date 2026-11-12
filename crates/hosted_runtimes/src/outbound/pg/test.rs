@@ -733,3 +733,50 @@ async fn fleet_attachment_tracks_host_heartbeat_freshness(pool: PgPool) {
         FleetAttachment::Attached
     );
 }
+
+/// The sign-in refresh visits awake computers that have a harness.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn awake_computers_are_those_awake_with_a_harness(pool: PgPool) {
+    sqlx::raw_sql(
+        r#"
+        INSERT INTO hosted_runtime_host (id, name, awake_capacity_units, sold_capacity_units)
+        VALUES ('00000000-0000-7000-8000-00000000b0b0', 'awake-host', 9, 9);
+        INSERT INTO harnesses (id, name, owner_user_id, created_by, computer_id)
+        VALUES
+            ('00000000-0000-7000-8000-0000000000a1', 'Awake', 'macro|owner@example.com',
+                'macro|owner@example.com', '00000000-0000-7000-8000-0000000000c1'),
+            ('00000000-0000-7000-8000-0000000000a2', 'Asleep', 'macro|owner@example.com',
+                'macro|owner@example.com', '00000000-0000-7000-8000-0000000000c2');
+        INSERT INTO hosted_runtime
+            (id, team_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, state,
+             created_by, price_id, purchase_key, host_id, awake, harness_id)
+        VALUES
+            ('00000000-0000-7000-8000-0000000000c1', '00000000-0000-7000-8000-0000000000aa',
+                'Awake', 'standard', 4, 8, 100, 'standard@2026-11', '{}',
+                'macro|owner@example.com', 'price_standard', 'buy-1',
+                '00000000-0000-7000-8000-00000000b0b0', true,
+                '00000000-0000-7000-8000-0000000000a1'),
+            ('00000000-0000-7000-8000-0000000000c2', '00000000-0000-7000-8000-0000000000aa',
+                'Asleep', 'standard', 4, 8, 100, 'standard@2026-11', '{}',
+                'macro|owner@example.com', 'price_standard', 'buy-2',
+                '00000000-0000-7000-8000-00000000b0b0', false,
+                '00000000-0000-7000-8000-0000000000a2'),
+            ('00000000-0000-7000-8000-0000000000c3', '00000000-0000-7000-8000-0000000000aa',
+                'Unenrolled', 'standard', 4, 8, 100, 'standard@2026-11', '{}',
+                'macro|owner@example.com', 'price_standard', 'buy-3',
+                '00000000-0000-7000-8000-00000000b0b0', true, NULL);
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let repo = PgComputerRepo::new(pool, policy());
+
+    assert_eq!(
+        repo.awake_computers().await.unwrap(),
+        vec![(
+            HarnessId::new_from_uuid(Uuid::from_u128(0x0000_0000_0000_7000_8000_0000_0000_00a1)),
+            ComputerId::new_from_uuid(Uuid::from_u128(0x0000_0000_0000_7000_8000_0000_0000_00c1)),
+        )]
+    );
+}
