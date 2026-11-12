@@ -10,7 +10,7 @@ means this is a Macro-managed team vault.
 
 - `src/domain/models.rs`: public DTOs, zeroizing sensitive values.
 - `src/domain/service.rs`: human membership, grants, administrator policy and retry recovery.
-- `src/domain/ports.rs`: provider, metadata, lock and global rollout ports.
+- `src/domain/ports.rs`: provider, metadata, lock and per-user rollout ports.
 - `src/outbound/openbao.rs`: team JWT login, KV v2 CAS/history, TOTP.
 - `src/outbound/postgres.rs`: metadata index, durable intents and transaction-scoped locks.
 - `src/inbound/router.rs`: authenticated human routes, CSRF header, private no-store responses.
@@ -32,11 +32,12 @@ Do not add plaintext values to any metadata record, errors or tracing fields.
 
 ## Gotchas
 
-- Every human use case, job and internal team purge uses `enable-passwords-v1`,
-  evaluated for explicit service context `passwords-v1`. Human admission additionally
-  requires the same key for the authenticated actor. Local explicitly enables both.
-  Missing/error results in either evaluation and absent
-  provider configuration deny work. Off pauses cleanup and retains every retry.
+- Human admission evaluates `enable-passwords-v1` only for the authenticated user.
+  Missing, disabled or failed evaluations deny requests; no service identity is evaluated.
+  Local composition explicitly enables the user flag. Provider configuration remains required.
+- Cleanup, reconciliation and trusted internal team purge never evaluate flags.
+  Empty maintenance passes need no provider configuration; retained erasure work checks
+  provider readiness and keeps its journals on failure.
 - Require session origin and authoritative `User.isAgent=false`; session-shaped
   agent accounts never gain access through direct or team grants.
 - Keep `Record.user_id` as immutable creator. New items get a team Edit grant
@@ -111,9 +112,9 @@ metadata revision, so losing a lease cannot restore stale grants or TOTP pointer
   before skipping RPC. Any retained item, intent, enrollment or tombstone requires
   guarded internal team purge. Recheck empty under the existing team lease and
   retain its opaque guard through team deletion; release before RPC if data appears.
-  Off-existing fails before ordinary cleanup effects.
+  Missing provider configuration or failed purge blocks ordinary cleanup effects.
 - Retain bounded explicit item-delete retries and TOTP cleanup journals; jobs
-  gate before metadata discovery and provider work, and resume retained retries on enablement.
+  discover retained work independently of user flags and require provider readiness before erasure.
 - Namespace cleanup uses parent JWT mount `macro-lifecycle`, per-team role
   `team-<team-id>` and exact namespace read/delete policy. Require GET 404 to
   acknowledge asynchronous erasure; never use runtime bootstrap credentials.

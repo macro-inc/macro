@@ -105,6 +105,22 @@ with the staged token, keeps them for local previews, and uploads through
 `upload_staged_file_to_presigned_url`. Other desktop platforms stage nothing
 and keep the browser upload. This needs a desktop native release.
 
+## macOS app menu and Cmd+W
+
+`src/desktop/app_menu.rs` replaces Tauri's default macOS menu with a copy whose
+File menu has **Close Tab** (Cmd+W) instead of Close Window. The menu claims
+Cmd+W before the page sees the key, so the item emits `desktop-close-tab` to the
+focused window, and `useCloseTabShortcut` (`components/app/tab-layout`) closes
+the active desktop tab, or the window when no other tab is open or tabs are off.
+Window > Close Window has no shortcut; the title bar's close button is unchanged.
+When the key window isn't a Tauri window (a popup wry opened, Web Inspector),
+both items close it natively. Until the frontend mounts its listener (a blank
+or crashed webview), Cmd+W does nothing; the close button still works.
+The frontend's window close needs `core:window:allow-close` in
+`capabilities/desktop.json`. Both the WKWebView and Chromium builds use this
+menu; Linux and Windows have no app menu and no desktop tabs. The menu is a
+native change: it ships with the next desktop release.
+
 ## Desktop app icons
 
 Only desktop icons carry the ALPHA badge; iOS and Android icons are unbadged.
@@ -478,6 +494,13 @@ Old schema 2 updaters reject schema 3 and continue using their existing bundle.
 Android cannot receive legacy schema 2 updates because their shared minimum
 cannot establish Android compatibility. `MIN_NATIVE_BUILD` remains supported
 for iOS/desktop-only schema 2 releases.
+
+Desktop reads `minNativeBuild` (`MIN_NATIVE_BUILD`) from schema 3 manifests too.
+Its release numbers come from hand-typed tags, so they never gate updater
+capabilities: each check sends `manifest_schema`, the newest manifest schema the
+updater reads, and the endpoint offers desktop no bundle with a newer schema.
+Desktop updaters that predate the parameter reject schema 3 after downloading
+it, so they keep their bundle until a native update.
 
 Every new native command used by shared JS must raise the corresponding
 platform minimum to a binary that implements it. Optional reachability falls

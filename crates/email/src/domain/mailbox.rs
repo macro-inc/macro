@@ -14,15 +14,22 @@ use telemetry::{
 use tracing::{Instrument, Span};
 use uuid::Uuid;
 
+pub mod calendar_disconnect;
 pub mod catalog;
 pub mod commands;
+pub mod connection;
 pub mod contacts;
 pub mod credentials;
 pub mod drafts;
 pub mod gmail_history;
+pub mod gmail_push;
 pub mod health;
+/// Per-delivery Gmail inbox admission and reconciliation.
+pub mod inbox_sync;
 pub mod initialization;
 pub mod lifecycle;
+/// Link-maintenance queue decisions and reconnect notification selection.
+pub mod link_manager;
 pub mod progress;
 pub mod projection;
 pub mod settings;
@@ -347,6 +354,7 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
             mailbox.sync_generation = lease.mailbox.sync_generation,
             outlook.stream_kind = "folder_catalog",
             outlook.folders = tracing::field::Empty,
+            outlook.provider_item_count = tracing::field::Empty,
             outlook.outcome = tracing::field::Empty,
             outlook.defer_reason = tracing::field::Empty,
             outlook.defer_seconds = tracing::field::Empty,
@@ -365,6 +373,16 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
         let result = match outcome {
             Ok(folders) => {
                 span.record("outlook.folders", span_int(folders.len()));
+                span.record(
+                    "outlook.provider_item_count",
+                    span_int(
+                        folders
+                            .iter()
+                            .filter_map(|folder| folder.total_items)
+                            .map(u64::from)
+                            .sum::<u64>(),
+                    ),
+                );
                 self.repo.commit_catalog(lease, &folders).await
             }
             Err(MailboxError::Provider(error)) => {

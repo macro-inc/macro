@@ -449,6 +449,36 @@ where
     }
 }
 
+/// The ops that give a new pipeline its requested stages and fields.
+fn schema_ops(
+    overview: &PipelineOverview,
+    input: &NewPipeline,
+) -> Result<Vec<DatabaseOp>, WorkflowError> {
+    let mut ops = Vec::new();
+    if !input.stages.is_empty() && input.record_type.is_none() {
+        ops.push(add_field(
+            overview,
+            &NewField {
+                name: STAGE_FIELD.to_owned(),
+                kind: NewFieldKind::Select,
+                options: input.stages.clone(),
+            },
+        )?);
+    } else if !input.stages.is_empty() {
+        let stage = overview.field(STAGE_FIELD)?;
+        ops.extend(stage.options.iter().map(|(option, _)| DatabaseOp::Column {
+            table: overview.pipeline.pipeline.table_id,
+            column: stage.id,
+            change: ColumnChange::DeleteOption { option: *option },
+        }));
+        ops.push(add_options(overview, stage, &input.stages));
+    }
+    for field in &input.fields {
+        ops.push(add_field(overview, field)?);
+    }
+    Ok(ops)
+}
+
 /// The rows `additions` insert into a generic pipeline: free-form, so each
 /// names only its fields and is always a new row.
 fn generic_inserts(
@@ -900,7 +930,7 @@ where
             .create(
                 team,
                 CreatePipeline {
-                    name: input.name,
+                    name: input.name.clone(),
                     record_type: input.record_type,
                     sharing: input.sharing,
                 },
@@ -912,38 +942,20 @@ where
         if input.stages.is_empty() && input.fields.is_empty() {
             return Ok(overview);
         }
-        let mut ops = Vec::new();
-        if !input.stages.is_empty() && input.record_type.is_none() {
-            ops.push(add_field(
-                &overview,
-                &NewField {
-                    name: STAGE_FIELD.to_owned(),
-                    kind: NewFieldKind::Select,
-                    options: input.stages.clone(),
-                },
-            )?);
-        } else if !input.stages.is_empty() {
-            let stage = overview.field(STAGE_FIELD)?;
-            ops.extend(stage.options.iter().map(|(option, _)| DatabaseOp::Column {
-                table: overview.pipeline.pipeline.table_id,
-                column: stage.id,
-                change: ColumnChange::DeleteOption { option: *option },
-            }));
-            ops.push(add_options(&overview, stage, &input.stages));
-        }
-        for field in &input.fields {
-            ops.push(add_field(&overview, field)?);
-        }
+        // The pipeline exists from here on, so a stage or field the caller sent
+        // that cannot be set says so: retrying it would create a duplicate.
+        let created = |error: WorkflowError| {
+            WorkflowError::Invalid(format!(
+                "Created pipeline \"{}\" ({id}) with the default stages and fields, but \
+                 could not set its stages and fields: {error}. Edit the pipeline to change them.",
+                overview.pipeline.pipeline.name
+            ))
+        };
+        let ops = schema_ops(&overview, &input).map_err(created)?;
         let receipt = self.receipt::<EditAccessLevel>(viewer, id).await?;
         self.apply(receipt, viewer, OpBatch::from(ops))
             .await
-            .map_err(|error| {
-                WorkflowError::Invalid(format!(
-                    "Created pipeline \"{}\" ({id}) with the default stages and fields, but \
-                     could not set its stages and fields: {error}. Edit the pipeline to change them.",
-                    overview.pipeline.pipeline.name
-                ))
-            })?;
+            .map_err(created)?;
         self.overview(&view).await
     }
 

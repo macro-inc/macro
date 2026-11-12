@@ -100,6 +100,10 @@ pub struct MailFolder {
     pub role: FolderRole,
     /// Whether the folder has children that must also be enumerated.
     pub has_children: bool,
+    /// How many items the provider counted in the folder when it was last
+    /// listed, whether or not they have been imported yet.
+    #[serde(default)]
+    pub total_items: Option<u32>,
 }
 
 impl MailFolder {
