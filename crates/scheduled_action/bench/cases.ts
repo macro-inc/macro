@@ -112,9 +112,27 @@ const nothingUnused: Expectation = {
   arms: ['draft'],
 };
 
-/** Every cron schedule in a trigger, split into its fields (seconds first). */
-const schedules = (trigger: unknown): string[][] =>
-  [...text(trigger).matchAll(/"schedule":"([^"]+)"/g)].map((match) => match[1].trim().split(/\s+/));
+/** Every cron schedule in a trigger, split into its fields (seconds first), with the zone it runs in. */
+function crons(trigger: unknown): { fields: string[]; timezone?: string }[] {
+  const out: { fields: string[]; timezone?: string }[] = [];
+  const walk = (node: unknown) => {
+    if (Array.isArray(node)) return node.forEach(walk);
+    if (!node || typeof node !== 'object') return;
+    const { schedule, timezone } = node as { schedule?: unknown; timezone?: unknown };
+    if (typeof schedule === 'string') {
+      out.push({ fields: schedule.trim().split(/\s+/), timezone: typeof timezone === 'string' ? timezone : undefined });
+    }
+    Object.values(node).forEach(walk);
+  };
+  walk(trigger);
+  return out;
+}
+
+/** The cron schedules that run in the person's time zone: 8:30 in UTC isn't their 8:30. */
+const schedules = (trigger: unknown, timezone: string) =>
+  crons(trigger)
+    .filter((cron) => cron.timezone === timezone)
+    .map((cron) => cron.fields);
 
 // The scheduler's cron numbers days from 1 = Sunday.
 const DAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
@@ -144,9 +162,9 @@ function days(field: string): Set<string> {
 
 /** A schedule that runs at `hour:minute` on exactly `on` (every day if omitted), in every month and on any day of it. */
 const at = (hour: number, minute: number, on?: string[]): Expectation => ({
-  says: `runs at ${hour}:${String(minute).padStart(2, '0')}${on ? ` on ${on.join(', ')}` : ''}`,
-  holds: (draft) =>
-    schedules(draft.trigger).some((fields) => {
+  says: `runs at ${hour}:${String(minute).padStart(2, '0')}${on ? ` on ${on.join(', ')}` : ''} in the person's time zone`,
+  holds: (draft, { timezone }) =>
+    schedules(draft.trigger, timezone).some((fields) => {
       const [, min, hr, dom, month, dow = '*'] = fields;
       if (Number(min) !== minute || Number(hr) !== hour) return false;
       if (![dom, month].every((field) => field === '*' || field === '?')) return false;
@@ -185,7 +203,7 @@ const once = (daysAhead: number, hour: number, minute: number): Expectation => (
       return (['year', 'month', 'day', 'hour', 'minute'] as const).every((key) => got[key] === want[key]);
     }
     // A seven-field cron that names one date also runs once.
-    return schedules(trigger).some((fields) => {
+    return schedules(trigger, timezone).some((fields) => {
       const [, min, hr, dom, month, , year] = fields;
       return (
         Number(min) === minute &&
@@ -200,9 +218,9 @@ const once = (daysAhead: number, hour: number, minute: number): Expectation => (
 
 /** Runs on a schedule on weekdays only, at some time in the morning. */
 const weekdayMornings: Expectation = {
-  says: 'runs on weekday mornings',
-  holds: (draft) =>
-    schedules(draft.trigger).some((fields) => {
+  says: "runs on weekday mornings, in the person's time zone",
+  holds: (draft, { timezone }) =>
+    schedules(draft.trigger, timezone).some((fields) => {
       const [, , hr, , , dow = '*'] = fields;
       const named = days(dow);
       return Number(hr) >= 6 && Number(hr) <= 11 && named.size > 0 && [...named].every((day) => WEEKDAYS.includes(day));

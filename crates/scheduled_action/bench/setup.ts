@@ -1,13 +1,15 @@
 // Seeding the eval's workspace onto a stack, and the setup the seed CLI can't
-// do: due dates relative to today, and databases.
+// do: the owner's calendar, due dates relative to today, and databases.
 
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 
+import { SQL } from 'bun';
+
 import { type Stack, call, login, sdk, searchIndexer } from './stack';
-import { DATABASES, FIXTURE, OWNER, SCENARIO_NAME, email, scenario, tasks } from './workspace';
+import { DATABASES, FIXTURE, OWNER, SCENARIO_NAME, email, scenario, tasks, userId } from './workspace';
 
 const CACHE = join(homedir(), '.cache/routines-eval');
 const REPO = resolve(import.meta.dir, '../../..');
@@ -146,6 +148,37 @@ function noon(now: Date, days: number, timezone: string): string {
   return `${day}T17:00:00.000Z`;
 }
 
+/**
+ * Give the owner a primary calendar in `timezone`. An agent session learns the
+ * person's time zone only from their primary calendar, and the seed connects
+ * Gmail without one, so without this the `bare` arm would schedule in a zone
+ * it can't know, as it wouldn't for someone whose Google account is
+ * connected. The account is `ready` with no backfill job, so the calendar
+ * service never syncs it; reseeding deletes it with the mail link.
+ */
+async function primaryCalendar(db: SQL, timezone: string) {
+  const owner = userId(OWNER);
+  const account = seedId(SCENARIO_NAME, 'calendar_account', OWNER);
+  const calendar = seedId(SCENARIO_NAME, 'calendar', OWNER);
+  const linked = await db`
+    insert into calendar_accounts (id, owner_id, email_link_id, provider, provider_account_id, sync_status, last_synced_at)
+    select ${account}::uuid, ${owner}, link.id, 'google', ${email(OWNER)}, 'ready', now()
+    from email_links link
+    where link.macro_id = ${owner} and link.id::text like ${`${seedId(SCENARIO_NAME, '', '').slice(0, 8)}%`}
+    on conflict (email_link_id) do nothing
+    returning id`;
+  await db`
+    insert into calendars (id, account_id, provider_calendar_id, name, time_zone, is_primary)
+    select ${calendar}::uuid, ${account}::uuid, 'primary', ${email(OWNER)}, ${timezone}, true
+    where exists (select 1 from calendar_accounts where id = ${account}::uuid)
+    on conflict (account_id, provider_calendar_id) do update set time_zone = excluded.time_zone, is_primary = true, is_deleted = false`;
+  const [{ zone } = { zone: undefined }] = (await db`
+    select c.time_zone as zone from calendars c join calendar_accounts a on a.id = c.account_id
+    where a.owner_id = ${owner} and a.sync_status <> 'disabled' and c.is_primary and not c.is_deleted`) as { zone: string }[];
+  if (zone !== timezone) throw new Error(`${OWNER}'s primary calendar is in ${zone ?? 'no zone'}, not ${timezone}`);
+  if (linked.length > 0) console.log(`gave ${OWNER} a primary calendar in ${timezone}`);
+}
+
 type SetupState = { day: string; databases: Record<string, string> };
 
 const statePath = (instance: string) => join(CACHE, `${instance}.${SCENARIO_NAME}.setup.json`);
@@ -157,7 +190,8 @@ export function savedDatabases(instance: string): Record<string, string> | undef
 }
 
 /**
- * Due dates relative to today and the databases requests name. Due dates are
+ * The owner's primary calendar, due dates relative to today and the databases
+ * requests name. Due dates are
  * set again when the day changed since the last setup, so "due today" stays
  * true; databases are created once.
  */
@@ -165,6 +199,12 @@ export async function setup(at: Stack, timezone: string, force = false): Promise
   const path = statePath(at.instance);
   const today = new Date().toLocaleDateString('en-CA', { timeZone: timezone });
   const saved: SetupState | undefined = existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : undefined;
+  const db = new SQL(at.postgres);
+  try {
+    await primaryCalendar(db, timezone);
+  } finally {
+    await db.close();
+  }
   const token = await login(at, email(OWNER));
   const macro = sdk(at, token);
   const databases: Record<string, string> = {};
