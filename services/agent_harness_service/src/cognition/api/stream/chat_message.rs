@@ -532,7 +532,7 @@ fn resolve_pending_tool_calls(parts: Vec<AssistantMessagePart>) -> Vec<Assistant
 /// Creates a payload stream, publishes it via `from_async_stream`, and stores
 /// the conversation messages after the stream finishes.
 #[expect(clippy::too_many_arguments, reason = "matches WS handler signature")]
-#[tracing::instrument(skip(ctx, request, tool_selection, user_message_content, cancellation_sub))]
+#[tracing::instrument(skip(ctx, request, user_message_content, cancellation_sub))]
 fn stream_and_save_message(
     ctx: Arc<ApiContext>,
     request: Vec<ChatMessage>,

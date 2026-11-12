@@ -95,7 +95,7 @@ impl IntoResponse for StructuredCompletionError {
         (status = 504, description = "Tool-free completion deadline exceeded", body = StructuredCompletionError),
     )
 )]
-#[tracing::instrument(skip(state, model_access, user, request), fields(user_id = %user.authorization.user.macro_user_id), err)]
+#[tracing::instrument(skip(state, model_access, user, request), fields(user_id = %user.authorization.user.macro_user_id, toolset = tracing::field::Empty), err)]
 pub async fn structured_completion(
     State(state): State<ApiContext>,
     model_access: DcsChatModelAccess,
@@ -140,6 +140,7 @@ pub async fn structured_completion(
             status: StatusCode::SERVICE_UNAVAILABLE,
             code: None,
         })?;
+    tracing::Span::current().record("toolset", tracing::field::debug(&selection));
 
     if matches!(selection, ResolvedTools::None) {
         let system_prompt = structured_completion_prompt(

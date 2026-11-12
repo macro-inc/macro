@@ -50,6 +50,19 @@ pub(crate) enum ResolvedTools {
     DatabasesReadOnly,
 }
 
+// Recorded on spans by name: which tools the request ran with.
+impl std::fmt::Debug for ResolvedTools {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(match self {
+            Self::All => "All",
+            Self::None => "None",
+            Self::Databases => "Databases",
+            Self::DatabaseCode(_) => "DatabaseCode",
+            Self::DatabasesReadOnly => "DatabasesReadOnly",
+        })
+    }
+}
+
 impl ResolvedTools {
     fn is_database(&self) -> bool {
         matches!(
@@ -80,7 +93,8 @@ impl DatabaseCodeSurface {
     }
 }
 
-/// Whether a user's database assistant runs code mode.
+/// Whether a user's database assistant runs code mode. Boxed futures: the
+/// API context holds it as `Arc<dyn DatabaseCodeModePolicy>`.
 pub trait DatabaseCodeModePolicy: Send + Sync {
     /// Whether `user`'s database assistant runs code mode; unavailable flags
     /// do not.

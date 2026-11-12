@@ -11,7 +11,7 @@ Saved execution retries must match both actor selection and original
 turn, so a later requester cannot inherit an earlier execution result.
 
 Owns session-authorized code executions, user-scoped executions for the public
-MCP, SDK documentation selection, saved execution records, and durable review
+MCP and the cognition database assistant, SDK documentation selection, saved execution records, and durable review
 stacks. Process isolation belongs to
 `crates/code_execution`; session presentation belongs to `crates/agent_session`.
 
@@ -84,7 +84,7 @@ stacks. Process isolation belongs to
   carry `inline_guides`. `mcp_guides` and `entity_guide` serve hosts that
   carry areas whole. All of it is generated from the SDK; edit the TSDoc.
 - `src/inbound/toolset.rs`: `toolset()` for sessions, `user_toolset()` for the
-  public MCP. Tool texts are composed: host-specific parts in `toolset/session/`
+  public MCP and the cognition database assistant. Tool texts are composed: host-specific parts in `toolset/session/`
   and `toolset/user/`, guidance both share in `toolset/shared/`. Edit shared
   guidance once, there.
 
