@@ -28,13 +28,13 @@ fn runs(step: &serde_yaml::Value, command: &str) -> bool {
         .is_some_and(|script| script.contains(command))
 }
 
-/// Pull request jobs write the `web-ci` sccache and the cargo and wasm-pack
-/// directories on the cache volume. Dev deploys on main save the wasm packages
-/// production releases restore, so no deploy build reads from the volume more
-/// than the production release's own build job did: the Nix store and Bun's
-/// package cache.
+/// Pull request jobs write the `web-ci` sccache, Namespace's HTTP cache and
+/// the cargo and wasm-pack directories on the cache volume. Dev deploys on main
+/// save the wasm packages production releases restore, so no deploy build
+/// mounts more of the volume than the production release's own build job did
+/// (the Nix store and Bun's package cache) or reads the shared caches.
 #[test]
-fn deploy_builds_read_no_cache_pull_requests_write_beyond_nix_and_bun() {
+fn deploy_builds_mount_only_nix_and_bun_and_no_shared_cache() {
     let steps = build_steps();
     let mounts: Vec<&serde_yaml::Value> = steps
         .iter()
@@ -51,6 +51,12 @@ fn deploy_builds_read_no_cache_pull_requests_write_beyond_nix_and_bun() {
             .iter()
             .any(|step| runs(step, "nsc cache sccache setup")),
         "deploy builds must not read the web-ci sccache"
+    );
+    assert!(
+        steps
+            .iter()
+            .all(|step| step["with"]["seed-cache"].is_null()),
+        "deploy builds must not seed the Nix store from the HTTP cache"
     );
     assert!(
         steps

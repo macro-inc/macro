@@ -109,7 +109,8 @@ fn the_release_jobs_name_prod_themselves() {
 }
 
 /// Like the build, the web deploy mounts only the Nix store and Bun's package
-/// cache from the volume pull requests write.
+/// cache from the volume pull requests write, and seeds nothing from the HTTP
+/// cache they write.
 #[test]
 fn the_web_deploy_mounts_only_nix_and_bun() {
     let release = release();
@@ -122,5 +123,12 @@ fn the_web_deploy_mounts_only_nix_and_bun() {
     assert_eq!(
         mounts[0]["with"]["path"].as_str(),
         Some(vars::BUN_CACHE_VOLUME_DIR)
+    );
+    assert!(
+        release["jobs"]["deploy"]["steps"]
+            .as_sequence()
+            .expect("steps")
+            .iter()
+            .all(|step| step["with"]["seed-cache"].is_null())
     );
 }

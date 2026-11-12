@@ -149,10 +149,10 @@ fn publish_ios() -> Job {
 }
 
 /// The same build as dev deploys and manual web deploys. It reuses unchanged
-/// wasm packages from main's Actions cache, which those deploy builds fill, and
-/// like them reads nothing pull requests write beyond the Nix and Bun caches
-/// the release's own build job always read. No `needs`, so it overlaps the
-/// backend deploy.
+/// wasm packages from main's Actions cache, which those deploy builds fill.
+/// Like them, it mounts only the Nix store and Bun's package cache from the
+/// cache volume, as the release's own build job did, and uses no shared
+/// sccache. No `needs`, so it overlaps the backend deploy.
 fn build() -> Job {
     Job::default()
         .name("Build Web App")

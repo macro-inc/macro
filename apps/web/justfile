@@ -132,8 +132,8 @@ local-email: ensure-cache-wasm
 # with distinct CARGO_TARGET_DIR values so they do not serialize on the
 # workspace cargo lock. CI reuses a package only when nothing it is built from
 # changed (scripts/cached-wasm-build.sh keys on its sources, not on a version
-# bump); Namespace `web-ci` sccache makes the rustc invocations cheaper when it
-# does rebuild.
+# bump); in PR checks the Namespace `web-ci` sccache makes the rustc
+# invocations cheaper when it does rebuild, and deploy builds use a local one.
 #
 # Vite's chunk-rendering can exceed 6GB as the app grows. Leave headroom
 # above that peak; CI builds use the same mid-size runner as preview deploys.

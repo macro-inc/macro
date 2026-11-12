@@ -130,7 +130,8 @@ fn deploy() -> Job {
         .runs_on(runners::Runner::Mid.with_cache_tag(vars::WEB_CI_CACHE_TAG))
         .add_env(("CI", "true"))
         .add_step(build_web_app::checkout())
-        .add_step(steps::mount_web_build_cache_volume())
+        // It compiles nothing, so like the build it mounts only Nix and Bun.
+        .add_step(steps::mount_web_cache_volume(false))
         .add_step(steps::setup_nix())
         .add_step(steps::setup_reqs_web("Setup", false))
         .add_step(download_dist(build_web_app::ARTIFACT))
