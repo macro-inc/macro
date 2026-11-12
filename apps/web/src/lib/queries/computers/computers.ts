@@ -83,47 +83,57 @@ export function computerStatusKey(
     .join(',');
 }
 
-/** The current team's Macro computers; any team member can read them. */
-export function useComputersQuery(enabled: () => boolean) {
-  const computers = useQuery(() => computersQueryOptions(enabled()));
-  const harnesses = useHarnessesQuery();
+/**
+ * The last presence and status keys acted on, shared by every
+ * `useComputersQuery` caller, so one change refreshes once however many
+ * callers are mounted.
+ */
+const handledKeys = { presence: '', status: '' };
+
+/** Runs `refresh` when `key` changes, once across every caller. */
+function refreshOnChange(
+  kind: keyof typeof handledKeys,
+  key: () => string,
+  refresh: () => void
+) {
   createEffect(
     on(
-      () =>
-        computerPresenceKey(
-          computers.data,
-          new Set(
-            (harnesses.data ?? [])
-              .filter((harness) => harness.connected)
-              .map((harness) => harness.id)
-          )
-        ),
-      () => {
-        if (enabled()) {
-          fireAndForget(
-            queryClient.invalidateQueries({
-              queryKey: computerKeys.list.queryKey,
-            }),
-            'computers-presence'
-          );
-        }
+      key,
+      (next) => {
+        if (next === handledKeys[kind]) return;
+        handledKeys[kind] = next;
+        refresh();
       },
       { defer: true }
     )
   );
-  createEffect(
-    on(
-      () => computerStatusKey(computers.data),
-      () => {
-        fireAndForget(
-          queryClient.invalidateQueries({
-            queryKey: harnessKeys.directory.queryKey,
-          }),
-          'computers-directory'
-        );
-      },
-      { defer: true }
-    )
+}
+
+/** The current team's Macro computers; any team member can read them. */
+export function useComputersQuery(enabled: () => boolean) {
+  const computers = useQuery(() => computersQueryOptions(enabled()));
+  const harnesses = useHarnessesQuery();
+  const invalidate = (queryKey: readonly unknown[], name: string) => {
+    if (!enabled()) return;
+    fireAndForget(queryClient.invalidateQueries({ queryKey }), name);
+  };
+  refreshOnChange(
+    'presence',
+    () =>
+      computerPresenceKey(
+        computers.data,
+        new Set(
+          (harnesses.data ?? [])
+            .filter((harness) => harness.connected)
+            .map((harness) => harness.id)
+        )
+      ),
+    () => invalidate(computerKeys.list.queryKey, 'computers-presence')
+  );
+  refreshOnChange(
+    'status',
+    () => computerStatusKey(computers.data),
+    () => invalidate(harnessKeys.directory.queryKey, 'computers-directory')
   );
   return computers;
 }
