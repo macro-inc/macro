@@ -10,6 +10,7 @@ import type {
 import type { CrmContactEntity } from '@entity';
 import { type Accessor, createRoot, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { useEntitySearch } from './queries/entity-search';
 import type { CategoryFilter } from './types';
 import { type CommandContactSource, useCommandItems } from './useCommandItems';
 
@@ -126,7 +127,10 @@ afterEach(() => {
   mocks.searchDms = () => [];
 });
 
-function setup(initialCategory: CategoryFilter = 'dms', crmEnabled = true) {
+function setup(
+  initialCategory: CategoryFilter = 'dms',
+  options: { crm?: boolean; showPerson?: (userId: string) => boolean } = {}
+) {
   return createRoot((cleanup) => {
     dispose = cleanup;
     const [query, setQuery] = createSignal('');
@@ -161,12 +165,20 @@ function setup(initialCategory: CategoryFilter = 'dms', crmEnabled = true) {
     };
     const result = useCommandItems(query, category, {
       searchActive: () => true,
-      contactDiscovery: crmEnabled ? contactDiscovery : undefined,
+      showPerson: options.showPerson,
+    });
+    const search = useEntitySearch(query, category, {
+      enabled: () => true,
+      excludeEmails: true,
+      contactDiscovery: options.crm === false ? undefined : contactDiscovery,
     });
     return {
       result,
+      search,
       discovery,
       ids: () => result.items().map((item) => item.id),
+      searchIds: () =>
+        search.rankItems(search.items(), query()).map((item) => item.id),
       setQuery,
       setCategory,
       setContacts,
@@ -179,9 +191,9 @@ function setup(initialCategory: CategoryFilter = 'dms', crmEnabled = true) {
   });
 }
 
-describe('command menu contact discovery', () => {
+describe('command menu people', () => {
   it.each(['all', 'dms'] as const)(
-    'merges a DM found beyond the recent list with its person and CRM alias in %s',
+    'merges a DM found beyond the recent list with its person in %s',
     (category) => {
       const t = setup(category);
       const person = user('person@example.com', 'Sample Person');
@@ -193,13 +205,8 @@ describe('command menu contact discovery', () => {
       // Typed cache search finds this DM without adding it to the browse list.
       t.setSearchDms([dm]);
       expect(t.ids()).toEqual([`search:${category}:Sample`, dm.id]);
-      t.setContacts([
-        contact('crm-person', 'Sample CRM alias', person.data.email),
-      ]);
-      expect(t.ids()).toEqual([`search:${category}:Sample`, dm.id]);
       const result = t.result.items().find((item) => item.id === dm.id);
       expect(result?.searchText).toContain(person.data.email);
-      expect(result?.searchText).toContain('Sample CRM alias');
 
       // Hydrating the browse list later must not add a second row.
       t.setDms([dm]);
@@ -208,9 +215,9 @@ describe('command menu contact discovery', () => {
   );
 
   it.each(['all', 'dms'] as const)(
-    'finds a teammate without a DM or CRM contact in %s, including with CRM disabled',
+    'finds a teammate without a DM in %s',
     (category) => {
-      const t = setup(category, false);
+      const t = setup(category);
       const gabriel = user('gabriel@macro.com', 'Gabriel Birman');
       t.setUsers([gabriel, user('valentina@macro.com', 'Valentina')]);
       expect(t.ids()).toEqual([]);
@@ -232,7 +239,7 @@ describe('command menu contact discovery', () => {
   );
 
   it('keeps a teammate separate from group DMs and excludes the viewer', () => {
-    const t = setup('dms', false);
+    const t = setup('dms');
     const gabriel = user('gabriel@macro.com', 'Gabriel Birman');
     const viewer = user('viewer@macro.com', 'Gabriel Viewer');
     const group = directMessage('group-gabriel', 'Gabriel group', gabriel.id);
@@ -246,6 +253,74 @@ describe('command menu contact discovery', () => {
     expect(t.ids()).not.toContain(viewer.id);
   });
 
+  it.each(['all', 'dms', 'people'] as const)(
+    'lists only allowed people without a DM in %s, keeping DMs with anyone',
+    (category) => {
+      const teammate = user('julia@macro.com', 'Austin Julia');
+      const correspondent = user('austin@example.com', 'Austin Example');
+      const pen = user('pen@example.com', 'Austin Pen');
+      const t = setup(category, {
+        showPerson: (id) => id === teammate.id,
+      });
+      const dm = directMessage('dm-pen', 'Austin Pen', pen.id);
+      t.setUsers([teammate, correspondent, pen]);
+      t.setDms([dm]);
+      t.setContacts([contact('crm-austin', 'Austin CRM', 'crm@example.com')]);
+      t.setQuery('austin');
+
+      expect(t.ids()).toContain(teammate.id);
+      expect(t.ids()).not.toContain(correspondent.id);
+      expect(t.ids()).not.toContain('crm-austin');
+      if (category !== 'people') expect(t.ids()).toContain(dm.id);
+
+      // A DM still matches its person's email.
+      t.setQuery('pen@example.com');
+      if (category !== 'people') expect(t.ids()).toContain(dm.id);
+    }
+  );
+
+  it('lists only allowed people in blank People', () => {
+    const teammate = user('julia@macro.com', 'Julia');
+    const t = setup('people', { showPerson: (id) => id === teammate.id });
+    t.setUsers([teammate, user('austin@example.com', 'Austin')]);
+    expect(t.ids()).toEqual([teammate.id]);
+  });
+});
+
+describe('entity search contact discovery', () => {
+  it.each(['all', 'dms'] as const)(
+    'keeps a CRM alias searchable on a DM found beyond the recent list in %s',
+    (category) => {
+      const t = setup(category);
+      const person = user('person@example.com', 'Sample Person');
+      const dm = directMessage('older-dm', 'Sample Person', person.id);
+      t.setUsers([person]);
+      t.setSearchDms([dm]);
+      t.setQuery('Sample');
+      t.setContacts([
+        contact('crm-person', 'Sample CRM alias', person.data.email),
+      ]);
+      expect(t.searchIds()).toEqual([dm.id]);
+      const result = t.search.items().find((item) => item.id === dm.id);
+      expect(result?.searchText).toContain(person.data.email);
+      expect(result?.searchText).toContain('Sample CRM alias');
+
+      t.setDms([dm]);
+      expect(t.searchIds()).toEqual([dm.id]);
+    }
+  );
+
+  it.each(['all', 'dms'] as const)(
+    'finds a teammate without a DM or CRM contact in %s with CRM disabled',
+    (category) => {
+      const t = setup(category, { crm: false });
+      const gabriel = user('gabriel@macro.com', 'Gabriel Birman');
+      t.setUsers([gabriel]);
+      t.setQuery('Gabriel');
+      expect(t.searchIds()).toEqual([gabriel.id]);
+    }
+  );
+
   it.each(['all', 'dms'] as const)(
     'replaces a matching person with their DM when it arrives in %s',
     (category) => {
@@ -256,23 +331,15 @@ describe('command menu contact discovery', () => {
       t.setContacts([
         contact('crm-gabriel', 'Gabriel External', 'gabriel@other.com'),
       ]);
-      expect(t.ids()).toEqual([
-        `search:${category}:Gabriel`,
-        gabriel.id,
-        'crm-gabriel',
-      ]);
+      expect(t.searchIds()).toEqual([gabriel.id, 'crm-gabriel']);
 
       const dm = directMessage('dm-gabriel', 'Gabriel Birman', gabriel.id);
       t.setDms([dm]);
-      expect(t.ids()).toEqual([
-        `search:${category}:Gabriel`,
-        dm.id,
-        'crm-gabriel',
-      ]);
+      expect(t.searchIds()).toEqual([dm.id, 'crm-gabriel']);
 
       t.setQuery('gabriel@macro.com');
       t.setContacts([]);
-      expect(t.ids()).toEqual([`search:${category}:gabriel@macro.com`, dm.id]);
+      expect(t.searchIds()).toEqual([dm.id]);
     }
   );
 
@@ -282,21 +349,21 @@ describe('command menu contact discovery', () => {
       contact('crm-asher', 'Asher at HackerNoon', 'asher@hackernoon.com'),
     ]);
     expect(t.discovery.active?.()).toBe(false);
-    expect(t.ids()).toEqual([]);
+    expect(t.searchIds()).toEqual([]);
 
     t.setQuery('asher');
     expect(t.discovery.active?.()).toBe(true);
     expect(t.discovery.search?.()).toBe('asher');
-    expect(t.ids()).toEqual(['search:dms:asher', 'crm-asher']);
+    expect(t.searchIds()).toEqual(['crm-asher']);
   });
 
   it('adds contacts to a typed All search but keeps blank All on recency', () => {
     const t = setup('all');
     t.setContacts([contact('crm-pat', 'Pat Doe', 'pat@acme.com')]);
     expect(t.discovery.active?.()).toBe(false);
-    expect(t.ids()).not.toContain('crm-pat');
+    expect(t.searchIds()).not.toContain('crm-pat');
     t.setQuery('pat doe');
-    expect(t.ids()).toContain('crm-pat');
+    expect(t.searchIds()).toContain('crm-pat');
   });
 
   it.each(['all', 'dms'] as const)(
@@ -310,7 +377,7 @@ describe('command menu contact discovery', () => {
       );
       t.setDms([dm]);
       t.setQuery('jack');
-      expect(t.ids()).toEqual([`search:${category}:jack`, dm.id]);
+      expect(t.searchIds()).toEqual([dm.id]);
 
       t.setContacts([
         {
@@ -318,10 +385,10 @@ describe('command menu contact discovery', () => {
           lastInteraction: new Date().toISOString(),
         },
       ]);
-      expect(t.ids()).toEqual([`search:${category}:jack`, dm.id, 'crm-jack']);
+      expect(t.searchIds()).toEqual([dm.id, 'crm-jack']);
 
       t.setQuery('');
-      expect(t.ids()).toEqual([dm.id]);
+      expect(t.searchIds()).toEqual([dm.id]);
     }
   );
 
@@ -330,7 +397,7 @@ describe('command menu contact discovery', () => {
     t.setQuery('asher');
     t.setContacts([contact('crm-asher', 'Asher', 'asher@x.com')]);
     expect(t.discovery.active?.()).toBe(false);
-    expect(t.ids()).not.toContain('crm-asher');
+    expect(t.searchIds()).not.toContain('crm-asher');
     t.setCategory('people');
     expect(t.discovery.active?.()).toBe(true);
   });
@@ -344,15 +411,10 @@ describe('command menu contact discovery', () => {
       contact('crm-plus', 'Asher Press', 'asher+press@macro.com'),
     ]);
     t.setQuery('hackernoon');
-    const items = t.result.items();
+    const items = t.search.rankItems(t.search.items(), 'hackernoon');
     // The plus alias is a different address, so it stays a contact.
-    expect(items.map((item) => item.id)).toEqual([
-      'search:dms:hackernoon',
-      asher.id,
-      'crm-plus',
-    ]);
-    expect(items[1].kind).toBe('user');
-    expect(items.some((item) => item.id === 'crm-asher')).toBe(false);
+    expect(items.map((item) => item.id)).toEqual([asher.id, 'crm-plus']);
+    expect(items[0].kind).toBe('user');
   });
 
   it("opens the person's existing conversation instead of a second row", () => {
@@ -366,21 +428,21 @@ describe('command menu contact discovery', () => {
       contact('crm-asher', 'Asher at HackerNoon', asher.data.email),
     ]);
     t.setQuery('hackernoon');
-    expect(t.ids()).toEqual(['search:dms:hackernoon', 'dm-asher']);
+    expect(t.searchIds()).toEqual(['dm-asher']);
 
     t.setQuery('asher');
-    expect(t.ids().filter((id) => id === 'dm-asher')).toHaveLength(1);
+    expect(t.searchIds().filter((id) => id === 'dm-asher')).toHaveLength(1);
   });
 
-  it('pages contacts with the rest of the menu and reports their loading', async () => {
+  it('pages contacts with the rest of the search and reports their loading', async () => {
     const t = setup('dms');
     t.setQuery('pat');
-    expect(t.result.pagination.hasMore()).toBe(false);
+    expect(t.search.pagination.hasMore()).toBe(false);
     t.setHasMore(true);
-    expect(t.result.pagination.hasMore()).toBe(true);
-    await t.result.pagination.loadMore();
+    expect(t.search.pagination.hasMore()).toBe(true);
+    await t.search.pagination.loadMore();
     expect(t.discovery.loadMore).toHaveBeenCalledOnce();
     t.setLoading(true);
-    expect(t.result.isLoadingEntities()).toBe(true);
+    expect(t.search.isLoadingEntities()).toBe(true);
   });
 });

@@ -94,7 +94,7 @@ export default defineConfig({
           [
             '@components/app/split-layout/layout',
             '@app/lib/analytics/analytics-context',
-            '@app/features/crm/record-adapter',
+            './queries/teammates',
             '@queries/storage/databases',
           ].includes(source)
         )

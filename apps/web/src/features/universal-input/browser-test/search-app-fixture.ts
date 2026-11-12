@@ -21,6 +21,9 @@ export function useCrmContactDiscovery(): CommandContactSource {
     loadMore: async () => {},
   };
 }
+export function useIsTeammate() {
+  return () => true;
+}
 export function useDatabaseDiscoverySync() {}
 export async function createDatabase(): Promise<never> {
   throw new Error('Database creation is outside this fixture');

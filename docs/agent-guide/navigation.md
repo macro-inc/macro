@@ -1318,9 +1318,11 @@ notifications. External contacts insert a link to their original CRM record;
 they do not invite or notify that email address. Assignee and other user-only
 pickers continue to list Macro users only.
 
-Typed Cmd+K **People** and **All** queries find known Macro users, including
-teammates supplied by the contacts service, before their first DM and without a
-CRM record or the CRM feature. Search by name or email. Selecting a person opens
+Typed Cmd+K **People** and **All** queries find teammates (members of the
+viewer's team) before their first DM and without a CRM record or the CRM
+feature. Other people from the contacts service, such as email correspondents,
+appear only as an existing DM, and Cmd+K never lists CRM contacts. Search by
+name or email. Selecting a person opens
 their direct message; an existing one-to-one DM replaces the person row without
 losing name/email matches, including DMs found by typed search beyond the recent
 channel list. Group DMs stay separate, and the viewer is excluded
@@ -1328,8 +1330,8 @@ from person results. Empty queries keep the existing recency lists. Verify a
 teammate with no DM or CRM record in both categories, including with CRM disabled,
 then verify that loading their DM produces one row and that Files/Channels do not
 show that person. Also verify a typed match whose DM is absent from the recent
-list: desktop and mobile should show one DM row, including after a same-email CRM
-contact arrives, with its alias still searchable.
+list: desktop and mobile should show one DM row; on mobile, also after a
+same-email CRM contact arrives, with its alias still searchable.
 
 Duplicate-row verification: [desktop](media/command/deduplicated-person-desktop.png)
 and [phone](media/command/deduplicated-person-mobile.png) use the real command and
@@ -1344,7 +1346,7 @@ or CRM record and an intercepted DM request. These captures used a bundle-only
 guard for the unrelated disabled grouped-Soup startup crash in
 `create-grouped-soup-live-query.ts`; unmodified app startup remains unverified.
 
-With CRM enabled, Cmd+K **People** and a typed **All** query also find CRM contacts, using the same
+With CRM enabled, mobile name search **People** and a typed **All** query also find CRM contacts, using the same
 accessible-team search, hidden-record exclusions, and full-email collapsing as
 mentions. Cached contacts appear at once; the server search starts about 250 ms
 after typing stops and pages 100 contacts at a time, so contacts beyond the first
@@ -1377,8 +1379,8 @@ that are spread out or start late in the name score lower. The channel and DM
 boosts and recency order rows within each group. Verify that typing a project's
 full name puts it above recently viewed documents, tasks, and channels that
 only contain or start with those words. This shared ranking also applies to mobile name search.
-Verify an older matching channel stays above recent CRM contacts and agent
-sessions in All, and remains
+Verify an older matching channel stays above recent agent sessions in All
+(and above CRM contacts in mobile name search), and remains
 findable in Channels while its cache entry is absent. Refreshing the cache or
 reopening the menu with unchanged data must not reorder results or duplicate a
 channel when its cache entry arrives. Hydration must also refresh ownership,

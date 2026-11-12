@@ -1,5 +1,4 @@
 import { isListViewID } from '@app/constants/list-views';
-import { useCrmContactDiscovery } from '@app/features/crm/record-adapter';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
@@ -54,6 +53,7 @@ import { useUniversalInputEnabled } from '../universal-input/use-universal-input
 import { defaultCommandResultIndex } from './core/default-result-index';
 import { shouldUseUniversalInput } from './core/universal-input-mode';
 import { createCommandResultOpener } from './open-command-result';
+import { useIsTeammate } from './queries/teammates';
 import { trackCommandUsage } from './recency';
 import { CommandState } from './state';
 import type { CategoryFilter } from './types';
@@ -435,7 +435,7 @@ function CommandSearchMenu(
     ? undefined
     : useCommandItems(query, categoryFilter, {
         searchActive: CommandState.isOpen,
-        contactDiscovery: useCrmContactDiscovery,
+        showPerson: useIsTeammate(CommandState.isOpen),
       });
   const filteredItems = props.items ?? defaultCommandItems!.items;
   const pagination = defaultCommandItems?.pagination;

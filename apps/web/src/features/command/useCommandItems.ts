@@ -365,11 +365,11 @@ export function useCommandItems(
     commandScopeCommands?: Accessor<CommandWithInfo[]>;
     /** Whether this menu should drive cache-backed Quick Access search. */
     searchActive?: Accessor<boolean>;
-    /** Finds CRM contacts for typed People and All queries. */
-    contactDiscovery?: (
-      search: Accessor<string>,
-      active: Accessor<boolean>
-    ) => CommandContactSource;
+    /**
+     * Which people without a conversation may be listed; the rest, such as
+     * email correspondents, are reachable only through an existing DM.
+     */
+    showPerson?: (userId: string) => boolean;
   }
 ) {
   const showSearchRow = options?.showSearchRow ?? true;
@@ -383,10 +383,16 @@ export function useCommandItems(
   const entities = useEntitySearch(query, categoryFilter, {
     enabled: entityEnabled,
     excludeEmails: true,
-    contactDiscovery: options?.contactDiscovery,
   });
   const projectsFlag = useFeatureFlag(enableProjects);
-  const categoryItems = (): CommandMenuItem[] => {
+  const showPerson = options?.showPerson;
+  const visibleItems = (items: CommandMenuItem[]) =>
+    showPerson
+      ? items.filter((item) => !isUserItem(item) || showPerson(item.id))
+      : items;
+  const categoryItems = (): CommandMenuItem[] =>
+    visibleItems(unfilteredCategoryItems());
+  const unfilteredCategoryItems = (): CommandMenuItem[] => {
     if (
       commandScopeCommands().length > 0 ||
       CommandState.isEntityActionMode() ||
