@@ -1,5 +1,4 @@
 import { EntityDetailTopBar } from '@app/components/entity-detail/EntityDetailTopBar';
-import { ViewBreadcrumbs } from '@app/components/view-shell';
 import {
   makeCopyEntityIdAction,
   makeCopyLinkAction,
@@ -20,7 +19,7 @@ import {
   useSplitDisplayName,
   useSplitPanelOrThrow,
 } from '@components/app/split-layout/layoutUtils';
-import { EntityIcon, getIconConfig } from '@core/component/EntityIcon';
+import { getIconConfig } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { enableEntityAppearance } from '@core/constant/featureFlags';
@@ -50,61 +49,16 @@ import {
 } from './core/project';
 import type { ProjectRoute } from './core/route';
 import { openProject } from './open-project';
+import {
+  ProjectBreadcrumbItem,
+  type ProjectBreadcrumbProps,
+} from './project-breadcrumb';
 import { ProjectDiscussion } from './project-collaboration';
 import { ProjectDescription } from './project-description';
 import { useProjectShareModal } from './project-share';
 import { ProjectUnavailable } from './project-unavailable';
 import { Projects } from './projects';
 import { ProjectWorkspace } from './views/project-workspace';
-
-type ProjectBreadcrumbProps = {
-  entry: {
-    value: string;
-    data: { type: 'initiative'; id: string; fallbackName?: string };
-  };
-  order: number;
-};
-
-function ProjectBreadcrumbContent(props: ProjectBreadcrumbProps) {
-  const source = useProjectsContext().createProjectSource(
-    () => props.entry.data.id
-  );
-  const name = () =>
-    source.project()?.name ?? props.entry.data.fallbackName ?? 'Project';
-  return (
-    <ViewBreadcrumbs.Item
-      value={props.entry.value}
-      metadata={props.entry.data}
-      order={props.order}
-    >
-      {(item) => (
-        <div class="flex min-w-0 items-center">
-          <ViewBreadcrumbs.Button
-            class="gap-1.5"
-            isActive={item.isActive()}
-            onClick={item.onSelect}
-            tooltip={name()}
-          >
-            <EntityIcon
-              targetType="initiative"
-              appearance={source.project()?.appearance}
-              size="xs"
-            />
-            <span class="truncate">{name()}</span>
-          </ViewBreadcrumbs.Button>
-        </div>
-      )}
-    </ViewBreadcrumbs.Item>
-  );
-}
-
-export function ProjectBreadcrumb(props: ProjectBreadcrumbProps) {
-  return (
-    <Projects>
-      <ProjectBreadcrumbContent {...props} />
-    </Projects>
-  );
-}
 
 type ProjectDetailProps = {
   route: ProjectRoute;
@@ -266,7 +220,9 @@ function ProjectDetailHost(props: ProjectDetailProps) {
   return (
     <>
       <Show when={props.breadcrumb}>
-        {(breadcrumb) => <ProjectBreadcrumbContent {...breadcrumb()} />}
+        {(breadcrumb) => (
+          <ProjectBreadcrumbItem {...breadcrumb()} project={source.project()} />
+        )}
       </Show>
       <EntityDetailTopBar
         titleMenu={
