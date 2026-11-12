@@ -17,7 +17,7 @@ The transformer layer uses the shared lexical_markdown engine; route adapters ar
 - Read toolbar range format, link presence and ordered top-level kinds through group-b.format-facts, and plain selection text through the closed generation-checked group-b.selection-text query without clipboard export; preserve Source endpoint, shadow-root and raw list-kind rules, and leave table facts with group-b.table-facts.
 
 - Prepare expanded link editing with the existing empty-URL toggle policy and preserve the range; match Source cancel retaining the empty link until a paired product fix changes both engines.
-- Reject non-object payloads before derived struct decoding in object-only commands and queries, because Serde also accepts positional sequences.
+- Reject non-object payloads before derived struct decoding in object-only commands and queries, because Serde also accepts positional sequences. Deserialize the original JSON after shape preflight so duplicate known fields still fail derived decoding.
 
 - Answer action dependency queries from actual registered node-kind metadata; preserve generation-before-decode and never treat registration as JavaScript availability or construction authority.
 
@@ -27,6 +27,7 @@ The transformer layer uses the shared lexical_markdown engine; route adapters ar
 - Decode group-b.format-text and group-b.format-element from canonical enum JSON strings into the existing core commands; preserve the application envelope's generation, selection and admission checks and all command priorities.
 
 - Insert typed user mentions separately after search removal and host I/O, using current selection/admission, Source constructor fallback, insert_nodes_at_selection and select_next(0, 0); do not reuse strict menu-select range admission.
+- Insert typed dates through group-a.insert-date-mention after separate search removal; preserve raw strings and UUID presence, current selection, shared insertion, root/shadow wrapping and select_next(0, 0). Match actual Source command-entry points in selection fixtures; a virtual nonempty-container select can descend before the handler runs.
 - Insert tag mentions through group-a.insert-tag-mention after search removal; an expanded range collapses forwards and prepends one space, as Source tagsPlugin does. The `#` search kind uses Source's tag trigger boundaries (open brackets/quotes before, closers/quotes after).
 - Insert document mentions after file/folder host I/O through group-b.insert-document-mention using the current selection; preserve expanded-range append, injected timestamps and Agent construction, and keep captured-position entity drops separate.
 

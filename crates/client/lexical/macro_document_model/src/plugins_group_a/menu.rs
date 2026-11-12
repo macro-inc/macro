@@ -5,6 +5,7 @@ use crate::{
 };
 use lexical_model::*;
 pub(crate) mod action_dependencies;
+mod mention_date;
 mod mention_user;
 pub(crate) mod search;
 mod source;
@@ -160,6 +161,9 @@ pub fn decode_command(name: &str, json: &str, generation: u32) -> Result<Option<
     if let Some(command) = tag_mention::decode(name, json, generation)? {
         return Ok(Some(command));
     }
+    if let Some(command) = mention_date::decode(name, json, generation)? {
+        return Ok(Some(command));
+    }
     if name != SELECT.name() {
         return mention_user::decode(name, json, generation);
     }
@@ -175,7 +179,8 @@ pub(super) fn register(builder: EditorBuilder) -> EditorBuilder {
     let builder = search::register(builder)
         .extension_state(source::ExtractionState::default())
         .plugin(Menu);
-    tag_mention::register(mention_user::register(builder))
+    let builder = tag_mention::register(mention_user::register(builder));
+    mention_date::register(builder)
 }
 struct Menu;
 impl Plugin for Menu {
