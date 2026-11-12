@@ -51,15 +51,6 @@ impl FleetAttachment {
 #[error("computers are not available")]
 pub struct FleetUnavailable;
 
-/// A roster computer's durable status and current operator availability.
-#[derive(Debug)]
-pub struct RosterComputerStatus {
-    /// Durable lifecycle status, even while the fleet is detached.
-    pub status: ComputerStatus,
-    /// Advisory operator presence.
-    pub availability: FleetAttachment,
-}
-
 /// Stable identity shared by replicas of one computer control plane.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(transparent)]
