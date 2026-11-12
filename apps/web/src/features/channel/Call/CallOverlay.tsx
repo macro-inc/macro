@@ -32,13 +32,9 @@ import {
   createUniqueId,
   For,
   type JSXElement,
-  lazy,
-  Match,
   on,
   onCleanup,
   Show,
-  Suspense,
-  Switch,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { useCallContext } from './CallContext';
@@ -72,9 +68,6 @@ import {
   useCallFullscreenOptional,
 } from './views/call-fullscreen-host';
 
-const CallChat = lazy(() => import('./chat/CallChat'));
-const GuestCallChat = lazy(() => import('./chat/GuestCallChat'));
-
 export function CallOverlay(props: {
   onLeave: () => void;
   showTeamSharing?: boolean;
@@ -85,9 +78,9 @@ export function CallOverlay(props: {
   showChat?: boolean;
   /** Host-owned action aligned to the left of the media controls. */
   footerLeading?: JSXElement;
-  /** Narrow RTC credential for a guest; never an account bearer. */
-  guestChatSession?: { token: string; participantId: string };
-  /** The host's own discussion, in place of the call's chat. */
+  /** A guest has no account, so nothing may look up Macro profiles. */
+  accessMode?: 'guest' | 'member';
+  /** The host's discussion for this call. */
   discussion?: {
     /** Names the panel's discussion tab. */
     label: () => string | undefined;
@@ -882,7 +875,10 @@ export function CallOverlay(props: {
               chatAvailable={canChat()}
               participantCount={participants().length + 1}
               participants={
-                <CallParticipantsList localName={props.localName} />
+                <CallParticipantsList
+                  localName={props.localName}
+                  accessMode={props.accessMode}
+                />
               }
               work={workTab()}
               workDot={callWork.showTabDot()}
@@ -890,46 +886,18 @@ export function CallOverlay(props: {
               overlayMount={overlayMount()}
               returnFocus={panelButton}
             >
-              <Show when={canChat() && callCtx.activeCallId()} keyed>
-                {(callId) => (
-                  <Suspense>
-                    <Switch
-                      fallback={
-                        <CallChat
-                          callId={callId}
-                          open={panelOpen() && activeTab() === 'chat'}
-                          focusOnOpen={focusChatOnOpen()}
-                          onClose={closePanel}
-                        />
-                      }
-                    >
-                      <Match when={props.discussion}>
-                        {(discussion) =>
-                          discussion().render({
-                            get open() {
-                              return panelOpen() && activeTab() === 'chat';
-                            },
-                            get focusOnOpen() {
-                              return focusChatOnOpen();
-                            },
-                            onClose: closePanel,
-                          })
-                        }
-                      </Match>
-                      <Match when={props.guestChatSession} keyed>
-                        {(session) => (
-                          <GuestCallChat
-                            callId={callId}
-                            session={session}
-                            open={panelOpen() && activeTab() === 'chat'}
-                            focusOnOpen={focusChatOnOpen()}
-                            onClose={closePanel}
-                          />
-                        )}
-                      </Match>
-                    </Switch>
-                  </Suspense>
-                )}
+              <Show when={canChat() && props.discussion}>
+                {(discussion) =>
+                  discussion().render({
+                    get open() {
+                      return panelOpen() && activeTab() === 'chat';
+                    },
+                    get focusOnOpen() {
+                      return focusChatOnOpen();
+                    },
+                    onClose: closePanel,
+                  })
+                }
               </Show>
             </CallChatPanel>
           </Show>

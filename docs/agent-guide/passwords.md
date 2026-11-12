@@ -13,11 +13,16 @@ the team or password list loads. The inner sidebar (Drive's sidebar
 patterns) has a New dropdown, All items, Favorites, Recently used, Shared, and
 a Folders section: a Passwords root row and the folder tree, built from Drive's
 `FolderTree`. Folders nest; selecting one lists its items and its subfolders'
-items. Rows drag onto a folder (or the root row, to unfile). Right-click a
+items. Drag a folder onto another folder to nest it, or onto Passwords to
+move it to the root; a folder cannot move into itself or its descendants. Item
+rows drag onto a folder (or Passwords to unfile). Escape or switching away
+cancels a drag. Right-click a
 folder, or open the "…" folder actions beside New in the list header, for New
 subfolder, Rename (inline), Move to folder (an inline destination list), and
 Delete folder. Delete confirms in place and says how many items move to All
 items and how many subfolders go too; it never deletes items or their values.
+Folder rows use the same Tab, Enter and Space controls as Drive; context menus
+use arrow keys and Escape. Inline names commit with Enter and cancel with Escape.
 On a phone, the header pills are All, Favorites, Recent, Shared and Folders;
 Folders shows the same tree, and the floating New button opens the item kinds.
 Create folders from the Folders section's "+" on desktop or in the phone's
