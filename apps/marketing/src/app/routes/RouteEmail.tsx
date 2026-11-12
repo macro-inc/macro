@@ -1,9 +1,12 @@
+import MicrosoftIcon from '@assets/icons/logo-microsoft.svg';
+import GoogleIcon from '@icon/macro-google.svg';
 import { CrmRecordDemo } from '../../features/marketing/components/crm/CrmRecordDemo';
 import { DemoInteractionBoundary } from '../../features/marketing/components/DemoInteractionBoundary';
 import { EmailAgenticEditingDemo } from '../../features/marketing/components/email/EmailAgenticEditingDemo';
 import { EmailAutoTagDemo } from '../../features/marketing/components/email/EmailAutoTagDemo';
 import { EmailComparison } from '../../features/marketing/components/email/EmailComparison';
 import { EmailKeyboardDemo } from '../../features/marketing/components/email/EmailKeyboardDemo';
+import { EmailProvidersGraphic } from '../../features/marketing/components/email/EmailProvidersGraphic';
 import { EmailShareStory } from '../../features/marketing/components/email/EmailShareStory';
 import { EmailSignalNoiseDemo } from '../../features/marketing/components/email/EmailSignalNoiseDemo';
 import {
@@ -129,6 +132,23 @@ export function RouteEmail() {
         <div class="feature-page-hero-actions">
           <FeaturePageCta name="email_hero_get_started" />
         </div>
+        <div class="email-page-hero-providers">
+          Works with
+          <span>
+            <GoogleIcon
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              stroke="none"
+              aria-hidden="true"
+            />
+            Google
+          </span>
+          and
+          <span>
+            <MicrosoftIcon aria-hidden="true" />
+            Microsoft
+          </span>
+        </div>
       </header>
       <TutorialVideoEmbed tutorial="mail" />
       <ProductIntroduction product="Email" />
@@ -153,6 +173,17 @@ export function RouteEmail() {
         <PaperFeatureGraphic label="Switch between all inboxes, individual accounts, and email aliases.">
           <PaperEmailAccounts />
         </PaperFeatureGraphic>
+      </FeaturePageSection>
+      <FeaturePageSection
+        id="email-providers"
+        demo={{
+          tone: 'email',
+          glassFrame: true,
+        }}
+        title="Works with your Google and Outlook."
+        description="Continue with Google or Microsoft and your inbox and calendar sync securely. Your password stays with your provider, agents ask for your approval before sending email, and you can disconnect anytime."
+      >
+        <EmailProvidersGraphic />
       </FeaturePageSection>
       <FeaturePageSection
         id="signal-noise"

@@ -1,6 +1,7 @@
 /** Short labels keyed to heading IDs, or step text when the ID is generated. */
 export const pageOutlineLabels: Record<string, string> = {
   'email-accounts-title': 'Unified Inbox',
+  'email-providers-title': 'Google and Outlook',
   'auto-tags-title': 'Email tags',
   'email-sharing-title': 'Collaboration',
   'email-crm-title': 'CRM integration',
