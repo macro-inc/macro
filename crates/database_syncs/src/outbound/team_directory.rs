@@ -58,12 +58,21 @@ where
             .get_team_members(&team.team_id)
             .await
             .map_err(|error| rootcause::report!("reading the team's members: {error:?}"))?;
-        members.extend(
+        // The members list leaves the owner out.
+        let owner = self
+            .teams
+            .get_team_owner(&team.team_id)
+            .await
+            .map_err(|error| rootcause::report!("reading the team's owner: {error:?}"))?;
+        for member in std::iter::once(owner).chain(
             team_members
                 .into_iter()
-                .map(|member| member.user_id.into_owned())
-                .filter(|member| member != user),
-        );
+                .map(|member| member.user_id.into_owned()),
+        ) {
+            if !members.contains(&member) {
+                members.push(member);
+            }
+        }
         Ok(members)
     }
 }

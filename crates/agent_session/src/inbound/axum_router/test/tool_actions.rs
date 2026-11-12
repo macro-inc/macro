@@ -390,14 +390,17 @@ async fn session_activity_requires_view_access_and_valid_pagination_before_readi
             SelfBotAuthorizer,
             NoUserApiKeyAuthorizer,
         );
-        let router =
+        // Nested exactly as the service mounts it, so the served path is tested.
+        let router = axum::Router::new().nest(
+            "/agent-sessions",
             super::super::activity::router(super::super::activity::AgentActivityState::new(
                 ActivityReads(reads.clone()),
                 Arc::new(FakeEntityAccessService {
                     access_level: level,
                 }),
                 MacroAuthorizationState::new(Arc::new(auth)),
-            ));
+            )),
+        );
         let request = Request::builder()
             .uri(format!(
                 "/agent-sessions/{}/activity{query}",

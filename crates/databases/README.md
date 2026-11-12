@@ -104,7 +104,8 @@ and cells. The core storage adapter purges its journal in the same transaction.
    answers them. An id that already names something (a row id: in any table),
    or is minted twice in one batch, refuses the batch with a 400 whose `taken`
    is `{kind: "table" | "column" | "option" | "view" | "row", id}`; a retry of
-   a committed batch lands there instead of writing twice.
+   a committed batch whose new things all carry client-minted ids lands there
+   instead of writing twice. An `insert` without `ids` writes its rows again.
 5. The optional request-level `baseVersions` names tables and the version the
    caller read; a table at another version answers 409 and writes nothing. A
    column type change follows one cast rule for the type menu, the agent tool

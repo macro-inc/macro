@@ -1,5 +1,6 @@
 import accountManager from './en/account-manager';
 import agentAutoArchive from './en/agent-auto-archive';
+import agentNavigation from './en/agent-navigation';
 import agentSetup from './en/agent-setup';
 import agentWork from './en/agent-work';
 import calls from './en/calls';
@@ -9,21 +10,26 @@ import channelSections from './en/channel-sections';
 import commandMenu from './en/command-menu';
 import commands from './en/commands';
 import common from './en/common';
+import computers from './en/computers';
 import create from './en/create';
 import crm from './en/crm';
 import databaseSyncs from './en/database-syncs';
 import emailViews from './en/email-views';
 import entityActions from './en/entity-actions';
 import localRuntime from './en/local-runtime';
+import markdownEditor from './en/markdown-editor';
 import mobile from './en/mobile';
 import nav from './en/nav';
 import notificationsInbox from './en/notifications-inbox';
+import passwords from './en/passwords';
 import routineSuggestions from './en/routine-suggestions';
 import runtimeSharing from './en/runtime-sharing';
+import settingsBilling from './en/settings-billing';
 import settingsLanguage from './en/settings-language';
 import settingsMobileApp from './en/settings-mobile-app';
 import settingsNav from './en/settings-nav';
 import splitMenu from './en/split-menu';
+import subRoutines from './en/sub-routines';
 import tabs from './en/tabs';
 import tutorials from './en/tutorials';
 import viewMenus from './en/view-menus';
@@ -34,6 +40,7 @@ import viewMenus from './en/view-menus';
  */
 export default {
   agentAutoArchive,
+  agentNavigation,
   accountManager,
   agentSetup,
   agentWork,
@@ -44,21 +51,26 @@ export default {
   commandMenu,
   commands,
   common,
+  computers,
   create,
   crm,
   databaseSyncs,
   emailViews,
   entityActions,
   localRuntime,
+  markdownEditor,
   mobile,
   nav,
   notificationsInbox,
+  passwords,
   routineSuggestions,
+  settingsBilling,
   runtimeSharing,
   settingsLanguage,
   settingsMobileApp,
   settingsNav,
   splitMenu,
+  subRoutines,
   tabs,
   tutorials,
   viewMenus,

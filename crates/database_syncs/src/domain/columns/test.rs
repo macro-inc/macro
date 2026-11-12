@@ -337,3 +337,13 @@ fn a_new_table_creates_every_wanted_column_with_its_options() {
         }
     );
 }
+
+#[test]
+fn a_colliding_name_at_the_limit_keeps_its_suffix_within_the_limit() {
+    let name = "a".repeat(MAX_NAME);
+    let taken = HashSet::from([name.clone()]);
+
+    let unique = unique_name(&name, &taken);
+
+    assert_eq!(unique, format!("{} 2", "a".repeat(MAX_NAME - 2)));
+}

@@ -35,6 +35,12 @@ export interface SendEmailOptions {
   subject: string;
   /** Plain-text body. */
   bodyText: string;
+  /**
+   * The address to send from: the primary inbox's own address or one of its
+   * verified Gmail send-as aliases, which sends under the alias's display
+   * name. An unverified or unknown address is refused.
+   */
+  from?: string;
 }
 
 // The HTTP schema is opaque: the server serializes the Rust tool response,
@@ -56,11 +62,13 @@ export interface ConfirmedEmailOptions {
   /** The body, written as Markdown; it is rendered to HTML on send. */
   body: string;
   /**
-   * The connected inbox to send from. Omit it unless you know which inbox is
-   * right: a reply then goes out from the inbox that received the message it
-   * answers, and a new email from the user's primary inbox.
+   * The connected inbox to send from, or the address of a verified Gmail
+   * send-as alias of one, which then sends from that inbox under the alias's
+   * display name. Omit it unless you know which is right: a reply then goes
+   * out from the inbox that received the message it answers, and a new email
+   * from the user's primary inbox. An unverified alias is refused.
    */
-  from?: Link;
+  from?: Link | string;
   /** The message this answers; the email is then sent as a reply in its thread. */
   replyingTo?: EmailMessage;
   /**
@@ -89,14 +97,25 @@ export interface ForwardEmailOptions {
   bcc?: EmailRecipient[];
   /** A note above the forwarded message, written as Markdown. */
   body?: string;
-  /** The connected inbox to send from; defaults to the inbox holding the message. */
-  from?: Link;
+  /**
+   * The connected inbox to send from, or a verified Gmail send-as alias of
+   * one; defaults to the inbox holding the message.
+   */
+  from?: Link | string;
   /** `false` leaves the inbox signature off this one email; omit for the inbox's default. */
   includeSignature?: boolean;
 }
 
 /** The first line of a forwarded message, as the web composer writes it. */
 const FORWARDED_MESSAGE_HEADER = '---------- Forwarded message ----------';
+
+/** The address a `from` option names: an inbox's own address, or an alias as given. */
+async function senderAddress(
+  from: Link | string | undefined,
+): Promise<string | undefined> {
+  if (typeof from === 'string') return from;
+  return from?.emailAddress();
+}
 
 /** Escape text so Markdown renders it literally. */
 function literalMarkdown(text: string): string {
@@ -150,6 +169,7 @@ export class EmailMessage extends MacroEntity<EmailMessageData> {
             bcc: opts.bcc ?? null,
             subject: opts.subject,
             body_text: opts.bodyText,
+            from: opts.from ?? null,
           },
         },
       }),
@@ -168,7 +188,7 @@ export class EmailMessage extends MacroEntity<EmailMessageData> {
       to: opts.to,
       cc: opts.cc,
       bcc: opts.bcc,
-      from: opts.from ? await opts.from.emailAddress() : undefined,
+      from: await senderAddress(opts.from),
       replyingToId: opts.replyingTo?.id,
       includeSignature: opts.includeSignature,
       attachments: opts.attachments?.map((document) => ({
@@ -237,7 +257,6 @@ export class EmailMessage extends MacroEntity<EmailMessageData> {
     const documents = await Promise.all(
       attachments.map((attachment) => attachment.toDocument()),
     );
-    const inbox = opts.from ?? Link.byId(this.client, message.link_id);
     const subject = message.subject ?? '';
     const people = (contacts: EmailMessageData['to']) =>
       contacts
@@ -268,7 +287,9 @@ export class EmailMessage extends MacroEntity<EmailMessageData> {
       to: opts.to,
       cc: opts.cc,
       bcc: opts.bcc,
-      from: await inbox.emailAddress(),
+      from: await senderAddress(
+        opts.from ?? Link.byId(this.client, message.link_id),
+      ),
       includeSignature: opts.includeSignature,
       attachments: documents.map((document) => ({ documentId: document.id })),
     };

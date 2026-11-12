@@ -264,8 +264,14 @@ fn mcp_chatgpt_service_url_defaults_are_bases_without_a_trailing_slash() {
     with_mock_override_env(missing_override, || {
         for (environment, expected) in [
             (Environment::Local, "http://localhost:8103"),
-            (Environment::Develop, "https://mcp-chatgpt.dev.macro.com"),
-            (Environment::Production, "https://mcp-chatgpt.macro.com"),
+            (
+                Environment::Develop,
+                "https://mcp-chatgpt-worker-dev.macroverse.workers.dev",
+            ),
+            (
+                Environment::Production,
+                "https://mcp-chatgpt-worker.macroverse.workers.dev",
+            ),
         ] {
             let url = McpChatgptServiceUrl::new_for_environment(environment).unwrap();
             assert_eq!(url.as_str(), expected);

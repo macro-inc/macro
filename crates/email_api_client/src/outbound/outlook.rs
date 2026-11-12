@@ -32,6 +32,12 @@ use std::sync::Arc;
 
 const GRAPH_ROOT: &str = "https://graph.microsoft.com/v1.0/";
 const IMMUTABLE_ID_PREFERENCE: &str = "IdType=\"ImmutableId\"";
+/// Graph reads `$top` on a delta request as a cap on the whole round, not a
+/// page size: it stops at that many items and hands back the deltaLink, so
+/// the rest of the folder is never listed. Delta pages are sized with this
+/// preference instead, sent as its own `Prefer` line so the immutable-id one
+/// stays as it is.
+const DELTA_PAGE_PREFERENCE: &str = "odata.maxpagesize=100";
 
 /// Microsoft Graph provider adapter with no embedded credential or mailbox identity.
 #[derive(Clone)]

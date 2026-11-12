@@ -3989,6 +3989,7 @@
           "agent_session",
           "agent_repository_choice",
           "agent_mode_choice",
+          "agent_activity_summary",
           "dictation",
           "image_generation",
           "email_focus",

@@ -940,7 +940,7 @@ where
             .map_err(|error| {
                 WorkflowError::Invalid(format!(
                     "Created pipeline \"{}\" ({id}) with the default stages and fields, but \
-                     could not set its stages and fields: {error}. Change them with EditPipeline.",
+                     could not set its stages and fields: {error}. Edit the pipeline to change them.",
                     overview.pipeline.pipeline.name
                 ))
             })?;

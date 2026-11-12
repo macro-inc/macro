@@ -325,7 +325,7 @@ where
 
     /// Add the synced table to the database, then store the sync. A table an
     /// earlier attempt of this create made is taken up, not made twice; a
-    /// table whose sync cannot be stored is removed again.
+    /// table this attempt made whose sync cannot be stored is removed again.
     #[expect(
         clippy::too_many_arguments,
         reason = "a synced table needs its database, creator, source, name, columns and the ops riding along"
@@ -352,6 +352,7 @@ where
             .ok_or(DatabaseSyncError::NotFound)?;
         let table = table_id(sync.id);
 
+        let made_here = !database.tables.iter().any(|existing| existing.id == table);
         let columns = match database.tables.iter().find(|existing| existing.id == table) {
             Some(existing) => reconcile(table, &[], &[], &existing.columns, &wanted).columns,
             None => {
@@ -390,6 +391,9 @@ where
             })
             .await;
         if let Err(error) = stored {
+            if !made_here {
+                return Err(DatabaseSyncError::Repository(error));
+            }
             let _ = self
                 .tables
                 .apply(
@@ -466,7 +470,8 @@ where
             return Ok(existing);
         }
 
-        let (name, wanted) = self.source_columns(user, sync.id, &sync.source).await?;
+        let sync_id = sync.id;
+        let (name, wanted) = self.source_columns(user, sync_id, &sync.source).await?;
         let (database_id, starter_table) = self
             .tables
             .create_database(user, name.clone())
@@ -500,7 +505,13 @@ where
         }
         .await;
 
-        if created.is_err() {
+        // Once the sync is stored the database is a finished create, even if
+        // reading it back failed; when that can't be told, keep the database.
+        let stored = match &created {
+            Ok(_) => true,
+            Err(_) => !matches!(self.repository.sync(sync_id).await, Ok(None)),
+        };
+        if !stored {
             let _ = self
                 .tables
                 .delete_database(database_id)

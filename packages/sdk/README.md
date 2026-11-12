@@ -184,14 +184,17 @@ await doc.delete(); // soft delete; doc.restore() brings it back
 ```
 
 Documents, projects, calls and chats change their link and channel sharing with
-`updateSharePermissions`; omitted fields are left as they are. A calendar event
-is shared with a channel's members through `shareWithChannel`:
+`updateSharePermissions`; omitted fields are left as they are. Any item a
+channel message can carry (a document or task, project, database, form, call,
+email thread, agent session, external chat or calendar event) is shared with a
+channel's current members, as posting it there does, through `shareWithChannel`:
 
 ```ts
 await project.updateSharePermissions({
   linkShareAccessLevel: 'view',
   channelSharePermissions: [{ channel, accessLevel: 'comment', operation: 'add' }],
 });
+await doc.shareWithChannel(channel);
 await event.shareWithChannel(channel);
 ```
 
@@ -951,9 +954,10 @@ the build.
 
 You can add exceptions for stuff OpenAPI covers that we don't want the sdk to
 support by adding them to the `src/coverage/skipped.ts`. You can implement
-support by adding a wrapper to the appropriate model. There is CI to ensure that
-we don't forget to add coverage or explicitly skip coverage for new generated
-functions (endpoints).
+support by adding a wrapper to the appropriate model. Every wrapped generated
+method also needs a hand-assigned display verb in `src/utils/verbs.ts`; choose a
+read verb for a POST that only reads. Coverage fails for missing or stale verb
+entries as well as uncovered endpoints.
 
 ## Events
 
