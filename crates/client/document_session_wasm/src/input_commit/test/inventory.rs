@@ -63,10 +63,9 @@ fn wasm(attrs: &[syn::Attribute]) -> bool {
         .iter()
         .any(|attr| attr.path().is_ident("wasm_bindgen"))
 }
-fn exported_name(method: &syn::ImplItemFn) -> String {
-    let mut name = method.sig.ident.to_string();
-    for attr in method
-        .attrs
+fn exported_name(ident: &syn::Ident, attrs: &[syn::Attribute]) -> String {
+    let mut name = ident.to_string();
+    for attr in attrs
         .iter()
         .filter(|attr| attr.path().is_ident("wasm_bindgen"))
     {
@@ -110,6 +109,7 @@ fn invalidates_first(method: &syn::ImplItemFn) -> bool {
 struct Exports {
     methods: BTreeMap<String, (bool, String)>,
     classes: BTreeSet<String>,
+    functions: BTreeMap<String, String>,
 }
 fn collect_file(path: &Path, module_dir: &Path, profile: Profile, exports: &mut Exports) {
     let text = std::fs::read_to_string(path).expect("source");
@@ -151,12 +151,29 @@ fn collect_items(
                             .methods
                             .insert(
                                 method.sig.ident.to_string(),
-                                (invalidates_first(method), exported_name(method))
+                                (
+                                    invalidates_first(method),
+                                    exported_name(&method.sig.ident, &method.attrs)
+                                )
                             )
                             .is_none(),
                         "duplicate export"
                     );
                 }
+            }
+            syn::Item::Fn(function)
+                if enabled(&function.attrs, profile)
+                    && wasm(&function.attrs)
+                    && matches!(function.vis, syn::Visibility::Public(_)) =>
+            {
+                let name = exported_name(&function.sig.ident, &function.attrs);
+                assert!(
+                    exports
+                        .functions
+                        .insert(name, function.sig.ident.to_string())
+                        .is_none(),
+                    "duplicate free export"
+                );
             }
             syn::Item::Struct(value) if enabled(&value.attrs, profile) && wasm(&value.attrs) => {
                 exports.classes.insert(value.ident.to_string());
@@ -241,6 +258,15 @@ fn declared_ordinary_preview_profile_has_complete_export_policy_and_predecode_in
                 actual.methods[name].1, policy.js_name,
                 "{name} generated name"
             );
+            if matches!(
+                name.as_str(),
+                "register_view_block_navigation" | "enable_view_listener_metadata"
+            ) {
+                assert!(
+                    !actual.methods[name].0,
+                    "{name} must preserve the historical receipt"
+                );
+            }
             if policy.policy == "invalidate-before-decode" {
                 assert!(
                     actual.methods[name].0,
@@ -260,4 +286,45 @@ fn compatibility_profile_exports_no_observed_methods_receipt_or_capability_stub(
     assert!(!actual.methods.contains_key("read_input_commit_receipt"));
     assert!(!actual.classes.contains("InputCommitReceipt"));
     assert!(!actual.classes.contains("InputCommitKind"));
+}
+
+#[test]
+fn issued_navigation_scope_exports_have_explicit_profile_and_names() {
+    #[derive(serde::Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct ScopePolicy {
+        js_name: String,
+        policy: String,
+        ordinary: bool,
+        compatibility: bool,
+    }
+    let expected: BTreeMap<String, ScopePolicy> =
+        serde_json::from_str(include_str!("scope-export-policy.json"))
+            .expect("reviewed scope policy");
+    for profile in [
+        Profile::OrdinaryDefault,
+        Profile::OrdinaryPreview,
+        Profile::CompatWeb,
+    ] {
+        let actual = exports(profile);
+        for (name, policy) in &expected {
+            assert_eq!(policy.policy, "issued-view-command-scope-only");
+            let present = if matches!(profile, Profile::CompatWeb) {
+                policy.compatibility
+            } else {
+                policy.ordinary
+            };
+            assert_eq!(
+                actual.functions.contains_key(&policy.js_name),
+                present,
+                "{name} profile"
+            );
+            if present {
+                assert_eq!(
+                    actual.functions[&policy.js_name], *name,
+                    "{name} generated scope name"
+                );
+            }
+        }
+    }
 }

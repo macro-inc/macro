@@ -10,6 +10,7 @@ const [tsPath, ordinaryPath, compatPath] = process.argv.slice(2);
 assert(tsPath && ordinaryPath && compatPath, 'actual TypeScript module and both generated manifests required');
 const { default: ts } = await import(pathToFileURL(tsPath).href);
 const policy = JSON.parse(await readFile(new URL('../src/input_commit/test/entry-policy.json', import.meta.url), 'utf8'));
+const scopePolicy = JSON.parse(await readFile(new URL('../src/input_commit/test/scope-export-policy.json', import.meta.url), 'utf8'));
 const sha = (value) => createHash('sha256').update(value).digest('hex');
 async function load(manifestPath) {
   const raw = await readFile(manifestPath);
@@ -89,5 +90,20 @@ for (const name of ['inputObserved', 'readInputCommitReceipt']) {
 for (const name of ['InputCommitReceipt', 'InputCommitKind']) {
   assert(!declaration(compat, name, (node) => ts.isClassDeclaration(node) || ts.isEnumDeclaration(node)));
   assert(!Object.hasOwn(compat.module, name), `no compat class/enum stub ${name}`);
+}
+// Presence is only an issued-callback scope capability. It grants no ordinary
+// receiver, compatibility observation or receipt authority.
+for (const [rustName, entry] of Object.entries(scopePolicy)) {
+  assert.equal(entry.policy, 'issued-view-command-scope-only', rustName);
+  for (const [profile, binding] of [['ordinary', ordinary], ['compatibility', compat]]) {
+    const fn = declaration(binding, entry.jsName, ts.isFunctionDeclaration);
+    if (entry[profile]) {
+      assert(fn, `${profile} actual generated scope declaration ${entry.jsName}`);
+      assert.equal(typeof binding.module[entry.jsName], 'function', `${profile} actual scope export ${entry.jsName}`);
+    } else {
+      assert(!fn, `${profile} scope declaration absent ${entry.jsName}`);
+      assert(!Object.hasOwn(binding.module, entry.jsName), `${profile} scope export absent ${entry.jsName}`);
+    }
+  }
 }
 process.stdout.write(`${JSON.stringify({ status: 'pass', ordinary: { manifestSHA: ordinary.manifestSHA, files: ordinary.files, methods: methods.length }, compatibility: { manifestSHA: compat.manifestSHA, files: compat.files, observedCapability: 'absent; consumer must explicitly report Unavailable' } })}\n`);

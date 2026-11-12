@@ -1,0 +1,26 @@
+{
+  "block_navigation_block": {
+    "jsName": "viewCommandScopeBlockNavigationBlock",
+    "policy": "issued-view-command-scope-only",
+    "ordinary": true,
+    "compatibility": true
+  },
+  "cancel_block_navigation": {
+    "jsName": "viewCommandScopeCancelBlockNavigation",
+    "policy": "issued-view-command-scope-only",
+    "ordinary": true,
+    "compatibility": true
+  },
+  "complete_block_navigation": {
+    "jsName": "viewCommandScopeCompleteBlockNavigation",
+    "policy": "issued-view-command-scope-only",
+    "ordinary": true,
+    "compatibility": true
+  },
+  "prepare_block_navigation": {
+    "jsName": "viewCommandScopePrepareBlockNavigation",
+    "policy": "issued-view-command-scope-only",
+    "ordinary": true,
+    "compatibility": true
+  }
+}

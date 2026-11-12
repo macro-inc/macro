@@ -317,3 +317,5 @@ Expose inputObserved/readInputCommitReceipt and primitive receipt classes only i
 After matched ordinary and compatibility bindings are built, run `node crates/client/document_session_wasm/tests/input-commit-bindings.mjs <typescript.js> <ordinary-manifest.json> <compat-manifest.json>` to rehash both complete five-file packages and compare actual JS/DTS exports with the cfg-selected source policy. Source AST controls cover only the declared ordinary default/preview and compat-web profiles; they do not replace actual generated binding checks.
 
 Enable listener-metadata transport only through the explicit qualified owner binding after legacy output drains; raw owner queries and registrations retain default output behavior, and actual view retirement closes the protocol permanently.
+
+Classify each issued view-command scope export in input_commit/test/scope-export-policy.json and verify its cfg-selected source name plus actual ordinary/compatibility JS and DTS exports; scope presence grants no compatibility receipt or ordinary receiver authority.
