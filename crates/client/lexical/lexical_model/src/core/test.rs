@@ -223,6 +223,7 @@ fn apply_created_node_receives_id_in_the_same_output_and_initial_output_drains_o
             editable: false,
             diff: DiffOptions {
                 include_state: true,
+                ..Default::default()
             },
             track_text_content: false,
         },

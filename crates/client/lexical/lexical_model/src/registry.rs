@@ -673,6 +673,7 @@ impl EditorBuilder {
                     chain
                         .diff(&DiffOptions {
                             include_state: true,
+                            ..Default::default()
                         })
                         .map_err(|error| BuildError::InitialState(Box::new(error)))?,
                 );

@@ -75,6 +75,7 @@ impl HostCommitPacket {
         commit.encode_diff(
             &DiffOptions {
                 include_state: true,
+                ..Default::default()
             },
             &mut buffer,
         )?;

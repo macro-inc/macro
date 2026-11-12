@@ -30,6 +30,7 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - `src/history.rs` owns undo/redo stacks and the standalone merge tracker.
 - `src/diff/` owns the versioned flat ABI; keep all 12 opcodes in sync with the independent TS decoder test. Native decorator signature sidecars are resolved by the consuming view, never serialized as state or observed by Commit.diff.
 - Preserve ordered decorator own properties after a changed-payload COW even when typed values compare equal; keep signature equality separate and account for prior/current export callbacks.
+- Use `DiffOptions::selected_state` only for pure native view payloads: full-state mode takes precedence, foreign-hook graphs skip it, and each State replaces or clears the prior payload. Core cached build-time hook output does not project selected state; an owning Surface must generate its authoritative Initialize diff.
 - `src/core/` owns input policy, raw remote edits and host effects.
 - `src/caret/` implements directional positions, eager cursors, range removal and splitting.
 - `src/test/proptest.rs` checks generated scripts against independent link, cache, JSON, mutation and view-diff invariants.

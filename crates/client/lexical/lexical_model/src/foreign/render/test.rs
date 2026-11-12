@@ -77,6 +77,7 @@ fn render_records_capture_typed_native_fields_without_public_export_calls() -> R
     })?;
     let diff = commit.diff(&DiffOptions {
         include_state: true,
+        ..Default::default()
     })?;
     assert!(diff.ops.iter().any(
         |op| matches!(op,DiffOp::CreateElement { key:k,props,.. } if *k == key && props.is_empty())
@@ -201,6 +202,7 @@ fn bound_instance_diff_skips_public_export_indent_and_node_state_callbacks() -> 
     calls.store(0, Ordering::SeqCst);
     let diff = commit.diff(&DiffOptions {
         include_state: true,
+        ..Default::default()
     })?;
     assert_eq!(calls.load(Ordering::SeqCst), 0);
     assert!(

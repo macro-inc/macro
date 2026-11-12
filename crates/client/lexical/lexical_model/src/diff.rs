@@ -11,7 +11,13 @@ pub use encode::*;
 pub struct DiffOptions {
     /// Include NodeState, which the DOM ordinarily ignores.
     pub include_state: bool,
+    /// Selected native view-state payload. Full state takes precedence when enabled.
+    /// Hosted foreign graphs never invoke this selector.
+    pub selected_state: Option<ViewStateSelector>,
 }
+/// Pure native read of selected view state; the returned payload replaces prior view state.
+pub type ViewStateSelector =
+    for<'state> fn(StateRef<'state>, NodeKey) -> Result<Option<SerializedNode>, Error>;
 /// A structural patch spanning a commit chain.
 #[derive(Clone, PartialEq, Debug)]
 pub struct Diff {
@@ -454,6 +460,15 @@ pub(crate) fn visit_transition_diff(
     options: &DiffOptions,
     mut emit: impl FnMut(DiffOp),
 ) -> Result<(), Error> {
+    let selected_state = if options.include_state {
+        None
+    } else {
+        options.selected_state
+    };
+    #[cfg(feature = "foreign-nodes")]
+    let selected_state = selected_state.filter(|_| {
+        !prev.state.foreign_instances.has_hooks() && !next.state.foreign_instances.has_hooks()
+    });
     let mut prev_positions = ChildPositions::default();
     let mut next_positions = ChildPositions::default();
     let mut changed = IndexSet::default();
@@ -627,6 +642,20 @@ pub(crate) fn visit_transition_diff(
                 key,
                 state: state_props(next, key)?,
             });
+        } else if let Some(select) = selected_state {
+            let previous = select(prev, key)?;
+            let current = select(next, key)?;
+            let unchanged = match (&previous, &current) {
+                (None, None) => true,
+                (Some(previous), Some(current)) => ordered_props_equal(previous, current),
+                _ => false,
+            };
+            if !unchanged {
+                emit(DiffOp::State {
+                    key,
+                    state: current,
+                });
+            }
         }
     }
     if options.include_state {
@@ -638,9 +667,20 @@ pub(crate) fn visit_transition_diff(
                 });
             }
         }
+    } else if let Some(select) = selected_state {
+        for key in created {
+            if let Some(state) = select(next, key)? {
+                emit(DiffOp::State {
+                    key,
+                    state: Some(state),
+                });
+            }
+        }
     }
     Ok(())
 }
 
+#[cfg(test)]
+mod selected_state_test;
 #[cfg(test)]
 mod test;

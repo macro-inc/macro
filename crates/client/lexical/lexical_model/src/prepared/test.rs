@@ -89,6 +89,7 @@ fn prepared_main_diff_bytes_match_actual_ordinary_commit() -> Result<(), Box<dyn
     let (_, commit) = ordinary.update(populate)?;
     let options = DiffOptions {
         include_state: true,
+        ..Default::default()
     };
     let mut expected = DiffBuffer::default();
     commit.encode_diff(&options, &mut expected)?;

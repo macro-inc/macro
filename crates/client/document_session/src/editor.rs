@@ -37,6 +37,8 @@ pub struct EditorConfig {
     pub comment_node: CommentNodeFactory,
     /// Application projection exclusions.
     pub policy: &'static dyn SyncPolicy,
+    /// View-state selection; full-state mode retains its existing precedence.
+    pub diff: DiffOptions,
     /// Live model mode; comment staging always uses Headless.
     pub mode: EditorMode,
     /// Platform selection policy.
@@ -55,6 +57,7 @@ impl Default for EditorConfig {
             builder: Arc::new(default_editor_builder),
             comment_node: lexical_rich_nodes::mark::create_mark_node,
             policy: &PLAIN,
+            diff: DiffOptions::default(),
             mode: EditorMode::ViewAttached,
             view_host: ViewHost {
                 engine: ViewEngine::Native,
@@ -105,7 +108,7 @@ impl EditorSurface {
             .map_err(|_| SessionError::Configuration("history delay exceeds i64 milliseconds"))?;
         let editor = Self::builder(&config, config.mode, peer).build()?;
         Ok(Self {
-            core: Self::core(editor),
+            core: Self::core(editor, config.diff),
             reported_errors: None,
             follow_up_errors: None,
             #[cfg(feature = "application")]
@@ -149,13 +152,13 @@ impl EditorSurface {
             builder
         }
     }
-    fn core(editor: Editor) -> EditorCore {
+    fn core(editor: Editor, diff: DiffOptions) -> EditorCore {
         EditorCore::new(
             editor,
             CoreConfig {
                 history: None,
                 editable: true,
-                diff: DiffOptions::default(),
+                diff,
                 track_text_content: false,
             },
         )
@@ -247,6 +250,7 @@ impl EditorSurface {
             Self::builder(&self.config, self.config.mode, doc.peer_id())
                 .initial_state(state)
                 .build()?,
+            self.config.diff,
         );
         if let Some(capture) = &self.follow_up_errors {
             capture.clear();
@@ -317,7 +321,7 @@ impl EditorSurface {
         let (_, mut commit) = empty.update(|_| Ok(()))?;
         commit.next = self.core.state().clone();
         commit.full_reconcile = true;
-        let diff = commit.diff(&DiffOptions::default())?;
+        let diff = commit.diff(&self.config.diff)?;
         view.push(ViewEffect::Initialize(InitialView::Editor {
             diff,
             state: self.core.state().to_json()?,
@@ -358,7 +362,7 @@ impl EditorSurface {
         let (_, mut commit) = empty.update(|_| Ok(()))?;
         commit.next = self.core.state().clone();
         commit.full_reconcile = true;
-        Ok(commit.diff(&DiffOptions::default())?)
+        Ok(commit.diff(&self.config.diff)?)
     }
     fn history_changed(&mut self, view: &mut Vec<ViewEffect>) {
         if let Some(undo) = &self.undo {

@@ -515,6 +515,7 @@ fn run_script(
             commit
                 .diff(&DiffOptions {
                     include_state: true,
+                    ..Default::default()
                 })
                 .expect("diff"),
         );

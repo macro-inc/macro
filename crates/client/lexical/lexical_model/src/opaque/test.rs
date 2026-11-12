@@ -53,6 +53,7 @@ fn remote_unknown_create_and_update_keep_the_original_serialized_name() -> Resul
             editable: true,
             diff: DiffOptions {
                 include_state: true,
+                ..Default::default()
             },
             track_text_content: false,
         },

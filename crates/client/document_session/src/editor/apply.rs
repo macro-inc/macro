@@ -217,7 +217,7 @@ impl EditorSurface {
                     let mut chain = first.clone();
                     chain.next = last.next.clone();
                     chain.full_reconcile = true;
-                    view.push(ViewEffect::Diff(chain.diff(&DiffOptions::default())?));
+                    view.push(ViewEffect::Diff(chain.diff(&self.config.diff)?));
                 }
                 if let Some(observer) = &self.reported_errors {
                     observer.reported(&error.error, view.len());

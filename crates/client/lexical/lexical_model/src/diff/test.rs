@@ -60,7 +60,10 @@ fn encoded_with_order(commit: &Commit, options: &DiffOptions, path: OrderPath) -
 
 fn assert_ordered_buffers(commit: &Commit) {
     for include_state in [false, true] {
-        let options = DiffOptions { include_state };
+        let options = DiffOptions {
+            include_state,
+            ..Default::default()
+        };
         let memo = encoded_with_order(commit, &options, OrderPath::Memo);
         let legacy = encoded_with_order(commit, &options, OrderPath::Legacy);
         assert_eq!(
@@ -230,7 +233,7 @@ proptest! {
             }
             Ok(())
         }).unwrap();
-        assert!(initial.diff(&DiffOptions { include_state: true }).unwrap().ops.iter().any(|op| matches!(op, DiffOp::State { .. })));
+        assert!(initial.diff(&DiffOptions { include_state: true, ..Default::default() }).unwrap().ops.iter().any(|op| matches!(op, DiffOp::State { .. })));
         assert_ordered_buffers(&initial);
         let mut snapshots = vec![initial.next.clone()];
         let mut chain: Option<Commit> = None;
@@ -263,6 +266,7 @@ fn whole_commit_buffer_control_detects_reversed_reference_order() {
         .unwrap();
     let options = DiffOptions {
         include_state: true,
+        ..Default::default()
     };
     let memo = encoded_with_order(&commit, &options, OrderPath::Memo);
     let reversed = encoded_with_order(&commit, &options, OrderPath::ReversedLegacy);
@@ -549,7 +553,8 @@ fn state_is_opt_in_and_property_groups_only_emit_when_changed() {
     assert_eq!(
         commit
             .diff(&DiffOptions {
-                include_state: true
+                include_state: true,
+                ..Default::default()
             })
             .unwrap()
             .ops,
