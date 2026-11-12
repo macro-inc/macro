@@ -462,6 +462,7 @@ pub fn inbound_message(message: &Message) -> InboundMessage {
             .is_thread_reply()
             .then(|| message.thread_ts.as_ref().map(|ts| ts.to_string()))
             .flatten(),
+        broadcast: message.subtype == Some(MessageSubtype::ThreadBroadcast),
         system: message.subtype.as_ref().is_some_and(is_system),
         files: message
             .files

@@ -178,7 +178,7 @@ pub(super) async fn store_message_in(
     origin: StoredOrigin<'_>,
 ) -> ExternalChatResult<bool> {
     let person = person_in(tx, chat, &message.sender).await?;
-    let reply_to = match &message.thread_ts {
+    let thread_root = match &message.thread_ts {
         Some(root) => message_in(tx, chat, root).await?,
         None => None,
     };
@@ -190,10 +190,11 @@ pub(super) async fn store_message_in(
     let kind = if message.system { "system" } else { "message" };
     let row = sqlx::query!(
         r#"INSERT INTO external_chat_message (id, message_id, chat_id, person_id, source_id, origin, source_at,
-            body, reply_to, kind, mentions, effect_revision)
-        VALUES ($1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 1)
+            body, thread_root, thread_broadcast, kind, mentions, effect_revision)
+        VALUES ($1, $1, $2, $3, $4, $5, $6, $7, $8, $11, $9, $10, 1)
         ON CONFLICT (chat_id, person_id, source_id) DO UPDATE SET
-            reply_to = COALESCE(external_chat_message.reply_to, excluded.reply_to),
+            thread_root = COALESCE(external_chat_message.thread_root, excluded.thread_root),
+            thread_broadcast = external_chat_message.thread_broadcast OR excluded.thread_broadcast,
             mentions = CASE WHEN cardinality(external_chat_message.mentions) = 0
                 THEN excluded.mentions ELSE external_chat_message.mentions END
         RETURNING id, xmax = 0 AS "created!""#,
@@ -204,9 +205,10 @@ pub(super) async fn store_message_in(
         origin_name,
         message.sent_at,
         message.body,
-        reply_to,
+        thread_root,
         kind,
-        &message.mentions
+        &message.mentions,
+        message.broadcast
     )
     .fetch_one(&mut **tx)
     .await
@@ -355,7 +357,7 @@ pub(super) async fn apply_in(
                 sqlx::query!(
                     r#"INSERT INTO external_chat_reaction (message_id, person_id, emoji, source_id, revision, updated_at)
                     VALUES ($1, $2, $3, $4, $5, $6)
-                    ON CONFLICT (message_id, person_id) DO UPDATE SET emoji = excluded.emoji, source_id = excluded.source_id,
+                    ON CONFLICT (message_id, person_id, emoji) DO UPDATE SET source_id = excluded.source_id,
                         revision = excluded.revision, updated_at = excluded.updated_at
                     WHERE excluded.revision >= external_chat_reaction.revision"#,
                     target,

@@ -38,6 +38,40 @@ fn progress(row: SendRow) -> ExternalChatResult<SendProgress> {
 
 #[async_trait]
 impl SendRepository for PgSlackRepository {
+    async fn queue_read_mark(
+        &self,
+        chat: &ChatRef,
+        read: &external_chat::domain::timeline::ReadAdvance,
+    ) -> ExternalChatResult<()> {
+        let mut tx = self.pool.begin().await.map_err(failure)?;
+        let accounts = sqlx::query_scalar!(
+            r#"INSERT INTO slack_read_mark (chat_id, account_id, thread_ts, ts, traceparent)
+            SELECT m.chat_id, m.account_id, COALESCE(r.source_id, ''), read.source_id, $4
+            FROM slack_chat_membership m
+            JOIN slack_account a ON a.id = m.account_id
+            JOIN external_chat_message read ON read.id = $2 AND read.chat_id = m.chat_id
+            LEFT JOIN external_chat_message r ON r.id = $3 AND r.chat_id = m.chat_id
+            WHERE m.chat_id = $1 AND a.user_id = $5 AND m.consent_ended_at IS NULL
+              AND m.generation = a.generation AND a.state IN ('connecting', 'connected')
+            ON CONFLICT (chat_id, account_id, thread_ts) DO UPDATE SET ts = excluded.ts,
+                traceparent = excluded.traceparent, requested_at = now()
+            WHERE slack_read_mark.ts < excluded.ts
+            RETURNING account_id"#,
+            chat.id,
+            read.message_id,
+            read.thread_root,
+            external_chat::signals::trace_context::current(),
+            chat.user_id
+        )
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(failure)?;
+        for account in accounts {
+            notify(&mut tx, signals::READ_REQUESTED, account).await?;
+        }
+        tx.commit().await.map_err(failure)
+    }
+
     async fn mutation_target(
         &self,
         chat: &ChatRef,
@@ -281,7 +315,7 @@ async fn slack_position_in(
 ) -> ExternalChatResult<Option<(String, Option<String>)>> {
     Ok(sqlx::query!(
         r#"SELECT m.source_id, r.source_id AS "root?" FROM external_chat_message m
-        LEFT JOIN external_chat_message r ON r.id = m.reply_to
+        LEFT JOIN external_chat_message r ON r.id = m.thread_root
         WHERE m.chat_id = $1 AND m.message_id = $2"#,
         chat,
         message
@@ -340,10 +374,10 @@ pub(super) async fn claim_sends(
             }
             // Files from Macro wait for the attachment pipeline's Slack upload.
             ReplyContent::Media { .. } => (None, None, true),
-            ReplyContent::Text { .. } => match request.reply_to {
-                Some(quoted) => match slack_position_in(&mut tx, row.chat_id, quoted).await? {
-                    // A reply goes into the target's thread.
-                    Some((ts, root)) => (Some(root.unwrap_or(ts)), None, false),
+            // Slack has no quotes: a reply is in the thread of its root.
+            ReplyContent::Text { .. } => match request.thread.or(request.reply_to) {
+                Some(root) => match slack_position_in(&mut tx, row.chat_id, root).await? {
+                    Some((ts, parent)) => (Some(parent.unwrap_or(ts)), None, false),
                     None => (None, None, true),
                 },
                 None => (None, None, false),
@@ -477,8 +511,8 @@ pub(super) async fn record_send_outcome(
             let request: SendReply = decode(row.payload)?;
             match &request.message {
                 ReplyContent::Text { text, mentions } => {
-                    let thread_ts = match request.reply_to {
-                        Some(quoted) => slack_position_in(&mut tx, row.chat_id, quoted)
+                    let thread_ts = match request.thread.or(request.reply_to) {
+                        Some(root) => slack_position_in(&mut tx, row.chat_id, root)
                             .await?
                             .map(|(target, root)| root.unwrap_or(target)),
                         None => None,
@@ -494,6 +528,7 @@ pub(super) async fn record_send_outcome(
                         body: text.clone(),
                         mentions: mentions.clone(),
                         thread_ts,
+                        broadcast: false,
                         system: false,
                         files: vec![],
                         edited_ts: None,
@@ -542,6 +577,7 @@ pub(super) async fn record_send_outcome(
                                     body: text.clone().unwrap_or_default(),
                                     mentions: vec![],
                                     thread_ts: None,
+                                    broadcast: false,
                                     system: false,
                                     files: vec![],
                                     edited_ts: Some(ts.clone()),

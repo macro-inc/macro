@@ -50,7 +50,20 @@ impl SlackProvider {
 #[async_trait]
 impl ChatProvider for SlackProvider {
     fn capabilities(&self, _chat: &ChatRef) -> Capabilities {
-        Capabilities::default()
+        Capabilities {
+            threads: true,
+            ..Capabilities::default()
+        }
+    }
+
+    /// The owner's read position goes back to Slack, from every account of
+    /// theirs that observes the chat.
+    async fn read_advanced(
+        &self,
+        chat: &ChatRef,
+        read: &external_chat::domain::timeline::ReadAdvance,
+    ) -> ExternalChatResult<()> {
+        self.sends.queue_read_mark(chat, read).await
     }
 
     /// Each mention is a Slack user id that the mrkdwn text writes as

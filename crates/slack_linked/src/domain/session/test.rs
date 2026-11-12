@@ -33,6 +33,7 @@ fn a_thread_reply_from_another_organization_becomes_a_threaded_message_with_ment
                 body: "hi <@U0OWNER12|ana>, see <#C0123ABCDE> and <@U0OWNER12>".to_owned(),
                 mentions: vec!["U0OWNER12".to_owned()],
                 thread_ts: Some("1700000000.000100".to_owned()),
+                broadcast: false,
                 system: false,
                 files: vec![InboundFile {
                     file_id: "F0FILE1234".to_owned(),

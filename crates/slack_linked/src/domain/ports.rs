@@ -250,9 +250,16 @@ pub trait AdoptionRepository: Send + Sync {
     async fn detach(&self, chat: &ChatRef) -> ExternalChatResult<()>;
 }
 
-/// Durable send intents in the `slack_send` outbox.
+/// Durable send intents in the `slack_send` outbox, and read marks for Slack.
 #[async_trait]
 pub trait SendRepository: Send + Sync {
+    /// Queue the owner's read position for each observing account of theirs
+    /// (`slack_read_mark`, newest wins) and signal `slack_read_requested`.
+    async fn queue_read_mark(
+        &self,
+        chat: &ChatRef,
+        read: &external_chat::domain::timeline::ReadAdvance,
+    ) -> ExternalChatResult<()>;
     /// The source of a message in this chat, for quotes and mutations.
     async fn mutation_target(
         &self,

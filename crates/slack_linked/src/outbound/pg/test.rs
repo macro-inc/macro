@@ -247,6 +247,7 @@ async fn a_pasted_session_adds_a_slack_connect_channel_and_ingests_its_traffic(p
         body: body.to_owned(),
         mentions: vec![],
         thread_ts: thread_ts.map(str::to_owned),
+        broadcast: false,
         system: false,
         files: vec![],
         edited_ts: None,
@@ -299,7 +300,7 @@ async fn a_pasted_session_adds_a_slack_connect_channel_and_ingests_its_traffic(p
             r.source_id AS "thread_root?", p.display_name
         FROM external_chat_message m
         JOIN external_chat_person p ON p.id = m.person_id
-        LEFT JOIN external_chat_message r ON r.id = m.reply_to
+        LEFT JOIN external_chat_message r ON r.id = m.thread_root
         WHERE m.chat_id = $1 ORDER BY m.source_at"#,
         chat.id
     )

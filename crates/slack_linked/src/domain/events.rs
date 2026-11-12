@@ -221,6 +221,9 @@ pub struct InboundMessage {
     pub mentions: Vec<String>,
     /// The thread root's `ts`, for a reply in a thread.
     pub thread_ts: Option<String>,
+    /// A thread reply also sent to the conversation.
+    #[serde(default)]
+    pub broadcast: bool,
     /// A system line (joined, renamed…).
     pub system: bool,
     /// Files.
