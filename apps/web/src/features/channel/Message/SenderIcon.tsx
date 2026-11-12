@@ -41,9 +41,10 @@ export function SenderIcon(props: SenderIconProps) {
 
   // Someone outside Macro, such as a WhatsApp participant, has no principal.
   const externalAuthor = () => {
-    const name = message().imported_author?.name?.trim();
+    const author = message().imported_author;
+    const name = author?.name?.trim();
     return !message().sender_id && name
-      ? { name, avatar_url: null }
+      ? { name, avatar_url: author?.avatar_url ?? null }
       : undefined;
   };
 

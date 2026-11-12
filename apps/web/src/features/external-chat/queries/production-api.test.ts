@@ -3,6 +3,7 @@ import type {
   ExternalChatMessage,
   ExternalChatMessages,
 } from '@service-storage/generated/schemas';
+import { staticFileIdEndpoint } from '@core/constant/servers';
 import { err, ok } from 'neverthrow';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { externalChatApi } from './production-api';
@@ -21,6 +22,8 @@ vi.mock('@service-storage/external-chats', () => ({
   externalChatsClient: client,
 }));
 beforeEach(() => vi.clearAllMocks());
+
+const phoneJid = (number: string) => `${number}@s.whatsapp.net`;
 
 it('decodes shared viewing separately from the callers own sending account and handles absent members', async () => {
   const detail = {
@@ -59,6 +62,83 @@ it('decodes shared viewing separately from the callers own sending account and h
   expect(chat.phone).toBeUndefined();
   expect(chat.members).toEqual([]);
   expect(chat.limits.attachmentTypes).toEqual(['image/png', 'application/pdf']);
+});
+
+it('turns provider pictures into static file URLs and leaves hidden ones absent', async () => {
+  const detail = {
+    id: '019a061e-0000-7000-8000-000000000010',
+    provider: 'whatsapp',
+    kind: 'group',
+    name: 'Family',
+    userId: 'macro|owner@example.test',
+    unreadCount: 0,
+    lastMessageAt: null,
+    canSend: true,
+    sendReason: null,
+    backfill: null,
+    community: null,
+    pictureFileId: '019a061e-0000-7000-8000-0000000000f1',
+    accessLevel: 'owner',
+    sendingIdentity: null,
+    disappearingSeconds: null,
+    members: {
+      name: 'Family',
+      announce: false,
+      observedAt: '2026-11-12T12:00:00Z',
+      participants: [
+        {
+          jid: phoneJid('1555'),
+          alternateJid: null,
+          displayName: 'Ana',
+          name: 'Ana',
+          admin: true,
+          pictureFileId: '019a061e-0000-7000-8000-0000000000f2',
+        },
+        {
+          jid: phoneJid('1666'),
+          alternateJid: null,
+          displayName: null,
+          name: '+1666',
+          admin: false,
+          pictureFileId: null,
+        },
+      ],
+    },
+    sharePermission: {
+      id: 'share-1',
+      owner: 'macro|owner@example.test',
+      channelSharePermissions: [],
+    },
+    limits: {
+      textLimitBytes: 65536,
+      attachmentLimitBytes: 33554432,
+      maxAttachments: 1,
+      mutations: ['reaction', 'edit', 'delete'],
+      mutationWindowSeconds: 900,
+      attachmentTypes: ['image/png'],
+    },
+  } satisfies ExternalChatDetail;
+  client.detail.mockResolvedValue(ok(detail));
+
+  const chat = await externalChatApi.detail(detail.id);
+
+  expect(chat.pictureUrl).toBe(
+    staticFileIdEndpoint('019a061e-0000-7000-8000-0000000000f1')
+  );
+  expect(chat.members).toEqual([
+    {
+      id: phoneJid('1555'),
+      name: 'Ana',
+      admin: true,
+      pictureUrl: staticFileIdEndpoint('019a061e-0000-7000-8000-0000000000f2'),
+    },
+    {
+      id: phoneJid('1666'),
+      name: '+1666',
+      admin: false,
+      pictureUrl: undefined,
+    },
+  ]);
 });
 
 it('decodes pagination, deleted flags, reaction ownership and attachment states from the independent timeline', async () => {
