@@ -1573,10 +1573,10 @@ pub struct VisibleCalendar {
     /// birthdays) the account subscribes to rather than one a person maintains.
     pub is_subscription: bool,
     /// Whether this calendar counts toward the requester's busy time: their
-    /// setting, by default only the primary calendars of inboxes they own.
+    /// setting in Settings → Calendar, on by default for every calendar.
     /// The nearest thing to "this is the requester's own": a provider's
     /// access role only says what they may do, on a colleague's calendar too.
-    #[serde(default)]
+    #[serde(default = "counts_toward_availability_by_default")]
     pub contributes_to_availability: bool,
     /// A persistent sync failure isolated to this calendar, surfaced so the
     /// settings row can badge it. `None` while the calendar is syncing
@@ -1584,6 +1584,11 @@ pub struct VisibleCalendar {
     pub sync_error: Option<String>,
     /// Default reminders applied to events that keep `useDefault`.
     pub default_reminders: Vec<EventReminderOverride>,
+}
+
+/// A reply that omits the setting must not free the user's time.
+fn counts_toward_availability_by_default() -> bool {
+    true
 }
 
 impl VisibleCalendar {

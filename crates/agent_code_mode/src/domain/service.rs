@@ -253,6 +253,8 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 // Message.context().
                 | "ReadChannelMessageContext"
                 | "RenameChannel"
+                // shareWithChannel() on every shareable item's handle.
+                | "ShareWithChannel"
                 | "ManageChannelParticipants"
                 // macro.channels.dm() and macro.channels.private().
                 | "OpenDirectMessage"
