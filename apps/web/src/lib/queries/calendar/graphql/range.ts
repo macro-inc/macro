@@ -299,6 +299,11 @@ async function readOccurrenceItems(
 // returns costs one request per session rather than one per read.
 const refetchedUnreadable = new WeakMap<object, Set<string>>();
 
+/** An explicit Retry gets one more attempt; automatic reads keep their per-key bound. */
+export function retryUnreadableCalendarOccurrences(host: object) {
+  refetchedUnreadable.delete(host);
+}
+
 function claimUnreadable(host: object, keys: readonly string[]): string[] {
   let claimed = refetchedUnreadable.get(host);
   if (!claimed) {

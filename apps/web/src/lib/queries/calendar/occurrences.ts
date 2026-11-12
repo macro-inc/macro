@@ -15,10 +15,14 @@ import {
 } from '@tanstack/solid-query';
 import { type Accessor, createEffect, onCleanup } from 'solid-js';
 import {
+  answeringGraphqlCalendarHost,
   markCalendarCacheUnsupported,
   useGraphqlCalendarHost,
 } from './graphql/flag';
-import { readCalendarRange } from './graphql/range';
+import {
+  readCalendarRange,
+  retryUnreadableCalendarOccurrences,
+} from './graphql/range';
 import { calendarCacheAnswered } from './graphql/readiness';
 import { activeCalendarSyncController } from './graphql/sync-controller';
 import { type CalendarOccurrenceQueryRange, calendarKeys } from './keys';
@@ -301,7 +305,13 @@ export async function invalidateCalendarOccurrences(
  * waiting for a cache that is still starting: nothing awaits this refresh, and
  * a refetch that skipped the delta could reread a stale covered week.
  */
-export async function syncCalendarOccurrences() {
+export async function syncCalendarOccurrences(
+  options: { retryUnreadable?: boolean } = {}
+) {
+  const host = options.retryUnreadable
+    ? answeringGraphqlCalendarHost()
+    : undefined;
+  if (host) retryUnreadableCalendarOccurrences(host);
   return Telemetry.span('calendar.occurrences_sync', async (parent) => {
     const controller = activeCalendarSyncController();
     await parent.span('calendar.occurrences_delta_sync', async (span) => {

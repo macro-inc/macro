@@ -12,6 +12,7 @@ import {
   lowestWatermark,
   readCalendarRange,
   recordCalendarSyncStatus,
+  retryUnreadableCalendarOccurrences,
   toCalendarRangeArgs,
 } from '../range';
 import { calendarCacheAnswered } from '../readiness';
@@ -240,6 +241,28 @@ describe('readCalendarRange', () => {
 
     expect(fetchPage).toHaveBeenCalledTimes(1);
     expect(host.calendarRange).toHaveBeenCalledTimes(3);
+  });
+
+  it('retries a still-unreadable record only after an explicit Retry', async () => {
+    const key = 'GraphqlCalendarOccurrence:event-1:a';
+    const host = fakeHost(
+      Array.from({ length: 5 }, () => range({ occurrenceKeys: [key] }))
+    );
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      host.readRecordsByKeys.mockResolvedValueOnce({
+        revision: '2' as never,
+        records: [],
+      });
+    }
+    const fetchPage = vi.fn().mockResolvedValue(page());
+    expect((await readData(host, week, { fetchPage })).partial).toBe(true);
+    expect((await readData(host, week, { fetchPage })).partial).toBe(true);
+    expect(fetchPage).toHaveBeenCalledOnce();
+    retryUnreadableCalendarOccurrences(host);
+    const refreshed = await readData(host, week, { fetchPage });
+    expect(refreshed.items).toHaveLength(1);
+    expect(refreshed.partial).toBeUndefined();
+    expect(fetchPage).toHaveBeenCalledTimes(2);
   });
 
   it('answers with what it read when the refetch fails, and retries later', async () => {

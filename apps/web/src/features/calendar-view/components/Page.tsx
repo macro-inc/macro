@@ -153,7 +153,7 @@ function CalendarPageDataStatus(props: {
   const retry = () =>
     fireAndForget(
       props.holdingTimeChange
-        ? syncCalendarOccurrences()
+        ? syncCalendarOccurrences({ retryUnreadable: true })
         : props.data.occurrencesQuery.refetch(),
       'calendar-view'
     );
