@@ -1,3 +1,4 @@
+import { useSessionActivity } from '@core/agent-session/session-activity';
 import type {
   ExecutionActivity,
   ExecutionRecord,
@@ -33,6 +34,10 @@ export function CodeExecutionToolCall(props: {
       ? activity().findIndex((item) => item.status === 'running')
       : -1;
   const active = () => activeIndex() !== -1;
+  const sessionLine = useSessionActivity(() => props.context.sessionId);
+  // As with a run of native tool calls, the program the turn is in takes the
+  // session's live line.
+  const summary = () => (props.context.current ? sessionLine() : undefined);
 
   return (
     <div class="min-w-0" data-code-execution={props.record?.executionId}>
@@ -46,7 +51,7 @@ export function CodeExecutionToolCall(props: {
             (calls().length > 0
               ? `${calls().length} tool calls`
               : isToolActive(props.common.status)
-                ? 'Working in your workspace…'
+                ? (summary() ?? 'Working in your workspace…')
                 : undefined)
           }
         />
@@ -56,6 +61,7 @@ export function CodeExecutionToolCall(props: {
           count={activity().length}
           active={active()}
           activeIndex={active() ? activeIndex() : undefined}
+          summary={summary()}
         >
           <For each={activity()}>
             {(item) => (
