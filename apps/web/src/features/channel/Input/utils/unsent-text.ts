@@ -3,11 +3,16 @@ import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { makeInputValuePersistenceKey } from './persistence';
 
+const COPY_OFFER_MS = 60_000;
+
 /** A mounted composer that keeps its draft under a persistence key. */
 type DraftComposer = {
   value: () => string;
-  /** Put text into the composer, which holds nothing. */
-  restoreText: (text: string) => void;
+  /**
+   * Put text into the composer, which holds nothing. Answers false when it
+   * cannot take it now.
+   */
+  restoreText: (text: string) => boolean;
 };
 
 /** A channel open in two splits mounts two composers on one draft. */
@@ -67,6 +72,8 @@ function storeDraft(key: string, text: string): boolean {
 
 function offerCopy(text: string) {
   toast.failure(t('channelMessages.unsentKept'), {
+    // It can be the only place the text is left.
+    duration: COPY_OFFER_MS,
     actions: [
       {
         label: t('channelMessages.copyUnsent'),
@@ -122,9 +129,12 @@ export function keepUnsentPostText(post: {
       offerCopy(text);
       return true;
     }
+    if (!empty.restoreText(text)) {
+      offerCopy(text);
+      return true;
+    }
     handed.set(empty, text);
     setTimeout(() => handed.delete(empty), 0);
-    empty.restoreText(text);
     return false;
   }
   const stored = storedDraft(key);

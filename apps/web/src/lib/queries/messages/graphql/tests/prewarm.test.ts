@@ -544,6 +544,38 @@ describe('when nothing runs', () => {
     expect(mocks.readCachedPageRecords).not.toHaveBeenCalled();
   });
 
+  it('the hook reads the queue once the cache is there, without a channel open', async () => {
+    vi.useFakeTimers();
+    knownChannels({});
+    const inspectMutations = vi.fn().mockResolvedValue([]);
+    const host = {
+      ...HOST,
+      inspectMutations,
+      onMutationSettled: () => () => {},
+      onCacheGenerationChanged: () => () => {},
+    };
+    // The flag has not loaded when the shell mounts.
+    mocks.channelCacheHost.mockReturnValue(undefined);
+    visibility = 'hidden';
+    const dispose = createRoot((dispose) => {
+      useChannelCachePrewarm(
+        () => [],
+        () => []
+      );
+      return dispose;
+    });
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(inspectMutations).not.toHaveBeenCalled();
+
+    mocks.channelCacheHost.mockReturnValue(host);
+    setVisibility('hidden');
+    await vi.advanceTimersByTimeAsync(10_000);
+    setVisibility('hidden');
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(inspectMutations).toHaveBeenCalledOnce();
+    dispose();
+  });
+
   it('the hook waits for a hidden tab to be shown', async () => {
     vi.useFakeTimers();
     knownChannels({ a: daysAgo(1) });

@@ -147,7 +147,15 @@ const liveUuids = new Map<string, number>();
 const watchedHosts = new WeakMap<CacheHost, () => void>();
 const restores = new WeakMap<CacheHost, Promise<void>>();
 /** Settlements announced while a restore read the queue. */
-let settledDuringRestore: Map<string, MutationSettlement['status']> | undefined;
+/**
+ * What settled while the queue was being read, per read in flight: the read's
+ * snapshot can still list those writes. `live` ones belong to a hook.
+ */
+type SettledDuringRead = Map<
+  string,
+  { status: MutationSettlement['status']; live: boolean }
+>;
+const readsInFlight = new Set<SettledDuringRead>();
 let reapplyCache: ReturnType<typeof queryClient.getQueryCache> | undefined;
 let stopReapply: (() => void) | undefined;
 
@@ -281,8 +289,14 @@ function watchHost(host: CacheHost) {
 }
 
 function onSettled(host: CacheHost, settlement: MutationSettlement) {
-  settledDuringRestore?.set(settlement.transactionId, settlement.status);
   const entry = held.get(settlement.transactionId);
+  const live =
+    entry?.live === true ||
+    (settlement.mutationUuid !== undefined &&
+      liveUuids.has(settlement.mutationUuid));
+  for (const settled of readsInFlight) {
+    settled.set(settlement.transactionId, { status: settlement.status, live });
+  }
   if (!entry || entry.live) return;
   held.delete(settlement.transactionId);
   syncQueuedPosts();
@@ -377,8 +391,8 @@ export function restoreQueuedChannelWrites(host: CacheHost): Promise<void> {
 async function readQueue(host: CacheHost) {
   if (!host.inspectMutations) return;
   watchHost(host);
-  const settled = new Map<string, MutationSettlement['status']>();
-  settledDuringRestore = settled;
+  const settled: SettledDuringRead = new Map();
+  readsInFlight.add(settled);
   let queue: MutationInspection[];
   try {
     queue = await host.inspectMutations();
@@ -386,7 +400,7 @@ async function readQueue(host: CacheHost) {
     restores.delete(host);
     throw error;
   } finally {
-    if (settledDuringRestore === settled) settledDuringRestore = undefined;
+    readsInFlight.delete(settled);
   }
   const restored: HeldWrite[] = [];
   for (const inspection of queue) {
@@ -401,7 +415,11 @@ async function readQueue(host: CacheHost) {
     const outcome = settled.get(inspection.transactionId);
     if (outcome) {
       // Refused while the queue was being read: nothing held it yet.
-      if (outcome === 'permanently-failed' && !keepUnsentText(write))
+      if (
+        outcome.status === 'permanently-failed' &&
+        !outcome.live &&
+        !keepUnsentText(write)
+      )
         toast.failure(failureText(write));
       continue;
     }
@@ -694,5 +712,5 @@ export function resetQueuedChannelWrites() {
   stopReapply?.();
   stopReapply = undefined;
   reapplyCache = undefined;
-  settledDuringRestore = undefined;
+  readsInFlight.clear();
 }

@@ -374,9 +374,7 @@ async function boot(world: WorldCore) {
       client: queryClient,
       get children() {
         made = {
-          send: mutations.useSendMessageMutation(undefined, {
-            keepRefusedText: true,
-          }),
+          send: mutations.useSendMessageMutation(),
           edit: mutations.usePatchMessageMutation(),
           remove: mutations.useDeleteMessageMutation(),
           react: reactions.useAddReactionMutation(),

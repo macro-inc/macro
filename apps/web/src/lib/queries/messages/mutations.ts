@@ -444,14 +444,7 @@ export function useSendMessageMutation(
     Error,
     SendMessageParams,
     SendMessageContext
-  >,
-  options?: {
-    /**
-     * For a channel composer: a refused post's text goes back to the channel's
-     * draft when the composer that sent it no longer can take it.
-     */
-    keepRefusedText?: boolean;
-  }
+  >
 ) {
   const analytics = useAnalytics();
 
@@ -595,11 +588,10 @@ export function useSendMessageMutation(
           reconcileFailedChannelWrite(vars.parent);
           // After the composer that sent it had its turn to take the draft
           // back: what was typed is kept wherever that left it out.
-          if (
-            options?.keepRefusedText &&
-            vars.parent.type === 'channel' &&
-            !vars.message.anchor
-          ) {
+          // Every surface that posts to a channel gets this: one that keeps
+          // its own copy leaves a second in the channel's draft, which costs
+          // less than a surface that closed losing the text.
+          if (vars.parent.type === 'channel' && !vars.message.anchor) {
             const post = {
               channelId: vars.parent.id,
               threadId: vars.message.thread_id,

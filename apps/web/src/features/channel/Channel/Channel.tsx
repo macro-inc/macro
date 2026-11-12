@@ -229,9 +229,7 @@ export function Channel(props: ChannelProps) {
         }
       : { start: 0, end: 0 };
 
-  const sendMessageMutation = useSendMessageMutation(undefined, {
-    keepRefusedText: true,
-  });
+  const sendMessageMutation = useSendMessageMutation();
   const patchMessageMutation = usePatchMessageMutation();
   const deleteMessageMutation = useDeleteMessageMutation();
   const typingMutation = usePostTypingUpdateMutation();

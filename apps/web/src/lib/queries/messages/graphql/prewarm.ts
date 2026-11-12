@@ -595,9 +595,15 @@ export function useChannelCachePrewarm(
   const { channels, activity } = useChannelsContext();
   // The queue sends without a channel being open; a post it holds from before
   // a reload needs someone on this page to take its text if it is refused.
-  const host = channelCacheHost();
-  if (host) fireAndForget(restoreQueuedChannelWrites(host), SURFACE);
+  // Asked again on every run: the flag or the cache can arrive after mount,
+  // and the read happens once per host.
+  const readQueue = () => {
+    const host = channelCacheHost();
+    if (host) fireAndForget(restoreQueuedChannelWrites(host), SURFACE);
+  };
+  readQueue();
   const schedule = debounce(() => {
+    readQueue();
     if (document.visibilityState !== 'visible') return;
     fireAndForget(
       maintainChannelCache({

@@ -23,6 +23,7 @@ function composer(initial: string) {
     value: () => value,
     restoreText: (text: string) => {
       value = text;
+      return true;
     },
   };
 }
@@ -117,7 +118,7 @@ describe('the text of a refused channel post', () => {
 
   it('hands two posts refused together to the composer and to a copy', () => {
     // The composer's own value lags the text it was handed.
-    const restoreText = vi.fn();
+    const restoreText = vi.fn(() => true);
     const close = registerDraftComposer(key, { value: () => '', restoreText });
     keepUnsentPostText({ channelId: CHANNEL, content: 'first' });
     keepUnsentPostText({ channelId: CHANNEL, content: 'second' });
@@ -140,6 +141,16 @@ describe('the text of a refused channel post', () => {
 
     expect(empty.value()).toBe('typed on friday');
     expect(busy.value()).toBe('a newer draft');
+    expect(failure).toHaveBeenCalledOnce();
+  });
+  it('offers a copy when the open composer cannot take it yet', () => {
+    const close = registerDraftComposer(key, {
+      value: () => '',
+      restoreText: () => false,
+    });
+    keepUnsentPostText({ channelId: CHANNEL, content: 'typed on friday' });
+    close();
+
     expect(failure).toHaveBeenCalledOnce();
   });
 });
