@@ -12642,6 +12642,7 @@
       "crates/remote_env_var",
       "crates/share_permission_db_utils",
       "crates/system_properties",
+      "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack"
     ],
