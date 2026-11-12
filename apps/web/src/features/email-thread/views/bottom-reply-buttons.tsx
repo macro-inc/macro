@@ -1,11 +1,13 @@
 import type { ReplyType } from '@app/features/email-compose/core/reply-type';
 import type { EmailMessage } from '@app/features/email-message/core/email-message';
+import { t } from '@app/lib/i18n';
 import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
 import { MobileDockIsland } from '@components/app/mobile/MobileDockIsland';
 import { inboxIconProps } from '@core/component/inboxIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import { fireAndForget } from '@core/util/fireAndForget';
 import CheckBoldIcon from '@icon/system/bold/check-bold.svg?component-solid';
+import ArrowBendDoubleUpLeft from '@icon/system/regular/arrow-bend-double-up-left.svg';
 import ArrowBendUpLeft from '@icon/system/regular/arrow-bend-up-left.svg';
 import ArrowBendUpRight from '@icon/system/regular/arrow-bend-up-right.svg';
 import ArrowDown from '@icon/system/regular/arrow-down.svg';
@@ -17,7 +19,10 @@ import { type Component, Show } from 'solid-js';
 import type { EmailThreadListNavigation } from '../context/email-thread-context';
 import { useEmailThreadState } from '../context/email-thread-state-context';
 import { useEmailThreadViewContext } from '../context/email-thread-view-context';
-import { openEmailReplyComposerForMessage } from '../primitives/reply-actions';
+import {
+  offersReplyAll,
+  openEmailReplyComposerForMessage,
+} from '../primitives/reply-actions';
 
 /**
  * A floating pill on the dock's own surface. The island stays opaque when the
@@ -79,6 +84,13 @@ export function BottomReplyButtons(props: {
     return email ? inboxIconProps(email) : { email: '' };
   };
 
+  const showReplyAll = () =>
+    offersReplyAll(
+      props.lastMessage,
+      currentUserEmail(),
+      viewContext.compose.accounts.inboxes()
+    );
+
   const isDone = () => ctx.isThreadDone();
 
   // Matches TopBar: a send-only thread is permanently done, so the toggle
@@ -114,7 +126,7 @@ export function BottomReplyButtons(props: {
               showTooltip={false}
               suppressClick
             />
-            <span class="truncate">Reply...</span>
+            <span class="truncate">{t('emailThread.replyPlaceholder')}</span>
           </button>
         </div>
       }
@@ -125,13 +137,20 @@ export function BottomReplyButtons(props: {
             <div class="flex flex-row items-center gap-2">
               <ReplyActionButton
                 icon={ArrowBendUpLeft}
-                label="Reply"
-                onClick={open('reply-all')}
+                label={t('emailThread.reply')}
+                onClick={open('reply')}
               />
+              <Show when={showReplyAll()}>
+                <ReplyActionButton
+                  icon={ArrowBendDoubleUpLeft}
+                  label={t('emailThread.replyAll')}
+                  onClick={open('reply-all')}
+                />
+              </Show>
               <Show when={ctx.permissions().isOwner}>
                 <ReplyActionButton
                   icon={ArrowBendUpRight}
-                  label="Forward"
+                  label={t('emailThread.forward')}
                   onClick={open('forward')}
                 />
               </Show>
@@ -143,13 +162,13 @@ export function BottomReplyButtons(props: {
                   <>
                     <ReplyActionButton
                       icon={ArrowUp}
-                      ariaLabel="Previous email"
+                      ariaLabel={t('emailThread.previousEmail')}
                       disabled={!navigation().canPrevious()}
                       onClick={() => navigation().previous()}
                     />
                     <ReplyActionButton
                       icon={ArrowDown}
-                      ariaLabel="Next email"
+                      ariaLabel={t('emailThread.nextEmail')}
                       disabled={!navigation().canNext()}
                       onClick={() => navigation().next()}
                     />
@@ -168,7 +187,11 @@ export function BottomReplyButtons(props: {
                       />
                     </Show>
                   )}
-                  ariaLabel={isDone() ? 'Mark as not done' : 'Mark done'}
+                  ariaLabel={
+                    isDone()
+                      ? t('emailThread.markNotDone')
+                      : t('emailThread.markDone')
+                  }
                   onClick={toggleMarkDone}
                 />
               </Show>

@@ -1,5 +1,7 @@
 import type { EmailMessage } from '@app/features/email-message/core/email-message';
+import { t } from '@app/lib/i18n';
 import { TOKENS } from '@core/hotkey/tokens';
+import ArrowBendDoubleUpLeft from '@icon/system/regular/arrow-bend-double-up-left.svg';
 import ArrowBendUpLeft from '@icon/system/regular/arrow-bend-up-left.svg';
 import ArrowBendUpRight from '@icon/system/regular/arrow-bend-up-right.svg';
 import { Button } from '@ui';
@@ -36,10 +38,24 @@ export function MessageActions(props: {
           variant="ghost"
           size="icon-sm"
           class="size-6 p-0"
-          onClick={onChangeReplyType('reply-all')}
-          tooltip={{ content: 'Reply', hotkey: TOKENS.email.reply }}
+          onClick={onChangeReplyType('reply')}
+          tooltip={{ content: t('emailThread.reply'), hotkey: TOKENS.email.reply }}
         >
           <ArrowBendUpLeft class="size-3.5" />
+        </Button>
+      </Show>
+      <Show when={!props.hiddenActions?.includes('reply-all')}>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          class="size-6 p-0"
+          onClick={onChangeReplyType('reply-all')}
+          tooltip={{
+            content: t('emailThread.replyAll'),
+            hotkey: TOKENS.email.replyAll,
+          }}
+        >
+          <ArrowBendDoubleUpLeft class="size-3.5" />
         </Button>
       </Show>
       <Show when={!props.hiddenActions?.includes('forward')}>
@@ -48,7 +64,10 @@ export function MessageActions(props: {
           size="icon-sm"
           class="size-6 p-0"
           onClick={onChangeReplyType('forward')}
-          tooltip={{ content: 'Forward', hotkey: TOKENS.email.forward }}
+          tooltip={{
+            content: t('emailThread.forward'),
+            hotkey: TOKENS.email.forward,
+          }}
         >
           <ArrowBendUpRight class="size-3.5" />
         </Button>
