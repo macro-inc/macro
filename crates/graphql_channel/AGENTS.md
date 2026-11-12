@@ -30,6 +30,8 @@ separately from Soup's thread-root projection.
 ## Gotchas
 
 - Read the channel sequence before loading a page so replay cannot skip a racing write.
+- Map change pages from `MessageReader::channel_changes`; preserve its reset,
+  watermark, coalescing, removed identities, and changed-reply roots.
 - Reply keys include `import_order NULLS LAST`; timestamps alone do not describe their order.
 - Preserve microseconds in timestamps and cursors; message UUIDs break equal-time ties.
 - Keep `id` for global identities; thread metadata and attachment references are embedded.

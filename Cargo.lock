@@ -4913,6 +4913,7 @@ dependencies = [
  "macro_db_migrator",
  "macro_user_id",
  "messages",
+ "mockall",
  "model-entity",
  "model_notifications",
  "model_owner",
@@ -9253,6 +9254,7 @@ dependencies = [
 name = "graphql_channel"
 version = "0.1.0"
 dependencies = [
+ "activity",
  "async-graphql",
  "channels",
  "chrono",

@@ -5,6 +5,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
+activity = { path = "../activity", default-features = false }
 chrono = { workspace = true }
 messages = { path = "../messages", default-features = false, features = ["ports"] }
 serde_json = { workspace = true }
