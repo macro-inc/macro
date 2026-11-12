@@ -79,6 +79,7 @@ pub struct ApiStates<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes
     sharing: Router,
     routine_sessions: Router,
     coding_agents: Router,
+    user_code_executions: Router,
     capabilities: Router,
     mode_choice: Router,
     conversations: Router,
@@ -134,6 +135,7 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
             sharing: Router::new(),
             routine_sessions: Router::new(),
             coding_agents: Router::new(),
+            user_code_executions: Router::new(),
             capabilities: Router::new(),
             mode_choice: Router::new(),
             conversations: Router::new(),
@@ -232,6 +234,12 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
     /// Attach internal coding agent discovery and dispatch routes.
     pub fn with_coding_agents(mut self, router: Router) -> Self {
         self.coding_agents = router;
+        self
+    }
+
+    /// Attach the internal route channel-mention bots run their programs on.
+    pub fn with_user_code_executions(mut self, router: Router) -> Self {
+        self.user_code_executions = router;
         self
     }
 
@@ -427,6 +435,7 @@ where
         .merge(agent_repositories_router(states.repositories))
         .merge(states.routine_sessions)
         .merge(states.coding_agents)
+        .merge(states.user_code_executions)
         .merge(states.capabilities)
         .merge(states.mode_choice)
         .merge(states.conversations)

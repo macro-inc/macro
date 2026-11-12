@@ -83,8 +83,14 @@ stacks. Process isolation belongs to
   `auto-skills`) loads each entity's guide with its index; otherwise prompts
   carry `inline_guides`. `mcp_guides` and `entity_guide` serve hosts that
   carry areas whole. All of it is generated from the SDK; edit the TSDoc.
+- `src/inbound/internal_user_executions.rs`: `POST
+  /internal/code-mode/user-executions`, internal key only, runs one program
+  through `UserCodeMode` as the body's user, always as `ToolCaller::Agent(MACRO_AI_BOT_ID)`
+  with no session (the body cannot pick either). The channel-mention bot in
+  document storage, which has no Deno runtime, calls it through
+  `src/outbound/harness_user_executions.rs`.
 - `src/inbound/toolset.rs`: `toolset()` for sessions, `user_toolset()` for the
-  public MCP. Tool texts are composed: host-specific parts in `toolset/session/`
+  public MCP and the channel-mention bot. Tool texts are composed: host-specific parts in `toolset/session/`
   and `toolset/user/`, guidance both share in `toolset/shared/`. Edit shared
   guidance once, there.
 

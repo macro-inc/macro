@@ -691,6 +691,16 @@ async fn run() -> anyhow::Result<()> {
                     ..Default::default()
                 },
             )?;
+            // Channel-mention bots (document storage's `@macro` replies) get
+            // their own budget too, so a busy channel cannot starve sessions.
+            let channel_bots = code_execution::domain::ExecutionService::new(
+                Arc::clone(&runner),
+                code_execution::domain::Limits {
+                    max_running: 4,
+                    max_queued: 8,
+                    ..Default::default()
+                },
+            )?;
             let checker = code_execution::outbound::deno::check::DenoChecker::new(
                 binary.into(),
                 code_scratch.path().join("checks"),
@@ -707,13 +717,14 @@ async fn run() -> anyhow::Result<()> {
                 public,
                 routines,
                 Arc::new(checker),
+                channel_bots,
             ))
         }
         None => None,
     };
     // Routine code steps run as their owner on the routines' executor.
     let routine_code = match &code_runner {
-        Some((_, _, routines, checker)) => Some(
+        Some((_, _, routines, checker, _)) => Some(
             routine_code::SdkRoutineCode::new(
                 Arc::new(routines.clone()),
                 Arc::clone(checker) as Arc<dyn code_execution::domain::ProgramChecker>,
@@ -775,7 +786,7 @@ async fn run() -> anyhow::Result<()> {
         })
         .transpose()?;
     let public_code_mode = match &code_runner {
-        Some((_, public, _, _)) => Some(public_mcp::PublicCodeMode {
+        Some((_, public, _, _, _)) => Some(public_mcp::PublicCodeMode {
             service: Arc::new(agent_code_mode::domain::UserCodeModeService::new(
                 Arc::new(public.clone()),
                 Arc::new(code_mode::UserRunCredentials {
@@ -824,7 +835,7 @@ async fn run() -> anyhow::Result<()> {
             Arc::clone(&tool_approvals),
         ),
     );
-    let code_executor = code_runner.as_ref().map(|(runner, _, _, _)| {
+    let code_executor = code_runner.as_ref().map(|(runner, _, _, _, _)| {
         Arc::new(runner.clone()) as Arc<dyn code_execution::domain::ProgramExecutor>
     });
     let code_mode_enabled = code_executor.is_some();
@@ -1765,6 +1776,27 @@ async fn run() -> anyhow::Result<()> {
         session_repo.clone(),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
+    // Channel-mention bots in document storage run their programs here, as the
+    // mentioning user, attributed to Macro AI; internal key only.
+    let user_code_executions = match &code_runner {
+        Some((_, _, _, _, channel_bots)) => {
+            agent_code_mode::inbound::internal_user_executions::user_executions_router(
+                agent_code_mode::inbound::internal_user_executions::UserExecutionsState::new(
+                    Arc::new(channel_bots.clone()),
+                    Arc::new(code_mode::MentionRunCredentials::new(
+                        MacroApiTokenSigner::new(
+                            pool.clone(),
+                            config.macro_api_token_issuer.as_ref(),
+                            config.macro_api_token_private_secret_key.as_ref(),
+                        ),
+                        code_mode::sdk_endpoints()?,
+                    )),
+                    MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+                ),
+            )
+        }
+        None => axum::Router::new(),
+    };
     let gateway_state = RuntimeGatewayState::new(
         runtimes,
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
@@ -1957,6 +1989,7 @@ async fn run() -> anyhow::Result<()> {
             .with_routine_sessions(routine_sessions)
             .with_conversations(conversations)
             .with_coding_agents(coding_agents)
+            .with_user_code_executions(user_code_executions)
             .with_capabilities(capabilities)
             .with_mode_choice(mode_choice)
             .with_pull_requests(pull_requests)
@@ -2458,8 +2491,13 @@ async fn run() -> anyhow::Result<()> {
     typing_heartbeat.abort();
     recovery.abort();
     runtime_commands.abort();
-    if let Some((sessions, public, routines, _)) = &code_runner {
-        tokio::join!(sessions.shutdown(), public.shutdown(), routines.shutdown());
+    if let Some((sessions, public, routines, _, channel_bots)) = &code_runner {
+        tokio::join!(
+            sessions.shutdown(),
+            public.shutdown(),
+            routines.shutdown(),
+            channel_bots.shutdown()
+        );
     }
     let stop_failures = container_shutdown.shutdown_all().await;
     if stop_failures > 0 {

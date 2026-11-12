@@ -23,12 +23,14 @@ entity_access = { path = "../entity_access", default-features = false, features 
 futures = { workspace = true }
 import = { path = "../import" }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = ["axum"] }
+macro_tower_layers = { path = "../macro_tower_layers" }
 macro_user_id = { path = "../macro_user_id" }
 mcp_client = { path = "../mcp_client" }
 macro_uuid = { path = "../macro_uuid" }
 nom = { workspace = true }
 nutype = { workspace = true }
 pipedream_mcp = { path = "../pipedream_mcp" }
+reqwest = { workspace = true }
 rootcause = { workspace = true }
 schemars = { workspace = true }
 serde = { workspace = true }
@@ -53,6 +55,8 @@ tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
 agent_session = { path = "../agent_session", default-features = false, features = ["test-utils", "outbound"] }
 entity_access = { path = "../entity_access", features = ["outbound"] }
+tower = { workspace = true }
+wiremock = { workspace = true }
 
 [package.metadata.cargo-shear]
 # Named only in `#[sqlx::test(migrator = "...")]` strings.

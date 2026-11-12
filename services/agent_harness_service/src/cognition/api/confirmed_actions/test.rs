@@ -90,3 +90,29 @@ async fn an_event_without_the_users_approval_is_never_created(pool: sqlx::PgPool
             .contains("requires the user's own message approving this event")
     );
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_channel_mention_program_never_sends_even_when_confirmed(pool: sqlx::PgPool) {
+    let ctx = test_api_context(pool).await;
+    let router = Router::new()
+        .route("/email/send-confirmed", post(send_confirmed_email))
+        .with_state((*ctx).clone());
+    let email = json!({
+        "subject": "Q3 numbers",
+        "body": "Attached.",
+        "to": [{"email": "ada@example.com"}],
+        "userConfirmation": "yes, send it",
+    });
+    let mention = agent_correlation::context::Attribution {
+        channel_mention_id: Some(uuid::Uuid::from_u128(1)),
+        ..Default::default()
+    };
+    let refused = agent_correlation::context::scope_attribution(
+        mention,
+        router.oneshot(authorized_request("/email/send-confirmed", email)),
+    )
+    .await
+    .unwrap();
+    assert_eq!(refused.status(), StatusCode::FORBIDDEN);
+    assert_eq!(message(refused).await, email::CHANNEL_MENTION_SEND_REFUSAL);
+}

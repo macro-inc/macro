@@ -26,6 +26,19 @@ pub trait UserExecutionCredentials: Send + Sync + 'static {
     ) -> Result<RunEnvironment, CodeModeError>;
 }
 
+/// Mint a credential for a program answering a channel mention: the
+/// mentioning user's access, attributed to Macro AI and signed with the
+/// mention, so services that refuse such runs (email sends) can tell.
+#[async_trait]
+pub trait MentionExecutionCredentials: Send + Sync + 'static {
+    /// `mention` is the message whose bot mention the program answers.
+    async fn issue(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        mention: uuid::Uuid,
+    ) -> Result<RunEnvironment, CodeModeError>;
+}
+
 /// Outcome returned to the caller without a saved execution journal.
 #[derive(Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]

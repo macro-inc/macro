@@ -128,6 +128,51 @@ impl UserExecutionCredentials for UserRunCredentials {
     }
 }
 
+/// Credentials for a channel-mention bot's program: the mentioning user's
+/// access attributed to Macro AI, as the bot's direct tools act, signed with
+/// the mention so email refuses its sends. Email's host is also left out of
+/// the run's network allowlist.
+pub struct MentionRunCredentials {
+    pub signer: MacroApiTokenSigner,
+    pub endpoints: SdkEndpoints,
+}
+
+impl MentionRunCredentials {
+    pub fn new(signer: MacroApiTokenSigner, mut endpoints: SdkEndpoints) -> Self {
+        endpoints.hosts.remove(EMAIL_HOST);
+        Self { signer, endpoints }
+    }
+}
+
+/// The SDK host name for the email service.
+const EMAIL_HOST: &str = "email";
+
+#[async_trait]
+impl agent_code_mode::domain::MentionExecutionCredentials for MentionRunCredentials {
+    async fn issue(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        mention: uuid::Uuid,
+    ) -> Result<RunEnvironment, CodeModeError> {
+        let token = self
+            .signer
+            .mint_for_channel_mention(user, 60, bot_id::MACRO_AI_BOT_ID.as_uuid(), mention)
+            .await
+            .map_err(|error| {
+                tracing::error!(?error, "could not mint channel-mention credential");
+                CodeModeError::Unavailable
+            })?;
+        Ok(RunEnvironment {
+            token,
+            trace_headers: trace_headers(),
+            endpoints: self.endpoints.clone(),
+            session_id: None,
+            execution_id: None,
+            unattended: None,
+        })
+    }
+}
+
 /// The current trace context, for the SDK to forward on authenticated requests.
 pub(crate) fn trace_headers() -> BTreeMap<String, String> {
     let mut headers = axum::http::HeaderMap::new();
