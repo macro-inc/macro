@@ -323,6 +323,114 @@ export type CalendarCommitCacheResult =
     }
   | { kind: 'unsupported' };
 
+/** Sort key bound meaning "before the first entry" in channel coverage. */
+export const CHANNEL_TIMELINE_START = '';
+/** Sort key bound meaning "up to the live end" in channel coverage. */
+export const CHANNEL_TIMELINE_HEAD = '\u{10FFFF}';
+export const MAX_CHANNEL_TIMELINE_PAGE = 100;
+export const MAX_EVICTED_CHANNELS = 200;
+
+/**
+ * One page of a channel's timeline, or of one thread's replies, read from the
+ * local index. At most one of `before`, `after` and `around`; none reads the
+ * latest page.
+ */
+export type ChannelTimelineCacheArgs = {
+  channelId: string;
+  /** Reads the replies of this root instead of the channel's roots. */
+  threadRootId?: string;
+  limit: number;
+  /** Server sort key; entries strictly older. */
+  before?: string;
+  /** Server sort key; entries strictly newer. */
+  after?: string;
+  /** `GraphqlChannelMessage:{id}`; in a channel read a reply resolves to its root. */
+  around?: string;
+};
+
+export type ChannelTimelineCacheResult =
+  | {
+      kind: 'page';
+      revision: CacheRevision;
+      /** False when the window was never fully fetched: read it from the server. */
+      covered: boolean;
+      /** Entry keys of the page, newest first. */
+      keys: string[];
+      /** Null at the first entry of the list. */
+      olderCursor: string | null;
+      /** Null at the live end. */
+      newerCursor: string | null;
+      /** Applied change sequence (decimal), null before the first fetched page. */
+      seq: string | null;
+      /** Whether a pending optimistic mutation shaped this result. */
+      optimistic: boolean;
+    }
+  /** The native host predates channel timelines; read channels over REST. */
+  | { kind: 'unsupported' };
+
+/**
+ * `lower` records the sequence a fetched page was read at; `advance` applies
+ * only when the stored sequence is exactly `from`, so a gap is never skipped.
+ */
+export type ChannelSeqUpdateWire =
+  | { kind: 'lower'; seq: string }
+  | { kind: 'advance'; from: string; to: string };
+
+/** Inclusive stretch of sort keys that was fully fetched and written. */
+export type ChannelCoverageWire = {
+  /** Thread whose replies were fetched; absent for the channel's roots. */
+  threadRootId?: string;
+  start: string;
+  end: string;
+};
+
+/** One atomic change to a channel's coverage, cached entries, and sync state. */
+export type ChannelTimelineCommitArgs = {
+  channelId: string;
+  coverage?: ChannelCoverageWire[];
+  /** Entries that no longer exist on the server at all. */
+  removedKeys?: string[];
+  /** Threads whose cached replies and coverage are dropped. */
+  droppedThreadRootIds?: string[];
+  seq?: ChannelSeqUpdateWire;
+  /** When the channel was last opened or prewarmed; eviction orders by it. */
+  touchedAtMs?: number;
+  /** Deletes everything held for the channel first. */
+  reset?: boolean;
+};
+
+export type ChannelTimelineCommitCacheResult =
+  | {
+      kind: 'committed';
+      revision: CacheRevision;
+      /** Records the commit deleted. */
+      changed: string[];
+      /** Applied change sequence after the commit; differs from `advance.to` on a gap. */
+      channelSeq: string | null;
+    }
+  | { kind: 'unsupported' };
+
+/** Removes the channels last touched before `touchedBeforeMs`, oldest first. */
+export type ChannelTimelineEvictArgs = {
+  touchedBeforeMs: number;
+  maxChannels: number;
+};
+
+export type ChannelTimelineEvictCacheResult =
+  | {
+      kind: 'evicted';
+      revision: CacheRevision;
+      changed: string[];
+      channelIds: string[];
+      /** More channels older than the bound remain; run another pass. */
+      hasMore: boolean;
+    }
+  | { kind: 'unsupported' };
+
+export type ChannelTimelineStatsCacheResult =
+  | { kind: 'stats'; channels: number; entries: number }
+  | { kind: 'unsupported' };
+
 export type ReadRecordsByKeysArgs = {
   /** Serialized generated fragment document. */
   document: string;
@@ -529,6 +637,108 @@ export function isValidCalendarCommitArgs(
       value.freshness === 'fresh' ||
       value.freshness === 'stale') &&
     (value.reset === undefined || typeof value.reset === 'boolean')
+  );
+}
+
+const isChannelId = (value: unknown): value is string =>
+  typeof value === 'string' && value.length > 0 && value.length <= 128;
+
+// The engine's rule: non-empty printable ASCII, at most 128 bytes.
+const isChannelSortKey = (value: unknown): value is string =>
+  typeof value === 'string' && /^[\x21-\x7e]{1,128}$/.test(value);
+
+const isChannelSeq = (value: unknown): value is string =>
+  typeof value === 'string' && /^[0-9]{1,19}$/.test(value);
+
+const isChannelCoverageWire = (value: unknown): boolean =>
+  isRecord(value) &&
+  hasOnlyCalendarKeys(value, ['threadRootId', 'start', 'end']) &&
+  (value.threadRootId === undefined || isChannelId(value.threadRootId)) &&
+  (value.start === CHANNEL_TIMELINE_START || isChannelSortKey(value.start)) &&
+  (value.end === CHANNEL_TIMELINE_HEAD || isChannelSortKey(value.end));
+
+const isChannelSeqUpdateWire = (value: unknown): boolean =>
+  isRecord(value) &&
+  ((value.kind === 'lower' &&
+    hasOnlyCalendarKeys(value, ['kind', 'seq']) &&
+    isChannelSeq(value.seq)) ||
+    (value.kind === 'advance' &&
+      hasOnlyCalendarKeys(value, ['kind', 'from', 'to']) &&
+      isChannelSeq(value.from) &&
+      isChannelSeq(value.to)));
+
+/** Non-throwing channel page validation for wire ingress. */
+export function isValidChannelTimelineArgs(
+  value: unknown
+): value is ChannelTimelineCacheArgs {
+  if (
+    !isRecord(value) ||
+    !hasOnlyCalendarKeys(value, [
+      'channelId',
+      'threadRootId',
+      'limit',
+      'before',
+      'after',
+      'around',
+    ])
+  )
+    return false;
+  const anchors = [value.before, value.after, value.around].filter(
+    (anchor) => anchor !== undefined
+  );
+  return (
+    isChannelId(value.channelId) &&
+    (value.threadRootId === undefined || isChannelId(value.threadRootId)) &&
+    Number.isSafeInteger(value.limit) &&
+    (value.limit as number) >= 1 &&
+    (value.limit as number) <= MAX_CHANNEL_TIMELINE_PAGE &&
+    anchors.length <= 1 &&
+    (value.before === undefined || isChannelSortKey(value.before)) &&
+    (value.after === undefined || isChannelSortKey(value.after)) &&
+    (value.around === undefined || isValidNormalizedRecordKey(value.around))
+  );
+}
+
+/**
+ * Non-throwing channel commit shape validation for wire ingress. The engine
+ * still validates typenames, span order, and size bounds.
+ */
+export function isValidChannelTimelineCommitArgs(
+  value: unknown
+): value is ChannelTimelineCommitArgs {
+  return (
+    isRecord(value) &&
+    hasOnlyCalendarKeys(value, [
+      'channelId',
+      'coverage',
+      'removedKeys',
+      'droppedThreadRootIds',
+      'seq',
+      'touchedAtMs',
+      'reset',
+    ]) &&
+    isChannelId(value.channelId) &&
+    isOptionalWireArray(value.coverage, isChannelCoverageWire) &&
+    isOptionalWireArray(value.removedKeys, isValidNormalizedRecordKey) &&
+    isOptionalWireArray(value.droppedThreadRootIds, isChannelId) &&
+    (value.seq === undefined || isChannelSeqUpdateWire(value.seq)) &&
+    (value.touchedAtMs === undefined ||
+      Number.isSafeInteger(value.touchedAtMs)) &&
+    (value.reset === undefined || typeof value.reset === 'boolean')
+  );
+}
+
+/** Non-throwing channel eviction validation for wire ingress. */
+export function isValidChannelTimelineEvictArgs(
+  value: unknown
+): value is ChannelTimelineEvictArgs {
+  return (
+    isRecord(value) &&
+    hasOnlyCalendarKeys(value, ['touchedBeforeMs', 'maxChannels']) &&
+    Number.isSafeInteger(value.touchedBeforeMs) &&
+    Number.isSafeInteger(value.maxChannels) &&
+    (value.maxChannels as number) >= 1 &&
+    (value.maxChannels as number) <= MAX_EVICTED_CHANNELS
   );
 }
 
@@ -941,6 +1151,20 @@ export type CacheRequest = { id: number } & (
       kind: 'calendar-commit';
       commit: CalendarCommitArgs;
     }
+  | {
+      kind: 'channel-timeline';
+      request: ChannelTimelineCacheArgs;
+    }
+  /** Atomically apply channel coverage, deletions, and the change sequence. */
+  | {
+      kind: 'channel-timeline-commit';
+      commit: ChannelTimelineCommitArgs;
+    }
+  | {
+      kind: 'channel-timeline-evict';
+      eviction: ChannelTimelineEvictArgs;
+    }
+  | { kind: 'channel-timeline-stats' }
   | {
       kind: 'inspect-query';
       query: string;

@@ -33,6 +33,10 @@ import type {
   CalendarCommitArgs,
   CalendarRangeCacheArgs,
   CalendarRangeCacheResult,
+  ChannelTimelineCacheArgs,
+  ChannelTimelineCacheResult,
+  ChannelTimelineCommitArgs,
+  ChannelTimelineEvictArgs,
   ClaimedMutation,
   CommitOptimisticWriteResult,
   DeferOptimisticWriteResult,
@@ -135,6 +139,17 @@ export interface CacheEngine {
   ): Promise<CalendarRangeCacheResult>;
   /** Resolves like `writeQuery`: deleted records are reported as `changed`. */
   calendarCommit(commit: CalendarCommitArgs): Promise<WriteResult>;
+  channelTimeline(
+    request: ChannelTimelineCacheArgs
+  ): Promise<ChannelTimelineCacheResult>;
+  /** Resolves like `writeQuery`, plus the channel's sequence after the commit. */
+  channelTimelineCommit(
+    commit: ChannelTimelineCommitArgs
+  ): Promise<WriteResult & { channelSeq: string | null }>;
+  channelTimelineEvict(
+    eviction: ChannelTimelineEvictArgs
+  ): Promise<WriteResult & { channelIds: string[]; hasMore: boolean }>;
+  channelTimelineStats(): Promise<{ channels: number; entries: number }>;
   writeQuery(
     context: {
       originOpId?: string;

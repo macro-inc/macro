@@ -777,6 +777,152 @@ describe('CacheWorkerCore', () => {
     });
   });
 
+  it('keeps a channel commit behind the hydration it covers and reports the sequence', async () => {
+    const order: string[] = [];
+    let releaseBlocker!: () => void;
+    let markBlockerStarted!: () => void;
+    const blocker = new Promise<void>((resolve) => {
+      releaseBlocker = resolve;
+    });
+    const blockerStarted = new Promise<void>((resolve) => {
+      markBlockerStarted = resolve;
+    });
+    const page = {
+      kind: 'page' as const,
+      revision: '1',
+      covered: false,
+      keys: [],
+      olderCursor: null,
+      newerCursor: null,
+      seq: null,
+      optimistic: false,
+    };
+    const write = {
+      revisionAdvanced: true,
+      affectedOps: [],
+      reset: false,
+      searchChangedBuckets: [],
+    };
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({
+        readQuery: vi.fn(async () => {
+          order.push('read');
+          markBlockerStarted();
+          await blocker;
+          return { kind: 'miss' as const };
+        }),
+        hydrateQuery: vi.fn(async () => {
+          order.push('hydrate');
+          return { ...write, revision: '1', changed: [], data: null };
+        }),
+        channelTimeline: vi.fn(async () => {
+          order.push('channel-timeline');
+          return page;
+        }),
+        channelTimelineCommit: vi.fn(async () => {
+          order.push('channel-timeline-commit');
+          return {
+            ...write,
+            revision: '2',
+            changed: ['GraphqlChannelMessage:m1'],
+            channelSeq: '9',
+          };
+        }),
+        channelTimelineEvict: vi.fn(async () => {
+          order.push('channel-timeline-evict');
+          return {
+            ...write,
+            revision: '3',
+            changed: ['GraphqlChannelMessage:m2'],
+            channelIds: ['c2'],
+            hasMore: true,
+          };
+        }),
+        channelTimelineStats: vi.fn(async () => ({ channels: 1, entries: 4 })),
+      }),
+    });
+    const messages: unknown[] = [];
+    const port = { postMessage: vi.fn((message) => messages.push(message)) };
+    const core = new CacheWorkerCore();
+    core.addPort(port);
+    await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+
+    const running = core.handleRequest(port, {
+      id: 2,
+      kind: 'read',
+      query: 'query Blocker { blocker }',
+    });
+    await blockerStarted;
+    const eviction = core.handleRequest(port, {
+      id: 3,
+      kind: 'channel-timeline-evict',
+      eviction: { touchedBeforeMs: 5, maxChannels: 10 },
+    });
+    const hydration = core.handleRequest(port, {
+      id: 4,
+      kind: 'hydrate',
+      query: 'query ChannelTimeline { entries }',
+      data: { entries: [] },
+    });
+    const commit = core.handleRequest(port, {
+      id: 5,
+      kind: 'channel-timeline-commit',
+      commit: {
+        channelId: 'c1',
+        coverage: [{ start: 'k1', end: '\u{10FFFF}' }],
+        seq: { kind: 'lower', seq: '9' },
+      },
+    });
+    const read = core.handleRequest(port, {
+      id: 6,
+      kind: 'channel-timeline',
+      request: { channelId: 'c1', limit: 50 },
+    });
+    releaseBlocker();
+    await Promise.all([running, eviction, hydration, commit, read]);
+    await core.handleRequest(port, { id: 7, kind: 'channel-timeline-stats' });
+
+    expect(order).toEqual([
+      'read',
+      'channel-timeline',
+      'channel-timeline-evict',
+      'hydrate',
+      'channel-timeline-commit',
+    ]);
+    expect(messages).toContainEqual({ id: 6, ok: true, result: page });
+    expect(messages).toContainEqual({
+      id: 5,
+      ok: true,
+      result: {
+        kind: 'committed',
+        revision: '2',
+        changed: ['GraphqlChannelMessage:m1'],
+        channelSeq: '9',
+      },
+    });
+    expect(messages).toContainEqual({
+      id: 3,
+      ok: true,
+      result: {
+        kind: 'evicted',
+        revision: '3',
+        changed: ['GraphqlChannelMessage:m2'],
+        channelIds: ['c2'],
+        hasMore: true,
+      },
+    });
+    expect(messages).toContainEqual({
+      kind: 'cache-changed',
+      revision: '2',
+      searchChangedBuckets: [],
+    });
+    expect(messages).toContainEqual({
+      id: 7,
+      ok: true,
+      result: { kind: 'stats', channels: 1, entries: 4 },
+    });
+  });
+
   it('does not let stale hydration overwrite a newer queued write', async () => {
     let releaseBlocker!: () => void;
     let markBlockerStarted!: () => void;
