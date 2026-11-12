@@ -18,7 +18,7 @@ import { confirmPermissionBypass } from '../confirm-permission-bypass';
  * Turns "Don't ask before acting" (the runtime's permission bypass) on or off.
  * Turning it on asks first; only the owner may change it.
  */
-function createBypassControl(
+export function createBypassControl(
   harness: () => RegisteredHarness,
   dialogOptions?: OpenDialogOptions
 ) {
@@ -45,7 +45,7 @@ function createBypassControl(
   };
 }
 
-function OptionsHint(props: { harness: RegisteredHarness }) {
+export function OptionsHint(props: { harness: RegisteredHarness }) {
   return (
     <p class="text-xs text-ink-extra-muted">
       {props.harness.access === 'owner'

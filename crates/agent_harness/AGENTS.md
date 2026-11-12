@@ -74,6 +74,9 @@ Remember successful announcements. After 24 hours, recover replies without a
 persisted completion at most hourly, preserving late answers after lost callbacks.
 Persisted completions bypass this backoff; direct completion handling is immediate.
 
+External runtimes pass container preflight without a managed provider; only
+managed runtimes require provider account setup.
+
 Prompts to an external runtime pass `authorize_runtime` when accepted and
 `runtime_refusal` again when they dispatch, so a prompt queued before access was
 removed never runs: `RuntimeAccessFacts::may_run` requires a coding agent's
@@ -155,6 +158,10 @@ wrap after its final page so those sessions cannot starve later ones.
 Reconcile active leases against terminal log evidence too: an observer can miss a
 completion during takeover. Previously bound quiet attempts reconcile before new
 wakes; interrupted quiet batches return to the next real prompt.
+
+`RuntimeRegistry::computer_control` forwards typed computer commands to the
+local live connection, returning `None` when another replica owns it. The
+service composition owns cross-replica carriage and request deadlines.
 
 Each dial costs a replica a handshake, `session/list` and a reattach, so
 `inbound/runtime_gateway.rs` gives every authenticated harness a per-replica,

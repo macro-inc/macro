@@ -2,7 +2,10 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { useLogout } from '@core/auth/logout';
 import { UserIcon } from '@core/component/UserIcon';
-import { enableEmailSignatures } from '@core/constant/featureFlags';
+import {
+  enableEmailSignatures,
+  enableMacroComputers,
+} from '@core/constant/featureFlags';
 import { useSettingsTabs } from '@core/constant/settingsTabsConfig';
 import { useEmail, useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -17,6 +20,7 @@ import { useTeamSettingsGroups } from './teamSettingsGroups';
 export function MobileSettings() {
   const settings = useMobileSettings();
   const signatures = useFeatureFlag(enableEmailSignatures);
+  const macroComputers = useFeatureFlag(enableMacroComputers);
   // Always mounted on phones; read the providers only once settings open.
   const outlook = useOutlookAvailable(settings.open);
   const { groups, searchGroups } = useSettingsTabs();
@@ -42,6 +46,7 @@ export function MobileSettings() {
       searchGroups={searchGroups()}
       emailSignatures={signatures().enabled}
       outlook={outlook()}
+      macroComputers={macroComputers().enabled}
       name={displayName()}
       email={email() ?? ''}
       avatar={
