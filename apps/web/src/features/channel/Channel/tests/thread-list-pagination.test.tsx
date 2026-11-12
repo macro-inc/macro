@@ -91,9 +91,17 @@ afterEach(() => {
   Reflect.deleteProperty(HTMLElement.prototype, 'scrollTo');
 });
 
-/** Animation frames that run only when a test asks for one. */
-function controlFrames() {
+/**
+ * Animation frames that run only when a test asks for one, on a clock that
+ * moves `frameMs` with each. By default frames are far enough apart for a
+ * scroll to settle between them; pass a display's frame time to see inside
+ * that window.
+ */
+function controlFrames(frameMs = 200) {
   let frameId = 0;
+  let now = performance.now();
+  const clock = vi.spyOn(performance, 'now').mockImplementation(() => now);
+  onTestFinished(() => clock.mockRestore());
   const frames = new Map<number, FrameRequestCallback>();
   vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
     frames.set(++frameId, callback);
@@ -103,9 +111,10 @@ function controlFrames() {
   return {
     pending: () => frames.size,
     run: () => {
+      now += frameMs;
       const due = [...frames.values()];
       frames.clear();
-      for (const callback of due) callback(performance.now());
+      for (const callback of due) callback(now);
     },
   };
 }
@@ -135,10 +144,6 @@ function reportObservedRowsOnce() {
  * that wrote the offset.
  */
 function deliverScrollEventsWithFrames() {
-  const original = Object.getOwnPropertyDescriptor(
-    HTMLElement.prototype,
-    'scrollTo'
-  );
   Object.defineProperty(HTMLElement.prototype, 'scrollTo', {
     configurable: true,
     value(this: HTMLElement, options: ScrollToOptions) {
@@ -150,11 +155,6 @@ function deliverScrollEventsWithFrames() {
       this.scrollTop = offset;
       requestAnimationFrame(() => this.dispatchEvent(new Event('scroll')));
     },
-  });
-  onTestFinished(() => {
-    if (original)
-      Object.defineProperty(HTMLElement.prototype, 'scrollTo', original);
-    else Reflect.deleteProperty(HTMLElement.prototype, 'scrollTo');
   });
 }
 
@@ -421,6 +421,101 @@ describe('history loading ahead of scrolling', () => {
     frames.run();
     await settleMicrotasks();
     expect(firstMounted()).toBeLessThan(20);
+  });
+
+  it.each([
+    { name: 'right after the first pass', framesFirst: 0 },
+    { name: 'a frame later', framesFirst: 1 },
+  ])(
+    'follows a message that arrives while history is being measured ($name)',
+    async ({ framesFirst }) => {
+      const frames = controlFrames();
+      reportObservedRowsOnce();
+      deliverScrollEventsWithFrames();
+      const [keys, setKeys] = createSignal(
+        Array.from({ length: 40 }, (_, index) => String(index))
+      );
+      for (let key = 0; key <= 40; key++) rowHeights.set(String(key), 300);
+      const { container } = render(() => (
+        <ThreadList keys={keys}>{({ id }) => <div>{id}</div>}</ThreadList>
+      ));
+      const scroller = container.querySelector<HTMLDivElement>(
+        '[data-channel-scroll]'
+      )!;
+      const lastMounted = () =>
+        Math.max(
+          ...[...container.querySelectorAll('[data-index]')].map((row) =>
+            Number(row.getAttribute('data-index'))
+          )
+        );
+
+      await waitFor(() => expect(firstMountedIndex(container)).toBe(32));
+      // The paint, then the frame that starts the first pass.
+      frames.run();
+      frames.run();
+      await settleMicrotasks();
+      for (let frame = 0; frame < framesFirst; frame++) {
+        frames.run();
+        await settleMicrotasks();
+      }
+      expect(firstMountedIndex(container)).toBeLessThan(32);
+
+      // A pass just measured rows above the view; a message lands before
+      // the next frame.
+      setKeys((previous) => [...previous, '40']);
+      await settleMicrotasks();
+      for (let frame = 0; frame < 12; frame++) {
+        frames.run();
+        await settleMicrotasks();
+      }
+
+      expect(lastMounted()).toBe(40);
+      expect(
+        scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop
+      ).toBe(0);
+    }
+  );
+
+  it('waits for a scroll to latest to settle before measuring more history', async () => {
+    // Frames a display apart, so the settle window spans several of them.
+    const frames = controlFrames(16);
+    reportObservedRowsOnce();
+    deliverScrollEventsWithFrames();
+    const keys = Array.from({ length: 40 }, (_, index) => String(index));
+    for (const key of keys) rowHeights.set(key, 300);
+    let navigation: ThreadListNavigation | undefined;
+    const { container } = render(() => (
+      <ThreadList
+        keys={() => keys}
+        onReady={(value) => {
+          navigation = value;
+        }}
+      >
+        {({ id }) => <div>{id}</div>}
+      </ThreadList>
+    ));
+    const firstMounted = () => firstMountedIndex(container);
+    const step = async () => {
+      frames.run();
+      await settleMicrotasks();
+    };
+
+    await waitFor(() => expect(firstMounted()).toBe(32));
+    // The scroll that positioned the list settles, then the first pass runs.
+    for (let frame = 0; frame < 20 && firstMounted() === 32; frame++)
+      await step();
+    const afterFirstPass = firstMounted();
+    expect(afterFirstPass).toBeLessThan(32);
+    expect(afterFirstPass).toBeGreaterThan(22);
+
+    expect(navigation?.scrollToLatest('auto')).toBe(true);
+    await settleMicrotasks();
+    const whenScrolled = firstMounted();
+    for (let frame = 0; frame < 3; frame++) await step();
+    expect(firstMounted()).toBe(whenScrolled);
+
+    for (let frame = 0; frame < 12; frame++) await step();
+    expect(firstMounted()).toBeLessThan(whenScrolled);
   });
 
   it('ends native scrolling at the latest message while a gesture shifts the rows', async () => {

@@ -117,6 +117,10 @@ const WEBKIT_HISTORY_BUFFER_VIEWPORTS = 6;
 // How far above the reading position WebKit keeps rows measured: about as far
 // as one long momentum fling travels.
 const WEBKIT_MEASURED_HISTORY_VIEWPORTS = 12;
+// How long after the virtualizer last wrote a scroll target before history
+// rows are measured again. Its reconcile needs a frame in which the target
+// does not move; a pass every frame moves it every frame.
+const SCROLL_SETTLE_MS = 100;
 const EXPLICIT_SCROLL_DOWN_TRIGGER_DISTANCE = 64;
 
 const clamp = (value: number, min: number, max: number) =>
@@ -281,12 +285,24 @@ export function ThreadList(props: ThreadListProps) {
   const historyRowsThisFrame = new Set<VirtualItem['key']>();
   let historyPassDue = false;
   let historyFrame: number | undefined;
+  // While the virtualizer settles a scroll to a row (the latest message after
+  // one arrives, a jump, a resize while pinned), measuring history moves its
+  // target each frame and keeps it settling. It holds that row by index, so
+  // an older page landing meanwhile sends it to the wrong row, and a drag is
+  // pulled back. History waits until it has settled.
+  let scrollTargetWrittenAt = Number.NEGATIVE_INFINITY;
+  const settlingScroll = () =>
+    performance.now() - scrollTargetWrittenAt < SCROLL_SETTLE_MS;
   const scheduleHistoryFrame = () => {
     if (historyFrame !== undefined) return;
     historyFrame = requestAnimationFrame(() => {
       historyFrame = undefined;
       historyRowsThisFrame.clear();
       if (!historyPassDue) return;
+      if (settlingScroll()) {
+        scheduleHistoryFrame();
+        return;
+      }
       historyPassDue = false;
       setHistoryPass((pass) => pass + 1);
     });
@@ -346,7 +362,7 @@ export function ThreadList(props: ThreadListProps) {
       // Rows already mounted this frame stay; only new ones count.
       const unmeasured = !instance.itemSizeCache.has(item.key);
       if (unmeasured && !historyRowsThisFrame.has(item.key)) {
-        if (historyRowsThisFrame.size >= OVERSCAN) {
+        if (settlingScroll() || historyRowsThisFrame.size >= OVERSCAN) {
           reachedPassLimit = true;
           break;
         }
@@ -469,6 +485,10 @@ export function ThreadList(props: ThreadListProps) {
       };
     },
     scrollToFn: (offset, options, instance) => {
+      // A scroll to a target, or its reconcile, names a behavior and carries no
+      // size correction; corrections and prepend syncs do the opposite.
+      if (options.adjustments === undefined && options.behavior !== undefined)
+        scrollTargetWrittenAt = performance.now();
       // Each correction carries the absolute target, so a batch only needs its
       // last one. Writing every row's correction forces a layout per row.
       if (applyingBatch) {
