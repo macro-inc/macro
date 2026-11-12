@@ -34,12 +34,11 @@ use crate::domain::{
 
 use models::{
     AddEntriesRequest, AddEntriesResponse, CompanyImportResponse, CreatePipelineRequest,
-    EditPipelineRequest,
-    EntrySearchQuery, FindEntriesRequest, FoundEntriesResponse, ImportCompaniesCsvRequest,
-    ImportPipelineCsvRequest, PipelineCsvResponse, PipelineEntries, PipelineEntry,
-    PipelineExportResponse, PipelineFields, PipelineImportResponse, RecordEntriesRequest,
-    RemoveEntriesRequest, RemoveEntriesResponse, UpdateEntriesRequest, UpdateEntriesResponse,
-    UpdatedPipelineEntry, pairs,
+    EditPipelineRequest, EntrySearchQuery, FindEntriesRequest, FoundEntriesResponse,
+    ImportCompaniesCsvRequest, ImportPipelineCsvRequest, PipelineCsvResponse, PipelineEntries,
+    PipelineEntry, PipelineExportResponse, PipelineFields, PipelineImportResponse,
+    RecordEntriesRequest, RemoveEntriesRequest, RemoveEntriesResponse, UpdateEntriesRequest,
+    UpdateEntriesResponse, UpdatedPipelineEntry, pairs,
 };
 
 /// Entries a read returns when it names no limit.

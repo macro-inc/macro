@@ -13,8 +13,8 @@ use crate::domain::{
     },
     pipeline_workflows::{
         FieldChange, FieldInput, FieldKind, FieldValue, FoundEntries, NewField, NewFieldKind,
-        NewPipeline, OptionCounts, PipelineEntryView, PipelineField, PipelineOverview, PipelineRecord,
-        RecordEntries, UpdatedEntry,
+        NewPipeline, OptionCounts, PipelineEntryView, PipelineField, PipelineOverview,
+        PipelineRecord, RecordEntries, UpdatedEntry,
     },
     pipelines::{AccessiblePipeline, PipelineRecordType, PipelineSharing},
 };
