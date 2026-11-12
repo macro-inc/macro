@@ -4271,6 +4271,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "channel_change_db_utils"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "macro_db_migrator",
+ "sqlx",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "channel_labels"
 version = "0.1.0"
 dependencies = [
