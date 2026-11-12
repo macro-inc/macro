@@ -432,42 +432,44 @@ impl<Code: RoutineCode, Sessions: RoutineSessions, Updates: RoutineDraftUpdates>
         );
         let action = drafts.action(&owner, session);
         match outcome {
-            Ok(Some(draft)) => {
-                let draft = finish(draft);
-                match store.finish_job(id, &draft).await {
-                    Ok(Finished::Written) => {
-                        updates
-                            .publish_draft(
-                                &owner,
-                                DraftUpdate {
-                                    draft_id: id,
-                                    state: DraftUpdateState::finished(&draft),
-                                    progress,
-                                },
-                            )
-                            .await;
-                    }
-                    // Cancelled while it read its result: no one will.
-                    Ok(Finished::Cancelled) => {
-                        tracing::Span::current().record("routine.draft.outcome", "cancelled");
-                        clean_up(
-                            drafts.sessions.as_ref(),
-                            drafts.hand_backs.as_ref(),
-                            &action,
-                            true,
+            // Its outcome is recorded once, from what finishing it found.
+            Ok(Some(draft)) => match store.finish_job(id, &draft).await {
+                Ok(Finished::Written) => {
+                    let draft = finish(draft);
+                    updates
+                        .publish_draft(
+                            &owner,
+                            DraftUpdate {
+                                draft_id: id,
+                                state: DraftUpdateState::finished(&draft),
+                                progress,
+                            },
                         )
                         .await;
-                        // Its last word: progress it sent can land after the
-                        // cancel's.
-                        updates.publish_draft(&owner, removed(id, progress)).await;
-                    }
-                    Ok(Finished::Gone) => {}
-                    // Still drafting on its row: the sweep fails it.
-                    Err(error) => {
-                        tracing::error!(error = ?error, "could not finish a routine draft");
-                    }
                 }
-            }
+                // Cancelled while it read its result: no one will.
+                Ok(Finished::Cancelled) => {
+                    tracing::Span::current().record("routine.draft.outcome", "cancelled");
+                    clean_up(
+                        drafts.sessions.as_ref(),
+                        drafts.hand_backs.as_ref(),
+                        &action,
+                        true,
+                    )
+                    .await;
+                    // Its last word: progress it sent can land after the
+                    // cancel's.
+                    updates.publish_draft(&owner, removed(id, progress)).await;
+                }
+                Ok(Finished::Gone) => {
+                    finish(draft);
+                }
+                // Still drafting on its row: the sweep fails it.
+                Err(error) => {
+                    finish(draft);
+                    tracing::error!(error = ?error, "could not finish a routine draft");
+                }
+            },
             // Cancelled: the drafter deleted its session and row. Its last
             // word, as progress it sent can land after the cancel's.
             Ok(None) => {
