@@ -3,7 +3,10 @@ import type { EntityItem } from '@core/context/quickAccess';
 import { trackMention } from '@core/signal/mention';
 import type { DateOption } from '@core/util/dateSearch/useDateSearch';
 import type { ChannelEntity, CrmCompanyEntity, EmailEntity } from '@entity';
-import type { DocumentMentionInfo } from '@macro-inc/lexical-core';
+import type {
+  DateMentionInfo,
+  DocumentMentionInfo,
+} from '@macro-inc/lexical-core';
 import { Telemetry } from '@macro-inc/observability';
 import { match } from 'ts-pattern';
 import { REMOVE_INLINE_SEARCH_COMMAND } from '../../../../plugins';
@@ -200,14 +203,34 @@ export async function handleEntityMentionWithInsertion(
 /**
  * Handle date mention from DateOption.
  */
-async function handleDateMentionFromOption(
+export type DateMentionInsertion = {
+  insert(buildPayload: () => DateMentionInfo): void | Promise<void>;
+};
+
+/** Keep actual date-provider values and dispatch payload reads in Source order. */
+export async function handleDateMentionWithInsertion(
+  dateOption: DateOption,
+  prepare: () => DateMentionInsertion
+): Promise<void> {
+  const { insert } = prepare();
+  const completion = insert(() => ({
+    date: dateOption.date.toISOString(),
+    displayFormat: dateOption.displayText,
+  }));
+  if (completion !== undefined) await completion;
+}
+
+function handleDateMentionFromOption(
   dateOption: DateOption,
   dependencies: HandlerDependencies
 ): Promise<void> {
-  const { editor } = dependencies;
-  editor.dispatchCommand(INSERT_DATE_MENTION_COMMAND, {
-    date: dateOption.date.toISOString(),
-    displayFormat: dateOption.displayText,
+  return handleDateMentionWithInsertion(dateOption, () => {
+    const { editor } = dependencies;
+    return {
+      insert(buildPayload) {
+        editor.dispatchCommand(INSERT_DATE_MENTION_COMMAND, buildPayload());
+      },
+    };
   });
 }
 
