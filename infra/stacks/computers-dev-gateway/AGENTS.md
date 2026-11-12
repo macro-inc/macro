@@ -7,7 +7,7 @@ cannot run WireGuard) reach the dev computers host's Incus API at
 `https://10.200.0.2:8443` in the `macro-computers` GCP VPC. One `t4g.nano`
 (Amazon Linux 2023) with an Elastic IP sits in a public subnet. The private
 subnets' route tables send `10.200.0.2/32` to its interface; it forwards only
-TCP 8443 into `wg0` and masquerades as `10.99.0.1`. The deploy rules are in
+TCP 8443 into `wg0` (MTU 1400, MSS clamped) and masquerades as `10.99.0.1`. The deploy rules are in
 [the Pulumi rule](../../../.agents/rules/infra/pulumi.md).
 
 ## Start here
