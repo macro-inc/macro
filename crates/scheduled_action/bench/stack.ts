@@ -71,6 +71,23 @@ export function stack(instance: string, tempo: string): Stack {
   };
 }
 
+/**
+ * The stack's search indexer and the internal key its backfill routes take,
+ * from the compose override and env `run_local` generated: the portmap lists
+ * only what the web app calls.
+ */
+export function searchIndexer(at: Stack): { url: string; key: string } {
+  const generated = join(at.owner, 'infra/local/generated', at.instance);
+  const compose = readFileSync(join(generated, 'docker-compose.override.yml'), 'utf8');
+  const service = compose.split(/\n {2}search_processing_service:\n/)[1]?.split(/\n {2}\S/)[0];
+  const port = service?.match(/- (\d+):8080/)?.[1];
+  if (!port) throw new Error(`${at.instance} runs no search_processing_service, so nothing indexes it for search`);
+  const env = readFileSync(join(generated, 'local.generated.env'), 'utf8');
+  const key = env.match(/^INTERNAL_API_KEY=(.*)$/m)?.[1];
+  if (!key) throw new Error(`no INTERNAL_API_KEY in ${at.instance}'s generated env`);
+  return { url: `http://localhost:${port}`, key };
+}
+
 /** A Macro API token for `email`, through local passwordless login. */
 export async function login(at: Stack, email: string): Promise<string> {
   for (let attempt = 0; ; attempt++) {

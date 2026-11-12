@@ -24,7 +24,7 @@ import {
   verdictLines,
 } from './report';
 import { type SavedRoutine, type Tokens, onEvents, reset, runCheck, save, withReplies } from './runcheck';
-import { SEEDED_IDS, savedDatabases, seed, setup } from './setup';
+import { SEEDED_IDS, index, savedDatabases, seed, setup } from './setup';
 import {
   type Stack,
   call,
@@ -90,7 +90,10 @@ type Session = {
 async function open(instance: string, tempo: string): Promise<Session> {
   const at = stack(instance, tempo);
   // Due dates written on a new day are task changes another eval's run check would see.
-  const ids = await exclusive(instance, 'setup', () => setup(at, TIMEZONE));
+  const ids = await exclusive(instance, 'setup', async () => {
+    await index(at);
+    return setup(at, TIMEZONE);
+  });
   const tokens: Tokens = {};
   for (const person of PERSON_KEYS) tokens[person] = await login(at, email(person));
   const judgeToken = await login(at, email(JUDGE));
@@ -593,6 +596,7 @@ async function seedCommand(args: string[]) {
   // Seeding resets the workspace under any draft running on it.
   const ids = await exclusive(values.instance, 'seed', async () => {
     seed(values.instance);
+    await index(at);
     return setup(at, TIMEZONE, true);
   });
   console.log(`seeded ${Object.keys(ids).length} named items on ${values.instance}`);

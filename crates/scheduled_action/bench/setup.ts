@@ -6,7 +6,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 
-import { type Stack, call, login, sdk } from './stack';
+import { type Stack, call, login, sdk, searchIndexer } from './stack';
 import { DATABASES, FIXTURE, OWNER, SCENARIO_NAME, email, scenario, tasks } from './workspace';
 
 const CACHE = join(homedir(), '.cache/routines-eval');
@@ -52,6 +52,68 @@ export function seed(instance: string) {
     stderr: 'inherit',
   });
   if (result.exitCode !== 0) throw new Error(`seed-scenario exited with ${result.exitCode}`);
+}
+
+/** What search indexes of a workspace, by its indexer's backfill route. */
+const INDEXED = ['documents', 'channels', 'projects', 'emails'];
+
+/** Seeded items that name search must find, one per kind a request names by name. */
+const PROBES: [kind: 'documents' | 'projects', name: string][] = [
+  ['documents', 'Weekly metrics'],
+  ['projects', 'Q4 Launch'],
+];
+
+/** Whether name search finds the seeded items, as the owner. */
+async function indexed(at: Stack, token: string): Promise<boolean> {
+  const macro = sdk(at, token);
+  for (const [kind, name] of PROBES) {
+    let found = false;
+    let seen = 0;
+    // The first page is enough: an exact name ranks first.
+    for await (const hit of macro[kind].search(name, { searchOn: 'name', pageSize: 10 })) {
+      if (hit.id === SEEDED_IDS[name]) found = true;
+      if (found || ++seen >= 10) break;
+    }
+    if (!found) return false;
+  }
+  return true;
+}
+
+/**
+ * Index the seeded workspace for search. The seed CLI writes rows straight
+ * to the database, which the search indexer never hears about, so without
+ * this name search finds none of the seeded documents, projects, channels or
+ * mail and every draft that looks one up fails, as it wouldn't for a real
+ * person. Backfills are upserts, so indexing again is harmless.
+ */
+export async function index(at: Stack) {
+  const token = await login(at, email(OWNER));
+  if (await indexed(at, token)) return;
+  const indexer = searchIndexer(at);
+  const headers = { 'x-internal-auth-key': indexer.key };
+  for (const kind of INDEXED) {
+    const { job_id } = await call<{ job_id: string }>(`${indexer.url}/internal/backfill/${kind}`, {
+      method: 'POST',
+      headers,
+      body: '{}',
+    });
+    for (let attempt = 0; ; attempt++) {
+      const job = await call<{ status: string; enqueued: number; error?: string }>(
+        `${indexer.url}/internal/backfill/${job_id}`,
+        { headers },
+      );
+      if (job.status === 'completed') break;
+      if (job.status !== 'running') throw new Error(`indexing ${kind} ${job.status}: ${job.error ?? ''}`);
+      if (attempt >= 60) throw new Error(`indexing ${kind} still running after 2 minutes`);
+      await Bun.sleep(2000);
+    }
+  }
+  // Backfills only queue the items; the indexer's worker writes them.
+  for (let attempt = 0; !(await indexed(at, token)); attempt++) {
+    if (attempt >= 60) throw new Error(`name search still finds no seeded items on ${at.instance} 2 minutes after indexing`);
+    await Bun.sleep(2000);
+  }
+  console.log(`indexed the seeded workspace for search on ${at.instance}`);
 }
 
 // Property ids of the system task properties (crates/system_properties).
