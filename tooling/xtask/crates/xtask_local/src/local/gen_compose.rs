@@ -287,19 +287,8 @@ fn add_computers(
     computers: &Computers,
 ) -> Result<()> {
     match computers.fleet() {
-        Fleet::Off => {
-            let harness = services
-                .get_mut(EGRESS_SERVICE)
-                .and_then(Option::as_mut)
-                .context("the computer control plane runs in agent_harness_service")?;
-            let dct::Environment::KvPair(env) = &mut harness.environment else {
-                anyhow::bail!("harness environment must be a key-value map");
-            };
-            env.insert(
-                "COMPUTERS_FLEET".into(),
-                Some(dct::SingleValue::String("disabled".into())),
-            );
-        }
+        // The harness reads an unset COMPUTERS_FLEET as no fleet.
+        Fleet::Off => {}
         Fleet::Docker => {
             // Same path on both sides: the harness writes enrollments here and
             // hands the daemon bind sources below it.

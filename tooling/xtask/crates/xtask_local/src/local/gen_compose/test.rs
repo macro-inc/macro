@@ -169,7 +169,7 @@ fn incus_computers_need_no_relay_sidecars() {
 }
 
 #[test]
-fn disabled_control_plane_is_explicit_only_in_the_harness() {
+fn computers_off_leaves_the_harness_without_a_fleet() {
     let instance = Instance::derive(Some("computers-off"), None).unwrap();
     let computers = Computers::new(Mode::Local, Fleet::Off, &instance);
     let mut services = IndexMap::from([(
@@ -181,10 +181,9 @@ fn disabled_control_plane_is_explicit_only_in_the_harness() {
     )]);
     add_computers(&mut services, &computers).unwrap();
     let value = serde_yaml::to_value(&services).unwrap();
-    assert_eq!(
-        value[EGRESS_SERVICE]["environment"]["COMPUTERS_FLEET"],
-        "disabled"
-    );
+    // The harness reads an unset COMPUTERS_FLEET as no fleet, and refuses
+    // any value but a fleet kind.
+    assert!(value[EGRESS_SERVICE]["environment"]["COMPUTERS_FLEET"].is_null());
     assert_eq!(value[EGRESS_SERVICE]["environment"]["PORT"], "8080");
 }
 
