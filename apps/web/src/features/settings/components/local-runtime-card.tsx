@@ -105,7 +105,7 @@ export function LocalRuntimeCard() {
     try {
       await macrodStart({});
     } catch (error) {
-      toast.failure(errorMessage(error, 'Could not start the local runtime'));
+      toast.failure(errorMessage(error, 'Could not start this computer'));
     } finally {
       setBusy(false);
     }
@@ -117,7 +117,7 @@ export function LocalRuntimeCard() {
     try {
       await macrodStop();
     } catch (error) {
-      toast.failure(errorMessage(error, 'Could not stop the local runtime'));
+      toast.failure(errorMessage(error, 'Could not stop this computer'));
     } finally {
       setBusy(false);
     }
@@ -254,7 +254,8 @@ export function LocalRuntimeCard() {
                 <Match when={phase() === 'error'}>
                   <div class="mt-4 flex flex-wrap items-center gap-3">
                     <p class="text-sm text-failure">
-                      {snapshot()?.lastError ?? 'The local runtime stopped.'}
+                      {snapshot()?.lastError ??
+                        'This computer stopped running agents.'}
                     </p>
                     <Button
                       type="button"

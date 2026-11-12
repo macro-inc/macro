@@ -413,7 +413,7 @@ pub async fn build_tool_service_context_from_env(
     .with_design_files(Arc::new(document_files.clone()))
     .with_photoshop_files(Arc::new(document_files.clone()))
     .with_illustrator_files(Arc::new(document_files));
-    let document_tool_context = match crate::canvas_artifacts_rollout_from_env()? {
+    let document_tool_context = match crate::canvas_artifacts_rollout_from_env(environment)? {
         Some(rollout) => document_tool_context.with_canvas_artifacts(rollout),
         None => document_tool_context,
     };
@@ -576,7 +576,7 @@ pub async fn build_tool_service_context_from_env(
 
     let admission =
         ai_billing::composition::pg_admission_service(pool.clone(), enforcement, pricing);
-    let pipedream_client = crate::mcp_app_catalog::connector_backends_from_env()?;
+    let pipedream_client = crate::mcp_app_catalog::connector_backends_from_env(environment)?;
     let native_servers = match maybe_env
         .mcp_credentials_key_secret_name
         .as_ref()
@@ -606,6 +606,9 @@ pub async fn build_tool_service_context_from_env(
         );
         let mcp_selector = Arc::new(mcp_select::McpToolSelector::new(
             native_servers.clone(),
+            mcp_client::outbound::guarded_http::McpHttp::new(
+                mcp_client::outbound::guarded_http::AddressPolicy::for_environment(environment),
+            )?,
             pipedream_connections.clone(),
             Arc::new(pipedream_client.clone()),
         ));

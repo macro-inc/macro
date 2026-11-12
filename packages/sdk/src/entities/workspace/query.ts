@@ -65,7 +65,11 @@ function validateFilter(expression: unknown, path: string): void {
   });
 }
 
-/** @internal */
+/**
+ * @internal
+ *
+ * @mcp-exclude Internal query-building helper, not reachable from the `Macro` client.
+ */
 export class WorkspaceQuery {
   private tagSets?: Promise<TagSetResponse[]>;
   constructor(private readonly client: MacroClient) {}

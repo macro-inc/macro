@@ -1,6 +1,6 @@
-import Code from '@phosphor/code.svg';
-import Plus from '@phosphor/plus.svg';
-import Lightning from '@phosphor-fill/lightning-fill.svg';
+import Lightning from '@icon/system/fill/lightning-fill.svg';
+import Code from '@icon/system/regular/code.svg';
+import Plus from '@icon/system/regular/plus.svg';
 import { Button, Dropdown } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import { ChannelComposer } from '../email/frozen/ChannelComposer';

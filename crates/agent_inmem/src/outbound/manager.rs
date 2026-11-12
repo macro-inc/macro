@@ -22,7 +22,7 @@ use crate::domain::agent::{AgentState, serve};
 use crate::domain::engine::{AgentIdentity, ReplyDelivery, TurnEngine};
 use crate::domain::mcp::DynMcpToolConnector;
 use crate::domain::replay::{FrameSource, replay_history, replay_reasoning_effort, replay_speed};
-use crate::domain::session::{SessionState, SessionStore, Summarizing};
+use crate::domain::session::{HistoryEntry, SessionState, SessionStore, Summarizing};
 
 #[cfg(test)]
 mod test;
@@ -129,6 +129,24 @@ impl InMemAgentManager {
         self
     }
 
+    /// How many sessions' conversations this process holds.
+    #[must_use]
+    pub fn conversations(&self) -> usize {
+        self.store.len()
+    }
+
+    /// Whether this process holds `session`'s conversation.
+    #[must_use]
+    pub fn holds(&self, session: AgentSessionId) -> bool {
+        self.store.contains_key(&session)
+    }
+
+    /// How many sessions have a running agent task in this process.
+    #[must_use]
+    pub fn live_agents(&self) -> usize {
+        self.live.len()
+    }
+
     /// The egress token `attach` was handed for `session`, if this process
     /// still holds it.
     #[must_use]
@@ -163,30 +181,8 @@ impl InMemAgentManager {
             // Loaded before taking the entry so the read never blocks the
             // map; `or_insert_with` still wins any race to create it.
             let frames = self.frames.frames(facts.id).await?;
-            let restored_effort = replay_reasoning_effort(&frames);
-            let reasoning_effort =
-                if agent::ReasoningEffort::supported(&facts.model).contains(&restored_effort) {
-                    restored_effort
-                } else {
-                    agent::ReasoningEffort::default()
-                };
-            let restored_speed = replay_speed(&frames);
-            let speed = if restored_speed.supported(&facts.model) {
-                restored_speed
-            } else {
-                agent::ModelSpeed::Standard
-            };
-            let history = replay_history(frames);
-            self.store.entry(facts.id).or_insert_with(|| SessionState {
-                acp_session_id: facts.acp_session_id.clone(),
-                model: facts.model.clone(),
-                reasoning_effort,
-                speed,
-                identity: facts.identity.clone(),
-                instructions: facts.instructions.clone(),
-                history,
-                summarizing: Summarizing::default(),
-            });
+            let rebuilt = rebuilt_state(&facts, frames);
+            self.store.entry(facts.id).or_insert(rebuilt);
         }
 
         // Do not replace a runtime or cache a credential until its history is
@@ -240,8 +236,49 @@ impl InMemAgentManager {
         Ok(server_half)
     }
 
-    /// End the session for good: kill its agent task, drop its conversation,
-    /// and close the MCP sessions its token was holding open.
+    /// Whether a cold [`Self::attach`] from the log would give `facts`'s
+    /// agent exactly the state it runs on now, so that dropping it with
+    /// [`Self::teardown`] changes nothing the model sees. A session this
+    /// process holds nothing for answers yes.
+    ///
+    /// Compared as the model reads it: reasoning parts are dropped before a
+    /// turn's messages are built, so they are left out on both sides. Summary
+    /// state is not in the log at all, so a summary in flight, one that
+    /// failed, or images already described keep the session here.
+    pub async fn rebuilds_identically(
+        &self,
+        facts: &SessionFacts,
+    ) -> agent_session::domain::error::Result<bool> {
+        match self.store.get(&facts.id) {
+            None => return Ok(true),
+            Some(live) => {
+                let summarizing = &live.summarizing;
+                if summarizing.pending.is_some()
+                    || summarizing.failed_at.is_some()
+                    || !summarizing.descriptions.is_empty()
+                {
+                    return Ok(false);
+                }
+            }
+        }
+
+        let rebuilt = rebuilt_state(facts, self.frames.frames(facts.id).await?);
+        let Some(live) = self.store.get(&facts.id) else {
+            return Ok(true);
+        };
+        Ok(live.acp_session_id == rebuilt.acp_session_id
+            && live.model == rebuilt.model
+            && live.reasoning_effort == rebuilt.reasoning_effort
+            && live.speed == rebuilt.speed
+            && live.identity == rebuilt.identity
+            && live.instructions == rebuilt.instructions
+            && model_history(&live.history) == model_history(&rebuilt.history))
+    }
+
+    /// Drop everything this process holds for the session: kill its agent
+    /// task, drop its conversation, and close the MCP sessions its token was
+    /// holding open. Used on delete, and by the harness's idle release; a
+    /// later [`Self::attach`] rebuilds the conversation from the log.
     pub fn teardown(&self, session: AgentSessionId) {
         self.live.remove(&session);
         self.store.remove(&session);
@@ -249,4 +286,58 @@ impl InMemAgentManager {
             self.mcp.release_dyn(&token);
         }
     }
+}
+
+/// The state a cold attach builds for `facts` from its logged `frames`.
+fn rebuilt_state(
+    facts: &SessionFacts,
+    frames: Vec<agent_session::domain::model::Message>,
+) -> SessionState {
+    let restored_effort = replay_reasoning_effort(&frames);
+    let reasoning_effort =
+        if agent::ReasoningEffort::supported(&facts.model).contains(&restored_effort) {
+            restored_effort
+        } else {
+            agent::ReasoningEffort::default()
+        };
+    let restored_speed = replay_speed(&frames);
+    let speed = if restored_speed.supported(&facts.model) {
+        restored_speed
+    } else {
+        agent::ModelSpeed::Standard
+    };
+    SessionState {
+        acp_session_id: facts.acp_session_id.clone(),
+        model: facts.model.clone(),
+        reasoning_effort,
+        speed,
+        identity: facts.identity.clone(),
+        instructions: facts.instructions.clone(),
+        history: replay_history(frames),
+        summarizing: Summarizing::default(),
+    }
+}
+
+/// `history` as a turn's model messages are built from it: without reasoning
+/// parts, with the text parts that leaves next to each other read as one, and
+/// without assistant entries that held nothing else.
+fn model_history(history: &[HistoryEntry]) -> Vec<HistoryEntry> {
+    history
+        .iter()
+        .filter_map(|entry| match entry {
+            HistoryEntry::Assistant(parts) => {
+                let parts = agent::merge_consecutive_parts(
+                    parts
+                        .iter()
+                        .filter(|part| {
+                            !matches!(part, agent::types::AssistantMessagePart::Thinking { .. })
+                        })
+                        .cloned()
+                        .collect(),
+                );
+                (!parts.is_empty()).then_some(HistoryEntry::Assistant(parts))
+            }
+            other => Some(other.clone()),
+        })
+        .collect()
 }

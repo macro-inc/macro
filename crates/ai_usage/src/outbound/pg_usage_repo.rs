@@ -116,11 +116,11 @@ impl UsageRepo for PgUsageRepo {
                 price_per_million_in, price_per_million_out,
                 price_per_million_cache_read, price_per_million_cache_write,
                 price_per_audio_minute, price_per_provider_credit, total,
-                count_usage, agent_api_key_id
+                count_usage, agent_api_key_id, agent_session_id
             )
             VALUES (
                 $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
-                $19, $20
+                $19, $20, $21
             )
             "#,
             id,
@@ -143,6 +143,7 @@ impl UsageRepo for PgUsageRepo {
             total,
             count_usage,
             usage.agent_api_key_id,
+            usage.agent_session_id,
         )
         .execute(&self.inner)
         .await?;
@@ -282,6 +283,7 @@ impl UsageRepo for PgUsageRepo {
                 user_id,
                 entity,
                 agent_api_key_id,
+                agent_session_id,
                 model,
                 input_tokens,
                 output_tokens,
@@ -343,6 +345,7 @@ impl UsageRepo for PgUsageRepo {
                     user,
                     entity: r.entity,
                     agent_api_key_id: r.agent_api_key_id,
+                    agent_session_id: r.agent_session_id,
                     cost: Usage {
                         amount: match (r.audio_seconds, r.provider_credits) {
                             (Some(seconds), _) => UsageAmount::Audio {

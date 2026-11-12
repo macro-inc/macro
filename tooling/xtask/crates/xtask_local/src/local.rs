@@ -1255,7 +1255,23 @@ fn ensure_tracing_backend(stage: &Stage, backend: cli::TracesBackend) -> Result<
              the shell you run this from)"
         );
     }
-    evict_other_collector(stage, service);
+    match collector_action(otlp_port_holder().as_deref(), service) {
+        CollectorAction::Reuse(name) => {
+            // Never `up` a running collector: Compose would recreate it
+            // whenever its config hash differs (each worktree bind-mounts
+            // its own `docker/lgtm` path), dropping the `otel-collector`
+            // attachments other running instances added to it.
+            stage.note(&format!("  reusing running trace collector {name}"));
+            return Ok(());
+        }
+        CollectorAction::Replace(name) => {
+            stage.note(&format!(
+                "  replacing running trace collector {name} (all collectors share the OTLP ports)"
+            ));
+            let _ = Command::new("docker").args(["rm", "-f", &name]).output();
+        }
+        CollectorAction::Start => {}
+    }
     let result =
         start_global_compose_service(stage, profile, service, "trace collector").and_then(|()| {
             // `up -d` returns once the container starts, not once it's accepting
@@ -1288,32 +1304,98 @@ fn ensure_tracing_backend(stage: &Stage, backend: cli::TracesBackend) -> Result<
     }
 }
 
-/// Remove a *different* collector holding the OTLP ports before starting the
-/// requested one. All backends bind 4317/4318, so a leftover collector from a
-/// previous `--traces` choice would otherwise win the port race and keep
-/// receiving the telemetry — silently, since the port probe only asks "is
-/// something listening", not "is it the backend that was asked for".
-fn evict_other_collector(stage: &Stage, wanted_service: &str) {
-    if !summary::port_open(4318) {
-        return;
-    }
-    let Some(holder) = Command::new("docker")
-        .args(["ps", "--filter", "publish=4318", "--format", "{{.Names}}"])
-        .output()
-        .ok()
-        .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string())
-        .filter(|name| !name.is_empty())
-    else {
-        return; // not a docker container (host collector) — leave it alone
+/// Compose project of the machine-global containers (`name:` in
+/// `docker/docker-compose.yml`).
+const GLOBAL_COMPOSE_PROJECT: &str = "macro";
+
+/// What [`ensure_tracing_backend`] does about the container holding the OTLP
+/// port.
+#[derive(Debug, PartialEq, Eq)]
+enum CollectorAction {
+    /// The wanted global collector is already up: leave it untouched.
+    Reuse(String),
+    /// A *different* container holds the port. All backends bind 4317/4318,
+    /// so a leftover collector from a previous `--traces` choice would
+    /// otherwise keep receiving the telemetry — silently, since the port probe
+    /// only asks "is something listening".
+    Replace(String),
+    /// Nothing (or a host collector, which is left alone) holds the port.
+    Start,
+}
+
+/// Decide from the [`otlp_port_holder`] line (`<name> <project> <service>`).
+/// Ownership is by compose label, not name: the global `macro-lgtm-1` is
+/// name-indistinguishable from an instance named `lgtm`'s containers.
+fn collector_action(holder: Option<&str>, wanted_service: &str) -> CollectorAction {
+    let Some(mut fields) = holder.map(str::split_whitespace) else {
+        return CollectorAction::Start;
     };
-    // Compose names containers `<project>-<service>-<n>`.
-    if holder.contains(&format!("-{wanted_service}-")) {
-        return;
+    let Some(name) = fields.next() else {
+        return CollectorAction::Start;
+    };
+    if fields.next() == Some(GLOBAL_COMPOSE_PROJECT) && fields.next() == Some(wanted_service) {
+        CollectorAction::Reuse(name.to_string())
+    } else {
+        CollectorAction::Replace(name.to_string())
     }
-    stage.note(&format!(
-        "  replacing running trace collector {holder} (all collectors share the OTLP ports)"
-    ));
-    let _ = Command::new("docker").args(["rm", "-f", &holder]).output();
+}
+
+/// The docker container binding host port 4318, as
+/// `<name> <compose project> <compose service>`; `None` when the port is
+/// closed or held by a host process.
+fn otlp_port_holder() -> Option<String> {
+    if !summary::port_open(4318) {
+        return None;
+    }
+    let out = Command::new("docker")
+        .args(["ps", "--filter", "publish=4318", "--format"])
+        .arg(
+            "{{.Names}}\t{{.Label \"com.docker.compose.project\"}}\t\
+             {{.Label \"com.docker.compose.service\"}}\t{{.Ports}}",
+        )
+        .output()
+        .ok()?;
+    pick_otlp_port_holder(&String::from_utf8_lossy(&out.stdout))
+}
+
+/// From tab-separated `docker ps` rows (`name, project, service, ports`),
+/// the one binding host port 4318. `publish=4318` also matches containers
+/// that only expose container port 4318 on another host port (`14318:4318`),
+/// and those must never be taken for the collector.
+fn pick_otlp_port_holder(ps: &str) -> Option<String> {
+    ps.lines().find_map(|row| {
+        let mut fields = row.split('\t');
+        let (name, project, service, ports) = (
+            fields.next()?,
+            fields.next()?,
+            fields.next()?,
+            fields.next()?,
+        );
+        binds_host_otlp_port(ports).then(|| format!("{name} {project} {service}"))
+    })
+}
+
+/// Whether a `{{.Ports}}` value such as `0.0.0.0:4317-4318->4317-4318/tcp,
+/// [::]:4317-4318->4317-4318/tcp` binds host port 4318 (Docker collapses
+/// consecutive ports into ranges).
+fn binds_host_otlp_port(ports: &str) -> bool {
+    ports.split(", ").any(|binding| {
+        // `<host ip>:<host ports>-><container ports>/<proto>`; an exposed but
+        // unpublished port (`4040/tcp`) has no `->`.
+        let Some((_, host_ports)) = binding
+            .split_once("->")
+            .and_then(|(host, _)| host.rsplit_once(':'))
+        else {
+            return false;
+        };
+        match host_ports.split_once('-') {
+            Some((low, high)) => matches!(
+                (low.parse::<u16>(), high.parse::<u16>()),
+                (Ok(low), Ok(high)) if (low..=high).contains(&4318)
+            ),
+            None => host_ports == "4318",
+        }
+    })
 }
 
 /// Start a profile-gated service from the base compose file under the global
@@ -1321,6 +1403,9 @@ fn evict_other_collector(stage: &Stage, wanted_service: &str) {
 /// across invocations) — the pattern the trace collectors and headless Chrome
 /// share. Keep other containers in the shared project: the base compose file
 /// does not include generated infrastructure services such as LocalStack.
+/// `--no-recreate`: an existing container is only started, never replaced —
+/// its config hash differs per worktree, and a recreate drops the network
+/// attachments running instances added to it.
 fn start_global_compose_service(
     stage: &Stage,
     profile: &str,
@@ -1338,6 +1423,7 @@ fn start_global_compose_service(
         .arg(profile)
         .arg("up")
         .arg("-d")
+        .arg("--no-recreate")
         .arg(service);
     stage.run(&format!("Starting {profile} {label}"), &mut up)
 }
@@ -1368,19 +1454,10 @@ fn ensure_headless_chrome(stage: &Stage) {
 /// errors. Best-effort: "already connected" (rerun) and other failures are
 /// ignored, they only mean traces don't flow.
 fn connect_tracing_network(instance: &Instance) {
-    if !summary::port_open(4318) {
+    let Some(holder) = otlp_port_holder() else {
         return;
-    }
-    // Find the collector container (Jaeger or Datadog agent — both publish the
-    // OTLP HTTP port) by that port rather than assuming a container name, in
-    // case it was started under a different project.
-    let Some(collector) = Command::new("docker")
-        .args(["ps", "--filter", "publish=4318", "--format", "{{.Names}}"])
-        .output()
-        .ok()
-        .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string())
-        .filter(|name| !name.is_empty())
-    else {
+    };
+    let Some(collector) = holder.split_whitespace().next() else {
         return;
     };
     let _ = Command::new("docker")

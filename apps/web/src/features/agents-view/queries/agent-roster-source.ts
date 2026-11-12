@@ -1,7 +1,7 @@
 import { useAgentsQuery } from '@queries/agents/agents';
 import { useAgentModelsQuery } from '@queries/agents/models';
 import { useCursorApiKeyStatusQuery } from '@queries/auth/cursor-api-key';
-import { useHarnessesQuery } from '@queries/harnesses/harnesses';
+import { useHarnessDirectoryQuery } from '@queries/harnesses/harnesses';
 import { type Accessor, createMemo } from 'solid-js';
 import { buildAgentRoster, type RosterAgent } from '../core/roster';
 
@@ -24,7 +24,7 @@ export type AgentRosterSource = {
  */
 export function createAgentRosterSource(): AgentRosterSource {
   const agentsQuery = useAgentsQuery();
-  const harnessesQuery = useHarnessesQuery();
+  const harnessesQuery = useHarnessDirectoryQuery();
   const cursorStatus = useCursorApiKeyStatusQuery();
   const cursorConnected = () =>
     cursorStatus.isSuccess ? cursorStatus.data.registered : false;

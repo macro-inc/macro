@@ -45,17 +45,29 @@ export class AccountManagerGrant extends MacroEntity<AccountManagerGrantRecord> 
   /** When the token was last used, to the minute. */
   readonly lastUsedAt = this.field('lastUsedAt');
 
-  /** The account being managed. */
+  /**
+   * The account being managed.
+   *
+   * @readonly
+   */
   async managed(): Promise<User> {
     return User.byId(this.client, (await this.detail.get()).managedUserId);
   }
 
-  /** The agent account doing the managing. */
+  /**
+   * The agent account doing the managing.
+   *
+   * @readonly
+   */
   async manager(): Promise<User> {
     return User.byId(this.client, (await this.detail.get()).managerUserId);
   }
 
-  /** Approve a request you didn't make. Only the side that didn't ask can. */
+  /**
+   * Approve a request you didn't make. Only the side that didn't ask can.
+   *
+   * @destructive
+   */
   async approve(): Promise<void> {
     await this.mutate((c) =>
       c.storage.respondToAccountManagerRequest({
@@ -65,7 +77,11 @@ export class AccountManagerGrant extends MacroEntity<AccountManagerGrantRecord> 
     );
   }
 
-  /** Decline a request you didn't make. Only the side that didn't ask can. */
+  /**
+   * Decline a request you didn't make. Only the side that didn't ask can.
+   *
+   * @destructive
+   */
   async decline(): Promise<void> {
     await this.mutate((c) =>
       c.storage.respondToAccountManagerRequest({
@@ -78,6 +94,8 @@ export class AccountManagerGrant extends MacroEntity<AccountManagerGrantRecord> 
   /**
    * Get the token for the managed account. Only the manager can, and only once:
    * save it now. Use it as the SDK's `token` to act as the managed account.
+   *
+   * @destructive
    */
   async claimToken(): Promise<string> {
     const claimed = await this.mutate((c) =>
@@ -86,7 +104,12 @@ export class AccountManagerGrant extends MacroEntity<AccountManagerGrantRecord> 
     return claimed.token;
   }
 
-  /** End the grant, stopping its token immediately. Either side can. */
+  /**
+   * End the grant, stopping its token immediately. Either side can.
+   *
+   * @destructive
+   * @idempotent
+   */
   async revoke(): Promise<void> {
     await this.mutate((c) =>
       c.storage.revokeAccountManagerGrant({ path: { id: this.id } }),

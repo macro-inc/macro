@@ -292,7 +292,10 @@ across instances) debugging containers:
   Prometheus behind it. Rust services export spans and `tracing` events over
   OTLP; the frontend exports browser spans through the proxy and propagates
   `traceparent`, so one trace covers browser → proxy → services. Swap with
-  `--traces jaeger|datadog`, or disable with `--traces off`.
+  `--traces jaeger|datadog`, or disable with `--traces off`. A running
+  collector is reused as-is and never recreated, so other stacks keep their
+  network attachments to it; to pick up a changed compose definition, run
+  `docker rm -f macro-lgtm-1` and start a stack again.
 - **Agent browser** (opt-in via `--with-chrome`): Chromium with the DevTools
   protocol on http://localhost:9222, for agents driving the app (the
   `chrome-devtools` MCP server in `.mcp.json` / `opencode.json` /

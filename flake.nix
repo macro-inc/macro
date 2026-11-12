@@ -7,7 +7,15 @@
 
     fenix.url = "github:nix-community/fenix";
     fenix.inputs.nixpkgs.follows = "nixpkgs";
+    disko.url = "github:nix-community/disko";
+    disko.inputs.nixpkgs.follows = "nixpkgs";
     crane.url = "github:ipetkov/crane";
+    # The Macro computer's herdr and its official agent skill; see
+    # nix/macro-box/AGENTS.md.
+    herdr = {
+      url = "github:herdrdev/herdr/v0.9.5";
+      flake = false;
+    };
     crane-tauri.url = "github:JPHutchins/crane-tauri";
     nixidy.url = "github:arnarg/nixidy/latest";
     nixidy.inputs.nixpkgs.follows = "nixpkgs";

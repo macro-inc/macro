@@ -48,14 +48,22 @@ export function TeamStep(props: {
   onSkip: () => void;
 }) {
   const context = useOnboardingContext();
-  const directory = context.createTeamDirectory();
-  const team = createTeamStep(context, directory);
   const record = context.createOnboardingRecord();
   const ownEmail = () => {
     const viewer = context.viewer();
     return viewer.t === 'signed-in' ? viewer.viewer.email : undefined;
   };
-  // Wait for contacts and the domain suggestion so the form mounts once,
+  const directory = context.createTeamDirectory({
+    domain: () => {
+      const current = record();
+      return current.t === 'ready'
+        ? current.value.suggestedTeamDomain
+        : undefined;
+    },
+    ownEmail,
+  });
+  const team = createTeamStep(context, directory);
+  // Wait for bounded suggestions and the domain so the form mounts once,
   // fully formed. Keep the first settled seed so background refreshes cannot
   // replace the form, reset edits, or steal focus from an input.
   const seed = createMemo<TeamFormSeed | undefined>(

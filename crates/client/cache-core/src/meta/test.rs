@@ -79,7 +79,12 @@ fn interface_possible_types() {
             .possible_types
             .contains(&"GraphqlSoupReminder".to_owned())
     );
-    assert_eq!(entity.possible_types.len(), 15);
+    assert!(
+        entity
+            .possible_types
+            .contains(&"GraphqlSoupHarness".to_owned())
+    );
+    assert_eq!(entity.possible_types.len(), 16);
     assert!(type_matches("GraphqlSoupDocument", "GraphqlSoupEntity"));
     assert!(type_matches("GraphqlSoupInitiative", "GraphqlSoupEntity"));
     assert!(!type_matches("GraphqlSoupItem", "GraphqlSoupEntity"));
