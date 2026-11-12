@@ -97,6 +97,23 @@ pub trait Repository: Send + Sync {
     /// Create a new folder (insert only, never an upsert) under its parent.
     /// Rejects a missing parent, the team folder cap, and trees deeper than the limit.
     async fn save_folder(&self, folder: &Folder) -> Result<(), Error>;
+    /// Insert a folder if absent; an existing team folder is never moved or renamed.
+    async fn ensure_folder(
+        &self,
+        team: TeamId,
+        id: uuid::Uuid,
+        name: &str,
+        parent_id: Option<uuid::Uuid>,
+    ) -> Result<Folder, Error>;
+    /// Record only source format and counts for one batch attempt, even when no item succeeded.
+    async fn audit_import(
+        &self,
+        team: TeamId,
+        import_id: uuid::Uuid,
+        actor: &Actor,
+        format: ImportFormat,
+        counts: ImportCounts,
+    ) -> Result<(), Error>;
     /// Rename an existing folder (update only); `NotFound` when it no longer exists.
     async fn rename_folder(
         &self,
@@ -161,7 +178,11 @@ pub trait SecretProvider: Send + Sync {
 }
 
 /// A scope-bound team-vault lock; releasing the guard releases its lease.
-pub trait ItemLock: Send + Sync {}
+#[async_trait]
+pub trait ItemLock: Send + Sync {
+    /// Await release before the next batch step, instead of relying on asynchronous Drop cleanup.
+    async fn release(self: Box<Self>) -> Result<(), Error>;
+}
 
 /// Human rollout and provider readiness are independent of maintenance.
 #[async_trait]

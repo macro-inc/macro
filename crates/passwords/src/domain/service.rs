@@ -267,8 +267,22 @@ impl PasswordService {
         team: TeamId,
         command: WriteItem,
     ) -> Result<ItemView, Error> {
+        let _lock = self
+            .admit(actor, team, ItemId(command.operation_id))
+            .await?;
+        self.create_under_lease(actor, team, command, _lock.as_ref())
+            .await
+            .map(|(item, _)| item)
+    }
+    #[tracing::instrument(skip_all,err,name="passwords.create.commit",fields(team_id=%team.0))]
+    async fn create_under_lease(
+        &self,
+        actor: &Actor,
+        team: TeamId,
+        command: WriteItem,
+        _lease: &dyn ItemLock,
+    ) -> Result<(ItemView, bool), Error> {
         let id = ItemId(command.operation_id);
-        let _lock = self.admit(actor, team, id).await?;
         command.validate()?;
         if command.expected_version.is_some() || command.operation_id.get_version_num() != 7 {
             return Err(Error::Invalid);
@@ -290,7 +304,7 @@ impl PasswordService {
                 self.repository
                     .audit(team, id, actor, Action::Create, command.operation_id)
                     .await?;
-                return self.metadata(actor, record).await;
+                return Ok((self.metadata(actor, record).await?, false));
             }
             Ok(_) => return Err(Error::Conflict),
             Err(Error::NotFound) => {}
@@ -338,7 +352,7 @@ impl PasswordService {
         self.repository
             .audit(team, id, actor, Action::Create, command.operation_id)
             .await?;
-        self.metadata(actor, record).await
+        Ok((self.metadata(actor, record).await?, true))
     }
     #[tracing::instrument(skip_all,err,name="passwords.update",fields(team_id=%team.0,item_id=%item.0))]
     /// Update an editable credential with provider CAS and retry recovery.
@@ -658,7 +672,23 @@ impl PasswordService {
         key: Option<SecretString>,
     ) -> Result<(), Error> {
         let _lock = self.admit(actor, team, item).await?;
+        self.configure_totp_under_lease(actor, team, item, key, false, _lock.as_ref())
+            .await
+    }
+    #[tracing::instrument(skip_all,err,name="passwords.totp.configure.commit",fields(team_id=%team.0,item_id=%item.0))]
+    async fn configure_totp_under_lease(
+        &self,
+        actor: &Actor,
+        team: TeamId,
+        item: ItemId,
+        key: Option<SecretString>,
+        only_if_missing: bool,
+        _lease: &dyn ItemLock,
+    ) -> Result<(), Error> {
         let record = self.access(actor, team, item, true).await?;
+        if only_if_missing && record.totp_key_id.is_some() {
+            return Ok(());
+        }
         let action = if let Some(key) = key {
             if key.0.len() > 1024 || !lazy_regex::regex_is_match!(r"^[A-Z2-7]+=*$", &key.0) {
                 return Err(Error::Invalid);
@@ -734,3 +764,5 @@ pub(crate) mod test;
 mod review_test;
 
 mod lifecycle;
+
+mod import;

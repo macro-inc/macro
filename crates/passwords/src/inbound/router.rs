@@ -42,6 +42,10 @@ pub fn router<A: MacroAuthorizationService, T: Send + Sync + 'static>(
     state: PasswordRouterState<A>,
 ) -> Router<T> {
     Router::new()
+        .route(
+            "/teams/{team}/imports/{import_id}/items",
+            post(super::import::import_batch::<A>).layer(DefaultBodyLimit::max(4 * 1024 * 1024)),
+        )
         .route("/teams", get(teams::<A>))
         .route("/teams/{team}/items", get(list::<A>).post(create::<A>))
         .route(
@@ -204,7 +208,7 @@ impl IntoResponse for ApiError {
         (status, Json(Failure { code })).into_response()
     }
 }
-fn actor<A: MacroAuthorizationService>(
+pub(super) fn actor<A: MacroAuthorizationService>(
     user: MacroAuthorizationExtractor<A, UserOnly>,
 ) -> Result<Actor, ApiError> {
     if user.authorization.origin != CredentialOrigin::Session {

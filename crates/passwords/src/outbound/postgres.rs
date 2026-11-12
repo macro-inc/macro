@@ -33,8 +33,9 @@ impl PgRepository {
         })
     }
     /// Whether this namespace has any retained metadata or closure fence.
+    // Order the one-row audit lookup so absent teams cannot scan the growing activity table.
     pub async fn has_team_data(&self, team: TeamId) -> Result<bool, Error> {
-        sqlx::query_scalar!(r#"SELECT EXISTS(SELECT 1 FROM password_item_entities WHERE team_id=$1) OR EXISTS(SELECT 1 FROM password_write_intents WHERE team_id=$1) OR EXISTS(SELECT 1 FROM password_folders WHERE team_id=$1) OR EXISTS(SELECT 1 FROM password_totp_enrollments WHERE team_id=$1) OR EXISTS(SELECT 1 FROM password_team_lifecycle WHERE team_id=$1) AS "present!""#,team.0)
+        sqlx::query_scalar!(r#"SELECT EXISTS(SELECT 1 FROM password_item_entities WHERE team_id=$1) OR EXISTS(SELECT 1 FROM password_write_intents WHERE team_id=$1) OR EXISTS(SELECT 1 FROM password_folders WHERE team_id=$1) OR EXISTS(SELECT 1 FROM password_totp_enrollments WHERE team_id=$1) OR EXISTS(SELECT 1 FROM password_team_lifecycle WHERE team_id=$1) OR (SELECT id FROM password_import_activity WHERE team_id=$1 ORDER BY id LIMIT 1) IS NOT NULL AS "present!""#,team.0)
             .fetch_one(&self.pool).await.map_err(database_error)
     }
 
@@ -68,7 +69,12 @@ struct PgItemLock {
     _admission: OwnedSemaphorePermit,
     _transaction: Transaction<'static, Postgres>,
 }
-impl ItemLock for PgItemLock {}
+#[async_trait]
+impl ItemLock for PgItemLock {
+    async fn release(self: Box<Self>) -> Result<(), Error> {
+        self._transaction.rollback().await.map_err(database_error)
+    }
+}
 
 fn decode(
     metadata: serde_json::Value,
@@ -139,6 +145,13 @@ impl Repository for PgRepository {
             .execute(&mut *transaction)
             .await
             .map_err(database_error)?;
+        sqlx::query!(
+            "DELETE FROM password_import_activity WHERE team_id=$1",
+            team.0
+        )
+        .execute(&mut *transaction)
+        .await
+        .map_err(database_error)?;
         transaction.commit().await.map_err(database_error)
     }
     async fn item_cleanup_due(&self) -> Result<Vec<(TeamId, ItemId)>, Error> {
@@ -465,6 +478,26 @@ impl Repository for PgRepository {
     async fn folders(&self, team: TeamId) -> Result<Vec<Folder>, Error> {
         self.list_folders(team).await
     }
+    async fn ensure_folder(
+        &self,
+        team: TeamId,
+        id: Uuid,
+        name: &str,
+        parent_id: Option<Uuid>,
+    ) -> Result<Folder, Error> {
+        self.ensure_stored_folder(team, id, name, parent_id).await
+    }
+    async fn audit_import(
+        &self,
+        team: TeamId,
+        import_id: Uuid,
+        actor: &Actor,
+        format: ImportFormat,
+        counts: ImportCounts,
+    ) -> Result<(), Error> {
+        self.record_import(team, import_id, actor, format, counts)
+            .await
+    }
     async fn save_folder(&self, folder: &Folder) -> Result<(), Error> {
         self.create_folder(folder).await
     }
@@ -489,3 +522,5 @@ mod test;
 
 mod cleanup;
 mod folders;
+
+mod import;

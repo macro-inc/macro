@@ -63,28 +63,74 @@ impl PgRepository {
     #[tracing::instrument(skip_all,err,name="passwords.folder.create",fields(team_id=%folder.team_id.0,folder_id=%folder.id))]
     pub(super) async fn create_folder(&self, folder: &Folder) -> Result<(), Error> {
         let mut transaction = self.folder_transaction(folder.team_id).await?;
+        Self::insert_folder(&mut transaction, folder).await?;
+        transaction.commit().await.map_err(database_error)
+    }
+
+    pub(super) async fn ensure_stored_folder(
+        &self,
+        team: TeamId,
+        id: Uuid,
+        name: &str,
+        parent_id: Option<Uuid>,
+    ) -> Result<Folder, Error> {
+        let mut transaction = self.folder_transaction(team).await?;
+        let existing = sqlx::query!(
+            "SELECT id,name,parent_id FROM password_folders WHERE team_id=$1 AND id=$2",
+            team.0,
+            id
+        )
+        .fetch_optional(&mut *transaction)
+        .await
+        .map_err(database_error)?;
+        let folder = match existing {
+            Some(row) => Folder {
+                id: row.id,
+                team_id: team,
+                name: row.name,
+                parent_id: row.parent_id,
+            },
+            None => {
+                let folder = Folder {
+                    id,
+                    team_id: team,
+                    name: name.to_owned(),
+                    parent_id,
+                };
+                Self::insert_folder(&mut transaction, &folder).await?;
+                folder
+            }
+        };
+        transaction.commit().await.map_err(database_error)?;
+        Ok(folder)
+    }
+
+    async fn insert_folder(
+        transaction: &mut Transaction<'static, Postgres>,
+        folder: &Folder,
+    ) -> Result<(), Error> {
         let existing = sqlx::query!(
             "SELECT id FROM password_folders WHERE team_id=$1 LIMIT 501",
             folder.team_id.0
         )
-        .fetch_all(&mut *transaction)
+        .fetch_all(&mut **transaction)
         .await
         .map_err(database_error)?;
         if existing.len() >= MAX_FOLDERS {
             return Err(Error::Invalid);
         }
-        Self::parent_depth(&mut transaction, folder.team_id, folder.parent_id).await?;
+        Self::parent_depth(transaction, folder.team_id, folder.parent_id).await?;
         sqlx::query!(
-            "INSERT INTO password_folders(team_id,id,name,parent_id) VALUES($1,$2,$3,$4)",
+            "INSERT INTO password_folders(team_id,id,name,parent_id) VALUES($1,$2,$3,$4) ON CONFLICT(team_id,id) DO NOTHING",
             folder.team_id.0,
             folder.id,
             folder.name,
             folder.parent_id
         )
-        .execute(&mut *transaction)
+        .execute(&mut **transaction)
         .await
         .map_err(folder_error)?;
-        transaction.commit().await.map_err(database_error)
+        Ok(())
     }
 
     #[tracing::instrument(skip_all,err,name="passwords.folder.rename",fields(team_id=%team.0,folder_id=%id))]

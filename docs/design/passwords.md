@@ -203,3 +203,47 @@ Future work includes independently managed team envelopes/BYOK, end-to-end
 encrypted private items, provider adapters, and agent grants with explicit
 approval policy. Those features change the trust or authorization model and
 require separate review.
+
+## Importing exports
+
+The browser parses supported unencrypted exports locally and submits normalized
+items to `POST /passwords/teams/{team}/imports/{import_id}/items`. The UUIDv7
+`import_id` stays stable across batches and retries. Requests include `format`
+(`one_password_pux`, `one_password_csv`, `bitwarden_json`, or `bitwarden_csv`), a
+`target` (`new` with a name, `existing` with `folderId`, or `root`), `private`,
+source `folders`, and `items`. The server requires the same human session,
+per-user rollout, current team membership, CSRF header and private no-store
+responses as manual vault creation. The request limit is 4 MiB, with at most
+25 items and 200 folders. The browser parser/client limits the full import to
+20,000 items; there is no server import quota journal.
+
+Every source key is nonempty printable text of at most 200 bytes. SHA-256 of
+`import_id || namespace || key` supplies the random bits of deterministic UUIDv7
+ids; the timestamp comes from `import_id`. Separate `item`, `folder` and `target`
+namespaces prevent collisions between resource types. The new target uses an
+empty key. Each batch includes its referenced source folders and ancestors,
+parents first, nested under the target. Ensuring an existing folder preserves its
+current name and parent.
+Existing-folder targets must belong to the current team. Creation retains the
+vault limits of 500 folders per team and eight levels including the target. A
+folder-phase failure returns a batch error; already ensured folders remain
+available for retry.
+
+Each item reuses the ordinary create validation, durable intent, provider write,
+reconciliation, grants and audit path. New items receive the team Edit grant
+unless `private=true`. The outcome is `created`, `already_present`, or `failed`,
+with a fixed `errorCode` for failures and an `itemId` when creation completed.
+Item lease contention uses `busy`, so the client can retry those items. Optional
+TOTP setup runs through the ordinary enrollment path with a check under the lease
+that preserves an already enrolled seed. A TOTP failure retains the created item;
+retrying with the same source key finishes enrollment without writing the item
+again. Other item failures do not abort the batch.
+
+`password_import_activity` stores counts and format for each completed batch
+attempt, including attempts without successful items. Its team foreign key
+cascades on deletion, and explicit vault purge removes its rows after namespace
+erasure. No item names, URLs, source keys or secret values enter this audit.
+The `passwords.import.batch` span records team/import ids, item, folder and
+outcome counts, and an `audit_failed` boolean. Batch audit failure preserves the
+per-item results; the team foreign key removes audit rows racing team deletion.
+Import request types have no Debug implementation, and all errors have fixed text.
