@@ -66,7 +66,7 @@ type ChannelRailVirtualizerProps<K extends string> = {
   keepMounted?: readonly number[];
   ref?: (handle: ChannelRailVirtualizerHandle | undefined) => void;
   onRangeChange?: () => void;
-  children: (key: K) => JSX.Element;
+  children: (key: K, start: () => number) => JSX.Element;
 };
 
 function VirtualRows<K extends string>(
@@ -225,7 +225,7 @@ function VirtualRows<K extends string>(
                 top: `${row().start - (props.scrollMargin ?? 0)}px`,
               }}
             >
-              {props.children(key)}
+              {props.children(key, () => row().start)}
             </div>
           );
         }}

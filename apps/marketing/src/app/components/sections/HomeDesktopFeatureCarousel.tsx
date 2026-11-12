@@ -1,3 +1,9 @@
+import IconCompany from '@icon/system/regular/buildings.svg';
+import IconDocs from '@icon/system/regular/file.svg';
+import IconTasks from '@icon/system/regular/list-checks.svg';
+import IconChat from '@icon/system/regular/sparkle.svg';
+import IconAi from '@icon/system/regular/star.svg';
+import IconInbox from '@icon/system/regular/tray.svg';
 import { createSignal, For, onCleanup, onMount } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import agentsUrl from '../../../assets/desktop-feature-screens/agents-email-triage.png';
@@ -6,12 +12,6 @@ import docsUrl from '../../../assets/desktop-feature-screens/docs-prd.png';
 import emailUrl from '../../../assets/desktop-feature-screens/email-thread.png';
 import messagesUrl from '../../../assets/desktop-feature-screens/messages-channel.png';
 import tasksUrl from '../../../assets/desktop-feature-screens/task-detail.png';
-import IconChat from '../../../assets/icons/wide-chat.svg';
-import IconCompany from '../../../assets/icons/wide-company.svg';
-import IconDocs from '../../../assets/icons/wide-file-md.svg';
-import IconInbox from '../../../assets/icons/wide-inbox.svg';
-import IconAi from '../../../assets/icons/wide-star.svg';
-import IconTasks from '../../../assets/icons/wide-task.svg';
 import { heroEntrance } from '../../utils/utilHeroEntrance';
 import {
   InfiniteCarousel,

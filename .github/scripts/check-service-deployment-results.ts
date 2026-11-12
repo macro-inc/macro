@@ -5,17 +5,13 @@ export function checkDeploymentResults(needs: Record<string, Need>): void {
 	if (needs.setup?.result !== "success")
 		throw new Error("Deployment setup did not succeed");
 	const outputs = needs.setup.outputs ?? {};
-	if (outputs.dss !== "[]" && outputs.email === "[]")
-		throw new Error("DSS requires email consumer readiness");
 	for (const [job, partition] of [
 		["warm-binaries", "binaries"],
 		["warm-lambdas", "lambdas"],
 		["build-service-binaries", "binaries"],
 		["build-lambda-artifacts", "lambdas"],
 		["migrate-db", "matrix"],
-		["deploy-email", "email"],
-		["deploy-dss", "dss"],
-		["deploy-services", "others"],
+		["deploy-services", "matrix"],
 	]) {
 		const members: unknown = JSON.parse(outputs[partition] ?? "null");
 		if (!Array.isArray(members))
@@ -25,9 +21,7 @@ export function checkDeploymentResults(needs: Record<string, Need>): void {
 		if (result !== expected)
 			throw new Error(`${job}: expected ${expected}, got ${result}`);
 	}
-	console.log(
-		"All required service deployments and consumer readiness checks succeeded",
-	);
+	console.log("All required service deployments succeeded");
 }
 
 if (import.meta.main) {
