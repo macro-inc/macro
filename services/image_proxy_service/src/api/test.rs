@@ -133,6 +133,32 @@ async fn logos_require_authentication_and_reject_non_domains() {
 }
 
 #[tokio::test]
+async fn proxy_error_responses_are_sandboxed() {
+    for (uri, status) in [
+        (
+            "/proxy?url=http://127.0.0.1/image.png",
+            StatusCode::UNAUTHORIZED,
+        ),
+        ("/image-proxy/proxy", StatusCode::UNAUTHORIZED),
+        ("/proxy/unknown", StatusCode::NOT_FOUND),
+    ] {
+        let response = app(test_context())
+            .oneshot(proxy_request(uri).body(Body::empty()).unwrap())
+            .await
+            .expect("application should return a response");
+
+        assert_eq!(response.status(), status, "{uri}");
+        let headers = response.headers();
+        assert_eq!(headers["x-content-type-options"], "nosniff", "{uri}");
+        assert_eq!(
+            headers["content-security-policy"],
+            "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+            "{uri}"
+        );
+    }
+}
+
+#[tokio::test]
 async fn authentication_precedes_proxy_query_validation() {
     for uri in ["/proxy", "/proxy?url=not-a-url"] {
         let request = proxy_request(uri).body(Body::empty()).unwrap();
