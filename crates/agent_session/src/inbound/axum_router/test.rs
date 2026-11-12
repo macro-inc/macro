@@ -458,6 +458,8 @@ struct RecordingRequester {
     requested: Mutex<Vec<RequestedExternalSession>>,
     /// No runtime answers, as when the operator's macrod is not running.
     unavailable: bool,
+    /// The id already names someone else's session.
+    foreign: bool,
 }
 
 impl RecordingRequester {
@@ -466,6 +468,7 @@ impl RecordingRequester {
         Self {
             requested: Mutex::default(),
             unavailable: true,
+            foreign: false,
         }
     }
 }
@@ -489,7 +492,11 @@ impl ExternalSessionRequester for RecordingRequester {
             id: request.session_id,
             name: crate::domain::model::DEFAULT_AGENT_SESSION_NAME.to_owned(),
             archived: None,
-            owner_id: Owner::User(request.owner.clone()),
+            owner_id: if self.foreign {
+                Owner::User(MacroUserIdStr::try_from(STRANGER.to_owned()).unwrap())
+            } else {
+                Owner::User(request.owner.clone())
+            },
             thread_id: None,
             thread_parent: None,
             originating_message_id: None,
@@ -549,7 +556,7 @@ impl AgentSessionNotificationRecipient for RecordingControls {
             .expect("the handler names the first prompt's id");
         self.events.lock().unwrap().push((id, event));
         if self.refuse {
-            return Err(AgentSessionError::NoRuntimeAccess("no access"));
+            return Err(AgentSessionError::NoRuntimeAccess("no access".to_owned()));
         }
         Ok(crate::domain::ports::AcceptedControl {
             action_id,
@@ -1536,6 +1543,40 @@ async fn a_refused_first_prompt_fails_the_create() {
 
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
     assert_eq!(controls.events.lock().unwrap().len(), 1);
+}
+
+/// The id is the caller's to name, so it may already be another person's
+/// session. The prompt must never reach it.
+#[tokio::test]
+async fn a_first_prompt_never_reaches_someone_elses_session() {
+    let controls = Arc::new(RecordingControls::default());
+    let request = as_user(
+        OWNER,
+        serde_json::json!({
+            "id": macro_uuid::generate_uuid_v7(),
+            "botId": BotId::TEST_A.as_uuid(),
+            "prompt": "fix it",
+        })
+        .to_string(),
+    );
+
+    let response = router_with_controls(
+        Arc::new(RecordingOpener::default()),
+        OneBotDirectory::macrod_agent(),
+        Arc::new(RecordingRequester {
+            requested: Mutex::default(),
+            unavailable: false,
+            foreign: true,
+        }),
+        controls.clone(),
+        NonUserOwners::Disabled,
+    )
+    .oneshot(request)
+    .await
+    .unwrap();
+
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+    assert!(controls.events.lock().unwrap().is_empty());
 }
 
 /// A runtime that never creates the session is a conflict the operator can

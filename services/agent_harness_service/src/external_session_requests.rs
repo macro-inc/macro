@@ -14,6 +14,7 @@ use agent_session::domain::ports::{
 };
 use agent_trigger::domain::broker_events::{AgentSessionMacroEvent, AgentSessionRequestedEvent};
 use macro_event_broker::MacroEventBroker;
+use model_owner::Owner;
 
 /// How long a runtime gets to create the session before the request is
 /// refused. A daemon that is up answers well inside this; one that is down
@@ -66,6 +67,13 @@ where
         loop {
             match self.sessions.get(session_id).await {
                 Ok(session) => {
+                    // The id is the caller's, so the row may be a session
+                    // someone else already holds. Never touch or return it.
+                    if session.bot_id != request.bot_id
+                        || session.owner_id != Owner::User(request.owner.clone())
+                    {
+                        return Err(AgentSessionError::SessionIdTaken(session_id));
+                    }
                     if request.model.is_none() && request.source == SessionSource::User {
                         return Ok(session);
                     }

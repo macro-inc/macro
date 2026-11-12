@@ -2415,8 +2415,7 @@ pub async fn create_agent_session_handler<
                 // request goes out as a trigger and the runtime creates the
                 // session under the id we hand it. Nothing is announced,
                 // there being no thread. A first prompt follows through the
-                // session's control path once the runtime has created it,
-                // as CreateAgentSession and DispatchCodingAgent deliver theirs.
+                // session's control path once the runtime has created it.
                 SelectedPersona::External { bot_id } => {
                     let repo_url = crate::domain::ports::external_repository(
                         request.repo_url,
@@ -2445,6 +2444,13 @@ pub async fn create_agent_session_handler<
                             origin,
                         })
                         .await?;
+                    // The caller names the id, so the session found under it
+                    // must be the one requested, never another person's.
+                    if session.bot_id != bot_id || session.owner_id != Owner::User(owner.clone()) {
+                        return Err(CreateSessionApiError::Domain(
+                            AgentSessionError::SessionIdTaken(session.id),
+                        ));
+                    }
                     if let Some(first_prompt) = first_prompt {
                         let client = first_prompt.client;
                         let (action_id, action) = first_prompt.into_action();
