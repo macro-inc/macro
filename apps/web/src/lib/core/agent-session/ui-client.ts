@@ -9,7 +9,11 @@
  * would both open what the agent asks. So each page says hello with its id on
  * a BroadcastChannel, and when two live pages hold one id, the one that took
  * it later mints its own. A page in the back/forward cache isn't live: it
- * leaves the channel, and says hello again when it comes back.
+ * leaves the channel, and says hello again when it comes back. A copy made
+ * while the original can't answer (frozen, discarded, in that cache) keeps
+ * the id until both are live, so meanwhile an open for a turn typed in one
+ * can reach the other. Without storage or a channel, the id lasts as long as
+ * the page.
  */
 
 import { z } from 'zod';
@@ -60,7 +64,11 @@ function tookItLater(hello: Hello): boolean {
 function sayHello() {
   if (!current || !self) return;
 
-  channel?.postMessage({ id: current, ...self } satisfies Hello);
+  try {
+    channel?.postMessage({ id: current, ...self } satisfies Hello);
+  } catch {
+    // The channel closed under us; the next page says hello again.
+  }
 }
 
 /** Another live page holds this id: the later one mints its own. */
@@ -78,11 +86,23 @@ function onHello(event: MessageEvent) {
   sayHello();
 }
 
-function join() {
-  if (channel || typeof BroadcastChannel === 'undefined') return;
+/** A channel to the tab's other pages, unless the browser refuses one. */
+function openChannel(): BroadcastChannel | undefined {
+  if (typeof BroadcastChannel === 'undefined') return;
 
-  channel = new BroadcastChannel(CHANNEL);
-  channel.addEventListener('message', onHello);
+  try {
+    return new BroadcastChannel(CHANNEL);
+  } catch {
+    // Storage denied for the site (Firefox throws a SecurityError).
+    return undefined;
+  }
+}
+
+function join() {
+  if (channel) return;
+
+  channel = openChannel();
+  channel?.addEventListener('message', onHello);
   sayHello();
 }
 

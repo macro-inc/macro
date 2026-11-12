@@ -87,6 +87,8 @@ afterAll(() => vi.unstubAllGlobals());
 beforeEach(() => sessionStorage.clear());
 afterEach(() => {
   for (const channel of opened.splice(0)) channel.close();
+  vi.restoreAllMocks();
+  vi.stubGlobal('BroadcastChannel', RecordedChannel);
 });
 
 describe('uiClientId', () => {
@@ -116,6 +118,28 @@ describe('uiClientId', () => {
     await answered();
 
     expect(after.id()).toBe(id);
+  });
+
+  it('still gives an id when storage and channels are refused', async () => {
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new DOMException('denied', 'SecurityError');
+    });
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('denied', 'SecurityError');
+    });
+    vi.stubGlobal(
+      'BroadcastChannel',
+      class {
+        constructor() {
+          throw new DOMException('denied', 'SecurityError');
+        }
+      }
+    );
+
+    const page = await loadPage();
+
+    expect(page.id()).toMatch(/^[0-9a-f-]{36}$/);
+    expect(page.id()).toBe(page.id());
   });
 
   it('gives a tab duplicated or opened from this one its own id', async () => {
