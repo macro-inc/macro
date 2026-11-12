@@ -10,6 +10,7 @@ import channelSections from './en/channel-sections';
 import commandMenu from './en/command-menu';
 import commands from './en/commands';
 import common from './en/common';
+import computers from './en/computers';
 import create from './en/create';
 import crm from './en/crm';
 import emailViews from './en/email-views';
@@ -19,8 +20,10 @@ import markdownEditor from './en/markdown-editor';
 import mobile from './en/mobile';
 import nav from './en/nav';
 import notificationsInbox from './en/notifications-inbox';
+import passwords from './en/passwords';
 import routineSuggestions from './en/routine-suggestions';
 import runtimeSharing from './en/runtime-sharing';
+import settingsBilling from './en/settings-billing';
 import settingsLanguage from './en/settings-language';
 import settingsMobileApp from './en/settings-mobile-app';
 import settingsNav from './en/settings-nav';
@@ -47,6 +50,7 @@ export default {
   commandMenu,
   commands,
   common,
+  computers,
   create,
   crm,
   emailViews,
@@ -56,7 +60,9 @@ export default {
   mobile,
   nav,
   notificationsInbox,
+  passwords,
   routineSuggestions,
+  settingsBilling,
   runtimeSharing,
   settingsLanguage,
   settingsMobileApp,

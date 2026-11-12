@@ -64,3 +64,8 @@ nearly every Rust service's `main.rs` calls.
 ## Related
 
 - Skill: `new-service` · Docs: `docs/guides/new-service.md`
+
+OTLP-enabled entrypoints also install the global tracer provider (for spans
+built with the OpenTelemetry API, such as `hosted_runtimes` setup waits with
+recorded timestamps) and a global meter provider on the same
+collector endpoint; `shutdown` flushes it with the trace and log providers.
