@@ -566,6 +566,7 @@ fn inner_hit_groups_expand_in_clause_order() {
         })
     };
     let inner_hits = serde_json::json!({
+        "term_10": { "hits": { "hits": [chunk("d")] } },
         "term_2": { "hits": { "hits": [chunk("c"), chunk("a")] } },
         "term_0": { "hits": { "hits": [chunk("a")] } },
         "term_1": { "hits": { "hits": [chunk("b")] } },
@@ -580,7 +581,7 @@ fn inner_hit_groups_expand_in_clause_order() {
             other => panic!("expected a document goto, got {other:?}"),
         })
         .collect();
-    assert_eq!(node_ids, ["a", "b", "c"]);
+    assert_eq!(node_ids, ["a", "b", "c", "d"]);
 }
 
 #[test]
@@ -715,4 +716,44 @@ fn dynamic_matching_leaves_the_name_branch_a_strict_and() -> anyhow::Result<()> 
 fn required_term_count_is_all_up_to_two_then_three_quarters() {
     let required: Vec<usize> = (1..=8).map(required_term_count).collect();
     assert_eq!(required, [1, 2, 2, 3, 3, 4, 5, 6]);
+}
+
+#[test]
+fn dynamic_matching_keeps_a_last_term_that_may_be_a_word_in_progress() -> anyhow::Result<()> {
+    let passage_terms = |terms: &[&str], match_type: &str| -> anyhow::Result<serde_json::Value> {
+        let json = content_terms(terms)
+            .match_type(match_type)
+            .term_matching(DocumentTermMatching::Dynamic)
+            .build_bool_query()?
+            .build()
+            .to_json();
+        Ok(json["bool"]["must"][0]["has_child"]["query"]["bool"]["should"].clone())
+    };
+
+    // `for` may be the start of `forecast`.
+    assert_eq!(
+        passage_terms(&["revenue", "q3", "for"], "partial")?,
+        serde_json::json!([
+            {"match_phrase": {"content": "revenue"}},
+            {"match_phrase": {"content": "q3"}},
+            {"match_phrase_prefix": {"content": {"query": "for", "max_expansions": 256}}},
+        ])
+    );
+    // An exact search has no word in progress, and neither has a stopword too
+    // short to expand.
+    assert_eq!(
+        passage_terms(&["revenue", "q3", "for"], "exact")?,
+        serde_json::json!([
+            {"match_phrase": {"content": "revenue"}},
+            {"match_phrase": {"content": "q3"}},
+        ])
+    );
+    assert_eq!(
+        passage_terms(&["revenue", "q3", "in"], "partial")?,
+        serde_json::json!([
+            {"match_phrase": {"content": "revenue"}},
+            {"match_phrase": {"content": "q3"}},
+        ])
+    );
+    Ok(())
 }

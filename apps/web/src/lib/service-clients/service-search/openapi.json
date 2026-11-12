@@ -4807,7 +4807,7 @@
           },
           "term_matching": {
             "$ref": "#/components/schemas/TermMatching",
-            "description": "How a query of several terms matches document content. Defaults to\n`all`, the strict AND that AI tools and the SDK rely on; interactive\nsearch surfaces ask for `dynamic`."
+            "description": "How a query of several terms matches document content. Defaults to\n`all`, the strict AND that AI tools and the SDK rely on; the web\napp's Search view asks for `dynamic`."
           }
         }
       },

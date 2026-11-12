@@ -77,7 +77,8 @@ projects.
   is one `has_child` per term: every term somewhere in the document, each a
   prefix. `Dynamic` is one `has_child` for queries of three or more terms:
   most non-stopword terms in the same chunk, only the last term a prefix.
-  It changes which documents match, so callers opt in per request.
+  It both adds and removes matches (terms scattered over several chunks no
+  longer match), so callers opt in per request.
 
 ## Related
 

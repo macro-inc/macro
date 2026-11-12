@@ -2537,8 +2537,8 @@ export type UnifiedSearchRequest = {
     search_on?: SearchOn;
     /**
      * How a query of several terms matches document content. Defaults to
-     * `all`, the strict AND that AI tools and the SDK rely on; interactive
-     * search surfaces ask for `dynamic`.
+     * `all`, the strict AND that AI tools and the SDK rely on; the web
+     * app's Search view asks for `dynamic`.
      */
     term_matching?: TermMatching;
 };

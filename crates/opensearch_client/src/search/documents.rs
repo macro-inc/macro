@@ -83,7 +83,9 @@ pub enum DocumentTermMatching {
     All,
     /// Queries of three or more terms match a document when one passage holds
     /// most of the terms that are not stopwords; only the last term is a
-    /// prefix. Shorter queries behave as `All`.
+    /// prefix. Shorter queries behave as `All`. Neither set contains the
+    /// other: a sentence missing a word now matches, while terms scattered
+    /// over different chunks, or cut short before the last one, no longer do.
     Dynamic,
 }
 
@@ -334,19 +336,25 @@ impl DocumentQueryBuilder {
         let mut counted_terms: Vec<String> = Vec::new();
         let mut term_queries: Vec<QueryType<'a>> = Vec::new();
         for (idx, term) in terms.iter().enumerate() {
-            let lowercase = term.to_lowercase();
-            if STOPWORDS.contains(&lowercase.as_str()) || counted_terms.contains(&lowercase) {
-                continue;
-            }
-            counted_terms.push(lowercase);
-
             let is_last_term = idx + 1 == terms.len();
             let match_type = if is_last_term {
                 self.inner.match_type.as_str()
             } else {
                 "exact"
             };
-            term_queries.push(build_child_content_query(term, match_type));
+            let term_query = build_child_content_query(term, match_type);
+
+            // A last term that expands as a prefix is a word still being
+            // typed: `for` may be the start of `forecast`, so it is kept.
+            let is_prefix = matches!(term_query, QueryType::MatchPhrasePrefix(_));
+            let lowercase = term.to_lowercase();
+            if counted_terms.contains(&lowercase)
+                || (STOPWORDS.contains(&lowercase.as_str()) && !is_prefix)
+            {
+                continue;
+            }
+            counted_terms.push(lowercase);
+            term_queries.push(term_query);
         }
         if term_queries.is_empty() {
             return None;
@@ -632,10 +640,14 @@ pub(crate) fn expand_inner_hits_to_search_hits(
         Ok(g) => g,
         Err(_) => return Vec::new(),
     };
+    // `term_10` sorts before `term_2` as a string; shorter names first puts
+    // the groups back in clause order.
+    let mut groups: Vec<(String, InnerHitsGroup)> = groups.into_iter().collect();
+    groups.sort_by_key(|(name, _)| name.len());
 
     let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
     let mut out: Vec<SearchHit> = Vec::new();
-    for group in groups.into_values() {
+    for (_, group) in groups {
         for chunk in group.hits.hits {
             if !seen.insert(chunk.id) {
                 continue;

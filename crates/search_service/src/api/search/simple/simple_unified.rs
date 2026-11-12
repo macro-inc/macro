@@ -17,7 +17,9 @@ use macro_authorization::{MacroAuthorizationExtractor, MacroUserAuthentication, 
 use macro_user_id::user_id::MacroUserId;
 use model::{response::ErrorResponse, user::UserContext};
 use models_search::unified::SearchEntityFilters;
-use models_search::{MatchType, SearchOn, SimpleSearchResponse, unified::UnifiedSearchRequest};
+use models_search::{
+    MatchType, SearchOn, SimpleSearchResponse, TermMatching, unified::UnifiedSearchRequest,
+};
 use models_search_cursor::{SearchCursor, SearchCursorOption, SearchMethodCursor};
 use opensearch_client::search::agent_sessions::{AgentSessionSearchArgs, AgentSessionSearchMode};
 use opensearch_client::search::call_records::CallRecordSearchMode;
@@ -324,17 +326,7 @@ async fn search_unified_sources(
         search_terms.len(),
         split_count - search_terms.len(),
     );
-    let document_term_matching = resolve_document_term_matching(
-        ctx.term_matching_rollout.as_ref(),
-        &user_context.user_id,
-        req.term_matching,
-        search_terms.len(),
-    )
-    .await;
-    tracing::Span::current().record(
-        "search.term_matching",
-        tracing::field::debug(document_term_matching),
-    );
+    let requested_term_matching = req.term_matching;
 
     // Property filters live at the top level of the request and only apply to
     // the OpenSearch documents index, so capture them before the conversion
@@ -407,7 +399,75 @@ async fn search_unified_sources(
     );
     let email_terms = search_terms.clone();
 
+    // Term matching only applies to document content, so a search that leaves
+    // it out never reads the rollout.
+    let searches_document_content =
+        should_include_documents && !matches!(search_on, SearchOn::Name);
+    let requested_term_matching = if searches_document_content {
+        requested_term_matching
+    } else {
+        TermMatching::All
+    };
+
     // Await all tasks in parallel
+    let (filter_responses, document_term_matching) = tokio::join!(
+        async {
+            tokio::try_join!(
+                doc_filters.filter_to_search_args(
+                    ctx,
+                    user_id.as_ref(),
+                    user_organization_id,
+                    should_include_documents,
+                ),
+                channel_filters.filter_to_search_args(
+                    ctx,
+                    user_id.as_ref(),
+                    user_organization_id,
+                    should_search_channel_messages,
+                ),
+                chat_filters.filter_to_search_args(
+                    ctx,
+                    user_id.as_ref(),
+                    user_organization_id,
+                    should_include_chats,
+                ),
+                email_filters.filter_to_search_args(
+                    ctx,
+                    user_id.as_ref(),
+                    user_organization_id,
+                    should_include_emails,
+                ),
+                project_filters.filter_to_search_args(
+                    ctx,
+                    user_id.as_ref(),
+                    user_organization_id,
+                    should_include_projects
+                ),
+                call_filters.filter_to_search_args(
+                    ctx,
+                    user_id.as_ref(),
+                    user_organization_id,
+                    should_include_call_records,
+                ),
+                calendar_event_filters.filter_to_search_args(
+                    ctx,
+                    user_id.as_ref(),
+                    user_organization_id,
+                    should_include_calendar_events,
+                )
+            )
+        },
+        resolve_document_term_matching(
+            ctx.term_matching_rollout.as_ref(),
+            &user_context.user_id,
+            requested_term_matching,
+            search_terms.len(),
+        ),
+    );
+    tracing::Span::current().record(
+        "search.term_matching",
+        tracing::field::debug(document_term_matching),
+    );
     let (
         mut filter_document_response,
         mut filter_channel_response,
@@ -416,51 +476,8 @@ async fn search_unified_sources(
         mut filter_project_response,
         mut filter_call_record_response,
         mut filter_calendar_event_response,
-    ) = tokio::try_join!(
-        doc_filters.filter_to_search_args(
-            ctx,
-            user_id.as_ref(),
-            user_organization_id,
-            should_include_documents,
-        ),
-        channel_filters.filter_to_search_args(
-            ctx,
-            user_id.as_ref(),
-            user_organization_id,
-            should_search_channel_messages,
-        ),
-        chat_filters.filter_to_search_args(
-            ctx,
-            user_id.as_ref(),
-            user_organization_id,
-            should_include_chats,
-        ),
-        email_filters.filter_to_search_args(
-            ctx,
-            user_id.as_ref(),
-            user_organization_id,
-            should_include_emails,
-        ),
-        project_filters.filter_to_search_args(
-            ctx,
-            user_id.as_ref(),
-            user_organization_id,
-            should_include_projects
-        ),
-        call_filters.filter_to_search_args(
-            ctx,
-            user_id.as_ref(),
-            user_organization_id,
-            should_include_call_records,
-        ),
-        calendar_event_filters.filter_to_search_args(
-            ctx,
-            user_id.as_ref(),
-            user_organization_id,
-            should_include_calendar_events,
-        )
-    )
-    .map_err(|e| SearchError::InternalError(anyhow::anyhow!("tokio error: {:?}", e)))?;
+    ) = filter_responses
+        .map_err(|e| SearchError::InternalError(anyhow::anyhow!("tokio error: {:?}", e)))?;
 
     // Set terms on each index's search args.
     //
