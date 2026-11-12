@@ -65,9 +65,11 @@ enforced by the ordinary backend APIs.
   saving's checks and saves nothing; code mode's catalog lists it as a read.
   `created` takes handles with an `entityType` (`CreatedEntity`) and is kept
   with a routine draft for its review.
-- `users.search(nameOrEmail)` searches existing Macro contacts with batched auth
-  names and returns seeded User handles; it is not a global directory. Empty
-  contact sets are 404, but authorization/service errors must propagate.
+- `users.search(nameOrEmail)` is one `GET /contacts/search`: the server
+  ranks the caller's contacts and current team (teammates first, at most 20)
+  and the SDK seeds User handles with each name and agent flag, keeping that
+  order. It is not a global directory, and the full `GET /contacts` list stays
+  out of the SDK.
 - `src/entities/sharing/`, `messages/`: scoped access requests and message threads.
 - `src/entities/databases/query.ts`: SQL statements, typed table/row references and version guards.
 - `Contact.setEmail(address)` adds a missing address; `setCompany(company)`
@@ -144,6 +146,8 @@ enforced by the ordinary backend APIs.
 ## Boundaries
 
 - Keep handwritten behavior in `src/`; never edit `generated/` or `specs/`.
+- Keep the human-session-only Passwords vault endpoints in coverage exclusions;
+  normal human-session authorization and secret disclosure are outside v1 agent capabilities.
 - Keep WhatsApp pairing, passkeys, connection setup/disconnect and rollout configuration out of the handwritten public SDK; operate on accounts linked in the app, with personal bearer sessions for account/access controls. External chat sends/uploads accept the connection owner's session or own API token; bots never send.
 - Use POST to start channel calls and call-id scoped joins/leaves; the legacy GET starts a call as a side effect.
 - One item's mute, snooze and unmute are `muteNotifications`/`unmuteNotifications` on every favoritable handle; keep mute-all, email unsubscribe and bulk item preferences in the app-only coverage exclusions.

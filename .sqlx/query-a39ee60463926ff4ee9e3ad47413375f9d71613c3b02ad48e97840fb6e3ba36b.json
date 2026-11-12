@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS(SELECT 1 FROM \"User\" WHERE id=$1 AND NOT \"isAgent\") AS \"human!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "human!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "a39ee60463926ff4ee9e3ad47413375f9d71613c3b02ad48e97840fb6e3ba36b"
+}
