@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT m.id FROM comms_messages m\n               JOIN comms_message_threads t ON t.root_id = m.id\n               WHERE m.id = $1 AND m.parent_entity_type = $2 AND m.parent_entity_id = $3\n                   AND t.deleted_at IS NULL FOR KEY SHARE OF m",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "6d2b91704340199e6432ef90e00437d37da1d0e32c6f65297012f0076b5da531"
+}

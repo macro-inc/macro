@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH pending AS MATERIALIZED (\n                SELECT channel_id, activity_id,\n                       row_number() OVER (PARTITION BY channel_id ORDER BY ordinal) AS position,\n                       count(*) OVER (PARTITION BY channel_id) AS total\n                FROM UNNEST($1::uuid[], $2::uuid[]) WITH ORDINALITY\n                    AS input(channel_id, activity_id, ordinal)\n            ), advanced AS (\n                INSERT INTO channel_change_counters (channel_id, seq)\n                SELECT channel_id, total FROM pending GROUP BY channel_id, total ORDER BY channel_id\n                ON CONFLICT (channel_id) DO UPDATE\n                SET seq = channel_change_counters.seq + EXCLUDED.seq,\n                    updated_at = clock_timestamp()\n                RETURNING channel_id, seq\n            )\n            INSERT INTO channel_change_log (channel_id, seq, kind, activity_id)\n            SELECT pending.channel_id, advanced.seq - pending.total + pending.position,\n                   2, pending.activity_id\n            FROM pending JOIN advanced USING (channel_id)\n            ORDER BY pending.channel_id, pending.position\n            RETURNING activity_id AS \"activity_id!\", seq\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "activity_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "seq",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      true,
+      false
+    ]
+  },
+  "hash": "c308e7075a399b646cfb2b072e60a3f96371d745a46c93febb9bfb5199f0708e"
+}

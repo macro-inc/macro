@@ -1,0 +1,55 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH position AS MATERIALIZED (\n                SELECT COALESCE((\n                    SELECT seq FROM channel_change_counters WHERE channel_id = $1\n                ), 0) AS seq\n            )\n            SELECT position.seq AS \"counter!\",\n                COALESCE((\n                    SELECT min(retained.seq) - 1\n                    FROM channel_change_log retained WHERE retained.channel_id = $1\n                ), position.seq) AS \"floor!\",\n                change.seq AS \"log_seq?\", change.kind AS \"kind?\",\n                change.message_id AS \"message_id?\", change.activity_id AS \"activity_id?\"\n            FROM position\n            LEFT JOIN LATERAL (\n                SELECT log.seq, log.kind, log.message_id, log.activity_id\n                FROM channel_change_log log\n                WHERE log.channel_id = $1 AND log.seq > $2\n                    AND position.seq - $2 <= $3\n                ORDER BY log.seq\n                LIMIT $4\n            ) change ON true\n            ORDER BY change.seq\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "counter!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "floor!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "log_seq?",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "kind?",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 4,
+        "name": "message_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "activity_id?",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "bde583bd2f2c7c85f0e4eb70a82127ca77db4509593ceae22e4a19df1da03b1d"
+}
