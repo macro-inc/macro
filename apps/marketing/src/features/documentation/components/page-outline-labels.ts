@@ -3,6 +3,7 @@ export const pageOutlineLabels: Record<string, string> = {
   'email-accounts-title': 'Unified Inbox',
   'email-providers-title': 'Google and Outlook',
   'auto-tags-title': 'Email tags',
+  'email-routines-title': 'Email routines',
   'email-sharing-title': 'Collaboration',
   'email-crm-title': 'CRM integration',
   'email-to-task-title': 'Email to tasks',

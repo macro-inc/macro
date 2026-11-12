@@ -2,12 +2,13 @@ import MicrosoftIcon from '@assets/icons/logo-microsoft.svg';
 import GoogleIcon from '@icon/macro-google.svg';
 import { CrmRecordDemo } from '../../features/marketing/components/crm/CrmRecordDemo';
 import { DemoInteractionBoundary } from '../../features/marketing/components/DemoInteractionBoundary';
-import { EmailAgenticEditingDemo } from '../../features/marketing/components/email/EmailAgenticEditingDemo';
 import { EmailAutoTagDemo } from '../../features/marketing/components/email/EmailAutoTagDemo';
 import { EmailComparison } from '../../features/marketing/components/email/EmailComparison';
+import { EmailDraftStory } from '../../features/marketing/components/email/EmailDraftStory';
 import { EmailKeyboardDemo } from '../../features/marketing/components/email/EmailKeyboardDemo';
 import { EmailProvidersGraphic } from '../../features/marketing/components/email/EmailProvidersGraphic';
-import { EmailShareStory } from '../../features/marketing/components/email/EmailShareStory';
+import { EmailRoutineDemo } from '../../features/marketing/components/email/EmailRoutineDemo';
+import { EmailSharingDemo } from '../../features/marketing/components/email/EmailSharingDemo';
 import { EmailSignalNoiseDemo } from '../../features/marketing/components/email/EmailSignalNoiseDemo';
 import {
   FeaturePage,
@@ -200,27 +201,21 @@ export function RouteEmail() {
       </FeaturePageSection>
       <FeaturePageSection
         id="email-sharing"
-        demo={{ tone: 'email', glassFrame: false }}
+        demo={{ tone: 'email' }}
         title="Share email in Macro Chat, no screenshots."
         description="Share an email in a channel without taking a screenshot of Gmail and pasting it in Slack. Your team sees the full thread, including future replies, so they’re not asking what happened after your screenshot."
       >
         <DemoInteractionBoundary
           class="feature-page-visual"
-          render={() => <EmailShareStory />}
+          render={() => <EmailSharingDemo />}
         />
       </FeaturePageSection>
       <FeaturePageSection
         id="agentic-editing"
-        demo={{
-          tone: 'email',
-        }}
         title="Draft and send with Macro Agents."
         description="The agent can search prior interactions with people and build up context before drafting the email. You can iterate with it and then hit send without leaving the agent."
       >
-        <DemoInteractionBoundary
-          class="feature-page-visual"
-          render={() => <EmailAgenticEditingDemo />}
-        />
+        <EmailDraftStory />
       </FeaturePageSection>
       <FeaturePageSection
         id="email-to-task"
@@ -250,16 +245,29 @@ export function RouteEmail() {
       </FeaturePageSection>
       <FeaturePageSection
         id="auto-tags"
-        title="Let Macro Routines watch your email."
-        description="Set up a routine that runs when an email arrives. Have an agent tag incoming emails by customer, project, or topic, or notify a channel when an urgent support email comes in. The same tags work across emails, docs, and tasks."
+        title="Unified Macro Tags across your workspace."
+        description="Tag incoming email by customer, project, or topic. Use Jev, an extraction model, to set up any tags you want, or frontier AI if you’d like. The same tags work across emails, docs, and tasks."
       >
         <PaperFeatureGraphic
           height={360}
           mobileHeight={390}
-          label="An inbox with one highlighted email automatically tagged Customers and Follow up by a routine. Callouts point to each tag."
+          label="An inbox with one highlighted email automatically tagged Customers and Follow up. Callouts point to each tag."
         >
           <EmailAutoTagDemo />
         </PaperFeatureGraphic>
+      </FeaturePageSection>
+      <FeaturePageSection
+        id="email-routines"
+        demo={{
+          tone: 'email',
+        }}
+        title="Kick off Macro Routines from any email."
+        description="Set up a routine that runs when an email arrives and kicks off work across your workspace. When an important customer email comes in, it can message an internal channel and send you a push notification."
+      >
+        <DemoInteractionBoundary
+          class="feature-page-visual"
+          render={() => <EmailRoutineDemo />}
+        />
       </FeaturePageSection>
       <EmailComparison />
       <FeaturePageFaq
