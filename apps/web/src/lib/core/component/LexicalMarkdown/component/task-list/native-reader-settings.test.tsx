@@ -155,7 +155,17 @@ for (const canComment of [false, true]) {
       const before = owned.runtime.executor.session.serializedState();
       const observedSequence = owned.host.observedSequence();
       expect(observedSequence).toBeDefined();
-      const input = vi.spyOn(owned.runtime.executor.session, 'input');
+      const nativeInput = owned.runtime.executor.session.input.bind(
+        owned.runtime.executor.session
+      );
+      const inputBytes: Uint8Array[] = [];
+      vi.spyOn(owned.runtime.executor.session, 'input').mockImplementation(
+        (...args) => {
+          // Bebop encodes into a shared buffer; retain the actual entry bytes.
+          inputBytes.push(args[0].slice());
+          return nativeInput(...args);
+        }
+      );
       const settled = vi.spyOn(owned.runtime.executor, 'runSettled');
       fireEvent.pointerEnter(root.querySelector('ul') ?? root);
       await user.click(filter);
@@ -166,7 +176,7 @@ for (const canComment of [false, true]) {
       if (result.type !== 'return')
         throw new Error('Missing actual executor settlement');
       await result.value;
-      const settingsCalls = input.mock.calls.filter(([bytes]) => {
+      const settingsCalls = inputBytes.filter((bytes) => {
         const message = SessionInputMsg.decode(bytes).editor;
         return (
           message.isEditorApplication() &&
@@ -174,7 +184,7 @@ for (const canComment of [false, true]) {
         );
       });
       expect(settingsCalls).toHaveLength(1);
-      const admitted = SessionInputMsg.decode(settingsCalls[0][0]).editor;
+      const admitted = SessionInputMsg.decode(settingsCalls[0]).editor;
       if (!admitted.isEditorApplication())
         throw new Error('Missing actual settings intent');
       expect(JSON.parse(admitted.value.json).observedSequence).toBe(
