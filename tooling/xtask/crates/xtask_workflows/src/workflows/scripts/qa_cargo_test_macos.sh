@@ -15,8 +15,8 @@ echo development > apps/web/tauri/src-tauri/.macro-tauri-env
 
 # Nix's cctools ld crashes (SIGTRAP) linking the app's tests; the DMG build
 # avoids it with Apple's linker, so put the system tools ahead of Nix's.
-nix develop --command bash -c 'PATH="/usr/bin:$PATH" exec cargo test \
-  --manifest-path apps/web/tauri/Cargo.toml -p app --lib --locked' \
+nix develop --command bash -c "PATH=/usr/bin:\$PATH exec cargo test \
+  --manifest-path apps/web/tauri/Cargo.toml -p app --lib --locked" \
   > "$QA_OUT/cargo-test.log" 2>&1
 status=$?
 echo "$status" > "$QA_OUT/cargo-test.status"
