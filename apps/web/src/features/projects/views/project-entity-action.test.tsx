@@ -30,7 +30,8 @@ function open(
   commands: {
     rename?: (id: string, name: string) => Promise<void>;
     deleteMany?: (ids: readonly string[]) => Promise<string[]>;
-  }
+  },
+  onDeleted?: (ids: readonly string[]) => void
 ) {
   const [shown, setShown] = createSignal(true);
   const unused = (): never => {
@@ -59,6 +60,7 @@ function open(
       <Show when={shown()}>
         <ProjectEntityActionContent
           action={action}
+          options={{ onDeleted }}
           onClose={() => setShown(false)}
         />
       </Show>
@@ -90,7 +92,12 @@ it('keeps only the projects that failed to delete for a retry', async () => {
     .fn<(ids: readonly string[]) => Promise<string[]>>()
     .mockResolvedValueOnce(['b'])
     .mockResolvedValueOnce([]);
-  const view = open({ kind: 'delete', ids: ['a', 'b'] }, { deleteMany });
+  const onDeleted = vi.fn();
+  const view = open(
+    { kind: 'delete', ids: ['a', 'b'] },
+    { deleteMany },
+    onDeleted
+  );
 
   fireEvent.click(
     await screen.findByRole('button', { name: 'Delete 2 projects' })
@@ -103,6 +110,7 @@ it('keeps only the projects that failed to delete for a retry', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Delete project' }));
   await vi.waitFor(() => expect(view.shown()).toBe(false));
   expect(deleteMany.mock.calls).toEqual([[['a', 'b']], [['b']]]);
+  expect(onDeleted.mock.calls).toEqual([[['a']], [['b']]]);
   expect(toast.success).toHaveBeenCalledOnce();
 });
 
@@ -124,7 +132,12 @@ it.each([
   ],
 ])('keeps every project for a retry when the delete %s', async (_, run) => {
   const deleteMany = vi.fn(run);
-  const view = open({ kind: 'delete', ids: ['a', 'b'] }, { deleteMany });
+  const onDeleted = vi.fn();
+  const view = open(
+    { kind: 'delete', ids: ['a', 'b'] },
+    { deleteMany },
+    onDeleted
+  );
 
   fireEvent.click(
     await screen.findByRole('button', { name: 'Delete 2 projects' })
@@ -138,4 +151,5 @@ it.each([
     screen.getByRole('button', { name: 'Delete 2 projects' })
   ).toBeTruthy();
   expect(toast.success).not.toHaveBeenCalled();
+  expect(onDeleted).not.toHaveBeenCalled();
 });

@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { ManagedDialogProps } from '@ui';
@@ -17,8 +18,14 @@ export type ProjectEntityAction =
   | { kind: 'share'; id: string }
   | { kind: 'delete'; ids: readonly string[] };
 
+export type ProjectEntityActionOptions = {
+  /** Called with the projects a delete removed, including a partial one. */
+  onDeleted?(ids: readonly string[]): void;
+};
+
 type ProjectEntityActionDialogProps = ManagedDialogProps & {
   action: ProjectEntityAction;
+  options?: ProjectEntityActionOptions;
 };
 
 /**
@@ -35,6 +42,7 @@ export function ProjectEntityActionDialog(
       <ProjectsProvider context={createProjectsContext()}>
         <ProjectEntityActionContent
           action={props.action}
+          options={props.options}
           onClose={() => props.onOpenChange(false)}
         />
       </ProjectsProvider>
@@ -44,6 +52,7 @@ export function ProjectEntityActionDialog(
 
 export function ProjectEntityActionContent(props: {
   action: ProjectEntityAction;
+  options?: ProjectEntityActionOptions;
   onClose(): void;
 }) {
   const commands = useProjectsContext().createCommands();
@@ -56,7 +65,7 @@ export function ProjectEntityActionContent(props: {
             onOpenChange={(open) => !open && props.onClose()}
             onRename={async (name) => {
               await commands.rename(action().id, name);
-              toast.success('Project renamed');
+              toast.success(t('entityActions.toastProjectRenamed'));
             }}
           />
         )}
@@ -74,6 +83,7 @@ export function ProjectEntityActionContent(props: {
           <DeleteProjects
             ids={action().ids}
             deleteMany={commands.deleteMany}
+            onDeleted={props.options?.onDeleted}
             onClose={props.onClose}
           />
         )}
@@ -86,6 +96,7 @@ export function ProjectEntityActionContent(props: {
 function DeleteProjects(props: {
   ids: readonly string[];
   deleteMany(ids: readonly string[]): Promise<string[]>;
+  onDeleted?(ids: readonly string[]): void;
   onClose(): void;
 }) {
   const [remaining, setRemaining] = createSignal(props.ids);
@@ -103,10 +114,12 @@ function DeleteProjects(props: {
     } finally {
       setPending(false);
     }
+    const deleted = ids.filter((id) => !failed.includes(id));
+    if (deleted.length > 0) props.onDeleted?.(deleted);
     if (failed.length === 0) {
       props.onClose();
       toast.success(
-        ids.length > 1 ? `Deleted ${ids.length} projects` : 'Project deleted'
+        t('entityActions.toastProjectsDeleted', { count: ids.length })
       );
       return;
     }

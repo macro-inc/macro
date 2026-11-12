@@ -15,8 +15,9 @@ import type { Client } from '@urql/core';
 import { onCleanup } from 'solid-js';
 
 /** Refresh live project details and collections after UI or agent-tool writes.
- * Without the normalized cache, shared lists that show projects as rows (Home,
- * Search) are plain Soup queries, so they are read again too. */
+ * Search is always a plain Soup query, and without the normalized cache so are
+ * the other shared lists that show projects as rows (Home), so those are read
+ * again too. */
 export async function refreshProjectQueries(
   client = getGraphqlSoupClient(),
   cache: QueryClient = queryClient,
@@ -28,7 +29,7 @@ export async function refreshProjectQueries(
     revalidateActivityQueries(client, null),
     !host || host.disabled
       ? cache.invalidateQueries({ queryKey: soupKeys._def })
-      : undefined,
+      : cache.invalidateQueries({ queryKey: soupKeys.search._def }),
   ]);
 }
 

@@ -657,7 +657,12 @@ export function createSoupEntityActions(
         id: 'delete',
         label: t('entityActions.delete'),
         onClick: () => {
-          openProjectEntityAction({ kind: 'delete', ids: projectIds });
+          // Like the other delete path, drop the selection once rows are
+          // gone so later bulk actions don't target deleted projects.
+          openProjectEntityAction(
+            { kind: 'delete', ids: projectIds },
+            { onDeleted: () => soup.selection.clear() }
+          );
         },
         destructive: true,
       });

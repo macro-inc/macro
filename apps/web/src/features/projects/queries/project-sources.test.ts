@@ -156,6 +156,8 @@ it.each([
     const cache = new QueryClient();
     const key = soupKeys.astItems({ body: 'home' } as never).queryKey;
     cache.setQueryData(key, { pages: [] });
+    const search = soupKeys.search({ body: 'launch' } as never).queryKey;
+    cache.setQueryData(search, { pages: [] });
     const { rename, dispose } = createRoot((dispose) => ({
       rename: createProjectSources(
         { update: async () => ok(undefined) } as never,
@@ -169,6 +171,7 @@ it.each([
     await rename('launch', 'Launch v2');
 
     expect(cache.getQueryState(key)?.isInvalidated).toBe(refetched);
+    expect(cache.getQueryState(search)?.isInvalidated).toBe(true);
     dispose();
   }
 );

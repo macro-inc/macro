@@ -201,15 +201,22 @@ describe('Open in new tab on a conversation', () => {
 const project = (id: string, ownerId: string) =>
   ({ type: 'initiative', id, name: `Project ${id}`, ownerId }) as EntityData;
 
+const clearSelection = vi.fn();
 const menuItems = (entities: EntityData[]) =>
   createSoupEntityActions()
-    .buildActionGroups({} as EntityActionListState, entities, {
-      viewContext: {
-        supportsMarkDone: false,
-        supportsOpenInNewSplit: true,
-        senderBucket: undefined,
-      },
-    })
+    .buildActionGroups(
+      {
+        selection: { clear: clearSelection },
+      } as unknown as EntityActionListState,
+      entities,
+      {
+        viewContext: {
+          supportsMarkDone: false,
+          supportsOpenInNewSplit: true,
+          senderBucket: undefined,
+        },
+      }
+    )
     .flatMap((group) => group.items);
 
 describe('Project rows', () => {
@@ -226,7 +233,7 @@ describe('Project rows', () => {
     expect(mocks.openProjectAction.mock.calls).toEqual([
       [{ kind: 'rename', id: 'a', name: 'Project a' }],
       [{ kind: 'share', id: 'a' }],
-      [{ kind: 'delete', ids: ['a'] }],
+      [{ kind: 'delete', ids: ['a'] }, { onDeleted: expect.any(Function) }],
     ]);
   });
 
@@ -244,10 +251,13 @@ describe('Project rows', () => {
     expect(items.map(({ id }) => id)).toEqual(['delete']);
     await items[0]?.onClick();
 
-    expect(mocks.openProjectAction).toHaveBeenCalledExactlyOnceWith({
-      kind: 'delete',
-      ids: ['a', 'b'],
-    });
+    expect(mocks.openProjectAction).toHaveBeenCalledExactlyOnceWith(
+      { kind: 'delete', ids: ['a', 'b'] },
+      { onDeleted: expect.any(Function) }
+    );
+    clearSelection.mockClear();
+    mocks.openProjectAction.mock.calls[0]?.[1]?.onDeleted(['a']);
+    expect(clearSelection).toHaveBeenCalledOnce();
   });
 
   it('offers no project actions while projects are off or loading', () => {

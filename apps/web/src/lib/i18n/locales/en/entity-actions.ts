@@ -306,6 +306,13 @@ export default {
   toastPrConvertToDraftFailed: 'Failed to convert pull request to a draft',
   toastPrClosed: 'Closed {{name}}',
   toastPrCloseFailed: 'Failed to close pull request',
+  toastProjectActionLoadFailed: 'Could not open this project action',
+  toastProjectRenamed: 'Project renamed',
+  toastProjectsDeleted: {
+    one: 'Project deleted',
+    other: 'Deleted {{count}} projects',
+  },
+
   // Markdown document layout.
   turnOnWideMode: 'Turn on wide mode',
   turnOffWideMode: 'Turn off wide mode',
