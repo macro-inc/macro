@@ -1,5 +1,9 @@
 # Lexical WASM view
 
+For opt-in main-commit observation, claim one pure-JS observation per programmatic factory entry, copy and release its actual generated native receipt before synchronous notification or output consumption, and preserve native/consume/after/drain errors over secondary observation failures. Never infer publication from flags or latest-published UI state. Unsupported profiles explicitly refuse observation without running the factory; cancelled/non-entered entries update only the pure handle after the existing drain. This requires the ordinary generated receipt API and the bound synchronous observer lifetime fence; compatibility has no fallback authority.
+
+Share canonical nonzero-u64 correlation numbering across the installed receiver guard and every Port for the same actual session; record valid guarded attempts after active/cleaning admission, mint only after materialization and clock callbacks, and never wrap exhausted IDs. Reject nonprimitive IDs before native delegation or completion-token advancement; retain native validation for invalid primitive strings.
+
 ## What it is
 
 Production browser rendering and input over document_session_wasm. The dev shim
@@ -90,6 +94,8 @@ Keep a published NodeSelection through every keydown, beforeinput and selectionc
 Assert direct child types when testing rich insertion into code, since nested blocks can preserve the same visible text.
 
 ## Checks
+
+- Prepare both test artifacts from a coherent native source/seal before package typechecks/tests; never use an incoherent held facade branch. After project build authorization, `just --justfile apps/web/justfile build-document-session-wasm build-document-session-compat-wasm` produces the canonical outputs; this recipe reference does not grant Cargo permission. The metadata-only compatibility test imports `wasm-compat`. Set `NATIVE_SESSION_GUARD_JS` and `NATIVE_SESSION_GUARD_WASM` to the ordinary output for guard fixtures. Verified paired artifacts may be copied into those same owned build outputs without changing tracked compatibility declarations.
 
 - Preserve the previous model selection when projecting non-range selections: clear only an owned DOM range after a non-null model selection, retaining readonly, nested-editor and captured-input selections.
 - Register actual external editor roots from their root-listener lifecycle through `view/editor-roots`, releasing the listener and current registration on disposal; keep stale cleanup from removing a newer owner.

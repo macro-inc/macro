@@ -18,6 +18,14 @@ export {
   EditorView,
   type ViewOptions,
 } from './view/editor-view';
+export {
+  createInputCommitObservation,
+  type InputCommitEvidence,
+  type InputCommitFailure,
+  type InputCommitObservation,
+  type InputCommitObservationState,
+  InputCommitUnavailableError,
+} from './view/input-commit-observation';
 export type {
   LatestPublishedObserver,
   LatestPublishedUnavailable,
@@ -36,6 +44,7 @@ export {
 export type {
   ConformancePort,
   EditorPort,
+  InputSettlement,
   NativeEnterPort,
   NativeEscapePort,
   ProgrammaticApplicationAdmissionOptions,

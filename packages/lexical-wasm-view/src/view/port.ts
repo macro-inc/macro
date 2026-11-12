@@ -9,6 +9,10 @@ import type {
   IViewEffectMsg,
 } from '@macro-inc/collaboration/session/abi.generated';
 import type { ViewCommandPriority } from './commands';
+import type {
+  InputCommitEvidence,
+  InputCommitObservation,
+} from './input-commit-observation';
 import type { NativeEnterScope } from './native-enter';
 import type { NativeCallbackFailure } from './native-enter-output';
 import type { EditorThemeClasses } from './registry';
@@ -19,13 +23,21 @@ export type ProgrammaticApplicationInput = Readonly<
   Pick<IEditorApplication, 'name' | 'json' | 'generation' | 'selection'>
 >;
 
-export interface ProgrammaticApplicationOptions {
-  readonly after: (handled: boolean) => void;
-}
+export type ProgrammaticApplicationOptions =
+  | {
+      readonly after: (handled: boolean) => void;
+      readonly mainCommit?: InputCommitObservation;
+    }
+  | {
+      readonly after?: (handled: boolean) => void;
+      readonly mainCommit: InputCommitObservation;
+    };
 
 /** Caller-owned validity checked in the authorized queued entry. */
 export interface ProgrammaticApplicationAdmissionOptions {
   readonly admit: () => boolean;
+  readonly after?: (handled: boolean) => void;
+  readonly mainCommit?: InputCommitObservation;
 }
 
 export interface NativeEnterPort {
@@ -67,7 +79,7 @@ export interface ViewSink {
   text(key: NodeKey): string | null;
 }
 /** Actual input completion, distinct from completed-but-unhandled and cancellation. */
-export type InputSettlement =
+export type InputSettlement = (
   | { readonly status: 'success'; readonly handled: boolean }
   | { readonly status: 'error'; readonly error: unknown }
   | {
@@ -77,7 +89,8 @@ export type InputSettlement =
         | 'closing'
         | 'session-access'
         | 'entry-admission';
-    };
+    }
+) & { readonly mainCommit?: InputCommitEvidence };
 /** Model boundary shared by production sessions and the development shim. */
 export interface EditorPort {
   readonly nativeEnter?: NativeEnterPort;

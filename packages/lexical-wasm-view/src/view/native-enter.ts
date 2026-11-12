@@ -6,6 +6,7 @@ import {
 } from '@macro-inc/collaboration/session/abi.generated';
 import type * as Native from '@macro-inc/collaboration/session/wasm';
 import type { ViewCommandPriority } from './commands';
+import { captureNativeInputCommit } from './input-commit-native';
 import {
   assertNativeSessionReceiverAdmission,
   installNativeSessionReceiverGuard,
@@ -32,6 +33,8 @@ export type NativeEnterModule = Pick<
       | 'viewCommandScopeEscape'
       | 'viewCommandScopeRegisterEscape'
       | 'viewCommandScopeUnregisterEscape'
+      | 'InputCommitReceipt'
+      | 'InputCommitKind'
     >
   >;
 export type NativeCommandKey = 'Enter' | 'Escape';
@@ -86,6 +89,8 @@ const moduleFunctions: readonly (keyof NativeEnterModule)[] = [
   'viewCommandScopeEscape',
   'viewCommandScopeRegisterEscape',
   'viewCommandScopeUnregisterEscape',
+  'InputCommitReceipt',
+  'InputCommitKind',
 ];
 
 /** Module-wide invocation state; output/lease consumption belongs to its owner. */
@@ -107,6 +112,7 @@ export class NativeEnterDispatcher {
   private teardowns: (() => void)[] = [];
   readonly guard;
   readonly supportsEscape: boolean;
+  private readonly inputCommit: ReturnType<typeof captureNativeInputCommit>;
 
   private readonly active = () =>
     this.scopes.length !== 0 || this.pureObservationDepth !== 0;
@@ -157,6 +163,7 @@ export class NativeEnterDispatcher {
       active: this.active,
       afterReturn: this.afterReturn,
     });
+    this.inputCommit = captureNativeInputCommit(native);
   }
 
   static forModule(native: NativeEnterModule): NativeEnterDispatcher {
@@ -244,6 +251,21 @@ export class NativeEnterDispatcher {
   /** Lifecycle metadata only; never an issued Rust scope or native authority. */
   pureInputCommitObserverActive(): boolean {
     return this.pureObservationDepth !== 0;
+  }
+
+  /** Pure bound-module lookup; these wrappers were captured after guard installation. */
+  inputCommitBinding(session: Native.EditorSession, expectedOwner: bigint) {
+    this.assertRootAdmission();
+    const owner = this.sessions.get(session);
+    if (
+      owner === undefined ||
+      owner !== expectedOwner ||
+      this.owners.get(expectedOwner) !== session
+    )
+      throw new Error(
+        'Input commit observation requires its actual session binding'
+      );
+    return this.inputCommit;
   }
 
   current(owner: bigint): NativeEnterScope | undefined {

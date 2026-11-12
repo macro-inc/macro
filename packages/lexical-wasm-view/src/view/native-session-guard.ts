@@ -1,3 +1,5 @@
+import { recordGuardedInputCommitCorrelation } from './input-commit-correlation';
+
 /** The actual generated constructor is supplied by its owning module binding. */
 export interface NativeSessionConstructor {
   readonly prototype: object;
@@ -97,6 +99,7 @@ export function installNativeSessionReceiverGuard(
     takeCleanupFailure: () => cleanupFailures.shift(),
   });
   const wrappers = new Map<Callable, Callable>();
+  const inputCommitReceivers = new WeakSet<Callable>();
   function wrap(original: Callable): Callable {
     const existing = wrappers.get(original);
     if (existing) return existing;
@@ -107,6 +110,8 @@ export function installNativeSessionReceiverGuard(
           throw new Error(
             'Native session receiver call during scoped callback or cleanup'
           );
+        if (inputCommitReceivers.has(original))
+          recordGuardedInputCommitCorrelation(this, args[3]);
         depth++;
         try {
           return Reflect.apply(original, this, args);
@@ -147,6 +152,8 @@ export function installNativeSessionReceiverGuard(
     if (callable(value)) {
       if (!original.configurable && !original.writable)
         throw new Error('Native session method cannot be guarded');
+      if (target === prototype && key === 'inputObserved')
+        inputCommitReceivers.add(value);
       replacement = { ...original, value: wrap(value) };
     } else if (callable(get) || callable(set)) {
       if (!original.configurable)

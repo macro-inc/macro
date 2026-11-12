@@ -22,12 +22,21 @@ import type {
 import { emptyInput } from '@macro-inc/collaboration/session/input';
 import { decodeOutput } from '@macro-inc/collaboration/session/output';
 import type { EditorSession } from '@macro-inc/collaboration/session/wasm';
+import { Telemetry } from '@macro-inc/observability';
 import { serializeClipboardDom } from './clipboard-dom';
 import {
   type CommentSelection,
   encodeCommentSelectionCursors,
   parseCommentSelection,
 } from './comment-selection';
+import { InputCommitCorrelationExhausted } from './input-commit-correlation';
+import {
+  claimInputCommitObservation,
+  type InputCommitEvidence,
+  type InputCommitFailure,
+  type InputCommitObservation,
+  InputCommitUnavailableError,
+} from './input-commit-observation';
 import type { NativeCommandKey } from './native-enter';
 import type { NativeEnterBinding } from './native-enter-output';
 import { assertNativeSessionReceiverAdmission } from './native-session-guard';
@@ -437,14 +446,17 @@ export class SessionPort implements EditorPort {
       throw new TypeError('Entry admission requires a callback');
     return this.settleInput(
       factory,
-      undefined,
+      options,
       () => this.effectiveAccess() === Access.Edit,
       admitEntry
     );
   }
   private settleInput(
     editor: EditorInputMsg | (() => ProgrammaticApplicationInput),
-    eventOrOptions?: KeyboardEvent | ProgrammaticApplicationOptions,
+    eventOrOptions?:
+      | KeyboardEvent
+      | ProgrammaticApplicationOptions
+      | ProgrammaticApplicationAdmissionOptions,
     admit?: () => boolean,
     admitEntry?: () => boolean
   ): Promise<InputSettlement> {
@@ -454,41 +466,172 @@ export class SessionPort implements EditorPort {
     if (admit && typeof editor !== 'function')
       throw new Error('Conditional application inputs require a factory');
     let after: ((handled: boolean) => void) | undefined;
+    let requested: InputCommitObservation | undefined;
     let event: KeyboardEvent | undefined;
     if (typeof editor === 'function') {
       if (eventOrOptions !== undefined) {
         if (
-          !('after' in eventOrOptions) ||
-          typeof eventOrOptions.after !== 'function'
+          !('after' in eventOrOptions) &&
+          !('mainCommit' in eventOrOptions) &&
+          !('admit' in eventOrOptions)
         )
           throw new Error(
             'Deferred application inputs cannot carry DOM events'
           );
-        after = eventOrOptions.after;
+        const capturedAfter =
+          'after' in eventOrOptions ? eventOrOptions.after : undefined;
+        if (capturedAfter !== undefined && typeof capturedAfter !== 'function')
+          throw new TypeError('Application completion requires a callback');
+        after = capturedAfter;
+        requested =
+          'mainCommit' in eventOrOptions
+            ? eventOrOptions.mainCommit
+            : undefined;
       }
     } else if (eventOrOptions !== undefined) {
-      if ('after' in eventOrOptions)
+      if (
+        'after' in eventOrOptions ||
+        'mainCommit' in eventOrOptions ||
+        'admit' in eventOrOptions
+      )
         throw new Error('Completion options require an application factory');
       event = eventOrOptions;
+    }
+    const observerCommands = this.commands;
+    if (requested !== undefined && !observerCommands)
+      throw new Error(
+        'Input commit observation requires its native lifetime fence'
+      );
+    const expectedOwner =
+      requested === undefined ? undefined : observerCommands?.owner;
+    if (requested !== undefined && typeof expectedOwner !== 'bigint')
+      throw new Error(
+        'Input commit observation requires its actual owner binding'
+      );
+    const observerSession =
+      requested === undefined ? undefined : this.executor.session;
+    const binding =
+      observerSession === undefined || expectedOwner === undefined
+        ? undefined
+        : observerCommands?.dispatcher.inputCommitBinding(
+            observerSession,
+            expectedOwner
+          );
+    // Shape/root failures above leave a fresh handle unbound. Claim atomically
+    // before enqueue, which can synchronously execute or reenter this Port.
+    const observation =
+      requested === undefined
+        ? undefined
+        : claimInputCommitObservation(requested);
+    let copied: InputCommitEvidence | undefined;
+    let receiverInvoked = false;
+    const secondary: InputCommitFailure[] = [];
+    const finishObservation = (evidence: InputCommitEvidence) => {
+      copied = evidence;
+      return observation?.finish(evidence);
+    };
+    if (observation && !binding) {
+      const unavailable = Object.freeze({
+        status: 'unavailable',
+        reason: 'unsupported-profile',
+        receiverNeverCalled: true,
+      } satisfies InputCommitEvidence);
+      // No entry/afterDrain exists here: do not run a listener that could defer
+      // teardown. This is explicit profile refusal, never a fallback input.
+      finishObservation(unavailable);
+      throw new InputCommitUnavailableError(unavailable);
     }
     const operation =
       typeof editor === 'function'
         ? {
             synchronous: false,
             call: () => {
+              if (observation) {
+                if (
+                  !observerSession ||
+                  expectedOwner === undefined ||
+                  this.executor.session !== observerSession ||
+                  observerCommands?.dispatcher.inputCommitBinding(
+                    observerSession,
+                    expectedOwner
+                  ) !== binding
+                )
+                  throw new Error(
+                    'Observed native receiver changed before entry'
+                  );
+              }
               const application = editor();
-              return this.prepareInput(
-                EditorInputMsg.fromEditorApplication({
-                  name: application.name,
-                  json: application.json,
-                  generation: application.generation,
-                  selection: application.selection,
-                  keyboard: false,
-                  key: '',
-                  mods: 0,
-                  code: 0,
-                })
-              ).call();
+              const message = EditorInputMsg.fromEditorApplication({
+                name: application.name,
+                json: application.json,
+                generation: application.generation,
+                selection: application.selection,
+                keyboard: false,
+                key: '',
+                mods: 0,
+                code: 0,
+              });
+              if (!observation) return this.prepareInput(message).call();
+              if (!binding)
+                throw new Error('Observed native binding disappeared');
+              const bytes = SessionInputMsg.encode({
+                ...emptyInput(2),
+                editor: message,
+              }).slice();
+              const now = this.executor.now();
+              const wall = Date.now();
+              const receiver = this.executor.session;
+              if (
+                receiver !== observerSession ||
+                expectedOwner === undefined ||
+                observerCommands?.dispatcher.inputCommitBinding(
+                  receiver,
+                  expectedOwner
+                ) !== binding
+              )
+                throw new Error(
+                  'Observed native receiver changed during materialization'
+                );
+              receiverInvoked = true;
+              let result: ReturnType<typeof binding.invoke>;
+              try {
+                // All user callbacks/getters are complete. The frozen binding
+                // mints immediately before calling its captured guarded input.
+                result = binding.invoke(receiver, bytes, now, wall);
+              } catch (error) {
+                if (error instanceof InputCommitCorrelationExhausted) {
+                  receiverInvoked = false;
+                  const unavailable = Object.freeze({
+                    status: 'unavailable',
+                    reason: 'correlation-exhausted',
+                    receiverNeverCalled: true,
+                  } satisfies InputCommitEvidence);
+                  finishObservation(unavailable);
+                  throw new InputCommitUnavailableError(unavailable);
+                }
+                throw error;
+              }
+              const notify = finishObservation(result.evidence);
+              secondary.push(...result.secondary);
+              if (result.released && notify) {
+                try {
+                  if (!observerCommands)
+                    throw new Error('Native observation fence disappeared');
+                  observerCommands.dispatcher.withPureInputCommitObserver(
+                    receiver,
+                    notify
+                  );
+                } catch (error) {
+                  secondary.push(Object.freeze({ error }));
+                }
+              }
+              if (result.nativeFailure !== undefined)
+                throw result.nativeFailure.error;
+              if (result.flags === undefined)
+                throw new Error(
+                  'Observed native input completed without flags'
+                );
+              return result.flags;
             },
           }
         : this.prepareInput(editor, event);
@@ -496,28 +639,100 @@ export class SessionPort implements EditorPort {
     const pending = new Promise<InputSettlement>((complete) => {
       resolve = complete;
     });
-    run.call(
-      this.executor,
-      operation.call,
-      (result) => {
-        resolve(
-          result.status === 'success'
-            ? {
-                status: 'success',
-                handled: Boolean(result.flags & FLAG_HANDLED),
+    try {
+      run.call(
+        this.executor,
+        operation.call,
+        (result) => {
+          if (observation?.pending()) {
+            if (receiverInvoked) {
+              finishObservation(
+                Object.freeze({
+                  status: 'unavailable',
+                  reason: 'receipt-read',
+                  receiverNeverCalled: false,
+                  failure: Object.freeze({
+                    error:
+                      result.status === 'error'
+                        ? result.error
+                        : new Error(
+                            'Observed receiver settled without copied evidence'
+                          ),
+                  }),
+                })
+              );
+            } else {
+              const cause: Extract<
+                InputCommitEvidence,
+                { status: 'not-entered' }
+              >['cause'] =
+                result.status === 'success'
+                  ? {
+                      status: 'error',
+                      error: new Error('Observed input did not enter native'),
+                    }
+                  : result.status === 'error'
+                    ? { status: 'error', error: result.error }
+                    : { status: 'cancelled', reason: result.reason };
+              finishObservation({
+                status: 'not-entered',
+                cause: Object.freeze(cause),
+              });
+            }
+          }
+          const settled: InputSettlement =
+            result.status === 'success'
+              ? {
+                  status: 'success',
+                  handled: Boolean(result.flags & FLAG_HANDLED),
+                }
+              : result;
+          if (observation) {
+            resolve({
+              ...(settled.status === 'success' && secondary[0] !== undefined
+                ? { status: 'error', error: secondary[0].error }
+                : settled),
+              mainCommit: copied,
+            });
+            for (const failure of secondary) {
+              try {
+                Telemetry.error(failure.error, {
+                  surface: 'editor.input-observation.secondary',
+                });
+              } catch {
+                /* Optional reporting cannot replace this entry's primary error. */
               }
-            : result
-        );
-      },
-      {
-        admit,
-        admitEntry,
-        synchronous: operation.synchronous,
-        after: after
-          ? (flags) => after(Boolean(flags & FLAG_HANDLED))
-          : undefined,
+            }
+          } else resolve(settled);
+        },
+        {
+          admit,
+          admitEntry,
+          synchronous: operation.synchronous,
+          after: after
+            ? (flags) => after(Boolean(flags & FLAG_HANDLED))
+            : undefined,
+        }
+      );
+    } catch (error) {
+      if (observation?.pending()) {
+        if (receiverInvoked)
+          finishObservation(
+            Object.freeze({
+              status: 'unavailable',
+              reason: 'receipt-read',
+              receiverNeverCalled: false,
+              failure: Object.freeze({ error }),
+            })
+          );
+        else
+          finishObservation({
+            status: 'not-entered',
+            cause: Object.freeze({ status: 'error', error }),
+          });
       }
-    );
+      throw error;
+    }
     return pending;
   }
   /** Current native authority, independent of local editability and initial config. */
