@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { For, type JSX } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { AgentSessionHeaderState } from '../component/agent-session-header';
-import { DesktopAgentSessionHeader } from './desktop-agent-session-header';
+import { AgentSessionHeader } from './agent-session-header';
 
 vi.mock('@components/app/split-layout/components/SplitHeader', () => ({
   SplitHeaderLeft: (props: { children: JSX.Element }) => <>{props.children}</>,
@@ -104,10 +104,7 @@ const headerButtons = () =>
 
 it('places viewers, the task, Changes, the external link, then Share', () => {
   render(() => (
-    <DesktopAgentSessionHeader
-      session={session}
-      header={header({ linked: true })}
-    />
+    <AgentSessionHeader session={session} header={header({ linked: true })} />
   ));
 
   expect(screen.getByRole('heading', { name: 'Fix the build' })).toBeTruthy();
@@ -128,10 +125,7 @@ it('places viewers, the task, Changes, the external link, then Share', () => {
 
 it('drops the external link for a session that has none', () => {
   render(() => (
-    <DesktopAgentSessionHeader
-      session={session}
-      header={header({ linked: false })}
-    />
+    <AgentSessionHeader session={session} header={header({ linked: false })} />
   ));
 
   expect(headerButtons()).toEqual(['Viewers', 'Task', 'Changes', 'Share']);

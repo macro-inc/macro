@@ -21,7 +21,7 @@ import { useAgentSession } from '../context/AgentSessionContext';
  * The agent session block's header on desktop: the session's identity, its
  * live viewers, task and pull request, Changes, its external link and Share.
  */
-export function DesktopAgentSessionHeader(props: {
+export function AgentSessionHeader(props: {
   session: AgentSessionResponse | undefined;
   header: AgentSessionHeaderState;
 }) {

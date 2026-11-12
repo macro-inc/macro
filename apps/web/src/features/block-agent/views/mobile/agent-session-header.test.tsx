@@ -3,8 +3,8 @@ import type { AgentSessionResponse } from '@service-agent-harness/generated/sche
 import { cleanup, render, screen, within } from '@solidjs/testing-library';
 import { For, type JSX } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
-import type { AgentSessionHeaderState } from '../component/agent-session-header';
-import { MobileAgentSessionHeader } from './mobile-agent-session-header';
+import type { AgentSessionHeaderState } from '../../component/agent-session-header';
+import { MobileAgentSessionHeader } from './agent-session-header';
 
 vi.mock('@components/app/mobile-header/mobile-header', () => {
   const MobileHeader = (props: {
@@ -44,13 +44,13 @@ vi.mock('@core/component/AI/component/ProviderIcon', () => ({
 vi.mock('@core/component/LiveIndicators', () => ({
   BlockLiveIndicators: () => <button>Viewers</button>,
 }));
-vi.mock('../component/AgentTaskChip', () => ({
+vi.mock('../../component/AgentTaskChip', () => ({
   AgentTaskChip: () => <button>Task</button>,
 }));
-vi.mock('../component/AgentPullRequestChip', () => ({
+vi.mock('../../component/AgentPullRequestChip', () => ({
   AgentPullRequestChip: () => <button>Pull request</button>,
 }));
-vi.mock('../context/AgentSessionContext', () => ({
+vi.mock('../../context/AgentSessionContext', () => ({
   useAgentSession: () => ({
     sessionId: () => 'session-1',
     metadata: () => undefined,

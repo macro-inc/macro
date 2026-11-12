@@ -38,8 +38,8 @@ import { AgentSessionProvider } from '../agent-session-provider';
 import { useAgentSession } from '../context/AgentSessionContext';
 import { parseAgentMessageTarget } from '../core/search-location';
 import { createAgentRouteTarget } from '../primitives/create-agent-route-target';
-import { DesktopAgentSessionHeader } from '../views/desktop-agent-session-header';
-import { MobileAgentSessionHeader } from '../views/mobile-agent-session-header';
+import { AgentSessionHeader } from '../views/agent-session-header';
+import { MobileAgentSessionHeader } from '../views/mobile/agent-session-header';
 import { AgentComposer } from './AgentComposer';
 import { AgentConnections } from './AgentConnections';
 import { AgentPreviewBanner } from './AgentPreviewBanner';
@@ -50,7 +50,7 @@ import { AgentSidePanelSections } from './sidepanel/AgentSidePanelSections';
 import { Transcript } from './Transcript';
 
 /** The session's header state, then the one device switch. */
-function AgentSessionHeader(props: {
+function AgentBlockHeader(props: {
   session: Accessor<AgentSessionResponse | undefined>;
   title: Accessor<string | undefined>;
 }) {
@@ -60,7 +60,7 @@ function AgentSessionHeader(props: {
     <Show
       when={isTouchDevice()}
       fallback={
-        <DesktopAgentSessionHeader session={props.session()} header={header} />
+        <AgentSessionHeader session={props.session()} header={header} />
       }
     >
       <MobileAgentSessionHeader session={props.session()} header={header} />
@@ -206,7 +206,7 @@ function AgentBlockContent(props: {
             persistentFloating={persistentFloating()}
           >
             <AgentSidePanelSections />
-            <AgentSessionHeader
+            <AgentBlockHeader
               session={session}
               title={() => metadata()?.title ?? undefined}
             />

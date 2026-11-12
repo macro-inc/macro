@@ -4,10 +4,10 @@ import { ProviderIcon } from '@core/component/AI/component/ProviderIcon';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import type { AgentSessionResponse } from '@service-agent-harness/generated/schemas';
 import { Show } from 'solid-js';
-import { AgentPullRequestChip } from '../component/AgentPullRequestChip';
-import { AgentTaskChip } from '../component/AgentTaskChip';
-import type { AgentSessionHeaderState } from '../component/agent-session-header';
-import { useAgentSession } from '../context/AgentSessionContext';
+import { AgentPullRequestChip } from '../../component/AgentPullRequestChip';
+import { AgentTaskChip } from '../../component/AgentTaskChip';
+import type { AgentSessionHeaderState } from '../../component/agent-session-header';
+import { useAgentSession } from '../../context/AgentSessionContext';
 
 /**
  * The agent session block's header on touch, where every session opens as
