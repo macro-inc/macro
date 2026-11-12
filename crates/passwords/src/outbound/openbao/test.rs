@@ -3,6 +3,8 @@ use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use std::{process::Command, sync::Mutex};
 use tracing::instrument::WithSubscriber;
 
+mod recovery;
+
 // This external protocol can finish after one adapter polling budget. Busy-only
 // reinvocation models its durable retry; each call already waits on namespace GET.
 async fn purge_namespace_with_ack(provider: &OpenBaoProvider, team: TeamId) -> Result<(), Error> {

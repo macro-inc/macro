@@ -251,9 +251,7 @@ pub(crate) fn bring_up(
     if !stage.is_dry_run() {
         stack::clear_state(instance)?;
     }
-    if let Some(job) = stage.job() {
-        job.bring_up(mode, plan);
-    }
+    stage.record_bring_up(mode, plan);
 
     // Before `prepare` (which resolves env and reads the OTLP port to decide
     // whether to wire `OTEL_EXPORTER_OTLP_ENDPOINT`), so a `--traces` run gets
@@ -1729,19 +1727,28 @@ fn wait_localstack(url: &str, compose_done: &std::sync::mpsc::Receiver<()>) -> R
 
 /// `cargo x build-services`.
 pub fn build_services_only() -> Result<()> {
-    let stage = Stage::from_env();
-    let target = arch::detect()?;
-    let binaries = build::resolve(
-        &stage,
-        target,
-        &build::BuildOptions {
-            no_build: false,
-            binaries_dir: None,
-            only: None,
-        },
-    )?;
-    stage.note(&format!("binaries at {}", binaries.host_dir().display()));
-    Ok(())
+    let (stage, telemetry) = telemetry::RunTelemetry::attach(
+        Stage::from_env(),
+        None,
+        telemetry::RunKind::BuildServices,
+        std::time::SystemTime::now(),
+    );
+    let result = (|| -> Result<()> {
+        let target = arch::detect()?;
+        let binaries = build::resolve(
+            &stage,
+            target,
+            &build::BuildOptions {
+                no_build: false,
+                binaries_dir: None,
+                only: None,
+            },
+        )?;
+        stage.note(&format!("binaries at {}", binaries.host_dir().display()));
+        Ok(())
+    })();
+    telemetry::RunTelemetry::close(telemetry, &result);
+    result
 }
 
 /// `cargo x runtime-image`.

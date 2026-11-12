@@ -79,8 +79,10 @@ Quick Access person lists are per-observer windows, never global item-cache rows
 Forward live queries from commands, mentions and property selectors; resolve CRM
 aliases only for the listed rows. In menus (Cmd+K, mentions, mobile name search)
 further pages of people and contact matches are listed below the earlier ones, up
-to a bound; property pickers keep a replaceable window with explicit paging. A
-window key names the page or growing list on screen, never a refresh of it. Reset
+to a bound; property pickers use explicit paging, and query-backed pages append
+to the visible options. Thread/generic pickers advance their browsed-email and
+server-search pages alongside Quick Access; explicit user rosters stay capped.
+A window key names the page or growing list on screen, never a refresh of it. Reset
 virtual focus/scroll only on window replacement, not label updates or refreshes.
 Menus hold the row the user moved to by identity (`createSelectionAnchor`) while
 results arrive; the highlight resets only when the query or category changes.
@@ -230,7 +232,9 @@ It exercises the real resize solver, scroll container, and Lexical layout primit
 
 Stacked splits have a backend-free browser regression over the real split
 router and tiled layout: splitting keeps the pane mounted, stacked gutters drag
-and nudge to the minimum height, and closing hands the column back:
+and nudge to the minimum height, closing hands the column back, and a document
+keeps its reading position as the splits beside it close (WebKit has no CSS
+scroll anchoring; see `keepScrollAnchorOnResize`):
 `bunx playwright test --config src/components/app/split-layout/browser-test/playwright.config.ts`.
 Keep panes in one keyed list positioned by the layout tree; nesting a
 `Resize.Zone` per split remounts a pane whenever its split changes.
@@ -246,6 +250,10 @@ retained detail is claimed by another pane or preview. Keep this check in view
 restoration and preserve entity deduplication and native dock stack restoration;
 `split-layout/tests/view-restoration.test.tsx` covers Chat and Tasks lists in
 either pane, keeping the other pane's detail and history independent.
+
+Links in database text and URL cells open without editing the cell, on desktop
+and touch, while the rest of the cell still edits:
+`bunx playwright test --config src/features/block-database/browser-test/playwright.config.ts links.browser.e2e.ts`.
 
 Database document-reference cells have a backend-free desktop/touch regression:
 `bunx playwright test --config src/features/block-database/browser-test/playwright.config.ts references.browser.e2e.ts`.
@@ -343,6 +351,12 @@ and Unicode contact names at the server's character limit:
 `bunx playwright test --config src/features/crm/browser-test/creation/playwright.config.ts`.
 Nested picker selection must keep its containing drawer open when the option
 unmounts during the tap; drawer dismissal checks the original event path.
+
+Collapsible document sections (the real heading-folds plugin and its gutter
+controls) have a backend-free desktop/tablet/phone regression: placement in
+the 24px phone gutter, hover and touch visibility, nested folds, reload, and
+Mod+Enter:
+`bunx playwright test --config src/lib/core/component/LexicalMarkdown/component/misc/browser-test/playwright.config.ts`.
 
 Composer typeahead menus choosing the side with room for their full list
 (`floatWithSelection`'s `fullHeight`), above a composer at the bottom of a
@@ -568,6 +582,15 @@ on desktop and mobile. Tool results render through
 `lib/core/component/AI/component/tool/Canvas.tsx`; edits arrive through live sync.
 The shared plain-text Lexical codec is `packages/lexical-core/canvas-text.ts`.
 
+## Group chats in the notifications inbox
+
+A group chat's message row shows the chat (its picture or the channel kind)
+and its name, with the sender in the body, never whoever wrote last as the
+row's author; unnamed group chats shorten to two names and a count
+(`features/channel/group-chat-name.ts`). The backend-free desktop/phone
+regression is
+`bunx playwright test --config src/features/notifications-inbox/browser-test/playwright.config.ts`.
+
 ## Message notification reads
 
 Gate automatic message notification reads on the actual message element
@@ -679,6 +702,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   completion after a code has been consumed. New address/back/send attempts must
   verify anew. Keep admission closed until cleanup succeeds; serialize login behind every logout wipe;
   `browser-test/archive/contact-edit.browser.e2e.ts` covers desktop and touch flows.
+  `browser-test/archive/selector-pagination.browser.e2e.ts` covers shared
+  task/contact/mixed/thread/generic source pagination on desktop and touch.
 - CRM creation accepts name-only companies and full contact email addresses.
   Company selection is explicit; a matching domain only suggests a company.
   Keep the standalone and pipeline forms consistent (see
@@ -827,7 +852,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Key mobile name-result history ordering and scroll anchors by the other participant for one-to-one DMs, preserving a person's position when their conversation is created; keep group DMs keyed by channel.
 - Keep mobile Search history lightweight: save query/category/mode, account-scoped item anchors, and at most 200 ordering IDs per mode; never save row objects or virtualizer caches. Restore from current sources with at most three additional pages, fall back when an anchor disappears, and stop restoration on user interaction or scope changes. Dock navigation starts a fresh search session; cached rows belong to the source, not history.
 - Release per-history-entry state when its router entry is replaced, pruned, or closed; retain only the latest per-view session snapshot and the latest split event outside reachable Back/Forward history.
-- Cmd+K, mobile name search, and the desktop Search page find routines by name from the Quick Access `routine` bucket (the scheduled-action list); keep them out of `entityPool`, which Home, Drive, and Tasks searches share, and use `routinePool` for workspace Search only.
+- Cmd+K, mobile name search, and the desktop Search page find routines by name from the Quick Access `routine` bucket (the scheduled-action list, which holds top-level routines only: sub-routines, which another routine's run created, are reached from their creator); keep them out of `entityPool`, which Home, Drive, and Tasks searches share, and use `routinePool` for workspace Search only.
 - Keep Quick Access cache availability reactive to the GraphQL rollout flag; it can arrive after the provider mounts, and email has no legacy source fallback.
 - Browser storage schema 12 enables covering-index search through a fresh versioned cache; native upgrades reset incompatible caches, including queued writes. Preserve the historical unversioned tuple and existing old-queue cleanup safeguards; see `../../crates/client/README.md#streaming-text-search`.
 - Contact backfill shares Soup's authenticated tab leadership and account/session ownership. Capture contact admission before each fetch, hydrate with `contactFence`, then verify cached IDs in 500-record keyset windows through the existing exact lookup. Checkpoint v2 completes only after verification; persist cursors after acknowledged writes and generation checks. Never delete from scan omissions or failed/foreign evidence, and never downgrade unsupported fencing. Keep the 15-minute coalescing floor and hourly name refresh. Deploy canonical-ID lookup fixes before client removal checks; see `../../docs/design/disk-backed-contacts.md`.
@@ -868,8 +893,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Store iOS OTA bundles and markers in `Application Support/<bundle-identifier>/bundle-updates`, excluded from backup; ignore legacy cache contents rather than migrating them. Other platforms keep the updater's existing cache location. See `tauri/src-tauri/README.md#ota-bundle-storage`.
 - Inline agent steps reuse the session code-execution query for live SDK operation
   names; completed step snapshots come from the shared fold of the tool receipt.
-  Session `ExecuteCode` activity uses the same Calling N tools peek window as
-  ordinary consecutive tool calls.
+  Session `ExecuteCode` calls join their segment's tool group as their SDK
+  operation rows only; never show the program or code-mode wording.
 - Compose multiselect filters with `Dropdown.MultiSelectItem` and the shared
   searchable filters; follow [multiselect dropdowns](../../docs/agent-guide/ui-conventions.md#multiselect-dropdowns)
   for checkbox, row, Only, keyboard, and touch behavior.

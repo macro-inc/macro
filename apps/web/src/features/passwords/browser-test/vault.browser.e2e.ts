@@ -336,6 +336,103 @@ test.describe('desktop keyboard', () => {
   });
 });
 
+/** True when the element's centre is not painted over by another element. */
+function uncovered(locator: Locator) {
+  return locator.evaluate((element) => {
+    const box = element.getBoundingClientRect();
+    const hit = document.elementFromPoint(
+      box.left + box.width / 2,
+      box.top + box.height / 2
+    );
+    return !!hit && (hit === element || element.contains(hit));
+  });
+}
+
+test.describe('phone device', () => {
+  test.use({
+    viewport: { width: 390, height: 844 },
+    hasTouch: true,
+    isMobile: true,
+    userAgent:
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+  });
+  test('a full-screen draft or item hides the list pills and New; Back brings them back', async ({
+    page,
+  }) => {
+    test.setTimeout(360_000);
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    await page.goto('/src/features/passwords/browser-test/vault.html', {
+      timeout: 240_000,
+    });
+    const pills = page
+      .locator('[data-view-shell-header]')
+      .filter({ visible: true });
+    const floatingNew = page
+      .getByRole('button', { name: 'New', exact: true })
+      .filter({ visible: true });
+    await expect(pills).toHaveCount(1);
+    await expect(floatingNew).toHaveCount(1);
+
+    await startNew(page, VIEWPORTS[1], 'Login');
+    await expect(pills).toHaveCount(0);
+    await expect(floatingNew).toHaveCount(0);
+    const name = page.getByLabel('Name', { exact: true });
+    expect(await uncovered(page.locator('label', { hasText: /^Name$/ }))).toBe(
+      true
+    );
+    await name.fill('Phone login');
+    await page.getByLabel('Username', { exact: true }).fill('phone-user');
+    await press(page, VIEWPORTS[1], 'Save');
+    await expect(
+      page.getByRole('button', { name: 'Edit', exact: true })
+    ).toBeVisible();
+    await expect(pills).toHaveCount(0);
+    await expect(floatingNew).toHaveCount(0);
+    expect(await uncovered(page.getByText('phone-user', { exact: true }))).toBe(
+      true
+    );
+
+    await press(page, VIEWPORTS[1], 'Back');
+    await expect(pills).toHaveCount(1);
+    await expect(floatingNew).toHaveCount(1);
+    await expect(
+      page.getByRole('button', { name: /Phone login/ })
+    ).toBeVisible();
+    expect(errors).toEqual([]);
+  });
+});
+
+test.describe('tablet device', () => {
+  test.use({
+    viewport: { width: 1024, height: 768 },
+    hasTouch: true,
+    isMobile: true,
+    userAgent:
+      'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+  });
+  test('an item beside the list keeps the list pills and New', async ({
+    page,
+  }) => {
+    test.setTimeout(360_000);
+    await page.goto('/src/features/passwords/browser-test/vault.html', {
+      timeout: 240_000,
+    });
+    await press(page, VIEWPORTS[2], /View-only login/);
+    await expect(
+      page.getByRole('heading', { name: 'View-only login' })
+    ).toBeVisible();
+    await expect(
+      page.locator('[data-view-shell-header]').filter({ visible: true })
+    ).toHaveCount(1);
+    await expect(
+      page
+        .getByRole('button', { name: 'New', exact: true })
+        .filter({ visible: true })
+    ).toHaveCount(1);
+  });
+});
+
 test.describe('desktop folders', () => {
   test('creates, nests, renames and deletes folders; items move to All items', async ({
     page,

@@ -640,6 +640,7 @@ dependencies = [
  "frecency",
  "fusionauth",
  "futures",
+ "genai_telemetry",
  "github",
  "github_pull_requests",
  "granola_sync",
@@ -1491,6 +1492,7 @@ dependencies = [
  "async-trait",
  "chrono",
  "futures",
+ "genai_telemetry",
  "lazy_static",
  "macro_env_var",
  "macro_user_id",
@@ -6503,6 +6505,7 @@ dependencies = [
  "axum-extra",
  "backoff",
  "bytes",
+ "genai_telemetry",
  "infer 0.19.0",
  "macro_authorization",
  "macro_env_var",
@@ -6759,7 +6762,6 @@ dependencies = [
  "opensearch_client",
  "opentelemetry",
  "opentelemetry_sdk",
- "password_events",
  "passwords",
  "projects",
  "properties",
@@ -7801,6 +7803,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-openai",
+ "genai_telemetry",
  "workspace-hack",
 ]
 
@@ -8802,6 +8805,7 @@ dependencies = [
  "opentelemetry",
  "opentelemetry_sdk",
  "serde_json",
+ "strum 0.27.2",
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",
@@ -10035,9 +10039,9 @@ checksum = "e712f64ec3850b98572bffac52e2c6f282b29fe6c5fa6d42334b30be438d95c1"
 
 [[package]]
 name = "hickory-net"
-version = "0.26.1"
+version = "0.26.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e2295ed2f9c31e471e1428a8f88a3f0e1f4b27c15049592138d1eebe9c35b183"
+checksum = "c480823ed7c2c5d0f09c41020cb6b7c28029ce60ec42dc942158dcf22f8e0a4d"
 dependencies = [
  "async-trait",
  "cfg-if",
@@ -10079,9 +10083,9 @@ dependencies = [
 
 [[package]]
 name = "hickory-resolver"
-version = "0.26.1"
+version = "0.26.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f0d58d28879ceecde6607729660c2667a081ccdc082e082675042793960f178c"
+checksum = "3f3da5255c95d5a716857d54b5b8f4e8d67c3484d3beaaaae2ce25063b3ba981"
 dependencies = [
  "cfg-if",
  "futures-util",
@@ -10738,6 +10742,7 @@ dependencies = [
  "base64 0.22.1",
  "bot_id",
  "entity_registry",
+ "genai_telemetry",
  "image",
  "lexical_client",
  "macro_authorization",
@@ -10919,6 +10924,7 @@ dependencies = [
  "indexmap 2.14.0",
  "lazy-regex",
  "macro_user_id",
+ "models_databases",
  "pipedream_mcp",
  "rand 0.9.4",
  "rootcause",
@@ -10927,6 +10933,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "uuid",
  "workspace-hack",
 ]
 
@@ -15069,20 +15076,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aab41826031698d6ffcd9cff78ef56ef998e39dc7e5067cdfebe373842d4723b"
 dependencies = [
  "phc",
-]
-
-[[package]]
-name = "password_events"
-version = "0.1.0"
-dependencies = [
- "macro_event_broker",
- "macro_event_topics",
- "macro_user_id",
- "serde",
- "serde_json",
- "utoipa",
- "uuid",
- "workspace-hack",
 ]
 
 [[package]]
@@ -20256,6 +20249,7 @@ dependencies = [
  "connection_gateway_client",
  "embedding",
  "futures",
+ "genai_telemetry",
  "lexical_client",
  "macro_aws_config",
  "macro_db_migrator",
@@ -22228,7 +22222,6 @@ dependencies = [
  "model-error-response",
  "model_owner",
  "model_user",
- "password_events",
  "rate_limit",
  "rdkafka",
  "reqwest 0.13.4",
@@ -23591,6 +23584,7 @@ name = "xtask_local_telemetry"
 version = "0.1.0"
 dependencies = [
  "flate2",
+ "libc",
  "reqwest 0.13.4",
  "serde",
  "serde_json",
