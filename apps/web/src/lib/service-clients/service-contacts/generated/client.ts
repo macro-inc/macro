@@ -4,7 +4,12 @@
  * contacts
  * OpenAPI spec version: 0.1.0
  */
-import type { AddContactRequest, GetContactsResponse } from './schemas';
+import type {
+  AddContactRequest,
+  GetContactsResponse,
+  SearchPeopleParams,
+  SearchPeopleResponse,
+} from './schemas';
 
 /**
  * @summary GET /contacts handler.
@@ -121,4 +126,77 @@ export const addContact = async (
     status: res.status,
     headers: res.headers,
   } as addContactResponse;
+};
+
+/**
+ * @summary GET /contacts/search handler: ranked search of the viewer's contacts and team.
+ */
+export type searchPeopleResponse200 = {
+  data: SearchPeopleResponse;
+  status: 200;
+};
+
+export type searchPeopleResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type searchPeopleResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type searchPeopleResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type searchPeopleResponseSuccess = searchPeopleResponse200 & {
+  headers: Headers;
+};
+export type searchPeopleResponseError = (
+  | searchPeopleResponse400
+  | searchPeopleResponse401
+  | searchPeopleResponse500
+) & {
+  headers: Headers;
+};
+
+export type searchPeopleResponse =
+  | searchPeopleResponseSuccess
+  | searchPeopleResponseError;
+
+export const getSearchPeopleUrl = (params: SearchPeopleParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/contacts/search?${stringifiedParams}`
+    : `/contacts/search`;
+};
+
+export const searchPeople = async (
+  params: SearchPeopleParams,
+  options?: RequestInit
+): Promise<searchPeopleResponse> => {
+  const res = await fetch(getSearchPeopleUrl(params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: searchPeopleResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as searchPeopleResponse;
 };

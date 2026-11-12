@@ -1,6 +1,5 @@
 use crate::domain::models::{CallToolResultExt, Error, MacroUserIdStr, McpServer, McpServerRecord};
-use crate::domain::ports::{McpConnector, McpServerStore};
-use crate::outbound::guarded_http::McpHttp;
+use crate::domain::ports::{McpConnector, McpServerHttp, McpServerStore};
 use ai_toolset::{
     AsyncToolCollection, RequestContext, RequestSchema, SearchableTool, ToolCallError, ToolInfo,
     ToolResult, ToolSet, ToolSetError,
@@ -177,7 +176,7 @@ impl McpToolSet {
     #[tracing::instrument(skip_all)]
     pub async fn new<S: McpServerStore>(
         records: &[McpServerRecord],
-        http: &McpHttp,
+        http: &impl McpServerHttp,
         server_store: Arc<S>,
     ) -> Self {
         let user_id = records.first().map(|r| r.user_id.clone());
@@ -445,7 +444,7 @@ impl<T> CombinedToolSet<T> {
     pub async fn new<S: McpServerStore>(
         static_tools: Arc<AsyncToolCollection<T>>,
         records: &[McpServerRecord],
-        http: &McpHttp,
+        http: &impl McpServerHttp,
         server_store: Arc<S>,
     ) -> Self {
         let mcp_tools = McpToolSet::new(records, http, server_store).await;

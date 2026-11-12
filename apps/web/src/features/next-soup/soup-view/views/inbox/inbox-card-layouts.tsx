@@ -1,5 +1,6 @@
 import { ListPropertyValue } from '@app/features/next-soup/soup-view/views/tasks/list-property-value';
 import { formatCallDuration } from '@block-call/utils';
+import { channelListName } from '@channel/group-chat-name';
 import { BotIcon } from '@channel/Message/BotIcon';
 import { MACRO_AI_BOT_ID, MACRO_AI_NAME } from '@channel/macroAi';
 import { EntityIcon, getEntityIconType } from '@core/component/EntityIcon';
@@ -38,6 +39,7 @@ import ClockIcon from '@icon/system/regular/clock-clockwise.svg?component-solid'
 import FilesIcon from '@icon/system/regular/files.svg';
 import GitMergeIcon from '@icon/system/regular/git-merge.svg';
 import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
+import HardDrivesIcon from '@icon/system/regular/hard-drives.svg?component-solid';
 import PaperclipIcon from '@icon/system/regular/paperclip.svg?component-solid';
 import PhoneIcon from '@icon/system/regular/phone.svg?component-solid';
 import QuestionIcon from '@icon/system/regular/question.svg?component-solid';
@@ -272,6 +274,9 @@ const tagBubbleIcon = (tag: NotificationTag) =>
     .with('routine_run_finished', () => () => (
       <ClockIcon class={AVATAR_GLYPH_CLASS} />
     ))
+    .with('agent_sign_in_expiry', () => () => (
+      <HardDrivesIcon class={AVATAR_GLYPH_CLASS} />
+    ))
     .with('reminder', () => () => <BellSimpleIcon class={AVATAR_GLYPH_CLASS} />)
     .with('calendar_event_reminder', () => () => (
       <CalendarBlankIcon class={AVATAR_GLYPH_CLASS} />
@@ -456,7 +461,8 @@ const channelLocation = (entity: EntityData): string | undefined => {
     return undefined;
   }
   if (entity.channelType === 'direct_message') return undefined;
-  return entity.name.startsWith('#') ? entity.name.slice(1) : entity.name;
+  const name = entity.name.startsWith('#') ? entity.name.slice(1) : entity.name;
+  return channelListName({ name, channelType: entity.channelType });
 };
 
 const entityLocation = (entity: EntityData): string | undefined => {

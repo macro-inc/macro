@@ -1025,6 +1025,12 @@ bottom action drawer, without `Open in new split` and with each Status and
 Priority choice as its own row. Use disposable projects: these actions change
 hosted data.
 
+Project rows in shared lists (Home's Projects filter, Search) use the shared
+row menu: `Open in new split`, `Copy Link`, `Copy ID`, and `Share`, plus
+`Rename` and `Delete` on projects you own. These rows carry no access level,
+so an editor who doesn't own the project gets neither; several owned projects
+offer only `Delete`. The dialogs are the Projects list's own.
+
 `New project` and the global Create menu's `Project` action (C, then P) open
 the same native composer host and layout as task creation,
 with a project name, a Markdown description (`Add description...`), and the
@@ -1157,7 +1163,8 @@ disabled. The section tabs
 use the same control as Channels. Editors can choose `Add existing tasks` beside
 `New task`; both actions use bordered buttons with a background. `Add existing
 tasks` opens an anchored task-selector dropdown: search, select several, and
-confirm `Add N tasks`. Escape or Cancel dismisses without assigning tasks. Tasks
+confirm `Add N tasks`. Next options/PageDown appends later loaded task pages to
+the visible options. Escape or Cancel dismisses without assigning tasks. Tasks
 already in this project are excluded. Adding a task moves it from its previous
 project. A partial failure keeps only
 failed tasks selected for retry, and a request failure preserves the selection.
@@ -1242,9 +1249,10 @@ GitHub instead.
 Assignees lists and searches current team members and available agents, keeping
 each surface's existing search placeholder, styling, and selected-first ordering
 when opening the picker. Rows stay in place while selecting or deselecting.
-Existing selected outsiders remain visible and removable,
-including references absent from contacts. The picker has no contact discovery;
-a removed outsider cannot be added again unless they join the team.
+Initially selected outsiders remain visible and removable, including references
+absent from contacts. They stay searchable for re-adding during that editing
+session without contact discovery. Once the editor closes without them, they
+cannot be added again unless they join the team.
 
 The same scope applies to task/project creation and editing, bulk Set assignee,
 and desktop/mobile Assignee filters. Existing **Me** and **Unassigned** choices

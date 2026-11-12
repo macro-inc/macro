@@ -114,6 +114,14 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
             ),
             config.sent_undo_delay_secs,
         )
+        // Lets `from` name a verified send-as alias of the selected inbox.
+        .with_sender_provider(email::outbound::GmailSenderProvider::new(
+            gmail_client.as_ref().clone(),
+            email::outbound::GmailTokenProviderImpl::lazy(
+                redis_client.inner.clone(),
+                Arc::new(auth_service_client.clone()),
+            ),
+        ))
         .with_macro_event_broker(macro_event_broker.clone()),
     );
     let entity_access_service = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
