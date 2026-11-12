@@ -18,6 +18,11 @@ import { NOOP_SPAN, Telemetry } from '@macro-inc/observability';
 import { createRoot } from 'solid-js';
 import { afterAll, afterEach, beforeAll, expect, test, vi } from 'vitest';
 import type { Gif } from '../../plugins/gif';
+import { createInputCommitObservation } from '@macro-inc/lexical-wasm-view';
+import {
+  dispatchApplicationCommand,
+  dispatchApplicationCommandSettledIfSessionEdit,
+} from '../../plugins/group-b/command';
 import { createNativeGifContext } from './native-gif';
 
 const previousLocks = Object.getOwnPropertyDescriptor(navigator, 'locks');
@@ -42,9 +47,24 @@ afterAll(() => {
 
 /** Everything a test created, torn down even when its assertions fail. */
 const cleanups: Array<() => unknown> = [];
+/** Run every cleanup independently (reverse order); rethrow the first failure after all ran. */
+async function drainCleanups(list: Array<() => unknown>) {
+  let first: { error: unknown } | undefined;
+  for (const cleanup of list.splice(0).reverse()) {
+    try {
+      await cleanup();
+    } catch (error) {
+      first ??= { error };
+    }
+  }
+  if (first) throw first.error;
+}
 afterEach(async () => {
-  for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
-  vi.restoreAllMocks();
+  try {
+    await drainCleanups(cleanups);
+  } finally {
+    vi.restoreAllMocks();
+  }
 });
 function owned<Element extends HTMLElement>(element: Element) {
   document.body.append(element);
@@ -411,13 +431,14 @@ test('a captured caret detached while the insert is queued inserts nothing', asy
     runtime,
     () => {
       presentAtEnqueue =
-        captured !== undefined && runtime.view.node(captured) !== undefined;
+        captured !== undefined && runtime.view.node(captured) !== null;
       return gif.host.commit(insertion, GIF, FILE_ID, vi.fn());
     },
     { before: () => runtime.port.setState(REPLACED) }
   );
   await expect(pending).resolves.toBe(false);
   expect(presentAtEnqueue).toBe(true);
+  expect(captured !== undefined && runtime.view.node(captured)).toBeNull();
   expect(imageIndex(runtime)).toBe(-1);
 });
 
@@ -509,4 +530,223 @@ test('focus leaving the root for the panel does not propagate; cleanup cancels t
     new FocusEvent('focusout', { bubbles: true, relatedTarget: input })
   );
   expect(outer).toHaveBeenCalledTimes(2);
+});
+
+const cell = (text: string) => ({
+  type: 'tablecell',
+  version: 1,
+  headerState: 0,
+  colSpan: 1,
+  rowSpan: 1,
+  children: [
+    {
+      type: 'paragraph',
+      version: 1,
+      children: [{ type: 'text', version: 1, text }],
+    },
+  ],
+});
+const TABLE = JSON.stringify({
+  root: {
+    type: 'root',
+    version: 1,
+    children: [
+      {
+        type: 'table',
+        version: 1,
+        children: [
+          { type: 'tablerow', version: 1, children: [cell('a1'), cell('b1')] },
+          { type: 'tablerow', version: 1, children: [cell('a2'), cell('b2')] },
+        ],
+      },
+      {
+        type: 'paragraph',
+        version: 1,
+        children: [{ type: 'text', version: 1, text: 'after' }],
+      },
+    ],
+  },
+});
+function tableSelection(runtime: ReturnType<typeof mount>) {
+  runtime.port.setState(TABLE);
+  const nodes = [...runtime.view.mirror.values()];
+  const table = nodes.find((node) => node.type === 'table');
+  const cells = nodes.filter((node) => node.type === 'tablecell');
+  if (!table || cells.length !== 4) throw new Error('Missing actual table');
+  const [anchor, , , focus] = cells;
+  if (!anchor || !focus) throw new Error('Missing actual cells');
+  runtime.port.selectionFromView({
+    kind: 'table',
+    table: table.key,
+    anchorCell: anchor.key,
+    focusCell: focus.key,
+  });
+  return { table, anchor, focus };
+}
+const images = (runtime: ReturnType<typeof mount>) =>
+  [...runtime.view.mirror.values()].filter((node) => node.type === 'image');
+
+test('healthy table selection: admitted and handled, but attaches no image, as Source', async () => {
+  // Source $insertNodesAndSplitList returns for any non-range selection
+  // (LexicalMarkdown/utils.ts:1027-1029) while its GIF commit still reports
+  // inserted: the known shared no-attach retention (t1tm ruling).
+  const runtime = mount();
+  const gif = bound(runtime);
+  tableSelection(runtime);
+  const before = runtime.view.query.serializedState();
+  const insertion = prepared(gif);
+  expect(insertion.target?.selection.kind).toBe('table');
+  expect(gif.host.isCurrent(insertion)).toBe(true);
+  const onInserted = vi.fn();
+  await expect(
+    gif.host.commit(insertion, GIF, FILE_ID, onInserted)
+  ).resolves.toBe(true);
+  expect(onInserted).toHaveBeenCalledTimes(1);
+  expect(images(runtime)).toHaveLength(0);
+  expect(runtime.view.query.serializedState()).toBe(before);
+});
+
+test('table focus cell deleted while the insert is queued (table and anchor remain): refused', async () => {
+  const runtime = mount();
+  const gif = bound(runtime);
+  const { table, anchor, focus } = tableSelection(runtime);
+  const insertion = prepared(gif);
+  const onInserted = vi.fn();
+  const pending = queued(
+    runtime,
+    () => gif.host.commit(insertion, GIF, FILE_ID, onInserted),
+    {
+      before: () => {
+        // Real native inputs queued ahead of the insert: a caret in the focus
+        // cell (row deletion follows the live selection), then delete that row.
+        const text = [...runtime.view.mirror.values()].find(
+          (node) =>
+            node.kind === 'text' &&
+            node.parent !== null &&
+            runtime.view.node(node.parent)?.parent === focus.key
+        );
+        if (!text) throw new Error('Missing actual focus-cell text');
+        runtime.port.selectionFromView({
+          kind: 'range',
+          anchor: { key: text.key, offset: 0, type: 'text' },
+          focus: { key: text.key, offset: 0, type: 'text' },
+        });
+        dispatchApplicationCommand(runtime.view, 'group-b.table', {
+          action: 'delete',
+          cell: focus.key,
+          axis: 'row',
+        });
+      },
+    }
+  );
+  await expect(pending).resolves.toBe(false);
+  const rest = {
+    table: runtime.view.node(table.key) !== null,
+    anchor: runtime.view.node(anchor.key) !== null,
+    focus: runtime.view.node(focus.key) !== null,
+  };
+  expect(rest).toEqual({ table: true, anchor: true, focus: false });
+  expect(onInserted).not.toHaveBeenCalled();
+  expect(images(runtime)).toHaveLength(0);
+});
+
+for (const [label, cause] of [
+  ['undefined', undefined],
+  ['null', null],
+  ['an opaque object', { opaque: true }],
+] as const) {
+  test(`onInserted throwing ${label} still resolves true, keeps the file, next input healthy`, async () => {
+    const runtime = mount();
+    const gif = bound(runtime);
+    vi.spyOn(Telemetry, 'error').mockImplementation(() => {});
+    runtime.caret(0, 5);
+    await expect(
+      gif.host.commit(prepared(gif), GIF, FILE_ID, () => {
+        throw cause;
+      })
+    ).resolves.toBe(true);
+    expect(images(runtime).map((node) => node.props().id)).toEqual([FILE_ID]);
+    const next = '00000000-0000-4000-8000-000000000043';
+    runtime.caret(0, 5);
+    await expect(
+      gif.host.commit(prepared(gif), GIF, next, vi.fn())
+    ).resolves.toBe(true);
+    expect(images(runtime).map((node) => node.props().id)).toContain(next);
+  });
+}
+
+test('a throwing Telemetry reporter inside the onInserted fault still resolves true', async () => {
+  const runtime = mount();
+  const gif = bound(runtime);
+  vi.spyOn(Telemetry, 'error').mockImplementation(() => {
+    throw new Error('reporter failed');
+  });
+  runtime.caret(0, 5);
+  await expect(
+    gif.host.commit(prepared(gif), GIF, FILE_ID, () => {
+      throw new Error('picker callback failed');
+    })
+  ).resolves.toBe(true);
+  expect(images(runtime).map((node) => node.props().id)).toEqual([FILE_ID]);
+});
+
+test('cleanup drain runs every step after a failure and rethrows the first', async () => {
+  const ran: string[] = [];
+  const first = new Error('first cleanup failed');
+  const list: Array<() => unknown> = [
+    () => ran.push('a'),
+    () => {
+      ran.push('b');
+      throw new Error('second failure');
+    },
+    () => {
+      ran.push('c');
+      throw first;
+    },
+    () => ran.push('d'),
+  ];
+  await expect(drainCleanups(list)).rejects.toBe(first);
+  expect(ran).toEqual(['d', 'c', 'b', 'a']);
+  expect(list).toEqual([]);
+});
+
+test('another input inserting the SAME file id, queued after ours: both published; the delta cannot attribute per input', async () => {
+  const runtime = mount();
+  const gif = bound(runtime);
+  runtime.caret(0, 5);
+  const insertion = prepared(gif);
+  const other = createInputCommitObservation();
+  let otherSettled: Promise<unknown> | undefined;
+  const pending = queued(
+    runtime,
+    () => gif.host.commit(insertion, GIF, FILE_ID, vi.fn()),
+    {
+      after: () => {
+        otherSettled = dispatchApplicationCommandSettledIfSessionEdit(
+          runtime.view,
+          'group-b.media',
+          () => ({
+            action: 'insert',
+            kind: 'image',
+            media: {
+              srcType: 'sfs',
+              id: FILE_ID,
+              url: staticFileIdEndpoint(FILE_ID),
+            },
+          }),
+          { mainCommit: other }
+        );
+      },
+    }
+  );
+  await expect(pending).resolves.toBe(true);
+  await otherSettled;
+  const otherEvidence = other.read();
+  // Reported as observed: the other input's own main commit, and two images
+  // with this file id. The host's reference delta alone does not prove which
+  // input owns which image; ownership here also rests on published && mainHandled.
+  expect(otherEvidence.status).toBe('published');
+  expect(
+    images(runtime).filter((node) => node.props().id === FILE_ID)
+  ).toHaveLength(2);
 });

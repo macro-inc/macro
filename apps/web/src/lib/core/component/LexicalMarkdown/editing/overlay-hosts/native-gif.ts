@@ -42,7 +42,11 @@ function isDetached(view: EditorView, selection: ViewSelection) {
   if (selection.kind === 'node')
     return selection.keys.some((key) => !view.node(key));
   if (selection.kind === 'table')
-    return !view.node(selection.table) || !view.node(selection.anchorCell);
+    return (
+      !view.node(selection.table) ||
+      !view.node(selection.anchorCell) ||
+      !view.node(selection.focusCell)
+    );
   return false;
 }
 
@@ -207,7 +211,12 @@ export function createNativeGifContext(): {
         try {
           onInserted();
         } catch (error) {
-          Telemetry.error(error, { source: 'native-gif-on-inserted' });
+          // A failing reporter must not turn a published, owned commit into a rejection.
+          try {
+            Telemetry.error(error, { source: 'native-gif-on-inserted' });
+          } catch {
+            /* the upload stays owned either way */
+          }
         }
         return true;
       }
