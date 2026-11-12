@@ -1,5 +1,5 @@
 use super::*;
-async fn create_root(pool: &PgPool, call_id: Uuid, channel_id: Uuid) -> anyhow::Result<()> {
+async fn create_root(pool: &Pool<Postgres>, call_id: Uuid, channel_id: Uuid) -> anyhow::Result<()> {
     sqlx::query!(
         "INSERT INTO comms_messages (id, parent_entity_type, parent_entity_id, sender_id, content, kind) VALUES ($1, 'channel', $2, $3, 'Call', 'call_root')",
         call_id,
