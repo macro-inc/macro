@@ -132,8 +132,12 @@ pub trait GroupRepository: Send + Sync {
         groups: &[String],
     ) -> ExternalChatResult<Vec<VisibleAdoption>>;
     /// Latest metadata for a chat's group from any account consenting to it,
-    /// with names of people who wrote in it.
-    async fn chat_roster(&self, chat: &ChatRef) -> ExternalChatResult<Option<GroupInfo>>;
+    /// with names of people who wrote in it and the pictures the chat
+    /// owner's account sees.
+    async fn chat_roster(
+        &self,
+        chat: &ChatRef,
+    ) -> ExternalChatResult<Option<super::people::ChatRoster>>;
     /// The account's own rosters of these groups, by group JID.
     async fn account_rosters(
         &self,
@@ -146,6 +150,9 @@ pub trait GroupRepository: Send + Sync {
         &self,
         chats: &[ChatRef],
     ) -> ExternalChatResult<Vec<Option<CommunityReference>>>;
+    /// Each chat's picture as its owner's account sees it, in order: the
+    /// group's, or the direct chat's person's under any of their JIDs.
+    async fn pictures(&self, chats: &[ChatRef]) -> ExternalChatResult<Vec<Option<Uuid>>>;
     /// Names for WhatsApp ids and stored people in a chat
     /// ([`super::people::ChatNames`]).
     async fn people(

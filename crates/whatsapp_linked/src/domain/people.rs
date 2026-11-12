@@ -1,6 +1,7 @@
 //! What WhatsApp people are called in a chat: the chat owner's own name for
 //! them (their address book, as the owner's chat list holds it), else their
-//! WhatsApp name, else their phone number.
+//! WhatsApp name, else their phone number. Pictures are the ones the chat
+//! owner's account can see.
 
 use super::{
     jid::phone_number,
@@ -27,18 +28,34 @@ pub struct SeenPerson {
     pub jids: Vec<String>,
 }
 
-/// The names a chat's people go by.
+/// The names and pictures a chat's people go by.
 #[derive(Debug)]
 pub struct ChatNames {
     /// The owner's chat-list names, by JID.
     contacts: HashMap<String, String>,
+    /// The profile pictures the owner's account has stored, by JID.
+    pictures: HashMap<String, Uuid>,
     seen: Vec<SeenPerson>,
 }
 
 impl ChatNames {
-    /// From the owner's chat-list names and the people seen in the chat.
-    pub fn new(contacts: HashMap<String, String>, seen: Vec<SeenPerson>) -> Self {
-        Self { contacts, seen }
+    /// From the owner's chat-list names and pictures and the people seen in
+    /// the chat.
+    pub fn new(
+        contacts: HashMap<String, String>,
+        pictures: HashMap<String, Uuid>,
+        seen: Vec<SeenPerson>,
+    ) -> Self {
+        Self {
+            contacts,
+            pictures,
+            seen,
+        }
+    }
+
+    /// The owner's stored picture of someone with these JIDs.
+    fn picture(&self, jids: &[&str]) -> Option<Uuid> {
+        jids.iter().find_map(|jid| self.pictures.get(*jid).copied())
     }
 
     /// The seen person behind any of `jids`.
@@ -91,13 +108,15 @@ impl ChatNames {
             let Some(name) = self.name(&jids, person.whatsapp_name.as_deref()) else {
                 continue;
             };
-            people.name_person(person.person_id, name.clone());
+            let picture = self.picture(&jids);
+            people.name_person(person.person_id, name.clone(), picture);
             for jid in jids {
                 people.learn(
                     jid,
                     ExternalChatPersonRef {
                         name: name.clone(),
                         user_id: person.user_id.clone(),
+                        picture_file_id: picture,
                     },
                 );
             }
@@ -107,12 +126,14 @@ impl ChatNames {
             let Some(name) = self.name(&jids, whatsapp_name) else {
                 continue;
             };
+            let picture = self.picture(&jids);
             for jid in jids {
                 people.learn(
                     jid,
                     ExternalChatPersonRef {
                         name: name.clone(),
                         user_id: seen.and_then(|person| person.user_id.clone()),
+                        picture_file_id: picture,
                     },
                 );
             }
@@ -120,12 +141,37 @@ impl ChatNames {
         people
     }
 
-    /// Names every member of `roster` that has a name.
-    pub fn name_members(&self, roster: &mut GroupInfo) {
+    /// Names every member of `roster` that has a name, with the pictures of
+    /// those that have one, by their roster JID.
+    pub fn name_members(&self, mut roster: GroupInfo) -> ChatRoster {
+        let mut pictures = HashMap::new();
         for participant in &mut roster.participants {
             let (jids, whatsapp_name, _) = self.member(&participant.identity);
             let name = self.name(&jids, whatsapp_name);
+            if let Some(picture) = self.picture(&jids) {
+                pictures.insert(participant.identity.jid.clone(), picture);
+            }
             participant.identity.display_name = name;
         }
+        ChatRoster {
+            info: roster,
+            pictures,
+        }
+    }
+}
+
+/// A chat's roster with its members named.
+#[derive(Debug, Clone)]
+pub struct ChatRoster {
+    /// The roster; each member's display name is what to call them.
+    pub info: GroupInfo,
+    /// Members' pictures as the owner's account sees them, by roster JID.
+    pub pictures: HashMap<String, Uuid>,
+}
+
+impl ChatRoster {
+    /// The picture of the member with this roster JID.
+    pub fn picture(&self, jid: &str) -> Option<Uuid> {
+        self.pictures.get(jid).copied()
     }
 }

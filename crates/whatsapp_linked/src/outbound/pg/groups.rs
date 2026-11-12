@@ -1,7 +1,7 @@
 //! Group metadata observed by accounts, and membership reconciliation.
 
 use super::*;
-use crate::domain::people::{ChatNames, SeenPerson};
+use crate::domain::people::{ChatNames, ChatRoster, SeenPerson};
 use crate::domain::ports::{GroupRepository, StoredChat, VisibleAdoption};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
@@ -406,7 +406,21 @@ impl PgWhatsAppRepository {
         .into_iter()
         .map(|row| (row.chat_jid, row.name))
         .collect();
-        Ok(ChatNames::new(contacts, seen))
+        let pictures = sqlx::query!(
+            r#"SELECT p.jid, p.static_file_id AS "static_file_id!" FROM whatsapp_profile_picture p
+            JOIN whatsapp_linked_account o ON o.id = p.account_id
+            JOIN external_chat g ON g.user_id = o.user_id
+            WHERE g.id = $1 AND p.state = 'ready' AND p.static_file_id IS NOT NULL AND p.jid = ANY($2)"#,
+            chat.id,
+            &named
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(failure)?
+        .into_iter()
+        .map(|row| (row.jid, row.static_file_id))
+        .collect();
+        Ok(ChatNames::new(contacts, pictures, seen))
     }
 }
 
@@ -488,7 +502,7 @@ impl GroupRepository for PgWhatsAppRepository {
         .map_err(failure)
     }
 
-    async fn chat_roster(&self, chat: &ChatRef) -> ExternalChatResult<Option<GroupInfo>> {
+    async fn chat_roster(&self, chat: &ChatRef) -> ExternalChatResult<Option<ChatRoster>> {
         let roster = sqlx::query_scalar!(
             r#"SELECT r.metadata FROM whatsapp_roster r
             JOIN whatsapp_chat_membership m ON m.account_id = r.account_id
@@ -502,7 +516,7 @@ impl GroupRepository for PgWhatsAppRepository {
         .map_err(failure)?
         .map(decode::<GroupInfo>)
         .transpose()?;
-        let Some(mut roster) = roster else {
+        let Some(roster) = roster else {
             return Ok(None);
         };
         // WhatsApp's group metadata has no names.
@@ -517,10 +531,11 @@ impl GroupRepository for PgWhatsAppRepository {
             })
             .flatten()
             .collect();
-        self.chat_names(chat, &jids, &[])
-            .await?
-            .name_members(&mut roster);
-        Ok(Some(roster))
+        Ok(Some(
+            self.chat_names(chat, &jids, &[])
+                .await?
+                .name_members(roster),
+        ))
     }
 
     async fn account_rosters(
@@ -573,6 +588,36 @@ impl GroupRepository for PgWhatsAppRepository {
                     row.community_name.as_deref(),
                     row.community_announcements.unwrap_or(false),
                 ))
+            })
+            .collect())
+    }
+
+    async fn pictures(&self, chats: &[ChatRef]) -> ExternalChatResult<Vec<Option<Uuid>>> {
+        let ids: Vec<Uuid> = chats.iter().map(|chat| chat.id).collect();
+        // A direct chat's person may be stored under their other JID.
+        let rows = sqlx::query!(
+            r#"SELECT g.id AS "id!", picture.static_file_id AS "static_file_id?"
+            FROM external_chat g
+            JOIN whatsapp_linked_account o ON o.user_id = g.user_id
+            JOIN LATERAL (SELECT p.static_file_id FROM whatsapp_profile_picture p
+              WHERE p.account_id = o.id AND p.state = 'ready' AND p.static_file_id IS NOT NULL
+                AND (p.jid = g.remote_id OR p.jid IN (
+                  SELECT other.jid FROM whatsapp_identity_alias remote
+                  JOIN whatsapp_identity_alias other ON other.chat_id = remote.chat_id AND other.person_id = remote.person_id
+                  WHERE remote.chat_id = g.id AND remote.jid = g.remote_id))
+              ORDER BY p.jid = g.remote_id DESC LIMIT 1) picture ON true
+            WHERE g.id = ANY($1) AND g.provider = 'whatsapp'"#,
+            &ids
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(failure)?;
+        Ok(chats
+            .iter()
+            .map(|chat| {
+                rows.iter()
+                    .find(|row| row.id == chat.id)
+                    .and_then(|row| row.static_file_id)
             })
             .collect())
     }

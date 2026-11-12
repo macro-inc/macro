@@ -23,6 +23,7 @@ fn named(name: &str) -> ExternalChatPersonRef {
     ExternalChatPersonRef {
         name: name.to_owned(),
         user_id: None,
+        picture_file_id: None,
     }
 }
 
@@ -30,6 +31,7 @@ fn named(name: &str) -> ExternalChatPersonRef {
 fn people_go_by_the_owners_contact_name_then_their_whatsapp_name_then_their_number() {
     let names = ChatNames::new(
         HashMap::from([(phone("5550001"), "Ana (work)".to_owned())]),
+        HashMap::new(),
         vec![
             // Seen by LID in a history message without a WhatsApp name; the
             // owner saved her number.
@@ -102,13 +104,13 @@ fn roster() -> GroupInfo {
 fn members_never_seen_writing_go_by_the_owners_contact_name_else_their_number() {
     let names = ChatNames::new(
         HashMap::from([(phone("5550001"), "Ana (work)".to_owned())]),
+        HashMap::new(),
         vec![],
     );
-    let mut members = roster();
-
-    names.name_members(&mut members);
+    let members = names.name_members(roster());
 
     let shown: Vec<Option<&str>> = members
+        .info
         .participants
         .iter()
         .map(|participant| participant.identity.display_name.as_deref())
@@ -123,6 +125,7 @@ fn members_never_seen_writing_go_by_the_owners_contact_name_else_their_number() 
 fn members_seen_writing_go_by_their_whatsapp_name() {
     let names = ChatNames::new(
         HashMap::new(),
+        HashMap::new(),
         vec![SeenPerson {
             person_id: Uuid::from_u128(2),
             user_id: Some("macro|ben@example.com".to_owned()),
@@ -130,12 +133,10 @@ fn members_seen_writing_go_by_their_whatsapp_name() {
             jids: vec![phone("5550002")],
         }],
     );
-    let mut members = roster();
-
-    names.name_members(&mut members);
+    let members = names.name_members(roster());
 
     assert_eq!(
-        members.participants[1].identity.display_name.as_deref(),
+        members.info.participants[1].identity.display_name.as_deref(),
         Some("Ben")
     );
     assert_eq!(
@@ -143,6 +144,37 @@ fn members_seen_writing_go_by_their_whatsapp_name() {
         ExternalChatPersonRef {
             name: "Ben".to_owned(),
             user_id: Some("macro|ben@example.com".to_owned()),
+            picture_file_id: None,
         }
     );
+}
+
+#[test]
+fn people_and_members_show_the_owners_picture_stored_under_any_of_their_jids() {
+    let ana_picture = Uuid::from_u128(901);
+    let names = ChatNames::new(
+        HashMap::new(),
+        // Stored under her phone number; she wrote and is listed by LID.
+        HashMap::from([(phone("5550001"), ana_picture)]),
+        vec![SeenPerson {
+            person_id: Uuid::from_u128(1),
+            user_id: None,
+            whatsapp_name: Some("Ana".to_owned()),
+            jids: vec![ANA_LID.to_owned(), phone("5550001")],
+        }],
+    );
+
+    let people = names.people(Some(&roster()));
+    let members = names.name_members(roster());
+
+    let ana = ExternalChatPersonRef {
+        name: "Ana".to_owned(),
+        user_id: None,
+        picture_file_id: Some(ana_picture),
+    };
+    assert_eq!(people.person(&stored(1)), ana);
+    assert_eq!(people.get(ANA_LID), ana);
+    assert_eq!(people.get(BEN_LID), named("+5550002"));
+    assert_eq!(members.picture(ANA_LID), Some(ana_picture));
+    assert_eq!(members.picture(BEN_LID), None);
 }
