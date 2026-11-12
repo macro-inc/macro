@@ -1,3 +1,4 @@
+mod address_policy;
 mod aes_key;
 mod call_tool_result;
 mod consts;
@@ -5,6 +6,8 @@ mod oauth_client_metadata;
 mod result;
 mod server;
 
+pub(crate) use address_policy::is_public;
+pub use address_policy::{AddressPolicy, RefusedAddress};
 pub use aes_key::{AesKey, AesKeyError};
 pub use call_tool_result::CallToolResultExt;
 pub use consts::*;

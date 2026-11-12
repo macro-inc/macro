@@ -74,7 +74,8 @@ stacks. Process isolation belongs to
   gateway receipt.
 - `src/domain/documentation.rs`: the build-time SDK catalog (per entity a
   `@routing` description, an `@agent` guide and an index; a reference per
-  symbol). Jev ranks entities on their descriptions, in parallel calls of 32
+  symbol). Jev ranks entities on their descriptions against the latest and
+  previous user message (`cognition::domain::RoutingRequest`), in parallel calls of 32
   (`cognition::domain::decide_in_batches`; a late or failed call loses only
   its own entities), for the per-turn prompt (≥ 0.5, top four, 48 KiB) or a
   `DescribeCodeTools` `task` (every relevant entity, 32 KiB); `ReadCodeDocs`

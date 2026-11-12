@@ -150,6 +150,19 @@ whether the name stopped fitting (threshold 0.8) before Haiku proposes a new
 one. Only names with `agent_session.name_is_generated` are retitled; a rename
 through `set_name` clears it, so a name a person chose is never replaced.
 
+Activity summaries: `domain/activity_summary.rs` is a turn observer the
+harness binds next to the queue. For each running turn it keeps one task that
+summarizes the newest activity rows of `TurnSignal::Progressed` (labels and
+details already shown to readers, never tool input or output) with
+`outbound/activity_summarizer.rs` (Nemotron), resting 4s for the first 10 lines
+and 15s after, at most 120 per turn; calls made while it rests coalesce. Lines go
+to viewers only, through `AgentSessionRealtime::publish_activity_summarized`
+(`agent_session_activity`), and a `null` line clears it when the turn ends.
+Admission and usage are against the session's owner (`AiFeature::AgentActivitySummary`,
+non-billable); a session with no person owner gets none. The PostHog flag
+`disable-agent-activity-summary` (`KILL_SWITCH_FLAG`), when on for the owner,
+skips the turn before any model call; unset or unreadable, summaries run.
+
 ## Checks
 
 - `cargo test -p agent_session` (`SQLX_OFFLINE` unset).
