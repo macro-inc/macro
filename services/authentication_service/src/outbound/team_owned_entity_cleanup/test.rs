@@ -4,11 +4,12 @@ use reqwest::StatusCode;
 
 use super::*;
 
-struct EmptyTeamComputers;
+/// A team with no computers to release.
+struct NoComputers;
 
 #[async_trait::async_trait]
-impl crate::domain::computer_billing::TeamComputers for EmptyTeamComputers {
-    async fn release_team(&self, _: Uuid) -> Result<(), rootcause::Report> {
+impl crate::domain::computer_billing::TeamComputers for NoComputers {
+    async fn release_team(&self, _team_id: Uuid) -> Result<(), rootcause::Report> {
         Ok(())
     }
 }
@@ -104,7 +105,7 @@ async fn empty_team_skips_disabled_vault_rpc_but_existing_state_requires_acknowl
             harness_url: server.uri(),
             scheduled_action_url: server.uri(),
         },
-        Arc::new(EmptyTeamComputers),
+        Arc::new(NoComputers),
     )
     .unwrap();
     adapter.prepare_team_deletion(team).await.unwrap();
@@ -160,7 +161,7 @@ async fn empty_deletion_proof_keeps_first_create_lease_admission_closed_until_de
             harness_url: server.uri(),
             scheduled_action_url: server.uri(),
         },
-        Arc::new(EmptyTeamComputers),
+        Arc::new(NoComputers),
     )
     .unwrap();
     let team = TeamId(Uuid::now_v7());

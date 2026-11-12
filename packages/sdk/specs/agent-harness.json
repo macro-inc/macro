@@ -6088,7 +6088,7 @@
           },
           "prompt": {
             "type": ["string", "null"],
-            "description": "First prompt to deliver once the session is running. Managed sessions\nonly - an external runtime sends its own first prompt through the\ncontrol endpoint. Omitted, the session opens idle."
+            "description": "First prompt to deliver once the session is running. The managed shape\nonly: a persona its operator runs gets it through the session's control\npath once its runtime opens the session, while a runtime opening its\nown (the `workspace` shape) sends its first prompt through the control\nendpoint. Omitted, the session opens idle."
           },
           "promptActionId": {
             "oneOf": [
