@@ -349,6 +349,7 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
             mailbox.sync_generation = lease.mailbox.sync_generation,
             outlook.stream_kind = "folder_catalog",
             outlook.folders = tracing::field::Empty,
+            outlook.provider_item_count = tracing::field::Empty,
             outlook.outcome = tracing::field::Empty,
             outlook.defer_reason = tracing::field::Empty,
             outlook.defer_seconds = tracing::field::Empty,
@@ -367,6 +368,16 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
         let result = match outcome {
             Ok(folders) => {
                 span.record("outlook.folders", span_int(folders.len()));
+                span.record(
+                    "outlook.provider_item_count",
+                    span_int(
+                        folders
+                            .iter()
+                            .filter_map(|folder| folder.total_items)
+                            .map(u64::from)
+                            .sum::<u64>(),
+                    ),
+                );
                 self.repo.commit_catalog(lease, &folders).await
             }
             Err(MailboxError::Provider(error)) => {
