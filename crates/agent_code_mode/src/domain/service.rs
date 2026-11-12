@@ -250,6 +250,8 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "ReactToChannelMessage"
                 | "ReadChannelMessages"
                 | "ReadChannelThread"
+                // Message.context().
+                | "ReadChannelMessageContext"
                 | "RenameChannel"
                 // shareWithChannel() on every shareable item's handle.
                 | "ShareWithChannel"
