@@ -1038,7 +1038,7 @@ Closing restores focus to the mention. Editing a linked cell into plain text
 removes its reference; undo restores it. Check mouse and keyboard opening,
 Escape/close, and phone-width record tabs.
 
-Use `EmailShareStory` for the Mail feature-page illustration: one compact panel changes from email to channel picker to chat, then shows a new reply in the shared thread. Keep the three-step navigation and stop autoplay on the completed result. Avoid stacked email/chat windows and internal scrollbars; reduced motion shows the final result immediately. The separate interactive inbox sandbox retains `EmailSharingDemo` and its `DocMention` link for opening the complete sample thread.
+The Mail feature page's sharing, drafting, and routine sections use the app's own replicas, not drawn diagrams. Sharing is `EmailSharingDemo` (the email block, its Share form, and the channel it posts to), also used by the inbox sandbox. Drafting is `EmailDraftStory`, the homepage's conversation and composer; both read their messages from `emailDraftMessages`. `EmailRoutineDemo` shows a routine's effects in order: the email arrives in the inbox, Macro posts it to a channel, and a push notification drops in. Reduced motion shows each finished result immediately.
 
 The retained `HomepageCrm` illustration has no playback footer or Pause/Replay controls;
 it still pauses offscreen and when a visitor enters the demo.
