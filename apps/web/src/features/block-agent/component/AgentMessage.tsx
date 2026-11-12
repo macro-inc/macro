@@ -305,10 +305,7 @@ function replySentAt(message: FoldedMessage): string | undefined {
   return message.postedAt;
 }
 
-/**
- * What the working row says: the last part names the work — a tool call or
- * a plan — and a bare turn is just working.
- */
+/** What the working row says: a plan names the work; anything else is working. */
 function workingLabel(message: FoldedMessage): string {
   const last = message.parts.at(-1);
   if (last === undefined) return 'Working';
@@ -318,13 +315,13 @@ function workingLabel(message: FoldedMessage): string {
 }
 
 /**
- * Whether the newest run of tool calls is where the turn is: no prose or
- * request after it, only thoughts. Its group then carries the session's live
- * line, which is the turn's one working indicator.
+ * Whether the turn ends in a group of tool calls, which then carries the
+ * session's live line as the turn's one working indicator. A call that stands
+ * outside a group (a subagent, a presented view) carries no line. Only asked
+ * while the working row would show, so the last part is never a thought.
  */
 function inToolRun(message: FoldedMessage): boolean {
-  const last = message.parts.findLast((part) => part.kind !== 'thought');
-  return last?.kind === 'tool_use';
+  return segmentParts(message.parts).at(-1)?.kind === 'tools';
 }
 
 /**
@@ -479,8 +476,8 @@ export function Message(props: {
                 </Show>
               )}
             </Index>
-            {/* The turn is open with nothing to read yet — a ripple and a label
-              naming the work, so the wait reads as work rather than a stall. */}
+            {/* The turn is open with nothing to read yet — a ripple and a working
+              label, so the wait reads as work rather than a stall. */}
             <Show when={showsWorkingRow()}>
               <WorkingLine label={workingLabel(props.message)} />
             </Show>

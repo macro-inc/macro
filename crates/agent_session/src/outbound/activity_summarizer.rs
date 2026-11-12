@@ -67,9 +67,9 @@ impl ActivitySummarizer for NemotronActivitySummarizer {
 fn clean_summary(raw: &str) -> Option<String> {
     let line = raw.lines().find(|line| !line.trim().is_empty())?;
     let line = line.trim().trim_matches(['"', '\'']).trim();
-    // The line is a status, not a tally: a count the model adds anyway goes.
+    // The line is a status, not a tally: a trailing count the model adds goes.
     let line = lazy_regex::regex_replace!(r"\s*\(\d+\)\s*(…|\.\.\.)?$", line, "$1");
-    if line.is_empty() {
+    if !line.chars().any(char::is_alphanumeric) {
         return None;
     }
 

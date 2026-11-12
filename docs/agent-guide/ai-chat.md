@@ -1910,8 +1910,9 @@ pushes it to every viewer (`agent_session_activity`). It replaces the
 **Using N tools** label of the run the turn is in: one with a call in flight,
 or the newest run while the agent thinks between calls. The line carries no
 count (the server drops a trailing "(N)" the model adds), and it is the turn's
-only working indicator: no separate working row shows under it. Without a line
-the turn shows one **Working** row. The caret still opens the raw calls; a
+only working indicator: no separate working row shows under it. Without a line,
+the indicator is the group's own **Using N tools** while a call runs, or a single
+**Working** row between calls. The caret still opens the raw calls; a
 settled run reads **Used N tools**.
 It also replaces the
 open activity line of an agent reply in a channel, and shows under a working

@@ -648,6 +648,31 @@ describe('Message working tail', () => {
     }
   });
 
+  it('keeps the working row after a call that no group carries the line for', () => {
+    publishSessionActivity('session', 'Searching your workspace…');
+    try {
+      const view = render(() => (
+        <Message
+          message={message(
+            [
+              tool('a'),
+              text('Showing what I found.'),
+              tool('display', {
+                name: { kind: 'mcp', server: 'macro', tool: 'DisplayResults' },
+                detail: { kind: 'view', view: null, error: null },
+              }),
+            ],
+            null
+          )}
+          inFlight
+        />
+      ));
+      expect(view.getByTestId('working').textContent).toBe('Working');
+    } finally {
+      publishSessionActivity('session', null);
+    }
+  });
+
   it('does not duplicate the active tool or group with a working shimmer', () => {
     const view = render(() => (
       <Message

@@ -23,4 +23,5 @@ fn a_line_without_a_count_is_kept() {
         Some("Editing the Q3 plan…")
     );
     assert_eq!(clean_summary("  \n "), None);
+    assert_eq!(clean_summary("(3)…"), None);
 }
