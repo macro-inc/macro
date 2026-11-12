@@ -45,6 +45,12 @@ pub trait Spawner: Send + Sync + 'static {
 
 /// A collection of [`MacroEvent`] types that can decode a broker message.
 pub trait MacroEventCollection: Sized {
+    /// Validated originating invocation, if carried by the envelope.
+    fn agent_correlation_id(&self) -> Option<uuid::Uuid>;
+
+    /// Display verb of the originating invocation, if carried by the envelope.
+    fn agent_verb(&self) -> Option<agent_correlation::AgentVerb>;
+
     /// Decodes an event from the supplied broker message.
     fn decode<T: MessageParts>(message: &T) -> Result<Self, EventBrokerError>;
 

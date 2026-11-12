@@ -275,7 +275,45 @@ impl WebhookWorkspaceResolver for FakeWorkspaceResolver {
     }
 }
 
-type TestService = WebhookEventStreamServiceImpl<FakeAccessService, FakeWorkspaceResolver>;
+/// Contact pairs the fake graph knows, as `(user, other)`; counts lookups.
+#[derive(Clone, Default)]
+struct FakeContactChecker {
+    pairs: Arc<Mutex<Vec<(String, String)>>>,
+    calls: Arc<Mutex<usize>>,
+}
+
+impl FakeContactChecker {
+    fn with_pair(user: &str, other: &str) -> Self {
+        let checker = Self::default();
+        checker
+            .pairs
+            .lock()
+            .unwrap()
+            .push((user.to_string(), other.to_string()));
+        checker
+    }
+}
+
+impl WebhookContactChecker for FakeContactChecker {
+    type Err = anyhow::Error;
+
+    async fn is_contact(
+        &self,
+        user: MacroUserIdStr<'static>,
+        other: MacroUserIdStr<'static>,
+    ) -> Result<bool, Self::Err> {
+        *self.calls.lock().unwrap() += 1;
+        Ok(self
+            .pairs
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|(a, b)| a == user.as_ref() && b == other.as_ref()))
+    }
+}
+
+type TestService =
+    WebhookEventStreamServiceImpl<FakeAccessService, FakeWorkspaceResolver, FakeContactChecker>;
 
 fn service(access: FakeAccessService) -> (TestService, broadcast::Sender<StreamCandidateEvent>) {
     service_with_team(access, Some(TEAM_WORKSPACE_ID.to_string()))
@@ -290,6 +328,7 @@ fn service_with_team(
         sender.clone(),
         Arc::new(access),
         FakeWorkspaceResolver::with_team(team_workspace_id),
+        FakeContactChecker::default(),
     );
     (service, sender)
 }
@@ -427,6 +466,7 @@ async fn lagged_stream_skips_missed_events_and_continues() {
         sender.clone(),
         Arc::new(FakeAccessService::allowing(&[DOCUMENT_ID])),
         FakeWorkspaceResolver::with_team(Some(TEAM_WORKSPACE_ID.to_string())),
+        FakeContactChecker::default(),
     );
     let mut stream = service
         .open_stream(
@@ -516,6 +556,7 @@ async fn team_membership_revocation_ends_the_stream() {
         sender.clone(),
         Arc::new(FakeAccessService::allowing(&[])),
         resolver.clone(),
+        FakeContactChecker::default(),
     );
     let mut stream = service
         .open_stream(
@@ -562,4 +603,139 @@ async fn agent_session_events_fall_back_to_access_level() {
     let delivered: Vec<NormalizedWebhookEvent> = stream.take(1).collect().await;
     assert_eq!(delivered[0].entity_id, SESSION_ID);
     assert_eq!(*access_level_calls.lock().unwrap(), 1);
+}
+
+const CHANGED_USER_ID: &str = "macro|changed@example.com";
+
+fn picture_candidate(team_workspace_ids: &[&str]) -> StreamCandidateEvent {
+    let mut audiences = vec![StreamAudience::ContactsOf {
+        user_id: CHANGED_USER_ID.to_string(),
+    }];
+    audiences.extend(
+        team_workspace_ids
+            .iter()
+            .map(|id| StreamAudience::Workspace {
+                workspace_id: (*id).to_string(),
+            }),
+    );
+    let mut candidate = document_candidate("user.picture_changed", CHANGED_USER_ID);
+    candidate.audience = StreamAudience::Any(audiences);
+    candidate
+}
+
+/// Whether one picture event reaches a stream with this scope.
+async fn picture_reaches(
+    scope: WebhookScope,
+    subscriber: MacroUserIdStr<'static>,
+    contacts: FakeContactChecker,
+    candidate: StreamCandidateEvent,
+) -> bool {
+    let (sender, _) = broadcast::channel(16);
+    let service = WebhookEventStreamServiceImpl::new(
+        sender.clone(),
+        Arc::new(FakeAccessService::allowing(&[])),
+        FakeWorkspaceResolver::with_team(Some(TEAM_WORKSPACE_ID.to_string())),
+        contacts,
+    );
+    let mut stream = service
+        .open_stream(subscriber, scope, filter(&["user.picture_changed"]))
+        .await
+        .expect("stream opens");
+    sender.send(candidate).unwrap();
+    // Sentinel the stream always delivers, so a skipped event ends the wait.
+    let sentinel_workspace = match scope {
+        WebhookScope::User => SUBSCRIBER_ID,
+        WebhookScope::Team => TEAM_WORKSPACE_ID,
+    };
+    sender
+        .send(workspace_candidate(
+            "user.picture_changed",
+            sentinel_workspace,
+        ))
+        .unwrap();
+    let first = stream.next().await.expect("sentinel arrives");
+    first.entity_id == CHANGED_USER_ID
+}
+
+#[tokio::test]
+async fn picture_event_reaches_the_changed_user() {
+    let changed = MacroUserIdStr::try_from(CHANGED_USER_ID.to_string()).unwrap();
+    let contacts = FakeContactChecker::default();
+    assert!(
+        picture_reaches(
+            WebhookScope::User,
+            changed,
+            contacts.clone(),
+            picture_candidate(&[])
+        )
+        .await
+    );
+    assert_eq!(*contacts.calls.lock().unwrap(), 0);
+}
+
+#[tokio::test]
+async fn picture_event_reaches_a_contact_with_one_lookup() {
+    let contacts = FakeContactChecker::with_pair(CHANGED_USER_ID, SUBSCRIBER_ID);
+    assert!(
+        picture_reaches(
+            WebhookScope::User,
+            subscriber(),
+            contacts.clone(),
+            picture_candidate(&[])
+        )
+        .await
+    );
+    assert_eq!(*contacts.calls.lock().unwrap(), 1);
+}
+
+#[tokio::test]
+async fn picture_event_skips_a_non_contact() {
+    let contacts = FakeContactChecker::default();
+    assert!(
+        !picture_reaches(
+            WebhookScope::User,
+            subscriber(),
+            contacts,
+            picture_candidate(&[FOREIGN_WORKSPACE_ID])
+        )
+        .await
+    );
+}
+
+#[tokio::test]
+async fn picture_event_reaches_team_streams_of_the_users_teams_only() {
+    assert!(
+        picture_reaches(
+            WebhookScope::Team,
+            subscriber(),
+            FakeContactChecker::default(),
+            picture_candidate(&[FOREIGN_WORKSPACE_ID, TEAM_WORKSPACE_ID])
+        )
+        .await
+    );
+    assert!(
+        !picture_reaches(
+            WebhookScope::Team,
+            subscriber(),
+            FakeContactChecker::default(),
+            picture_candidate(&[FOREIGN_WORKSPACE_ID])
+        )
+        .await
+    );
+}
+
+#[tokio::test]
+async fn team_stream_does_not_get_contact_audience() {
+    // A contact's team-scoped stream is not the contact's own user stream.
+    let contacts = FakeContactChecker::with_pair(CHANGED_USER_ID, SUBSCRIBER_ID);
+    assert!(
+        !picture_reaches(
+            WebhookScope::Team,
+            subscriber(),
+            contacts.clone(),
+            picture_candidate(&[])
+        )
+        .await
+    );
+    assert_eq!(*contacts.calls.lock().unwrap(), 0);
 }

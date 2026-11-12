@@ -55,6 +55,10 @@ function prioritizeInternalPeople<T extends CommandMenuItem>(items: T[]): T[] {
   );
 }
 
+function isMacroPerson(item: CommandMenuItem) {
+  return item.bucket === 'dm' || item.bucket === 'person';
+}
+
 /** Rank cached and local candidates together using the command menu's rules. */
 export function rankCommandSearchItems<T extends CommandMenuItem>(
   items: T[],
@@ -64,6 +68,10 @@ export function rankCommandSearchItems<T extends CommandMenuItem>(
     /** Rows a server search already matched, kept even when the menu's
      * fuzzy matcher would not match them. */
     preservedIds?: ReadonlySet<string>;
+    /** Members of the viewer's team. Their people rows and one-to-one
+     * conversations lead other rows that match equally well. */
+    teammateIds?: ReadonlySet<string>;
+    viewerId?: string;
   }
 ): T[] {
   const search = createFreshSearch<T>({
@@ -97,19 +105,47 @@ export function rankCommandSearchItems<T extends CommandMenuItem>(
   const eligible = items.filter(
     (item) => item.kind !== 'command' || commandMatches.has(item.id)
   );
-  const ranked = search(eligible, query)
-    .sort(
-      (left, right) =>
-        right.nameMatchRank - left.nameMatchRank ||
-        right.combinedScore - left.combinedScore ||
-        compareRecency(left.item, right.item)
-    )
-    .map(({ item }) => item);
+  const withTeammate = (item: CommandMenuItem) => {
+    const team = options.teammateIds;
+    if (!team?.size) return false;
+    if (item.kind === 'user') return team.has(item.id);
+    if (item.kind !== 'entity' || item.data.type !== 'channel') return false;
+    if (item.data.channelType !== 'direct_message') return false;
+    const others = (item.data.participantIds ?? []).filter(
+      (id) => id !== options.viewerId
+    );
+    return others.length === 1 && team.has(others[0]);
+  };
+  // Match quality decides first. Among equally good matches, teammates and
+  // conversations with them lead, then other Macro users and DMs, then
+  // documents and channels.
+  const scored = search(eligible, query).sort(
+    (left, right) =>
+      right.nameMatchRank - left.nameMatchRank ||
+      Number(withTeammate(right.item)) - Number(withTeammate(left.item)) ||
+      Number(isMacroPerson(right.item)) - Number(isMacroPerson(left.item)) ||
+      right.combinedScore - left.combinedScore ||
+      compareRecency(left.item, right.item)
+  );
+  const ranked = scored.map(({ item }) => item);
+  // People keep their window order only among equally good name matches, so
+  // a recent weak match cannot take the slot an exact name earned.
+  const nameRanks = new Map(
+    scored.map(({ item, nameMatchRank }) => [item.id, nameMatchRank])
+  );
+  // Window order holds among people who match equally well and are equally
+  // close to the viewer, so a teammate keeps the lead the sort gave them.
+  const nameRank = (item: T) =>
+    (nameRanks.get(item.id) ?? -Infinity) * 2 + Number(withTeammate(item));
   const preserved = (item: CommandMenuItem) =>
     options.preservedIds?.has(item.id) ||
     (options.preserveAdditionalEntityMatches && item.kind === 'entity');
   if (!options.preserveAdditionalEntityMatches && !options.preservedIds?.size)
-    return preservePersonOrder(prioritizeInternalPeople(ranked), items);
+    return preservePersonOrder(
+      prioritizeInternalPeople(ranked),
+      items,
+      nameRank
+    );
 
   // Cache search accepts broader subsequences than the menu's fuzzy matcher.
   // Keep these additional matches reachable after the regular ranked results.
@@ -119,6 +155,7 @@ export function rankCommandSearchItems<T extends CommandMenuItem>(
     .sort(compareRecency);
   return preservePersonOrder(
     prioritizeInternalPeople([...ranked, ...additional]),
-    items
+    items,
+    nameRank
   );
 }

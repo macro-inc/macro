@@ -543,6 +543,11 @@ pub struct ControlRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schema(value_type = Option<Object>)]
     pub context: Option<trigger_context::TriggerContext>,
+    /// The app tab the person typed this in (a UUID the tab keeps for its
+    /// lifetime), so what the turn opens in the app reaches that tab only.
+    /// Only a person's own request may send it; a runtime's is refused.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client_id: Option<Uuid>,
     /// The operation to perform.
     #[serde(flatten)]
     pub action: AgentAction,
@@ -1031,6 +1036,31 @@ async fn ensure_harness_serves_session<R: AgentSessionNotificationRecipient>(
     Ok(())
 }
 
+/// Who is asking, as control policy tells them apart. A user's credential
+/// used by an agent's program (a code-mode run, or a token carrying an
+/// agent's attribution) is `Program`: it acts for the user but sits in no
+/// app tab. The app itself may hold a session or a bearer token.
+pub(crate) fn control_principal(
+    caller: &UserBotOrHarnessAuthorization,
+    headers: &axum::http::HeaderMap,
+) -> crate::domain::control::ControlPrincipal {
+    use crate::domain::control::ControlPrincipal;
+
+    match caller {
+        UserBotOrHarnessAuthorization::User(user)
+            if macro_authorization::is_agent_run(user.agent_id.is_some(), headers) =>
+        {
+            ControlPrincipal::Program
+        }
+        UserBotOrHarnessAuthorization::User(_) => ControlPrincipal::User,
+        authorization => ControlPrincipal::Runtime(
+            authorization
+                .acting_user()
+                .map(|user| user.macro_user_id.clone()),
+        ),
+    }
+}
+
 #[utoipa::path(
     post,
     path = "/agent-sessions/{session_id}/control",
@@ -1084,6 +1114,7 @@ pub async fn control_agent_session_handler<
     State(state): State<AgentSessionControlState<R, Access, Auth>>,
     caller: MacroAuthorizationExtractor<Auth, UserBotOrHarness>,
     Path(session_id): Path<Uuid>,
+    headers: axum::http::HeaderMap,
     Json(req): Json<ControlRequest>,
 ) -> Result<Json<ControlResponse>, AgentSessionApiError> {
     ensure_harness_serves_session(
@@ -1093,14 +1124,7 @@ pub async fn control_agent_session_handler<
     )
     .await?;
 
-    let principal = match &caller.authorization {
-        UserBotOrHarnessAuthorization::User(_) => crate::domain::control::ControlPrincipal::User,
-        authorization => crate::domain::control::ControlPrincipal::Runtime(
-            authorization
-                .acting_user()
-                .map(|user| user.macro_user_id.clone()),
-        ),
-    };
+    let principal = control_principal(&caller.authorization, &headers);
 
     let accepted = state
         .recipient
@@ -1110,6 +1134,8 @@ pub async fn control_agent_session_handler<
                 req.action,
                 req.action_id,
                 req.context,
+                req.client_id
+                    .map(crate::domain::model::UiClientId::from_uuid),
                 principal,
                 access.entity_access_receipt,
             )?,

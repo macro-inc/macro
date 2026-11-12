@@ -9,6 +9,8 @@ use static_file_service_client::StaticFileServiceClient;
 use std::sync::Arc;
 use uuid::Uuid;
 
+mod gmail_images;
+
 use super::persistence_error::InboxPersistenceError;
 
 pub struct PgSignatureSettings(pub sqlx::PgPool);
@@ -29,10 +31,19 @@ pub struct SignatureImageRehoster {
 impl SignatureImages for SignatureImageRehoster {
     type Err = InboxPersistenceError;
 
-    async fn rehost(&self, html: &str) -> Result<(String, usize), Self::Err> {
+    async fn rehost(
+        &self,
+        html: &str,
+        images: &impl email::domain::signature_settings::gmail_images::SignatureImageSource,
+    ) -> Result<(String, usize), Self::Err> {
         Ok(
-            crate::util::process_pre_insert::sfs_map::rehost_html_images(&self.db, &self.sfs, html)
-                .await?,
+            crate::util::process_pre_insert::sfs_map::rehost_html_images(
+                &self.db,
+                &self.sfs,
+                html,
+                &ImageSource(images),
+            )
+            .await?,
         )
     }
 }
@@ -43,6 +54,12 @@ pub struct GmailSignatures {
 }
 
 impl SignatureProvider for GmailSignatures {
+    fn image_reader(
+        &self,
+    ) -> impl email::domain::signature_settings::gmail_images::SignatureImageReader + '_ {
+        gmail_images::GmailImageReader::new(&self.email_api)
+    }
+
     type TokenErr = EmailApiError;
     type ReadErr = gmail_client::GmailApiHttpError;
 
@@ -66,5 +83,17 @@ impl SignatureProvider for GmailSignatures {
                 primary: alias.is_primary == Some(true),
             })
             .collect())
+    }
+}
+
+struct ImageSource<'a, S>(&'a S);
+impl<S: email::domain::signature_settings::gmail_images::SignatureImageSource>
+    crate::util::process_pre_insert::sfs_map::ImageSource for ImageSource<'_, S>
+{
+    async fn fetch(&self, url: &str) -> anyhow::Result<Option<bytes::Bytes>> {
+        Ok(self.0.fetch(url).await?.map(bytes::Bytes::from))
+    }
+    fn is_public(&self, url: &str) -> bool {
+        self.0.is_public(url)
     }
 }
