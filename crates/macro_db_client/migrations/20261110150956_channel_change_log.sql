@@ -11,6 +11,10 @@
 -- channel's rows are unreachable (reads authorize against the channel first)
 -- and retention removes them by age, which keeps channel deletion from
 -- cascading through a long log.
+-- The reference takes a lock on comms_channels that blocks channel writes;
+-- give up instead of queueing behind a long transaction.
+SET LOCAL lock_timeout = '5s';
+
 CREATE TABLE comms_channel_change_counters (
     channel_id uuid PRIMARY KEY REFERENCES comms_channels (id) ON DELETE CASCADE,
     seq bigint NOT NULL CHECK (seq >= 0),

@@ -302,6 +302,13 @@ impl ChannelChangeLogPruner for PgMessageRepository {
     ) -> Result<usize, MessageError> {
         let limit = i64::try_from(batch)
             .map_err(|_| internal("channel change prune batch is too large"))?;
+        // The pool sets no statement timeout, and a batch is bounded by its
+        // row limit, not by time.
+        let mut tx = self.pool.begin().await.map_err(database_error)?;
+        sqlx::query!("SET LOCAL statement_timeout = '5s'")
+            .execute(&mut *tx)
+            .await
+            .map_err(database_error)?;
         let removed = sqlx::query!(
             r#"
             WITH doomed AS (
@@ -319,10 +326,11 @@ impl ChannelChangeLogPruner for PgMessageRepository {
             cutoff,
             limit,
         )
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await
         .map_err(database_error)?
         .rows_affected();
+        tx.commit().await.map_err(database_error)?;
         usize::try_from(removed).map_err(|_| internal("pruned row count overflows"))
     }
 }
