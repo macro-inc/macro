@@ -5,7 +5,7 @@ import {
   SettingsSection,
 } from '@app/features/settings/primitives';
 import PlusIcon from '@icon/system/regular/plus.svg';
-import { Checkbox } from '@ui';
+import { Checkbox, ToggleSwitch } from '@ui';
 import { Index, Show } from 'solid-js';
 import type { CalendarSource } from '../types';
 import { CalendarColorPicker } from './calendar-color-picker';
@@ -35,6 +35,11 @@ export function ConnectedCalendars(props: {
   sourceColor: (id: string) => string | undefined;
   onAccountColor: (id: string, color: string | undefined) => void;
   onSourceColor: (id: string, color: string | undefined) => void;
+  /** Whether a calendar counts toward availability, unknown until loaded. */
+  countsAsBusy: (id: string) => boolean | undefined;
+  onCountsAsBusyChange: (id: string, counts: boolean) => void;
+  busyError: boolean;
+  onBusyRetry: () => void;
 }) {
   const accountNeedingPermission = () =>
     props.accounts.length === 1 && props.accounts[0].needsPermission
@@ -44,7 +49,7 @@ export function ConnectedCalendars(props: {
   return (
     <SettingsSection
       title="Connected calendars"
-      description="Connect your accounts and choose which calendars appear in Macro."
+      description="Connect your accounts, choose which calendars appear in Macro, and which ones make you busy."
     >
       <SettingsCard>
         <SettingsRow
@@ -209,6 +214,27 @@ export function ConnectedCalendars(props: {
                             props.onSourceColor(calendar().id, color)
                           }
                         />
+                        <Show
+                          when={props.countsAsBusy(calendar().id) !== undefined}
+                        >
+                          <ToggleSwitch
+                            size="md"
+                            class="shrink-0 flex-row-reverse"
+                            labelClass="text-xs text-ink-muted"
+                            label={
+                              <>
+                                <span aria-hidden="true">Busy</span>
+                                <span class="sr-only">
+                                  {`${calendar().name} counts as busy`}
+                                </span>
+                              </>
+                            }
+                            checked={props.countsAsBusy(calendar().id) ?? true}
+                            onChange={(counts) =>
+                              props.onCountsAsBusyChange(calendar().id, counts)
+                            }
+                          />
+                        </Show>
                       </div>
                     )}
                   </Index>
@@ -220,9 +246,19 @@ export function ConnectedCalendars(props: {
       </SettingsCard>
       <Show when={props.accounts.some((account) => account.calendars.length)}>
         <p class="px-6 text-xs text-ink-extra-muted">
-          Visibility and colors are saved in this browser. Hiding a calendar
-          does not disconnect it or change your booking availability.
+          Visibility and colors are saved in this browser. Busy is saved to your
+          account: events on a Busy calendar block your booking links and your
+          availability, shown or hidden. Turn Busy off for a calendar that isn't
+          your schedule, such as a coworker's you follow.
         </p>
+        <Show when={props.busyError}>
+          <p role="alert" class="px-6 text-xs text-ink-muted">
+            Could not load which calendars make you busy.{' '}
+            <button type="button" class="underline" onClick={props.onBusyRetry}>
+              Retry
+            </button>
+          </p>
+        </Show>
       </Show>
     </SettingsSection>
   );
