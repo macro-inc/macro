@@ -17,6 +17,8 @@ pub mod invitation_extraction;
 pub mod invitation_import;
 #[cfg(feature = "calendar_invitations")]
 pub mod invitation_resolution;
+#[cfg(feature = "calendar_invitations")]
+pub mod invitations;
 #[cfg(feature = "mailbox")]
 pub mod mailbox;
 /// Optimistic message-label batches and provider-write compensation.
@@ -66,3 +68,15 @@ pub mod inbox_entitlement;
 /// Atomic sender changes and retirement of the original draft.
 #[cfg(feature = "mailbox")]
 pub mod draft_transfer;
+
+/// Signature preparation and settings-patch policy.
+#[cfg(feature = "mailbox")]
+pub mod signature_settings;
+
+/// Backfill-job access, cancellation, and initialization publication.
+#[cfg(feature = "mailbox")]
+pub mod backfill_jobs;
+
+/// Nightly CRM candidate cleanup and delivery disposition.
+#[cfg(feature = "mailbox")]
+pub mod crm_cleanup;
