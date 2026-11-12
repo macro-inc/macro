@@ -133,6 +133,53 @@ describe('Quick Access local projection', () => {
     ]);
   });
 
+  it('reports searching until the current query answers, but not while a loaded window replays', async () => {
+    const [query, setQuery] = createSignal('sea');
+    const [revision, setRevision] = createSignal(0);
+    const first = deferred<SearchCachePage>();
+    const replay = deferred<SearchCachePage>();
+    const next = deferred<SearchCachePage>();
+    const search = vi
+      .fn<(args: SearchCacheArgs) => Promise<SearchCachePage>>()
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(replay.promise)
+      .mockReturnValueOnce(next.promise)
+      .mockRejectedValueOnce(new Error('Cache unavailable'));
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const list = root(() =>
+      createProjectedList({
+        host: { search },
+        buckets: ['note'],
+        revision,
+        searchTerm: query,
+        filterPreviousItems: (items, term) =>
+          items.filter((item) => item.id.includes(term)),
+        materialize,
+      })
+    );
+    expect(list.isSearching()).toBe(true);
+    first.resolve(page(['seamus', 'sean']));
+    await vi.waitFor(() => expect(list.isSearching()).toBe(false));
+
+    setRevision(1);
+    expect(list.isLoading()).toBe(true);
+    expect(list.isSearching()).toBe(false);
+    replay.resolve(page(['seamus', 'sean']));
+    await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+
+    setQuery('seam');
+    expect(list.items()).toEqual([{ id: 'GraphqlSoupDocument:seamus' }]);
+    expect(list.isSearching()).toBe(true);
+    next.resolve(page(['seamus', 'seamless']));
+    await vi.waitFor(() => expect(list.isSearching()).toBe(false));
+    expect(list.items()).toHaveLength(2);
+
+    setQuery('seaml');
+    expect(list.isSearching()).toBe(true);
+    await vi.waitFor(() => expect(list.error()).toBeDefined());
+    expect(list.isSearching()).toBe(false);
+  });
+
   it.each(['buckets', 'disable'] as const)(
     'does not retain matches when %s changes',
     async (change) => {

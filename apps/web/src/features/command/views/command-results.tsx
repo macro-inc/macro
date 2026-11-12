@@ -1,5 +1,6 @@
 import { t } from '@app/lib/i18n';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { createSteadyFlag } from '@core/util/steady-flag';
 import { CommandMenuEmptyState } from '@ui';
 import { createEffect, createSelector, createSignal, on, Show } from 'solid-js';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
@@ -11,6 +12,7 @@ const LIST_PADDING = 16;
 const MAX_LIST_HEIGHT = VIRTUAL_ITEM_HEIGHT * 8 + LIST_PADDING;
 const LOAD_MORE_THRESHOLD = VIRTUAL_ITEM_HEIGHT * 3;
 const EMPTY_STATE_HEIGHT = VIRTUAL_ITEM_HEIGHT * 1.5 + LIST_PADDING;
+const SEARCHING_ROW_HEIGHT = 28;
 
 type CommandResultsProps = {
   items: CommandMenuItem[];
@@ -25,19 +27,25 @@ type CommandResultsProps = {
 
 /** The same result rows, virtualization, and pagination in the menu and embedded search. */
 export function CommandResults(props: CommandResultsProps) {
-  const height = () =>
-    props.items.length
-      ? Math.min(
-          MAX_LIST_HEIGHT,
-          props.items.length * VIRTUAL_ITEM_HEIGHT + LIST_PADDING
-        )
-      : EMPTY_STATE_HEIGHT;
+  // Rows from faster sources can be listed while the search is still running;
+  // a slow one says so below them instead of leaving the list looking final.
+  const searchingShown = createSteadyFlag(() => props.loading ?? false);
+  const stillSearching = () => searchingShown() && props.items.length > 0;
+  const height = () => {
+    if (!props.items.length) return EMPTY_STATE_HEIGHT;
+
+    const rows = Math.min(
+      MAX_LIST_HEIGHT,
+      props.items.length * VIRTUAL_ITEM_HEIGHT + LIST_PADDING
+    );
+    return stillSearching() ? rows + SEARCHING_ROW_HEIGHT : rows;
+  };
   return (
     <div
       role="listbox"
       aria-label={props.label ?? t('commandMenu.searchResults')}
       aria-busy={props.loading || undefined}
-      class="overflow-hidden transition-[height] duration-60 ease-out p-2"
+      class="flex flex-col overflow-hidden transition-[height] duration-60 ease-out p-2"
       style={{ height: `${height()}px` }}
     >
       <Show
@@ -52,7 +60,17 @@ export function CommandResults(props: CommandResultsProps) {
           </CommandMenuEmptyState>
         }
       >
-        <VirtualizedCommandList {...props} />
+        <div class="min-h-0 flex-1">
+          <VirtualizedCommandList {...props} />
+        </div>
+        <Show when={stillSearching()}>
+          <p
+            role="status"
+            class="flex h-7 shrink-0 items-center px-2 text-xs text-ink-muted"
+          >
+            {t('commandMenu.searching')}
+          </p>
+        </Show>
       </Show>
     </div>
   );

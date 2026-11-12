@@ -77,6 +77,11 @@ export function createProjectedList<T extends { id: string }>(options: {
     )
   );
   const [error, setError] = createSignal<unknown>();
+  // True from a new query or bucket set until its first answer, unlike
+  // `loading`, which also covers replays of a window already on screen.
+  const [searching, setSearching] = createSignal(
+    untrack(loading) === 'initial'
+  );
   let current: Request | undefined;
   onCleanup(() => {
     current = undefined;
@@ -121,6 +126,7 @@ export function createProjectedList<T extends { id: string }>(options: {
     span.setAttr('search.buckets', request.buckets.join(','));
     span.setAttr('search.query_length', request.query.length);
     span.setAttr('search.append', append);
+    span.setAttr('search.refresh', !append && !untrack(searching));
     try {
       for (const [key, value] of Object.entries(
         untrack(() => options.sourceAttributes?.() ?? {})
@@ -186,6 +192,7 @@ export function createProjectedList<T extends { id: string }>(options: {
       console.warn('Quick Access cache search failed', error);
     } finally {
       span.end();
+      if (current === request) setSearching(false);
       finishRequest(request);
     }
   };
@@ -228,6 +235,7 @@ export function createProjectedList<T extends { id: string }>(options: {
         ? (options.filterPreviousItems?.(untrack(items), query) ?? [])
         : []
     );
+    setSearching(enabled);
     if (!enabled) {
       setLoading('idle');
       return;
@@ -248,6 +256,7 @@ export function createProjectedList<T extends { id: string }>(options: {
     error,
     hasMore,
     isLoading: () => loading() === 'initial',
+    isSearching: searching,
     isLoadingMore: () => loading() === 'more',
     loadMore: async () => {
       const request = current;

@@ -80,11 +80,12 @@ afterEach(() => {
   dispose?.();
   mocks.goTo = [];
 });
-function setup() {
+function setup(query = '') {
   return createRoot((cleanup) => {
     dispose = cleanup;
     const [items, setItems] = createSignal<QuickAccessItem[]>([]);
     const [loading, setLoading] = createSignal(true);
+    const [searching, setSearching] = createSignal(false);
     const [category, setCategory] = createSignal<CategoryFilter>('all');
     const [entityMode, setEntityMode] = createSignal(false);
     const [scope, setScope] = createSignal<CommandWithInfo[]>([]);
@@ -93,19 +94,21 @@ function setup() {
     mocks.list = {
       items,
       isLoading: loading,
+      isSearching: searching,
       totalCount: () => items().length,
       hasMore: () => false,
       isLoadingMore: () => false,
       error: () => undefined,
       loadMore: async () => {},
     };
-    const result = useCommandItems(() => '', category, {
+    const result = useCommandItems(() => query, category, {
       searchActive: () => true,
     });
     return {
       result,
       setItems,
       setLoading,
+      setSearching,
       setCategory,
       setEntityMode,
       setScope,
@@ -142,6 +145,26 @@ describe('command menu entity loading', () => {
     // A dirty follow-up may still be fetching; available entities remove the notice.
     expect(result.isLoadingEntities()).toBe(false);
     setLoading(false);
+    expect(result.isLoadingEntities()).toBe(false);
+  });
+
+  it('keeps reporting loading for a typed query until the cache answers it, even with rows listed', () => {
+    const { result, setItems, setLoading, setSearching } = setup('Document');
+    setSearching(true);
+    setItems([entity]);
+    expect(result.items().some((item) => item.kind === 'entity')).toBe(true);
+    expect(result.isLoadingEntities()).toBe(true);
+    setSearching(false);
+    // A replay of the answered window is not a pending search.
+    expect(result.isLoadingEntities()).toBe(false);
+    setLoading(false);
+    expect(result.isLoadingEntities()).toBe(false);
+  });
+
+  it('does not report a pending cache search for the recency list once rows are listed', () => {
+    const { result, setItems, setSearching } = setup();
+    setSearching(true);
+    setItems([entity]);
     expect(result.isLoadingEntities()).toBe(false);
   });
 
