@@ -17,6 +17,8 @@ import {
 import { NOOP_SPAN } from '@macro-inc/observability';
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 import { dispatchApplicationCommand } from '../../plugins/group-b/command';
+import { createMenuOperations } from '../../shared/inlineMenu';
+import { registerNativeInlineSearch } from './native-inline-search';
 import { createNativeActionMenuHost } from './native-actions';
 import { createNativeTagsMenuHost } from './native-tags-menu';
 import { createNativeUserMentionMenuHost } from './native-user-mention-menu';
@@ -256,3 +258,59 @@ test('a host on a view with no key generation does nothing', async () => {
     await runtime.close();
   }
 });
+
+const TRIGGERS = { mentions: '@', actions: '/', tags: '#' } as const;
+
+describe.each(['mentions', 'actions', 'tags'] as const)(
+  '%s trigger key',
+  (kind) => {
+    const press = (runtime: ReturnType<typeof mount>) =>
+      runtime.view.root.dispatchEvent(
+        new KeyboardEvent('keydown', { key: TRIGGERS[kind], bubbles: true })
+      );
+    for (const [label, comment] of [
+      ['view-only', false],
+      ['comment-only', true],
+    ] as const) {
+      // A reader's focus can sit on a body descendant (a link, a decorator button).
+      test(`a ${label} reader pressing the trigger keeps the editor alive`, async () => {
+        const runtime = mount(kind);
+        const dispose = registerNativeInlineSearch(
+          runtime.view,
+          createMenuOperations(),
+          kind,
+          TRIGGERS[kind]
+        );
+        try {
+          runtime.authorize(false, comment);
+          const before = runtime.view.query.serializedState();
+          press(runtime);
+          expect(runtime.errors).toEqual([]);
+          expect(runtime.view.query.serializedState()).toBe(before);
+        } finally {
+          dispose();
+          await runtime.close();
+        }
+      });
+    }
+
+    test('an editor pressing the trigger still starts a real search', async () => {
+      const runtime = mount(kind);
+      const dispose = registerNativeInlineSearch(
+        runtime.view,
+        createMenuOperations(),
+        kind,
+        TRIGGERS[kind]
+      );
+      try {
+        press(runtime);
+        runtime.port.command(CommandCode.InsertText, 0, 0, 'person');
+        expect(runtime.errors).toEqual([]);
+        expect(runtime.searchNodes()).toHaveLength(1);
+      } finally {
+        dispose();
+        await runtime.close();
+      }
+    });
+  }
+);

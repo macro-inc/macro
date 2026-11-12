@@ -1,7 +1,7 @@
 import type { EditorView } from '@macro-inc/lexical-wasm-view';
 import { createViewCommand } from '@macro-inc/lexical-wasm-view/view/commands';
 import {
-  dispatchApplicationCommand,
+  dispatchApplicationCommandIfSessionEdit,
   queryApplication,
 } from '../../plugins/group-b/command';
 import type { MenuOperations } from '../../shared/inlineMenu';
@@ -120,7 +120,9 @@ export function registerNativeInlineSearch(
     listeners.add(view.registerViewCommand(enter, () => menu.isOpen(), 4));
     const rootListener = createInlineMenuTriggerListener(trigger, () => {
       if (interceptTrigger?.()) return;
-      dispatchApplicationCommand(view, 'group-a.search-trigger', {
+      // This root listener sits outside the view's editability gate: a reader's
+      // focus can be on a body descendant, so actual session access decides.
+      dispatchApplicationCommandIfSessionEdit(view, 'group-a.search-trigger', {
         kind,
       });
     });
