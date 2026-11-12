@@ -1085,7 +1085,7 @@ Keep /docs/switch-to-macro focused on bulk importers and MCP migration paths, ti
 Keep Changelog as one sidebar link; monthly archives remain accessible from its page, outside search.
 Keep the outdated Tool Reference unpublished and redirect its former URLs to MCP Setup.
 Keep concise FAQs on feature pages and put the full written setup, shortcut, and limitation reference in the expandable Setup and reference section below. Do not replace interactive demos
-with documentation screenshots. Desktop navigation remains open and pushes the content aside. Phones keep the article visible and use a full-screen drawer on demand; Escape closes it and restores focus. Keep the hamburger-to-Macro morph on the mobile toggle. The desktop mark is static. Use the foreground color for the mark (white in dark mode). Reduced-motion mode skips drawer transitions.
+with documentation screenshots. Desktop navigation remains open and pushes the content aside. Phones keep the article visible and use a full-screen drawer on demand; Escape closes it and restores focus. The mobile toggle folds its three bars into a close mark while the drawer is open and never shows the Macro logo; it keeps a 54px touch target, shows its highlight only on hover-capable pointers and keyboard focus, and sits in a 68px bar matching the drawer background, with the search field 8px below. Use the foreground color for the mark (white in dark mode). Reduced-motion mode skips drawer transitions.
 
 `src/features/documentation` owns the reading page, MDX components, and sidebar. Start guide headers with the title and description, without a Documentation eyebrow.
 Use the matching app block icons beside feature links, block guides, and their
