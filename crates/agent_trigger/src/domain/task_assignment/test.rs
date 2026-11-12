@@ -161,6 +161,7 @@ fn discussion(assignment: &TaskAssignment) -> messages::domain::models::Message 
         bot_profile: None,
         guest_name: None,
         imported_author: None,
+        import_order: None,
         content: "Work on this task".to_owned(),
         created_at: Utc::now(),
         updated_at: Utc::now(),
