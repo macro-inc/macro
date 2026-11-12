@@ -39,7 +39,8 @@ export function nativeSurface(
   codeTokens?: {
     provider: NativeCodeTokenProvider;
     profile: string;
-  }
+  },
+  create?: (config: Uint8Array) => nativeModule.EditorSession
 ) {
   // The supported provider path: the module dispatcher (and its receiver guard) exists before
   // construction and fences the provider.
@@ -48,9 +49,7 @@ export function nativeSurface(
         codeTokens.provider
       )
     : undefined;
-  const session = nativeModule.EditorSession.createMacroWithNamespace(
-    ABI_MAJOR,
-    SessionConfigMsg.encode({
+  const config = SessionConfigMsg.encode({
       doc: 'group-b-view-fixture',
       session: '00000000-0000-0000-0000-000000000001',
       user: 'fixture-user',
@@ -67,15 +66,20 @@ export function nativeSurface(
       coalesce: 25,
       snapshotInterval: 0,
       observed: [],
-    }),
-    0,
-    0,
-    'group-b-view',
-    undefined,
-    undefined,
-    provider,
-    codeTokens?.profile
-  );
+    });
+  const session = create
+    ? create(config)
+    : nativeModule.EditorSession.createMacroWithNamespace(
+        ABI_MAJOR,
+        config,
+        0,
+        0,
+        'group-b-view',
+        undefined,
+        undefined,
+        provider,
+        codeTokens?.profile
+      );
   let view: EditorView | undefined;
   const counters = { admissions: 0 };
   /** Session failure texts reported to the view, in order. */

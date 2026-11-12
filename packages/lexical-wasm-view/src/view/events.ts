@@ -1,3 +1,4 @@
+import { wordKeyCommand } from './word-key-command';
 /**
  * Copyright (c) Meta Platforms, Inc. and affiliates.
  * MIT licensed. Retargeted LexicalEvents.ts handlers and controlled-input gates.
@@ -335,23 +336,26 @@ export function registerEvents(view: EditorView): {
       event.preventDefault();
       return;
     }
-    const keyCommand = [
-      'Enter',
-      'Backspace',
-      'Delete',
-      'Tab',
-      'Escape',
-      'ArrowUp',
-      'ArrowDown',
-      'ArrowLeft',
-      'ArrowRight',
-      'Home',
-      'End',
-    ].includes(event.key)
-      ? `Key(${event.key})`
-      : event.key === ' '
-        ? 'Key(Space)'
-        : null;
+    const wordCommand = wordKeyCommand(event);
+    const keyCommand =
+      wordCommand ??
+      ([
+        'Enter',
+        'Backspace',
+        'Delete',
+        'Tab',
+        'Escape',
+        'ArrowUp',
+        'ArrowDown',
+        'ArrowLeft',
+        'ArrowRight',
+        'Home',
+        'End',
+      ].includes(event.key)
+        ? `Key(${event.key})`
+        : event.key === ' '
+          ? 'Key(Space)'
+          : null);
     if (keyCommand && view.runViewCommand(keyCommand, event, 'before')) {
       event.preventDefault();
       return;

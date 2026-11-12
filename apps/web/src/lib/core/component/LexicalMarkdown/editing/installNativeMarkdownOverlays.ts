@@ -15,6 +15,7 @@ import { registerNativeListSwipeIndent } from '../plugins/list-swipe-indent/nati
 import { registerNativeTabIndentation } from '../plugins/tab-indentation/native';
 import { registerNativeTableTouchSelection } from '../plugins/tables/nativeTouchSelection';
 import { registerNativeTrailingParagraph } from '../plugins/trailing-paragraph/native';
+import { registerNativeWordNavigation } from '../plugins/word-navigation/native';
 import { createMenuOperations } from '../shared/inlineMenu';
 import {
   type NativeActionsOptions,
@@ -80,6 +81,7 @@ export function installNativeMarkdownOverlays(
   try {
     listeners.add(registerNativeBlockNavigation(view));
     listeners.add(registerNativeTabIndentation(view));
+    listeners.add(registerNativeWordNavigation(view));
     listeners.add(registerNativeChecklist(view));
     listeners.add(registerNativeListSwipeIndent(view, options.canEdit));
     if (options.comments) {

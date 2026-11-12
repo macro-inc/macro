@@ -188,6 +188,12 @@ movement; Shift continues selection rather than selecting the whole block.
 Check root-boundary carets too, and verify the final model point after the actual
 DOM selectionchange rather than flattening text and element offsets.
 
+With a leading inline mention, compare Ctrl+Left and Ctrl+Right with both engines,
+including Shift. At text offset zero after the chip, Ctrl+Left selects the
+paragraph start; away from that boundary, browser word movement remains enabled.
+On Apple, Cmd+Left/Right retain line-edge behavior. Repeat in a code block and
+with expanded selections; code endpoints must bypass the application word policy.
+
 Check decorator selection with both engines: click an image and verify its node
 selection clears browser ranges, click an equation once without selecting it as
 a node, then click text after a node selection and verify a range caret returns.

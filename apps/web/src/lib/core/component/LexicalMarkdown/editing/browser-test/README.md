@@ -84,3 +84,21 @@ Meta events and the pixel image load emitted local static assets. The real
 analytics and menu providers remain mounted; analytics delivery is outside this
 cohort. Every other external HTTP/WebSocket attempt is aborted and fails the
 USER fixture, including production hosts. Record these rewrites with evidence.
+
+
+## Word navigation
+
+`word-navigation.playwright.config.ts` runs the existing actual user-mention
+fixture with Source and native engines on Chromium desktop, tablet and phone.
+It inserts a mention through the menu, admits an initial browser caret through
+selectionchange, then compares trusted Ctrl+Left/Right and subsequent typing.
+Raw model JSON, DOM points and the served WASM hash are attached separately.
+The command/model controls cover Shift, code endpoints and simulated Apple
+line-edge fallback; this browser gate does not claim physical Apple or Firefox.
+
+Use `NATIVE_WORD_OUTPUT` for an isolated cache, build and report directory and
+`NATIVE_WORD_PORT` for the preview port. The served WASM must match the canonical
+ordinary artifact, or the explicit `NATIVE_WORD_WASM_SHA` when supplied.
+`NATIVE_WORD_PREBUILT=true` with `NATIVE_WORD_BUILD` replays a previously sealed
+static build; verify its source and package-map hashes before attributing the
+result to current code.

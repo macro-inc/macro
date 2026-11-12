@@ -930,3 +930,5 @@ mod table_facts;
 
 #[cfg(test)]
 mod keyboard_shortcuts;
+
+mod word_navigation;

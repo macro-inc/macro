@@ -241,6 +241,8 @@ impl Plugin for RichCommands {
             CommandKind::Key(KeyCommand::ArrowRight),
             CommandKind::Key(KeyCommand::ArrowUp),
             CommandKind::Key(KeyCommand::ArrowDown),
+            CommandKind::Key(KeyCommand::MoveToStart),
+            CommandKind::Key(KeyCommand::MoveToEnd),
             CommandKind::InsertText,
             CommandKind::DeleteCharacter,
             CommandKind::DeleteWord,
@@ -313,6 +315,24 @@ impl Plugin for RichCommands {
                 rich_text::arrow_up(tx, shift)
             } else {
                 rich_text::arrow_down(tx, shift)
+            }
+            .map_err(|lexical_rich_nodes::Error::Model(error)| error)?;
+            if outcome == rich_text::ArrowOutcome::Handled {
+                tx.prevent_default();
+                return Ok(Handled::Yes);
+            }
+            return Ok(Handled::No);
+        }
+        if let Command::Key {
+            command: command @ (KeyCommand::MoveToStart | KeyCommand::MoveToEnd),
+            event,
+        } = command
+        {
+            let shift = event.as_ref().is_some_and(|event| event.shift);
+            let outcome = if *command == KeyCommand::MoveToStart {
+                rich_text::move_to_start(tx, shift)
+            } else {
+                rich_text::move_to_end(tx, shift)
             }
             .map_err(|lexical_rich_nodes::Error::Model(error)| error)?;
             if outcome == rich_text::ArrowOutcome::Handled {

@@ -118,6 +118,7 @@ pub fn register(builder: EditorBuilder, ty: crate::EditorType) -> EditorBuilder 
     let builder = horizontal_rule::register(builder);
     let builder = movement::register(builder);
     let builder = keyboard::register(builder);
+    let builder = word_navigation::register(builder);
     let builder = table::register(builder);
     let builder = code::register(builder);
     let builder = checklist::register(builder);
@@ -261,6 +262,9 @@ pub fn decode_command(
     if let Some(command) = pinned_properties::decode(name, json)? {
         return Ok(Some(command));
     }
+    if let Some(command) = word_navigation::decode(name, json, event)? {
+        return Ok(Some(command));
+    }
     if name == "group-b.select-all" {
         return Ok(Some(Command::SelectAll(event.cloned())));
     }
@@ -329,7 +333,9 @@ pub fn query(
 
 /// Whether an application key route claims the browser default before dispatch.
 pub fn key_prevents_default(name: &str) -> Option<bool> {
-    (name == "group-b.table-key").then_some(false)
+    (name == "group-b.table-key")
+        .then_some(false)
+        .or_else(|| word_navigation::key_prevents_default(name))
 }
 
 /// Read-only source checklist metadata, with no installed commands or listeners.
@@ -349,3 +355,5 @@ pub mod checklist_presentation;
 
 /// Native presentation deltas over one current session-owned checklist baseline.
 pub mod checklist_updates;
+
+mod word_navigation;

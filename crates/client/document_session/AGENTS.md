@@ -39,6 +39,7 @@ The host supplies identities and both clocks and executes the returned effects.
 - Deliver explicit Focus inputs when host focus changes; preserve logical selection on blur.
 - Register Click at the ordinary rich-text Editor priority and reuse lexical_rich_nodes::rich_text::click; decorator-specific selection remains in component listeners.
 - Register ArrowLeft/ArrowRight at the same Editor priority through rich_text::arrow_left/right; run MoveCharacter through modify_selection with RequireView and leave LayoutRequired text movement to the browser.
+- Register MoveToStart/MoveToEnd at Editor priority through the existing rich-text helpers; preserve application High word interception and prevent browser defaults only when the helper handles the command.
 - Match collaborative registerLoroHistory with Loro’s configured merge interval and the injected host wall clock; keep MergeTracker as the independent group classifier, without a second session interval override. Standalone lexical-history tests do not define collaborative Session boundaries. Pin immediate structural Undo and cold-reopened Undo separately, since reopening has no earlier local creation entry.
 - Checkpoint eligible local projections from their new oplog span instead of document events; retain full events for imports, fixups, paused/excluded edits and undo/redo.
 - Drain initial core output before accepting input; rebuild bindings and undo on reset.

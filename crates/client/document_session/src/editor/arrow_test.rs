@@ -279,3 +279,111 @@ fn vertical_core_fallthrough_leaves_each_selected_block_at_the_source_model_poin
         }
     }
 }
+
+#[test]
+fn word_navigation_keeps_non_apple_browser_motion_and_apple_rich_text_fallback() {
+    for os in [ViewOs::Other, ViewOs::Apple, ViewOs::Ios] {
+        for start in [true, false] {
+            for shift in [false, true] {
+                let mut config = crate::application::application_editor_config(
+                    EditorConfig::default(),
+                    Arc::new(AtomicI64::new(0)),
+                    macro_document_model::EditorType::MarkdownSync,
+                );
+                config.view_host = ViewHost {
+                    engine: ViewEngine::Chromium,
+                    os,
+                };
+                let mut surface = EditorSurface::new(config, 7, now(0)).expect("word session");
+                let doc = lexical_loro::new_doc(7).expect("Loro");
+                let mut view = Vec::new();
+                surface
+                    .init(&doc, now(0), Access::Edit, &mut view)
+                    .expect("initialize");
+                surface.apply(&doc, Input::SetState {
+                    state: serde_json::from_value(json!({"root":{"type":"root","children":[{
+                        "type":"paragraph","children":[
+                            {"type":"user-mention","userId":"person","email":"person@example.com","displayName":"Person"},
+                            {"type":"text","text":" after words"}
+                        ]
+                    }]}})).expect("word document"), tags: TagSet::default(),
+                }, now(0), Access::Edit, &mut view).expect("install");
+                let state = surface.state().view();
+                let block = state.first_child(NodeKey::ROOT).expect("paragraph");
+                let text = state.last_child(block).expect("text");
+                let initial = if start {
+                    Point::text(text, Utf16Offset(6))
+                } else {
+                    Point::element(block, ChildIndex(0))
+                };
+                surface
+                    .apply(
+                        &doc,
+                        Input::SelectionFromView {
+                            selection: ViewSelection::Range {
+                                anchor: initial,
+                                focus: initial,
+                                resolution_dirty: false,
+                            },
+                            change: None,
+                        },
+                        now(1),
+                        Access::Edit,
+                        &mut view,
+                    )
+                    .expect("caret");
+                let json_before = surface.state().to_json().expect("before JSON");
+                let frontiers = doc.oplog_frontiers();
+                view.clear();
+                let apple = matches!(os, ViewOs::Apple | ViewOs::Ios);
+                let event = KeyEvent {
+                    key: if start {
+                        "ArrowLeft".into()
+                    } else {
+                        "ArrowRight".into()
+                    },
+                    ctrl: !apple,
+                    meta: apple,
+                    shift,
+                    ..Default::default()
+                };
+                surface
+                    .apply(
+                        &doc,
+                        Input::KeyDown {
+                            event: event.clone(),
+                            routed: Some(Command::Key {
+                                command: if start {
+                                    KeyCommand::MoveToStart
+                                } else {
+                                    KeyCommand::MoveToEnd
+                                },
+                                event: Some(event),
+                            }),
+                            routed_prevent_default: false,
+                            selection: ViewSelection::KeepModel,
+                        },
+                        now(2),
+                        Access::Edit,
+                        &mut view,
+                    )
+                    .expect("word key");
+                let range = surface
+                    .state()
+                    .selection()
+                    .and_then(Selection::as_range)
+                    .expect("word range");
+                let edge = if start {
+                    Point::element(block, ChildIndex(0))
+                } else {
+                    Point::text(text, Utf16Offset(12))
+                };
+                assert_eq!(range.focus, if apple { edge } else { initial });
+                assert_eq!(range.anchor, if apple && !shift { edge } else { initial });
+                assert_eq!(prevented(&view), apple);
+                assert_eq!(surface.state().to_json().expect("after JSON"), json_before);
+                assert_eq!(doc.oplog_frontiers(), frontiers);
+            }
+        }
+    }
+}
