@@ -204,6 +204,7 @@ export type RoutineContext = {
 export type RoutineTrigger =
   | { type: 'schedule'; cron: string; timezone: string }
   | { type: 'once'; at: string }
+  | { type: 'location'; place: PlaceWatch; on: PlaceTransition }
   | {
       type: 'events';
       events: string[];
@@ -215,6 +216,17 @@ export type RoutineTrigger =
       payload_match?: string[];
       condition?: string;
     };
+
+/** A place a routine watches: a circle around a point. */
+export type PlaceWatch = {
+  name: string;
+  latitude: number;
+  longitude: number;
+  radius_meters: number;
+};
+
+/** Crossing into or out of a place. */
+export type PlaceTransition = 'arrive' | 'leave';
 
 /** The GitHub deliveries a routine watches. Empty lists match everything. */
 export type GithubWatch = {
@@ -229,6 +241,12 @@ export type GithubWatch = {
 export type RoutineFiring =
   | { type: 'scheduled'; scheduled_for: string; schedule: string }
   | { type: 'manual'; requested_at: string }
+  | {
+      type: 'location';
+      place: PlaceWatch;
+      on: PlaceTransition;
+      reported_at: string;
+    }
   | {
       type: 'event';
       event: RoutineEvent;
@@ -1448,6 +1466,19 @@ function routineFiringNodes(firing: RoutineFiring): FxpNode[] {
         requested_at,
       }),
     ])
+    .with({ type: 'location' }, ({ place, on, reported_at }) => [
+      el(
+        'location',
+        [
+          note(
+            on === 'arrive'
+              ? 'The routine ran because its owner arrived at this place.'
+              : 'The routine ran because its owner left this place.'
+          ),
+        ],
+        { ...placeAttributes(place), on, reported_at }
+      ),
+    ])
     .with({ type: 'event' }, ({ event, conditions }) => [
       el('event', routineEventChildren(event), { type: event.event }),
       ...(conditions === undefined || conditions.length === 0
@@ -1464,12 +1495,24 @@ function routineFiringNodes(firing: RoutineFiring): FxpNode[] {
     .exhaustive();
 }
 
+function placeAttributes(place: PlaceWatch) {
+  return {
+    place: place.name,
+    latitude: String(place.latitude),
+    longitude: String(place.longitude),
+    radius_meters: String(place.radius_meters),
+  };
+}
+
 function routineTriggerNode(trigger: RoutineTrigger): FxpNode {
   return match(trigger)
     .with({ type: 'schedule' }, ({ cron, timezone }) =>
       el('schedule', [], { cron, timezone })
     )
     .with({ type: 'once' }, ({ at }) => el('once', [], { at }))
+    .with({ type: 'location' }, ({ place, on }) =>
+      el('location', [], { ...placeAttributes(place), on })
+    )
     .with(
       { type: 'events' },
       ({ events, entity_ids, github, payload_match, condition }) =>

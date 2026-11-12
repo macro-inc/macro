@@ -16,6 +16,7 @@ use routine_program::{AgentStep, StepRecord};
 
 use super::event_runs::ConfigurationRevision;
 use super::event_trigger::ActionTrigger;
+use super::location::{LocationTransition, Place};
 
 #[cfg(test)]
 mod test;
@@ -315,6 +316,13 @@ pub enum RunStart {
     Manual {
         /// Who started it.
         by: String,
+    },
+    /// Its owner's phone arrived at or left one of its places.
+    Location {
+        /// The place.
+        place: Place,
+        /// Which crossing it was.
+        on: LocationTransition,
     },
 }
 

@@ -1,3 +1,5 @@
+import type { PlaceTransition } from './location-trigger';
+
 export type HistoryResource = { type: 'chat' | 'agent'; id: string };
 /** Why a trigger's condition kept a run from starting. */
 export type HistorySkip =
@@ -38,6 +40,8 @@ export type HistoryStep =
 export type HistoryStart =
   | { kind: 'schedule'; schedule: string; timezone: string }
   | { kind: 'event'; event: string; entityId?: string }
+  /** `place` is the name the owner gave it. */
+  | { kind: 'location'; place: string; on: PlaceTransition }
   /** `by` is the person's user id. */
   | { kind: 'manual'; by: string };
 /** Whose name a run's code steps wrote under. */

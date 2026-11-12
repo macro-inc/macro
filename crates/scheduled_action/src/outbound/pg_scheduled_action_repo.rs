@@ -99,7 +99,7 @@ impl TryFrom<ActionRow> for ScheduledAction {
                     row.event_filters.context("event filters missing")?,
                 )?,
             },
-            "multiple" | "once" => {
+            "multiple" | "once" | "location" => {
                 serde_json::from_value(row.trigger_config.context("routine triggers missing")?)?
             }
             other => bail!("unknown action trigger: {other}"),
@@ -160,6 +160,13 @@ impl TryFrom<&ActionTrigger> for TriggerColumns {
             }),
             ActionTrigger::Once { .. } => Ok(Self {
                 trigger_type: "once",
+                schedule: None,
+                timezone: None,
+                event_filters: None,
+                trigger_config: Some(serde_json::to_value(trigger)?),
+            }),
+            ActionTrigger::Location { .. } => Ok(Self {
+                trigger_type: "location",
                 schedule: None,
                 timezone: None,
                 event_filters: None,

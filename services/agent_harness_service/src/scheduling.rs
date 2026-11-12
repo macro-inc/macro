@@ -27,6 +27,7 @@ use scheduled_action::domain::event_runs::{
     PageSize, admission::EventAdmissionService, condition::ConditionGate,
     dispatch::EventDispatchService,
 };
+use scheduled_action::domain::location::LocationRoutines;
 use scheduled_action::domain::models::CreatedItem;
 use scheduled_action::domain::ports::{
     DraftHandBacks, RequestSessions, ScheduledActionDispatcher, SessionCreations,
@@ -43,6 +44,7 @@ use scheduled_action::inbound::axum_router::{ScheduledActionRouterState, schedul
 use scheduled_action::inbound::draft_router::{RoutineDraftRouterState, routine_draft_router};
 use scheduled_action::inbound::event_run_worker::run_event_worker;
 use scheduled_action::inbound::kafka_consumer::run_scheduled_action_event_consumer;
+use scheduled_action::inbound::location_router::{LocationRouterState, location_router};
 use scheduled_action::inbound::suggestion_router::{
     RoutineSuggestionRouterState, routine_suggestion_router,
 };
@@ -57,6 +59,7 @@ use scheduled_action::outbound::inprocess_executor::InProcessExecutor;
 use scheduled_action::outbound::pg_code_upgrades::PgCodeUpgrades;
 use scheduled_action::outbound::pg_draft_hand_backs::PgDraftHandBacks;
 use scheduled_action::outbound::pg_event_run_repo::PgEventRunRepo;
+use scheduled_action::outbound::pg_location_repo::PgLocationRepo;
 use scheduled_action::outbound::pg_polling_dispatcher::{
     PgPollingDispatcher, PgPollingDispatcherLifecycle,
 };
@@ -413,7 +416,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     let service = Arc::new(
         ScheduledActionServiceImpl::new(
             Arc::clone(&repo),
-            service_executor,
+            Arc::clone(&service_executor),
             dispatcher_tx,
             access.clone(),
         )
@@ -507,6 +510,14 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         service: drafts,
         authorization_state: authorization_state.clone(),
     };
+    let location_state = LocationRouterState {
+        service: Arc::new(LocationRoutines::new(
+            Arc::clone(&repo),
+            Arc::new(PgLocationRepo::new(db.clone())),
+            Arc::clone(&service_executor),
+        )),
+        authorization_state: authorization_state.clone(),
+    };
     let state = ScheduledActionRouterState {
         service,
         access_service: access,
@@ -515,7 +526,8 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     let authed_routes = scheduled_action_router::<_, _, _, ()>(state)
         .merge(routine_template_router::<_, _, _, ()>(template_state))
         .merge(routine_draft_router::<_, _, ()>(draft_state))
-        .merge(routine_suggestion_router::<_, _, ()>(suggestion_state));
+        .merge(routine_suggestion_router::<_, _, ()>(suggestion_state))
+        .merge(location_router::<_, _, ()>(location_state));
 
     let router = mount_router(authed_routes)
         .layer(macro_cors::cors_layer())

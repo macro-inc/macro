@@ -3,6 +3,8 @@ import { createQueryKeys } from '@lukemorales/query-key-factory';
 export const scheduledActionKeys = createQueryKeys('scheduledAction', {
   all: null,
   list: null,
+  /** The places the user's enabled routines watch, for this phone to monitor. */
+  locationFences: null,
   catalog: (params: { timezone: string }) => ({
     queryKey: [params.timezone],
   }),

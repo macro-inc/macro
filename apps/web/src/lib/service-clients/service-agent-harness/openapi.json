@@ -7652,6 +7652,17 @@
           },
           {
             "type": "object",
+            "description": "Its owner's phone arrived at or left a place it watches.",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["location"]
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "An event it watches happened.",
             "required": ["event_id", "type"],
             "properties": {

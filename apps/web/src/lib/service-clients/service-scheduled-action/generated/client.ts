@@ -17,10 +17,14 @@ import type {
   Draft,
   DraftRoutineRequest,
   EmptyResponse,
+  FenceList,
   GenerateRoutineSuggestionsParams,
   InProgressExecution,
   ListRoutineSuggestionsParams,
   ListScheduledActionsParams,
+  LocationReport,
+  LocationReportOutcome,
+  RegisteredDevice,
   RoutineCatalogParams,
   RoutineCheck,
   RoutineSuggestions,
@@ -442,6 +446,246 @@ export const draftRoutine = async (
     status: res.status,
     headers: res.headers,
   } as draftRoutineResponse;
+};
+
+export type registerLocationDeviceResponse201 = {
+  data: RegisteredDevice;
+  status: 201;
+};
+
+export type registerLocationDeviceResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type registerLocationDeviceResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type registerLocationDeviceResponseSuccess =
+  registerLocationDeviceResponse201 & {
+    headers: Headers;
+  };
+export type registerLocationDeviceResponseError = (
+  | registerLocationDeviceResponse401
+  | registerLocationDeviceResponse500
+) & {
+  headers: Headers;
+};
+
+export type registerLocationDeviceResponse =
+  | registerLocationDeviceResponseSuccess
+  | registerLocationDeviceResponseError;
+
+export const getRegisterLocationDeviceUrl = () => {
+  return `/scheduled-actions/location/devices`;
+};
+
+export const registerLocationDevice = async (
+  options?: RequestInit
+): Promise<registerLocationDeviceResponse> => {
+  const res = await fetch(getRegisterLocationDeviceUrl(), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: registerLocationDeviceResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as registerLocationDeviceResponse;
+};
+
+export type removeLocationDeviceResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type removeLocationDeviceResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type removeLocationDeviceResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type removeLocationDeviceResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type removeLocationDeviceResponseSuccess =
+  removeLocationDeviceResponse204 & {
+    headers: Headers;
+  };
+export type removeLocationDeviceResponseError = (
+  | removeLocationDeviceResponse401
+  | removeLocationDeviceResponse404
+  | removeLocationDeviceResponse500
+) & {
+  headers: Headers;
+};
+
+export type removeLocationDeviceResponse =
+  | removeLocationDeviceResponseSuccess
+  | removeLocationDeviceResponseError;
+
+export const getRemoveLocationDeviceUrl = (deviceId: string) => {
+  return `/scheduled-actions/location/devices/${deviceId}`;
+};
+
+export const removeLocationDevice = async (
+  deviceId: string,
+  options?: RequestInit
+): Promise<removeLocationDeviceResponse> => {
+  const res = await fetch(getRemoveLocationDeviceUrl(deviceId), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: removeLocationDeviceResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as removeLocationDeviceResponse;
+};
+
+export type listLocationFencesResponse200 = {
+  data: FenceList;
+  status: 200;
+};
+
+export type listLocationFencesResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type listLocationFencesResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type listLocationFencesResponseSuccess =
+  listLocationFencesResponse200 & {
+    headers: Headers;
+  };
+export type listLocationFencesResponseError = (
+  | listLocationFencesResponse401
+  | listLocationFencesResponse500
+) & {
+  headers: Headers;
+};
+
+export type listLocationFencesResponse =
+  | listLocationFencesResponseSuccess
+  | listLocationFencesResponseError;
+
+export const getListLocationFencesUrl = () => {
+  return `/scheduled-actions/location/fences`;
+};
+
+export const listLocationFences = async (
+  options?: RequestInit
+): Promise<listLocationFencesResponse> => {
+  const res = await fetch(getListLocationFencesUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listLocationFencesResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listLocationFencesResponse;
+};
+
+/**
+ * @summary Authorized by the phone's device token (`Authorization: Bearer mloc_…`),
+not a session: the phone reports from the background, without the app.
+ */
+export type reportLocationCrossingResponse202 = {
+  data: LocationReportOutcome;
+  status: 202;
+};
+
+export type reportLocationCrossingResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type reportLocationCrossingResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type reportLocationCrossingResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type reportLocationCrossingResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type reportLocationCrossingResponseSuccess =
+  reportLocationCrossingResponse202 & {
+    headers: Headers;
+  };
+export type reportLocationCrossingResponseError = (
+  | reportLocationCrossingResponse400
+  | reportLocationCrossingResponse401
+  | reportLocationCrossingResponse404
+  | reportLocationCrossingResponse500
+) & {
+  headers: Headers;
+};
+
+export type reportLocationCrossingResponse =
+  | reportLocationCrossingResponseSuccess
+  | reportLocationCrossingResponseError;
+
+export const getReportLocationCrossingUrl = () => {
+  return `/scheduled-actions/location/reports`;
+};
+
+export const reportLocationCrossing = async (
+  locationReport: LocationReport,
+  options?: RequestInit
+): Promise<reportLocationCrossingResponse> => {
+  const res = await fetch(getReportLocationCrossingUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(locationReport),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: reportLocationCrossingResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as reportLocationCrossingResponse;
 };
 
 export type listRoutineSuggestionsResponse200 = {

@@ -26,6 +26,10 @@ document_sub_type = { path = "../document_sub_type" }
 email = { path = "../email", default-features = false, features = ["outbound"] }
 github = { path = "../github", default-features = false, features = ["installation_claims"] }
 glob = { workspace = true }
+hex = { workspace = true }
+lazy-regex = { workspace = true }
+rand = { workspace = true }
+sha2 = { workspace = true }
 feature_flags = { path = "../feature_flags" }
 jev = { path = "../jev", features = ["outbound"] }
 lexical_client = { path = "../lexical_client" }
@@ -54,7 +58,6 @@ sqlx = { workspace = true }
 macro_user_id = { path = "../macro_user_id"}
 cron = { workspace = true }
 anyhow = { workspace = true }
-lazy-regex = { workspace = true }
 macro_uuid = { path = "../macro_uuid"}
 chrono = { workspace = true}
 chrono-tz = { workspace = true }

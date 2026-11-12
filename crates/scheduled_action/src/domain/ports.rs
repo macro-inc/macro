@@ -1,6 +1,7 @@
 use super::event_runs::{AuthorizedEventRun, ClaimToken, ConfigurationRevision};
 use super::event_trigger::{EventName, EventReference};
 use super::execution::ExecutionHandle;
+use super::location::LocationFiring;
 use super::models::{
     ActionConfiguration, ActionConfigurationUpdate, ActionExecutionRecord, DispatchEvent,
     InProgressExecution, ListedAction, RunHistory, ScheduledAction, ScheduledActionUpdate,
@@ -437,6 +438,13 @@ pub trait ScheduledActionExecutor {
         &self,
         action: ScheduledAction,
     ) -> impl Future<Output = Result<InProgressExecution>> + Send;
+
+    /// Run the routine because its owner's phone crossed one of its places.
+    fn execute_location(
+        &self,
+        action: ScheduledAction,
+        firing: LocationFiring,
+    ) -> impl Future<Output = Result<InProgressExecution>> + Send;
 }
 
 /// What started a routine run.
@@ -446,6 +454,8 @@ pub enum RoutineRun<'a> {
     Scheduled { scheduled_for: DateTime<Utc> },
     /// Its owner started it by hand.
     Manual { requested_at: DateTime<Utc> },
+    /// Its owner's phone arrived at or left one of its places.
+    Location(&'a LocationFiring),
     /// An event it watches happened, and its owner may read it.
     Event(&'a AuthorizedEventRun),
 }
@@ -456,6 +466,7 @@ impl RoutineRun<'_> {
         match self {
             Self::Scheduled { .. } => RoutineCause::Scheduled,
             Self::Manual { .. } => RoutineCause::Manual,
+            Self::Location(_) => RoutineCause::Location,
             Self::Event(run) => RoutineCause::Event {
                 event_id: run.pending.event.event_id().into(),
             },
@@ -465,7 +476,7 @@ impl RoutineRun<'_> {
     pub fn event(&self) -> Option<&EventReference> {
         match self {
             Self::Event(run) => Some(&run.pending.event),
-            Self::Scheduled { .. } | Self::Manual { .. } => None,
+            Self::Scheduled { .. } | Self::Manual { .. } | Self::Location(_) => None,
         }
     }
 }
@@ -848,6 +859,8 @@ pub enum RunTrigger {
     Scheduled,
     /// Its owner started it by hand.
     Manual,
+    /// Its owner's phone arrived at or left one of its places.
+    Location,
     /// An event it watches happened.
     Event(EventName),
 }

@@ -583,6 +583,55 @@ describe('composeAgentContextPrompt with a trigger', () => {
     );
   });
 
+  it('renders a routine run by its owner arriving at a place', () => {
+    const markdown = composeAgentContextPrompt({
+      promptMarkdown: 'Post my standup notes.',
+      trigger: {
+        kind: 'routine',
+        routine_id: 'r-4',
+        name: 'At the office',
+        owner: {
+          id: 'macro|julia@example.com',
+          name: 'Julia',
+          email: 'julia@example.com',
+        },
+        instructions: 'Post my standup notes in #standup.',
+        triggers: [
+          {
+            type: 'location',
+            place: {
+              name: 'Office',
+              latitude: 40.7128,
+              longitude: -74.006,
+              radius_meters: 200,
+            },
+            on: 'arrive',
+          },
+        ],
+        firing: {
+          type: 'location',
+          place: {
+            name: 'Office',
+            latitude: 40.7128,
+            longitude: -74.006,
+            radius_meters: 200,
+          },
+          on: 'arrive',
+          reported_at: '2026-11-06T13:02:11Z',
+        },
+      },
+    });
+
+    const context = hiddenContext(markdown);
+    expect(context).toContain(
+      '<location place="Office" latitude="40.7128" longitude="-74.006" radius_meters="200" on="arrive"/>'
+    );
+    expect(context).toContain(
+      'The routine ran because its owner arrived at this place.'
+    );
+    expect(context).toContain('reported_at="2026-11-06T13:02:11Z"');
+  });
+
   it('renders a routine fired by a task status change, with the change and the condition', () => {
     const markdown = composeAgentContextPrompt({
       promptMarkdown: 'Escalate the blocker.',

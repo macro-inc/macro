@@ -577,7 +577,8 @@ fn next_run(
     fired: impl Fn(DateTime<Utc>) -> bool,
 ) -> Result<Option<DateTime<Utc>>> {
     let next = trigger.first_run_at(now, fired);
-    if trigger.has_schedule() && next.is_none() && trigger.event_filters().is_none() {
+    let fires_otherwise = trigger.event_filters().is_some() || !trigger.places().is_empty();
+    if trigger.has_schedule() && next.is_none() && !fires_otherwise {
         return Err(ActionPolicyError::NoFutureFirings.into());
     }
     Ok(next)

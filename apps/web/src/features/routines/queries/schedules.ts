@@ -150,6 +150,10 @@ export function invalidateSchedules() {
     queryClient.invalidateQueries({
       queryKey: scheduledActionKeys.detail._def,
     }),
+    // A routine's places change with its triggers and whether it is enabled.
+    queryClient.invalidateQueries({
+      queryKey: scheduledActionKeys.locationFences.queryKey,
+    }),
   ]);
 }
 

@@ -478,6 +478,13 @@ pub enum RoutineTrigger {
         /// When it runs.
         at: DateTime<Utc>,
     },
+    /// Its owner's phone arriving at or leaving a place.
+    Location {
+        /// The place, as the owner named it.
+        place: PlaceWatch,
+        /// Which crossing runs it.
+        on: PlaceTransition,
+    },
     /// Events it watches.
     Events {
         /// The event names, such as `email.message_received`.
@@ -496,6 +503,42 @@ pub enum RoutineTrigger {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         condition: Option<String>,
     },
+}
+
+/// A place a routine watches: a circle around a point.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlaceWatch {
+    /// What the owner calls it, such as "Office".
+    pub name: String,
+    /// Degrees north.
+    pub latitude: Degrees,
+    /// Degrees east.
+    pub longitude: Degrees,
+    /// How far from the point still counts as there.
+    pub radius_meters: u32,
+}
+
+/// An angle in degrees. Finite by construction, so equality is exact.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct Degrees(pub f64);
+
+impl PartialEq for Degrees {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.to_bits() == other.0.to_bits()
+    }
+}
+
+impl Eq for Degrees {}
+
+/// Crossing into or out of a place.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PlaceTransition {
+    /// Arriving there.
+    Arrive,
+    /// Leaving.
+    Leave,
 }
 
 /// The GitHub deliveries a routine watches. Empty lists match everything.
@@ -529,6 +572,15 @@ pub enum RoutineFiring {
     Manual {
         /// When they started it.
         requested_at: DateTime<Utc>,
+    },
+    /// Its owner's phone arrived at or left a place it watches.
+    Location {
+        /// The place.
+        place: PlaceWatch,
+        /// Which crossing it was.
+        on: PlaceTransition,
+        /// When the phone reported it.
+        reported_at: DateTime<Utc>,
     },
     /// An event it watches happened.
     Event {

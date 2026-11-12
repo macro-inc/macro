@@ -67,7 +67,8 @@ export type ActionExecutionRecord = {
 export type ActionKind = 'Agent';
 
 /**
- * A routine may run on one trigger or any of several schedules and Macro events.
+ * A routine may run on one trigger or any of several schedules, places and
+ * Macro events.
  */
 export type ActionTrigger = {
     schedule: Schedule;
@@ -79,6 +80,10 @@ export type ActionTrigger = {
 } | {
     at: string;
     type: 'once';
+} | {
+    on: LocationTransition;
+    place: Place;
+    type: 'location';
 } | {
     triggers: RoutineTriggers;
     type: 'multiple';
@@ -565,6 +570,21 @@ export type ExecutionResult = {
 };
 
 /**
+ * A fence for the owner's phones to watch.
+ */
+export type Fence = {
+    id: string;
+    on: LocationTransition;
+    place: Place;
+    routine_id: string;
+    routine_name: string;
+};
+
+export type FenceList = {
+    fences: Array<Fence>;
+};
+
+/**
  * Where a person's suggestions are in being generated.
  */
 export type GenerationStatus = 'none' | 'generating' | 'ready' | 'failed';
@@ -604,6 +624,29 @@ export type InProgressExecution = {
  * digits, e.g. `dueWithinDays`.
  */
 export type KnobName = string;
+
+/**
+ * A phone saying it crossed one of its fences.
+ */
+export type LocationReport = {
+    fence: string;
+    on: LocationTransition;
+};
+
+/**
+ * Whether a report started its routine.
+ */
+export type LocationReportOutcome = {
+    /**
+     * False when the place already ran it within the cooldown.
+     */
+    started: boolean;
+};
+
+/**
+ * Crossing into or out of a place.
+ */
+export type LocationTransition = 'arrive' | 'leave';
 
 /**
  * What a text knob's value names: one of its owner's items, which a client
@@ -646,6 +689,29 @@ export type PayloadCondition = {
 export type PayloadScalar = null | boolean | number | string;
 
 /**
+ * A circle around a point: the place a location trigger watches.
+ */
+export type Place = {
+    /**
+     * Degrees north, -90 to 90.
+     */
+    latitude: number;
+    /**
+     * Degrees east, -180 to 180.
+     */
+    longitude: number;
+    /**
+     * What the owner calls it, such as "Office".
+     */
+    name: string;
+    /**
+     * How far from the point still counts as there. Phones place a fence
+     * reliably only from about 100 meters.
+     */
+    radius_meters: number;
+};
+
+/**
  * Narrows a task property change filter to one property and, optionally, the
  * values it must gain.
  */
@@ -659,6 +725,14 @@ export type PropertySelector = {
      * add. Any change to the property matches when empty.
      */
     values?: Array<string>;
+};
+
+/**
+ * A newly registered phone. The token is shown only here.
+ */
+export type RegisteredDevice = {
+    device_id: string;
+    token: string;
 };
 
 /**
@@ -927,6 +1001,10 @@ export type RoutineTrigger = {
 } | {
     at: string;
     type: 'once';
+} | {
+    on: LocationTransition;
+    place: Place;
+    type: 'location';
 };
 
 /**
@@ -987,6 +1065,16 @@ export type RunStart = {
      */
     by: string;
     kind: 'manual';
+} | {
+    kind: 'location';
+    /**
+     * Which crossing it was.
+     */
+    on: LocationTransition;
+    /**
+     * The place.
+     */
+    place: Place;
 };
 
 /**
@@ -1396,6 +1484,106 @@ export type DraftRoutineResponses = {
 };
 
 export type DraftRoutineResponse = DraftRoutineResponses[keyof DraftRoutineResponses];
+
+export type RegisterLocationDeviceData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/scheduled-actions/location/devices';
+};
+
+export type RegisterLocationDeviceErrors = {
+    401: string;
+    500: string;
+};
+
+export type RegisterLocationDeviceError = RegisterLocationDeviceErrors[keyof RegisterLocationDeviceErrors];
+
+export type RegisterLocationDeviceResponses = {
+    /**
+     * The phone's token, shown only here
+     */
+    201: RegisteredDevice;
+};
+
+export type RegisterLocationDeviceResponse = RegisterLocationDeviceResponses[keyof RegisterLocationDeviceResponses];
+
+export type RemoveLocationDeviceData = {
+    body?: never;
+    path: {
+        /**
+         * The phone to stop reporting
+         */
+        device_id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/location/devices/{device_id}';
+};
+
+export type RemoveLocationDeviceErrors = {
+    401: string;
+    404: string;
+    500: string;
+};
+
+export type RemoveLocationDeviceError = RemoveLocationDeviceErrors[keyof RemoveLocationDeviceErrors];
+
+export type RemoveLocationDeviceResponses = {
+    204: void;
+};
+
+export type RemoveLocationDeviceResponse = RemoveLocationDeviceResponses[keyof RemoveLocationDeviceResponses];
+
+export type ListLocationFencesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/scheduled-actions/location/fences';
+};
+
+export type ListLocationFencesErrors = {
+    401: string;
+    500: string;
+};
+
+export type ListLocationFencesError = ListLocationFencesErrors[keyof ListLocationFencesErrors];
+
+export type ListLocationFencesResponses = {
+    /**
+     * The places the caller's enabled routines watch
+     */
+    200: FenceList;
+};
+
+export type ListLocationFencesResponse = ListLocationFencesResponses[keyof ListLocationFencesResponses];
+
+export type ReportLocationCrossingData = {
+    body: LocationReport;
+    path?: never;
+    query?: never;
+    url: '/scheduled-actions/location/reports';
+};
+
+export type ReportLocationCrossingErrors = {
+    400: string;
+    /**
+     * Unknown device token: the phone should forget it
+     */
+    401: string;
+    /**
+     * Unknown fence: the phone should stop watching it
+     */
+    404: string;
+    500: string;
+};
+
+export type ReportLocationCrossingError = ReportLocationCrossingErrors[keyof ReportLocationCrossingErrors];
+
+export type ReportLocationCrossingResponses = {
+    202: LocationReportOutcome;
+};
+
+export type ReportLocationCrossingResponse = ReportLocationCrossingResponses[keyof ReportLocationCrossingResponses];
 
 export type ListRoutineSuggestionsData = {
     body?: never;

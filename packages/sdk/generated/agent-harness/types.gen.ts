@@ -2721,6 +2721,8 @@ export type RoutineCause = {
 } | {
     type: 'manual';
 } | {
+    type: 'location';
+} | {
     /**
      * The event.
      */

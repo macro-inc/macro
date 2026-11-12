@@ -3,9 +3,9 @@
 ## What it is
 
 Serves agent sessions' automations ("routines"): the reusable domain and adapters for
-scheduled and event-triggered agent automations — cron-style schedules plus
-Kafka/Jev-gated event triggers that run a target (agent, workflow) and track
-each run.
+scheduled, event- and location-triggered agent automations — cron-style
+schedules, Kafka/Jev-gated event triggers and place crossings reported by the
+owner's phone, each running a target (agent, workflow) and tracking each run.
 
 ## Start here
 
@@ -126,6 +126,14 @@ each run.
   `src/inbound/event_run_worker.rs`: the three inbound adapters.
 - `src/domain/templates.rs` + `src/inbound/template_router.rs`: sharing a
   routine as a template and activating it as someone else's routine.
+- `src/domain/location.rs` + `src/inbound/location_router.rs`: location
+  triggers (`place` + `on: arrive | leave`). The phone app registers a device
+  (`POST /scheduled-actions/location/devices`, token returned once, SHA-256
+  kept in `scheduled_action_location_device`), lists its owner's fences
+  (`GET …/location/fences`) for OS geofencing
+  (`apps/web/tauri/geofence_plugin`), and reports crossings with the device
+  token (`POST …/location/reports`), which `LocationRoutines` runs through
+  `ScheduledActionExecutor::execute_location`.
 - `services/agent_harness_service/src/scheduling.rs`: the sole runtime host;
   this crate has no deployed binary.
 
@@ -242,6 +250,15 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   rejects it as `RoutineWrite`, for any routine, so two can't trigger each
   other. Mail received, internal hops and sync-service document edits carry
   no stamp.
+- A location trigger (stored as `trigger_type = 'location'`, or inside
+  `multiple`) has no `next_run_at` of its own. The server never receives a
+  location, only "this fence was crossed". A fence id is
+  `<routine id>.<digest of circle and crossing>`, so moving a place or changing
+  arrive/leave makes the phone's old fence 404 (it drops it) while renaming
+  keeps it. `scheduled_action_location_firing` lets each fence start its
+  routine at most once per `FIRING_COOLDOWN` (10 minutes), across all the
+  owner's phones. Routines with places can't be shared as templates
+  (`TemplateInputError::SharesPlaces`): the snapshot would show where the owner goes.
 - `EventReference` rejects unknown keys, so a replica still on older code can't
   read a run row with a new key: write a new optional key only when it is set.
 

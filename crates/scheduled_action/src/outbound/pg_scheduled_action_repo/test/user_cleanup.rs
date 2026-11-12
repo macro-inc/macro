@@ -21,6 +21,14 @@ impl ScheduledActionExecutor for NeverExecutor {
     async fn execute_action(&self, _: ScheduledAction) -> Result<InProgressExecution> {
         panic!("cleanup must not execute actions")
     }
+
+    async fn execute_location(
+        &self,
+        _: ScheduledAction,
+        _: crate::domain::location::LocationFiring,
+    ) -> Result<InProgressExecution> {
+        panic!("cleanup must not execute actions")
+    }
 }
 
 /// Both User rows remain throughout, ruling out ON DELETE CASCADE entirely.

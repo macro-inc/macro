@@ -281,6 +281,12 @@ export const scheduledActionExcluded = [
   'generateRoutineSuggestions', // The app starts suggestions once the inbox connects.
   'dismissRoutineSuggestion', // The app's suggestion surfaces.
   'scheduledActionHealth',
+  // The phone app's geofencing: its device token, the places it monitors, and
+  // the crossings its native code reports with that token.
+  'listLocationFences',
+  'registerLocationDevice',
+  'removeLocationDevice',
+  'reportLocationCrossing',
 ] as const satisfies readonly (keyof ScheduledActionSdk)[];
 
 export const scheduledActionBacklog =

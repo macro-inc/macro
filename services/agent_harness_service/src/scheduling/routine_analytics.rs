@@ -42,6 +42,7 @@ impl From<&FinishedRoutineRun> for RunProperties {
         let (trigger, trigger_event) = match run.trigger {
             RunTrigger::Scheduled => ("scheduled", None),
             RunTrigger::Manual => ("manual", None),
+            RunTrigger::Location => ("location", None),
             RunTrigger::Event(name) => ("event", Some(name.as_str())),
         };
         Self {
