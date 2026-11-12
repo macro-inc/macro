@@ -75,8 +75,7 @@ pub struct ActivityRow {
     /// Where it got to.
     pub status: ActivityStatus,
     /// The model's tool call this step ran inside: set on each SDK request a
-    /// code execution made, absent for a call the model made itself. Counting
-    /// tool calls counts distinct calls, not rows.
+    /// code execution made, absent for a call the model made itself.
     #[serde(default)]
     pub call: Option<String>,
     /// What the step put in front of the person, shown where it ran.

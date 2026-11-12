@@ -1,20 +1,21 @@
 import { DisclosureCaret, TextShimmer } from '@app/features/block-agent/ui';
+import { plural } from '@core/util/string';
 import { CollapseTransition } from '@ui/components/CollapseTransition';
 import { createSignal, createUniqueId, Show } from 'solid-js';
 import { ActivityRows, type ActivityRowView } from './activity-rows';
 
-const plural = (count: number, noun: string) =>
-  `${count} ${count === 1 ? noun : `${noun}s`}`;
+const counted = (count: number, noun: string) =>
+  `${count} ${plural(noun, count)}`;
 
 /**
  * What a run did: the model's tool calls, and the SDK requests its code
  * executions made, which are rows of their own but not calls.
  */
-export function usedLabel(rows: readonly ActivityRowView[]): string {
+function usedLabel(rows: readonly ActivityRowView[]): string {
   const calls = new Set(rows.map((row) => row.call ?? row.id)).size;
   const requests = rows.filter((row) => row.call).length;
-  const used = `Used ${plural(calls, 'tool')}`;
-  return requests > 0 ? `${used} · ${plural(requests, 'request')}` : used;
+  const used = `Used ${counted(calls, 'tool')}`;
+  return requests > 0 ? `${used} · ${counted(requests, 'request')}` : used;
 }
 
 /**
@@ -24,13 +25,12 @@ export function usedLabel(rows: readonly ActivityRowView[]): string {
 export function ActivitySummary(props: { rows: readonly ActivityRowView[] }) {
   const [open, setOpen] = createSignal(false);
   const contentId = createUniqueId();
-  const count = () => props.rows.length;
   const failed = () =>
     props.rows.filter((row) => row.status === 'failed').length;
   // A call held for permission can still finish after its run sealed.
   const running = () => props.rows.some((row) => row.status === 'running');
   return (
-    <Show when={count() > 0}>
+    <Show when={props.rows.length > 0}>
       <div class="my-1 min-w-0">
         <button
           type="button"
@@ -40,10 +40,7 @@ export function ActivitySummary(props: { rows: readonly ActivityRowView[] }) {
           onClick={() => setOpen(!open())}
         >
           <span>
-            <TextShimmer
-              text={usedLabel(props.rows)}
-              active={running()}
-            />
+            <TextShimmer text={usedLabel(props.rows)} active={running()} />
             <Show when={failed() > 0}>
               <span class="text-failure">{` · ${failed()} failed`}</span>
             </Show>
