@@ -537,7 +537,6 @@ fn term_clauses_share_one_chunk_budget_per_document() -> anyhow::Result<()> {
             vec!["one", "two", "three", "four", "five", "six", "seven"],
             1,
         ),
-        (vec!["term"; 12], 1),
     ] {
         let json = content_terms(&terms).build_bool_query()?.build().to_json();
         let must = json["bool"]["must"].as_array().expect("must array");
@@ -552,6 +551,26 @@ fn term_clauses_share_one_chunk_budget_per_document() -> anyhow::Result<()> {
             );
         }
     }
+    Ok(())
+}
+
+#[test]
+fn only_the_first_ten_term_clauses_carry_inner_hits() -> anyhow::Result<()> {
+    let terms = [
+        "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven",
+        "twelve",
+    ];
+    let json = content_terms(&terms).build_bool_query()?.build().to_json();
+    let must = json["bool"]["must"].as_array().expect("must array");
+
+    assert_eq!(must.len(), 12, "every term still has to match");
+    let inner_hit_sizes: Vec<Option<u64>> = must
+        .iter()
+        .map(|clause| clause["has_child"]["inner_hits"]["size"].as_u64())
+        .collect();
+    let mut expected = vec![Some(1); 10];
+    expected.extend([None, None]);
+    assert_eq!(inner_hit_sizes, expected);
     Ok(())
 }
 

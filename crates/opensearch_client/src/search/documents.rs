@@ -285,7 +285,7 @@ impl DocumentQueryBuilder {
     /// One `has_child` clause per term, each carrying its own `inner_hits` so
     /// highlights and chunk-nav data come back alongside the parent. The
     /// clauses split [`INNER_HITS_PER_DOCUMENT`] between them, so a document
-    /// returns about that many chunks however many terms the query has. The
+    /// returns at most that many chunks however many terms the query has. The
     /// shared `highlight_query` ORs every term so a returned chunk gets tagged
     /// for every term it contains, not just the one its clause matched.
     fn build_content_has_child_clauses<'a>(&'a self) -> Vec<QueryType<'a>> {
@@ -296,21 +296,27 @@ impl DocumentQueryBuilder {
             .map(|term| build_child_content_query(term, &self.inner.match_type))
             .collect();
         let highlight_query = build_any_term_highlight_query(&term_queries);
-        let term_count = u32::try_from(term_queries.len()).unwrap_or(u32::MAX);
-        let inner_hits_per_term = (INNER_HITS_PER_DOCUMENT / term_count.max(1)).max(1);
+        // Past the budget, only the first clauses carry inner hits. A matching
+        // document has a chunk for every term, so each row still gets passages.
+        let clauses_with_inner_hits = u32::try_from(term_queries.len())
+            .unwrap_or(u32::MAX)
+            .clamp(1, INNER_HITS_PER_DOCUMENT);
+        let inner_hits_per_term = INNER_HITS_PER_DOCUMENT / clauses_with_inner_hits;
 
         term_queries
             .into_iter()
-            .enumerate()
-            .map(|(idx, inner_query)| {
+            .zip(0u32..)
+            .map(|(inner_query, idx)| {
+                let has_child = HasChildQuery::new(CHILD_RELATION, inner_query);
+                if idx >= clauses_with_inner_hits {
+                    return has_child.into();
+                }
                 let inner_hits = InnerHits::new()
                     .name(format!("term_{idx}"))
                     .size(inner_hits_per_term)
                     .source_fields(CHUNK_SOURCE_FIELDS)
                     .highlight(inner_hits_content_highlight(&highlight_query));
-                HasChildQuery::new(CHILD_RELATION, inner_query)
-                    .inner_hits(inner_hits)
-                    .into()
+                has_child.inner_hits(inner_hits).into()
             })
             .collect()
     }
