@@ -266,6 +266,7 @@ fn configure(
         return ConfigForm::create(path, agent, workspace);
     }
     let mut form = ConfigForm::load(path)?;
+    form.drop_retired_settings();
     if let Some(agent) = &agent {
         form.apply_agent(agent);
     }
