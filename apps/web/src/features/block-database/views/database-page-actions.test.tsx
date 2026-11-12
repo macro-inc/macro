@@ -22,9 +22,16 @@ import {
   DatabasePageActions,
 } from './database-page-actions';
 
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({ enabled: true }),
+}));
+
 // Keep the real split label, title and menu together; stub only host data.
 vi.mock('@app/components/entity-detail/DocumentTitleHoverCard', () => ({
   DocumentTitleHoverCard: () => null,
+}));
+vi.mock('@app/features/entity-appearance/entity-appearance', () => ({
+  useChangeEntityIcon: () => vi.fn(),
 }));
 vi.mock('@core/block', () => ({
   isInBlock: () => true,
@@ -118,38 +125,36 @@ function setup(
   const [loaded, setLoaded] = createSignal(false);
   render(() => (
     <QueryClientProvider client={queryClient}>
-      <>
-        <BlockItemSplitLabel
-          name={() => 'Customers'}
-          title={
-            <Show when={loaded()}>
-              <DatabaseTitle
-                name="Customers"
-                canEdit={grant !== 'view'}
-                onRename={vi.fn()}
-                onEditReady={editReady}
-              />
-            </Show>
-          }
-        />
-        <DatabasePageActions
-          detail={
-            {
-              database: { id: 'db', name: 'Customers', owner_id: 'owner' },
-              grant,
-              tables: [],
-            } as unknown as DatabaseDetail
-          }
-          table={
-            selectedTable?.() ??
-            ({ table: { id: 'table', name: 'Contacts' } } as TableDetail)
-          }
-          entityActions={entityActions}
-          onImported={vi.fn()}
-          onRename={() => editTitle?.()}
-          onDelete={remove}
-        />
-      </>
+      <BlockItemSplitLabel
+        name={() => 'Customers'}
+        title={
+          <Show when={loaded()}>
+            <DatabaseTitle
+              name="Customers"
+              canEdit={grant !== 'view'}
+              onRename={vi.fn()}
+              onEditReady={editReady}
+            />
+          </Show>
+        }
+      />
+      <DatabasePageActions
+        detail={
+          {
+            database: { id: 'db', name: 'Customers', owner_id: 'owner' },
+            grant,
+            tables: [],
+          } as unknown as DatabaseDetail
+        }
+        table={
+          selectedTable?.() ??
+          ({ table: { id: 'table', name: 'Contacts' } } as TableDetail)
+        }
+        entityActions={entityActions}
+        onImported={vi.fn()}
+        onRename={() => editTitle?.()}
+        onDelete={remove}
+      />
     </QueryClientProvider>
   ));
   setLoaded(true);
