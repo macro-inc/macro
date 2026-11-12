@@ -240,7 +240,7 @@ where
         self.end(id);
         let (digests, receiver) = watch::channel(Some(digest));
         let ended = self.shutdown.child_token();
-        self.running.insert(
+        let replaced = self.running.insert(
             id,
             RunningTurn {
                 turn,
@@ -248,17 +248,29 @@ where
                 ended: ended.clone(),
             },
         );
-        self.tasks.spawn(run_turn(
-            self.repo.clone(),
-            self.realtime.clone(),
-            Arc::clone(&self.summarizer),
-            Arc::clone(&self.admission),
-            self.flags.clone(),
-            id,
-            turn,
-            receiver,
-            ended,
-        ));
+        if let Some(replaced) = replaced {
+            replaced.ended.cancel();
+        }
+        let span = tracing::info_span!(
+            "agent.session.activity_turn",
+            agent.session.id = %id,
+            agent.turn.id = turn.0,
+            agent.activity.admission = tracing::field::Empty,
+        );
+        self.tasks.spawn(
+            run_turn(
+                self.repo.clone(),
+                self.realtime.clone(),
+                Arc::clone(&self.summarizer),
+                Arc::clone(&self.admission),
+                self.flags.clone(),
+                id,
+                turn,
+                receiver,
+                ended,
+            )
+            .instrument(span),
+        );
     }
 }
 
@@ -282,6 +294,9 @@ async fn run_turn<R, Rt, S, Flags>(
     S: ActivitySummarizer,
     Flags: FeatureFlags,
 {
+    let admitted = |outcome: &'static str| {
+        tracing::Span::current().record("agent.activity.admission", outcome);
+    };
     let usage = async {
         let session = repo
             .get(id)
@@ -290,6 +305,7 @@ async fn run_turn<R, Rt, S, Flags>(
         // A session owned by no person has nobody to bill, and is the kind
         // that runs unattended through thousands of calls: it gets no line.
         let Ok(owner) = session.owner_user() else {
+            admitted("no_owner");
             return Ok::<_, rootcause::Report>(None);
         };
         if let Some(flags) = &flags {
@@ -301,6 +317,7 @@ async fn run_turn<R, Rt, S, Flags>(
                 })
                 .is_ok_and(|snapshot| snapshot.is_enabled(KILL_SWITCH_FLAG));
             if killed {
+                admitted("killed");
                 return Ok(None);
             }
         }
@@ -309,8 +326,10 @@ async fn run_turn<R, Rt, S, Flags>(
             .await
         {
             tracing::debug!(code = error.code(), %id, "skipping agent activity summaries");
+            admitted("refused");
             return Ok(None);
         }
+        admitted("admitted");
         Ok(Some(
             UsageContext::new(AiFeature::AgentActivitySummary, owner.clone())
                 .with_entity(Some(id.as_uuid()))
@@ -322,6 +341,7 @@ async fn run_turn<R, Rt, S, Flags>(
         Ok(Some(usage)) => usage,
         Ok(None) => return,
         Err(error) => {
+            admitted("failed");
             tracing::warn!(error = ?error, %id, "failed to admit agent activity summaries");
             return;
         }

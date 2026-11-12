@@ -60,7 +60,7 @@ impl ActivitySummarizer for NemotronActivitySummarizer {
             usage,
         )
         .await
-        .map_err(|error| rootcause::report!("{error:#}"))?;
+        .map_err(|error| rootcause::report!(error))?;
         Ok(clean_summary(&response))
     }
 }

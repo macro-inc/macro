@@ -203,54 +203,18 @@ impl ActivitySummarizer for CountingSummarizer {
     }
 }
 
-fn working(rows: usize) -> TurnSignal {
-    TurnSignal::Progressed {
-        turn: TurnId(1),
-        action_id: None,
-        phase: Some(agent_fold::domain::model::TurnPhase::Working),
-        segments: vec![ProjectedSegment {
-            segment: Segment {
-                index: 0,
-                kind: SegmentKind::Activity,
-                start: 0,
-                end: rows,
-                sealed: false,
-                rows: (0..rows)
-                    .map(|id| ActivityRow {
-                        id: format!("call_{id}"),
-                        label: "Read".into(),
-                        detail: None,
-                        status: ActivityStatus::Running,
-                        card: None,
-                    })
-                    .collect(),
-            },
-            text: None,
-        }],
-    }
-}
-
-/// The owner's flags with the kill switch at `killed`.
-fn owner_flags(
-    session: &crate::domain::model::AgentSession,
-    killed: bool,
-) -> feature_flags::outbound::fake::FakeFeatureFlags {
-    let mut flags = feature_flags::outbound::fake::FakeFeatureFlags::default();
-    flags.set(
-        session.owner_user().unwrap().clone(),
-        Ok(feature_flags::FlagSnapshot::new([(
-            KILL_SWITCH_FLAG.into(),
-            feature_flags::FlagValue::Boolean(killed),
-        )])),
-    );
-    flags
-}
-
 #[tokio::test]
 async fn the_kill_switch_stops_summaries_before_any_model_call() {
     let id = AgentSessionId::new_from_uuid(macro_uuid::Uuid::from_u128(1));
     let session = crate::testing::test_agent_session(id);
-    let flags = owner_flags(&session, true);
+    let mut flags = feature_flags::outbound::fake::FakeFeatureFlags::default();
+    flags.set(
+        session.owner_user().unwrap().clone(),
+        Ok(feature_flags::FlagSnapshot::new([(
+            "disable-agent-activity-summary".into(),
+            feature_flags::FlagValue::Boolean(true),
+        )])),
+    );
     let repo = crate::testing::InMemoryAgentSessionRepo::new();
     repo.insert_session(session);
     let (calls, mut called) = mpsc::unbounded_channel();
@@ -265,7 +229,31 @@ async fn the_kill_switch_stops_summaries_before_any_model_call() {
         CancellationToken::new(),
     );
 
-    summaries.signal(id, working(3));
+    summaries.signal(
+        id,
+        TurnSignal::Progressed {
+            turn: TurnId(1),
+            action_id: None,
+            phase: Some(agent_fold::domain::model::TurnPhase::Working),
+            segments: vec![ProjectedSegment {
+                segment: Segment {
+                    index: 0,
+                    kind: SegmentKind::Activity,
+                    start: 0,
+                    end: 1,
+                    sealed: false,
+                    rows: vec![ActivityRow {
+                        id: "call_0".into(),
+                        label: "Read".into(),
+                        detail: Some("src/main.rs".into()),
+                        status: ActivityStatus::Running,
+                        card: None,
+                    }],
+                },
+                text: None,
+            }],
+        },
+    );
     tasks.close();
     tasks.wait().await;
 
@@ -277,7 +265,14 @@ async fn the_kill_switch_stops_summaries_before_any_model_call() {
 async fn summaries_run_while_the_kill_switch_is_off() {
     let id = AgentSessionId::new_from_uuid(macro_uuid::Uuid::from_u128(1));
     let session = crate::testing::test_agent_session(id);
-    let flags = owner_flags(&session, false);
+    let mut flags = feature_flags::outbound::fake::FakeFeatureFlags::default();
+    flags.set(
+        session.owner_user().unwrap().clone(),
+        Ok(feature_flags::FlagSnapshot::new([(
+            "disable-agent-activity-summary".into(),
+            feature_flags::FlagValue::Boolean(false),
+        )])),
+    );
     let repo = crate::testing::InMemoryAgentSessionRepo::new();
     repo.insert_session(session);
     let (calls, mut called) = mpsc::unbounded_channel();
@@ -292,7 +287,31 @@ async fn summaries_run_while_the_kill_switch_is_off() {
         CancellationToken::new(),
     );
 
-    summaries.signal(id, working(3));
+    summaries.signal(
+        id,
+        TurnSignal::Progressed {
+            turn: TurnId(1),
+            action_id: None,
+            phase: Some(agent_fold::domain::model::TurnPhase::Working),
+            segments: vec![ProjectedSegment {
+                segment: Segment {
+                    index: 0,
+                    kind: SegmentKind::Activity,
+                    start: 0,
+                    end: 1,
+                    sealed: false,
+                    rows: vec![ActivityRow {
+                        id: "call_0".into(),
+                        label: "Read".into(),
+                        detail: Some("src/main.rs".into()),
+                        status: ActivityStatus::Running,
+                        card: None,
+                    }],
+                },
+                text: None,
+            }],
+        },
+    );
 
     assert_eq!(called.recv().await, Some(()));
     summaries.session_stopped(id, StopReason::InitializationRefused);
