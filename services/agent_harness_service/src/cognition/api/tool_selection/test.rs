@@ -134,13 +134,16 @@ async fn chat_refuses_hidden_native_tools_by_name(pool: sqlx::PgPool) {
         &user,
     )
     .await;
+    // Empty arguments fail to deserialize for every tool here but
+    // DescribeCodeTools, whose fields all default: it returns the compact
+    // catalog without I/O. A hidden tool never gets that far.
+    let empty = serde_json::json!({});
     let call = |name: &'static str| {
-        // Empty arguments fail to deserialize, so a tool that is found never runs.
         chat.try_tool_call(
             ctx.tool_service_context.clone(),
             RequestContext::new(user.clone()),
             name,
-            &serde_json::json!({}),
+            &empty,
         )
     };
 
@@ -164,7 +167,7 @@ async fn chat_refuses_hidden_native_tools_by_name(pool: sqlx::PgPool) {
             "chat dispatched hidden {hidden}"
         );
     }
-    for listed in ["ExecuteCode", "DescribeCodeTools", "ReadCodeDocs"] {
+    for listed in ai_tools::CHAT_CODE_MODE_TOOLS {
         assert!(
             !matches!(call(listed).await, Err(ToolSetError::NotFound(_))),
             "chat does not find {listed}"
