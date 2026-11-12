@@ -31,10 +31,26 @@ import { ResizeHandle } from './ResizeHandle';
 
 type ImageState = 'loading' | 'ok' | 'error';
 
+/**
+ * Source `MediaNode.updateFromJSON` sets the stored source type, id and
+ * dimensions unchanged, so null or omitted values reach this component. Its
+ * reads tolerate them: dimensions fall back with `|| 0`, and the source type
+ * and id only select a `getMediaUrl` branch or interpolate into its request.
+ * The url stays text: local and url sources call `startsWith` on it.
+ */
 export type MarkdownImageProps = Omit<
   ImageDecoratorProps,
-  'constrainedWidth' | 'constrainedHeight'
+  | 'srcType'
+  | 'id'
+  | 'width'
+  | 'height'
+  | 'constrainedWidth'
+  | 'constrainedHeight'
 > & {
+  srcType?: string | null;
+  id?: string | null;
+  width?: number | null;
+  height?: number | null;
   constrainedWidth?: number | null;
   constrainedHeight?: number | null;
   host?: ImageHost;
@@ -99,9 +115,11 @@ export function MarkdownImage(props: MarkdownImageProps) {
       return;
     }
     fireAndForget(
+      // String() matches getMediaUrl's own use of a stored null: it compares
+      // the source type with literals and interpolates the id into a path.
       getMediaUrl({
-        type: props.srcType,
-        id: props.id,
+        type: String(props.srcType),
+        id: String(props.id),
         url: props.url,
       }).then((maybeUrl) => {
         if (maybeUrl.isErr()) {
@@ -336,7 +354,7 @@ export function MarkdownImage(props: MarkdownImageProps) {
           crossOrigin={
             isImageProxyUrl(imageUrl()) ? 'use-credentials' : 'anonymous'
           }
-          imageId={() => props.id}
+          imageId={() => String(props.id)}
           navigationHidden
         />
       </Dialog.Portal>

@@ -32,12 +32,12 @@ export function createNativeVideoDecoratorViews(
         constrainedHeight,
       } = node.props();
       if (
-        typeof srcType !== 'string' ||
-        typeof id !== 'string' ||
+        (srcType != null && typeof srcType !== 'string') ||
+        (id != null && typeof id !== 'string') ||
         typeof url !== 'string' ||
         typeof controls !== 'boolean' ||
-        typeof width !== 'number' ||
-        typeof height !== 'number' ||
+        (width != null && typeof width !== 'number') ||
+        (height != null && typeof height !== 'number') ||
         typeof scale !== 'number' ||
         (constrainedWidth != null && typeof constrainedWidth !== 'number') ||
         (constrainedHeight != null && typeof constrainedHeight !== 'number')
