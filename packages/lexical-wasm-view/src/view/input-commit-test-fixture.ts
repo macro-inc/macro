@@ -9,6 +9,10 @@ import {
 import { emptyInput } from '@macro-inc/collaboration/session/input';
 import * as native from '../../../../apps/web/src/lib/core/document-session/wasm/document_session_wasm.js';
 import { mountLocalSessionView } from '../local-session-view';
+import {
+  type NativeCodeTokenProvider,
+  NativeEnterDispatcher,
+} from './native-enter';
 import { createBuiltinRegistry } from './node-views/builtins';
 import { registerMacroElementViews } from './node-views/macro';
 import { selectionMessage } from './session-port';
@@ -35,10 +39,16 @@ export function initializeInputCommitFixture() {
   };
 }
 
-export function mountInputCommitFixture(bindCommands = true) {
+export function mountInputCommitFixture(
+  bindCommands = true,
+  provider?: NativeCodeTokenProvider
+) {
   const root = document.createElement('div');
   document.body.append(root);
   try {
+    const fenced = provider
+      ? NativeEnterDispatcher.forModule(native).fenceCodeTokenProvider(provider)
+      : undefined;
     const runtime = mountLocalSessionView(
       root,
       registerMacroElementViews(createBuiltinRegistry()),
@@ -61,7 +71,11 @@ export function mountInputCommitFixture(bindCommands = true) {
             config,
             now,
             wall,
-            'main-commit-gate'
+            'main-commit-gate',
+            undefined,
+            undefined,
+            fenced,
+            fenced ? 'main-commit-composed-gate' : undefined
           ),
       }
     );
