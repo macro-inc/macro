@@ -36,6 +36,31 @@ describe('calendar loading transition', () => {
     expect(phases).not.toContain('visible');
   });
 
+  it('holds a shown skeleton for its minimum unless given none', () => {
+    const phaseAfterLoad = (minimumVisibleMs?: number) => {
+      let phase: CalendarLoadingPhase | undefined;
+
+      createRoot((dispose) => {
+        const transition = createCalendarLoadingTransition(
+          undefined,
+          minimumVisibleMs
+        );
+
+        transition.setLoading(true);
+        vi.advanceTimersByTime(200);
+        transition.setLoading(false);
+        vi.advanceTimersByTime(1);
+        phase = transition.phase();
+        dispose();
+      });
+
+      return phase;
+    };
+
+    expect(phaseAfterLoad()).toBe('visible');
+    expect(phaseAfterLoad(0)).toBe('leaving');
+  });
+
   it('shows the skeleton when a load outlasts the delay', () => {
     const phases: CalendarLoadingPhase[] = [];
 

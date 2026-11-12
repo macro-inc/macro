@@ -33,9 +33,14 @@ function transitionTo(
   };
 }
 
-/** State scopes own timers, so interrupted loads cannot leave stale transitions. */
+/**
+ * State scopes own timers, so interrupted loads cannot leave stale transitions.
+ * `minimumVisibleMs` is how long a skeleton stays once shown; zero reveals the
+ * events as soon as they arrive.
+ */
 export function createCalendarLoadingTransition(
-  onPhaseChange?: (phase: CalendarLoadingPhase) => void
+  onPhaseChange?: (phase: CalendarLoadingPhase) => void,
+  minimumVisibleMs = SKELETON_MIN_VISIBLE_MS
 ) {
   const machine = createSolidMachine<
     LoadingState,
@@ -143,7 +148,7 @@ export function createCalendarLoadingTransition(
         }
 
         const elapsedMs = Date.now() - state.visibleSince;
-        const remainingMs = Math.max(0, SKELETON_MIN_VISIBLE_MS - elapsedMs);
+        const remainingMs = Math.max(0, minimumVisibleMs - elapsedMs);
 
         // Always a task later: FullCalendar lays out the events being revealed.
         const timer = setTimeout(

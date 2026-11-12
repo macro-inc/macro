@@ -1,3 +1,4 @@
+import { isMobile } from '@core/mobile/isMobile';
 import type { DatesSetArg } from '@fullcalendar/core';
 import { createEffect, createMemo, For, on, onCleanup, Show } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
@@ -235,11 +236,14 @@ export function CalendarLoadingSkeleton(props: {
   disabled: boolean;
   onBlockingChange?: (blocking: boolean) => void;
 }) {
+  // A phone reveals events the moment they arrive. Holding the skeleton for a
+  // minimum time only adds to a load that was already slow enough to show it.
+  const minimumVisibleMs = isMobile() ? 0 : undefined;
   const transition = createCalendarLoadingTransition((phase) => {
     const blocksEventRendering = phase === 'waiting' || phase === 'visible';
 
     props.onBlockingChange?.(blocksEventRendering);
-  });
+  }, minimumVisibleMs);
 
   const [targets, setTargets] = createStore<SkeletonTarget[]>([]);
 

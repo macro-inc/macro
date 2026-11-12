@@ -67,7 +67,8 @@ Quick loads skip the skeletons: the delay counts animation frames, so time the
 thread spends mounting a grid never uses it up, and events that are in memory or
 answered locally appear without skeletons on slow phones too.
 Real events lay out underneath during the brief
-minimum display, then fade in as the skeletons fade out. Changing period during a
+minimum display, then fade in as the skeletons fade out. Phones have no minimum
+display: events fade in as soon as they arrive. Changing period during a
 load carries feedback into the new cells without restarting the appearance delay.
 Background refreshes retain current events without skeletons or a transient loading
 pill. On a cold reload, the first event paint waits for calendar metadata so events
