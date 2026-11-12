@@ -1,13 +1,8 @@
-import {
-  type AgentSessionMentionDecoratorProps,
-  AgentSessionMentionNode,
-} from '@macro-inc/lexical-core';
+import { AgentSessionMentionNode } from '@macro-inc/lexical-core';
 import type { MacroDecorators } from '@macro-inc/lexical-wasm-view/view/node-views/macro';
+import type { AgentSessionMentionUIProps } from '../component/decorator/AgentSessionMention';
 import type { DecoratorHostCapabilities } from '../context/DecoratorHostContext';
-import type {
-  AgentSessionMentionHost,
-  AgentSessionMentionHostProp,
-} from './agent-session-mention-host';
+import type { AgentSessionMentionHost } from './agent-session-mention-host';
 import {
   createNativeDecoratorAdapter,
   type NativeDecoratorContext,
@@ -21,27 +16,29 @@ export function createNativeAgentSessionMentionViews<
 ): Pick<MacroDecorators, 'agent-session-mention'> {
   const bind = createNativeDecoratorAdapter(context);
   return {
-    'agent-session-mention': bind<
-      AgentSessionMentionDecoratorProps & AgentSessionMentionHostProp
-    >(AgentSessionMentionNode, (node, context) => {
-      const value = node.props();
-      if (
-        typeof value.id !== 'string' ||
-        (value.label != null && typeof value.label !== 'string') ||
-        (value.mentionUuid != null && typeof value.mentionUuid !== 'string') ||
-        (value.expanded != null && typeof value.expanded !== 'boolean')
-      )
-        throw new Error('Invalid agent session mention payload');
-      return {
-        id: value.id,
-        label: value.label ?? undefined,
-        mentionUuid: value.mentionUuid ?? undefined,
-        // Source exportComponentProps includes expanded only when true.
-        ...(value.expanded === true ? { expanded: true } : {}),
-        key: String(node.key),
-        theme: context.theme,
-        host: context.host,
-      };
-    }),
+    'agent-session-mention': bind<AgentSessionMentionUIProps>(
+      AgentSessionMentionNode,
+      (node, context) => {
+        const { id, label, mentionUuid, expanded } = node.props();
+        // Source passes a stored null or omitted id, label and mention id through.
+        if (
+          (id != null && typeof id !== 'string') ||
+          (label != null && typeof label !== 'string') ||
+          (mentionUuid != null && typeof mentionUuid !== 'string') ||
+          (expanded != null && typeof expanded !== 'boolean')
+        )
+          throw new Error('Invalid agent session mention payload');
+        return {
+          id,
+          label,
+          mentionUuid,
+          // Source exportComponentProps includes expanded only when true.
+          ...(expanded === true ? { expanded } : {}),
+          key: String(node.key),
+          theme: context.theme,
+          host: context.host,
+        };
+      }
+    ),
   };
 }

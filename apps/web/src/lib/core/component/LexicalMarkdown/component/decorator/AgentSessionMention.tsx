@@ -26,9 +26,22 @@ import { autoRegister } from '../../plugins';
 import { AgentSessionMentionLabel } from './AgentSessionMentionLabel';
 import { MagicChip } from './MagicChip';
 
-export function AgentSessionMention(
-  props: AgentSessionMentionDecoratorProps & AgentSessionMentionHostProp
-) {
+/**
+ * Source `importJSON` and `exportComponentProps` hand the stored id, label and
+ * mention id over unchanged, so null or omitted values reach this component.
+ * A falsy id disables the preview, a falsy label shows the fallback, and the
+ * mention id is never read.
+ */
+export type AgentSessionMentionUIProps = Omit<
+  AgentSessionMentionDecoratorProps,
+  'id' | 'label' | 'mentionUuid'
+> & {
+  id?: string | null;
+  label?: string | null;
+  mentionUuid?: string | null;
+} & AgentSessionMentionHostProp;
+
+export function AgentSessionMention(props: AgentSessionMentionUIProps) {
   const wrapper = useContext(LexicalWrapperContext);
   const layout = useSplitLayout();
   // Older documents stored expanded references inside paragraphs. Parsing a
@@ -46,10 +59,11 @@ export function AgentSessionMention(
       if (parent && !$isRootOrShadowRoot(parent)) node.markDirty();
     });
   });
-  const query = useAgentSessionMentionPreview(
-    () => props.id,
-    () =>
-      props.host ? props.host.previewFetchEnabled() : !wrapper?.skipPreviewFetch
+  // A null or omitted id reads like an empty one: the preview stays off, so
+  // nothing below that needs a loaded session can open, expand or link it.
+  const sessionId = () => props.id ?? '';
+  const query = useAgentSessionMentionPreview(sessionId, () =>
+    props.host ? props.host.previewFetchEnabled() : !wrapper?.skipPreviewFetch
   );
   // Guard resource reads: a pending chip must never suspend its editor.
   const preview = () => (query.isSuccess ? query.data : undefined);
@@ -84,7 +98,7 @@ export function AgentSessionMention(
     }
     if (!session()) return;
     layout?.openWithSplit(
-      { type: 'agent', id: props.id },
+      { type: 'agent', id: sessionId() },
       {
         preferNewSplit: openInNewSplitForMention(
           event?.shiftKey,
@@ -132,7 +146,12 @@ export function AgentSessionMention(
   // One set of preview props for the hover card and the touch sheet.
   const previewContentProps: DocumentPreviewContentProps = {
     get documentInfo(): DocumentPreviewContentProps['documentInfo'] {
-      return { id: props.id, type: 'agent', params: {}, isOpenable: true };
+      return {
+        id: sessionId(),
+        type: 'agent',
+        params: {},
+        isOpenable: true,
+      };
     },
     get previewInfo() {
       return {
@@ -193,7 +212,7 @@ export function AgentSessionMention(
           <MagicChip
             host={props.host?.magic}
             key={props.key}
-            agentSessionId={props.id}
+            agentSessionId={sessionId()}
             promptedMessage={null}
             status="no_messages"
             onCollapse={canExpand() ? () => setExpanded(false) : undefined}
