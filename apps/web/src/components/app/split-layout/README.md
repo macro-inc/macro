@@ -130,6 +130,17 @@ TODO AFTER:
       Lots of places use `isLeavingCurrentBlock` to run some side effects, we need to abstract this under the split
       Might need something like `useBeforeSplitClose` or `useBeforeBlockClose`
 
+## Panel-owned slots
+
+`withSplitPanelOwner(name, factory)` creates a resource in a root owned by the
+split panel, not by the calling component, so it outlives the component: an
+email opened from a list still pages through that list's data source after the
+list has unmounted. A slot ends when its name is claimed again, when the panel
+closes, or when the split moves to another view (`splitViewId`: the component
+it shows, or the nearest one behind its content in history). The slot's root
+closes over the view that created it, so a slot that outlived its view would
+keep that view's DOM and subscriptions in memory.
+
 ## Priority collapse
 
 Split headers and toolbars create their own controllers from
