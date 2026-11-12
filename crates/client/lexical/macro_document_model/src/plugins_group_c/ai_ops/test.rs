@@ -537,31 +537,123 @@ fn minted_bijection(value: &Value, kept: &HashSet<String>) -> Value {
     walk(value, kept, &mut std::collections::HashMap::new())
 }
 
+/// Every id in document order, duplicates kept.
+fn id_list(value: &Value, ids: &mut Vec<String>) {
+    match value {
+        Value::Array(items) => items.iter().for_each(|item| id_list(item, ids)),
+        Value::Object(map) => {
+            if let Some(Value::String(id)) = map.get("$").and_then(|state| state.get("id")) {
+                ids.push(id.clone());
+            }
+            for (key, child) in map {
+                if key != "$" {
+                    id_list(child, ids);
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Oracle control: the raw Source JSON must survive a native import and export
+/// unchanged, or the parity comparison below would compare a native projection.
+#[test]
+fn source_block_states_survive_native_import_unchanged() {
+    let corpus: Vec<BlockEntry> = serde_json::from_str(BLOCK_CORPUS).expect("corpus");
+    let mut deltas = Vec::new();
+    for entry in &corpus {
+        for (label, raw) in [("seed", &entry.seed), ("state", &entry.state)] {
+            let mut editor = block_editor();
+            load(&mut editor, raw);
+            let exported = export(&editor);
+            if &exported != raw {
+                deltas.push(format!(
+                    "{} [{label}]\n  raw    {raw}\n  native {exported}",
+                    entry.name
+                ));
+            }
+        }
+    }
+    assert!(
+        deltas.is_empty(),
+        "{} projection deltas:\n{}",
+        deltas.len(),
+        deltas.join("\n")
+    );
+}
+
+/// Per-case outcome against the raw Source state. Cases Source applies fully are
+/// positive-support checks; cases Source stops at op k are refusal-equivalence
+/// checks (failedAt only, not typed-cause parity, which has its own tests).
 #[test]
 fn block_ops_reach_the_source_doc_state() {
     let corpus: Vec<BlockEntry> = serde_json::from_str(BLOCK_CORPUS).expect("corpus");
     assert!(!corpus.is_empty());
-    let mut failures = Vec::new();
+    let mut rows = Vec::new();
+    let mut failed = 0;
     for entry in corpus {
+        let class = match entry.failed_at {
+            None => "positive".to_string(),
+            Some(index) => format!("refusal@{index}"),
+        };
         let mut kept = HashSet::new();
         collect_ids(&entry.seed, &mut kept);
-        kept.extend(entry.refs.iter().cloned());
+        let refs: HashSet<String> = entry.refs.iter().cloned().collect();
 
         let mut native = block_editor();
         load(&mut native, &entry.seed);
         let failed_at = replay(&mut native, &entry.ops);
-        let actual = minted_bijection(&export(&native), &kept);
+        let exported = export(&native);
 
-        let mut source = block_editor();
-        load(&mut source, &entry.state);
-        let expected = minted_bijection(&export(&source), &kept);
-
-        if failed_at != entry.failed_at || actual != expected {
-            failures.push(format!(
-                "{}: failedAt native {failed_at:?} source {:?}\n  native {actual}\n  source {expected}",
-                entry.name, entry.failed_at
+        // Lineage on raw values, before any renaming.
+        let mut problems = Vec::new();
+        for (side, value) in [("native", &exported), ("source", &entry.state)] {
+            let mut ids = Vec::new();
+            id_list(value, &mut ids);
+            let unique: HashSet<&String> = ids.iter().collect();
+            if unique.len() != ids.len() {
+                problems.push(format!("{side} has duplicate ids"));
+            }
+        }
+        let (mut native_ids, mut source_ids) = (Vec::new(), Vec::new());
+        id_list(&exported, &mut native_ids);
+        id_list(&entry.state, &mut source_ids);
+        let native_set: HashSet<&String> = native_ids.iter().collect();
+        let source_set: HashSet<&String> = source_ids.iter().collect();
+        for id in kept.iter().chain(refs.iter()) {
+            if native_set.contains(id) != source_set.contains(id) {
+                problems.push(format!(
+                    "id {id}: native {} source {}",
+                    native_set.contains(id),
+                    source_set.contains(id)
+                ));
+            }
+        }
+        if failed_at != entry.failed_at {
+            problems.push(format!(
+                "failedAt native {failed_at:?} source {:?}",
+                entry.failed_at
             ));
         }
+        let mut stable = kept.clone();
+        stable.extend(refs);
+        let actual = minted_bijection(&exported, &stable);
+        let expected = minted_bijection(&entry.state, &stable);
+        if actual != expected {
+            problems.push(format!("state\n    native {actual}\n    source {expected}"));
+        }
+        let outcome = if problems.is_empty() {
+            "match".to_string()
+        } else {
+            failed += 1;
+            format!("MISMATCH: {}", problems.join("; "))
+        };
+        rows.push(format!("{class:<11} {}: {outcome}", entry.name));
     }
-    assert!(failures.is_empty(), "{}", failures.join("\n"));
+    assert!(
+        failed == 0,
+        "{failed} of {} cases differ:\n{}",
+        rows.len(),
+        rows.join("\n")
+    );
 }
