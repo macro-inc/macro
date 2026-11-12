@@ -350,14 +350,20 @@ export const behavior = <Needs extends object = {}>(): Behavior<
 
 /**
  * The handlings that were scheduled and haven't finished. A source can end
- * before they have, when its schedule doesn't wait for them. One that
- * rejected stays, so `finished` rejects with its error.
+ * before they have, when its schedule doesn't wait for them. `failed`
+ * rejects with the error of the first handling that rejects, which no
+ * schedule has to pass on.
  */
 const unfinished = (): {
 	readonly track: (handling: () => Promise<void>) => () => Promise<void>;
 	readonly finished: () => Promise<void>;
+	readonly failed: Promise<never>;
 } => {
 	const pending = new Set<Promise<void>>();
+	let fail: (error: unknown) => void = () => undefined;
+	const failed = new Promise<never>((_, reject) => {
+		fail = reject;
+	});
 	const finished = async (): Promise<void> => {
 		if (pending.size === 0) return;
 		await Promise.all(pending);
@@ -368,12 +374,9 @@ const unfinished = (): {
 			let settle: (result: Promise<void>) => void = () => undefined;
 			const settled = new Promise<void>((resolve) => {
 				settle = resolve;
-			});
+			}).catch(fail);
 			pending.add(settled);
-			settled.then(
-				() => pending.delete(settled),
-				() => undefined,
-			);
+			void settled.then(() => pending.delete(settled));
 			return () => {
 				const result = handling();
 				settle(result);
@@ -381,6 +384,7 @@ const unfinished = (): {
 			};
 		},
 		finished,
+		failed,
 	};
 };
 
@@ -391,7 +395,8 @@ const unfinished = (): {
  * `schedule` decides when each handling runs; without one a source moves to
  * its next event once every handler on it has returned and `accept` has
  * resolved. Once every other source has ended and every handling has
- * finished, the hooks are closed so their handlers end too.
+ * finished, the hooks are closed so their handlers end too. Rejects as soon
+ * as a handling does, i.e. when `accept` rejects.
  */
 export const serve = async <Needs, Provided extends Needs, Sources>(
 	behavior: Behavior<Needs, Provided, Sources, FailuresHandled>,
@@ -419,6 +424,7 @@ export const serve = async <Needs, Provided extends Needs, Sources>(
 		payload,
 		source,
 	});
+	const hooks: readonly unknown[] = Object.values(lifecycle.hooks);
 	const started = behavior.handlers.map((subscription) =>
 		subscription(
 			behavior.decorations,
@@ -427,17 +433,23 @@ export const serve = async <Needs, Provided extends Needs, Sources>(
 				wakeFor(request, event(source, payload)),
 			(handled, source, payload) => accept(handled, event(source, payload)),
 			(handling, source, payload) =>
-				schedule(running.track(handling), event(source, payload)),
+				schedule(
+					// A hook's handling is waited for by whatever fired the hook.
+					hooks.includes(source) ? handling : running.track(handling),
+					event(source, payload),
+				),
 		),
 	);
-	const hooks: readonly unknown[] = Object.values(lifecycle.hooks);
-	await Promise.all(
-		started
-			.filter(({ source }) => !hooks.includes(source))
-			.map(({ done }) => done),
-	);
-	// A schedule may have let a source end while its events are still being handled, and they fire hooks.
-	await running.finished();
+	const ended = (async () => {
+		await Promise.all(
+			started
+				.filter(({ source }) => !hooks.includes(source))
+				.map(({ done }) => done),
+		);
+		// A schedule may have let a source end while its events are still being handled, and they fire hooks.
+		await running.finished();
+	})();
+	await Promise.race([ended, running.failed]);
 	lifecycle.close();
 	await Promise.all(started.map(({ done }) => done));
 };

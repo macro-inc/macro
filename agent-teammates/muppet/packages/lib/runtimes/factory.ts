@@ -15,9 +15,10 @@ import {
 
 export type FactoryOptions = Options & {
 	/**
-	 * How many events are handled at once, across all sources. A handler holds
-	 * its worker until it returns, through any wakes it asks for, so this is
-	 * also how many agents are awake at once when a handler wakes one at a time.
+	 * How many handlers run at once, across all sources. A handler holds its
+	 * worker until it returns, through any wakes it asks for, so this is also
+	 * how many agents are awake at once when handlers wake one at a time. An
+	 * event with several handlers takes a worker for each.
 	 */
 	readonly workers: number;
 };
@@ -33,6 +34,18 @@ export type FactoryOptions = Options & {
  * `workers` bounds the work, so a burst of events can't start more agents
  * than the machine can run. When every worker is busy, sources aren't read
  * further: events wait wherever the source keeps them, not in a queue here.
+ *
+ * What a source can no longer count on, since it is read again as soon as a
+ * worker has started on its event, not when the event is handled:
+ * - A source that does something after each `yield` does it while the event
+ *   is still being handled. A schedule is marked as ended at once, so it can
+ *   fire again while its last run is still going: a handler that must not
+ *   overlap itself has to see to that.
+ * - A `channel`'s `push` resolves once the event has a worker. A handler
+ *   must not wait on a `push` to a source of the same behavior: it holds a
+ *   worker while the pushed event waits for one, and once every worker is
+ *   held that way nothing moves again. Push without waiting.
+ * - A handler that never returns keeps its worker for good.
  *
  * Wakes, hooks and failures work as in `simple`. Hook handlers take no
  * worker and each hook's events are handled in turn, so keep them short.

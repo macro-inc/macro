@@ -1,9 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import type { Agent } from "../../core/agent.ts";
-import { behavior } from "../../core/behavior.ts";
+import { type Accept, behavior, serve } from "../../core/behavior.ts";
 import { source } from "../../core/event.ts";
+import { lifecycle } from "../../core/hook.ts";
 import { factory } from "../factory.ts";
-import { pool } from "../pieces.ts";
+import { onWorkers, pool } from "../pieces.ts";
 import { scripts } from "./scripts.ts";
 
 const code = scripts();
@@ -115,7 +116,7 @@ describe("factory", () => {
 			expect(before(timeline, `end ${quick}`, "end slow")).toBe(true);
 	});
 
-	test("never has more events in hand than workers", async () => {
+	test("never runs more handlers at once than workers", async () => {
 		const events = (name: string) =>
 			Array.from({ length: 6 }, (_, i) => `${name}${i}`);
 		const { timeline, most } = await record({
@@ -168,6 +169,39 @@ describe("factory", () => {
 		expect(timeline).toContain("replied a1");
 	});
 
+	test("gives each handler of an event a worker of its own", async () => {
+		const timeline: string[] = [];
+		const handler = (name: string) => async (event: string) => {
+			timeline.push(`start ${name} ${event}`);
+			await sleep(10);
+			timeline.push(`end ${name} ${event}`);
+		};
+		await behavior()
+			.decorate({
+				agent: { wake: async () => ({ kind: "done" as const, reply: "ok" }) },
+			})
+			.source({
+				a: source(
+					(async function* () {
+						yield "a1";
+					})(),
+				),
+			})
+			.on((all) => all.a, handler("first"))
+			.on((all) => all.a, handler("second"))
+			.on(
+				(all) => all.hooks.failed,
+				async () => {},
+			)
+			.run(factory({ systemPrompt: "base", workers: 1, ...code }));
+		expect(timeline).toEqual([
+			"start first a1",
+			"end first a1",
+			"start second a1",
+			"end second a1",
+		]);
+	});
+
 	test("refuses a number of workers that can't be a pool", () => {
 		for (const workers of [0, -1, 1.5, Number.NaN])
 			expect(() => factory({ systemPrompt: "base", workers, ...code })).toThrow(
@@ -207,5 +241,47 @@ describe("pool", () => {
 			done.push("after");
 		});
 		expect(done).toEqual(["after"]);
+	});
+});
+
+describe("serve with a schedule that doesn't wait", () => {
+	const run = (accept: Accept) => {
+		const hooks = lifecycle();
+		return serve(
+			behavior()
+				.decorate({
+					agent: { wake: async () => ({ kind: "done" as const, reply: "" }) },
+				})
+				.source({
+					forever: source(
+						(async function* () {
+							yield 1;
+							await new Promise<never>(() => undefined);
+						})(),
+					),
+				})
+				.on(
+					(all) => all.forever,
+					async () => {},
+				)
+				.on(
+					(all) => all.hooks.failed,
+					async () => {},
+				),
+			hooks,
+			{
+				wakeFor: async () => ({ kind: "done", reply: "" }),
+				accept,
+				schedule: onWorkers({ run: hooks, start: pool(1) }),
+			},
+		);
+	};
+
+	test("rejects when a handling does, though its source never ends", async () => {
+		await expect(
+			run(async () => {
+				throw new Error("can't accept");
+			}),
+		).rejects.toThrow("can't accept");
 	});
 });
