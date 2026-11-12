@@ -1647,7 +1647,7 @@ export type VisibleCalendar = {
     color?: string | null;
     /**
      * Whether this calendar counts toward the requester's busy time: their
-     * setting, by default only the primary calendars of inboxes they own.
+     * setting in Settings → Calendar, on by default for every calendar.
      * The nearest thing to "this is the requester's own": a provider's
      * access role only says what they may do, on a colleague's calendar too.
      */
