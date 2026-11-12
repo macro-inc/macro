@@ -109,6 +109,23 @@ describe('delete item dialog keyboard', () => {
     await userEvent.keyboard('{Escape}');
   });
 
+  it('ignores Enter that keeps repeating onto Delete while held', async () => {
+    const { deleteButton } = await openDeleteDialog();
+    // Browsers skip a button's click when its keydown is cancelled. jsdom
+    // doesn't click on Enter and user-event never repeats, so check the cancel.
+    const held = new KeyboardEvent('keydown', {
+      key: 'Enter',
+      repeat: true,
+      bubbles: true,
+      cancelable: true,
+    });
+
+    deleteButton.dispatchEvent(held);
+
+    expect(held.defaultPrevented).toBe(true);
+    await userEvent.keyboard('{Escape}');
+  });
+
   it('cancels on Escape without deleting, and focuses Delete again on reopen', async () => {
     const { onFinish, onCancel } = await openDeleteDialog();
 

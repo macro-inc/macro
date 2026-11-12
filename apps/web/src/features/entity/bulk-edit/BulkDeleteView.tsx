@@ -29,8 +29,8 @@ export const BulkDeleteView = (props: {
   const [partialMessage, setPartialMessage] = createSignal<string>();
   const entities = () => remainingEntities() ?? props.entities;
   const multi = () => entities().length > 1;
-  // Enter repeats while held and the button stays enabled, so ignore presses
-  // while an attempt is in flight instead of deleting the same items twice.
+  // The button stays enabled while deleting, so ignore presses while an
+  // attempt is in flight instead of deleting the same items twice.
   let deleting = false;
   const handleDelete = async () => {
     if (deleting) return;
@@ -105,6 +105,11 @@ export const BulkDeleteView = (props: {
         <Button
           ref={props.deleteButtonRef}
           variant="secondary"
+          // Delete takes focus when the dialog opens, so an Enter held down to
+          // open it would repeat onto Delete. Confirm only on a fresh press.
+          onKeyDown={(event: KeyboardEvent) => {
+            if (event.key === 'Enter' && event.repeat) event.preventDefault();
+          }}
           onClick={() => fireAndForget(handleDelete(), 'bulk-delete')}
         >
           {multi() ? `Delete ${entities().length} items` : 'Delete item'}
