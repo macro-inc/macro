@@ -248,9 +248,10 @@ item in its reply instead. Agents never open anything on mobile, flag or not:
 in the iOS and Android apps (iPad included) and in a touch browser on a phone,
 held either way, a prompt carries no tab, so the agent links the item, and the
 tab ignores any `ui_command` frame. A phone is a touch screen whose short side
-is under 640px, so a phone turned sideways stays off. Routes are closed to agents unless they opt in
-(`OPEN_TO_AGENTS` in `apps/web/src/routes/routes.ts`), so settings, calls,
-composing mail and debug views are refused on the server and again in the tab.
+is under 640px, so a phone turned sideways stays off. Routes are closed to
+agents unless they opt in (`OPEN_TO_AGENTS` in `apps/web/src/routes/routes.ts`),
+so settings, calls, composing mail and debug views are refused on the server
+and again in the tab.
 
 To verify, ask an agent "create a short document called Launch plan, then open
 it next to this chat", watch the pane arrive, press **Undo**, and repeat with a

@@ -1,7 +1,8 @@
 /**
  * The device under test, for agent navigation's mobile check: a test file
  * mocks `isNativeMobilePlatform` and `isTouchDevice` to read its own
- * `DeviceFlags`, and these hold the screen.
+ * `DeviceFlags`, and these hold the screen. jsdom's screen is 0x0, a phone's
+ * size, so a touch test that holds no screen reads as a phone.
  */
 
 import { onTestFinished, vi } from 'vitest';

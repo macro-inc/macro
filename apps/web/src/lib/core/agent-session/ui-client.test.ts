@@ -200,6 +200,8 @@ describe('agentNavigationRunsHere', () => {
     { on: 'a phone held upright', touch: true, size: [390, 844], runs: false },
     { on: 'a phone held sideways', touch: true, size: [844, 390], runs: false },
     { on: 'a touch tablet', touch: true, size: [820, 1180], runs: true },
+    { on: 'a 639px touch screen', touch: true, size: [639, 960], runs: false },
+    { on: 'a 640px touch screen', touch: true, size: [960, 640], runs: true },
     { on: 'a desktop', touch: false, size: [1512, 982], runs: true },
   ] as const)('on $on: $runs', ({ touch, size: [width, height], runs }) => {
     device.touch = touch;
