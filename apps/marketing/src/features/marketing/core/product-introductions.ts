@@ -72,8 +72,8 @@ export const productIntroductions: Partial<Record<string, readonly string[]>> =
       'Macro Spreadsheets let agents read, calculate, and edit alongside your team. They can work on selected cells, build a sheet, or update one through a routine, using the emails, documents, and conversations in your workspace as context. You still get the spreadsheet fundamentals: formulas, charts, and Excel and CSV import and export, without the separate workflow for agentic work.',
     ],
     Databases: [
-      "We liked how easy Notion makes it to put information in a table, and we wanted the structure and flexibility you associate with a SQL database. Most teams shouldn't have to build an internal app just to track applicants, vendors, or projects. But the table should also be more than a page of loosely organized text.",
-      "Macro Databases bring structured data into the same workspace as your team and agents. Use typed fields, formulas, and related tables, with different views of the same records. Link those records to the documents and tasks behind them, so your database holds both the information and the context. The goal is the approachability of a Notion table without treating your company's data as an afterthought.",
+      'We liked how easy Notion makes it to put information in a table. We also wanted the structure of a real database, without building an internal app just to track applicants, vendors, or projects.',
+      'Macro Databases are good when you want to track and sort things by their properties. Use typed fields, formulas, and related tables, and link each record to the docs, tasks, and emails behind it.',
     ],
     Forms: [
       'Collecting a response is the easy part. We wanted the work after the form to be just as straightforward: reviewing the answers, checking whether someone qualifies, and letting them book a meeting. Moving responses from a separate form tool into a tracker is another manual handoff to maintain.',
