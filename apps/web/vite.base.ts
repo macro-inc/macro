@@ -179,6 +179,68 @@ function posthogSourceMapLimit(): Plugin {
   };
 }
 
+/**
+ * A chain of chunks the entries load statically that leads back to its start,
+ * or undefined. In such a cycle a module can read a binding of another before
+ * it is initialized. Dynamic imports are left out: one cannot close a cycle
+ * among chunks the entries load statically. Cycles among lazy chunks alone are
+ * not checked.
+ */
+export function startupChunkCycle(
+  chunks: readonly Pick<
+    Rolldown.OutputChunk,
+    'fileName' | 'imports' | 'isEntry'
+  >[]
+): string[] | undefined {
+  const byName = new Map(chunks.map((chunk) => [chunk.fileName, chunk]));
+  const finished = new Set<string>();
+  for (const entry of chunks) {
+    if (!entry.isEntry || finished.has(entry.fileName)) continue;
+    const path: string[] = [entry.fileName];
+    const next: number[] = [0];
+    const onPath = new Map([[entry.fileName, 0]]);
+    while (path.length > 0) {
+      const name = path[path.length - 1];
+      const imports = byName.get(name)?.imports ?? [];
+      const index = next[next.length - 1];
+      if (index >= imports.length) {
+        finished.add(name);
+        onPath.delete(name);
+        path.pop();
+        next.pop();
+        continue;
+      }
+      next[next.length - 1] = index + 1;
+      const imported = imports[index];
+      const open = onPath.get(imported);
+      if (open !== undefined) return [...path.slice(open), imported];
+      if (finished.has(imported) || !byName.has(imported)) continue;
+      onPath.set(imported, path.length);
+      path.push(imported);
+      next.push(0);
+    }
+  }
+  return undefined;
+}
+
+/** Fails the build if startup chunks import each other in a cycle. */
+function acyclicStartupChunks(): Plugin {
+  return {
+    name: 'acyclic-startup-chunks',
+    apply: 'build',
+    generateBundle(_options, bundle) {
+      const chunks = Object.values(bundle).filter(
+        (file): file is Rolldown.OutputChunk => file.type === 'chunk'
+      );
+      const cycle = startupChunkCycle(chunks);
+      if (!cycle) return;
+      this.error(
+        `Startup chunks import each other in a cycle, so a module could read a binding before it is initialized: ${cycle.join(' -> ')}. Check the groups in startupChunks().`
+      );
+    },
+  };
+}
+
 const isNodeModule = (id: string) => id.includes('/node_modules/');
 const isGeneratedSource = (id: string) =>
   !isNodeModule(id) && /\/generated\//.test(id);
@@ -187,14 +249,15 @@ const isGeneratedSource = (id: string) =>
 type StartupPart = { name: string; rank: number };
 
 /**
- * Module code (before minification, about 2.2 times the emitted size) per
- * startup chunk. Smaller chunks start the app sooner: Chrome compiles each one
- * as it arrives while later ones download, and V8 re-parses a whole chunk on
- * the main thread the first time code in it builds a stack trace, which some
- * libraries do as they load. 800 KB parts beat 2 MB parts on a slow CPU, and
- * both beat one chunk per kind.
+ * Module code per startup chunk, before minification. Smaller chunks start the
+ * app sooner: Chrome compiles each one as it arrives while later ones
+ * download, and V8 re-parses a whole chunk on the main thread the first time
+ * code in it builds a stack trace, which some libraries do as they load.
+ * 800 KB parts beat 2 MB parts on a slow CPU, and both beat one chunk per kind.
+ * A single module, or modules that import each other in a cycle, stay in one
+ * chunk however large, such as the generated GraphQL client.
  */
-const STARTUP_PART_CODE_BYTES = 800_000;
+export const STARTUP_PART_CODE_BYTES = 800_000;
 /** Groups available to startup chunks; the plan fails the build if it needs more. */
 const STARTUP_PART_GROUPS = 48;
 
@@ -208,7 +271,7 @@ type ImportFrame = { id: string; imports: readonly string[]; next: number };
  * component only after every component it reaches. It keeps its own stack so
  * a long import chain cannot overflow the call stack.
  */
-function dependencyFirstPositions(
+export function dependencyFirstPositions(
   ids: Iterable<string>,
   importsOf: (id: string) => readonly string[]
 ): Map<string, number> {
@@ -270,7 +333,7 @@ function dependencyFirstPositions(
  * STARTUP_PART_CODE_BYTES of code (the last part may be smaller), never
  * between modules that share a position because they import each other.
  */
-function cutIntoParts(
+export function cutIntoParts(
   ids: readonly string[],
   positionOf: (id: string) => number,
   bytesOf: (id: string) => number
@@ -428,6 +491,11 @@ function startupChunks(
         },
         tags: ['$initial'],
         priority: STARTUP_PART_GROUPS - rank,
+        // Rolldown's default, spelled out: the group also takes the modules its
+        // modules import that no group claimed, such as Vite's preload helper.
+        // acyclicStartupChunks() checks on every build that startup chunks
+        // still import each other in one direction.
+        includeDependenciesRecursively: true,
       })
     ),
   };
@@ -571,6 +639,7 @@ export const createAppViteConfig = (): UserConfigFn => {
         gitBranchHmrPlugin(),
         cloudFrontCompressionLimit(),
         posthogSourceMapLimit(),
+        acyclicStartupChunks(),
       ],
       define: defineEnv(ENV_MODE, command),
       clearScreen: false,
