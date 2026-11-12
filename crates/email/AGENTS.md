@@ -20,6 +20,9 @@ tools — hexagonal, heavily feature-gated.
   and settings patches. `signature_settings/gmail_images.rs` selects public or
   mailbox image reads, caches message parts for one import, and preserves retryable
   image failures behind an image-reader port.
+- `src/domain/invitations.rs` (feature `calendar_invitations`): composes saved
+  invitation resolution and import with their snapshot and calendar ports;
+  HTTP handlers pass only the authorized thread receipt and request values.
 - `src/domain/attachment_cleanup/sfs_deletion.rs` (feature `ports`): stored-file
   deletion order, the already-missing-file rule, and delivery disposition.
 - `src/domain/mailbox/contacts/sfs_upload.rs` (feature `mailbox`): URL-backed

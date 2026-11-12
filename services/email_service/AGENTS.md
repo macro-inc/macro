@@ -11,6 +11,8 @@ the gateway `/email` prefix.
 - `src/main.rs` / `src/lib.rs`: entrypoint and `run()`.
 - `src/api.rs` + `src/api/context.rs`: HTTP surface and `ApiContext`.
 - `src/composition/api.rs`: production API dependencies and service wiring.
+  It composes optional activity correlation and the saved-invitation service;
+  `ApiContext` holds those capabilities instead of raw database/provider clients.
 - `src/outbound/message_reads.rs`: query adapter for the email domain's synced
   read service; handlers retain only extraction and HTTP/error rendering.
 - `src/outbound/inbox_access.rs`, `inbox_contacts.rs`, `scheduled_drafts.rs`,
