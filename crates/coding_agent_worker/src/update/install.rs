@@ -1,5 +1,9 @@
 //! Staging a downloaded release next to the running executable, swapping it
 //! in, and re-executing.
+//!
+//! Several macrods can run one executable (one per config). Each stages to a
+//! file named for its own process, and the swap holds a lock beside the
+//! executable, so two never write the same file or replace it at once.
 
 use std::io::Read as _;
 use std::path::{Path, PathBuf};
@@ -7,7 +11,7 @@ use std::path::{Path, PathBuf};
 use sha2::{Digest as _, Sha256};
 
 #[cfg(all(test, unix))]
-mod test;
+pub(super) mod test;
 
 /// The binary's name inside a release archive.
 const EXECUTABLE_NAME: &str = if cfg!(windows) {
@@ -15,6 +19,15 @@ const EXECUTABLE_NAME: &str = if cfg!(windows) {
 } else {
     "macrod"
 };
+
+/// A staged binary's name beside the executable, followed by the staging
+/// process's pid: `.macrod.new.<pid>`. Releases before it used the bare name.
+#[cfg(not(windows))]
+const STAGED_NAME: &str = ".macrod.new";
+
+/// Beside the executable: held while a macrod replaces it.
+#[cfg(not(windows))]
+const LOCK_NAME: &str = ".macrod.update.lock";
 
 /// Why a downloaded archive could not be staged.
 #[derive(Debug, thiserror::Error)]
@@ -41,17 +54,27 @@ pub enum StageError {
 #[derive(Debug, Clone)]
 pub struct Installation {
     executable: PathBuf,
+    /// The pid the staged binary is named for.
+    #[cfg_attr(windows, expect(dead_code, reason = "Windows stages per version"))]
+    process: u32,
 }
 
 impl Installation {
     /// The running executable, with symlinks resolved so the swap replaces
     /// the real file rather than the link to it.
     pub fn current() -> std::io::Result<Self> {
-        Ok(Self::at(std::env::current_exe()?.canonicalize()?))
+        Ok(Self::at(
+            std::env::current_exe()?.canonicalize()?,
+            std::process::id(),
+        ))
     }
 
-    fn at(executable: PathBuf) -> Self {
-        Self { executable }
+    /// The executable, as seen by the macrod with pid `process`.
+    pub(super) fn at(executable: PathBuf, process: u32) -> Self {
+        Self {
+            executable,
+            process,
+        }
     }
 
     pub fn executable(&self) -> &Path {
@@ -61,7 +84,8 @@ impl Installation {
     /// The verified new binary, waiting to be swapped in.
     #[cfg(not(windows))]
     fn staged_path(&self, _tag: &str) -> PathBuf {
-        self.executable.with_file_name(".macrod.new")
+        self.executable
+            .with_file_name(format!("{STAGED_NAME}.{}", self.process))
     }
 
     #[cfg(windows)]
@@ -69,15 +93,30 @@ impl Installation {
         super::versions::Versions::of_executable(&self.executable).staging_executable(tag)
     }
 
-    /// Remove a staged binary an earlier run never swapped in. Best effort.
+    /// Remove staged binaries no running macrod will swap in: those of
+    /// processes that have exited, and the unnumbered one of older releases.
+    /// Another macrod's may still be waiting for its swap. Best effort.
     pub fn remove_leftovers(&self) {
         #[cfg(not(windows))]
         {
-            let leftover = self.staged_path("");
-            if let Err(error) = std::fs::remove_file(&leftover)
-                && error.kind() != std::io::ErrorKind::NotFound
-            {
-                tracing::debug!(error = ?error, path = %leftover.display(), "could not remove an updater leftover");
+            let Some(entries) = self
+                .executable
+                .parent()
+                .and_then(|directory| std::fs::read_dir(directory).ok())
+            else {
+                return;
+            };
+            for entry in entries.filter_map(Result::ok) {
+                let name = entry.file_name();
+                if !name.to_str().is_some_and(is_abandoned) {
+                    continue;
+                }
+                let leftover = entry.path();
+                if let Err(error) = std::fs::remove_file(&leftover)
+                    && error.kind() != std::io::ErrorKind::NotFound
+                {
+                    tracing::debug!(error = ?error, path = %leftover.display(), "could not remove an updater leftover");
+                }
             }
         }
     }
@@ -98,6 +137,19 @@ impl Installation {
         Ok(staged)
     }
 
+    /// Wait for, then hold, the lock every macrod running this executable
+    /// takes to replace it. Released when dropped, or by `exec`.
+    #[cfg(not(windows))]
+    pub fn lock(&self) -> std::io::Result<std::fs::File> {
+        let file = std::fs::OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .open(self.executable.with_file_name(LOCK_NAME))?;
+        file.lock()?;
+        Ok(file)
+    }
+
     /// Put the staged binary where the running one is. The rename replaces
     /// it atomically while the running process keeps its open inode.
     #[cfg(not(windows))]
@@ -110,6 +162,20 @@ impl Installation {
     pub fn commit(&self, tag: &str) -> std::io::Result<PathBuf> {
         super::versions::Versions::of_executable(&self.executable).commit(tag)
     }
+}
+
+/// Whether `name` is a staged binary whose macrod is gone.
+#[cfg(not(windows))]
+fn is_abandoned(name: &str) -> bool {
+    let Some((_, pid)) = lazy_regex::regex_captures!(r"^\.macrod\.new(?:\.(\d+))?$", name) else {
+        return false;
+    };
+    // Unnumbered (a release before per-process names), or no possible pid.
+    let Some(pid) = pid.parse().ok().and_then(rustix::process::Pid::from_raw) else {
+        return true;
+    };
+    // Another user's process answers EPERM: still running.
+    rustix::process::test_kill_process(pid) == Err(rustix::io::Errno::SRCH)
 }
 
 /// The checksum file is `sha256sum` output: the hex digest, then the name.

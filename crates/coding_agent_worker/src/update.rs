@@ -7,9 +7,11 @@
 //!
 //! On Unix the control panel then swaps the binary in and `execve`s into it
 //! once no agent turn is running, handing the running agent process over
-//! ([`crate::handoff`]) so it never restarts. On Windows the new version is
-//! installed beside the running one and the launcher starts it from the next
-//! launch ([`versions`]); the panel says so.
+//! ([`crate::handoff`]) so it never restarts. macrods sharing the executable
+//! swap one at a time, and one that finds the release (or a newer one)
+//! already installed by another restarts into that instead. On Windows the
+//! new version is installed beside the running one and the launcher starts it
+//! from the next launch ([`versions`]); the panel says so.
 //!
 //! Every failure is logged and leaves the running process alone; the next
 //! poll tries again. Only the terminal control panel updates itself.
@@ -85,6 +87,8 @@ enum UpdateError {
 pub struct StagedUpdate {
     tag: String,
     #[cfg_attr(windows, expect(dead_code, reason = "Windows installs while staging"))]
+    version: ReleaseVersion,
+    #[cfg_attr(windows, expect(dead_code, reason = "Windows installs while staging"))]
     staged: PathBuf,
     #[cfg_attr(windows, expect(dead_code, reason = "Windows installs while staging"))]
     installation: Installation,
@@ -96,20 +100,57 @@ impl StagedUpdate {
         &self.tag
     }
 
-    /// Move the staged binary over the running one. The running process is
-    /// unaffected until [`Installed::relaunch`].
+    /// Move the staged binary over the running one, unless another macrod
+    /// running this executable has installed this release or a newer one:
+    /// then drop the staged copy and restart into that. The running process
+    /// is unaffected until [`Installed::relaunch`].
     #[cfg(unix)]
-    pub fn swap(self) -> std::io::Result<Installed> {
-        let span = tracing::info_span!("macrod.update.apply", tag = %self.tag);
-        let _entered = span.enter();
-        self.installation.swap(&self.staged).inspect_err(
-            |error| tracing::warn!(error = ?error, "could not install the new macrod binary"),
-        )?;
-        tracing::info!("installed the new macrod binary; restarting");
-        Ok(Installed {
-            executable: self.installation.executable().to_owned(),
-            tag: self.tag,
-        })
+    pub async fn swap(self) -> std::io::Result<Installed> {
+        let span = tracing::info_span!(
+            "macrod.update.apply",
+            tag = %self.tag,
+            installed = tracing::field::Empty,
+            outcome = tracing::field::Empty,
+        );
+        async move {
+            let installation = self.installation.clone();
+            // Held until the rename is done, so the next macrod reads what it left.
+            let _lock = tokio::task::spawn_blocking(move || installation.lock())
+                .await
+                .map_err(std::io::Error::other)?
+                .inspect_err(|error| tracing::warn!(error = ?error, "could not take the macrod update lock"))?;
+            let executable = self.installation.executable().to_owned();
+            let output = run_version(&executable).await.ok();
+            if let Some(installed) = output
+                .as_deref()
+                .and_then(|output| output.split_whitespace().last())
+            {
+                let span = tracing::Span::current();
+                span.record("installed", installed);
+                if ReleaseVersion::parse(installed).is_some_and(|version| version >= self.version) {
+                    span.record("outcome", "already_installed");
+                    if let Err(error) = std::fs::remove_file(&self.staged) {
+                        tracing::debug!(error = ?error, "could not remove the staged macrod binary");
+                    }
+                    tracing::info!("another macrod already installed this release or a newer one; restarting");
+                    return Ok(Installed {
+                        executable,
+                        tag: installed.to_owned(),
+                    });
+                }
+            }
+            self.installation.swap(&self.staged).inspect_err(
+                |error| tracing::warn!(error = ?error, "could not install the new macrod binary"),
+            )?;
+            tracing::Span::current().record("outcome", "installed");
+            tracing::info!("installed the new macrod binary; restarting");
+            Ok(Installed {
+                executable,
+                tag: self.tag,
+            })
+        }
+        .instrument(span)
+        .await
     }
 }
 
@@ -271,7 +312,9 @@ async fn check_and_stage(
         })
         .await
         .map_err(|error| StageError::Io(std::io::Error::other(error)))??;
-        smoke_test(&staged).await.inspect_err(|_| {
+        // The staged binary must run on this machine before it replaces the
+        // one that does.
+        run_version(&staged).await.inspect_err(|_| {
             let _ = std::fs::remove_file(&staged);
         })?;
         Ok::<_, UpdateError>(staged)
@@ -314,17 +357,18 @@ async fn check_and_stage(
     tracing::info!(tag = %latest.tag, "downloaded a newer macrod");
     Ok(Some(StagedUpdate {
         tag: latest.tag,
+        version,
         staged,
         installation: installation.clone(),
     }))
 }
 
-/// The staged binary must run on this machine before it replaces the one
-/// that does.
-async fn smoke_test(staged: &std::path::Path) -> Result<(), UpdateError> {
+/// What `binary --version` prints (`macrod <tag>`), if it runs and exits
+/// cleanly within [`SMOKE_TEST_TIMEOUT`].
+async fn run_version(binary: &std::path::Path) -> Result<String, UpdateError> {
     let output = tokio::time::timeout(
         SMOKE_TEST_TIMEOUT,
-        tokio::process::Command::new(staged)
+        tokio::process::Command::new(binary)
             .arg("--version")
             .kill_on_drop(true)
             .output(),
@@ -333,7 +377,7 @@ async fn smoke_test(staged: &std::path::Path) -> Result<(), UpdateError> {
     .map_err(|_| UpdateError::SmokeTest("timed out".to_owned()))?
     .map_err(|error| UpdateError::SmokeTest(error.to_string()))?;
     if output.status.success() {
-        Ok(())
+        Ok(String::from_utf8_lossy(&output.stdout).into_owned())
     } else {
         Err(UpdateError::SmokeTest(format!(
             "exited with {}",

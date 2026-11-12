@@ -197,6 +197,9 @@ async fn run_loop(
     let mut tick = tokio::time::interval(TICK);
     let mut poller = update::start_poller(app.config.update.auto);
     let mut staged: Option<StagedUpdate> = None;
+    // Swapped in, waiting for the panel to be idle again to restart.
+    #[cfg(unix)]
+    let mut swapped: Option<update::Installed> = None;
     // Paired already? Start serving before the first frame.
     if app.paired() {
         app.restart_daemon().await;
@@ -239,7 +242,7 @@ async fn run_loop(
                     }
                 }
                 #[cfg(unix)]
-                if let Some(installed) = install_when_idle(app, &mut staged) {
+                if let Some(installed) = install_when_idle(app, &mut staged, &mut swapped).await {
                     let agent = match app.daemon.take() {
                         Some(daemon) => daemon.hand_off().await,
                         None => None,
@@ -256,31 +259,44 @@ async fn run_loop(
     }
 }
 
-/// Swap in a staged update once nothing would be cut short: no agent turn
-/// running and no edit, pairing, or install open in the panel.
+/// Swap in a staged update, and return it to restart into, once nothing
+/// would be cut short: no agent turn running and no edit, pairing, or
+/// install open in the panel.
 ///
 /// The agent process survives the restart, but the service ends a turn
 /// when its runtime connection closes, so a turn in flight would still be
-/// cut off in Macro: the swap waits for one to finish.
+/// cut off in Macro: the swap waits for one to finish. The swap itself can
+/// wait seconds behind another macrod's, so a turn that starts meanwhile
+/// holds the restart (kept in `swapped`) until a later idle tick.
 #[cfg(unix)]
-fn install_when_idle(
+async fn install_when_idle(
     app: &mut App,
     staged: &mut Option<StagedUpdate>,
+    swapped: &mut Option<update::Installed>,
 ) -> Option<update::Installed> {
-    let idle = matches!(app.mode, Mode::Normal)
-        && app.daemon.as_ref().is_none_or(|daemon| daemon.is_idle());
-    if !idle {
+    if !is_idle(app) {
         return None;
     }
-    let update = staged.take()?;
-    let tag = update.tag().to_owned();
-    match update.swap() {
-        Ok(installed) => Some(installed),
-        Err(error) => {
-            app.fail(format!("Could not install macrod {tag}: {error}"));
-            None
+    if swapped.is_none() {
+        let update = staged.take()?;
+        let tag = update.tag().to_owned();
+        match update.swap().await {
+            Ok(installed) => *swapped = Some(installed),
+            Err(error) => {
+                app.fail(format!("Could not install macrod {tag}: {error}"));
+                return None;
+            }
         }
     }
+    if !is_idle(app) {
+        return None;
+    }
+    swapped.take()
+}
+
+#[cfg(unix)]
+fn is_idle(app: &App) -> bool {
+    matches!(app.mode, Mode::Normal) && app.daemon.as_ref().is_none_or(|daemon| daemon.is_idle())
 }
 
 fn apply_pending_browser(app: &mut App) {
