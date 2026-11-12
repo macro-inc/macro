@@ -35,6 +35,7 @@ import {
 } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 import { createEnterOwningControl } from '../util/createEnterOwningControl';
+import { markdownWideMode } from '../wide-mode';
 import { DocumentDiscussion } from './DocumentDiscussion';
 import { InlineTaskGithubPullRequests } from './InlineTaskGithubPullRequests';
 import { InlineTaskProperties } from './InlineTaskProperties';
@@ -137,21 +138,29 @@ export function Notebook(props: {
     if (!showComments() || width() === undefined) {
       return CommentLayoutMode.none;
     }
-    if (commentBreakpoints.lg()) return CommentLayoutMode.lg;
+    // The lg layout floats the comments beside a centered fixed-width column;
+    // a column that fills the pane leaves no room there, so wide mode keeps
+    // the comments in their own flex column.
+    if (commentBreakpoints.lg() && !markdownWideMode())
+      return CommentLayoutMode.lg;
     if (commentBreakpoints.md()) return CommentLayoutMode.md;
     return CommentLayoutMode.xs;
   });
 
-  // Switching layout mode resizes the text column and reflows the document
-  // under an unchanged scrollTop; the first comment on a document would
-  // otherwise scroll its own anchor text out of view. Browser scroll anchoring
-  // is suppressed because the switch changes the column's padding and margins.
-  // The computed captures the anchor before the new classes are applied, the
-  // effect restores it after.
+  const isWide = () => markdownWideMode() && !isMobile();
+  const columnLayout = () => `${layoutMode()}:${isWide()}`;
+
+  // Switching layout mode or wide mode resizes the text column and reflows the
+  // document under an unchanged scrollTop; the first comment on a document
+  // would otherwise scroll its own anchor text out of view, and toggling wide
+  // mode would lose the reader's place. Browser scroll anchoring is suppressed
+  // because the switch changes the column's padding and margins. The computed
+  // captures the anchor before the new classes are applied, the effect
+  // restores it after.
   let scrollAnchor: ScrollAnchor | undefined;
   createComputed(
     on(
-      layoutMode,
+      columnLayout,
       () => {
         const scroller = md.scrollContainer;
         const editorRoot = md.editor?.getRootElement();
@@ -165,7 +174,7 @@ export function Notebook(props: {
   );
   createEffect(
     on(
-      layoutMode,
+      columnLayout,
       () => {
         const anchor = scrollAnchor;
         const scroller = md.scrollContainer;
@@ -298,23 +307,28 @@ export function Notebook(props: {
   const containerClasses = createMemo(() => {
     const mode = layoutMode();
     const shared = 'flex relative text-ink min-h-full min-w-0 isolate';
-    switch (mode) {
-      case CommentLayoutMode.lg:
-        return shared;
-      case CommentLayoutMode.md:
-        return `${shared} px-8 gap-6 justify-center`;
-      case CommentLayoutMode.xs:
-        return `${shared} px-6 gap-6 justify-center`;
-      default:
-        return `${shared} px-6`;
-    }
+    if (mode === CommentLayoutMode.lg) return shared;
+
+    const gap = mode === CommentLayoutMode.none ? '' : 'gap-6 justify-center';
+    if (mode === CommentLayoutMode.md) return `${shared} px-8 ${gap}`;
+    // Beside margin comments (or their rail) the margin below assumes a pane
+    // holding only the text, so it would take width from the text instead.
+    if (!isWide() || mode === CommentLayoutMode.xs)
+      return `${shared} px-6 ${gap}`;
+    // Wide mode's margin grows with the pane up to 64px, room for the outline
+    // in the left gutter. It never drops below the standard padding, and while
+    // the pane is narrower than the standard column plus that margin the text
+    // keeps the standard width, so the column only widens as the pane does.
+    return `${shared} px-[clamp(1.5rem,calc((100%_-_48rem)/2),4rem)] ${gap}`;
   });
 
   const contentDivClasses = createMemo(() => {
     const mode = layoutMode();
     // A zero basis keeps WebKit from sizing the column by the max-content width
     // of its text, which it recomputes slowly for long unbroken runs.
-    const shared = 'grow basis-0 max-w-3xl pt-12 touch:pt-6 min-w-0';
+    // Wide mode lifts the reading column's cap so it fills the pane.
+    const maxWidth = isWide() ? '' : 'max-w-3xl';
+    const shared = `grow basis-0 ${maxWidth} pt-12 touch:pt-6 min-w-0`;
     switch (mode) {
       case CommentLayoutMode.lg:
         return `${shared} mx-auto`;

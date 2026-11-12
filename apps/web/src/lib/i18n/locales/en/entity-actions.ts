@@ -306,4 +306,7 @@ export default {
   toastPrConvertToDraftFailed: 'Failed to convert pull request to a draft',
   toastPrClosed: 'Closed {{name}}',
   toastPrCloseFailed: 'Failed to close pull request',
+  // Markdown document layout.
+  turnOnWideMode: 'Turn on wide mode',
+  turnOffWideMode: 'Turn off wide mode',
 };
