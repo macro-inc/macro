@@ -659,3 +659,97 @@ fn block_ops_reach_the_source_doc_state() {
         rows.join("\n")
     );
 }
+
+const SELECTION_CORPUS: &str = include_str!("corpus/selection.json");
+
+/// Node key at a child-index path from the root.
+fn at_path(editor: &Editor, path: &[u64]) -> NodeKey {
+    let view = editor.state().view();
+    let mut key = NodeKey::ROOT;
+    for index in path {
+        let index = usize::try_from(*index).expect("index");
+        key = view.children(key).nth(index).expect("path exists");
+    }
+    key
+}
+
+fn path_of(value: &Value) -> Vec<u64> {
+    value
+        .as_array()
+        .expect("path")
+        .iter()
+        .map(|i| i.as_u64().expect("index"))
+        .collect()
+}
+
+/// Source MarkdownPopup ids for stored table and in-table range selections,
+/// transcribed from the live OFF capture named in the corpus `evidence`.
+#[test]
+fn selected_block_ids_match_source_for_table_selections() {
+    let corpus: Value = serde_json::from_str(SELECTION_CORPUS).expect("corpus");
+    let mut rows = Vec::new();
+    let mut failed = 0;
+    for case in corpus["cases"].as_array().expect("cases") {
+        let mut native = block_editor();
+        load(&mut native, &corpus["seed"]);
+        let selection = &case["selection"];
+        let chosen = match selection["kind"].as_str() {
+            Some("table") => {
+                let anchor = at_path(&native, &path_of(&selection["anchor"]));
+                let focus = at_path(&native, &path_of(&selection["focus"]));
+                let table = at_path(&native, &path_of(&selection["anchor"])[..1]);
+                Selection::Table(TableSelection::new(table, anchor, focus))
+            }
+            _ => {
+                let point = |side: &Value| {
+                    let key = at_path(&native, &path_of(&side["path"]));
+                    let offset =
+                        u32::try_from(side["offset"].as_u64().expect("offset")).expect("u32");
+                    Point::text(key, Utf16Offset(offset))
+                };
+                Selection::Range(RangeSelection::new(
+                    point(&selection["anchor"]),
+                    point(&selection["focus"]),
+                ))
+            }
+        };
+        native
+            .update(|tx| {
+                tx.set_selection(Some(chosen))?;
+                Ok(())
+            })
+            .expect("select");
+        let expected: Vec<Value> = case["expected"]
+            .as_array()
+            .expect("expected")
+            .iter()
+            .map(|path| {
+                let key = at_path(&native, &path_of(path));
+                let id = crate::node_ids::get_id(native.state().view(), key)
+                    .expect("id read")
+                    .expect("seed node has an id");
+                Value::String(id.into())
+            })
+            .collect();
+        let actual = surface::query(
+            "group-c.selected-block-ids",
+            &Value::Null,
+            0,
+            native.state(),
+        )
+        .expect("query")
+        .expect("registered query");
+        let name = case["name"].as_str().unwrap_or("?");
+        if actual == Value::Array(expected.clone()) {
+            rows.push(format!("match    {name}"));
+        } else {
+            failed += 1;
+            rows.push(format!(
+                "MISMATCH {name}\n    native {actual}\n    source {}",
+                Value::Array(expected)
+            ));
+        }
+    }
+    eprintln!("selection corpus outcomes:\n{}", rows.join("\n"));
+    assert!(failed == 0, "{failed} cases differ:\n{}", rows.join("\n"));
+}
