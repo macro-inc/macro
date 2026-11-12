@@ -60,8 +60,9 @@ each run.
   session, found from the request's code-mode invocation (`RequestSessions`),
   is kept on its `scheduled_action_draft` row (`DraftHandBacks`), so the
   session and the drafter may run on different replicas. The drafter reads
-  the session's turn status until it ends, or for `CHECKED_GRACE` after the
-  first passing check (all bounded by `DRAFT_TIMEOUT`), turns the last
+  the row every `POLL` and the session's turn every few polls (it reads the
+  whole log); the first passing check ends the draft, else the turn ending
+  does (all bounded by `DRAFT_TIMEOUT`). It turns the last
   passing check (else the last check) into the draft, then stops and deletes
   the session and the row, also when the request is dropped mid-draft;
   `RoutineDrafts::sweep` (every minute in the harness) cleans up drafts
@@ -70,7 +71,10 @@ each run.
   created, the session's tool calls and turns, status reads and outcome
   (`timeout` included), never the words; `routine.check` records
   whether a check passed and kept a draft's answer. `DraftContext` still
-  accepts and ignores the `workspace` older web clients send.
+  accepts and ignores the `workspace` older web clients send. `bench/`
+  times drafting on a local stack against the live model, phase by phase,
+  and checks the drafts (see its README); rerun it when changing the brief
+  or the wait.
 - `src/domain/suggestions.rs` + `src/inbound/suggestion_router.rs`: routine
   suggestions and the tools routines sessions write them with. The sessions
   themselves belong to generations (`crates/suggestion_generation`: an
@@ -112,6 +116,42 @@ each run.
   port the harness sets with `with_suggestion_origins`) are the field
   contract of `infra/stacks/monitoring/monitors/routine-suggestions.ts`;
   renaming an event or field empties its dashboard or alert.
+- `src/domain/service/sub_routines.rs` +
+  `src/outbound/pg_scheduled_action_repo/sub_routines.rs` (the `SubRoutines`
+  port): sub-routines. A routine created by a routine's run in progress is
+  that routine's sub-routine (`ScheduledAction::sub_routine`: `parent_id`,
+  `created_by_run_id`, `key`, `paused_by_parent`). The create's credential
+  proves the run, never its body (`RunCaller`): a code step's token is signed
+  for its routine (`agent_correlation::context::current_routine`), and an Ask
+  AI step's code-mode invocation resolves to its session (`RequestSessions`),
+  whose id is the run's id. A run's id is its claim's token
+  (`ExecutionHandle::for_run`): the session its agent step opens and its
+  history record take it, so `scheduled_action.claim_token` names the run in
+  progress and nothing matches once the claim is released. A routine made
+  from a chat, another session, the `CreateRoutine` tool or a session someone
+  continues after its run ended stays top-level. One level: a sub-routine's
+  run creates siblings under the same top-level parent, each recording its
+  own creating run. `?key=` on create upserts within the parent (a unique
+  index decides races; a key outside a run is 400 `KeyOutsideRun`). At most
+  `MAX_ACTIVE_SUB_ROUTINES` (50) active ones per parent, counted under a lock
+  on the parent row; a finished one-time one (`is_finished_once`: a `once`
+  trigger with no next run) doesn't count, and the refusal is 409
+  `TooManySubRoutines`. Switching a parent off switches its enabled
+  sub-routines off and marks them `paused_by_parent`; switching it on resumes
+  only those (`follow_parent`, also the code-upgrade pause in
+  `pg_code_upgrades.rs`). Deleting a parent deletes its sub-routines with
+  their grants and registry rows (`delete_action`; the foreign key's cascade
+  is only the fence against a racing create). `POST
+  /scheduled-actions/{id}/detach` ("Keep as my routine") clears the link. The
+  list returns top-level routines; `include_children` adds their active
+  sub-routines and `parent=` returns one routine's, active ones plus its
+  newest 200 finished one-time ones. Finished ones accumulate without bound,
+  so every read of active sub-routines repeats the predicate of the partial
+  index `scheduled_action_active_children_idx` and never touches them; history rows carry `created`, the sub-routines that run created
+  (`created_by_runs`). A sub-routine's run notification names its parent
+  (`FinishedRoutineRun::parent_name`). Spans: `routine.create` (parent, run,
+  keyed, outcome `created`/`updated`/`refused_cap`), `routine.follow_parent`,
+  `routine.detach`.
 - `src/domain/code_upgrade.rs`: before a run uses code checked against an
   older version (SDK or `StepContext`), it is checked again, and rewritten by
   a model only if that fails (once per routine and version,

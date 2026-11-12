@@ -32,11 +32,11 @@ async function draftErrorResponseHandler(
 import type {
   ActionConfiguration,
   ActionConfigurationUpdate,
-  ActionExecutionRecord,
   CatalogEntry,
   CodeUpgrade,
   Draft,
   DraftRoutineRequest,
+  ExecutionRecordResponse,
   InProgressExecution,
   RoutineSuggestions,
   RoutineTemplate,
@@ -80,6 +80,41 @@ export const scheduledActionClient = {
     ),
 
   /** `suggestionId` records the routine suggestion it is saved from. */
+  /**
+   * The caller's active sub-routines: the routines other routines' runs
+   * created, which `listSchedules` leaves out, without one-time ones that
+   * have run.
+   */
+  listSubRoutines: async () => {
+    const all = await scheduledActionFetch<ScheduledActionResponse[]>(
+      '/scheduled-actions?include_events=true&include_children=true',
+      { method: 'GET' }
+    );
+    return all.map((routines) =>
+      routines.filter((routine) => routine.sub_routine)
+    );
+  },
+
+  /**
+   * One routine's sub-routines: the active ones and its newest finished
+   * one-time ones.
+   */
+  listChildren: async (args: { scheduleId: string }) =>
+    scheduledActionFetch<ScheduledActionResponse[]>(
+      `/scheduled-actions?${new URLSearchParams({ include_events: 'true', parent: args.scheduleId })}`,
+      { method: 'GET' }
+    ),
+
+  /**
+   * Keep a sub-routine as the owner's own routine: it moves to the main
+   * list and stops following the routine whose run created it.
+   */
+  detach: async (args: { scheduleId: string }) =>
+    scheduledActionFetch<ScheduledAction>(
+      `/scheduled-actions/${args.scheduleId}/detach`,
+      { method: 'POST' }
+    ),
+
   createSchedule: async (
     body: ActionConfiguration,
     options: { suggestionId?: string } = {}
@@ -129,7 +164,7 @@ export const scheduledActionClient = {
     ),
 
   listHistory: async (args: { scheduleId: string }) =>
-    scheduledActionFetch<ActionExecutionRecord[]>(
+    scheduledActionFetch<ExecutionRecordResponse[]>(
       `/scheduled-actions/${args.scheduleId}/history`,
       { method: 'GET' }
     ),
