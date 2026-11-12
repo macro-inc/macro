@@ -1,9 +1,9 @@
-//! Code mode for channel-mention replies, behind a per-user PostHog flag.
+//! Code mode for channel-mention replies, the bot's only tool path.
 //!
 //! The bot's programs run through a [`MentionCodeMode`] (in production, the
 //! agent harness's internal user-execution route, the only host with a Deno
 //! runtime) as the mentioning user, attributed to Macro AI: the same identity
-//! the bot's direct tools use.
+//! the bot's direct tools used.
 
 use std::sync::Arc;
 
@@ -11,14 +11,13 @@ use agent_code_mode::domain::{
     CodeModeError, MentionCodeMode, MentionContext, UserCodeMode, UserExecutionReceipt,
 };
 use agent_code_mode::inbound::toolset::UserCodeModeToolContext;
-use ai_tools::{AiToolSet, ToolServiceContext, ToolSetWithPrompt};
+use ai_tools::{AiToolSet, ToolServiceContext};
 use ai_toolset::{
     AsyncToolCollection, RequestContext, RequestSchema, SearchableTool, ToolCallFuture, ToolCaller,
     ToolInfo, ToolSet,
 };
 use async_trait::async_trait;
 use code_execution::domain::ExecuteRequest;
-use feature_flags::FeatureFlags;
 use macro_user_id::user_id::MacroUserIdStr;
 use tokio_util::sync::CancellationToken;
 
@@ -27,134 +26,61 @@ use crate::domain::models::BotMention;
 #[cfg(test)]
 mod test;
 
-/// Per-user PostHog flag that moves mention replies to code mode.
-pub const CODE_MODE_FLAG: &str = "ai-channel-bot-code-mode";
-
-/// Whether a user's mention replies run code mode. Object-safe (the
-/// responder holds `Arc<dyn CodeModeGate>`), hence `async_trait`.
-#[async_trait]
-pub trait CodeModeGate: Send + Sync {
-    /// `false` unless the rollout is positively on for `user`.
-    async fn enabled(&self, user: &MacroUserIdStr<'static>) -> bool;
-}
-
-/// [`CODE_MODE_FLAG`] read for the mentioning user. Fails closed: an unset,
-/// disabled or unreadable flag keeps the direct tools.
-pub struct FlaggedCodeMode<Flags>(pub Flags);
-
-#[async_trait]
-impl<Flags: FeatureFlags> CodeModeGate for FlaggedCodeMode<Flags> {
-    async fn enabled(&self, user: &MacroUserIdStr<'static>) -> bool {
-        match self.0.load(user).await {
-            Ok(snapshot) => snapshot.is_enabled(CODE_MODE_FLAG),
-            Err(error) => {
-                tracing::warn!(error = ?error, "channel bot code-mode flag unreadable; using direct tools");
-                false
-            }
-        }
-    }
-}
-
-/// Everything a code-mode reply needs beyond the direct tools.
-pub struct ChannelBotCodeMode {
-    /// The filtered direct tools and the code-mode prompt.
-    pub tools: ToolSetWithPrompt,
-    /// The harness route programs run on.
-    pub executions: Arc<dyn MentionCodeMode>,
-    /// Who gets code mode.
-    pub gate: Arc<dyn CodeModeGate>,
-}
-
-/// The tools and system prompt one reply runs with.
-pub(crate) struct ReplyTools {
-    pub(crate) toolset: Arc<dyn ToolSet<ToolServiceContext> + Send + Sync>,
-    pub(crate) system_prompt: Arc<str>,
-    pub(crate) code_mode: bool,
-}
-
-/// Chooses each reply's tools: code mode where the gate allows it and the
-/// host configured it, the direct tools otherwise.
-pub(crate) struct ToolModes {
+/// The channel bot's tools: the direct tools code mode keeps (see
+/// [`ai_tools::tools_for_channel_bot_code_mode`]), the user-scoped
+/// `ExecuteCode`/`DescribeCodeTools`/`ReadCodeDocs`, and the code-mode prompt.
+pub struct ChannelBotTools {
     direct: Arc<AiToolSet>,
-    direct_prompt: Arc<str>,
-    code: Option<CodeTools>,
-}
-
-struct CodeTools {
-    direct: Arc<AiToolSet>,
-    prompt: Arc<str>,
-    user_tools: Arc<AsyncToolCollection<UserCodeModeToolContext>>,
+    system_prompt: String,
+    code: Arc<AsyncToolCollection<UserCodeModeToolContext>>,
     executions: Arc<dyn MentionCodeMode>,
-    gate: Arc<dyn CodeModeGate>,
 }
 
-impl ToolModes {
-    pub(crate) fn direct(tools: ToolSetWithPrompt) -> Self {
+impl ChannelBotTools {
+    /// Programs run through `executions`.
+    pub fn new(executions: Arc<dyn MentionCodeMode>) -> Self {
+        let tools = ai_tools::tools_for_channel_bot_code_mode();
         Self {
+            // The channel rules go last so they are the freshest instructions
+            // the model reads; ahead of the tool prompt they were often ignored.
+            system_prompt: format!("{}\n{}", tools.prompt, prompt::channel_mention::PROMPT),
             direct: tools.toolset,
-            direct_prompt: system_prompt(&tools),
-            code: None,
+            code: Arc::new(agent_code_mode::inbound::toolset::user_toolset()),
+            executions,
         }
     }
 
-    pub(crate) fn with_code_mode(mut self, code: ChannelBotCodeMode) -> Self {
-        self.code = Some(CodeTools {
-            prompt: system_prompt(&code.tools),
-            direct: code.tools.toolset,
-            user_tools: Arc::new(agent_code_mode::inbound::toolset::user_toolset()),
-            executions: code.executions,
-            gate: code.gate,
-        });
-        self
+    pub(crate) fn system_prompt(&self) -> &str {
+        &self.system_prompt
     }
 
-    pub(crate) async fn for_reply(
+    /// The tools for one reply, whose programs answer `mention`.
+    pub(crate) fn for_mention(
         &self,
-        user: &MacroUserIdStr<'static>,
         mention: &BotMention,
         cognition: Option<Arc<dyn cognition::domain::Cognition>>,
-    ) -> ReplyTools {
-        let code = match &self.code {
-            Some(code) if code.gate.enabled(user).await => code,
-            _ => {
-                return ReplyTools {
-                    toolset: self.direct.clone(),
-                    system_prompt: self.direct_prompt.clone(),
-                    code_mode: false,
-                };
-            }
-        };
-        ReplyTools {
-            toolset: Arc::new(CodeModeTools {
-                direct: code.direct.clone(),
-                code: code.user_tools.clone(),
-                context: UserCodeModeToolContext {
-                    service: Arc::new(MentionPrograms {
-                        executions: code.executions.clone(),
-                        mention: MentionContext {
-                            message_id: mention.message_id,
-                            root_id: mention.root_id,
-                        },
-                    }),
-                    cognition,
-                    caller: ToolCaller::Agent(bot_id::MACRO_AI_BOT_ID),
-                    session: None,
-                },
-            }),
-            system_prompt: code.prompt.clone(),
-            code_mode: true,
-        }
+    ) -> Arc<dyn ToolSet<ToolServiceContext> + Send + Sync> {
+        Arc::new(CodeModeTools {
+            direct: self.direct.clone(),
+            code: self.code.clone(),
+            context: UserCodeModeToolContext {
+                service: Arc::new(MentionPrograms {
+                    executions: self.executions.clone(),
+                    mention: MentionContext {
+                        message_id: mention.message_id,
+                        root_id: mention.root_id,
+                    },
+                }),
+                cognition,
+                caller: ToolCaller::Agent(bot_id::MACRO_AI_BOT_ID),
+                session: None,
+            },
+        })
     }
-}
-
-/// The channel rules go last so they are the freshest instructions the model
-/// reads; ahead of the tool prompt they were often ignored.
-fn system_prompt(tools: &ToolSetWithPrompt) -> Arc<str> {
-    format!("{}\n{}", tools.prompt, prompt::channel_mention::PROMPT).into()
 }
 
 /// One mention's programs, run for that mention's user. The caller and
-/// session the tools pass are the ones [`ToolModes::for_reply`] bound
+/// session the tools pass are the ones [`ChannelBotTools::for_mention`] bound
 /// (Macro AI, none); the harness credentials them itself.
 struct MentionPrograms {
     executions: Arc<dyn MentionCodeMode>,

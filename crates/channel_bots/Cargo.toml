@@ -21,7 +21,6 @@ cognition = { path = "../cognition" }
 entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
-feature_flags = { path = "../feature_flags" }
 futures = { workspace = true }
 lexical_client = { path = "../lexical_client" }
 macro_user_id = { path = "../macro_user_id" }

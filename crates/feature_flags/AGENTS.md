@@ -25,8 +25,8 @@ for the authenticated Macro user, where one load returns a stable
   every load sends).
 - Used by: `agent_harness_service` (agent modes, routine templates),
   `authentication_service` (`enable-outlook`), `document_storage_service`
-  (calls, Canvas artifacts, channel-bot code mode), and the `ai_tools`, `agent_harness`,
-  `agent_inmem`, `call`, `channel_bots`, and `scheduled_action` crates. Each composition root
+  (calls, Canvas artifacts), and the `ai_tools`, `agent_harness`,
+  `agent_inmem`, `call`, and `scheduled_action` crates. Each composition root
   wires the PostHog adapter with its config's `environment`.
 
 ## Recipes

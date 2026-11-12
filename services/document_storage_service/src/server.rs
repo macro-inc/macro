@@ -897,8 +897,6 @@ async fn run_server() -> anyhow::Result<()> {
         config.environment,
     )
     .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))?;
-    // One flag client for every per-user rollout here, including mention replies.
-    let rollout_flags = flags.clone();
     let call_service_builder = call_service_builder.with_channel_threads(Arc::new(
         call::outbound::channel_threads::FlaggedChannelThreads::new(
             flags.clone(),
@@ -906,7 +904,7 @@ async fn run_server() -> anyhow::Result<()> {
         ),
     ));
     let call_service_builder = call_service_builder.with_programmatic_call_gate(
-        call::outbound::programmatic_calls::FlaggedProgrammaticCalls(flags.clone()),
+        call::outbound::programmatic_calls::FlaggedProgrammaticCalls(flags),
     );
     let call_public_rate_limiter = RateLimitServiceImpl {
         repo: RedisRateLimitAdapter {
@@ -1521,7 +1519,6 @@ async fn run_server() -> anyhow::Result<()> {
             )),
             message_service.clone(),
         );
-    let macro_agent_tools = ai_tools::tools_for(ai_tools::AiHost::ChannelBot);
     let conversation_access = Arc::new(
         channel_bots::outbound::conversation::EntityAccessConversation(
             entity_access_service.clone(),
@@ -1598,31 +1595,21 @@ async fn run_server() -> anyhow::Result<()> {
             config.document_permission_jwt.as_ref().to_string(),
         ),
     );
-    // Mention replies run code mode on the harness's Deno runtime for users
-    // with `ai-channel-bot-code-mode`; everyone else keeps the direct tools.
-    let channel_bot_code_mode = channel_bots::outbound::code_mode::ChannelBotCodeMode {
-        tools: ai_tools::tools_for_channel_bot_code_mode(),
-        executions: Arc::new(
-            agent_code_mode::outbound::harness_user_executions::HarnessUserExecutions::new(
-                macro_service_urls::AgentHarnessServiceUrl::new()?.as_ref(),
-                config.internal_api_key.as_ref(),
-            )
-            .map_err(|error| anyhow::anyhow!("invalid agent harness client: {error}"))?,
-        ),
-        gate: Arc::new(channel_bots::outbound::code_mode::FlaggedCodeMode(
-            rollout_flags.clone(),
-        )),
-    };
+    // Mention replies run code mode; programs run on the harness's Deno runtime.
+    let channel_bot_tools = channel_bots::outbound::code_mode::ChannelBotTools::new(Arc::new(
+        agent_code_mode::outbound::harness_user_executions::HarnessUserExecutions::new(
+            macro_service_urls::AgentHarnessServiceUrl::new()?.as_ref(),
+            config.internal_api_key.as_ref(),
+        )
+        .map_err(|error| anyhow::anyhow!("invalid agent harness client: {error}"))?,
+    ));
     let bot_trigger_router = channel_bots::inbound::BotTriggerRouter::new_with_admission(
         message_service.clone(),
         conversation_access.clone(),
-        Arc::new(
-            channel_bots::outbound::AgentLoopResponder::new(
-                macro_agent_tool_context,
-                macro_agent_tools,
-            )
-            .with_code_mode(channel_bot_code_mode),
-        ),
+        Arc::new(channel_bots::outbound::AgentLoopResponder::new(
+            macro_agent_tool_context,
+            channel_bot_tools,
+        )),
         Arc::new(
             channel_bots::domain::trigger_detector::MentionOrInferredDetector::new(
                 message_service.clone(),

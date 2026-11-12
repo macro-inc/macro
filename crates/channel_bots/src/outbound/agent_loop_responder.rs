@@ -3,12 +3,12 @@
 use std::sync::Arc;
 
 use agent::{AgentLoop, StreamPart, to_rig_messages};
-use ai_tools::{ToolServiceContext, ToolSetWithPrompt};
+use ai_tools::ToolServiceContext;
 use async_trait::async_trait;
 use futures::StreamExt;
 use macro_user_id::user_id::MacroUserIdStr;
 
-use super::code_mode::{ChannelBotCodeMode, ToolModes};
+use super::code_mode::ChannelBotTools;
 use crate::domain::models::BotMention;
 use crate::domain::ports::AgentResponder;
 
@@ -16,24 +16,17 @@ use crate::domain::ports::AgentResponder;
 pub struct AgentLoopResponder {
     agent_loop: AgentLoop,
     tool_context: Arc<ToolServiceContext>,
-    tools: ToolModes,
+    tools: ChannelBotTools,
 }
 
 impl AgentLoopResponder {
     /// Create a responder from a pre-configured tool context and toolset.
-    pub fn new(tool_context: ToolServiceContext, tools: ToolSetWithPrompt) -> Self {
+    pub fn new(tool_context: ToolServiceContext, tools: ChannelBotTools) -> Self {
         Self {
             agent_loop: AgentLoop::new(tool_context.recorder.clone()),
             tool_context: Arc::new(tool_context),
-            tools: ToolModes::direct(tools),
+            tools,
         }
-    }
-
-    /// Answer in code mode for the users `code.gate` lets in.
-    #[must_use]
-    pub fn with_code_mode(mut self, code: ChannelBotCodeMode) -> Self {
-        self.tools = self.tools.with_code_mode(code);
-        self
     }
 }
 
@@ -41,7 +34,7 @@ impl AgentLoopResponder {
 impl AgentResponder for AgentLoopResponder {
     #[tracing::instrument(
         skip(self, prompt, user_id),
-        fields(message_id = %mention.message_id, code_mode = tracing::field::Empty),
+        fields(message_id = %mention.message_id),
         err
     )]
     async fn respond(
@@ -51,15 +44,10 @@ impl AgentResponder for AgentLoopResponder {
         prompt: String,
     ) -> anyhow::Result<String> {
         let user_id = MacroUserIdStr::try_from(user_id.to_string())?;
-        let tools = self
-            .tools
-            .for_reply(
-                &user_id,
-                &mention,
-                self.tool_context.cognition_tool_context.service.clone(),
-            )
-            .await;
-        tracing::Span::current().record("code_mode", tools.code_mode);
+        let toolset = self.tools.for_mention(
+            &mention,
+            self.tool_context.cognition_tool_context.service.clone(),
+        );
 
         let usage_ctx = ai_usage::UsageContext::new(ai_usage::AiFeature::ChannelBot, user_id);
         // Carry the feature on the context so AI calls made by tools are attributed to it.
@@ -68,9 +56,9 @@ impl AgentResponder for AgentLoopResponder {
         let mut session = self
             .agent_loop
             .session(
-                tools.toolset,
+                toolset,
                 Arc::new(tool_context),
-                &tools.system_prompt,
+                self.tools.system_prompt(),
                 usage_ctx,
             )
             .await;

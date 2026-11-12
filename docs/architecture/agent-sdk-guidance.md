@@ -32,8 +32,8 @@ code-mode agent turn ────┤  prompt = cross-cutting rules + inline_guid
                                      Jev over every entity's @routing sentence,   │
                                      parallel calls of 32, 1 s, ≥0.5, top 4 →     │
                                      index + @agent guide per entity              │
-direct-tool hosts (chat, channel bot): prompt + inline guides that do not need the SDK
-channel bot with `ai-channel-bot-code-mode`: reply-only code-mode rules + every inline guide
+direct-tool hosts (chat): prompt + inline guides that do not need the SDK
+channel bot (code mode): reply-only code-mode rules + every inline guide
 database-only host: base prompt + the databases guide
 public MCP: shared rules + databases, CRM and document-content guides;
             DescribeCodeTools returns entities with their guide
