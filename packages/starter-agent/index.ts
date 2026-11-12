@@ -23,7 +23,7 @@ import { agentClaude, capabilityServer } from './behavior/agent/claude.ts';
 import { guards } from './behavior/agent/guards/index.ts';
 import { profile } from './behavior/agent/profile.ts';
 import { restarter } from './behavior/capabilities/heartbeat/restart.ts';
-import { childEnvironment } from './behavior/context/children.ts';
+import { childEnvironment, claude } from './behavior/context/children.ts';
 import { base as makeBase } from './behavior/context/index.ts';
 import { timedOut } from './behavior/context/shell.ts';
 import {
@@ -45,7 +45,6 @@ const budgetOwner = 'budget';
 /** Where a script's process finds the wake it runs in (the secrets capability's session id). */
 const wakeVariable = 'MUPPET_WAKE_ID';
 const restartVariable = 'MUPPET_RESTART_FILE';
-const claudeProgram = 'claude';
 /** The flag that makes `cli.ts exec` print its result for `inSubprocess` to read. */
 export const resultFlag = '--result-line';
 
@@ -82,19 +81,14 @@ const restart =
         exit: () => undefined,
       });
 
+export { claude };
+
 /** Bubblewrap, which the image provides when children run sandboxed. */
 export const sandboxProgram = (): string | undefined => {
   const [program] = started.sandbox;
   if (program === undefined) return undefined;
   const found = Bun.which(program);
   if (found === null) throw new Error(`${program} is not on PATH`);
-  return found;
-};
-
-/** The `claude` on PATH, which the image provides. */
-export const claude = (): string => {
-  const found = Bun.which(claudeProgram);
-  if (found === null) throw new Error(`${claudeProgram} is not on PATH`);
   return found;
 };
 

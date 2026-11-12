@@ -83,6 +83,8 @@ export type Base = {
   readonly relayed: () => Promise<Readonly<Record<string, string>>>;
   /** Spans around an area's operations. */
   readonly trace: Trace;
+  /** What a child is started under so it can't read the enrollment's secrets: `Startup.sandbox`. */
+  readonly sandbox: readonly string[];
 };
 
 /** A relay's address and the capability it takes. */
@@ -424,6 +426,7 @@ export const base = (
       relay: async () => given ?? (await ownRelay()),
       relayed,
       trace,
+      sandbox: startup.sandbox,
     },
     wiring: {
       addresses,

@@ -98,8 +98,11 @@ export const startJoin =
     paths,
     join,
     relayed,
+    sandbox,
   }: {
     readonly shell: Pick<Shell, 'start'>;
+    /** What the join runs under, its brain's Claude Code and all: `Base.sandbox`. */
+    readonly sandbox: readonly string[];
     /** What makes the join's process the agent's, reaching Macro through its relay. */
     readonly relayed: () => Promise<Readonly<Record<string, string>>>;
     readonly disk: Pick<Disk, 'makeDirectory'>;
@@ -112,15 +115,18 @@ export const startJoin =
     // The logs' directory must exist before bash opens them.
     await disk.makeDirectory(paths.call(id));
     return shell.start(
-      withLogs(
-        [
-          join(config.root, binDirectory, agentProgram),
-          joinCapability,
-          JSON.stringify(input),
-        ],
-        paths.joinLog(id),
-        paths.joinErrors(id)
-      ),
+      [
+        ...sandbox,
+        ...withLogs(
+          [
+            join(config.root, binDirectory, agentProgram),
+            joinCapability,
+            JSON.stringify(input),
+          ],
+          paths.joinLog(id),
+          paths.joinErrors(id)
+        ),
+      ],
       {
         cwd: config.root,
         // rtc-node logs debug lines to stdout otherwise.

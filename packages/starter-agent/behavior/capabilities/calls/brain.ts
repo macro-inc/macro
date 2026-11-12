@@ -471,6 +471,8 @@ export type RunSession = (input: {
 export type BrainPorts = {
   /** The SDK's `query`, injected. */
   readonly query: RunSession;
+  /** The `claude` program to run: the image's wrapper on PATH, not the SDK's own, which has no sign-in. */
+  readonly claude: () => string;
   readonly config: Pick<Config, 'root' | 'owner' | 'model' | 'identity'>;
   /** The charter's text, or undefined if it can't be read. */
   readonly charter: () => Promise<string | undefined>;
@@ -548,6 +550,7 @@ export const claudeBrain = (
     identity,
     briefing: loadBriefing,
     environment,
+    claude,
     guards,
     work,
     place,
@@ -696,6 +699,7 @@ export const claudeBrain = (
           model: config.model,
           effort,
           cwd: config.root,
+          pathToClaudeCodeExecutable: claude(),
           // The agent runs unattended, so nothing waits on approval; the guards are the limit.
           permissionMode: 'bypassPermissions',
           allowDangerouslySkipPermissions: true,

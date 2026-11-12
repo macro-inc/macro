@@ -16,7 +16,10 @@ options in `voices.ts`.
 
 Only the agent's `MACRO_API_KEY`, and a call's process never holds it: it is
 started with the relay's environment (`base.relayed()`), and everything,
-speech included, goes through the agent's relay, which adds the key.
+speech included, goes through the agent's relay, which adds the key. On a
+computer it also runs under the agent's sandbox (`base.sandbox`), so neither
+it nor its brain's Claude Code (the image's `claude` wrapper) can read the
+enrollment's secrets.
 
 - **Speech is LiveKit Inference through Macro** (`context/speech.ts`):
   Deepgram Nova-3 to hear, Aura-2 to speak, over

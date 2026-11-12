@@ -88,6 +88,7 @@ const setup = () => {
     },
     relayed: async () => ({}),
     trace: passthrough,
+    sandbox: [],
   };
   const lock = { held: false };
   const heartbeat: HeartbeatContext['heartbeat'] = {

@@ -28,6 +28,15 @@ export const childEnvironment = (
     }).flatMap(([name, value]) => (value === undefined ? [] : [[name, value]]))
   );
 
+const claudeProgram = 'claude';
+
+/** The `claude` on PATH, which the image provides: the wrapper that signs in with harnessd's token when no Anthropic gateway is given. */
+export const claude = (): string => {
+  const found = Bun.which(claudeProgram);
+  if (found === null) throw new Error(`${claudeProgram} is not on PATH`);
+  return found;
+};
+
 /**
  * How Claude Code reaches Anthropic: through Macro's gateway when enrollment
  * gave these keys (Macro-credits mode), and otherwise with nothing here, since
