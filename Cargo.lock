@@ -21620,8 +21620,6 @@ dependencies = [
  "sqs_client",
  "tempfile",
  "tokio",
- "tokio-stream",
- "tokio-util",
  "tracing",
  "walkdir",
  "workspace-hack",

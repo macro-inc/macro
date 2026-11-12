@@ -5,8 +5,8 @@ use connection_gateway_client::client::ConnectionGatewayClient;
 use document_storage_service_client::DocumentStorageServiceClient;
 use dynamodb_client::DynamodbClient;
 use futures::{
-    TryFutureExt,
-    future::{join_all, try_join_all},
+    StreamExt, TryFutureExt, TryStreamExt,
+    stream::{self},
 };
 use lambda_runtime::{
     Error, LambdaEvent, run, service_fn,
@@ -20,18 +20,28 @@ use model::{
     folder::{FileSystemNodeWithIds, FolderItem, S3Destination, S3DestinationMap},
 };
 use model_entity::EntityType;
-use models_bulk_upload::{UploadDocumentStatus, UploadFolderStatus, UploadFolderStatusUpdate};
+use models_bulk_upload::{
+    UploadDocumentStatus, UploadFolderProgress, UploadFolderStatus, UploadFolderStatusUpdate,
+};
 use sha2::{Digest, Sha256};
 use sqs_client::upload_extractor::UploadExtractQueueMessage;
 use std::ffi::OsStr;
 use std::path::Path;
+use std::time::{Duration, Instant};
 use std::{fs, str::FromStr};
 use std::{path::PathBuf, sync::Arc};
 use tempfile::tempdir;
-use tokio::fs::File;
-use tokio_stream::StreamExt;
-use tokio_util::io::ReaderStream;
+use tokio::{fs::File, io::AsyncReadExt};
+use tracing::Instrument;
 use zip::read::root_dir_common_filter;
+
+/// Files hashed or copied to storage at once. Lambda allows 1,024 open file
+/// descriptors, and a copy holds both the file and its S3 connection.
+const CONCURRENT_FILE_TASKS: usize = 64;
+
+/// How often the extractor records how many files it has stored, for the
+/// uploader's progress indicator.
+const PROGRESS_INTERVAL: Duration = Duration::from_secs(2);
 
 env_vars! {
     struct LocalZipPath;
@@ -199,7 +209,7 @@ async fn update_bulk_upload_request_state(
     }
 }
 
-#[tracing::instrument(skip_all, fields(request_id=request_id))]
+#[tracing::instrument(name = "folder_upload.process", skip_all, err, fields(request_id = request_id))]
 #[expect(clippy::too_many_arguments, reason = "too annoying to fix")]
 async fn process_zipped_s3_object(
     s3_client: &S3Client,
@@ -224,31 +234,7 @@ async fn process_zipped_s3_object(
     let temp_dir = tempdir()?;
     let zip_path = temp_dir.path().join("upload.zip");
 
-    tracing::debug!("Downloading zip file to {:?}", zip_path);
-
-    if cfg!(feature = "local") {
-        tracing::info!("using local zip file, remove local feature to download s3 object");
-        // Update this path to your zip file location
-        let file_path = LocalZipPath::new().context("LOCAL_ZIP_PATH must be set")?;
-        tracing::info!("Loading local zip file from: {}", file_path.as_ref());
-        let file = File::open(file_path.as_ref()).await?;
-        let mut body = tokio::io::BufReader::new(file);
-
-        // Write the file to disk
-        tokio::io::copy(&mut body, &mut tokio::fs::File::create(&zip_path).await?).await?;
-    } else {
-        let obj = s3_client
-            .get_object()
-            .bucket(staging_bucket)
-            .key(object_key)
-            .send()
-            .await?;
-
-        let mut body = obj.body.into_async_read();
-
-        // Write the file to disk
-        tokio::io::copy(&mut body, &mut tokio::fs::File::create(&zip_path).await?).await?;
-    }
+    download_zip(s3_client, staging_bucket, object_key, &zip_path).await?;
 
     // Extract zip file
     let extract_dir = temp_dir.path().join("extracted");
@@ -257,17 +243,16 @@ async fn process_zipped_s3_object(
     tracing::debug!("Extracting zip file to {:?}", extract_dir);
     let root_folder_name = extract_zip_file(&zip_path, &extract_dir, zip_name)?;
 
-    // Build file system structure
-    tracing::debug!(
-        "Building file system structure for folder: {}",
-        root_folder_name
-    );
     let ExtractedTree {
         items: folder_items,
         folders,
     } = build_file_system(&extract_dir).await?;
-    tracing::debug!("Upload file system: {:?} {:?}", folder_items, folders);
 
+    let register_span = tracing::info_span!(
+        "folder_upload.register",
+        files = folder_items.len() as i64,
+        folders = folders.len() as i64
+    );
     let upload_result = dss_client
         .upload_unnested_folder(
             user_id.to_string(),
@@ -277,6 +262,7 @@ async fn process_zipped_s3_object(
             request_id.to_string(),
             parent_id.map(|s| s.to_string()),
         )
+        .instrument(register_span)
         .await?;
 
     let file_system = upload_result.file_system;
@@ -284,7 +270,6 @@ async fn process_zipped_s3_object(
         .get_project_id()
         .ok_or_else(|| anyhow::anyhow!("No project found for root folder"))?;
 
-    tracing::debug!("returned file system: {:?}", file_system);
     tracing::debug!("root project id: {:?}", root_project_id);
 
     let destination_map = upload_result.destination_map;
@@ -303,7 +288,47 @@ async fn process_zipped_s3_object(
     return Ok((request_status, root_project_id.clone()));
 }
 
-#[tracing::instrument(skip_all, fields(request_id=request_id))]
+/// Writes the uploaded archive to `zip_path`.
+#[tracing::instrument(name = "folder_upload.download", skip_all, err, fields(zip_bytes = tracing::field::Empty))]
+async fn download_zip(
+    s3_client: &S3Client,
+    staging_bucket: &str,
+    object_key: &str,
+    zip_path: &Path,
+) -> Result<(), Error> {
+    let mut destination = tokio::fs::File::create(zip_path).await?;
+
+    let bytes = if cfg!(feature = "local") {
+        tracing::info!("using local zip file, remove local feature to download s3 object");
+        let file_path = LocalZipPath::new().context("LOCAL_ZIP_PATH must be set")?;
+        tracing::info!("Loading local zip file from: {}", file_path.as_ref());
+        let file = File::open(file_path.as_ref()).await?;
+        tokio::io::copy(&mut tokio::io::BufReader::new(file), &mut destination).await?
+    } else {
+        let obj = s3_client
+            .get_object()
+            .bucket(staging_bucket)
+            .key(object_key)
+            .send()
+            .await?;
+        tokio::io::copy(&mut obj.body.into_async_read(), &mut destination).await?
+    };
+
+    tracing::Span::current().record("zip_bytes", i64::try_from(bytes).unwrap_or(i64::MAX));
+    Ok(())
+}
+
+#[tracing::instrument(
+    name = "folder_upload.store",
+    skip_all,
+    err,
+    fields(
+        request_id = request_id,
+        files = tracing::field::Empty,
+        stored = tracing::field::Empty,
+        failed = tracing::field::Empty
+    )
+)]
 async fn move_files_to_cloud_storage_bucket(
     s3_client: &S3Client,
     dynamodb_client: &DynamodbClient,
@@ -316,6 +341,8 @@ async fn move_files_to_cloud_storage_bucket(
 
     let document_ids: Vec<String> = folder_items.keys().cloned().collect();
     let document_count = document_ids.len();
+    let span = tracing::Span::current();
+    span.record("files", document_count as i64);
     if document_count == 0 {
         tracing::error!("No documents found in file system {}", request_id);
         return Ok(UploadFolderStatus::Completed);
@@ -330,30 +357,32 @@ async fn move_files_to_cloud_storage_bucket(
         )
         .await?;
 
-    let mut upload_tasks = Vec::new();
+    let mut progress = UploadFolderProgress {
+        files_total: u32::try_from(document_count).context("too many files in folder")?,
+        files_stored: 0,
+        files_failed: 0,
+    };
+    record_progress(dynamodb_client, request_id, progress).await;
 
-    for (document_id, item) in folder_items {
-        let destination = match destination_map.get(&document_id) {
-            Some(dest) => dest.clone(),
-            None => {
-                tracing::error!("No destination found for {}", document_id);
-                continue;
-            }
-        };
-
+    let upload_tasks = folder_items.into_iter().map(|(document_id, item)| {
+        let destination = destination_map.get(&document_id).cloned();
         let s3_client = s3_client.clone();
         let extract_dir = extract_dir.to_path_buf();
 
-        let fut = async move {
+        async move {
             match destination {
-                S3Destination::External(_) => {
+                None => {
+                    let error_message = format!("No destination found for {}", document_id);
+                    (document_id, false, Some(error_message))
+                }
+                Some(S3Destination::External(_)) => {
                     let error_message = format!(
                         "External destination not implemented for file {}",
                         document_id
                     );
                     (document_id, false, Some(error_message))
                 }
-                S3Destination::Internal(s3_info) => {
+                Some(S3Destination::Internal(s3_info)) => {
                     let path = get_file_path_for_item(&extract_dir, &item);
 
                     if !path.is_file() {
@@ -393,32 +422,42 @@ async fn move_files_to_cloud_storage_bucket(
                     }
                 }
             }
-        };
+        }
+    });
 
-        upload_tasks.push(fut);
-    }
-
-    let results = join_all(upload_tasks).await;
+    let mut results = stream::iter(upload_tasks).buffer_unordered(CONCURRENT_FILE_TASKS);
 
     let mut success_ids = Vec::new();
     let mut failed_ids = Vec::new();
+    let mut progress_recorded_at = Instant::now();
 
-    for result in results {
-        let (document_id, success, error_message) = result;
+    while let Some((document_id, success, error_message)) = results.next().await {
         match success {
-            true => success_ids.push(document_id),
+            true => {
+                success_ids.push(document_id);
+                progress.files_stored += 1;
+            }
             false => {
                 match error_message {
                     Some(error_message) => tracing::error!(error_message),
                     None => tracing::error!("Failed to upload {}", document_id),
                 }
-                failed_ids.push(document_id)
+                failed_ids.push(document_id);
+                progress.files_failed += 1;
             }
         };
+
+        if progress_recorded_at.elapsed() >= PROGRESS_INTERVAL {
+            record_progress(dynamodb_client, request_id, progress).await;
+            progress_recorded_at = Instant::now();
+        }
     }
+    record_progress(dynamodb_client, request_id, progress).await;
 
     let success_count = success_ids.len();
     let failed_count = failed_ids.len();
+    span.record("stored", success_count as i64);
+    span.record("failed", failed_count as i64);
 
     match (success_count == 0, failed_count == 0) {
         (true, true) => Ok(UploadFolderStatus::Completed),
@@ -462,7 +501,23 @@ async fn move_files_to_cloud_storage_bucket(
     }
 }
 
+/// Progress only feeds the uploader's indicator, so a failed write is logged
+/// and the upload carries on.
+async fn record_progress(
+    dynamodb_client: &DynamodbClient,
+    request_id: &str,
+    progress: UploadFolderProgress,
+) {
+    dynamodb_client
+        .bulk_upload
+        .update_bulk_upload_request_progress(request_id, progress)
+        .await
+        .inspect_err(|e| tracing::warn!(error = ?e, "failed to record upload progress"))
+        .ok();
+}
+
 // returns the root folder name
+#[tracing::instrument(name = "folder_upload.unzip", skip_all, err, fields(entries = tracing::field::Empty))]
 fn extract_zip_file(
     zip_path: &Path,
     extract_dir: &Path,
@@ -470,6 +525,7 @@ fn extract_zip_file(
 ) -> Result<String, Error> {
     let file = fs::File::open(zip_path)?;
     let mut archive = zip::ZipArchive::new(file)?;
+    tracing::Span::current().record("entries", archive.len() as i64);
 
     let extract_to: PathBuf;
     let root_dir_name = match archive
@@ -536,6 +592,12 @@ fn is_ignored_entry(relative_path: &Path) -> bool {
     relative_path.iter().skip(1).any(is_ignored_name)
 }
 
+#[tracing::instrument(
+    name = "folder_upload.hash",
+    skip_all,
+    err,
+    fields(files = tracing::field::Empty, folders = tracing::field::Empty)
+)]
 async fn build_file_system(extract_dir: &Path) -> Result<ExtractedTree, Error> {
     let mut tasks = Vec::new();
     let mut folders = Vec::new();
@@ -606,19 +668,30 @@ async fn build_file_system(extract_dir: &Path) -> Result<ExtractedTree, Error> {
         tasks.push(fut);
     }
 
-    // exits immediately if any task fails
-    let items = try_join_all(tasks).await?;
+    // Exits at the first failure. Each task holds its file open while hashing,
+    // so only a bounded number run at once.
+    let items: Vec<FolderItem> = stream::iter(tasks)
+        .buffered(CONCURRENT_FILE_TASKS)
+        .try_collect()
+        .await?;
+
+    let span = tracing::Span::current();
+    span.record("files", items.len() as i64);
+    span.record("folders", folders.len() as i64);
     Ok(ExtractedTree { items, folders })
 }
 
 async fn compute_sha256(path: &Path) -> Result<String, Error> {
-    let file = File::open(path).await?;
-    let mut stream = ReaderStream::new(file);
+    let mut file = File::open(path).await?;
     let mut hasher = Sha256::new();
+    let mut buffer = vec![0; 256 * 1024];
 
-    while let Some(chunk) = stream.next().await {
-        let bytes = chunk?;
-        hasher.update(&bytes);
+    loop {
+        let read = file.read(&mut buffer).await?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..read]);
     }
 
     let result = hasher.finalize();
@@ -1083,6 +1156,114 @@ mod tests {
                 "Board Pack/Finance/Forecasts/Scenarios",
                 "Board Pack/Finance/Forecasts/Scenarios/Empty Leaf",
             ]
+        );
+    }
+
+    /// An archive laid out the way the web app streams a folder: every entry
+    /// stored, files followed by a data descriptor that carries their CRC-32
+    /// and size, then the central directory.
+    fn write_streamed_browser_zip(path: &Path, entries: &[(&str, Option<(&[u8], u32)>)]) {
+        let mut bytes: Vec<u8> = Vec::new();
+        let mut central: Vec<u8> = Vec::new();
+        for (name, contents) in entries {
+            let offset = bytes.len() as u32;
+            let flags: u16 = if contents.is_some() { 0x0808 } else { 0x0800 };
+            bytes.extend(0x0403_4b50_u32.to_le_bytes());
+            bytes.extend(20_u16.to_le_bytes());
+            bytes.extend(flags.to_le_bytes());
+            bytes.extend([0; 18]);
+            bytes.extend((name.len() as u16).to_le_bytes());
+            bytes.extend(0_u16.to_le_bytes());
+            bytes.extend(name.as_bytes());
+
+            let (crc, size) = match contents {
+                Some((data, crc)) => {
+                    bytes.extend(*data);
+                    bytes.extend(0x0807_4b50_u32.to_le_bytes());
+                    bytes.extend(crc.to_le_bytes());
+                    bytes.extend((data.len() as u32).to_le_bytes());
+                    bytes.extend((data.len() as u32).to_le_bytes());
+                    (*crc, data.len() as u32)
+                }
+                None => (0, 0),
+            };
+
+            central.extend(0x0201_4b50_u32.to_le_bytes());
+            central.extend(20_u16.to_le_bytes());
+            central.extend(20_u16.to_le_bytes());
+            central.extend(flags.to_le_bytes());
+            central.extend([0; 6]);
+            central.extend(crc.to_le_bytes());
+            central.extend(size.to_le_bytes());
+            central.extend(size.to_le_bytes());
+            central.extend((name.len() as u16).to_le_bytes());
+            central.extend([0; 8]);
+            let external: u32 = if contents.is_some() { 0 } else { 0x10 };
+            central.extend(external.to_le_bytes());
+            central.extend(offset.to_le_bytes());
+            central.extend(name.as_bytes());
+        }
+        let central_offset = bytes.len() as u32;
+        bytes.extend(&central);
+        bytes.extend(0x0605_4b50_u32.to_le_bytes());
+        bytes.extend([0; 4]);
+        bytes.extend((entries.len() as u16).to_le_bytes());
+        bytes.extend((entries.len() as u16).to_le_bytes());
+        bytes.extend((central.len() as u32).to_le_bytes());
+        bytes.extend(central_offset.to_le_bytes());
+        bytes.extend(0_u16.to_le_bytes());
+        fs::write(path, bytes).unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_streamed_browser_zip_extracts_files_and_folders() {
+        let temp_dir = tempdir().unwrap();
+        let zip_path = temp_dir.path().join("upload.zip");
+        write_streamed_browser_zip(
+            &zip_path,
+            &[
+                ("Archive/", None),
+                ("Archive/Site/", None),
+                ("Archive/Empty/", None),
+                (
+                    "Archive/Summary.docx",
+                    Some((b"quarterly summary".as_slice(), 0x2e1d_df62)),
+                ),
+                (
+                    "Archive/Site/Photo 01.png",
+                    Some((b"site photo bytes".as_slice(), 0x4c4c_da58)),
+                ),
+                ("Archive/Site/blank.txt", Some((b"".as_slice(), 0))),
+            ],
+        );
+        let extract_dir = temp_dir.path().join("extracted");
+        fs::create_dir_all(&extract_dir).unwrap();
+
+        let root = extract_zip_file(&zip_path, &extract_dir, Some("Archive")).unwrap();
+        let tree = build_file_system(&extract_dir).await.unwrap();
+
+        assert_eq!(root, "Archive");
+        let mut files: Vec<String> = tree
+            .items
+            .iter()
+            .map(|item| format!("{}/{}", item.relative_path, item.full_name))
+            .collect();
+        files.sort();
+        assert_eq!(
+            files,
+            vec![
+                "Archive/Site/Photo 01.png",
+                "Archive/Site/blank.txt",
+                "Archive/Summary.docx"
+            ]
+        );
+        assert_eq!(
+            fs::read(extract_dir.join("Archive/Site/Photo 01.png")).unwrap(),
+            b"site photo bytes"
+        );
+        assert_eq!(
+            tree.folders,
+            vec!["Archive", "Archive/Empty", "Archive/Site"]
         );
     }
 
