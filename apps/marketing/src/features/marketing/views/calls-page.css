@@ -1,8 +1,8 @@
 /* Calls owns its presentation overrides; the shared product pages stay intact. */
 .calls-page .email-page-hero { padding-bottom: 40px; }
-.calls-page .email-page-hero > .email-page-hero-description { max-width: 720px; text-wrap: balance; }
+
 .calls-scene-picker { display: flex; justify-content: center; gap: 24px; margin-bottom: 22px; }
-.calls-scene-picker button { padding: 8px 0; border-bottom: 1px solid transparent; color: #888; font: 400 14px/1.5 'Inter Variable', Inter, sans-serif; }
+.calls-scene-picker button { padding: 8px 0; border-bottom: 1px solid transparent; color: #888; font: 370 14px/1.5 'Inter Variable', Inter, sans-serif; }
 .calls-scene-picker button[aria-pressed=true] { color: #eee; border-color: #eee; }
 .calls-scene-picker button:focus-visible { outline: 2px solid #aaa; outline-offset: 5px; border-radius: 2px; }
 .calls-page .email-desktop-demo { --desktop-stage-width: min(1120px, 92vw); }
@@ -46,18 +46,12 @@
   .calls-page .call-task-pane { border: 0; }
 }
 
-/* Three sections, with balanced navigation at every width. */
-.calls-page .feature-page-jump-links { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.calls-page .feature-page-jump-links .email-feature-graphic { max-width: 100%; }
 
 .calls-page .agent-mention:focus-visible, .calls-page .call-item-preview:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 3px; }
 
-/* Let the longer hero taper naturally on phones instead of isolating “Turn your”. */
 @media (max-width: 699px) {
   .calls-page .email-page-hero { padding-inline: 0; }
-  .calls-page .email-page-hero h1 { width: 100%; font-size: clamp(24px, 7.4vw, 50px); text-wrap: wrap; }
-  .calls-page .email-page-hero h1 span { display: inline; }
-  .calls-page .email-page-hero h1 span:first-child::after { content: ' '; }
-  .calls-page .email-page-hero-break { display: block; }
-  .calls-page .email-page-hero > .email-page-hero-description { font-size: clamp(11px, 3.6vw, 14px); text-wrap: nowrap; }
+  .calls-page .email-page-hero h1 { width: 100%; text-wrap: wrap; }
+
+
 }

@@ -41,7 +41,9 @@ pub struct Params {
             (status = 500, body=String),
         )
     )]
-#[tracing::instrument(skip(ctx, cookies))]
+// The path holds the one-time login code and the query the email address;
+// keep both out of the span.
+#[tracing::instrument(skip_all)]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     cookies: Cookies,

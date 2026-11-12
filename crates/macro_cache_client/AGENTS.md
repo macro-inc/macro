@@ -14,7 +14,8 @@ behind its own Cargo feature.
   `verify_email_rate_limit`).
 - `src/passwordless_rate_limit.rs`, `src/create_user_rate_limit.rs`: the
   `auth_rate_limit` feature's two limiters.
-- `src/auth.rs`: shared auth-cache helpers (feature `auth`).
+- `src/auth.rs`: shared auth-cache helpers (feature `auth`), including the
+  single-use mobile login sessions behind sign-in session codes.
 
 ## Scope
 
@@ -22,9 +23,10 @@ behind its own Cargo feature.
   creation, passwordless, verification emails), and short-lived auth markers
   in `src/auth.rs` (passwordless codes, just-signed-up, pending passwordless
   signups).
-- Not here: general-purpose Redis operations — those are `macro_redis`
-  (which this crate does not depend on; it rolls its own Redis calls per
-  limiter module).
+- Not here: general-purpose Redis operations — those are `macro_redis`.
+  Code that must keep a key out of its errors (keys holding a session code
+  or an email) calls `redis` directly: `macro_redis` names the key in its
+  error context.
 
 ## Boundaries
 
@@ -40,8 +42,8 @@ behind its own Cargo feature.
 
 ## Checks
 
-- `cargo test -p macro_cache_client` (`SQLX_OFFLINE` unset); `src/auth/test.rs`
-  needs Redis at `REDIS_URL` (default `redis://127.0.0.1:6379`).
+- `cargo test -p macro_cache_client` (`SQLX_OFFLINE` unset). The `auth` tests
+  need Redis: CI's on `127.0.0.1:6379`, or set `REDIS_URL`.
 
 ## Related
 

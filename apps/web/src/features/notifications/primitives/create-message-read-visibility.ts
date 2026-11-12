@@ -1,3 +1,4 @@
+import { useReadsHeldByAgentArrival } from '@app/features/agent-navigation/context/agent-arrivals';
 import {
   type Accessor,
   createEffect,
@@ -26,6 +27,9 @@ export function createMessageReadVisibility(options: {
 }) {
   const targets = new Map<Element, Target>();
   const [foreground, setForeground] = createSignal(!document.hidden);
+  // A pane an agent opened reads like a background tab until it is touched.
+  const heldByAgent = useReadsHeldByAgentArrival();
+  const reading = () => foreground() && !heldByAgent();
   const onVisibilityChange = () => setForeground(!document.hidden);
   document.addEventListener('visibilitychange', onVisibilityChange);
   onCleanup(() =>
@@ -40,7 +44,7 @@ export function createMessageReadVisibility(options: {
         options.root,
         () => options.insets().start,
         () => options.insets().end,
-        foreground,
+        reading,
       ],
       ([root, start, end, visible]) => {
         if (

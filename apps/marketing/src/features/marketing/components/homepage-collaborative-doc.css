@@ -134,7 +134,7 @@
   transform: translateY(-50%);
   background: #000;
   color: var(--color-ink-placeholder);
-  font: 400 12px/1.65 'Inter Variable', Inter, sans-serif;
+  font: 370 12px/1.65 'Inter Variable', Inter, sans-serif;
 }
 
 .homepage-history-caption > span {

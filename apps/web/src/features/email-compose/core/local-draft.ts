@@ -55,8 +55,8 @@ export type LocalDraft = {
   queuedAttemptId?: string;
   /**
    * A discard requested for this revision that the queue has not admitted.
-   * The copy stays editable until admission makes it `deleting`; an edit or a
-   * newer save drops the request.
+   * The copy stays editable until admission makes it `deleting`. Only an edit
+   * withdraws the request; a save of this revision yields to it.
    */
   deleteAttemptId?: string;
   draftId: string;
