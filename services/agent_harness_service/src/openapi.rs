@@ -5,7 +5,7 @@ mod config;
 /// Only the route modules the API document names, not the control plane.
 mod computers {
     pub(crate) mod claude;
-    pub(crate) mod control;
+    pub(crate) mod harnessd;
 }
 
 use utoipa::OpenApi;

@@ -116,7 +116,7 @@ impl PgHarnessRepo {
                 harness_id.as_uuid(),
                 account_id,
                 provider as AgentProvider,
-                signed_in_by.as_ref().map(AsRef::<str>::as_ref),
+                signed_in_by.as_ref().map(|user| user.as_ref()),
                 *expires_at,
             )
             .execute(&mut *tx)

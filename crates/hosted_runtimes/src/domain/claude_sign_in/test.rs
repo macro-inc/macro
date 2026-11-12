@@ -195,7 +195,7 @@ impl ClaudeSignIns for FakeSignIns {
 
 struct FakeNotices {
     failing_computer: ComputerId,
-    sent: Mutex<Vec<(ClaudeSignInExpiry, HashSet<MacroUserIdStr<'static>>)>>,
+    sent: Mutex<Vec<(SignInExpiry, HashSet<MacroUserIdStr<'static>>)>>,
 }
 
 impl ClaudeSignInNotices for FakeNotices {
@@ -211,7 +211,7 @@ impl ClaudeSignInNotices for FakeNotices {
 
     async fn send(
         &self,
-        expiry: ClaudeSignInExpiry,
+        expiry: SignInExpiry,
         recipients: HashSet<MacroUserIdStr<'static>>,
     ) -> Result<(), FakeError> {
         if expiry.computer_id == self.failing_computer {
@@ -266,7 +266,7 @@ async fn a_pass_tells_the_signer_and_admins_and_one_failure_spares_the_rest() {
     assert_eq!(
         *notices.sent.lock().unwrap(),
         vec![(
-            ClaudeSignInExpiry {
+            SignInExpiry {
                 computer_id: ComputerId::new_from_uuid(Uuid::from_u128(1)),
                 harness_id: HarnessId::new_from_uuid(Uuid::from_u128(
                     0x0000_0000_0000_7000_8000_0000_0000_0c0c

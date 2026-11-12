@@ -1,6 +1,5 @@
 //! In-memory fakes of the ports, for domain tests.
 
-use macro_user_id::user_id::MacroUserIdStr;
 
 use crate::domain::ids::ComputerId;
 use bot_id::BotId;

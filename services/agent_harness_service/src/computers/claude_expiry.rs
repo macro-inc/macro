@@ -12,7 +12,7 @@ use std::sync::Arc;
 
 use harness_id::HarnessId;
 use hosted_runtimes::domain::claude_sign_in::{
-    ClaudeSignIn, ClaudeSignInExpiry, ClaudeSignInNotice, ClaudeSignInNotices,
+    ClaudeSignIn, SignInExpiry, ClaudeSignInNotice, ClaudeSignInNotices,
     ClaudeSignInStage, ClaudeSignIns,
 };
 use hosted_runtimes::domain::ids::ComputerId;
@@ -179,7 +179,7 @@ impl<Ingress: NotificationIngress> ClaudeSignInNotices for IngressClaudeSignInNo
 
     async fn send(
         &self,
-        expiry: ClaudeSignInExpiry,
+        expiry: SignInExpiry,
         recipients: HashSet<MacroUserIdStr<'static>>,
     ) -> Result<(), ClaudeSignInNoticeError> {
         let notification_id = notification_id(&expiry);
@@ -214,7 +214,7 @@ impl<Ingress: NotificationIngress> ClaudeSignInNotices for IngressClaudeSignInNo
 
 /// The same for every delivery of one notice: its computer, sign-in, stage
 /// and expiry.
-fn notification_id(expiry: &ClaudeSignInExpiry) -> Uuid {
+fn notification_id(expiry: &SignInExpiry) -> Uuid {
     let notice = expiry.notice;
     let expires_at = notice
         .expires_at

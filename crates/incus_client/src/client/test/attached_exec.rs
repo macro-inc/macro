@@ -255,11 +255,9 @@ async fn dropping_an_attached_exec_ends_the_programs_stdin() {
     let websocket_base = format!("http://{}", listener.local_addr().unwrap());
     let client = IncusClient::with_http_client(&server.uri(), reqwest::Client::new(), timeouts())
         .with_websocket_base(websocket_base);
+    let instance = InstanceName::try_new("mc-01900000000070008000000000000001").unwrap();
     let (process, mut sockets) = tokio::join!(
-        client.exec_attached(
-            &InstanceName::try_new("mc-01900000000070008000000000000001").unwrap(),
-            harnessd(),
-        ),
+        client.exec_attached(&instance, harnessd()),
         accept_websockets(&listener),
     );
 

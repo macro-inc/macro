@@ -6,7 +6,6 @@
 use chrono::{DateTime, Utc};
 use harness_id::HarnessId;
 use macro_user_id::user_id::MacroUserIdStr;
-use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 pub use harnessd_protocol::AgentProvider;

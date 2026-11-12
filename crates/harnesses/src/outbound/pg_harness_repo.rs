@@ -18,7 +18,7 @@ use harness_id::HarnessId;
 use harness_token::HashedHarnessToken;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_permissions::share_permission::access_level::AccessLevel;
-use sqlx::{PgPool, types::Json};
+use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::domain::{

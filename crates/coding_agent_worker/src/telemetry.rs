@@ -6,6 +6,22 @@ use tracing_subscriber::{Layer, layer::SubscriberExt, util::SubscriberInitExt};
 
 macro_env_var::maybe_env_vars! { pub struct OtelExporterOtlpEndpoint; }
 
+/// Trace headers from the current span, or `parent` (the setup trace an
+/// enrollment carries) when this process exports no spans of its own, so the
+/// server still joins the trace.
+pub(crate) fn trace_headers(parent: Option<&str>) -> reqwest::header::HeaderMap {
+    let mut headers = reqwest::header::HeaderMap::new();
+    macro_tower_layers::inject_trace_headers(&mut headers);
+    if !headers.contains_key("traceparent")
+        && let Some(parent) =
+            parent.filter(|parent| hosted_runtimes::domain::telemetry::is_valid_traceparent(parent))
+        && let Ok(value) = reqwest::header::HeaderValue::from_str(parent)
+    {
+        headers.insert("traceparent", value);
+    }
+    headers
+}
+
 pub(crate) struct Telemetry(Option<SdkTracerProvider>);
 
 impl Drop for Telemetry {

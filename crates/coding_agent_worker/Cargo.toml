@@ -38,6 +38,7 @@ lazy-regex = { workspace = true }
 macro_event_broker = { path = "../macro_event_broker", default-features = false }
 macro_env_var = { path = "../macro_env_var" }
 macro_service_urls = { path = "../macro_service_urls" }
+macro_tower_layers = { path = "../macro_tower_layers" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 opentelemetry = { workspace = true, features = ["trace"] }

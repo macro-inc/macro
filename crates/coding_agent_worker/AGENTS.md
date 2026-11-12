@@ -45,13 +45,13 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   pairing it was claimed from (`credentials.pairing_id`), so only a new
   pairing is claimed, and nothing else on the disk is touched. No enrollment
   in the source (removed after macrod connects) with a marker means enrolled.
-- `src/computer.rs`: on an enrolled Macro computer only (the marker
-  exists), each Claude Code session's env: `ANTHROPIC_BASE_URL` (the
+- `src/computer.rs`: the one Macro-computer hook in sessions. On an enrolled Macro
+  computer only (the marker exists), each Claude Code session's env: `ANTHROPIC_BASE_URL` (the
   session's `macro_internal` MCP URL with `/mcp/internal` → `/anthropic`),
   `ANTHROPIC_AUTH_TOKEN` (its bearer) and
   `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` go to `session/new|load|resume`
-  as `_meta.claudeCode.options.env`, always. macrod never calls Claude or
-  reads its files: harnessd (`crates/harnessd`) owns Claude sign-in, and the
+  as `_meta.claudeCode.options.env`, always. It calls nothing in Claude and
+  reads no Claude files: harnessd (`crates/harnessd`) owns Claude sign-in, and the
   image's `claude` wrapper swaps the gateway env for the computer's own
   credential when harnessd holds one. ACP trace logs contain only direction
   and byte counts.

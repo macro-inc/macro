@@ -122,7 +122,7 @@ pub fn due_notice(now: DateTime<Utc>, sign_in: &ClaudeSignIn) -> Option<ClaudeSi
 
 /// A notice to deliver.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ClaudeSignInExpiry {
+pub struct SignInExpiry {
     /// The computer.
     pub computer_id: ComputerId,
     /// Its harness.
@@ -165,7 +165,7 @@ pub trait ClaudeSignInNotices: Send + Sync + 'static {
     /// must not notify twice.
     fn send(
         &self,
-        expiry: ClaudeSignInExpiry,
+        expiry: SignInExpiry,
         recipients: HashSet<MacroUserIdStr<'static>>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
@@ -253,7 +253,7 @@ where
     let mut recipients: HashSet<_> = sign_in.signed_in_by.into_iter().collect();
     recipients.extend(admins);
 
-    let expiry = ClaudeSignInExpiry {
+    let expiry = SignInExpiry {
         computer_id,
         harness_id: sign_in.harness_id,
         computer_name: sign_in.computer_name,

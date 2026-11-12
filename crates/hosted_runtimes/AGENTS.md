@@ -347,9 +347,8 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   registration after 10, 20, 40, then 60 seconds, holding fleet effects and timers
   until registration succeeds without consuming their attempts.
 - **Claude sign-in notices**: `domain::claude_sign_in::due_notice(now, sign_in)`
-  is pure: within three days of the reported expiry `ExpiresSoon`, within one
-  day `ExpiresToday`, once passed (or macrod reports Claude signed out)
-  `Expired`. Only a report newer than the recorded sign-in counts. Each
+  is pure: within three days of the expiry harnessd last reported
+  `ExpiresSoon`, within one day `ExpiresToday`, once passed `Expired`. Each
   `ClaudeSignIn` is a computer's active Claude login, and its last notice
   (stage and the expiry it warned about) is stored on that login row
   (`harness_account_logins.notice_*`), so a new sign-in starts over; one for an

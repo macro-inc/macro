@@ -926,8 +926,9 @@ running the real Claude Code on the computer), and press **Complete
 sign-in**; **Use Macro credits instead**
 switches to credits. A rejected code shows "That code didn't work. Try again to
 get a new one." with **Try again**; an expired sign-in shows **Start over**.
-Success closes the dialog with "Connected as <account>". Everyone on the team
-uses that Claude account on the computer.
+Success closes the dialog with "Signed in with Claude", and the row reads
+**Signed in with Claude**: the computer holds a one-year Claude credential
+(no email or plan to show). Everyone on the team uses it on the computer.
 
 In **Settings → Agents**, agents on a computer read `On a Macro computer ·
 <name>`. The editor's **Where it runs** has its own **On a Macro computer**
@@ -947,7 +948,7 @@ no itemized billing.
 Whoever completed the sign-in, and the team's owner and admins, get a
 **Claude sign-in expires soon** notification three days before the sign-in
 expires, **… expires today** within its last day, and **… expired** once it
-passes or as soon as macrod reports Claude signed out; the notification list
+passes; the notification list
 row uses the same titles. Each goes out once per sign-in, a later stage
 replacing the earlier ones it overtook, and none arrive after switching to
 Macro credits. Opening one lands on this section, where **Sign in with Claude**

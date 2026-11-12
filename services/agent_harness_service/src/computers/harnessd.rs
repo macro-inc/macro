@@ -26,10 +26,10 @@ use hosted_runtimes::domain::ids::ComputerId;
 use macro_user_id::user_id::MacroUserIdStr;
 
 /// The program the control plane runs in a guest.
-const HARNESSD: &str = "harnessd";
+pub(crate) const HARNESSD: &str = "harnessd";
 
 /// How long harnessd may take to answer `request`.
-fn answer_timeout(request: &Request) -> Duration {
+pub(crate) fn answer_timeout(request: &Request) -> Duration {
     match request {
         // Claude Code starts and shows its URL.
         Request::SignInStart { .. } => Duration::from_secs(60),
@@ -258,75 +258,6 @@ fn command_name(request: &Request) -> &'static str {
         Request::SignInCancel { .. } => "sign_in_cancel",
         Request::SignOut { .. } => "sign_out",
         Request::Status { .. } => "status",
-    }
-}
-
-/// [`HarnessdTransport`] over the operator's fleet: one `harnessd` process
-/// per request, its request on stdin and its answer on stdout.
-pub struct FleetTransport {
-    operator: Arc<super::Operator>,
-}
-
-impl FleetTransport {
-    /// Exec through `operator`'s fleet.
-    pub fn new(operator: Arc<super::Operator>) -> Self {
-        Self { operator }
-    }
-}
-
-impl HarnessdTransport for FleetTransport {
-    fn round_trip(
-        &self,
-        computer_id: ComputerId,
-        request: Request,
-    ) -> Pin<Box<dyn Future<Output = Result<Response, HarnessdError>> + Send + '_>> {
-        Box::pin(async move {
-            use hosted_runtimes::domain::ports::Fleet as _;
-            use tokio::io::{AsyncBufReadExt as _, AsyncWriteExt as _};
-
-            let deadline = answer_timeout(&request);
-            let mut line = serde_json::to_string(&request)
-                .map_err(|error| HarnessdError::Unreadable(error.to_string()))?;
-            line.push('\n');
-            let exchange = async {
-                let process = self
-                    .operator
-                    .fleet()
-                    .exec(computer_id, &[HARNESSD])
-                    .await
-                    .map_err(|error| HarnessdError::Unreachable(error.to_string()))?;
-                let mut stdin = process.stdin;
-                stdin
-                    .write_all(line.as_bytes())
-                    .await
-                    .map_err(|error| HarnessdError::Unreachable(error.to_string()))?;
-                // A closed stdin tells harnessd this was the only request.
-                stdin
-                    .shutdown()
-                    .await
-                    .map_err(|error| HarnessdError::Unreachable(error.to_string()))?;
-                drop(stdin);
-                let mut answer = String::new();
-                tokio::io::BufReader::new(process.stdout)
-                    .read_line(&mut answer)
-                    .await
-                    .map_err(|error| HarnessdError::Unreachable(error.to_string()))?;
-                let exit = process
-                    .exit
-                    .await
-                    .map_err(|error| HarnessdError::Unreachable(error.to_string()))?;
-                if answer.trim().is_empty() {
-                    return Err(HarnessdError::Unreachable(format!(
-                        "harnessd exited with {exit} without answering"
-                    )));
-                }
-                serde_json::from_str::<Response>(answer.trim())
-                    .map_err(|error| HarnessdError::Unreadable(error.to_string()))
-            };
-            tokio::time::timeout(deadline, exchange)
-                .await
-                .map_err(|_| HarnessdError::Timeout)?
-        })
     }
 }
 
