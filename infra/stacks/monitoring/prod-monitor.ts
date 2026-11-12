@@ -77,6 +77,8 @@ export function thresholdGraph(args: {
   query: string;
   critical?: string;
   warning?: string;
+  /** A fixed window, e.g. `month_to_date`, instead of the dashboard's. */
+  liveSpan?: string;
 }): datadog.types.input.DashboardWidget {
   const markers: datadog.types.input.DashboardWidgetTimeseriesDefinitionMarker[] =
     [];
@@ -99,6 +101,7 @@ export function thresholdGraph(args: {
       title: args.title,
       requests: [{ q: args.query, displayType: 'line' }],
       markers,
+      liveSpan: args.liveSpan,
     },
   };
 }
