@@ -8,7 +8,8 @@ async fn thread_pages_preserve_import_order_ties_tombstones_and_bounds(pool: PgP
     let root = repo
         .create(command("message-doc-a", None, "root"))
         .await
-        .unwrap();
+        .unwrap()
+        .0;
     let mut created = Vec::new();
     for (index, import_order) in [
         Some(2_i64),
@@ -26,7 +27,8 @@ async fn thread_pages_preserve_import_order_ties_tombstones_and_bounds(pool: PgP
         let reply = repo
             .create(command("message-doc-a", Some(root.id), "reply"))
             .await
-            .unwrap();
+            .unwrap()
+            .0;
         let created_at = DateTime::parse_from_rfc3339("2026-01-01T00:00:00.123456Z")
             .unwrap()
             .with_timezone(&Utc)

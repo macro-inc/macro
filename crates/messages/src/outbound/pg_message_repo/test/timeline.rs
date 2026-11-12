@@ -72,7 +72,7 @@ async fn timeline_keyset_rewrite_matches_previous_sql_selection(pool: PgPool) {
         for index in 0..9 {
             let mut input = command("message-doc-a", None, "root");
             input.parent = parent.clone();
-            let mut root = repo.create(input).await.unwrap();
+            let mut root = repo.create(input).await.unwrap().0;
             root.created_at = timestamp + chrono::Duration::seconds(index / 3);
             sqlx::query!(
                 "UPDATE comms_messages SET created_at = $2 WHERE id = $1",
