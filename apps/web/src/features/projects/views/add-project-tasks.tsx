@@ -1,4 +1,6 @@
+import { t } from '@app/lib/i18n';
 import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
+import { MobileCreateMenu } from '@components/app/mobile/MobileCreateMenu';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -57,6 +59,10 @@ export function AddProjectTasks(props: {
   };
   const close = () => setOpen(false);
   const chooseExisting = () => setState('mode', 'existing');
+  const openExisting = () => {
+    setOpen(true);
+    chooseExisting();
+  };
   const createTask = () => {
     close();
     props.onCreateTask?.();
@@ -234,38 +240,41 @@ export function AddProjectTasks(props: {
         fallback={
           <FloatRegion region="accessory">
             <div class="flex justify-end px-(--mobile-chrome-gutter) pointer-events-auto">
-              <Button variant="secondary" onClick={() => setOpen(true)}>
-                <PlusIcon class="size-5" />
-                Add task
-              </Button>
+              <MobileCreateMenu
+                label={t('create.taskLabel')}
+                items={[
+                  {
+                    label: t('mobile.new'),
+                    icon: PlusIcon,
+                    onSelect: createTask,
+                  },
+                  {
+                    label: 'Add existing',
+                    icon: ListPlusIcon,
+                    onSelect: openExisting,
+                  },
+                ]}
+              />
             </div>
           </FloatRegion>
         }
       >
-        <Button variant="secondary" onClick={() => setOpen(true)}>
+        <Button variant="secondary" onClick={openExisting}>
           <ListPlusIcon class="size-4" />
-          Add existing tasks
+          Add existing
         </Button>
       </Show>
-      <MobileDrawer open={state.open} onOpenChange={setOpen}>
+      <MobileDrawer
+        open={state.open && state.mode === 'existing'}
+        onOpenChange={setOpen}
+      >
         <MobileDrawer.Portal>
           <MobileDrawer.Overlay />
           <MobileDrawer.Content aria-label="Add project task">
             <MobileDrawer.Handle />
             <MobileDrawer.Label>Add task</MobileDrawer.Label>
-            <MobileDrawer.ScrollBody>
-              <Show when={state.mode === 'choices'} fallback={pickerFields()}>
-                <MobileDrawer.Section>
-                  <MobileDrawer.Item onClick={createTask}>
-                    New task
-                  </MobileDrawer.Item>
-                  <MobileDrawer.Item onClick={chooseExisting}>
-                    Add existing tasks
-                  </MobileDrawer.Item>
-                </MobileDrawer.Section>
-              </Show>
-            </MobileDrawer.ScrollBody>
-            <Show when={state.mode === 'existing'}>{pickerFooter()}</Show>
+            <MobileDrawer.ScrollBody>{pickerFields()}</MobileDrawer.ScrollBody>
+            {pickerFooter()}
           </MobileDrawer.Content>
         </MobileDrawer.Portal>
       </MobileDrawer>

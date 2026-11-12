@@ -62,17 +62,16 @@ test('phone floating create opens choices and existing picker', async ({
 }, info) => {
   test.skip(info.project.name !== 'phone');
   await open(page);
-  await page.getByRole('button', { name: 'Add task' }).click();
+  await page.getByRole('button', { name: 'Task' }).click();
+  await page.getByRole('button', { name: 'Add existing' }).click();
   const drawer = page.getByRole('dialog', { name: 'Add project task' });
   await expect(drawer).toBeVisible();
-  await expect(drawer.getByRole('button', { name: 'New task' })).toBeVisible();
-  await drawer.getByRole('button', { name: 'Add existing tasks' }).click();
   await drawer.getByRole('checkbox', { name: 'one' }).check();
   await page.screenshot({ path: '/tmp/project-task-phone.png' });
   await drawer.getByRole('button', { name: 'Add 1 task' }).click();
   await expect(page.getByTestId('assignments')).toHaveText('project: one');
-  await page.getByRole('button', { name: 'Add task' }).click();
-  await drawer.getByRole('button', { name: 'New task' }).click();
+  await page.getByRole('button', { name: 'Task' }).click();
+  await page.getByRole('button', { name: 'New', exact: true }).click();
   await expect(page.getByTestId('creates')).toHaveText('1');
 });
 
@@ -83,7 +82,7 @@ test('phone empty state creates and opens the existing-task picker directly', as
   await open(page, 'empty');
   await page.getByRole('button', { name: 'New task' }).click();
   await expect(page.getByTestId('creates')).toHaveText('1');
-  await page.getByRole('button', { name: 'Add existing tasks' }).click();
+  await page.getByRole('button', { name: 'Add existing' }).click();
   const drawer = page.getByRole('dialog', { name: 'Add project task' });
   await expect(drawer.getByRole('checkbox', { name: 'one' })).toBeVisible();
   await expect(drawer.getByRole('button', { name: 'New task' })).toHaveCount(0);

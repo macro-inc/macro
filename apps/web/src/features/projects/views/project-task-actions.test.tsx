@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { type Accessor, createSignal } from 'solid-js';
+import { type Accessor, createSignal, For } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { ProjectDetail } from '../core/project';
 import {
@@ -7,7 +7,7 @@ import {
   ProjectTasksEmptyState,
 } from './project-task-actions';
 
-const mock = vi.hoisted(() => ({ assignTasks: vi.fn() }));
+const mock = vi.hoisted(() => ({ assignTasks: vi.fn(), mobile: false }));
 vi.mock('@ui', async () => ({
   ...(await import('@app/components/ui/components/Button')),
   ...(await import('@app/components/ui/components/ButtonGroup')),
@@ -19,7 +19,24 @@ vi.mock('@ui', async () => ({
 vi.mock('@core/component/HoverCard', () => ({
   useIsInsideHoverCard: () => false,
 }));
-vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => false }));
+vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => mock.mobile }));
+vi.mock('@components/app/mobile/float-regions/FloatRegion', () => ({
+  FloatRegion: (props: { children: import('solid-js').JSX.Element }) =>
+    props.children,
+}));
+vi.mock('@components/app/mobile/MobileCreateMenu', () => ({
+  MobileCreateMenu: (props: {
+    label: string;
+    items: { label: string; onSelect(): void }[];
+  }) => (
+    <div>
+      <button>{props.label}</button>
+      <For each={props.items}>
+        {(item) => <button onClick={item.onSelect}>{item.label}</button>}
+      </For>
+    </div>
+  ),
+}));
 vi.mock('../context/projects-context', () => ({
   useProjectsContext: () => ({
     createCommands: () => ({ assignTasks: mock.assignTasks }),
@@ -56,9 +73,20 @@ const project: ProjectDetail = {
   updatedAt: new Date(0).toISOString(),
 };
 
-beforeEach(() => vi.stubGlobal('scrollTo', vi.fn()));
+beforeEach(() => {
+  vi.stubGlobal('scrollTo', vi.fn());
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
+});
 afterEach(() => {
   cleanup();
+  mock.mobile = false;
   vi.clearAllMocks();
   vi.unstubAllGlobals();
 });
@@ -131,6 +159,8 @@ it('shows both actions in the empty state and hides them without edit access', (
       onCreateTask={create}
     />
   ));
+  expect(screen.getByText('No tasks yet')).toBeTruthy();
+  expect(document.querySelector('svg')).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'New task' }));
   expect(create).toHaveBeenCalledTimes(1);
   fireEvent.keyDown(
@@ -148,4 +178,15 @@ it('shows both actions in the empty state and hides them without edit access', (
   expect(
     screen.queryByRole('button', { name: 'Add existing tasks' })
   ).toBeNull();
+});
+
+it('keeps the phone Task trigger and offers New and Add existing', () => {
+  mock.mobile = true;
+  const create = vi.fn();
+  render(() => <ProjectTaskActions project={project} onCreateTask={create} />);
+  expect(screen.getByRole('button', { name: 'Task' })).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'New' }));
+  expect(create).toHaveBeenCalledOnce();
+  fireEvent.click(screen.getByRole('button', { name: 'Add existing' }));
+  expect(screen.getByTestId('excluded').textContent).toBe('linked');
 });

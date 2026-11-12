@@ -23,7 +23,7 @@ Task projects are initiatives, not legacy Drive folders. `projects.tsx` composes
 - On phones, use the project detail title island for Overview, Tasks, Share, Copy link, and edit-gated Rename. Keep desktop tabs and project actions unchanged.
 - On phones, keep one title island for the selected project view before the filter island. Group built-ins and saved views in the picker as 48px cards, with accent selection, shared marks, actions, and New view at the bottom; defer navigation and dialogs until sheet closure.
 - Share `ListColumnHeader`, `NarrowRowGrid`, and task-grid tracks with task rows. Project lists order Status, Priority, Assignees, Due date, Updated; collapse values to icons at 840px and hide Updated at 600px with the shared 160ms reduced-motion-aware transition. Keep the saved `EntityIcon` before the name and an accessible 14px progress ring after it, with a 22px tooltip target; on phones, trail Status, Priority, and one lead avatar using existing property editors.
-- Use the combined New task split button on desktop and the floating create menu on phones; retain the current project's edit gate.
+- Use the combined New task split button on desktop and the floating Task create menu on phones. Its New and Add existing choices open creation or the existing assignment picker; retain the current project's edit gate and keep the floating trigger visible in empty projects.
 - Show the project task empty state only when the project has no tasks, not when filters hide linked tasks.
 - Keep existing-task assignment failures selected for retry and reject stale completion after the project or picker lifetime changes.
 

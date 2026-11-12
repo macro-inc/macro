@@ -1181,16 +1181,15 @@ when URL parameters are absent. Use
 set to this project (change or clear it like any property), and the create
 request carries it, so there is no separate assignment step. The new row appears
 once the task is created. Verify this with GraphQL Soup both enabled and
-disabled. The section tabs use the same control as Channels. Editors choose
-`Add existing tasks` from the New task caret menu (the floating add menu on a
-phone). It opens the existing task selector: search, select several, and
+disabled. Desktop section tabs use the same control as Channels; phones switch sections from the title island. Editors choose
+`Add existing tasks` from the New task caret menu on desktop. On phones, the floating Task control stays visible, offering New and Add existing; the latter opens the existing-task picker directly. It opens the existing task selector: search, select several, and
 confirm `Add N tasks`. Next options/PageDown appends later loaded task pages to
 the visible options. Escape or Cancel dismisses without assigning tasks. Tasks
 already in this project are excluded. Adding a task moves it from its previous
 project. A partial failure keeps only
 failed tasks selected for retry, and a request failure preserves the selection.
-When the project has no tasks, a subtly bordered rounded empty state offers
-New task and Add existing tasks without an explanatory paragraph. Filter-empty
+When the project has no tasks, an empty state with the tasks illustration offers
+New task and Add existing without an explanatory paragraph. The desktop state keeps its subtle border; the phone keeps the floating Task control. Filter-empty
 results do not show this project-empty state. Read-only projects omit add actions.
 
 ### Saved project views
