@@ -23,7 +23,9 @@ tools/HTTP/GraphQL surfaces over them.
 - `src/inbound/pipeline_workflows.rs`: HTTP routes over the pipeline workflows
   and CSV transfers (entries by record, fields by name, options by label),
   merged into `/crm` beside `src/inbound/pipelines.rs`; the SDK's pipeline
-  entry methods call them.
+  entry methods call them, and `GET /crm/pipelines/details` (every pipeline
+  with its fields and version, as `ListPipelines` sees them) backs
+  `crm.pipelines.listWithFields()`.
 - `src/inbound/toolset.rs` (+ `toolset/*.rs`): AI tool definitions.
 - `src/outbound/companies_repo.rs`: the Postgres adapter for companies/contacts.
 - `SALES_BACKFILL.md`: how the legacy-CRM-to-Sales migration behaves.
