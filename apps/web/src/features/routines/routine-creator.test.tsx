@@ -218,6 +218,7 @@ beforeEach(() => {
   host.githubLinked = true;
   host.flags = new Set([
     'enable-routine-conditions',
+    'enable-event-routines',
     'enable-routine-starter-templates',
   ]);
   localStorage.clear();
@@ -768,6 +769,29 @@ describe('routine composer execution selection', () => {
       })
     ).toBeNull();
     expect(host.connectGithub).toHaveBeenCalledOnce();
+  });
+
+  it('offers only schedules without the event routines flag', async () => {
+    host.flags.delete('enable-event-routines');
+    await mount();
+    inputPrompt();
+    press(screen.getByRole('button', { name: 'Add trigger' }), 'Enter');
+    expect(
+      screen.getByRole('menuitem', { name: 'Schedule', hidden: true })
+    ).toBeTruthy();
+    for (const name of ['Email', 'Tasks', 'GitHub']) {
+      expect(screen.queryByRole('menuitem', { name, hidden: true })).toBeNull();
+    }
+    // Searching finds no events either.
+    fireEvent.input(screen.getByRole('textbox', { name: 'Search triggers' }), {
+      target: { value: 'document' },
+    });
+    expect(
+      screen.queryByRole('menuitem', {
+        name: /^Document created/,
+        hidden: true,
+      })
+    ).toBeNull();
   });
 
   it('keeps trigger edits local until confirmed and leaves an add chip', async () => {

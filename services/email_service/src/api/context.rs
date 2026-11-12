@@ -149,6 +149,18 @@ pub(crate) struct ApiContext {
     pub inbox_health: Arc<crate::composition::InboxHealth>,
     pub attachment_reads: Arc<AttachmentReadSvc>,
     pub message_sources: Arc<MessageSourceSvc>,
+    pub message_labels: Arc<
+        email::domain::message_labels::MessageLabelService<
+            crate::outbound::message_labels::PgMessageLabels,
+            sqs_client::SQS,
+            EmailEventBroker,
+        >,
+    >,
+    pub message_reads: Arc<
+        email::domain::message_reads::MessageReadService<
+            crate::outbound::message_reads::PgMessageReads,
+        >,
+    >,
     /// Reads the top of a user's inboxes straight from the providers.
     pub recent_inbox: Arc<RecentInboxSvc>,
     pub draft_attachments: Arc<DraftAttachmentSvc>,

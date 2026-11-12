@@ -1316,6 +1316,28 @@ export type ApiParticipantRole = 'owner' | 'admin' | 'member';
 export type ApiPropertyEntityType = 'CALL_RECORD' | 'CALENDAR_EVENT' | 'DATABASE_ROW' | 'INITIATIVE' | 'CHANNEL' | 'CHAT' | 'COMPANY' | 'DOCUMENT' | 'PROJECT' | 'TASK' | 'THREAD' | 'USER';
 
 /**
+ * Named tint keys from the shared tag color palette.
+ */
+export type AppearanceColor = 'gray' | 'red' | 'tomato' | 'orange' | 'amber' | 'yellow' | 'green' | 'teal' | 'blue' | 'indigo' | 'purple' | 'pink';
+
+/**
+ * The source of an entity's custom icon.
+ */
+export type AppearanceIcon = {
+    kind: 'macro';
+    /**
+     * Catalog name without the SVG extension.
+     */
+    name: string;
+} | {
+    kind: 'emoji';
+    /**
+     * Unicode emoji text, not markup or a URL.
+     */
+    value: string;
+};
+
+/**
  * What a committed batch answers: a result per op, and the journal's change
  * for each table version it produced.
  */
@@ -5520,6 +5542,30 @@ export type CreatePipeline = {
     sharing?: PipelineSharing;
 };
 
+/**
+ * A new pipeline with its stages and fields.
+ */
+export type CreatePipelineRequest = {
+    /**
+     * Fields to add after the standard ones, or after a generic pipeline's Name.
+     */
+    fields?: Array<NewFieldRequest>;
+    /**
+     * Its name.
+     */
+    name: string;
+    recordType?: null | PipelineRecordType;
+    /**
+     * Defaults to private.
+     */
+    sharing?: PipelineSharing;
+    /**
+     * Its stages, first to last, replacing the team's default stages. A
+     * generic pipeline starts without a Stage field, so these add one.
+     */
+    stages?: Array<string>;
+};
+
 export type CreateProjectRequest = {
     /**
      * The name of the project.
@@ -6231,6 +6277,7 @@ export type DataType = 'BOOLEAN' | 'DATE' | 'DATE_RANGE' | 'NUMBER' | 'STRING' |
  * A database: a named collection of tables, owned and shared as one entity.
  */
 export type Database = {
+    appearance?: null | EntityAppearance;
     /**
      * Creation time.
      */
@@ -6889,6 +6936,7 @@ export type DocumentMarkdownWritten = {
 };
 
 export type DocumentMetadata = {
+    appearance?: null | EntityAppearance;
     /**
      * The id of the document this document branched from
      */
@@ -7023,6 +7071,7 @@ export type DocumentPreview = (DocumentPreviewData & {
 });
 
 export type DocumentPreviewData = {
+    appearance?: null | EntityAppearance;
     /**
      * The document id
      */
@@ -7090,6 +7139,7 @@ export type DocumentResponse = {
 };
 
 export type DocumentResponseMetadata = {
+    appearance?: null | EntityAppearance;
     /**
      * The id of the document this document branched from
      */
@@ -7313,6 +7363,10 @@ export type DocumentUpdatedMetadata = {
      */
     actor?: string | null;
     actor_user_id?: null | MacroUserIdStr;
+    /**
+     * Previous and new presentation overrides, in that order; no content edit occurred.
+     */
+    appearance_change?: Array<EntityAppearance> | null;
     /**
      * The id of the updated document.
      */
@@ -9258,6 +9312,14 @@ export type EnsureCollabSurfaceRequest = {
 };
 
 /**
+ * An entity's optional icon and tint overrides; absent values retain type defaults.
+ */
+export type EntityAppearance = {
+    color?: null | AppearanceColor;
+    icon?: null | AppearanceIcon;
+};
+
+/**
  * a bundle of all of the filters for each entity type
  */
 export type EntityFilters = {
@@ -10902,6 +10964,7 @@ export type Form = {
      * responds twice. Fixed once anyone has responded.
      */
     anonymous: boolean;
+    appearance?: null | EntityAppearance;
     /**
      * Who may respond.
      */
@@ -11048,7 +11111,7 @@ export type FormDetail = {
 /**
  * What went wrong with a forms request.
  */
-export type FormErrorCode = 'tableAlreadyHasForm' | 'notFound' | 'forbidden' | 'ownerOnly' | 'signInRequired' | 'closed' | 'tableGone' | 'alreadyResponded' | 'noResponse' | 'anonymousResponseFinal' | 'unknownQuestion' | 'repeatedAnswer' | 'missingAnswer' | 'invalidAnswer' | 'widgetMismatch' | 'fileUploadNeedsSignIn' | 'invalidLayout' | 'invalidName' | 'invalidSharing' | 'tallyHidden' | 'invalidBranding' | 'conflict' | 'internal';
+export type FormErrorCode = 'tableAlreadyHasForm' | 'notFound' | 'forbidden' | 'ownerOnly' | 'signInRequired' | 'closed' | 'tableGone' | 'alreadyResponded' | 'noResponse' | 'anonymousResponseFinal' | 'unknownQuestion' | 'repeatedAnswer' | 'missingAnswer' | 'invalidAnswer' | 'widgetMismatch' | 'fileUploadNeedsSignIn' | 'invalidLayout' | 'invalidName' | 'invalidSharing' | 'invalidAppearance' | 'tallyHidden' | 'invalidBranding' | 'conflict' | 'internal';
 
 /**
  * Why a forms request was refused or failed.
@@ -12923,6 +12986,7 @@ export type InitiativeDescription = {
  * Full initiative returned to a caller, including members, tasks, and share state.
  */
 export type InitiativeDetail = {
+    appearance?: null | EntityAppearance;
     /**
      * When the initiative was created.
      */
@@ -13086,6 +13150,7 @@ export type InitiativeSort = 'updated' | 'name' | 'due';
  * List-row view of an initiative.
  */
 export type InitiativeSummary = {
+    appearance?: null | EntityAppearance;
     /**
      * Opaque identifier.
      */
@@ -19055,6 +19120,7 @@ export type SoupDocumentSoupPropertiesField = {
      */
     properties: Array<SoupProperty>;
 } & {
+    appearance?: null | EntityAppearance;
     /**
      * The id of the document this document branched from
      */
@@ -19297,6 +19363,7 @@ export type SoupInitiativeSoupPropertiesField = {
      */
     properties: Array<SoupProperty>;
 } & {
+    appearance?: null | EntityAppearance;
     /**
      * Creation timestamp.
      */
@@ -27206,6 +27273,25 @@ export type CreateCrmPipelineResponses = {
 
 export type CreateCrmPipelineResponse = CreateCrmPipelineResponses[keyof CreateCrmPipelineResponses];
 
+export type CreateCrmPipelineWithFieldsData = {
+    body: CreatePipelineRequest;
+    path?: never;
+    query?: never;
+    url: '/crm/pipelines/create';
+};
+
+export type CreateCrmPipelineWithFieldsErrors = {
+    400: ErrorResponse;
+};
+
+export type CreateCrmPipelineWithFieldsError = CreateCrmPipelineWithFieldsErrors[keyof CreateCrmPipelineWithFieldsErrors];
+
+export type CreateCrmPipelineWithFieldsResponses = {
+    200: PipelineFields;
+};
+
+export type CreateCrmPipelineWithFieldsResponse = CreateCrmPipelineWithFieldsResponses[keyof CreateCrmPipelineWithFieldsResponses];
+
 export type SearchCrmPipelineEntriesData = {
     body?: never;
     path?: never;
@@ -27941,6 +28027,33 @@ export type GetDatabaseResponses = {
 };
 
 export type GetDatabaseResponse = GetDatabaseResponses[keyof GetDatabaseResponses];
+
+export type SetDatabaseAppearanceData = {
+    body: EntityAppearance;
+    path: {
+        /**
+         * Database id
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/databases/{id}/appearance';
+};
+
+export type SetDatabaseAppearanceErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type SetDatabaseAppearanceError = SetDatabaseAppearanceErrors[keyof SetDatabaseAppearanceErrors];
+
+export type SetDatabaseAppearanceResponses = {
+    200: EntityAppearance;
+};
+
+export type SetDatabaseAppearanceResponse = SetDatabaseAppearanceResponses[keyof SetDatabaseAppearanceResponses];
 
 export type ShareDatabaseAwarenessData = {
     body: Awareness;
@@ -29300,6 +29413,30 @@ export type EditDocumentWithAiResponses = {
 };
 
 export type EditDocumentWithAiResponse = EditDocumentWithAiResponses[keyof EditDocumentWithAiResponses];
+
+export type SetDocumentAppearanceData = {
+    body: EntityAppearance;
+    path: {
+        /**
+         * Document ID
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/appearance';
+};
+
+export type SetDocumentAppearanceErrors = {
+    400: unknown;
+    403: unknown;
+    404: unknown;
+};
+
+export type SetDocumentAppearanceResponses = {
+    200: EntityAppearance;
+};
+
+export type SetDocumentAppearanceResponse = SetDocumentAppearanceResponses[keyof SetDocumentAppearanceResponses];
 
 export type GetDocumentBranchNameData = {
     body?: never;
@@ -31471,6 +31608,33 @@ export type UpdateFormResponses = {
 
 export type UpdateFormResponse = UpdateFormResponses[keyof UpdateFormResponses];
 
+export type SetFormAppearanceData = {
+    body: EntityAppearance;
+    path: {
+        /**
+         * Form id
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/forms/{id}/appearance';
+};
+
+export type SetFormAppearanceErrors = {
+    400: FormErrorResponse;
+    401: FormErrorResponse;
+    403: FormErrorResponse;
+    404: FormErrorResponse;
+};
+
+export type SetFormAppearanceError = SetFormAppearanceErrors[keyof SetFormAppearanceErrors];
+
+export type SetFormAppearanceResponses = {
+    200: EntityAppearance;
+};
+
+export type SetFormAppearanceResponse = SetFormAppearanceResponses[keyof SetFormAppearanceResponses];
+
 export type CollaborateFormData = {
     body?: never;
     path: {
@@ -32532,6 +32696,30 @@ export type GetInitiativeActivityResponses = {
 };
 
 export type GetInitiativeActivityResponse = GetInitiativeActivityResponses[keyof GetInitiativeActivityResponses];
+
+export type SetInitiativeAppearanceData = {
+    body: EntityAppearance;
+    path: {
+        /**
+         * Initiative identifier.
+         */
+        initiative_id: string;
+    };
+    query?: never;
+    url: '/initiatives/{initiative_id}/appearance';
+};
+
+export type SetInitiativeAppearanceErrors = {
+    400: unknown;
+    401: unknown;
+    404: unknown;
+};
+
+export type SetInitiativeAppearanceResponses = {
+    200: EntityAppearance;
+};
+
+export type SetInitiativeAppearanceResponse = SetInitiativeAppearanceResponses[keyof SetInitiativeAppearanceResponses];
 
 export type GetInitiativeDescriptionData = {
     body?: never;

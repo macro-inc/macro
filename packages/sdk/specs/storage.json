@@ -9479,6 +9479,45 @@
         }
       }
     },
+    "/crm/pipelines/create": {
+      "post": {
+        "tags": ["crm::inbound::pipeline_workflows"],
+        "summary": "Create a pipeline with its stages, replacing the team's defaults, and its\nfields, in one call.",
+        "operationId": "create_crm_pipeline_with_fields",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePipelineRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PipelineFields"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/crm/pipelines/entry-search": {
       "get": {
         "tags": ["crm::inbound::pipeline_workflows"],
@@ -11119,6 +11158,87 @@
             }
           },
           "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/databases/{id}/appearance": {
+      "put": {
+        "tags": ["databases"],
+        "summary": "Replace a database's icon and color without changing its content timestamp.",
+        "operationId": "set_database_appearance",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Database id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EntityAppearance"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntityAppearance"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
             "description": "",
             "content": {
               "application/json": {
@@ -14383,6 +14503,55 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/documents/{document_id}/appearance": {
+      "put": {
+        "tags": ["document"],
+        "summary": "Replace a document's presentation overrides without editing its content.",
+        "operationId": "set_document_appearance",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Document ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EntityAppearance"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntityAppearance"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": ""
+          },
+          "403": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
           }
         }
       }
@@ -19028,6 +19197,87 @@
         }
       }
     },
+    "/forms/{id}/appearance": {
+      "put": {
+        "tags": ["forms"],
+        "summary": "Replace a form's icon and color without changing its content timestamp.",
+        "operationId": "set_form_appearance",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Form id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EntityAppearance"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntityAppearance"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FormErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/forms/{id}/collaboration": {
       "post": {
         "tags": ["forms"],
@@ -21708,6 +21958,55 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/initiatives/{initiative_id}/appearance": {
+      "put": {
+        "tags": ["initiative"],
+        "summary": "Replace a project's appearance without changing content timestamps.",
+        "operationId": "set_initiative_appearance",
+        "parameters": [
+          {
+            "name": "initiative_id",
+            "in": "path",
+            "description": "Initiative identifier.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EntityAppearance"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntityAppearance"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": ""
+          },
+          "401": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
           }
         }
       }
@@ -29785,6 +30084,59 @@
           "USER"
         ]
       },
+      "AppearanceColor": {
+        "type": "string",
+        "description": "Named tint keys from the shared tag color palette.",
+        "enum": [
+          "gray",
+          "red",
+          "tomato",
+          "orange",
+          "amber",
+          "yellow",
+          "green",
+          "teal",
+          "blue",
+          "indigo",
+          "purple",
+          "pink"
+        ]
+      },
+      "AppearanceIcon": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A stable name from Macro's original, distinct icon catalog.",
+            "required": ["name", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["macro"]
+              },
+              "name": {
+                "type": "string",
+                "description": "Catalog name without the SVG extension."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A single native emoji, including skin-tone and joined sequences.",
+            "required": ["value", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["emoji"]
+              },
+              "value": {
+                "type": "string",
+                "description": "Unicode emoji text, not markup or a URL."
+              }
+            }
+          }
+        ],
+        "description": "The source of an entity's custom icon."
+      },
       "AppliedOps": {
         "type": "object",
         "description": "What a committed batch answers: a result per op, and the journal's change\nfor each table version it produced.",
@@ -35904,6 +36256,47 @@
         },
         "additionalProperties": false
       },
+      "CreatePipelineRequest": {
+        "type": "object",
+        "description": "A new pipeline with its stages and fields.",
+        "required": ["name"],
+        "properties": {
+          "fields": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NewFieldRequest"
+            },
+            "description": "Fields to add after the standard ones, or after a generic pipeline's Name."
+          },
+          "name": {
+            "type": "string",
+            "description": "Its name."
+          },
+          "recordType": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PipelineRecordType",
+                "description": "Company or contact entries; omitted, a generic pipeline of free-form rows."
+              }
+            ]
+          },
+          "sharing": {
+            "$ref": "#/components/schemas/PipelineSharing",
+            "description": "Defaults to private."
+          },
+          "stages": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Its stages, first to last, replacing the team's default stages. A\ngeneric pipeline starts without a Stage field, so these add one."
+          }
+        },
+        "additionalProperties": false
+      },
       "CreateProjectRequest": {
         "type": "object",
         "required": ["name"],
@@ -36804,6 +37197,17 @@
           "project_id"
         ],
         "properties": {
+          "appearance": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EntityAppearance",
+                "description": "Entity-owned icon and color overrides."
+              }
+            ]
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -37789,6 +38193,17 @@
           "documentName"
         ],
         "properties": {
+          "appearance": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EntityAppearance",
+                "description": "Entity-owned presentation overrides; absent values use type defaults."
+              }
+            ]
+          },
           "branchedFromId": {
             "type": ["string", "null"],
             "description": "The id of the document this document branched from"
@@ -38016,6 +38431,17 @@
         "type": "object",
         "required": ["document_id", "document_name", "owner"],
         "properties": {
+          "appearance": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EntityAppearance",
+                "description": "Entity-owned icon and color overrides."
+              }
+            ]
+          },
           "document_id": {
             "type": "string",
             "description": "The document id"
@@ -38138,6 +38564,17 @@
           "documentName"
         ],
         "properties": {
+          "appearance": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EntityAppearance",
+                "description": "Entity-owned presentation overrides."
+              }
+            ]
+          },
           "branchedFromId": {
             "type": ["string", "null"],
             "description": "The id of the document this document branched from"
@@ -38487,6 +38924,13 @@
                 "description": "The authenticated user who performed the update; `None` for\nunauthenticated or internal callers."
               }
             ]
+          },
+          "appearance_change": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/EntityAppearance"
+            },
+            "description": "Previous and new presentation overrides, in that order; no content edit occurred."
           },
           "document_id": {
             "type": "string",
@@ -41994,6 +42438,35 @@
           }
         }
       },
+      "EntityAppearance": {
+        "type": "object",
+        "description": "An entity's optional icon and tint overrides; absent values retain type defaults.",
+        "properties": {
+          "color": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AppearanceColor",
+                "description": "A shared tag-palette key. Native emoji retain their own colors."
+              }
+            ]
+          },
+          "icon": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AppearanceIcon",
+                "description": "A custom Macro glyph or a native emoji."
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
       "EntityFilters": {
         "type": "object",
         "description": "a bundle of all of the filters for each entity type",
@@ -45022,6 +45495,17 @@
             "type": "boolean",
             "description": "Whether nobody, the owner included, can see who gave which response.\nWho responded is kept apart from the responses, only so nobody\nresponds twice. Fixed once anyone has responded."
           },
+          "appearance": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EntityAppearance",
+                "description": "Entity-owned icon and color overrides."
+              }
+            ]
+          },
           "audience": {
             "$ref": "#/components/schemas/Audience",
             "description": "Who may respond."
@@ -45205,6 +45689,7 @@
           "invalidLayout",
           "invalidName",
           "invalidSharing",
+          "invalidAppearance",
           "tallyHidden",
           "invalidBranding",
           "conflict",
@@ -47978,6 +48463,17 @@
           "updatedAt"
         ],
         "properties": {
+          "appearance": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EntityAppearance",
+                "description": "Entity-owned icon and color overrides."
+              }
+            ]
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time",
@@ -48186,6 +48682,17 @@
         "description": "List-row view of an initiative.",
         "required": ["id", "name", "updatedAt"],
         "properties": {
+          "appearance": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EntityAppearance",
+                "description": "Entity-owned icon and color overrides."
+              }
+            ]
+          },
           "id": {
             "$ref": "#/components/schemas/InitiativeId",
             "description": "Opaque identifier."
@@ -57608,6 +58115,17 @@
               "updatedAt"
             ],
             "properties": {
+              "appearance": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/EntityAppearance",
+                    "description": "Entity-owned icon and color overrides."
+                  }
+                ]
+              },
               "branchedFromId": {
                 "type": ["string", "null"],
                 "format": "uuid",
@@ -57936,6 +58454,17 @@
             "type": "object",
             "required": ["id", "name", "ownerId", "createdAt", "updatedAt"],
             "properties": {
+              "appearance": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/EntityAppearance",
+                    "description": "Entity-owned icon and color overrides."
+                  }
+                ]
+              },
               "createdAt": {
                 "type": "string",
                 "format": "date-time",

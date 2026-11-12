@@ -37,9 +37,9 @@ LEXICAL_SERVICE_URL = "http://lexical-service:8096"
 # Tags exported spans with deployment.environment=local, matching the
 # Datadog agent's DD_ENV so the env:local trace/log views include them.
 ENVIRONMENT = "local"
-# jaeger/datadog-agent alias on the compose `services` network.
-# Unset in deployed envs = trace and log export disabled.
-OTEL_EXPORTER_OTLP_ENDPOINT = "http://otel-collector:4318"
+# Disabled by default. The Docker launcher forwards the resolved run setting
+# with --var; an empty endpoint disables the custom trace/log exporter.
+OTEL_EXPORTER_OTLP_ENDPOINT = ""
 
 [[kv_namespaces]]
 binding = "DOCUMENT_VERSIONING_KV"
