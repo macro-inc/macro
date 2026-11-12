@@ -454,3 +454,114 @@ fn a_malformed_op_is_a_decode_error() {
             .is_err()
     );
 }
+
+const BLOCK_CORPUS: &str = include_str!("corpus/blocks.json");
+
+/// Every node type Source `nodeIdPlugin` gives an id in the block corpus.
+const BLOCK_ID_CLASSES: [&str; 14] = [
+    "root",
+    "paragraph",
+    "text",
+    "heading",
+    "quote",
+    "custom-code",
+    "code-highlight",
+    "equation",
+    "horizontalrule",
+    "listitem",
+    "task-list",
+    "table",
+    "tablerow",
+    "tablecell",
+];
+
+#[derive(serde::Deserialize)]
+struct BlockEntry {
+    name: String,
+    seed: Value,
+    ops: Vec<Value>,
+    state: Value,
+    #[serde(rename = "failedAt")]
+    failed_at: Option<usize>,
+    refs: Vec<String>,
+}
+
+fn block_editor() -> Editor {
+    crate::node_ids::NodeIdPlugin::register(
+        surface::preset_builder_with_mode(EditorType::MarkdownSync, EditorMode::ViewAttached)
+            .extension_state(crate::NodeClock(std::sync::Arc::new(|| 1234))),
+        &BLOCK_ID_CLASSES,
+        None,
+        [5; 32],
+    )
+    .build()
+    .expect("surface")
+}
+
+/// Seed ids and op refs stay verbatim; every other id is renamed `<newN>` in
+/// document order, so freshly minted ids compare one to one, not as one bucket.
+fn minted_bijection(value: &Value, kept: &HashSet<String>) -> Value {
+    fn walk(
+        value: &Value,
+        kept: &HashSet<String>,
+        names: &mut std::collections::HashMap<String, String>,
+    ) -> Value {
+        match value {
+            Value::Array(items) => {
+                Value::Array(items.iter().map(|v| walk(v, kept, names)).collect())
+            }
+            Value::Object(map) => {
+                let mut out = serde_json::Map::new();
+                // Own id first, then children, so numbering follows document order.
+                if let Some(Value::Object(state)) = map.get("$") {
+                    let mut state = state.clone();
+                    if let Some(Value::String(id)) = state.get("id")
+                        && !kept.contains(id)
+                    {
+                        let next = format!("<new{}>", names.len());
+                        let name = names.entry(id.clone()).or_insert(next).clone();
+                        state.insert("id".into(), Value::String(name));
+                    }
+                    out.insert("$".into(), Value::Object(state));
+                }
+                for (key, child) in map {
+                    if key != "$" {
+                        out.insert(key.clone(), walk(child, kept, names));
+                    }
+                }
+                Value::Object(out)
+            }
+            other => other.clone(),
+        }
+    }
+    walk(value, kept, &mut std::collections::HashMap::new())
+}
+
+#[test]
+fn block_ops_reach_the_source_doc_state() {
+    let corpus: Vec<BlockEntry> = serde_json::from_str(BLOCK_CORPUS).expect("corpus");
+    assert!(!corpus.is_empty());
+    let mut failures = Vec::new();
+    for entry in corpus {
+        let mut kept = HashSet::new();
+        collect_ids(&entry.seed, &mut kept);
+        kept.extend(entry.refs.iter().cloned());
+
+        let mut native = block_editor();
+        load(&mut native, &entry.seed);
+        let failed_at = replay(&mut native, &entry.ops);
+        let actual = minted_bijection(&export(&native), &kept);
+
+        let mut source = block_editor();
+        load(&mut source, &entry.state);
+        let expected = minted_bijection(&export(&source), &kept);
+
+        if failed_at != entry.failed_at || actual != expected {
+            failures.push(format!(
+                "{}: failedAt native {failed_at:?} source {:?}\n  native {actual}\n  source {expected}",
+                entry.name, entry.failed_at
+            ));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}

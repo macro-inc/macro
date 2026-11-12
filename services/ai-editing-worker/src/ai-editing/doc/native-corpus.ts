@@ -202,3 +202,414 @@ function renameIds(value: unknown, rename: (id: string) => string): unknown {
   }
   return out;
 }
+
+/** A seed node: a top-level block index, or a child path from it (for text ids). */
+type Address = number | readonly number[];
+
+/** Seed addresses for `node`, `nodes` and `at.after` / `at.before`; refs stay literal strings. */
+type BlockCase = {
+  readonly name: string;
+  readonly markdown: string;
+  readonly ops: readonly unknown[];
+  /** Source applies the ops without error and changes nothing. */
+  readonly unchanged?: true;
+};
+
+export type BlockCorpusEntry = CorpusEntry & {
+  /** Refs the ops minted; kept verbatim in `ops` and `state`. */
+  readonly refs: readonly string[];
+};
+
+const block = (i: number) => i;
+
+/** Block-structure ops (phase B1): insertNode, removeNode, moveNode, mergeBlocks,
+ *  setBlockType, formatNode, clearNodeFormat, setIndent. */
+export const BLOCK_CASES: readonly BlockCase[] = [
+  {
+    name: 'insertNode paragraph after the first block',
+    markdown: 'Alpha\n\nBeta',
+    ops: [
+      {
+        kind: 'insertNode',
+        ref: 'ref-p1',
+        spec: { block: 'paragraph', text: 'Inserted' },
+        at: { after: block(0) },
+      },
+    ],
+  },
+  {
+    name: 'insertNode heading before the first block',
+    markdown: 'Alpha',
+    ops: [
+      {
+        kind: 'insertNode',
+        ref: 'ref-h2',
+        spec: { block: 'heading', level: 2, text: 'Title' },
+        at: { before: block(0) },
+      },
+    ],
+  },
+  {
+    name: 'insertNode quote appended to the root',
+    markdown: 'Alpha',
+    ops: [
+      {
+        kind: 'insertNode',
+        ref: 'ref-q',
+        spec: { block: 'quote', text: 'Said' },
+        at: { appendToRoot: true },
+      },
+    ],
+  },
+  {
+    name: 'insertNode code prepended to the root',
+    markdown: 'Alpha',
+    ops: [
+      {
+        kind: 'insertNode',
+        ref: 'ref-code',
+        spec: { block: 'code', language: 'ts', text: 'let x = 1;' },
+        at: { prependToRoot: true },
+      },
+    ],
+  },
+  {
+    name: 'insertNode bullet list',
+    markdown: 'Alpha',
+    ops: [
+      {
+        kind: 'insertNode',
+        ref: 'ref-list',
+        spec: { block: 'list', list: 'bullet', items: ['one', 'two'] },
+        at: { after: block(0) },
+      },
+    ],
+  },
+  {
+    name: 'insertNode check list',
+    markdown: 'Alpha',
+    ops: [
+      {
+        kind: 'insertNode',
+        ref: 'ref-check',
+        spec: { block: 'list', list: 'check', items: ['todo'] },
+        at: { after: block(0) },
+      },
+    ],
+  },
+  {
+    name: 'insertNode table with a header row',
+    markdown: 'Alpha',
+    ops: [
+      {
+        kind: 'insertNode',
+        ref: 'ref-table',
+        spec: {
+          block: 'table',
+          rows: [
+            ['h1', 'h2'],
+            ['c1', 'c2'],
+          ],
+        },
+        at: { after: block(0) },
+      },
+    ],
+  },
+  {
+    name: 'insertNode divider',
+    markdown: 'Alpha\n\nBeta',
+    ops: [
+      {
+        kind: 'insertNode',
+        ref: 'ref-hr',
+        spec: { block: 'divider' },
+        at: { after: block(0) },
+      },
+    ],
+  },
+  {
+    name: 'insertNode block equation is wrapped in a paragraph',
+    markdown: 'Alpha',
+    ops: [
+      {
+        kind: 'insertNode',
+        ref: 'ref-eq',
+        spec: { block: 'equation', tex: 'x^2' },
+        at: { after: block(0) },
+      },
+    ],
+  },
+  {
+    name: 'insertNode with an inline spec fails',
+    markdown: 'Alpha',
+    ops: [
+      {
+        kind: 'insertNode',
+        ref: 'ref-bad',
+        spec: { inline: 'linebreak' },
+        at: { after: block(0) },
+      },
+    ],
+  },
+  {
+    name: 'insertNode after an unknown node fails',
+    markdown: 'Alpha',
+    ops: [
+      {
+        kind: 'insertNode',
+        ref: 'ref-orphan',
+        spec: { block: 'paragraph', text: 'x' },
+        at: { after: 'missing-id' },
+      },
+    ],
+  },
+  {
+    name: 'a later op addresses the ref an earlier insertNode minted',
+    markdown: 'Alpha',
+    ops: [
+      {
+        kind: 'insertNode',
+        ref: 'ref-chain',
+        spec: { block: 'paragraph', text: 'First pass' },
+        at: { after: block(0) },
+      },
+      { kind: 'setText', node: 'ref-chain', text: 'Second pass' },
+    ],
+  },
+  {
+    name: 'removeNode a paragraph',
+    markdown: 'Alpha\n\nBeta\n\nGamma',
+    ops: [{ kind: 'removeNode', node: block(1) }],
+  },
+  {
+    name: 'removeNode a text node inside a block',
+    markdown: 'plain **bold** tail',
+    ops: [{ kind: 'removeNode', node: [0, 1] }],
+  },
+  {
+    name: 'removeNode an unknown id fails',
+    markdown: 'Alpha',
+    ops: [{ kind: 'removeNode', node: 'missing-id' }],
+  },
+  {
+    name: 'moveNode the last block to the front',
+    markdown: 'Alpha\n\nBeta\n\nGamma',
+    ops: [{ kind: 'moveNode', node: block(2), at: { before: block(0) } }],
+  },
+  {
+    name: 'moveNode a block to the end of the root',
+    markdown: 'Alpha\n\nBeta',
+    ops: [{ kind: 'moveNode', node: block(0), at: { appendToRoot: true } }],
+  },
+  {
+    name: 'mergeBlocks two paragraphs with a space',
+    markdown: 'Alpha\n\nBeta',
+    ops: [{ kind: 'mergeBlocks', nodes: [block(0), block(1)], separator: ' ' }],
+  },
+  {
+    name: 'mergeBlocks three paragraphs keeping formats',
+    markdown: 'one\n\n**two**\n\nthree',
+    ops: [
+      {
+        kind: 'mergeBlocks',
+        nodes: [block(0), block(1), block(2)],
+        separator: ', ',
+      },
+    ],
+  },
+  {
+    name: 'setBlockType paragraph to heading 3',
+    markdown: 'Alpha',
+    ops: [{ kind: 'setBlockType', node: block(0), block: 'heading', level: 3 }],
+  },
+  {
+    name: 'setBlockType paragraph to quote',
+    markdown: 'Alpha',
+    ops: [{ kind: 'setBlockType', node: block(0), block: 'quote' }],
+  },
+  {
+    name: 'setBlockType paragraph to code with a language',
+    markdown: 'let x = 1;',
+    ops: [
+      { kind: 'setBlockType', node: block(0), block: 'code', language: 'ts' },
+    ],
+  },
+  {
+    name: 'setBlockType heading back to paragraph',
+    markdown: '## Title',
+    ops: [{ kind: 'setBlockType', node: block(0), block: 'paragraph' }],
+  },
+  {
+    name: 'setBlockType on a list container fails',
+    markdown: '- one',
+    ops: [{ kind: 'setBlockType', node: block(0), block: 'quote' }],
+  },
+  {
+    name: 'formatNode bold on a plain text node',
+    markdown: 'plain',
+    ops: [{ kind: 'formatNode', node: [0, 0], format: 'bold', on: true }],
+  },
+  {
+    name: 'formatNode italic off when already off',
+    markdown: 'plain',
+    unchanged: true,
+    ops: [{ kind: 'formatNode', node: [0, 0], format: 'italic', on: false }],
+  },
+  {
+    name: 'formatNode on a block id fails',
+    markdown: 'plain',
+    ops: [{ kind: 'formatNode', node: block(0), format: 'bold', on: true }],
+  },
+  {
+    name: 'clearNodeFormat on a bold italic run',
+    markdown: 'a ***b*** c',
+    ops: [{ kind: 'clearNodeFormat', node: [0, 1] }],
+  },
+  {
+    name: 'setIndent in on a paragraph',
+    markdown: 'Alpha',
+    ops: [{ kind: 'setIndent', node: block(0), indent: 'in' }],
+  },
+  {
+    name: 'setIndent to an absolute level',
+    markdown: 'Alpha',
+    ops: [{ kind: 'setIndent', node: block(0), indent: 2 }],
+  },
+  {
+    name: 'setIndent out at zero',
+    markdown: 'Alpha',
+    ops: [{ kind: 'setIndent', node: block(0), indent: 'out' }],
+  },
+  {
+    name: 'setIndent in on the second list item',
+    markdown: '- one\n- two',
+    ops: [{ kind: 'setIndent', node: [0, 1], indent: 'in' }],
+  },
+  {
+    name: 'setIndent to an absolute level on a list item',
+    markdown: '- one\n- two',
+    ops: [{ kind: 'setIndent', node: [0, 1], indent: 2 }],
+  },
+  {
+    name: 'a failing removeNode keeps the earlier insert and stops',
+    markdown: 'Alpha',
+    ops: [
+      {
+        kind: 'insertNode',
+        ref: 'ref-kept',
+        spec: { block: 'paragraph', text: 'kept' },
+        at: { after: block(0) },
+      },
+      { kind: 'removeNode', node: 'missing-id' },
+      { kind: 'removeNode', node: block(0) },
+    ],
+  },
+];
+
+/** Durable id of a seed node by top-level index or child path. */
+function addressId(
+  session: ReturnType<typeof setup>['session'],
+  address: Address
+): string | undefined {
+  const path = typeof address === 'number' ? [address] : address;
+  const state = session.editor.getEditorState().toJSON();
+  let node: { children?: unknown[]; $?: { id?: string } } | undefined =
+    state.root as never;
+  for (const index of path) node = node?.children?.[index] as never;
+  return node?.$?.id;
+}
+
+/** Like `generate`, but refs stay verbatim and other minted ids are numbered
+ *  `<new0>`, `<new1>`… in order of appearance (a bijection, not one bucket). */
+export function generateBlocks(
+  cases: readonly BlockCase[]
+): BlockCorpusEntry[] {
+  return cases.map((testCase) => {
+    const { session } = setup(testCase.markdown);
+    const seed = session.editor.getEditorState().toJSON();
+    const refs: string[] = [];
+    const resolve = (value: unknown): unknown => {
+      if (typeof value === 'number' || Array.isArray(value)) {
+        const id = addressId(session, value as Address);
+        if (id === undefined)
+          throw new Error(
+            `${testCase.name}: no seed node at ${JSON.stringify(value)}`
+          );
+        return id;
+      }
+      return value;
+    };
+    const ops = testCase.ops.map((raw) => {
+      const op = { ...(raw as Record<string, unknown>) };
+      if ('node' in op) op.node = resolve(op.node);
+      if (
+        Array.isArray(op.nodes) &&
+        op.nodes.every((n) => typeof n === 'number')
+      )
+        op.nodes = (op.nodes as number[]).map(resolve);
+      if (op.at && typeof op.at === 'object') {
+        const at = { ...(op.at as Record<string, unknown>) };
+        if ('after' in at) at.after = resolve(at.after);
+        if ('before' in at) at.before = resolve(at.before);
+        op.at = at;
+      }
+      if (typeof op.ref === 'string') refs.push(op.ref);
+      return op as DocumentOp;
+    });
+    const doc = new Doc(session);
+    let failedAt: number | null = null;
+    for (const [index, op] of ops.entries()) {
+      try {
+        doc.apply(op);
+      } catch {
+        failedAt = index;
+        break;
+      }
+    }
+    const names = new Map<string, string>();
+    collectIds(seed, (id) => {
+      if (!names.has(id))
+        names.set(id, `s${String(names.size).padStart(7, '0')}`);
+    });
+    for (const ref of refs) names.set(ref, ref);
+    let minted = 0;
+    const rename = (id: string) => {
+      let name = names.get(id);
+      if (name === undefined) {
+        name = `<new${minted++}>`;
+        names.set(id, name);
+      }
+      return name;
+    };
+    const state = renameIds(
+      session.editor.getEditorState().toJSON(),
+      rename
+    ) as SerializedEditorState;
+    const renameOp = (op: DocumentOp) => {
+      const out = { ...(op as Record<string, unknown>) };
+      if (typeof out.node === 'string')
+        out.node = names.get(out.node) ?? out.node;
+      if (Array.isArray(out.nodes))
+        out.nodes = out.nodes.map((n) => names.get(n as string) ?? n);
+      if (out.at && typeof out.at === 'object') {
+        const at = { ...(out.at as Record<string, unknown>) };
+        for (const key of ['after', 'before'])
+          if (typeof at[key] === 'string')
+            at[key] = names.get(at[key] as string) ?? at[key];
+        out.at = at;
+      }
+      return out as DocumentOp;
+    };
+    return {
+      name: testCase.name,
+      seed: renameIds(
+        seed,
+        (id) => names.get(id) ?? id
+      ) as SerializedEditorState,
+      ops: ops.map(renameOp),
+      state,
+      failedAt,
+      refs,
+    };
+  });
+}
