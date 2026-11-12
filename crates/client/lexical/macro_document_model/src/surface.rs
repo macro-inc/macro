@@ -66,6 +66,8 @@ pub fn event_payload(
         crate::plugins_group_b::event_payload,
         crate::plugins_group_a::menu::event_payload,
         crate::plugins_group_a::menu::search::event_payload,
+        // Group C AI-edit refusals.
+        crate::plugins_group_c::event_payload,
     ];
     for encode in encoders {
         if let Some(payload) = encode(event)? {

@@ -3,9 +3,10 @@
 //!
 //! Each op is one application input. The host sends `merge: true` for every op
 //! after the first of an edit, so the whole edit is one undo step regardless of
-//! timing. A refused op (unknown id, wrong target, missed substring) changes
-//! nothing and reports `Handled::No`; the host stops there and keeps the ops
-//! already applied, exactly as Source's per-op transactions do.
+//! timing. A refused op changes no document, selection, tag or history state:
+//! it emits one typed `group-c.ai-op-refused` event and reports `Handled::No`;
+//! the host stops there and keeps the ops already applied, as Source's per-op
+//! transactions do.
 //!
 //! The op types and appliers depend only on the model, so the worker could
 //! adopt them later.
@@ -13,7 +14,7 @@ use lexical_model::*;
 
 mod text;
 
-/// Source `Scope` (`nth` is 1-based; 0 matches nothing).
+/// Source `Scope` (`nth` is 1-based; 0 or a fraction matches nothing, as in Source).
 #[derive(Clone, Copy, Debug, serde::Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub(crate) enum Scope {
@@ -21,14 +22,14 @@ pub(crate) enum Scope {
     All,
 }
 
-/// The `DocumentOp`s this applier implements; others are refused.
+/// The wire shape of the `DocumentOp`s this applier implements.
 #[derive(Clone, Debug, serde::Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 #[expect(
     clippy::enum_variant_names,
     reason = "variants mirror Source DocumentOp kinds; block ops arrive in later phases"
 )]
-pub(crate) enum AiOp {
+enum WireOp {
     InsertText {
         node: String,
         at: f64,
@@ -59,10 +60,171 @@ pub(crate) enum AiOp {
     },
 }
 
+/// Kinds `WireOp` decodes; any other Source kind is refused as unsupported.
+const SUPPORTED_KINDS: [&str; 6] = [
+    "insertText",
+    "removeText",
+    "setText",
+    "appendText",
+    "prependText",
+    "replaceText",
+];
+
+/// A validated op: offsets and lengths are safe integers (UTF-16 units).
+#[derive(Clone, Debug)]
+#[expect(
+    clippy::enum_variant_names,
+    reason = "variants mirror Source DocumentOp kinds; block ops arrive in later phases"
+)]
+pub(crate) enum AiOp {
+    InsertText {
+        node: String,
+        at: u64,
+        text: String,
+    },
+    RemoveText {
+        node: String,
+        at: u64,
+        len: u64,
+    },
+    SetText {
+        node: String,
+        text: String,
+    },
+    AppendText {
+        node: String,
+        text: String,
+    },
+    PrependText {
+        node: String,
+        text: String,
+    },
+    ReplaceText {
+        node: String,
+        find: String,
+        to: String,
+        scope: Scope,
+    },
+}
+
+/// The numeric op field a refusal names.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum NumberField {
+    /// `insertText.at` or `removeText.at`.
+    At,
+    /// `removeText.len`.
+    Len,
+}
+
+/// Why a number is outside the AI-edit domain (finite non-negative safe integers).
+///
+/// Source's JavaScript `slice` accepts every one of these; native refuses them
+/// as corrupt model input (a named difference, not Source parity).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum NumberProblem {
+    /// Not representable in JSON; reachable only through direct Rust callers.
+    NonFinite,
+    /// Below zero.
+    Negative,
+    /// Has a fractional part.
+    Fractional,
+    /// Above `Number.MAX_SAFE_INTEGER`.
+    AboveMaxSafeInteger,
+}
+
+/// Why an AI op was refused. The document, selection and history are unchanged.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+#[serde(tag = "cause", rename_all = "camelCase")]
+pub enum AiOpRefusal {
+    /// A Source op kind or target this applier does not implement yet.
+    UnsupportedOp,
+    /// A number outside the AI-edit domain.
+    InvalidNumber {
+        /// The field.
+        field: NumberField,
+        /// What is wrong with it.
+        problem: NumberProblem,
+    },
+    /// `at + len` exceeds `Number.MAX_SAFE_INTEGER`.
+    RangeTooLarge,
+    /// No node carries the id.
+    UnknownNode,
+    /// The id names a node this op cannot edit (a container, or no block).
+    WrongTarget,
+    /// `replaceText` found nothing to replace.
+    FindMissed,
+    /// The edit would split a UTF-16 surrogate pair.
+    SplitsSurrogate,
+}
+
+/// The host event for a refused op, emitted in the same input's output.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AiOpRefused {
+    /// The typed cause.
+    pub cause: AiOpRefusal,
+}
+
+pub(crate) static AI_OP_REFUSED: EventKey<AiOpRefused> = EventKey::new("group-c.ai-op-refused");
+
+/// `Number.MAX_SAFE_INTEGER`.
+const MAX_SAFE_INTEGER: u64 = (1 << 53) - 1;
+
+/// A finite non-negative safe integer, else the typed problem.
+pub(crate) fn safe_integer(value: f64, field: NumberField) -> Result<u64, AiOpRefusal> {
+    let problem = if !value.is_finite() {
+        NumberProblem::NonFinite
+    } else if value < 0.0 {
+        NumberProblem::Negative
+    } else if value.fract() != 0.0 {
+        NumberProblem::Fractional
+    } else if value > MAX_SAFE_INTEGER as f64 {
+        NumberProblem::AboveMaxSafeInteger
+    } else {
+        // Exact: a non-negative integral f64 at or below 2^53 - 1.
+        return Ok(value as u64);
+    };
+    Err(AiOpRefusal::InvalidNumber { field, problem })
+}
+
+fn validate(op: WireOp) -> Result<AiOp, AiOpRefusal> {
+    Ok(match op {
+        WireOp::InsertText { node, at, text } => AiOp::InsertText {
+            node,
+            at: safe_integer(at, NumberField::At)?,
+            text,
+        },
+        WireOp::RemoveText { node, at, len } => {
+            let at = safe_integer(at, NumberField::At)?;
+            let len = safe_integer(len, NumberField::Len)?;
+            // Both are at most 2^53 - 1, so the sum cannot overflow u64.
+            if at.checked_add(len).is_none_or(|end| end > MAX_SAFE_INTEGER) {
+                return Err(AiOpRefusal::RangeTooLarge);
+            }
+            AiOp::RemoveText { node, at, len }
+        }
+        WireOp::SetText { node, text } => AiOp::SetText { node, text },
+        WireOp::AppendText { node, text } => AiOp::AppendText { node, text },
+        WireOp::PrependText { node, text } => AiOp::PrependText { node, text },
+        WireOp::ReplaceText {
+            node,
+            find,
+            to,
+            scope,
+        } => AiOp::ReplaceText {
+            node,
+            find,
+            to,
+            scope,
+        },
+    })
+}
+
 #[derive(Clone, Debug)]
 struct AiOpCommand {
-    /// `None` when the op kind or shape is not supported yet.
-    op: Option<AiOp>,
+    /// The validated op, or the refusal the handler reports.
+    op: Result<AiOp, AiOpRefusal>,
     merge: bool,
 }
 
@@ -73,6 +235,8 @@ static COMMANDS: [CommandRegistration; 1] = [CommandRegistration {
     placement: Placement::After,
 }];
 
+/// Decode `group-c.ai-op {op, merge}`. A malformed envelope is a decode error;
+/// an unsupported kind or out-of-domain number decodes to a typed refusal.
 pub(super) fn decode(name: &str, json: &str, _generation: u32) -> Result<Option<Command>, Error> {
     if name != AI_OP.name() {
         return Ok(None);
@@ -86,10 +250,18 @@ pub(super) fn decode(name: &str, json: &str, _generation: u32) -> Result<Option<
         Some(serde_json::Value::Bool(merge)) => *merge,
         Some(_) => return Err(Error::Invariant("group-c.ai-op merge must be a boolean")),
     };
-    // An op this applier does not implement is refused, never fatal.
-    let op = match envelope.get("op") {
-        Some(op @ serde_json::Value::Object(_)) => serde_json::from_value(op.clone()).ok(),
-        _ => None,
+    let Some(op @ serde_json::Value::Object(fields)) = envelope.get("op") else {
+        return Err(Error::Invariant("group-c.ai-op op must be an object"));
+    };
+    let Some(serde_json::Value::String(kind)) = fields.get("kind") else {
+        return Err(Error::Invariant("group-c.ai-op op.kind must be a string"));
+    };
+    let op = if SUPPORTED_KINDS.contains(&kind.as_str()) {
+        let wire: WireOp = serde_json::from_value(op.clone())
+            .map_err(|_| Error::Invariant("group-c.ai-op op fields do not match its kind"))?;
+        validate(wire)
+    } else {
+        Err(AiOpRefusal::UnsupportedOp)
     };
     Ok(Some(Command::Extension(ExtensionCommand::new(
         &AI_OP,
@@ -101,11 +273,7 @@ pub(super) fn register(builder: EditorBuilder) -> EditorBuilder {
     builder.plugin(AiOps)
 }
 
-/// A Source `EditError`: the op is refused and the document is unchanged.
-#[derive(Debug)]
-pub(crate) struct Refused;
-
-pub(crate) type OpResult<T> = Result<Result<T, Refused>, Error>;
+pub(crate) type OpResult<T> = Result<Result<T, AiOpRefusal>, Error>;
 
 struct AiOps;
 impl Plugin for AiOps {
@@ -122,23 +290,41 @@ impl Plugin for AiOps {
         let Some(command) = command.payload(&AI_OP) else {
             return Ok(Handled::No);
         };
-        let Some(op) = &command.op else {
-            return Ok(Handled::No);
+        // Plan against the current state before any write: a refusal is decided
+        // while selection, tags and nodes are untouched.
+        let planned = match &command.op {
+            Ok(op) => plan(tx, op)?,
+            Err(refusal) => Err(*refusal),
         };
-        // Source applyAiOps drops the selection before the first op.
-        tx.set_selection(None)?;
-        if command.merge {
-            tx.add_tag(UpdateTag::HistoryMerge);
+        match planned {
+            Ok(writes) => {
+                // Source applyAiOps drops the selection before an edit's ops run.
+                tx.set_selection(None)?;
+                if command.merge {
+                    tx.add_tag(UpdateTag::HistoryMerge);
+                }
+                text::execute(tx, writes)?;
+                Ok(Handled::Yes)
+            }
+            Err(cause) => {
+                // Event-only commit: no document, selection, tag or history change.
+                tx.emit(&AI_OP_REFUSED, AiOpRefused { cause });
+                Ok(Handled::No)
+            }
         }
-        Ok(match apply(tx, op)? {
-            Ok(()) => Handled::Yes,
-            Err(Refused) => Handled::No,
-        })
     }
 }
 
-/// Validate first, write second: a refusal leaves the transaction untouched.
-pub(crate) fn apply(tx: &mut Transaction<'_>, op: &AiOp) -> OpResult<()> {
+/// Encode a refused op for the host: `{"cause": ...}`.
+pub(super) fn event_payload(event: &PluginEvent) -> Result<Option<serde_json::Value>, Error> {
+    let Some(refused) = event.payload(&AI_OP_REFUSED) else {
+        return Ok(None);
+    };
+    Ok(Some(serde_json::to_value(refused.cause)?))
+}
+
+/// Plan one op without writing: its ordered writes, or the typed refusal.
+pub(crate) fn plan(tx: &Transaction<'_>, op: &AiOp) -> OpResult<Vec<text::Write>> {
     match op {
         AiOp::InsertText { node, at, text } => text::insert_text(tx, node, *at, text),
         AiOp::RemoveText { node, at, len } => text::remove_text(tx, node, *at, *len),
@@ -183,45 +369,51 @@ pub(super) fn query(
 }
 
 /// Source `$byId`: the node currently carrying a durable id.
-pub(crate) fn by_id(tx: &Transaction<'_>, id: &str) -> Result<Option<NodeKey>, Error> {
+pub(crate) fn by_id(tx: &Transaction<'_>, id: &str) -> OpResult<NodeKey> {
     // Read the durable `id` state itself: hosts index ids differently
     // (`NodeIdState` in the model plugin, `NodeIdIndex` in document_session).
     let view = tx.view();
     for (key, _) in view.descendants(view.root()) {
         if crate::node_ids::get_id(view, key)?.is_some_and(|found| found.as_str() == id) {
-            return Ok(Some(key));
+            return Ok(Ok(key));
         }
     }
-    Ok(None)
+    Ok(Err(AiOpRefusal::UnknownNode))
 }
 
 /// Source `$blockById`: the nearest block-level element at or above the id.
-pub(crate) fn block_by_id(tx: &Transaction<'_>, id: &str) -> Result<Option<NodeKey>, Error> {
-    let Some(mut key) = by_id(tx, id)? else {
-        return Ok(None);
+pub(crate) fn block_by_id(tx: &Transaction<'_>, id: &str) -> OpResult<NodeKey> {
+    let mut key = match by_id(tx, id)? {
+        Ok(key) => key,
+        Err(refusal) => return Ok(Err(refusal)),
     };
     let view = tx.view();
     loop {
         if view.kind(key) == Some(NodeKind::Element) && !view.is_inline(key) {
-            return Ok(Some(key));
+            return Ok(Ok(key));
         }
         let Some(parent) = view.parent(key) else {
-            return Ok(None);
+            return Ok(Err(AiOpRefusal::WrongTarget));
         };
         key = parent;
     }
 }
 
 /// Source `Doc.textBlock`: a block that holds text, not a table/list/root container.
-pub(crate) fn text_block(tx: &Transaction<'_>, id: &str) -> Result<Option<NodeKey>, Error> {
-    let Some(block) = block_by_id(tx, id)? else {
-        return Ok(None);
+pub(crate) fn text_block(tx: &Transaction<'_>, id: &str) -> OpResult<NodeKey> {
+    let block = match block_by_id(tx, id)? {
+        Ok(block) => block,
+        Err(refusal) => return Ok(Err(refusal)),
     };
     let container = matches!(
         tx.type_name(block)?,
         "table" | "tablerow" | "tablecell" | "list" | "task-list" | "root"
     );
-    Ok((!container).then_some(block))
+    Ok(if container {
+        Err(AiOpRefusal::WrongTarget)
+    } else {
+        Ok(block)
+    })
 }
 
 #[cfg(test)]

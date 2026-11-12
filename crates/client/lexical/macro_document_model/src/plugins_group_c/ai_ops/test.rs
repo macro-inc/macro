@@ -151,14 +151,13 @@ fn an_unknown_op_kind_is_refused_without_changing_the_document() {
     load(&mut native, &entry.seed);
     let before = export(&native);
     let op = serde_json::json!({ "kind": "notAnOp", "node": "s0000001" });
-    assert_eq!(
-        native
-            .dispatch(&op_command(&op, false))
-            .expect("dispatch")
-            .0,
-        Handled::No
-    );
+    let (handled, commit) = native.dispatch(&op_command(&op, false)).expect("dispatch");
+    assert_eq!(handled, Handled::No);
     assert_eq!(export(&native), before);
+    assert_eq!(
+        refusals(&commit),
+        vec![serde_json::json!({ "cause": "unsupportedOp" })]
+    );
 }
 
 #[test]
@@ -202,4 +201,231 @@ fn selected_block_ids_are_the_touched_top_level_blocks_in_order() {
         .map(|op| op.get("node").cloned().expect("op node"))
         .collect();
     assert_eq!(ids(&native), Value::Array(expected));
+}
+
+/// The host-encoded `group-c.ai-op-refused` payloads a commit carries.
+fn refusals(commit: &Commit) -> Vec<Value> {
+    commit
+        .events
+        .iter()
+        .filter(|event| event.name() == "group-c.ai-op-refused")
+        .map(|event| {
+            surface::event_payload(event)
+                .expect("encode")
+                .expect("group C encodes its refusal")
+        })
+        .collect()
+}
+
+/// One paragraph `para0001` holding one plain text run `text0001` = "abc".
+fn abc_editor() -> Editor {
+    let mut native = editor();
+    load(
+        &mut native,
+        &serde_json::json!({"root":{"type":"root","version":1,"direction":null,"format":"","indent":0,
+            "$":{"id":"root0001"},
+            "children":[{"type":"paragraph","version":1,"direction":null,"format":"","indent":0,
+                "textFormat":0,"textStyle":"","$":{"id":"para0001"},
+                "children":[{"type":"text","version":1,"detail":0,"format":0,"mode":"normal",
+                    "style":"","text":"abc","$":{"id":"text0001"}}]}]}}),
+    );
+    native
+}
+
+fn text_of(editor: &Editor) -> String {
+    editor.state().root_text_content().to_string()
+}
+
+#[test]
+fn a_huge_remove_length_is_refused_without_overflow() {
+    let mut native = abc_editor();
+    let before = export(&native);
+    // Source: Math.min(3, 1 + 1e100) removes to the end; native refuses the
+    // out-of-domain length (corrupt model input, a named difference).
+    let op = serde_json::json!({"kind":"removeText","node":"para0001","at":1,"len":1e100});
+    let (handled, commit) = native.dispatch(&op_command(&op, false)).expect("no panic");
+    assert_eq!(handled, Handled::No);
+    assert_eq!(export(&native), before);
+    assert_eq!(
+        refusals(&commit),
+        vec![serde_json::json!({"cause":"invalidNumber","field":"len","problem":"aboveMaxSafeInteger"})]
+    );
+
+    // Each bound is safe, but the range end is not.
+    let op = serde_json::json!({"kind":"removeText","node":"para0001",
+        "at":9_007_199_254_740_991_u64,"len":1});
+    let (handled, commit) = native.dispatch(&op_command(&op, false)).expect("no panic");
+    assert_eq!(handled, Handled::No);
+    assert_eq!(export(&native), before);
+    assert_eq!(refusals(&commit), vec![serde_json::json!({"cause":"rangeTooLarge"})]);
+
+    // Control: a safe range past the end clamps like Source slice.
+    let op = serde_json::json!({"kind":"removeText","node":"para0001","at":1,"len":9_007_199_254_740_990_u64});
+    let (handled, commit) = native.dispatch(&op_command(&op, false)).expect("dispatch");
+    assert_eq!(handled, Handled::Yes);
+    assert!(refusals(&commit).is_empty());
+    assert_eq!(text_of(&native), "a");
+}
+
+#[test]
+fn a_remove_inside_one_run_matches_source() {
+    let mut native = abc_editor();
+    let op = serde_json::json!({"kind":"removeText","node":"para0001","at":1,"len":1});
+    let (handled, commit) = native.dispatch(&op_command(&op, false)).expect("dispatch");
+    assert_eq!(handled, Handled::Yes);
+    assert!(refusals(&commit).is_empty());
+    assert_eq!(text_of(&native), "ac");
+}
+
+#[test]
+fn a_negative_offset_is_refused_not_sliced() {
+    let mut native = abc_editor();
+    let before = export(&native);
+    // Source slice(0, -1) + slice(0) yields "ababc"; native refuses.
+    let op = serde_json::json!({"kind":"removeText","node":"para0001","at":-1,"len":1});
+    let (handled, commit) = native.dispatch(&op_command(&op, false)).expect("dispatch");
+    assert_eq!(handled, Handled::No);
+    assert_eq!(export(&native), before);
+    assert_eq!(
+        refusals(&commit),
+        vec![serde_json::json!({"cause":"invalidNumber","field":"at","problem":"negative"})]
+    );
+    let op = serde_json::json!({"kind":"insertText","node":"text0001","at":-1,"text":"x"});
+    let (handled, commit) = native.dispatch(&op_command(&op, false)).expect("dispatch");
+    assert_eq!(handled, Handled::No);
+    assert_eq!(export(&native), before);
+    assert_eq!(
+        refusals(&commit),
+        vec![serde_json::json!({"cause":"invalidNumber","field":"at","problem":"negative"})]
+    );
+}
+
+#[test]
+fn a_fractional_offset_is_refused() {
+    let mut native = abc_editor();
+    let before = export(&native);
+    let op = serde_json::json!({"kind":"insertText","node":"text0001","at":1.5,"text":"x"});
+    let (handled, commit) = native.dispatch(&op_command(&op, false)).expect("dispatch");
+    assert_eq!(handled, Handled::No);
+    assert_eq!(export(&native), before);
+    assert_eq!(
+        refusals(&commit),
+        vec![serde_json::json!({"cause":"invalidNumber","field":"at","problem":"fractional"})]
+    );
+}
+
+/// NaN and infinities are not JSON numbers, so no wire input reaches this
+/// branch; this checks the validator directly for Rust callers.
+#[test]
+fn the_validator_refuses_non_finite_numbers_from_direct_callers() {
+    use crate::plugins_group_c::{AiOpRefusal, NumberField, NumberProblem};
+    for value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+        assert_eq!(
+            super::safe_integer(value, NumberField::At),
+            Err(AiOpRefusal::InvalidNumber {
+                field: NumberField::At,
+                problem: NumberProblem::NonFinite
+            })
+        );
+    }
+    assert_eq!(super::safe_integer(-0.0, NumberField::Len), Ok(0));
+    assert_eq!(
+        super::safe_integer(9_007_199_254_740_991.0, NumberField::Len),
+        Ok(9_007_199_254_740_991)
+    );
+    assert_eq!(
+        super::safe_integer(9_007_199_254_740_992.0, NumberField::Len),
+        Err(AiOpRefusal::InvalidNumber {
+            field: NumberField::Len,
+            problem: NumberProblem::AboveMaxSafeInteger
+        })
+    );
+}
+
+#[test]
+fn a_refused_op_keeps_the_selection_and_adds_no_merge_tag() {
+    let mut native = abc_editor();
+    let text = native
+        .state()
+        .view()
+        .first_child(native.state().view().first_child(NodeKey::ROOT).expect("paragraph"))
+        .expect("text");
+    native
+        .update(|tx| {
+            tx.set_selection(Some(Selection::Range(RangeSelection::new(
+                Point::text(text, Utf16Offset(0)),
+                Point::text(text, Utf16Offset(2)),
+            ))))?;
+            Ok(())
+        })
+        .expect("select ab");
+    let before = export(&native);
+    let selection = native.state().selection().cloned();
+    assert!(selection.is_some());
+
+    let op = serde_json::json!({"kind":"setText","node":"missing1","text":"x"});
+    let (handled, commit) = native.dispatch(&op_command(&op, true)).expect("dispatch");
+    assert_eq!(handled, Handled::No);
+    assert_eq!(export(&native), before);
+    assert_eq!(native.state().selection().cloned(), selection);
+    assert!(!commit.selection_changed);
+    assert!(!commit.tags.contains(&UpdateTag::HistoryMerge));
+    assert_eq!(refusals(&commit), vec![serde_json::json!({"cause":"unknownNode"})]);
+
+    // Control: the same envelope with a real target clears and tags.
+    let op = serde_json::json!({"kind":"setText","node":"text0001","text":"x"});
+    let (handled, commit) = native.dispatch(&op_command(&op, true)).expect("dispatch");
+    assert_eq!(handled, Handled::Yes);
+    assert!(refusals(&commit).is_empty());
+    assert!(commit.tags.contains(&UpdateTag::HistoryMerge));
+    assert_eq!(native.state().selection(), None);
+    assert_eq!(text_of(&native), "x");
+}
+
+#[test]
+fn a_container_target_is_the_wrong_target() {
+    let mut native = editor();
+    load(
+        &mut native,
+        &serde_json::json!({"root":{"type":"root","version":1,"direction":null,"format":"","indent":0,
+            "children":[{"type":"list","version":1,"direction":null,"format":"","indent":0,
+                "listType":"bullet","start":1,"tag":"ul","$":{"id":"list0001"},
+                "children":[{"type":"listitem","version":1,"direction":null,"format":"","indent":0,
+                    "value":1,"$":{"id":"item0001"},
+                    "children":[{"type":"text","version":1,"detail":0,"format":0,"mode":"normal",
+                        "style":"","text":"abc","$":{"id":"text0001"}}]}]}]}}),
+    );
+    let before = export(&native);
+    let op = serde_json::json!({"kind":"appendText","node":"list0001","text":"x"});
+    let (handled, commit) = native.dispatch(&op_command(&op, false)).expect("dispatch");
+    assert_eq!(handled, Handled::No);
+    assert_eq!(export(&native), before);
+    assert_eq!(refusals(&commit), vec![serde_json::json!({"cause":"wrongTarget"})]);
+}
+
+#[test]
+fn a_missed_find_is_refused() {
+    let mut native = abc_editor();
+    let before = export(&native);
+    let op = serde_json::json!({"kind":"replaceText","node":"para0001","find":"zz","to":"y",
+        "scope":{"kind":"all"}});
+    let (handled, commit) = native.dispatch(&op_command(&op, false)).expect("dispatch");
+    assert_eq!(handled, Handled::No);
+    assert_eq!(export(&native), before);
+    assert_eq!(refusals(&commit), vec![serde_json::json!({"cause":"findMissed"})]);
+}
+
+#[test]
+fn a_malformed_op_is_a_decode_error() {
+    let decode = |json: Value| surface::decode_command("group-c.ai-op", &json.to_string(), 0, None);
+    // A supported kind with a missing field.
+    assert!(decode(serde_json::json!({"op":{"kind":"setText","node":"text0001"}})).is_err());
+    // A string where a number belongs.
+    assert!(
+        decode(serde_json::json!({"op":{"kind":"insertText","node":"text0001","at":"1","text":"x"}}))
+            .is_err()
+    );
+    assert!(decode(serde_json::json!({"op":"setText"})).is_err());
+    assert!(decode(serde_json::json!({"op":{"node":"text0001"}})).is_err());
+    assert!(decode(serde_json::json!({"op":{"kind":"setText","node":"text0001","text":"x"},"merge":1})).is_err());
 }
