@@ -4,7 +4,7 @@
 // request names has exactly one match, except where a case checks a name
 // with none or two.
 
-import { FIXTURE, userId } from './workspace';
+import { FIXTURE, email } from './workspace';
 
 export { FIXTURE };
 
@@ -36,8 +36,11 @@ export type Case = {
   run?: RunCheck;
 };
 
-/** What a check knows besides the draft: seeded ids by name, and when it was asked. */
-export type Context = { ids: Record<string, string>; now: Date; timezone: string };
+/**
+ * What a check knows besides the draft: seeded ids by name, when it was
+ * asked, the person's time zone, and the channels made while it drafted.
+ */
+export type Context = { ids: Record<string, string>; now: Date; timezone: string; made: string[] };
 
 /**
  * One property of a good draft. `arms` limits it to one arm: the bare agent
@@ -229,9 +232,12 @@ const weekdayMornings: Expectation = {
 
 const plain = (value: string) => value.trim().replace(/^[#@]/, '').toLowerCase();
 
+/** The draft's steps; a bare step case's `step` is the steps it added. */
+const allSteps = (draft: DraftResult): unknown[] => [...(draft.steps ?? []), ...[draft.step].flat()];
+
 /** Whether some knob holds `name`: a step that finds the item by name when it runs. */
 const knobNamed = (draft: DraftResult, name: string) =>
-  [...(draft.steps ?? []), draft.step].some((step) =>
+  allSteps(draft).some((step) =>
     ((step as { knobs?: { value?: unknown }[] } | undefined)?.knobs ?? []).some(
       (knob) => typeof knob.value === 'string' && plain(knob.value) === plain(name),
     ),
@@ -248,20 +254,25 @@ const notAny = (names: string[]): Expectation => ({
   holds: (draft, { ids }) => names.every((name) => !ids[name] || !body(draft).includes(ids[name])),
 });
 
-/** Names a person: their user id, or their direct message with the owner. */
+/** Whether the draft names a person: their email (inside their user id too), or their direct message with the owner. */
+const names = (draft: DraftResult, key: string, ids: Record<string, string>) =>
+  body(draft).includes(email(key)) || Boolean(ids[`dm-${key}`] && body(draft).includes(ids[`dm-${key}`]));
+
 const person = (key: string): Expectation => ({
   says: `names ${key}`,
-  holds: (draft, { ids }) =>
-    body(draft).includes(userId(key)) || Boolean(ids[`dm-${key}`] && body(draft).includes(ids[`dm-${key}`])),
+  holds: (draft, { ids }) => names(draft, key, ids),
 });
 
 const notPerson = (keys: string[]): Expectation => ({
   says: `names none of ${keys.join(', ')}`,
-  holds: (draft, { ids }) =>
-    keys.every(
-      (key) => !body(draft).includes(userId(key)) && !(ids[`dm-${key}`] && body(draft).includes(ids[`dm-${key}`])),
-    ),
+  holds: (draft, { ids }) => keys.every((key) => !names(draft, key, ids)),
 });
+
+/** A code step's source holding `name` as a whole string, to look up when it runs. */
+const sourceNames = (draft: DraftResult, name: string) =>
+  allSteps(draft).some((step) =>
+    new RegExp(`(["'\`])[#@]?${name}\\1`, 'i').test(String((step as { source?: unknown } | null)?.source ?? '')),
+  );
 
 const watches = (...events: string[]): Expectation => ({
   says: `watches ${events.join(' or ')}`,
@@ -424,14 +435,13 @@ export const CASES: Case[] = [
       uses('Q4 Launch'),
       {
         says: 'leaves the missing #marketing channel for the person to pick',
-        // Neither a look-alike's id nor the name itself, in a knob or as a
-        // string in a code step's source.
-        holds: (draft, { ids }) =>
+        // Neither a look-alike's id, nor a channel made for it, nor the name
+        // itself, in a knob or as a string in a code step's source.
+        holds: (draft, { ids, made }) =>
           !['product-marketing', 'marketing-site', 'launch'].some((name) => body(draft).includes(ids[name] ?? '-')) &&
+          !made.some((id) => body(draft).includes(id)) &&
           !knobNamed(draft, 'marketing') &&
-          !(draft.steps ?? []).some((step) =>
-            /(["'`])#?marketing\1/i.test(String((step as { source?: unknown }).source ?? '')),
-          ),
+          !sourceNames(draft, 'marketing'),
       },
       nothingUnused,
     ],
@@ -531,7 +541,11 @@ export const CASES: Case[] = [
       at(10, 0, ['THU']),
       {
         says: 'leaves Jordan, who has two matches, for the person to pick',
-        holds: (draft, context) => notPerson(['jordan-lee', 'jordan-patel']).holds(draft, context),
+        // Neither Jordan's id or email, nor the name to look up when it runs.
+        holds: (draft, context) =>
+          notPerson(['jordan-lee', 'jordan-patel']).holds(draft, context) &&
+          !knobNamed(draft, 'jordan') &&
+          !sourceNames(draft, 'jordan'),
       },
       nothingUnused,
     ],
@@ -643,7 +657,7 @@ export const CASES: Case[] = [
       drafted,
       {
         says: 'names Eric, by user id or by a knob naming him',
-        holds: (draft) => text(draft.step).includes(userId('eric')) || knobNamed(draft, 'eric') || /\beric\b/i.test(text(draft.step)),
+        holds: (draft) => text(draft.step).includes(email('eric')) || knobNamed(draft, 'eric') || /\beric\b/i.test(text(draft.step)),
       },
       notPerson(['erica']),
       {

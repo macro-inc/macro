@@ -123,6 +123,14 @@ export async function save(at: Stack, token: string, draft: DraftResult, enabled
   });
 }
 
+/** The channels the owner made since `since`, which a request naming a missing channel must not get. */
+export async function channelsMade(db: SQL, since: Date): Promise<string[]> {
+  const rows = (await db`
+    select id from comms_channels
+    where owner_id = ${userId(OWNER)} and created_at >= ${since} and id::text not like ${`${OURS}%`}`) as { id: string }[];
+  return rows.map((row) => row.id);
+}
+
 /** Whether a trigger fires on events (as opposed to a schedule or a time). */
 export const onEvents = (trigger: unknown) => JSON.stringify(trigger ?? null).includes('"events"');
 

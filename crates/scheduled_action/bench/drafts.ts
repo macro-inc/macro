@@ -23,7 +23,7 @@ import {
   verdict,
   verdictLines,
 } from './report';
-import { type SavedRoutine, type Tokens, onEvents, reset, runCheck, save, withReplies } from './runcheck';
+import { type SavedRoutine, type Tokens, channelsMade, onEvents, reset, runCheck, save, withReplies } from './runcheck';
 import { SEEDED_IDS, index, savedDatabases, seed, setup } from './setup';
 import {
   type Stack,
@@ -55,7 +55,7 @@ const askedRightly = (item: Case, arm: Arm, asked: boolean | undefined, reply: s
   arm === 'bare' && item.asking !== undefined && asked === true && item.asking.test(reply ?? '');
 
 /** The mechanical checks for `arm`; a bare agent that asks about an unmatched name passes. */
-function checks(item: Case, arm: Arm, result: ArmResult, context: Context) {
+function checks(item: Case, arm: Arm, result: Pick<ArmResult, 'error' | 'draft' | 'asked' | 'reply'>, context: Context) {
   if (askedRightly(item, arm, result.asked, result.reply)) {
     return [{ says: 'asked which item the person meant instead of guessing', holds: true }];
   }
@@ -150,7 +150,8 @@ async function attempt(
         ? await draftArm(at, owner, item, entries, options.model, TIMEZONE)
         : await bareArm(at, owner, item, entries, options.model);
     const load = loadEnd(before);
-    const context: Context = { ids, now: new Date(result.startedAtMs), timezone: TIMEZONE };
+    const made = await channelsMade(db, new Date(result.startedAtMs));
+    const context: Context = { ids, now: new Date(result.startedAtMs), timezone: TIMEZONE, made };
     const quality = checks(item, arm, result, context);
     // Before the run check, so a session still running can't act during it.
     if (result.sessionId) await deleteSession(at, owner, result.sessionId);
@@ -172,9 +173,9 @@ async function attempt(
       }
     }
     await reset(at, db, tokens, keep);
-    return { result, load, quality, run, build };
+    return { result, load, made, quality, run, build };
   });
-  const { result, load, quality, run, build } = held;
+  const { result, load, made, quality, run, build } = held;
   // Traces and the judge need nothing from the stack's state, so they run
   // after the next eval may have the stack.
   const window = { start: result.startedAtMs, end: result.startedAtMs + result.wallMs };
@@ -200,6 +201,7 @@ async function attempt(
     reply: result.reply,
     turnMs: result.turnMs,
     asked: result.asked,
+    made,
     quality,
     run,
     grade,
@@ -527,12 +529,8 @@ async function reread(args: string[]) {
     for (const item of results.attempts) {
       const found = CASES.find((candidate) => candidate.id === item.case);
       if (!found) continue;
-      const context: Context = { ids, now: new Date(item.startedAt), timezone: TIMEZONE };
-      if (!askedRightly(found, item.arm, item.asked, item.reply) && !item.error && item.draft) {
-        item.quality = found.expect
-          .filter((expectation) => !expectation.arms || expectation.arms.includes(item.arm))
-          .map((expectation) => ({ says: expectation.says, holds: expectation.holds(item.draft as DraftResult, context) }));
-      }
+      const context: Context = { ids, now: new Date(item.startedAt), timezone: TIMEZONE, made: item.made ?? [] };
+      item.quality = checks(found, item.arm, item, context);
       if (item.run?.effects.runs.some((run) => run.reply === undefined && JSON.stringify(run.result).includes('"type":"agent"'))) {
         db ??= new SQL(stack(values.instance, values.tempo).postgres);
         item.run.effects.runs = await withReplies(db, item.run.effects.runs);

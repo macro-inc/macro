@@ -24,6 +24,8 @@ export type Attempt = {
   reply?: string;
   turnMs?: number;
   asked?: boolean;
+  /** Channels the owner made while it drafted, which some checks read. */
+  made?: string[];
   /** The mechanical checks on the draft. */
   quality: Check[];
   /** The run check: the drafted routine fired once. */
