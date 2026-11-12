@@ -300,6 +300,9 @@ pub trait SessionRepository: Send + Sync {
     /// sign-out, whose advisory lock
     /// (`hashtextextended('slack-account:' || id, 0)`) nobody holds.
     async fn discoverable_accounts(&self, limit: i64) -> ExternalChatResult<Vec<Uuid>>;
+    /// Accounts that need a replica and that none holds, and the age in
+    /// seconds of the oldest queued change.
+    async fn fleet_health(&self) -> ExternalChatResult<(u64, u64)>;
     /// Take the account: bump its lease epoch, record the previous replica's
     /// in-flight sends as `unknown`.
     async fn begin_lease(&self, account: Uuid) -> ExternalChatResult<super::events::Lease>;

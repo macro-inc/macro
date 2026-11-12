@@ -1,9 +1,9 @@
 //! External chats: composition of the `external_chat` crate, with its
-//! providers (`whatsapp_linked`) in one `ChatProviders`, and DSS's
+//! providers (`whatsapp_linked`, `slack_linked`) in one `ChatProviders`, and DSS's
 //! entity access, notification and static file clients; the notification
 //! outbox worker, and the `external_chat_changed` pushes to open pages. The
-//! session service runs the WhatsApp sockets; it reaches DSS only through
-//! MacroDB rows and `NOTIFY`.
+//! session services run the WhatsApp and Slack sockets; they reach DSS only
+//! through MacroDB rows and `NOTIFY`.
 
 use crate::api::context::{AuthorizationService, EntityAccessService, NotificationIngressType};
 use async_trait::async_trait;
@@ -33,6 +33,11 @@ use std::{collections::HashSet, sync::Arc, time::Duration};
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use tracing::Instrument as _;
 use uuid::Uuid;
+use slack_linked::{
+    domain::{provider::SlackProvider, service::SlackService},
+    inbound::router::SlackRouterState,
+    outbound::{kms::SlackLoginInputSealer, pg::PgSlackRepository},
+};
 use whatsapp_linked::{
     domain::{provider::WhatsAppProvider, service::WhatsAppService},
     inbound::router::WhatsAppRouterState,
@@ -46,6 +51,8 @@ pub(crate) struct State {
     pub chats: ExternalChatRouterState<EntityAccessService, AuthorizationService>,
     /// The caller's WhatsApp account, pairing and chat list.
     pub whatsapp: WhatsAppRouterState<AuthorizationService>,
+    /// The caller's Slack sign-in, accounts and Slack Connect catalogue.
+    pub slack: SlackRouterState<AuthorizationService>,
 }
 
 /// Clients the linked composition needs from DSS.
@@ -59,6 +66,9 @@ pub(crate) struct Dependencies {
     pub connection_gateway: Arc<ConnectionGatewayClient>,
     pub tracker: TaskTracker,
     pub cancellation: CancellationToken,
+    /// Seals pasted Slack sessions (`GenerateDataKey` for
+    /// `slack-login-input` only).
+    pub slack_kms: kms_envelope::kms::AwsKms,
 }
 
 /// Build the router state and start the publication worker.
@@ -73,7 +83,13 @@ pub(crate) fn build(dependencies: Dependencies) -> State {
         connection_gateway,
         tracker,
         cancellation,
+        slack_kms,
     } = dependencies;
+    let slack_repository = Arc::new(PgSlackRepository::new(pool.clone()));
+    let slack = Arc::new(SlackService::new(
+        slack_repository.clone(),
+        Arc::new(SlackLoginInputSealer::new(slack_kms)),
+    ));
     let whatsapp_repository = Arc::new(PgWhatsAppRepository::new(pool.clone()));
     let repository = Arc::new(PgExternalChatRepository::new(pool.clone()));
     let publisher = Arc::new(DssChatPublisher {
@@ -85,6 +101,7 @@ pub(crate) fn build(dependencies: Dependencies) -> State {
     let whatsapp = Arc::new(WhatsAppService::new(whatsapp_repository.clone()));
     let providers = ChatProviders {
         whatsapp: Arc::new(WhatsAppProvider::new(whatsapp_repository)),
+        slack: Arc::new(SlackProvider::new(slack_repository)),
     };
     let service = ExternalChatService::new(
         providers.clone(),
@@ -118,6 +135,10 @@ pub(crate) fn build(dependencies: Dependencies) -> State {
         },
         whatsapp: WhatsAppRouterState {
             service: whatsapp,
+            authorization_state: authorization.clone(),
+        },
+        slack: SlackRouterState {
+            service: slack,
             authorization_state: authorization,
         },
     }

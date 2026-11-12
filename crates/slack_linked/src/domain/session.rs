@@ -40,6 +40,12 @@ impl SessionService {
         self.repository.discoverable_accounts(limit).await
     }
 
+    /// Accounts nobody runs, and the age in seconds of the oldest queued
+    /// change.
+    pub async fn fleet_health(&self) -> ExternalChatResult<(u64, u64)> {
+        self.repository.fleet_health().await
+    }
+
     /// Take over an account after acquiring its advisory lock.
     #[tracing::instrument(name = "slack.session.begin_lease", skip_all, err, fields(account_id = %account, lease_epoch))]
     pub async fn begin_lease(&self, account: Uuid) -> ExternalChatResult<Lease> {

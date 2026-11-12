@@ -29,6 +29,17 @@ impl SessionRepository for PgSlackRepository {
         .map_err(failure)
     }
 
+    async fn fleet_health(&self) -> ExternalChatResult<(u64, u64)> {
+        let unowned = self.discoverable_accounts(10_000).await?.len();
+        let oldest = sqlx::query_scalar!(
+            r#"SELECT COALESCE(EXTRACT(EPOCH FROM now() - min(received_at)), 0)::bigint AS "seconds!" FROM slack_inbound"#
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map_err(failure)?;
+        Ok((unowned as u64, u64::try_from(oldest).unwrap_or(0)))
+    }
+
     async fn begin_lease(&self, account: Uuid) -> ExternalChatResult<Lease> {
         let mut tx = self.pool.begin().await.map_err(failure)?;
         let row = sqlx::query!(

@@ -586,6 +586,20 @@ use utoipa::OpenApi;
         whatsapp_linked::inbound::router::lookup,
         whatsapp_linked::inbound::router::import_history,
 
+        // Personal Slack sessions, for Slack Connect conversations
+        slack_linked::inbound::router::start_login,
+        slack_linked::inbound::router::submit_session,
+        slack_linked::inbound::router::login,
+        slack_linked::inbound::router::cancel_login,
+        slack_linked::inbound::router::captcha,
+        slack_linked::inbound::router::code,
+        slack_linked::inbound::router::workspaces,
+        slack_linked::inbound::router::two_factor,
+        slack_linked::inbound::router::accounts,
+        slack_linked::inbound::router::disconnect,
+        slack_linked::inbound::router::conversations,
+        slack_linked::inbound::router::import_history,
+
         access_requests::inbound::axum_router::state_handler,
         access_requests::inbound::axum_router::submit_handler,
         access_requests::inbound::axum_router::cancel_handler,

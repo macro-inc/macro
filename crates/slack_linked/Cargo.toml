@@ -19,6 +19,7 @@ outbound = [
   "dep:entity_access_db_utils",
   "dep:entity_registry_db_utils",
   "dep:kms_envelope",
+  "dep:macro_env",
   "dep:model_owner",
   "dep:share_permission_db_utils",
   "dep:sqlx",
@@ -47,6 +48,7 @@ external_chat = { path = "../external_chat" }
 kms_envelope = { path = "../kms_envelope", optional = true }
 lazy-regex = { workspace = true }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = ["axum"], optional = true }
+macro_env = { path = "../macro_env", optional = true }
 macro_user_id = { path = "../macro_user_id", optional = true }
 model-entity = { path = "../model-entity" }
 model_owner = { path = "../model_owner", optional = true }

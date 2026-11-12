@@ -21,6 +21,23 @@ use std::collections::HashMap;
 use uuid::Uuid;
 use zeroize::Zeroizing;
 
+/// The KMS key Slack secrets are sealed under:
+/// `alias/slack-session-service-<environment>`.
+/// `infra/stacks/slack-session-service` creates the dev and prod aliases;
+/// `xtask_local` creates the local one in LocalStack.
+pub struct SlackKmsKey;
+
+impl SlackKmsKey {
+    /// The alias for `environment`.
+    pub const fn for_environment(environment: macro_env::Environment) -> &'static str {
+        match environment {
+            macro_env::Environment::Local => "alias/slack-session-service-local",
+            macro_env::Environment::Develop => "alias/slack-session-service-dev",
+            macro_env::Environment::Production => "alias/slack-session-service-prod",
+        }
+    }
+}
+
 /// The scheme sealed blobs are written with.
 pub const ENCRYPTION_VERSION: i16 = 1;
 
