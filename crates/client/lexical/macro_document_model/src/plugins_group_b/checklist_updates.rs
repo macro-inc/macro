@@ -1,13 +1,17 @@
 //! One current session-owned presentation baseline, derived only from real commits.
+use super::checklist_presentation::SettingsIntent;
 use super::{
     checklist_controls::collect_checklist_metadata_for_list, checklist_facts::FactsRevision,
     checklist_plan::plan_checklist,
 };
-use lexical_model::{Commit, EditorState, Error, NodeKey};
+use lexical_model::{Commit, EditorState, Error, KeyParts, NodeKey};
 use lexical_rich_nodes::list::{ListNode, ListType};
 use serde::Serialize;
+use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::sync::Arc;
+#[cfg(test)]
+mod presentation_test;
 #[cfg(test)]
 mod test;
 mod types;
@@ -63,6 +67,8 @@ pub struct ChecklistProducer {
     reset: bool,
     clear_pending: bool,
     sequence: u64,
+    presentation_overrides: BTreeMap<NodeKey, Arc<Value>>,
+    presentation_invalidated: bool,
     #[cfg(test)]
     recomputed: usize,
 }
@@ -83,6 +89,7 @@ impl ChecklistProducer {
                 if revision.rebind && self.pending.is_empty() {
                     self.recompute_all = true;
                     self.acknowledge_facts = true;
+                    self.presentation_invalidated = true;
                     self.reset = true;
                 }
                 return Ok(());
@@ -91,11 +98,17 @@ impl ChecklistProducer {
         if !self.pending.is_empty() {
             return Err(Error::Invariant("checklist delivery pending"));
         }
-        self.sequence
+        if self
+            .sequence
             .checked_add(1 + u64::from(self.clear_pending))
-            .ok_or(Error::Invariant("checklist delivery exhausted"))?;
+            .is_none()
+        {
+            self.invalidate_presentation();
+            return Err(Error::Invariant("checklist delivery exhausted"));
+        }
         self.reset = self.facts.is_none();
         self.facts = Some(revision.clone());
+        self.presentation_invalidated = true;
         self.recompute_all = true;
         self.acknowledge_facts = true;
         Ok(())
@@ -106,10 +119,81 @@ impl ChecklistProducer {
     pub fn clear(&mut self) {
         self.clear_pending |= self.facts.is_some() || !self.baseline.is_empty();
         self.facts = None;
+        self.presentation_overrides.clear();
+        self.presentation_invalidated = true;
         self.candidates.clear();
         self.recompute_all = false;
         self.acknowledge_facts = false;
         self.reset = false;
+    }
+
+    /// An actual access change or accepted remote application revokes old UI intents now.
+    /// Final-state planning and sequence allocation remain in the sealed output epilogue.
+    pub fn invalidate_presentation(&mut self) {
+        self.presentation_overrides.clear();
+        self.presentation_invalidated = true;
+        if self.facts.is_some() {
+            self.recompute_all = true;
+            self.acknowledge_facts = true;
+        }
+    }
+
+    /// Accepted remote application drops a local choice without adding output debt
+    /// to ordinary remote updates which have no presentation override.
+    pub fn remote_applied(&mut self) {
+        if !self.presentation_overrides.is_empty() {
+            self.invalidate_presentation();
+        }
+    }
+
+    /// Validate configuration and target independently of stale-view comparison.
+    /// A stale input is processed without ever opening a model transaction.
+    pub fn accepts_presentation(
+        &mut self,
+        intent: &SettingsIntent,
+        state: &EditorState,
+    ) -> Result<bool, Error> {
+        let facts = self
+            .facts
+            .as_ref()
+            .ok_or(Error::Invariant("checklist settings producer unconfigured"))?;
+        if facts.generation != state.max_key().generation()
+            || intent.generation != state.max_key().generation()
+        {
+            return Err(Error::Invariant("checklist settings generation"));
+        }
+        let key = NodeKey::from_parts(KeyParts {
+            index: intent.key,
+            generation: intent.generation,
+        });
+        if collect_checklist_metadata_for_list(state, key)?.is_none() {
+            return Err(Error::Invariant("checklist settings target"));
+        }
+        if self.sequence == u64::MAX {
+            self.invalidate_presentation();
+            return Ok(false);
+        }
+        Ok(!self.presentation_invalidated && intent.observed_sequence == self.sequence)
+    }
+
+    /// Retain only an admitted reader choice. Never write or retain the graph.
+    pub fn set_presentation(
+        &mut self,
+        intent: &SettingsIntent,
+        state: &EditorState,
+    ) -> Result<(), Error> {
+        if !self.accepts_presentation(intent, state)? {
+            return Err(Error::Invariant("checklist settings admission changed"));
+        }
+        let key = NodeKey::from_parts(KeyParts {
+            index: intent.key,
+            generation: intent.generation,
+        });
+        self.presentation_overrides
+            .insert(key, intent.settings.clone());
+        self.candidates.insert(key);
+        self.acknowledge_facts = true;
+        Ok(())
     }
 
     fn previous(&self, key: NodeKey) -> Option<&Presentation> {
@@ -165,6 +249,8 @@ impl ChecklistProducer {
         let mut producer = Self {
             facts: self.facts.clone(),
             sequence: self.sequence,
+            presentation_overrides: self.presentation_overrides.clone(),
+            presentation_invalidated: self.presentation_invalidated,
             recompute_all: self.facts.is_some(),
             acknowledge_facts: self.facts.is_some(),
             reset: self.facts.is_some(),
@@ -220,6 +306,7 @@ impl ChecklistProducer {
 
     /// Derive against the final actual state; unchanged presentation emits nothing.
     pub fn finish(&mut self, state: &EditorState) -> Result<Vec<PlanUpdates>, Error> {
+        let sequence_before = self.sequence;
         let generation = state.max_key().generation();
         if self
             .facts
@@ -228,6 +315,13 @@ impl ChecklistProducer {
         {
             self.clear();
         }
+        self.presentation_overrides.retain(|key, _| {
+            state.view().parent(*key) == Some(NodeKey::ROOT)
+                && state
+                    .view()
+                    .get::<ListNode>(*key)
+                    .is_some_and(|list| list.list_type() == ListType::Check)
+        });
         let facts = self.facts.as_ref();
         let mut keys = self.candidates.clone();
         if facts.is_some() && self.recompute_all {
@@ -263,21 +357,25 @@ impl ChecklistProducer {
                     .collect()
             };
             for key in order {
-                let presentation = collect_checklist_metadata_for_list(state, key)?.map(|meta| {
-                    #[cfg(test)]
-                    {
-                        self.recomputed += 1;
-                    }
-                    Presentation::new(
-                        &meta,
-                        plan_checklist(
-                            Some(&meta),
-                            &facts.facts.tasks,
-                            &facts.facts.names,
-                            &facts.facts.calendar,
-                        ),
-                    )
-                });
+                let presentation =
+                    collect_checklist_metadata_for_list(state, key)?.map(|mut meta| {
+                        if let Some(settings) = self.presentation_overrides.get(&key) {
+                            meta.settings = settings.clone();
+                        }
+                        #[cfg(test)]
+                        {
+                            self.recomputed += 1;
+                        }
+                        Presentation::new(
+                            &meta,
+                            plan_checklist(
+                                Some(&meta),
+                                &facts.facts.tasks,
+                                &facts.facts.names,
+                                &facts.facts.calendar,
+                            ),
+                        )
+                    });
                 if let Some(presentation) = &presentation {
                     if let Some(change) = types::difference(
                         key,
@@ -300,9 +398,10 @@ impl ChecklistProducer {
         }
         let delivery_count = u64::from(self.clear_pending)
             + u64::from(self.facts.is_some() && (self.acknowledge_facts || !changes.is_empty()));
-        self.sequence
-            .checked_add(delivery_count)
-            .ok_or(Error::Invariant("checklist delivery exhausted"))?;
+        if self.sequence.checked_add(delivery_count).is_none() {
+            self.invalidate_presentation();
+            return Err(Error::Invariant("checklist delivery exhausted"));
+        }
         if self.clear_pending {
             self.sequence += 1;
             self.pending.push_back(PendingDelivery {
@@ -335,6 +434,9 @@ impl ChecklistProducer {
                 clear: self.reset,
                 changes: next,
             });
+        }
+        if self.sequence > sequence_before {
+            self.presentation_invalidated = false;
         }
         self.candidates.clear();
         self.recompute_all = false;

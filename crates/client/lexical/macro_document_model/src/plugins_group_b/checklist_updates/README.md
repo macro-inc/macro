@@ -68,3 +68,29 @@ queries and provider refreshes remain counted. Component recomputation and JSON
 size tests are not physical crossing, byte, reference-slot, browser, or full
 compatibility acceptance; all output bytes and native crossings remain visible
 to the physical collector.
+
+## Reader presentation choices
+
+The closed `group-b.checklist-settings-intent` input selects the existing
+persisted writer only after actual queued Edit admission. Read and Comment
+instead retain exact settings values in this producer, keyed by actual current
+direct-root checklist keys. Explicit empty filters remain an override; removing
+an override restores stored settings. The same Rust planner derives both paths,
+without model transactions, selection/history changes, CRDT writes or WAL.
+
+An actual access-value change drops every override immediately and closes
+settings admission. Equal access refreshes preserve overrides. Admission reopens
+only after the final-output epilogue installs a checked strictly newer real
+delivery sequence, or a prepared reset is actually adopted after transfer.
+Missing facts or failed/exhausted allocation stay closed. The freshness check
+uses the latest issued sequence, including pending deliveries, never the
+exposed baseline; failed encoding cannot revive an old queued write.
+
+A visual remount draft carries the local map without changing the live producer
+until adoption. Accepted Core replacement or binding clear drops it. Actual
+successful remote application drops existing overrides; ordinary remote updates
+without overrides retain the existing affected-key recomputation. Remote error paths
+only observe actual committed arrays and retain surviving choices until a
+later accepted reset, replacement or disposal. This error behavior is not
+qualified as Source parity. Native canonical serialization continues to expose
+stored settings, unlike Source's local reader NodeState.

@@ -153,3 +153,7 @@ Read the preview/test stored comparison from the current surface core and config
 Forward an opt-in main-commit sink only through the designated local editor application; retain it through projection/recovery errors without observing prefix, remote, resync or follow-up applications. Admission remains in the existing session path.
 
 Complete accepted InsertClipboardNodes through clipboard::insert_nodes_and_update_selection so the resulting caret inherits inserted format and style; keep direct dispatch handled and identity invalidation before insertion.
+
+Keep checklist reader settings in the session producer and stale/local intent
+returns before Core dispatch; notify its required sealed access hook only after
+the real access cache changes value, preserving equal-value refreshes.

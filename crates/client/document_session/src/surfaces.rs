@@ -50,12 +50,29 @@ impl Surface for EditorSurface {
             return Err(SessionError::WrongSurface);
         }
         #[cfg(feature = "application")]
-        {
-            use macro_document_model::plugins_group_b::checklist_facts;
+        let input = {
+            let mut input = input;
+            use macro_document_model::plugins_group_b::{checklist_facts, checklist_presentation};
             if matches!(&input, lexical_model::Input::Batch(_))
                 && checklist_facts::contains_facts(&input)
             {
                 return Err(SessionError::Model(lexical_model::Error::InputNotBatchable));
+            }
+            if matches!(&input, lexical_model::Input::Batch(_))
+                && checklist_presentation::contains_intent(&input)
+            {
+                return Err(SessionError::Model(lexical_model::Error::InputNotBatchable));
+            }
+            if let Some(intent) = checklist_presentation::input_intent(&input)? {
+                if !self.prepare_checklist_settings(intent, access, ready)? {
+                    return Ok(false);
+                }
+                if self.projection.is_none() {
+                    // Initialization replaces the actual Core. Never replay a pre-init intent.
+                    self.init(doc, now, access, view)?;
+                    return Ok(false);
+                }
+                input = intent.edit_input();
             }
             if let Some(revision) = checklist_facts::input_revision(&input)? {
                 if !ready {
@@ -64,7 +81,8 @@ impl Surface for EditorSurface {
                 self.accept_checklist_facts(revision)?;
                 return Ok(false);
             }
-        }
+            input
+        };
         if let lexical_model::Input::Batch(inputs) = &input
             && inputs.iter().any(|input| {
                 matches!(
@@ -244,6 +262,10 @@ impl Surface for EditorSurface {
     fn drop_binding(&mut self) {
         self.clear_binding();
     }
+    fn access_changed(&mut self) {
+        #[cfg(feature = "application")]
+        self.checklist.invalidate_presentation();
+    }
 }
 fn contains_remote(input: &lexical_model::Input) -> bool {
     match input {
@@ -271,6 +293,7 @@ fn local_only(input: &lexical_model::Input, allowed: &[lexical_model::CommandKin
 }
 impl crate::session::sealed::Sealed for GenericSurface {}
 impl Surface for GenericSurface {
+    fn access_changed(&mut self) {}
     #[cfg(feature = "application")]
     fn acknowledge_application_output(
         &mut self,

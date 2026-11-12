@@ -129,7 +129,7 @@ fn facts_input_delivers_real_plan_without_model_or_crdt_publication() {
             .iter()
             .any(|effect| matches!(effect, ViewEffect::ChecklistPlans(_)))
     );
-    session.handle(
+    let access_output = session.handle(
         time(6),
         SessionInput::Sync(SyncInput::Authorization(AuthorizationState {
             current: true,
@@ -137,6 +137,24 @@ fn facts_input_delivers_real_plan_without_model_or_crdt_publication() {
             can_comment: false,
         })),
     );
+    let access_updates: Vec<_> = access_output
+        .view
+        .iter()
+        .filter_map(|effect| {
+            if let ViewEffect::ChecklistPlans(updates) = effect {
+                Some(serde_json::to_value(updates).unwrap())
+            } else {
+                None
+            }
+        })
+        .collect();
+    assert_eq!(access_updates.len(), 1);
+    assert_eq!(access_updates[0]["sequence"], "2");
+    assert_eq!(access_updates[0]["factsVersion"], "1");
+    assert_eq!(access_updates[0]["lists"], json!([]));
+    assert!(access_output.io.is_empty());
+    let receipts = session.last_output().checklist_deliveries();
+    session.acknowledge_application_output(&receipts);
     assert_eq!(session.effective_access(), Access::Read);
     payload["factsVersion"] = json!("2");
     let readonly = macro_document_model::surface::decode_command(
@@ -166,7 +184,7 @@ fn facts_input_delivers_real_plan_without_model_or_crdt_publication() {
         })
         .collect();
     assert_eq!(readonly_updates.len(), 1);
-    assert_eq!(readonly_updates[0]["sequence"], "2");
+    assert_eq!(readonly_updates[0]["sequence"], "3");
     assert_eq!(readonly_updates[0]["factsVersion"], "2");
     assert_eq!(readonly_updates[0]["lists"], json!([]));
     assert!(readonly_output.io.is_empty());
@@ -281,7 +299,7 @@ fn facts_input_delivers_real_plan_without_model_or_crdt_publication() {
             }
         })
         .collect();
-    assert_eq!(valid_updates[0]["sequence"], "3");
+    assert_eq!(valid_updates[0]["sequence"], "4");
     assert_eq!(valid_updates[0]["factsVersion"], "3");
     assert_eq!(session.version(), version);
     assert!(session.surface().state().same_snapshot(&state));

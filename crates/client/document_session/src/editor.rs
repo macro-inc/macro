@@ -178,6 +178,31 @@ impl EditorSurface {
         self.handled = Handled::Yes;
         Ok(())
     }
+    /// True delegates to the existing Edit writer; false completes metadata-only input.
+    #[cfg(feature = "application")]
+    pub(crate) fn prepare_checklist_settings(
+        &mut self,
+        intent: &macro_document_model::plugins_group_b::checklist_presentation::SettingsIntent,
+        access: Access,
+        ready: bool,
+    ) -> Result<bool, SessionError> {
+        self.handled = Handled::No;
+        if !ready {
+            return Err(SessionError::NotReady);
+        }
+        if !self
+            .checklist
+            .accepts_presentation(intent, self.core.state())?
+        {
+            return Ok(false);
+        }
+        if access != Access::Edit {
+            self.checklist.set_presentation(intent, self.core.state())?;
+            self.handled = Handled::Yes;
+            return Ok(false);
+        }
+        Ok(true)
+    }
     /// The configured internal clipboard namespace, shared by all host exports.
     pub fn namespace(&self) -> &str {
         &self.config.namespace
@@ -631,7 +656,10 @@ impl EditorSurface {
                 SessionError::Model(error.error)
             })?;
         #[cfg(feature = "application")]
-        self.checklist.observe(&output.commits);
+        {
+            self.checklist.remote_applied();
+            self.checklist.observe(&output.commits);
+        }
         let created = output
             .effects
             .iter()

@@ -161,6 +161,9 @@ pub fn decode_command(
     generation: u32,
     event: Option<&KeyEvent>,
 ) -> Result<Option<Command>, Error> {
+    if let Some(command) = checklist_presentation::decode(name, json, generation, event)? {
+        return Ok(Some(command));
+    }
     if let Some(command) = checklist_facts::decode(name, json, generation, event)? {
         return Ok(Some(command));
     }
@@ -326,6 +329,7 @@ mod pr_mention_actions_test;
 
 /// Explicit session-owned host facts for derived checklist presentation.
 pub mod checklist_facts;
+pub mod checklist_presentation;
 
 /// Native presentation deltas over one current session-owned checklist baseline.
 pub mod checklist_updates;

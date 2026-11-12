@@ -42,6 +42,15 @@ pub(super) fn decode(name: &str, json: &str, generation: u32) -> Result<Option<C
         },
     ))))
 }
+pub(super) fn settings_command(key: u32, generation: u32, settings: serde_json::Value) -> Command {
+    Command::Extension(ExtensionCommand::new(
+        &CHECKLIST,
+        ChecklistCommand {
+            action: ChecklistAction::Settings { key, settings },
+            generation,
+        },
+    ))
+}
 pub(super) fn register(builder: EditorBuilder) -> EditorBuilder {
     builder.plugin(Checklist)
 }

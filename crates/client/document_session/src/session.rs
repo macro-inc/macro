@@ -238,6 +238,8 @@ pub trait Surface: sealed::Sealed {
     #[doc(hidden)]
     fn drop_binding(&mut self);
     #[doc(hidden)]
+    fn access_changed(&mut self);
+    #[doc(hidden)]
     fn finish_application_output(&mut self, view: &mut Vec<ViewEffect>)
     -> Result<(), SessionError>;
     #[cfg(feature = "application")]
@@ -605,7 +607,13 @@ impl<S: Surface> DocumentSession<S> {
                     self.peers.clone_from(&peers);
                     self.out.view.push(ViewEffect::Presence(peers));
                 }
-                SyncEvent::AccessChanged(access) => self.access = access,
+                SyncEvent::AccessChanged(access) => {
+                    let changed = self.access != access;
+                    self.access = access;
+                    if changed {
+                        self.surface.access_changed();
+                    }
+                }
                 SyncEvent::Reply { request, reply } => {
                     self.comments.remove(&request);
                     self.out.view.push(ViewEffect::Reply { request, reply });
