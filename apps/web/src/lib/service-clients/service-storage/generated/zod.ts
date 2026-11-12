@@ -49433,7 +49433,7 @@ export const postItemsSoupBody = zod
           .array(zod.string())
           .optional()
           .describe(
-            "Filter by session owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every\nowner."
+            "Filter by session owner principal — a user ('macro|user@example.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every\nowner."
           ),
       })
       .optional()
@@ -49650,7 +49650,7 @@ export const postItemsSoupBody = zod
           .array(zod.string())
           .optional()
           .describe(
-            "Filter by chat owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to\nsearch all owners."
+            "Filter by chat owner principal — a user ('macro|user@example.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user@example.com'], ['macro|user@example.com', 'bot|0199...']. Empty to\nsearch all owners."
           ),
         project_ids: zod
           .array(zod.string())
@@ -49735,7 +49735,7 @@ export const postItemsSoupBody = zod
           .array(zod.string())
           .optional()
           .describe(
-            "Filter by document owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to\nsearch all owners."
+            "Filter by document owner principal — a user ('macro|user@example.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user@example.com'], ['macro|user@example.com', 'bot|0199...']. Empty to\nsearch all owners."
           ),
         project_ids: zod
           .array(zod.string())
@@ -50018,7 +50018,7 @@ export const postItemsSoupBody = zod
           .array(zod.string())
           .optional()
           .describe(
-            "Filter by project owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to\nsearch all owners."
+            "Filter by project owner principal — a user ('macro|user@example.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user@example.com'], ['macro|user@example.com', 'bot|0199...']. Empty to\nsearch all owners."
           ),
         project_ids: zod
           .array(zod.string())
@@ -72358,6 +72358,1178 @@ export const entityMessageTypingBody = zod
       .describe('Root being replied to, absent for the parent composer.'),
   })
   .describe('Transient typing update.');
+
+/**
+ * @summary List current teams available to the authenticated human.
+ */
+export const passwordsTeamsResponseItem = zod
+  .uuid()
+  .describe('Team isolation boundary.');
+export const passwordsTeamsResponse = zod.array(passwordsTeamsResponseItem);
+
+/**
+ * @summary List the authenticated team’s folders.
+ */
+export const passwordsFoldersParams = zod.object({
+  team: zod.uuid(),
+});
+
+export const passwordsFoldersResponseItem = zod
+  .object({
+    id: zod.uuid().describe('Identity of this resource within its team.'),
+    name: zod
+      .string()
+      .describe('Searchable display name; must not contain credential values.'),
+    parentId: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'Containing folder in the same team; absent for a top-level folder.'
+      ),
+    teamId: zod.uuid().describe('Team isolation boundary.'),
+  })
+  .describe('Folder names are metadata only.');
+export const passwordsFoldersResponse = zod.array(passwordsFoldersResponseItem);
+
+/**
+ * @summary Create a folder within the authenticated team.
+ */
+export const passwordsCreateFolderParams = zod.object({
+  team: zod.uuid(),
+});
+
+export const passwordsCreateFolderHeader = zod.object({
+  'X-Macro-Passwords': zod.string().describe('Required CSRF header; send 1'),
+});
+
+export const passwordsCreateFolderBody = zod
+  .object({
+    name: zod.string().describe('Folder display name.'),
+    parentId: zod
+      .uuid()
+      .nullish()
+      .describe('Containing folder; absent or null for a top-level folder.'),
+  })
+  .describe(
+    'New folder, at the top level or inside another folder of the team.'
+  );
+
+export const passwordsCreateFolderResponse = zod
+  .object({
+    id: zod.uuid().describe('Identity of this resource within its team.'),
+    name: zod
+      .string()
+      .describe('Searchable display name; must not contain credential values.'),
+    parentId: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'Containing folder in the same team; absent for a top-level folder.'
+      ),
+    teamId: zod.uuid().describe('Team isolation boundary.'),
+  })
+  .describe('Folder names are metadata only.');
+
+/**
+ * @summary Rename a folder within the authenticated team.
+ */
+export const passwordsRenameFolderParams = zod.object({
+  team: zod.uuid(),
+  folder: zod.uuid(),
+});
+
+export const passwordsRenameFolderHeader = zod.object({
+  'X-Macro-Passwords': zod.string().describe('Required CSRF header; send 1'),
+});
+
+export const passwordsRenameFolderBody = zod
+  .object({
+    name: zod.string().describe('Folder display name.'),
+  })
+  .describe('Validated folder display-name request.');
+
+export const passwordsRenameFolderResponse = zod
+  .object({
+    id: zod.uuid().describe('Identity of this resource within its team.'),
+    name: zod
+      .string()
+      .describe('Searchable display name; must not contain credential values.'),
+    parentId: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'Containing folder in the same team; absent for a top-level folder.'
+      ),
+    teamId: zod.uuid().describe('Team isolation boundary.'),
+  })
+  .describe('Folder names are metadata only.');
+
+/**
+ * @summary Delete a folder within the authenticated team.
+ */
+export const passwordsRemoveFolderParams = zod.object({
+  team: zod.uuid(),
+  folder: zod.uuid(),
+});
+
+export const passwordsRemoveFolderHeader = zod.object({
+  'X-Macro-Passwords': zod.string().describe('Required CSRF header; send 1'),
+});
+
+/**
+ * @summary Move a folder under another folder of the team, or to the top level.
+ */
+export const passwordsMoveFolderParams = zod.object({
+  team: zod.uuid(),
+  folder: zod.uuid(),
+});
+
+export const passwordsMoveFolderHeader = zod.object({
+  'X-Macro-Passwords': zod.string().describe('Required CSRF header; send 1'),
+});
+
+export const passwordsMoveFolderBody = zod
+  .object({
+    parentId: zod
+      .uuid()
+      .nullish()
+      .describe('Containing folder; null moves the folder to the top level.'),
+  })
+  .describe('New containing folder for an existing folder.');
+
+export const passwordsMoveFolderResponse = zod
+  .object({
+    id: zod.uuid().describe('Identity of this resource within its team.'),
+    name: zod
+      .string()
+      .describe('Searchable display name; must not contain credential values.'),
+    parentId: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'Containing folder in the same team; absent for a top-level folder.'
+      ),
+    teamId: zod.uuid().describe('Team isolation boundary.'),
+  })
+  .describe('Folder names are metadata only.');
+
+/**
+ * @summary Search authorized metadata without resolving private values.
+ */
+export const passwordsListParams = zod.object({
+  team: zod.uuid(),
+});
+
+export const passwordsListQueryParams = zod.object({
+  search: zod
+    .string()
+    .nullish()
+    .describe('Optional metadata search text; never a value search.'),
+});
+
+export const passwordsListResponseShareCountMin = 0;
+
+export const passwordsListResponseItem = zod
+  .object({
+    createdAt: zod.iso.datetime({}).describe('Resource creation timestamp.'),
+    favorite: zod
+      .boolean()
+      .describe('Whether the item is marked as a favorite.'),
+    folderId: zod
+      .uuid()
+      .nullish()
+      .describe('Optional folder belonging to this same team.'),
+    hasTotp: zod
+      .boolean()
+      .describe('Whether the item has an enrolled verification-code seed.'),
+    id: zod.uuid().describe('Vault item identity, UUIDv7 for new items.'),
+    kind: zod
+      .enum(['login', 'card', 'note', 'identity', 'api', 'verification_code'])
+      .describe(
+        'Product template. Values use the same protected representation for every template.'
+      ),
+    lastUsedAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Most recent protected disclosure timestamp, when available.'),
+    name: zod
+      .string()
+      .describe('Searchable display name; must not contain credential values.'),
+    shareCount: zod
+      .number()
+      .min(passwordsListResponseShareCountMin)
+      .describe(
+        'Number of distinct explicitly shared recipients; a team grant counts once.'
+      ),
+    shared: zod
+      .boolean()
+      .describe('Whether the item currently has explicit grants.'),
+    teamId: zod.uuid().describe('Team isolation boundary.'),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('Most recent metadata modification timestamp.'),
+    url: zod
+      .union([
+        zod.null(),
+        zod
+          .string()
+          .describe(
+            'A public HTTP(S) login URL; credentials and userinfo are rejected before indexing.'
+          ),
+      ])
+      .optional(),
+    version: zod.number().describe('Committed provider value version.'),
+  })
+  .describe('Searchable display fields, without any credential values.')
+  .and(
+    zod.object({
+      canEdit: zod
+        .boolean()
+        .describe(
+          'Whether this caller may edit item fields or verification-code enrollment now.'
+        ),
+      canManage: zod
+        .boolean()
+        .describe(
+          'Whether this caller may change grants or delete the team item now.'
+        ),
+      sharedWithTeam: zod
+        .boolean()
+        .describe(
+          'Whether the team has an explicit grant, independent of direct recipients.'
+        ),
+    })
+  )
+  .describe(
+    'Actor-specific response capabilities, never part of persisted metadata or write intents.'
+  );
+export const passwordsListResponse = zod.array(passwordsListResponseItem);
+
+/**
+ * @summary Create one item using an idempotent logical operation identifier.
+ */
+export const passwordsCreateParams = zod.object({
+  team: zod.uuid(),
+});
+
+export const passwordsCreateHeader = zod.object({
+  'X-Macro-Passwords': zod.string().describe('Required CSRF header; send 1'),
+});
+
+export const passwordsCreateBody = zod
+  .object({
+    expectedVersion: zod
+      .number()
+      .nullish()
+      .describe('Version observed by the editor; absent only for creation.'),
+    favorite: zod
+      .boolean()
+      .describe('Whether the item is marked as a favorite.'),
+    folderId: zod
+      .uuid()
+      .nullish()
+      .describe('Optional folder belonging to this same team.'),
+    kind: zod
+      .enum(['login', 'card', 'note', 'identity', 'api', 'verification_code'])
+      .describe(
+        'Product template. Values use the same protected representation for every template.'
+      ),
+    name: zod
+      .string()
+      .describe('Searchable display name; must not contain credential values.'),
+    operationId: zod
+      .uuid()
+      .describe(
+        'UUIDv7 identifying one logical save across uncertain retries.'
+      ),
+    private: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Create without the default team edit grant. Updates preserve existing grants.'
+      ),
+    url: zod
+      .union([
+        zod.null(),
+        zod
+          .string()
+          .describe(
+            'A public HTTP(S) login URL; credentials and userinfo are rejected before indexing.'
+          ),
+      ])
+      .optional(),
+    values: zod
+      .object({
+        fields: zod
+          .array(
+            zod
+              .object({
+                label: zod
+                  .string()
+                  .describe(
+                    'Private field label, stored alongside its value in OpenBao.'
+                  ),
+                value: zod
+                  .string()
+                  .describe(
+                    'Owned sensitive text. Deliberately does not implement Debug or Display.'
+                  ),
+              })
+              .describe('One private custom field.')
+          )
+          .describe('Additional private fields, including their labels.'),
+        notes: zod
+          .string()
+          .describe(
+            'Owned sensitive text. Deliberately does not implement Debug or Display.'
+          ),
+        password: zod
+          .string()
+          .describe(
+            'Owned sensitive text. Deliberately does not implement Debug or Display.'
+          ),
+        username: zod
+          .string()
+          .describe(
+            'Owned sensitive text. Deliberately does not implement Debug or Display.'
+          ),
+      })
+      .describe(
+        'Secret payload; never persisted in the metadata database or traced.'
+      ),
+  })
+  .describe('Mutation without provider-specific representations.');
+
+export const passwordsCreateResponseShareCountMin = 0;
+
+export const passwordsCreateResponse = zod
+  .object({
+    createdAt: zod.iso.datetime({}).describe('Resource creation timestamp.'),
+    favorite: zod
+      .boolean()
+      .describe('Whether the item is marked as a favorite.'),
+    folderId: zod
+      .uuid()
+      .nullish()
+      .describe('Optional folder belonging to this same team.'),
+    hasTotp: zod
+      .boolean()
+      .describe('Whether the item has an enrolled verification-code seed.'),
+    id: zod.uuid().describe('Vault item identity, UUIDv7 for new items.'),
+    kind: zod
+      .enum(['login', 'card', 'note', 'identity', 'api', 'verification_code'])
+      .describe(
+        'Product template. Values use the same protected representation for every template.'
+      ),
+    lastUsedAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Most recent protected disclosure timestamp, when available.'),
+    name: zod
+      .string()
+      .describe('Searchable display name; must not contain credential values.'),
+    shareCount: zod
+      .number()
+      .min(passwordsCreateResponseShareCountMin)
+      .describe(
+        'Number of distinct explicitly shared recipients; a team grant counts once.'
+      ),
+    shared: zod
+      .boolean()
+      .describe('Whether the item currently has explicit grants.'),
+    teamId: zod.uuid().describe('Team isolation boundary.'),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('Most recent metadata modification timestamp.'),
+    url: zod
+      .union([
+        zod.null(),
+        zod
+          .string()
+          .describe(
+            'A public HTTP(S) login URL; credentials and userinfo are rejected before indexing.'
+          ),
+      ])
+      .optional(),
+    version: zod.number().describe('Committed provider value version.'),
+  })
+  .describe('Searchable display fields, without any credential values.')
+  .and(
+    zod.object({
+      canEdit: zod
+        .boolean()
+        .describe(
+          'Whether this caller may edit item fields or verification-code enrollment now.'
+        ),
+      canManage: zod
+        .boolean()
+        .describe(
+          'Whether this caller may change grants or delete the team item now.'
+        ),
+      sharedWithTeam: zod
+        .boolean()
+        .describe(
+          'Whether the team has an explicit grant, independent of direct recipients.'
+        ),
+    })
+  )
+  .describe(
+    'Actor-specific response capabilities, never part of persisted metadata or write intents.'
+  );
+
+/**
+ * @summary Read authorized item metadata only.
+ */
+export const passwordsDetailParams = zod.object({
+  team: zod.uuid(),
+  item: zod.uuid(),
+});
+
+export const passwordsDetailResponseShareCountMin = 0;
+
+export const passwordsDetailResponse = zod
+  .object({
+    createdAt: zod.iso.datetime({}).describe('Resource creation timestamp.'),
+    favorite: zod
+      .boolean()
+      .describe('Whether the item is marked as a favorite.'),
+    folderId: zod
+      .uuid()
+      .nullish()
+      .describe('Optional folder belonging to this same team.'),
+    hasTotp: zod
+      .boolean()
+      .describe('Whether the item has an enrolled verification-code seed.'),
+    id: zod.uuid().describe('Vault item identity, UUIDv7 for new items.'),
+    kind: zod
+      .enum(['login', 'card', 'note', 'identity', 'api', 'verification_code'])
+      .describe(
+        'Product template. Values use the same protected representation for every template.'
+      ),
+    lastUsedAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Most recent protected disclosure timestamp, when available.'),
+    name: zod
+      .string()
+      .describe('Searchable display name; must not contain credential values.'),
+    shareCount: zod
+      .number()
+      .min(passwordsDetailResponseShareCountMin)
+      .describe(
+        'Number of distinct explicitly shared recipients; a team grant counts once.'
+      ),
+    shared: zod
+      .boolean()
+      .describe('Whether the item currently has explicit grants.'),
+    teamId: zod.uuid().describe('Team isolation boundary.'),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('Most recent metadata modification timestamp.'),
+    url: zod
+      .union([
+        zod.null(),
+        zod
+          .string()
+          .describe(
+            'A public HTTP(S) login URL; credentials and userinfo are rejected before indexing.'
+          ),
+      ])
+      .optional(),
+    version: zod.number().describe('Committed provider value version.'),
+  })
+  .describe('Searchable display fields, without any credential values.')
+  .and(
+    zod.object({
+      canEdit: zod
+        .boolean()
+        .describe(
+          'Whether this caller may edit item fields or verification-code enrollment now.'
+        ),
+      canManage: zod
+        .boolean()
+        .describe(
+          'Whether this caller may change grants or delete the team item now.'
+        ),
+      sharedWithTeam: zod
+        .boolean()
+        .describe(
+          'Whether the team has an explicit grant, independent of direct recipients.'
+        ),
+    })
+  )
+  .describe(
+    'Actor-specific response capabilities, never part of persisted metadata or write intents.'
+  );
+
+/**
+ * @summary Save a new protected value version and its metadata.
+ */
+export const passwordsUpdateParams = zod.object({
+  team: zod.uuid(),
+  item: zod.uuid(),
+});
+
+export const passwordsUpdateHeader = zod.object({
+  'X-Macro-Passwords': zod.string().describe('Required CSRF header; send 1'),
+});
+
+export const passwordsUpdateBody = zod
+  .object({
+    expectedVersion: zod
+      .number()
+      .nullish()
+      .describe('Version observed by the editor; absent only for creation.'),
+    favorite: zod
+      .boolean()
+      .describe('Whether the item is marked as a favorite.'),
+    folderId: zod
+      .uuid()
+      .nullish()
+      .describe('Optional folder belonging to this same team.'),
+    kind: zod
+      .enum(['login', 'card', 'note', 'identity', 'api', 'verification_code'])
+      .describe(
+        'Product template. Values use the same protected representation for every template.'
+      ),
+    name: zod
+      .string()
+      .describe('Searchable display name; must not contain credential values.'),
+    operationId: zod
+      .uuid()
+      .describe(
+        'UUIDv7 identifying one logical save across uncertain retries.'
+      ),
+    private: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Create without the default team edit grant. Updates preserve existing grants.'
+      ),
+    url: zod
+      .union([
+        zod.null(),
+        zod
+          .string()
+          .describe(
+            'A public HTTP(S) login URL; credentials and userinfo are rejected before indexing.'
+          ),
+      ])
+      .optional(),
+    values: zod
+      .object({
+        fields: zod
+          .array(
+            zod
+              .object({
+                label: zod
+                  .string()
+                  .describe(
+                    'Private field label, stored alongside its value in OpenBao.'
+                  ),
+                value: zod
+                  .string()
+                  .describe(
+                    'Owned sensitive text. Deliberately does not implement Debug or Display.'
+                  ),
+              })
+              .describe('One private custom field.')
+          )
+          .describe('Additional private fields, including their labels.'),
+        notes: zod
+          .string()
+          .describe(
+            'Owned sensitive text. Deliberately does not implement Debug or Display.'
+          ),
+        password: zod
+          .string()
+          .describe(
+            'Owned sensitive text. Deliberately does not implement Debug or Display.'
+          ),
+        username: zod
+          .string()
+          .describe(
+            'Owned sensitive text. Deliberately does not implement Debug or Display.'
+          ),
+      })
+      .describe(
+        'Secret payload; never persisted in the metadata database or traced.'
+      ),
+  })
+  .describe('Mutation without provider-specific representations.');
+
+export const passwordsUpdateResponseShareCountMin = 0;
+
+export const passwordsUpdateResponse = zod
+  .object({
+    createdAt: zod.iso.datetime({}).describe('Resource creation timestamp.'),
+    favorite: zod
+      .boolean()
+      .describe('Whether the item is marked as a favorite.'),
+    folderId: zod
+      .uuid()
+      .nullish()
+      .describe('Optional folder belonging to this same team.'),
+    hasTotp: zod
+      .boolean()
+      .describe('Whether the item has an enrolled verification-code seed.'),
+    id: zod.uuid().describe('Vault item identity, UUIDv7 for new items.'),
+    kind: zod
+      .enum(['login', 'card', 'note', 'identity', 'api', 'verification_code'])
+      .describe(
+        'Product template. Values use the same protected representation for every template.'
+      ),
+    lastUsedAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Most recent protected disclosure timestamp, when available.'),
+    name: zod
+      .string()
+      .describe('Searchable display name; must not contain credential values.'),
+    shareCount: zod
+      .number()
+      .min(passwordsUpdateResponseShareCountMin)
+      .describe(
+        'Number of distinct explicitly shared recipients; a team grant counts once.'
+      ),
+    shared: zod
+      .boolean()
+      .describe('Whether the item currently has explicit grants.'),
+    teamId: zod.uuid().describe('Team isolation boundary.'),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('Most recent metadata modification timestamp.'),
+    url: zod
+      .union([
+        zod.null(),
+        zod
+          .string()
+          .describe(
+            'A public HTTP(S) login URL; credentials and userinfo are rejected before indexing.'
+          ),
+      ])
+      .optional(),
+    version: zod.number().describe('Committed provider value version.'),
+  })
+  .describe('Searchable display fields, without any credential values.')
+  .and(
+    zod.object({
+      canEdit: zod
+        .boolean()
+        .describe(
+          'Whether this caller may edit item fields or verification-code enrollment now.'
+        ),
+      canManage: zod
+        .boolean()
+        .describe(
+          'Whether this caller may change grants or delete the team item now.'
+        ),
+      sharedWithTeam: zod
+        .boolean()
+        .describe(
+          'Whether the team has an explicit grant, independent of direct recipients.'
+        ),
+    })
+  )
+  .describe(
+    'Actor-specific response capabilities, never part of persisted metadata or write intents.'
+  );
+
+/**
+ * @summary Delete an owned item with a resumable provider fence.
+ */
+export const passwordsRemoveParams = zod.object({
+  team: zod.uuid(),
+  item: zod.uuid(),
+});
+
+export const passwordsRemoveHeader = zod.object({
+  'X-Macro-Passwords': zod.string().describe('Required CSRF header; send 1'),
+});
+
+/**
+ * @summary Change metadata without resolving private values.
+ */
+export const passwordsPatchParams = zod.object({
+  team: zod.uuid(),
+  item: zod.uuid(),
+});
+
+export const passwordsPatchHeader = zod.object({
+  'X-Macro-Passwords': zod.string().describe('Required CSRF header; send 1'),
+});
+
+export const passwordsPatchBody = zod
+  .object({
+    expectedVersion: zod
+      .number()
+      .describe('Version observed by the editor; absent only for creation.'),
+    favorite: zod
+      .boolean()
+      .describe('Whether the item is marked as a favorite.'),
+    folderId: zod
+      .uuid()
+      .nullish()
+      .describe('Optional folder belonging to this same team.'),
+    kind: zod
+      .enum(['login', 'card', 'note', 'identity', 'api', 'verification_code'])
+      .describe(
+        'Product template. Values use the same protected representation for every template.'
+      ),
+    name: zod
+      .string()
+      .describe('Searchable display name; must not contain credential values.'),
+    url: zod
+      .union([
+        zod.null(),
+        zod
+          .string()
+          .describe(
+            'A public HTTP(S) login URL; credentials and userinfo are rejected before indexing.'
+          ),
+      ])
+      .optional(),
+  })
+  .describe('A metadata-only change never reads or writes a secret value.');
+
+export const passwordsPatchResponseShareCountMin = 0;
+
+export const passwordsPatchResponse = zod
+  .object({
+    createdAt: zod.iso.datetime({}).describe('Resource creation timestamp.'),
+    favorite: zod
+      .boolean()
+      .describe('Whether the item is marked as a favorite.'),
+    folderId: zod
+      .uuid()
+      .nullish()
+      .describe('Optional folder belonging to this same team.'),
+    hasTotp: zod
+      .boolean()
+      .describe('Whether the item has an enrolled verification-code seed.'),
+    id: zod.uuid().describe('Vault item identity, UUIDv7 for new items.'),
+    kind: zod
+      .enum(['login', 'card', 'note', 'identity', 'api', 'verification_code'])
+      .describe(
+        'Product template. Values use the same protected representation for every template.'
+      ),
+    lastUsedAt: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Most recent protected disclosure timestamp, when available.'),
+    name: zod
+      .string()
+      .describe('Searchable display name; must not contain credential values.'),
+    shareCount: zod
+      .number()
+      .min(passwordsPatchResponseShareCountMin)
+      .describe(
+        'Number of distinct explicitly shared recipients; a team grant counts once.'
+      ),
+    shared: zod
+      .boolean()
+      .describe('Whether the item currently has explicit grants.'),
+    teamId: zod.uuid().describe('Team isolation boundary.'),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('Most recent metadata modification timestamp.'),
+    url: zod
+      .union([
+        zod.null(),
+        zod
+          .string()
+          .describe(
+            'A public HTTP(S) login URL; credentials and userinfo are rejected before indexing.'
+          ),
+      ])
+      .optional(),
+    version: zod.number().describe('Committed provider value version.'),
+  })
+  .describe('Searchable display fields, without any credential values.')
+  .and(
+    zod.object({
+      canEdit: zod
+        .boolean()
+        .describe(
+          'Whether this caller may edit item fields or verification-code enrollment now.'
+        ),
+      canManage: zod
+        .boolean()
+        .describe(
+          'Whether this caller may change grants or delete the team item now.'
+        ),
+      sharedWithTeam: zod
+        .boolean()
+        .describe(
+          'Whether the team has an explicit grant, independent of direct recipients.'
+        ),
+    })
+  )
+  .describe(
+    'Actor-specific response capabilities, never part of persisted metadata or write intents.'
+  );
+
+/**
+ * @summary List recorded activity for an authorized item.
+ */
+export const passwordsActivityParams = zod.object({
+  team: zod.uuid(),
+  item: zod.uuid(),
+});
+
+export const passwordsActivityResponseItem = zod
+  .object({
+    action: zod
+      .enum([
+        'create',
+        'update',
+        'delete',
+        'reveal',
+        'copy',
+        'share',
+        'totp_setup',
+        'totp_remove',
+        'totp_code',
+      ])
+      .describe('Only fixed event names enter the audit index.'),
+    id: zod.uuid().describe('Identity of this resource within its team.'),
+    itemId: zod.uuid().describe('Vault item identity, UUIDv7 for new items.'),
+    occurredAt: zod.iso
+      .datetime({})
+      .describe('Time this activity was recorded.'),
+    userId: zod
+      .string()
+      .describe(
+        'Authenticated Macro user identity; never a provider credential.'
+      ),
+  })
+  .describe('Bounded audit entry, correlated by opaque item\/event IDs.');
+export const passwordsActivityResponse = zod.array(
+  passwordsActivityResponseItem
+);
+
+/**
+ * @summary Disclose values for an explicitly audited clipboard action.
+ */
+export const passwordsCopyParams = zod.object({
+  team: zod.uuid(),
+  item: zod.uuid(),
+});
+
+export const passwordsCopyHeader = zod.object({
+  'X-Macro-Passwords': zod.string().describe('Required CSRF header; send 1'),
+});
+
+export const passwordsCopyBody = zod
+  .object({
+    version: zod
+      .number()
+      .nullish()
+      .describe(
+        'Requested historic version, or the currently committed version.'
+      ),
+  })
+  .describe('Explicit historical version selection for protected disclosure.');
+
+export const passwordsCopyResponse = zod
+  .object({
+    values: zod
+      .object({
+        fields: zod
+          .array(
+            zod
+              .object({
+                label: zod
+                  .string()
+                  .describe(
+                    'Private field label, stored alongside its value in OpenBao.'
+                  ),
+                value: zod
+                  .string()
+                  .describe(
+                    'Owned sensitive text. Deliberately does not implement Debug or Display.'
+                  ),
+              })
+              .describe('One private custom field.')
+          )
+          .describe('Additional private fields, including their labels.'),
+        notes: zod
+          .string()
+          .describe(
+            'Owned sensitive text. Deliberately does not implement Debug or Display.'
+          ),
+        password: zod
+          .string()
+          .describe(
+            'Owned sensitive text. Deliberately does not implement Debug or Display.'
+          ),
+        username: zod
+          .string()
+          .describe(
+            'Owned sensitive text. Deliberately does not implement Debug or Display.'
+          ),
+      })
+      .describe(
+        'Secret payload; never persisted in the metadata database or traced.'
+      ),
+    version: zod.number().describe('Committed provider value version.'),
+  })
+  .describe('Secret response used only by explicit reveal\/copy routes.');
+
+/**
+ * @summary List protected-value version metadata.
+ */
+export const passwordsHistoryParams = zod.object({
+  team: zod.uuid(),
+  item: zod.uuid(),
+});
+
+export const passwordsHistoryResponseItem = zod
+  .object({
+    createdAt: zod.string().describe('Resource creation timestamp.'),
+    version: zod.number().describe('Committed provider value version.'),
+  })
+  .describe('Immutable provider version metadata, without historic values.');
+export const passwordsHistoryResponse = zod.array(passwordsHistoryResponseItem);
+
+/**
+ * @summary Disclose a current or historical value with normal human-session item access.
+ */
+export const passwordsRevealParams = zod.object({
+  team: zod.uuid(),
+  item: zod.uuid(),
+});
+
+export const passwordsRevealHeader = zod.object({
+  'X-Macro-Passwords': zod.string().describe('Required CSRF header; send 1'),
+});
+
+export const passwordsRevealBody = zod
+  .object({
+    version: zod
+      .number()
+      .nullish()
+      .describe(
+        'Requested historic version, or the currently committed version.'
+      ),
+  })
+  .describe('Explicit historical version selection for protected disclosure.');
+
+export const passwordsRevealResponse = zod
+  .object({
+    values: zod
+      .object({
+        fields: zod
+          .array(
+            zod
+              .object({
+                label: zod
+                  .string()
+                  .describe(
+                    'Private field label, stored alongside its value in OpenBao.'
+                  ),
+                value: zod
+                  .string()
+                  .describe(
+                    'Owned sensitive text. Deliberately does not implement Debug or Display.'
+                  ),
+              })
+              .describe('One private custom field.')
+          )
+          .describe('Additional private fields, including their labels.'),
+        notes: zod
+          .string()
+          .describe(
+            'Owned sensitive text. Deliberately does not implement Debug or Display.'
+          ),
+        password: zod
+          .string()
+          .describe(
+            'Owned sensitive text. Deliberately does not implement Debug or Display.'
+          ),
+        username: zod
+          .string()
+          .describe(
+            'Owned sensitive text. Deliberately does not implement Debug or Display.'
+          ),
+      })
+      .describe(
+        'Secret payload; never persisted in the metadata database or traced.'
+      ),
+    version: zod.number().describe('Committed provider value version.'),
+  })
+  .describe('Secret response used only by explicit reveal\/copy routes.');
+
+/**
+ * @summary Read the owned item’s explicit recipient set.
+ */
+export const passwordsGrantsParams = zod.object({
+  team: zod.uuid(),
+  item: zod.uuid(),
+});
+
+export const passwordsGrantsResponseItem = zod
+  .object({
+    id: zod.string().describe('Identity of this resource within its team.'),
+    kind: zod
+      .enum(['user', 'team'])
+      .describe(
+        'Future principals can extend this without exposing agent controls in v1.'
+      ),
+    permission: zod.enum(['view', 'edit']).describe('Grant capability.'),
+  })
+  .describe('Explicit grant within a team vault.');
+export const passwordsGrantsResponse = zod.array(passwordsGrantsResponseItem);
+
+/**
+ * @summary Replace the owned item’s explicit recipient set.
+ */
+export const passwordsShareParams = zod.object({
+  team: zod.uuid(),
+  item: zod.uuid(),
+});
+
+export const passwordsShareHeader = zod.object({
+  'X-Macro-Passwords': zod.string().describe('Required CSRF header; send 1'),
+});
+
+export const passwordsShareBody = zod
+  .object({
+    grants: zod
+      .array(
+        zod
+          .object({
+            id: zod
+              .string()
+              .describe('Identity of this resource within its team.'),
+            kind: zod
+              .enum(['user', 'team'])
+              .describe(
+                'Future principals can extend this without exposing agent controls in v1.'
+              ),
+            permission: zod
+              .enum(['view', 'edit'])
+              .describe('Grant capability.'),
+          })
+          .describe('Explicit grant within a team vault.')
+      )
+      .describe(
+        'Complete desired recipient set; an empty list revokes sharing.'
+      ),
+  })
+  .describe('Owner-requested replacement of the explicit grant set.');
+
+/**
+ * @summary Enroll or replace a verification-code seed with normal human-session edit access.
+ */
+export const passwordsSetTotpParams = zod.object({
+  team: zod.uuid(),
+  item: zod.uuid(),
+});
+
+export const passwordsSetTotpHeader = zod.object({
+  'X-Macro-Passwords': zod.string().describe('Required CSRF header; send 1'),
+});
+
+export const passwordsSetTotpBody = zod
+  .object({
+    key: zod
+      .string()
+      .describe(
+        'Owned sensitive text. Deliberately does not implement Debug or Display.'
+      ),
+  })
+  .describe('Private seed submitted only to the verification-code provider.');
+
+/**
+ * @summary Remove a verification-code seed with normal human-session edit access.
+ */
+export const passwordsRemoveTotpParams = zod.object({
+  team: zod.uuid(),
+  item: zod.uuid(),
+});
+
+export const passwordsRemoveTotpHeader = zod.object({
+  'X-Macro-Passwords': zod.string().describe('Required CSRF header; send 1'),
+});
+
+/**
+ * @summary Resolve the current verification code with normal human-session item access.
+ */
+export const passwordsTotpParams = zod.object({
+  team: zod.uuid(),
+  item: zod.uuid(),
+});
+
+export const passwordsTotpHeader = zod.object({
+  'X-Macro-Passwords': zod.string().describe('Required CSRF header; send 1'),
+});
+
+export const passwordsTotpResponsePeriodMin = 0;
+
+export const passwordsTotpResponse = zod
+  .object({
+    code: zod
+      .string()
+      .describe(
+        'Owned sensitive text. Deliberately does not implement Debug or Display.'
+      ),
+    period: zod
+      .number()
+      .min(passwordsTotpResponsePeriodMin)
+      .describe('Verification-code period in seconds.'),
+  })
+  .describe('Current TOTP output is confidential, just like a password.');
+
+/**
+ * @summary Read only the current account identifier with normal human view authorization.
+ */
+export const passwordsUsernameParams = zod.object({
+  team: zod.uuid(),
+  item: zod.uuid(),
+});
+
+export const passwordsUsernameResponse = zod
+  .object({
+    username: zod
+      .string()
+      .describe(
+        'Owned sensitive text. Deliberately does not implement Debug or Display.'
+      ),
+    version: zod
+      .number()
+      .describe('Committed version used to resolve this identifier.'),
+  })
+  .describe(
+    'Current account identifier, without confidential credentials or custom fields.'
+  );
+
+/**
+ * @summary Read only the current account identifier and record an explicit clipboard action.
+ */
+export const passwordsCopyUsernameParams = zod.object({
+  team: zod.uuid(),
+  item: zod.uuid(),
+});
+
+export const passwordsCopyUsernameHeader = zod.object({
+  'X-Macro-Passwords': zod.string().describe('Required CSRF header; send 1'),
+});
+
+export const passwordsCopyUsernameResponse = zod
+  .object({
+    username: zod
+      .string()
+      .describe(
+        'Owned sensitive text. Deliberately does not implement Debug or Display.'
+      ),
+    version: zod
+      .number()
+      .describe('Committed version used to resolve this identifier.'),
+  })
+  .describe(
+    'Current account identifier, without confidential credentials or custom fields.'
+  );
 
 /**
  * @summary Gets the users pinned items

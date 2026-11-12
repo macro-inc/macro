@@ -251,9 +251,7 @@ pub(crate) fn bring_up(
     if !stage.is_dry_run() {
         stack::clear_state(instance)?;
     }
-    if let Some(job) = stage.job() {
-        job.bring_up(mode, plan);
-    }
+    stage.record_bring_up(mode, plan);
 
     // Before `prepare` (which resolves env and reads the OTLP port to decide
     // whether to wire `OTEL_EXPORTER_OTLP_ENDPOINT`), so a `--traces` run gets
@@ -1563,10 +1561,8 @@ fn reload_services(
     stage.run(&format!("Reloading {names}"), &mut up)
 }
 
-/// Every Docker volume an instance owns: the app DB/cache/search/Kafka plus the
-/// FusionAuth DB/config. The single list `teardown`, `ensure_external_resources`,
-/// and `destroy` share.
-fn instance_volumes(instance: &Instance) -> [String; 6] {
+/// Volumes created explicitly before Compose starts the instance.
+fn external_volumes(instance: &Instance) -> [String; 6] {
     [
         instance.volume_postgres(),
         instance.volume_redis(),
@@ -1575,6 +1571,13 @@ fn instance_volumes(instance: &Instance) -> [String; 6] {
         instance.volume_fusionauth_db(),
         instance.volume_fusionauth_config(),
     ]
+}
+
+/// Every owned volume removed by intentional full-stack teardown.
+fn instance_volumes(instance: &Instance) -> impl Iterator<Item = String> {
+    external_volumes(instance)
+        .into_iter()
+        .chain([format!("{}_openbao_data", instance.project_name())])
 }
 
 /// Whether the instance already has any data volume, which a bring-up must not
@@ -1591,12 +1594,11 @@ pub(crate) fn instance_has_volumes(instance: &Instance) -> Result<bool> {
 /// The docker teardown work: stop + remove the instance's stack and ALL its
 /// stateful volumes — the basis of `run_local`'s full-delete/full-create
 /// idempotency, the quit hotkey, and `destroy-local`. Containers come down with
-/// `down -v`; the data volumes and a named instance's networks are then removed
-/// explicitly, because they are declared `external`, which `down -v` leaves
-/// behind. A stack that's gone must not keep holding subnets. The default
-/// instance's networks are shared with the base compose files, so they stay.
-/// Output is captured (this is best-effort and noisy) so callers surface it as a
-/// single line; absent containers/volumes are ignored.
+/// `down -v`; owned data volumes and a named instance's networks are removed
+/// explicitly. External volumes survive `down -v`, and the generated OpenBao
+/// volume is absent from this command's Compose file set. The default networks
+/// are shared with the base Compose files, so they stay. Output is captured
+/// (best-effort and noisy); absent containers and volumes are ignored.
 fn teardown_commands(instance: &Instance) {
     sdk_webhook::stop(instance);
     // Detach the global trace collector first or `down` can't remove the
@@ -1686,7 +1688,7 @@ impl Drop for BackgroundTeardown {
 /// reference (idempotent — replaces the old `just create_networks`).
 fn ensure_external_resources(stage: &Stage, instance: &Instance) -> Result<()> {
     let networks = instance.networks();
-    let volumes = instance_volumes(instance);
+    let volumes = external_volumes(instance);
     stage.run_step("Ensuring networks & volumes", || {
         for (name, subnet) in &networks {
             docker::ensure_network(name, subnet.as_deref())?;
@@ -1725,19 +1727,28 @@ fn wait_localstack(url: &str, compose_done: &std::sync::mpsc::Receiver<()>) -> R
 
 /// `cargo x build-services`.
 pub fn build_services_only() -> Result<()> {
-    let stage = Stage::from_env();
-    let target = arch::detect()?;
-    let binaries = build::resolve(
-        &stage,
-        target,
-        &build::BuildOptions {
-            no_build: false,
-            binaries_dir: None,
-            only: None,
-        },
-    )?;
-    stage.note(&format!("binaries at {}", binaries.host_dir().display()));
-    Ok(())
+    let (stage, telemetry) = telemetry::RunTelemetry::attach(
+        Stage::from_env(),
+        None,
+        telemetry::RunKind::BuildServices,
+        std::time::SystemTime::now(),
+    );
+    let result = (|| -> Result<()> {
+        let target = arch::detect()?;
+        let binaries = build::resolve(
+            &stage,
+            target,
+            &build::BuildOptions {
+                no_build: false,
+                binaries_dir: None,
+                only: None,
+            },
+        )?;
+        stage.note(&format!("binaries at {}", binaries.host_dir().display()));
+        Ok(())
+    })();
+    telemetry::RunTelemetry::close(telemetry, &result);
+    result
 }
 
 /// `cargo x runtime-image`.
