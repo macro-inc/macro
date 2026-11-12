@@ -7,6 +7,7 @@ import {
   refreshSharedAccess,
   useAccessRequestState,
 } from '@queries/access-requests/requests';
+import { queryClient } from '@queries/client';
 import { useMutation, useQuery } from '@tanstack/solid-query';
 import { type Accessor, createSignal } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -49,6 +50,22 @@ function directAccessOptions(
   };
 }
 
+/**
+ * Writes a confirmed decision into the first page of the entity's state, so
+ * every view reading it updates on the response instead of after the refetch
+ * that follows, and cannot offer the decided request again meanwhile.
+ */
+function updateFirstPage(
+  target: ShareEntity,
+  update: (state: RequestState) => RequestState
+) {
+  queryClient.setQueryData<RequestState>(
+    accessRequestKeys.entity(target.entityType, target.entityId)._ctx.state(0)
+      .queryKey,
+    (state) => (state ? update(state) : state)
+  );
+}
+
 export function createSharingSource(
   entity: Accessor<ShareEntity | undefined>,
   enabled: Accessor<boolean>
@@ -69,19 +86,42 @@ export function createSharingSource(
             accessRequestsClient.submit(target, change.level, change.revision)
           )
         )
-        .with({ kind: 'cancel' }, (change) =>
-          throwOnErr(() => accessRequestsClient.cancel(target, change.revision))
-        )
-        .with({ kind: 'resolve' }, (change) =>
-          throwOnErr(() =>
+        .with({ kind: 'cancel' }, async (change) => {
+          await throwOnErr(() =>
+            accessRequestsClient.cancel(target, change.revision)
+          );
+          updateFirstPage(target, (state) =>
+            state.mine
+              ? { ...state, mine: { ...state.mine, status: 'cancelled' } }
+              : state
+          );
+        })
+        .with({ kind: 'resolve' }, async (change) => {
+          const resolved = await throwOnErr(() =>
             accessRequestsClient.resolve(
               target,
               change.request.id,
               change.request.revision,
               change.level
             )
-          )
-        )
+          );
+          updateFirstPage(target, (state) => {
+            const previous = state.requests.find(
+              (request) => request.id === resolved.id
+            );
+            return {
+              ...state,
+              requests: state.requests.map((request) =>
+                request.id === resolved.id ? resolved : request
+              ),
+              pendingCount:
+                previous?.status === 'pending' && resolved.status !== 'pending'
+                  ? state.pendingCount - 1
+                  : state.pendingCount,
+            };
+          });
+          return resolved;
+        })
         .with({ kind: 'grant' }, (change) =>
           throwOnErr(() =>
             accessRequestsClient.setGrant(target, change.userId, change.level)
