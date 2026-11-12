@@ -1057,7 +1057,7 @@ where
             })
     }
 
-    #[tracing::instrument(skip(self, access), err)]
+    #[tracing::instrument(skip(self, access, user_id), err)]
     #[allow(clippy::too_many_arguments)]
     async fn list_companies_for_soup(
         &self,

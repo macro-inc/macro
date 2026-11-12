@@ -2137,7 +2137,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         })
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, user_id), err)]
     #[allow(clippy::too_many_arguments)]
     async fn list_companies_for_soup(
         &self,
