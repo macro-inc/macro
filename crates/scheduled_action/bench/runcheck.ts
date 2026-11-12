@@ -51,7 +51,12 @@ export async function reset(at: Stack, db: SQL, tokens: Tokens, keep: Set<string
   const macro = sdk(at, owner);
   let removed = 0;
   for (const routine of await listRoutines(at, owner)) {
-    await call(`${routines(at)}/${routine.id}`, { method: 'DELETE', token: owner });
+    try {
+      await call(`${routines(at)}/${routine.id}`, { method: 'DELETE', token: owner });
+    } catch (error) {
+      // A sub-routine goes with its parent, deleted just before it.
+      if (!String(error).includes(' 404:')) throw error;
+    }
     removed++;
   }
   // A routine the list missed would fire during later drafts' run checks.
@@ -249,6 +254,8 @@ export async function runCheck(
     effects = await read(db, context, t0, firedMessage);
     effects.runs = runs.length ? await withReplies(db, await runsSince(at, owner, routine.id, t0)) : runs;
   } finally {
+    // Deleted first, so putting the task back doesn't fire it again.
+    await call(`${routines(at)}/${routine.id}`, { method: 'DELETE', token: owner }).catch(() => undefined);
     // Left changed, the task couldn't fire the next draft's run.
     await restore?.().catch(() => undefined);
   }
@@ -263,17 +270,24 @@ export async function runCheck(
   };
 }
 
-/** What changed in the workspace since `since`, from the stack's database. */
+/**
+ * What changed in the owner's workspace since `since`, from the stack's
+ * database: messages in channels they're in and tasks they own, so others
+ * using the stack can't make a run look as if it reported something.
+ */
 async function read(db: SQL, context: Context, since: Date, fired?: string): Promise<Effects> {
   const names = new Map(Object.entries(context.ids).map(([name, id]) => [id, name]));
   const messages = (await db`
     select m.id, m.sender_id, m.content, m.parent_entity_id as channel, c.name as channel_name
-    from comms_messages m left join comms_channels c on c.id::text = m.parent_entity_id
+    from comms_messages m join comms_channels c on c.id::text = m.parent_entity_id
     where m.created_at >= ${since} and m.deleted_at is null and m.parent_entity_type = 'channel'
+      and exists (
+        select 1 from comms_channel_participants p
+        where p.channel_id = c.id and p.user_id = ${userId(OWNER)} and p.left_at is null)
     order by m.created_at`) as { id: string; sender_id: string; content: string; channel: string; channel_name: string | null }[];
   const tasks = (await db`
     select d.id, d.name from "Document" d join document_sub_type t on t.document_id = d.id
-    where d."createdAt" >= ${since} and d."deletedAt" is null
+    where d."createdAt" >= ${since} and d."deletedAt" is null and d.owner = ${userId(OWNER)}
     order by d."createdAt"`) as { id: string; name: string }[];
   const notifications = (await db`
     select n.metadata from user_notification u join notification n on n.id = u.notification_id
