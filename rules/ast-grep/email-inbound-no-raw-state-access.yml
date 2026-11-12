@@ -27,13 +27,13 @@ rule:
     - kind: field_declaration
       has:
         field: name
-        regex: ^(?:db|email_api|gmail_client|redis_client|sqs_client|s3_client|sfs_client|dss_client|auth_service_client|system_properties_service|connection_gateway_client)$
+        regex: ^(?:db|pool|email_api|gmail_client|redis_client|sqs_client|s3_client|sfs_client|dss_client|auth_service_client|system_properties_service|connection_gateway_client)$
     - all:
         - any:
             - kind: field_expression
               has:
                 field: field
-                regex: ^(?:db|email_api|gmail_client|redis_client|sqs_client|s3_client|sfs_client|dss_client|auth_service_client|system_properties_service|connection_gateway_client)$
+                regex: ^(?:db|pool|email_api|gmail_client|redis_client|sqs_client|s3_client|sfs_client|dss_client|auth_service_client|system_properties_service|connection_gateway_client)$
             - kind: call_expression
               has:
                 field: function
@@ -41,7 +41,7 @@ rule:
                 has:
                   field: value
                   kind: identifier
-                  regex: ^(?:db|email_api|gmail_client|redis_client|sqs_client|s3_client|sfs_client|dss_client|auth_service_client|system_properties_service|connection_gateway_client)$
+                  regex: ^(?:db|pool|email_api|gmail_client|redis_client|sqs_client|s3_client|sfs_client|dss_client|auth_service_client|system_properties_service|connection_gateway_client)$
         - inside:
             kind: block
             inside:

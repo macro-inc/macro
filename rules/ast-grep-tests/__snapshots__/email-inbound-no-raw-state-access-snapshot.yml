@@ -62,6 +62,29 @@ snapshots:
       start: 27
       end: 48
   ? |
+    async fn process(pool: PgPool) { pool.acquire().await; }
+  : labels:
+    - source: pool.acquire()
+      style: primary
+      start: 33
+      end: 47
+    - source: pool
+      style: secondary
+      start: 33
+      end: 37
+    - source: pool.acquire
+      style: secondary
+      start: 33
+      end: 45
+    - source: 'async fn process(pool: PgPool) { pool.acquire().await; }'
+      style: secondary
+      start: 0
+      end: 56
+    - source: '{ pool.acquire().await; }'
+      style: secondary
+      start: 31
+      end: 56
+  ? |
     async fn process(sqs_client: Queue) { sqs_client.send_message().await; }
   : labels:
     - source: sqs_client.send_message()
@@ -163,3 +186,15 @@ snapshots:
       style: secondary
       start: 17
       end: 26
+  ? |
+    struct Context { pool: PgPool }
+    async fn process(ctx: Context) { ctx.pool.acquire().await; }
+  : labels:
+    - source: 'pool: PgPool'
+      style: primary
+      start: 17
+      end: 29
+    - source: pool
+      style: secondary
+      start: 17
+      end: 21

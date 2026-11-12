@@ -28,7 +28,7 @@ rule:
   all:
     - any:
         - all:
-            - regex: ^(::\s*)?(?:(?:email_db_client|sqlx(?:_core)?|sqs_client|redis|reqwest|gmail_client|s3_client|aws_config|aws_sdk_\w+|rdkafka|opensearch|static_file_service_client|document_storage_service_client|authentication_service_client|connection_gateway_client)\b|email_api_client(?:\s+as\s+\w+)?$|email_api_client\s*::\s*(?:(?:GmailApiClientRepository|OutlookApiClientRepository|inbound|outbound)\b|\*)|crate\s*::\s*outbound\b|crate\s*::\s*util\s*::\s*redis\b|(?:email|calendar_events)\s*::\s*outbound\b|crate\s*::\s*(?:calendar_tokens|calendar_request_gate|calendar_refresh)\b|std\s*::\s*env\b)
+            - regex: ^(::\s*)?(?:(?:email_db_client|sqlx(?:_core)?|sqs_client|redis|reqwest|gmail_client|s3_client|aws_config|aws_sdk_\w+|rdkafka|opensearch|static_file_service_client|document_storage_service_client|authentication_service_client|connection_gateway_client)\b|email_api_client(?:\s+as\s+\w+)?$|email_api_client\s*::\s*(?:(?:GmailApiClientRepository|OutlookApiClientRepository|inbound|outbound)\b|\*)|crate\s*::\s*outbound\b|crate\s*::\s*util\s*::\s*redis\b|(?:email|calendar_events)\s*::\s*outbound\b|crate\s*::\s*(?:calendar_tokens|calendar_request_gate|calendar_refresh)\b|std\s*::\s*(?:env|fs)\b|tokio\s*::\s*fs\b)
             - any:
                 - any:
                     - kind: scoped_identifier
@@ -136,7 +136,20 @@ rule:
             - has:
                 field: list
                 has:
-                  regex: ^(?:env)\b|^\*
+                  regex: ^(?:env|fs)\b|^\*
+        - kind: scoped_use_list
+          not:
+            inside:
+              kind: scoped_use_list
+              stopBy: end
+          all:
+            - has:
+                field: path
+                regex: ^(::\s*)?tokio$
+            - has:
+                field: list
+                has:
+                  regex: ^fs\b|^\*
     - not:
         any:
           - regex: ^(::\s*)?(?:sqlx\s*::\s*types\s*::\s*Uuid|sqlx_core\s*::\s*types\s*::\s*chrono\s*::\s*(?:DateTime|Utc)|aws_sdk_sqs\s*::\s*types\s*::\s*Message|sqs_client\s*::\s*email\s*::\s*(?:SFSDeleteMessage|BACKFILL_DEFERRALS_ATTRIBUTE|trace_context\s*::\s*(?:adopt|ATTRIBUTE))|crate\s*::\s*outbound\s*::\s*persistence_error\s*::\s*InboxPersistenceError)(?:\s+as\s+\w+)?$

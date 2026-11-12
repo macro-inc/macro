@@ -14,6 +14,11 @@ valid:
     async fn context(db: Pool) { db.begin().await; }
   - |
     fn context(ctx: Context) { let _ = ctx.db; }
+  - |
+    struct Context { pool_service: Service }
+    async fn process(ctx: Context) { ctx.pool_service.acquire().await; }
+  - |
+    async fn context(ctx: Context) { ctx.pool.acquire().await; }
 invalid:
   - |
     async fn process(ctx: Context) { ctx.db.begin().await; }
@@ -31,3 +36,8 @@ invalid:
     struct Context { db: Pool }
   - |
     struct Context { email_api: Provider }
+  - |
+    struct Context { pool: PgPool }
+    async fn process(ctx: Context) { ctx.pool.acquire().await; }
+  - |
+    async fn process(pool: PgPool) { pool.acquire().await; }

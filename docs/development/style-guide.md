@@ -55,24 +55,30 @@ without changing the severity or scope of the workspace's legacy rules.
 
 | Rule | Checks |
 | --- | --- |
-| [`email-domain-no-concrete-io`](../../rules/ast-grep/email-domain-no-concrete-io.yml) | Domain references to concrete clients, adapter modules and environment access. |
+| [`email-domain-no-concrete-io`](../../rules/ast-grep/email-domain-no-concrete-io.yml) | Domain references to concrete clients, adapter modules, filesystem I/O and environment access. |
 | [`email-inbound-no-concrete-io`](../../rules/ast-grep/email-inbound-no-concrete-io.yml) | Concrete I/O in HTTP handlers, crate inbound adapters and delivery processors. |
-| [`email-inbound-no-raw-state-access`](../../rules/ast-grep/email-inbound-no-raw-state-access.yml) | Raw client fields and local client calls in inbound processing. |
+| [`email-inbound-no-raw-state-access`](../../rules/ast-grep/email-inbound-no-raw-state-access.yml) | Raw pool/client fields and local client calls in inbound processing. |
 | [`email-worker-no-runtime-io`](../../rules/ast-grep/email-worker-no-runtime-io.yml) | Concrete I/O in worker/context files outside startup composition. |
-| [`email-worker-no-raw-state-access`](../../rules/ast-grep/email-worker-no-raw-state-access.yml) | Raw worker-context fields and raw client use outside `context()`. |
-| [`email-outbound-no-inbound-host`](../../rules/ast-grep/email-outbound-no-inbound-host.yml) | Outbound dependencies on API/pubsub implementations. |
+| [`email-worker-no-raw-state-access`](../../rules/ast-grep/email-worker-no-raw-state-access.yml) | Raw pool/client worker-context fields and raw client use outside `context()`. |
+| [`email-outbound-no-inbound-host`](../../rules/ast-grep/email-outbound-no-inbound-host.yml) | Outbound dependencies on API/pubsub implementations via `crate::` or `super::` paths. |
 
 These are error-level rules. Their notes list the composition, transport,
 legacy type and helper exceptions. Keep exceptions narrow and cover both the
 permitted syntax and a nearby forbidden case in
 [`rules/ast-grep-tests`](../../rules/ast-grep-tests).
 
-When changing these rules, run the native fixtures and scan their source scope
-from the repository root:
+The I/O rules include direct and grouped `std::fs` and `tokio::fs` paths;
+worker startup composition keeps its existing allowance. Relative API/pubsub
+paths are checked in outbound adapters. Relative domain/inbound module imports
+still need review: these syntax rules cannot resolve which module a `super::`
+chain reaches across their different file depths and roots.
+
+When changing these rules, run the native fixtures and scan the whole repository
+(the rules retain their declared source scopes):
 
 ```sh
 bunx --yes @ast-grep/cli@0.44.1 test
-bunx --yes @ast-grep/cli@0.44.1 scan --filter '^email-' services/email_service/src crates/email/src
+bunx --yes @ast-grep/cli@0.44.1 scan --filter '^email-' .
 ```
 
 The fixtures include expected match locations and are discovered through

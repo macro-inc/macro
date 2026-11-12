@@ -20,7 +20,7 @@ rule:
   all:
     - any:
         - all:
-            - regex: ^(::\s*)?crate\s*::\s*(?:api|pubsub)\b
+            - regex: ^(?:(::\s*)?crate\s*::\s*|(?:super\s*::\s*)+)(?:api|pubsub)\b
             - any:
                 - any:
                     - kind: scoped_identifier
@@ -60,5 +60,18 @@ rule:
                 field: list
                 has:
                   regex: ^(?:api|pubsub)\b|^\*
+        - kind: scoped_use_list
+          not:
+            inside:
+              kind: scoped_use_list
+              stopBy: end
+          all:
+            - has:
+                field: path
+                regex: ^super(?:\s*::\s*super)*$
+            - has:
+                field: list
+                has:
+                  regex: ^(?:super\s*::\s*)*(?:api|pubsub)\b
     - not:
-        regex: ^(::\s*)?crate\s*::\s*pubsub\s*::\s*(?:util\s*::\s*(?:cg_refresh_email|complete_transaction_with_processing_error)|publish_email_event)(?:\s+as\s+\w+)?$
+        regex: ^(?:(::\s*)?crate\s*::\s*|(?:super\s*::\s*)+)pubsub\s*::\s*(?:util\s*::\s*(?:cg_refresh_email|complete_transaction_with_processing_error)|publish_email_event)(?:\s+as\s+\w+)?$

@@ -15,6 +15,16 @@ valid:
   - |
     // use sqlx::PgPool;
     fn process() { let redis = 1; let _ = redis; }
+  - |
+    use std::fmt;
+  - |
+    use std::{fmt, sync::Arc};
+  - |
+    use tokio::sync;
+  - |
+    use tokio::{sync, task};
+  - |
+    use crate::fs::Image;
 invalid:
   - |
     use email_db_client::Client;
@@ -108,3 +118,19 @@ invalid:
     fn process() { let _ = email_api_client::GmailApiClientRepository::new(); }
   - |
     fn process() { let _ = std::env::var("FLAG"); }
+  - |
+    fn process(p: &str) { std::fs::read(p); }
+  - |
+    async fn process(p: &str) { tokio::fs::read(p).await; }
+  - |
+    use std::fs;
+  - |
+    use tokio::fs;
+  - |
+    use std::{fs, fmt};
+  - |
+    use tokio::{fs, sync};
+  - |
+    use std::fs as filesystem;
+  - |
+    use ::tokio::fs::{read, File};

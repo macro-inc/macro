@@ -16,6 +16,22 @@ valid:
     fn send() { crate::pubsub::publish_email_event(broker, event); }
   - |
     fn send() { tracing::warn!(target: "crate::pubsub::util", "adapter failure"); }
+  - |
+    use super::email_api::GmailApi;
+  - |
+    use super::{email_api::GmailApi, domain::Service};
+  - |
+    use super::super::domain::Service;
+  - |
+    use super::api_types::Request;
+  - |
+    use super::*;
+  - |
+    use super::pubsub::util::cg_refresh_email;
+  - |
+    fn finish() { super::super::pubsub::util::complete_transaction_with_processing_error(tx, result); }
+  - |
+    fn send() { super::pubsub::publish_email_event(broker, event); }
 invalid:
   - |
     use crate::pubsub::context::PubSubContext;
@@ -33,3 +49,25 @@ invalid:
     fn send() { crate::pubsub::util::cg_refresh_email_unchecked(); }
   - |
     fn send() { crate::api::handler(); }
+  - |
+    use super::api::context::ApiContext;
+  - |
+    use super::super::api::context::ApiContext;
+  - |
+    use super::pubsub::context::PubSubContext;
+  - |
+    use super::super::pubsub::context::PubSubContext;
+  - |
+    use super::{api::context::ApiContext, domain::Service};
+  - |
+    use super::super::{pubsub::context::PubSubContext, domain::Service};
+  - |
+    use super::{super::api::context::ApiContext};
+  - |
+    use {super::super::api::context::ApiContext};
+  - |
+    fn send() { super::super::api::handler(); }
+  - |
+    use super::pubsub as inbound;
+  - |
+    fn send() { super::pubsub::util::cg_refresh_email_unchecked(); }

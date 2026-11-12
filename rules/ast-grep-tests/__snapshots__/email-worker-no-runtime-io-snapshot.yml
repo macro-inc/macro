@@ -1,6 +1,13 @@
 id: email-worker-no-runtime-io
 snapshots:
   ? |
+    async fn process(p: &str) { tokio::fs::read(p).await; }
+  : labels:
+    - source: tokio::fs::read
+      style: primary
+      start: 28
+      end: 43
+  ? |
     async fn run_worker() { let _ = crate::outbound::Repo; }
   : labels:
     - source: crate::outbound::Repo
@@ -29,6 +36,13 @@ snapshots:
       start: 13
       end: 62
   ? |
+    fn process(p: &str) { std::fs::read(p); }
+  : labels:
+    - source: std::fs::read
+      style: primary
+      start: 22
+      end: 35
+  ? |
     fn run_worker() { PgGmailOps(pool); }
   : labels:
     - source: PgGmailOps(pool)
@@ -39,6 +53,13 @@ snapshots:
       style: secondary
       start: 18
       end: 28
+  ? |
+    use ::tokio::fs::{read, File};
+  : labels:
+    - source: ::tokio::fs::{read, File}
+      style: primary
+      start: 4
+      end: 29
   ? |
     use crate::outbound::Repo;
   : labels:
@@ -90,6 +111,65 @@ snapshots:
       style: primary
       start: 4
       end: 23
+  ? |
+    use std::fs as filesystem;
+  : labels:
+    - source: std::fs as filesystem
+      style: primary
+      start: 4
+      end: 25
+  ? |
+    use std::fs;
+  : labels:
+    - source: std::fs
+      style: primary
+      start: 4
+      end: 11
+  ? |
+    use std::{fs, fmt};
+  : labels:
+    - source: std::{fs, fmt}
+      style: primary
+      start: 4
+      end: 18
+    - source: std
+      style: secondary
+      start: 4
+      end: 7
+    - source: fs
+      style: secondary
+      start: 10
+      end: 12
+    - source: fs
+      style: secondary
+      start: 10
+      end: 12
+  ? |
+    use tokio::fs;
+  : labels:
+    - source: tokio::fs
+      style: primary
+      start: 4
+      end: 13
+  ? |
+    use tokio::{fs, sync};
+  : labels:
+    - source: tokio::{fs, sync}
+      style: primary
+      start: 4
+      end: 21
+    - source: tokio
+      style: secondary
+      start: 4
+      end: 9
+    - source: fs
+      style: secondary
+      start: 12
+      end: 14
+    - source: fs
+      style: secondary
+      start: 12
+      end: 14
   ? |
     use {sqlx as storage};
   : labels:

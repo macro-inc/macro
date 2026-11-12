@@ -10,6 +10,9 @@ valid:
     fn process(ctx: Context) { ctx.macro_event_broker.publish(); }
   - |
     fn process() { tracing::info!("ctx.db and ctx.email_api"); }
+  - |
+    struct Context { pool_service: Service }
+    async fn process(ctx: Context) { ctx.pool_service.acquire().await; }
 invalid:
   - |
     async fn process(ctx: Context) { ctx.db.begin().await; }
@@ -29,3 +32,8 @@ invalid:
     struct Context { email_api: Provider }
   - |
     async fn context(ctx: Context) { ctx.db.begin().await; }
+  - |
+    struct Context { pool: PgPool }
+    async fn process(ctx: Context) { ctx.pool.acquire().await; }
+  - |
+    async fn process(pool: PgPool) { pool.acquire().await; }

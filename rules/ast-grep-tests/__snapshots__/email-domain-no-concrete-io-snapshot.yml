@@ -1,6 +1,13 @@
 id: email-domain-no-concrete-io
 snapshots:
   ? |
+    async fn process(p: &str) { tokio::fs::read(p).await; }
+  : labels:
+    - source: tokio::fs::read
+      style: primary
+      start: 28
+      end: 43
+  ? |
     fn process() { let _ = email_api_client::GmailApiClientRepository::new(); }
   : labels:
     - source: email_api_client::GmailApiClientRepository::new
@@ -21,6 +28,13 @@ snapshots:
       style: primary
       start: 23
       end: 36
+  ? |
+    fn process(p: &str) { std::fs::read(p); }
+  : labels:
+    - source: std::fs::read
+      style: primary
+      start: 22
+      end: 35
   ? |
     type Repo = ::sqlx::Pool<::sqlx::Postgres>;
   : labels:
@@ -49,6 +63,13 @@ snapshots:
       style: primary
       start: 4
       end: 21
+  ? |
+    use ::tokio::fs::{read, File};
+  : labels:
+    - source: ::tokio::fs::{read, File}
+      style: primary
+      start: 4
+      end: 29
   ? |
     use authentication_service_client::Client;
   : labels:
@@ -379,6 +400,20 @@ snapshots:
       start: 4
       end: 27
   ? |
+    use std::fs as filesystem;
+  : labels:
+    - source: std::fs as filesystem
+      style: primary
+      start: 4
+      end: 25
+  ? |
+    use std::fs;
+  : labels:
+    - source: std::fs
+      style: primary
+      start: 4
+      end: 11
+  ? |
     use std::{env};
   : labels:
     - source: std::{env}
@@ -397,6 +432,51 @@ snapshots:
       style: secondary
       start: 10
       end: 13
+  ? |
+    use std::{fs, fmt};
+  : labels:
+    - source: std::{fs, fmt}
+      style: primary
+      start: 4
+      end: 18
+    - source: std
+      style: secondary
+      start: 4
+      end: 7
+    - source: fs
+      style: secondary
+      start: 10
+      end: 12
+    - source: fs
+      style: secondary
+      start: 10
+      end: 12
+  ? |
+    use tokio::fs;
+  : labels:
+    - source: tokio::fs
+      style: primary
+      start: 4
+      end: 13
+  ? |
+    use tokio::{fs, sync};
+  : labels:
+    - source: tokio::{fs, sync}
+      style: primary
+      start: 4
+      end: 21
+    - source: tokio
+      style: secondary
+      start: 4
+      end: 9
+    - source: fs
+      style: secondary
+      start: 12
+      end: 14
+    - source: fs
+      style: secondary
+      start: 12
+      end: 14
   ? |
     use {email_api_client};
   : labels:

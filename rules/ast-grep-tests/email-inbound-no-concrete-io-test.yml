@@ -33,6 +33,16 @@ valid:
     async fn process(ctx: Context) { ctx.service.process().await; }
   - |
     fn process() { tracing::warn!(target: "email_db_client::messages", "sqlx::Error"); }
+  - |
+    use std::fmt;
+  - |
+    use std::{fmt, sync::Arc};
+  - |
+    use tokio::sync;
+  - |
+    use tokio::{sync, task};
+  - |
+    use crate::fs::Image;
 invalid:
   - |
     use email_db_client::Client;
@@ -120,3 +130,19 @@ invalid:
     use crate::{calendar_tokens::{CalendarTokenProviderAdapter}};
   - |
     use email::{outbound::EmailPgRepo};
+  - |
+    fn process(p: &str) { std::fs::read(p); }
+  - |
+    async fn process(p: &str) { tokio::fs::read(p).await; }
+  - |
+    use std::fs;
+  - |
+    use tokio::fs;
+  - |
+    use std::{fs, fmt};
+  - |
+    use tokio::{fs, sync};
+  - |
+    use std::fs as filesystem;
+  - |
+    use ::tokio::fs::{read, File};
