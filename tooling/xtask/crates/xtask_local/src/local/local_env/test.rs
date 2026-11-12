@@ -280,7 +280,7 @@ fn emits_in_network_service_url_overrides() {
         ),
         (
             "OVERRIDE_AGENT_GIT_SERVICE_URL",
-            "http://agent-git-service:8080",
+            "http://agent-harness-service:8080/agent-git",
         ),
         (
             "OVERRIDE_DOCUMENT_STORAGE_SERVICE_URL",

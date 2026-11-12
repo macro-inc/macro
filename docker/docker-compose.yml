@@ -254,33 +254,6 @@ services:
       start_period: 10s
 
   # ============================================================================
-  # agent_git_service (Port 8111)
-  # Agent workspace git remotes (smart HTTP via `git http-backend`) and their
-  # internal create/ensure/delete API; the local owner of /agent-git. Bare
-  # repositories live on the named volume (REPO_STORAGE_ROOT=/data/agent-git).
-  # ============================================================================
-  agent_git_service:
-    <<: [*common-env, *rust-services-image]
-    command: ["/app/out/agent_git_service"]
-    ports:
-      - "8111:8080"
-    volumes:
-      - agent_git_repos:/data/agent-git
-    depends_on:
-      - postgres
-    networks:
-      databases:
-      services:
-        aliases:
-          - agent-git-service
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-
-  # ============================================================================
   # notification_service (Port 8089)
   # User notifications - NotificationDB
   # ============================================================================
@@ -363,6 +336,9 @@ services:
       # sandboxes are siblings of this container rather than children. Harmless
       # under the Daytona provider, which never opens it.
       - /var/run/docker.sock:/var/run/docker.sock
+      # Agent workspace git remotes under /agent-git: bare repositories at
+      # REPO_STORAGE_ROOT, the same path as the deployed EFS volume.
+      - agent_git_repos:/data/agent-git
     depends_on:
       - postgres
       - redis
@@ -765,7 +741,7 @@ services:
 
 volumes:
   sync_state:
-  # agent_git_service's bare repositories.
+  # agent_harness_service's agent git bare repositories.
   agent_git_repos:
   # Backing store for the `lgtm` collector (profile-gated, global project).
   lgtm_data:

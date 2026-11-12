@@ -47,7 +47,7 @@ FROM debian:trixie-slim AS base
 # docker-cli, for the agent harness's local container provider: it drives the
 # host's daemon over the mounted socket, so sandboxes are this container's
 # siblings. The client tarball only - the daemon is the host's. git, for
-# agent_git_service's `git http-backend`.
+# the agent harness's `git http-backend` (agent git remotes).
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates dumb-init curl docker-cli git \
     && apt-get clean && rm -rf /var/lib/apt/lists/*

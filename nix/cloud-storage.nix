@@ -459,11 +459,6 @@
 
       deployServiceBinaryDefinitions = [
         {
-          serviceName = "agent-git-service";
-          packageName = "agent_git_service";
-          binaries = [ "agent_git_service" ];
-        }
-        {
           serviceName = "agent-harness-service";
           packageName = "agent_harness_service";
           binaries = [ "agent_harness_service" ];
@@ -689,7 +684,6 @@
       );
 
       localStackDeployServiceNames = [
-        "agent-git-service"
         "agent-harness-service"
         "calendar-service"
         "connection-gateway"
@@ -1171,7 +1165,7 @@
             ''
               diff -r ${starterAgentSrc} ${src}/packages/starter-agent
               diff -r ${starterAgentSrc} \
-                ${prunedDeploySrc "service-agent-git-service" "agent_git_service"}/packages/starter-agent
+                ${prunedDeploySrc "service-agent-harness-service" "agent_harness_service"}/packages/starter-agent
               touch $out
             '';
         fmt = craneLib.cargoFmt {

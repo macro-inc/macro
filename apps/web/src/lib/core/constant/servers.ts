@@ -21,7 +21,7 @@ const serverHostLocal: Servers = {
   'scheduled-action': 'http://localhost:8101/scheduled-action',
   'agent-harness': 'http://localhost:8101',
   preview: 'http://localhost:8101/preview',
-  'agent-git': 'http://localhost:8111',
+  'agent-git': 'http://localhost:8101/agent-git',
 } as const;
 
 const devServerSuffix = import.meta.env.MODE === 'development' ? '-dev' : '';

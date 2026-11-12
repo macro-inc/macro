@@ -38,6 +38,7 @@ agent-client-protocol = { workspace = true }
 agent_changes = { path = "../../crates/agent_changes" }
 agent_code_mode = { path = "../../crates/agent_code_mode" }
 agent_egress = { path = "../../crates/agent_egress" }
+agent_git = { path = "../../crates/agent_git" }
 agent_fold = { path = "../../crates/folds/agent_fold" }
 agent_harness = { path = "../../crates/agent_harness" }
 agent_inmem = { path = "../../crates/agent_inmem" }

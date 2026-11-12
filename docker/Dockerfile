@@ -39,8 +39,8 @@ RUN : \
 
 COPY --chmod=755 --from=builder /app/svc /app/svc
 
-# agent_git_service spawns `git http-backend` for smart-HTTP clones and pushes.
-RUN if [ "$SERVICE_NAME" = "agent_git_service" ]; then \
+# agent_harness_service spawns `git http-backend` for agent git remotes.
+RUN if [ "$SERVICE_NAME" = "agent_harness_service" ]; then \
     apt-get update \
     && apt-get install -y --no-install-recommends git \
     && apt-get clean \

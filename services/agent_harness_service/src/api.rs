@@ -76,6 +76,7 @@ pub struct ApiStates<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes
     universal_input: Router,
     scheduling: Router,
     preview: Router,
+    agent_git: Router,
     sharing: Router,
     routine_sessions: Router,
     coding_agents: Router,
@@ -133,6 +134,7 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
             universal_input: Router::new(),
             scheduling: Router::new(),
             preview: Router::new(),
+            agent_git: Router::new(),
             sharing: Router::new(),
             routine_sessions: Router::new(),
             coding_agents: Router::new(),
@@ -200,6 +202,13 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
     /// Attach the team admin's agent voice catalog and samples.
     pub fn with_voices(mut self, router: Router) -> Self {
         self.voices = router;
+        self
+    }
+
+    /// Attach agent teammates' repos (`/agent-git`), outside the gzip layer:
+    /// pack streams are already compressed.
+    pub fn with_agent_git(mut self, router: Router) -> Self {
+        self.agent_git = router;
         self
     }
 
@@ -361,6 +370,7 @@ where
     let cognition = states.cognition.clone();
     let scheduling = states.scheduling.clone();
     let preview = states.preview.clone();
+    let agent_git = states.agent_git.clone();
     let inner = api_router(states)
         .layer(MacroRequestIdAndTracingLayer::new(Duration::from_millis(200)).into_inner())
         .merge(health_router(runtime_commands_ready))
@@ -378,6 +388,7 @@ where
         .merge(cognition)
         .merge(scheduling)
         .merge(preview)
+        .merge(agent_git)
         .merge(public_mcp)
         .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()))
         .merge(SwaggerUi::new("/agent-harness/docs").url(

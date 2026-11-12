@@ -18,10 +18,52 @@ use crate::domain::template::{PersonaSeed, RenderedFile, WORKSPACE_TEMPLATE};
 struct FakeRepos {
     rows: Arc<Mutex<HashMap<String, AgentRepo>>>,
     pushes: Arc<Mutex<Vec<(String, u64)>>>,
+    /// One lock per repo, waited on like the advisory lock.
+    locks: Arc<Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>>,
+    /// Repos whose lock a guard holds now.
+    locked: Arc<Mutex<Vec<String>>>,
+    /// Every lock taken, in order.
+    lock_log: Arc<Mutex<Vec<String>>>,
+}
+
+/// Holds its repo's lock and its entry in [`FakeRepos::locked`] until dropped.
+struct FakeLock {
+    agent_user_id: String,
+    locked: Arc<Mutex<Vec<String>>>,
+    _guard: tokio::sync::OwnedMutexGuard<()>,
+}
+
+impl Drop for FakeLock {
+    fn drop(&mut self) {
+        self.locked
+            .lock()
+            .unwrap()
+            .retain(|held| held != &self.agent_user_id);
+    }
 }
 
 impl RepoRepository for FakeRepos {
     type Err = Infallible;
+    type Lock = FakeLock;
+
+    async fn lock_repo(&self, agent_user_id: &MacroUserIdStr<'_>) -> Result<FakeLock, Infallible> {
+        let agent_user_id = agent_user_id.as_ref().to_owned();
+        let lock = self
+            .locks
+            .lock()
+            .unwrap()
+            .entry(agent_user_id.clone())
+            .or_default()
+            .clone();
+        let guard = lock.lock_owned().await;
+        self.locked.lock().unwrap().push(agent_user_id.clone());
+        self.lock_log.lock().unwrap().push(agent_user_id.clone());
+        Ok(FakeLock {
+            agent_user_id,
+            locked: self.locked.clone(),
+            _guard: guard,
+        })
+    }
 
     async fn find_repo(
         &self,
@@ -191,13 +233,18 @@ struct FakeLimiter {
 }
 
 impl PushRateLimiter for FakeLimiter {
-    fn try_acquire_push(&self, _agent_user_id: &MacroUserIdStr<'_>) -> bool {
+    type Err = Infallible;
+
+    async fn try_acquire_push(
+        &self,
+        _agent_user_id: &MacroUserIdStr<'_>,
+    ) -> Result<bool, Infallible> {
         let mut remaining = self.remaining.lock().unwrap();
         if *remaining == 0 {
-            return false;
+            return Ok(false);
         }
         *remaining -= 1;
-        true
+        Ok(true)
     }
 }
 
@@ -867,4 +914,61 @@ async fn deletion_waits_for_recovery_and_removes_its_published_storage() {
     deletion.await.unwrap();
     assert!(repos.find_repo(&agent).await.unwrap().is_none());
     assert!(!store.repos.lock().unwrap().contains(agent.as_ref()));
+}
+
+#[tokio::test]
+async fn a_push_holds_the_repo_lock_until_its_response_ends_and_management_takes_it() {
+    let repos = FakeRepos::default();
+    let service = AgentGitServiceImpl::new(
+        AgentGitAdapters {
+            repos: repos.clone(),
+            store: FakeStore::default(),
+            admins: FakeAdmins::default(),
+            limiter: FakeLimiter {
+                remaining: Arc::new(Mutex::new(30)),
+            },
+            backend: EchoBackend::default(),
+        },
+        RepoLimits {
+            max_repo_size_bytes: 500_000_000,
+        },
+        WORKSPACE_TEMPLATE,
+    );
+    let agent = MacroUserIdStr::try_from(AGENT.to_owned()).unwrap();
+    let created = service
+        .create_repo(agent.clone(), TEAM, &seed())
+        .await
+        .unwrap();
+    assert_eq!(*repos.lock_log.lock().unwrap(), vec![AGENT.to_owned()]);
+    assert!(repos.locked.lock().unwrap().is_empty());
+
+    let push = service
+        .serve_git(
+            GitCredential::RepoToken(created.token.clone()),
+            &agent,
+            request(GitEndpoint::Rpc(GitService::ReceivePack), b"pack"),
+        )
+        .await
+        .unwrap();
+    // git is still receiving while the response streams.
+    assert_eq!(*repos.locked.lock().unwrap(), vec![AGENT.to_owned()]);
+    let body: Vec<_> = push.body.collect().await;
+    assert_eq!(body.len(), 1);
+    assert!(repos.locked.lock().unwrap().is_empty());
+
+    // Reads never wait for a push.
+    service
+        .serve_git(
+            GitCredential::RepoToken(created.token.clone()),
+            &agent,
+            request(GitEndpoint::Rpc(GitService::UploadPack), b""),
+        )
+        .await
+        .unwrap();
+    service.delete_repo(&agent).await.unwrap();
+    assert_eq!(
+        *repos.lock_log.lock().unwrap(),
+        vec![AGENT.to_owned(), AGENT.to_owned(), AGENT.to_owned()]
+    );
+    assert!(repos.locked.lock().unwrap().is_empty());
 }

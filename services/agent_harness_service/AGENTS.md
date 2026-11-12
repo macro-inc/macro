@@ -204,6 +204,20 @@ Pulumi stacks; they do not host extra agent processes.
   lease/ticket and authorization logic lives in `crates/agent_preview`. The shared
   pool stores replica ownership and credential hashes; startup and ten-second
   heartbeats register this process's private HTTP address for direct forwarding.
+- `src/agent_git.rs`: agent teammates' workspace repos (`crates/agent_git`)
+  under `/agent-git` (smart HTTP plus the internal create/ensure/delete API;
+  `AgentGitServiceUrl` points here), merged outside the gzip layer. Storage
+  is EFS at `REPO_STORAGE_ROOT` (`/data/agent-git`, the
+  `agent-harness-service` stack's file system and access point), chosen
+  because it is the simplest store git can use directly that both replicas
+  share. Each repo's push budget is a row in Postgres and each receive-pack
+  (and create/ensure/delete) holds a per-repo Postgres advisory lock, so the
+  replicas never interleave writes to one repo; git's lockfiles on EFS are
+  the second guard. Startup fails without git and `git-http-backend`, or
+  without the directory; shutdown drains running git processes for up to
+  8 s. Config: `REPO_STORAGE_ROOT`, `MAX_REPO_SIZE_BYTES`,
+  `PUSHES_PER_MINUTE` (required; locally the `agent_git_repos` compose
+  volume and 500 MiB / 30).
 - [Consolidation guide](../../docs/guides/consolidate-agent-services.md):
   Doppler migration, retirement order, OAuth provider cutover.
 
