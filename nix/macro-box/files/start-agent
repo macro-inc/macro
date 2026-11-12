@@ -52,25 +52,53 @@ git -C "$workspace" config --local credential.useHttpPath true
 git -C "$workspace" config --local user.name "$name"
 git -C "$workspace" config --local user.email "${user_id#macro|}"
 
+# The workspace's git, never running a hook: hooks are files the agent writes.
+wgit() { git -C "$workspace" -c core.hooksPath=/dev/null -c commit.gpgsign=false "$@"; }
+
 # Boot rollback: `agent-stopped` counts boots that failed before the runtime
-# wrote last-good for them. After max_failed_boots, go back to last-good.
-# Nothing is pushed; the runtime's next commit records the rollback.
+# wrote last-good for them. After max_failed_boots, go back to last-good's
+# code with a commit of its tree on top of the broken head, so the runtime's
+# next pull --rebase keeps it (and its next sync pushes it) instead of
+# fast-forwarding back to the broken head still on origin.
 count=$(cat "$failures" 2>/dev/null || echo 0)
 good=$(cat "$last_good" 2>/dev/null || true)
-head=$(git -C "$workspace" rev-parse HEAD)
+head=$(wgit rev-parse HEAD)
 if ((count >= max_failed_boots)) && [[ -n $good && $good != "$head" ]]; then
   echo "rolling back from $head to last-good $good after $count failed boots" >&2
-  git -C "$workspace" reset --hard --quiet "$good"
-  head=$good
+  rollback=$(wgit commit-tree "$good^{tree}" -p "$head" \
+    -m "revert(agent): roll back to last-good ${good:0:12} after $count failed boots")
+  wgit reset --hard --quiet "$rollback"
+  head=$rollback
   echo 0 > "$failures"
 fi
+# Written before anything here can fail the boot, so agent-stopped counts
+# that failure against this head.
 echo "$head" > "$boot_head"
 
-# The image's packages. They are installed from the starter agent's
-# bun.lock, so a self-edit that changes it fails to boot and rolls back.
+# The image's packages, installed from the starter agent's bun.lock. A lock
+# that differs because the image was updated is adopted (committed, so the
+# runtime pushes it); one that differs because the agent changed its
+# dependencies fails the boot, which rolls back: new packages need a new
+# image. The agent changed them if its package.json differs from the
+# template's (the repository's first commit) or has uncommitted changes; a
+# rollback restores the template's, so a rolled-back agent boots again.
+dependencies_edited() {
+  local template
+  ! wgit diff --quiet HEAD -- package.json && return 0
+  template=$(wgit rev-list --max-parents=0 HEAD | tail -n 1)
+  ! wgit diff --quiet "$template" HEAD -- package.json
+}
 if ! cmp -s "$workspace/bun.lock" "$runtime/bun.lock"; then
-  echo "bun.lock differs from the image's; new packages need a new image" >&2
-  exit 1
+  if dependencies_edited; then
+    echo "bun.lock differs from the image's and the agent changed its dependencies; new packages need a new image" >&2
+    exit 1
+  fi
+  echo "adopting the image's bun.lock" >&2
+  cp "$runtime/bun.lock" "$workspace/bun.lock"
+  wgit add bun.lock
+  wgit commit -qm "chore(agent): adopt the image's bun.lock"
+  head=$(wgit rev-parse HEAD)
+  echo "$head" > "$boot_head"
 fi
 modules=$workspace/node_modules
 if [[ "$(readlink "$modules" || true)" != "$runtime/node_modules" ]]; then
