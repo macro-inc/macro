@@ -158,7 +158,7 @@ impl PasswordService {
         Ok(record)
     }
     /// Revalidate shared disclosure policy after external I/O, even if its lease was lost.
-    #[tracing::instrument(skip_all,err,name="passwords.disclosure.recheck",fields(team_id=%team.0,item_id=%item.0,post_io_access_denied=false,outcome=tracing::field::Empty))]
+    #[tracing::instrument(skip_all,err,name="passwords.disclosure.recheck",fields(team_id=%team.0,item_id=%item.0,post_io_access_denied=tracing::field::Empty,outcome=tracing::field::Empty))]
     async fn recheck_disclosure(
         &self,
         actor: &Actor,
@@ -179,6 +179,7 @@ impl PasswordService {
             tracing::Span::current().record("outcome", "generation_changed");
             return Err(Error::Busy);
         }
+        tracing::Span::current().record("post_io_access_denied", false);
         tracing::Span::current().record("outcome", "allowed");
         Ok(current)
     }
