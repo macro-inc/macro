@@ -38,16 +38,20 @@ export function createEmailLogin(
     autoStart?: boolean;
     /** After a verified sign-in, before the session swaps the page. */
     onVerified?: () => void;
+    /** A provider sign-in just failed: open on the email step and say why. */
+    fallbackNotice?: string;
   }
 ) {
   const [step, setStep] = createSignal<LoginStep>(
-    options.initialEmail ? 'email' : 'choose'
+    options.initialEmail || options.fallbackNotice ? 'email' : 'choose'
   );
   const [email, setEmail] = createSignal(options.initialEmail ?? '');
   const [password, setPassword] = createSignal('');
   const [passwordRequired, setPasswordRequired] = createSignal(false);
   const [sending, setSending] = createSignal(false);
-  const [sendError, setSendError] = createSignal<string>();
+  const [sendError, setSendError] = createSignal<string | undefined>(
+    options.fallbackNotice
+  );
   const [code, setCode] = createSignal('');
   const [verifying, setVerifying] = createSignal(false);
   const [verifyError, setVerifyError] = createSignal<string>();

@@ -23,6 +23,7 @@ import {
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import { useUserId } from '@core/context/user';
+import { isModality } from '@core/mobile/inputModality';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { ContextProviderProps } from '@solid-primitives/context';
 import deepEqual from 'fast-deep-equal';
@@ -32,6 +33,7 @@ import {
   createMemo,
   createSignal,
   on,
+  onCleanup,
 } from 'solid-js';
 import {
   createStore,
@@ -61,6 +63,8 @@ type HomeViewProviderProps = ContextProviderProps & {
   initialState?: HomeViewStateOptions;
 };
 
+export type HomeComposerFocusRequest = { channelId: string; id: number };
+
 export type HomeViewContext = {
   state: Store<HomeViewState>;
   setState: SetStoreFunction<HomeViewState>;
@@ -76,6 +80,15 @@ export type HomeViewContext = {
     entity: PreviewSelection,
     options?: { activate?: boolean }
   ) => boolean;
+  /**
+   * Set when a click or Enter previews a conversation: its composer takes
+   * focus, also when it was already open. Any other preview clears it.
+   */
+  composerFocusRequest: Accessor<HomeComposerFocusRequest | undefined>;
+  /** Keyboard focus back to the list, on its focused row; false without one. */
+  focusList: () => boolean;
+  /** The list supplies `focusList` for as long as it is mounted. */
+  registerListFocus: (focus: () => boolean) => void;
   closePreview: () => void;
   setTab: (tab: HomeTab) => void;
   setFacets: (facets: FacetSelection) => void;
@@ -184,14 +197,36 @@ export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
   };
   const [previewNavigationRequest, setPreviewNavigationRequest] =
     createSignal(0);
+  const [composerFocusRequest, setComposerFocusRequest] =
+    createSignal<HomeComposerFocusRequest>();
+  let lastComposerFocusRequestId = 0;
   const openPreview = (
     entity: PreviewSelection,
     options?: { activate?: boolean }
   ) => {
     if (entity.type === 'calendar_event') {
+      setComposerFocusRequest(undefined);
       return openCalendarEvent(entity, options);
     }
-    return openPreviewTarget(previewBlockTarget(entity));
+    const target = previewBlockTarget(entity);
+    // A tap would raise the on-screen keyboard.
+    const focusComposer =
+      options?.activate === true &&
+      target.blockType === 'channel' &&
+      !isModality('touch');
+    setComposerFocusRequest(
+      focusComposer
+        ? { channelId: target.blockId, id: ++lastComposerFocusRequestId }
+        : undefined
+    );
+    return openPreviewTarget(target);
+  };
+  const [listFocus, setListFocus] = createSignal<() => boolean>();
+  const registerListFocus = (focus: () => boolean) => {
+    setListFocus(() => focus);
+    onCleanup(() =>
+      setListFocus((current) => (current === focus ? undefined : current))
+    );
   };
   const openPreviewTarget = (target: PreviewBlockTarget) => {
     if (!selectPreview.canSelect(target)) return false;
@@ -248,6 +283,9 @@ export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
     calendarOpen,
     calendarRefocus,
     openPreview,
+    composerFocusRequest,
+    focusList: () => listFocus()?.() ?? false,
+    registerListFocus,
     closePreview,
     setTab,
     setFacets,

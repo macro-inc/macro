@@ -256,7 +256,15 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
       tabItem('tabRuntimes', {
         tab: 'Harness',
         icon: HardDrivesIcon,
-        keywords: ['cursor', 'harness', 'runtime', 'credential', 'api key'],
+        keywords: [
+          'cursor',
+          'harness',
+          'runtime',
+          'machine',
+          'computer',
+          'credential',
+          'api key',
+        ],
       }),
       tabItem('tabMcpServer', {
         tab: 'Agent',

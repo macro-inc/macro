@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { AddContactData, AddContactErrors, AddContactResponses, GetContactsData, GetContactsErrors, GetContactsResponses } from './types.gen';
+import type { AddContactData, AddContactErrors, AddContactResponses, GetContactsData, GetContactsErrors, GetContactsResponses, SearchPeopleData, SearchPeopleErrors, SearchPeopleResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -76,5 +76,12 @@ export class Sdk extends HeyApiClient {
                 ...options.headers
             }
         });
+    }
+
+    /**
+     * GET /contacts/search handler: ranked search of the viewer's contacts and team.
+     */
+    public searchPeople<ThrowOnError extends boolean = false>(options: Options<SearchPeopleData, ThrowOnError>): RequestResult<SearchPeopleResponses, SearchPeopleErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<SearchPeopleResponses, SearchPeopleErrors, ThrowOnError>({ url: '/contacts/search', ...options });
     }
 }

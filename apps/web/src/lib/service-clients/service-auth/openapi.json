@@ -3946,6 +3946,16 @@
               }
             }
           },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "500": {
             "description": "",
             "content": {
@@ -6419,6 +6429,16 @@
               }
             }
           },
+          "429": {
+            "description": "Picture changed less than a second ago",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
           "500": {
             "description": "",
             "content": {
@@ -6480,6 +6500,16 @@
           },
           "404": {
             "description": "The caller has no such file",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Picture changed less than a second ago",
             "content": {
               "application/json": {
                 "schema": {
@@ -7653,6 +7683,11 @@
           {
             "type": "object",
             "properties": {
+              "id": {
+                "type": ["string", "null"],
+                "format": "uuid",
+                "description": "The id of the update that set it; absent when no status was ever set.\nClients remember dismissed banners by this id."
+              },
               "updatedAt": {
                 "type": ["string", "null"],
                 "format": "date-time",

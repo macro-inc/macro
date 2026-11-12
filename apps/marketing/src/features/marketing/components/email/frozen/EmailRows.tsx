@@ -1,4 +1,4 @@
-import Envelope from '@phosphor/envelope-open.svg';
+import Envelope from '@icon/system/regular/envelope-open.svg';
 import { Badge } from '@ui/components/Badge';
 import { For, Show } from 'solid-js';
 import {
