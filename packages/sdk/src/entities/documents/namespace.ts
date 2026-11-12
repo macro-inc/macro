@@ -149,6 +149,7 @@ export class DocumentNamespace {
       content: true,
       project: true,
     });
+
     const { documentId } = unwrap(
       await this.client.storage.uploadFile({
         query: { fileName: options.name, projectId: options.project?.id },
@@ -186,6 +187,7 @@ export class DocumentNamespace {
       attachment: true,
       isTask: true,
     });
+
     const body: CreateDocumentRequest = {
       documentName: options.name,
       sha: options.sha,
@@ -242,6 +244,7 @@ export class DocumentNamespace {
       name: true,
       project: true,
     });
+
     const result = unwrap(
       await this.client.storage.createCanvasHandler({
         body: { documentName: opts.name, projectId: opts.project?.id },
@@ -284,6 +287,7 @@ export class DocumentNamespace {
       name: true,
       project: true,
     });
+
     const result = unwrap(
       await this.client.storage.createSpreadsheet({
         body: { documentName: opts.name, projectId: opts.project?.id },

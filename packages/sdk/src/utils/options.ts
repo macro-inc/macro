@@ -11,7 +11,9 @@ export function rejectUnknownOptions<Options extends object>(
   options: Options,
   allowed: Record<keyof Options, true>,
 ): void {
-  const unknown = Object.keys(options).filter((key) => !(key in allowed));
+  const unknown = Object.keys(options).filter(
+    (key) => !Object.hasOwn(allowed, key),
+  );
 
   if (unknown.length === 0) return;
 
