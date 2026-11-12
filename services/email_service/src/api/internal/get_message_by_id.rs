@@ -4,6 +4,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
+use email::domain::message_reads::InternalMessageReadError;
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
 use model::response::ErrorResponse;
 use sqlx::types::Uuid;
@@ -20,30 +21,28 @@ pub async fn handler(
     _: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
     Path(PathParams { id }): Path<PathParams>,
 ) -> Result<Response, Response> {
-    let message = email_db_client::messages::get_parsed::get_parsed_message_by_id(&ctx.db, &id)
+    let messages = ctx
+        .message_reads
+        .internal_message(id)
         .await
-        .map_err(|e| {
-            tracing::error!(error=?e, "unable to get message ids for thread");
+        .map_err(|error| {
+            let (status, message) = match error {
+                InternalMessageReadError::NotFound => (StatusCode::NOT_FOUND, "message not found"),
+                InternalMessageReadError::Query(error) => {
+                    let e = error.into_inner();
+                    tracing::error!(error=?e, "unable to get message ids for thread");
+                    (StatusCode::INTERNAL_SERVER_ERROR, "internal server error")
+                }
+            };
             (
-                StatusCode::INTERNAL_SERVER_ERROR,
+                status,
                 Json(ErrorResponse {
-                    message: "internal server error".into(),
+                    message: message.into(),
                 }),
             )
                 .into_response()
         })?;
-
-    if let Some(message) = message {
-        Ok(Json(message).into_response())
-    } else {
-        Err((
-            StatusCode::NOT_FOUND,
-            Json(ErrorResponse {
-                message: "message not found".into(),
-            }),
-        )
-            .into_response())
-    }
+    Ok(Json(messages).into_response())
 }
 
 #[tracing::instrument(skip(ctx))]
@@ -52,43 +51,26 @@ pub async fn get_message_by_id_batch_handler(
     _: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
     Json(ids): Json<Vec<Uuid>>,
 ) -> Result<Response, Response> {
-    let messages =
-        email_db_client::messages::get_parsed::get_parsed_messages_by_id_batch(&ctx.db, &ids)
-            .await
-            .map_err(|e| {
-                tracing::error!(error=?e, "unable to get message ids for thread");
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(ErrorResponse {
-                        message: "internal server error".into(),
-                    }),
-                )
-                    .into_response()
-            })?;
-
-    if messages.len() == ids.len() {
-        Ok(Json(messages).into_response())
-    } else if !messages.is_empty() {
-        let missing_ids: Vec<Uuid> = ids
-            .iter()
-            .filter(|id| !messages.iter().any(|m| m.db_id == **id))
-            .cloned()
-            .collect();
-
-        tracing::warn!(
-            missing_ids = ?missing_ids,
-            "some ids not found in database"
-        );
-
-        Ok(Json(messages).into_response())
-    } else {
-        tracing::warn!("no messages found in database");
-        Err((
-            StatusCode::NOT_FOUND,
-            Json(ErrorResponse {
-                message: "messages not found".into(),
-            }),
-        )
-            .into_response())
-    }
+    let messages = ctx
+        .message_reads
+        .internal_messages(&ids)
+        .await
+        .map_err(|error| {
+            let (status, message) = match error {
+                InternalMessageReadError::NotFound => (StatusCode::NOT_FOUND, "messages not found"),
+                InternalMessageReadError::Query(error) => {
+                    let e = error.into_inner();
+                    tracing::error!(error=?e, "unable to get message ids for thread");
+                    (StatusCode::INTERNAL_SERVER_ERROR, "internal server error")
+                }
+            };
+            (
+                status,
+                Json(ErrorResponse {
+                    message: message.into(),
+                }),
+            )
+                .into_response()
+        })?;
+    Ok(Json(messages).into_response())
 }

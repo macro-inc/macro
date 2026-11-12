@@ -128,12 +128,13 @@ async fn an_agent_steps_session_creates_its_runs_sub_routines() {
     let (tx, mut rx) = tokio::sync::mpsc::channel(32);
     tokio::spawn(async move { while rx.recv().await.is_some() {} });
     // A run's id is the id of the session its agent step opens.
-    let service = TestService::new(
+    let service = ScheduledActionServiceImpl::new(
         Arc::clone(&repo),
         Arc::new(FakeExecutor::default()),
         tx,
         grants(&repo),
     )
+    .with_event_routines(Rollout(Some(false)))
     .with_run_sessions(Arc::new(OneSession(id(CORRELATION), id(PARENT_RUN))));
     let parent = top_level(&service, "parent").await;
     start_run(&service, &parent, PARENT_RUN);

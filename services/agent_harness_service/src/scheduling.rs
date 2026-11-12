@@ -23,6 +23,7 @@ pub mod routine_suggestions;
 use config::Config;
 use scheduled_action::domain::code_upgrade;
 use scheduled_action::domain::drafts::{DraftAgent, RoutineDrafts};
+use scheduled_action::domain::event_rollout::FlaggedEventRoutines;
 use scheduled_action::domain::event_runs::{
     PageSize, admission::EventAdmissionService, condition::ConditionGate,
     dispatch::EventDispatchService,
@@ -553,10 +554,29 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     drop(execution_rx);
 
     let conditions = classifier.map(|classifier| ConditionGate::new(event_content, classifier));
+    let routine_flags = config
+        .posthog_api_key
+        .value()
+        .map(|key| {
+            feature_flags::outbound::posthog::PostHogFeatureFlags::new(
+                config
+                    .posthog_host
+                    .value()
+                    .unwrap_or("https://us.i.posthog.com"),
+                key.to_owned(),
+                Duration::from_secs(3),
+                config.environment,
+            )
+        })
+        .transpose()
+        .map_err(|error| anyhow::anyhow!("invalid routine feature flag configuration: {error}"))?;
+    // Event routines follow each owner's PostHog flag; without PostHog no one has it.
+    let event_routines = routine_flags.clone().map(FlaggedEventRoutines::new);
     let event_dispatch = EventDispatchService::new(
         Arc::clone(&event_repo),
         Arc::clone(&event_access),
         Arc::clone(&service_executor),
+        event_routines.clone(),
     )
     .with_conditions(Arc::new(conditions));
     let brokers = config.kafka_brokers.to_string();
@@ -567,7 +587,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     let worker_shutdown = lifecycle.stop_workers.clone();
     let executions = lifecycle.executions.clone();
     start_event_tasks(
-        config.event_routines_enabled,
+        event_routines.is_some(),
         &lifecycle,
         move || {
             let mut ready = ready.clone();
@@ -656,7 +676,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
             dispatcher_tx,
             access.clone(),
         )
-        .with_event_management_enabled(config.event_routines_enabled)
+        .with_event_routines(event_routines)
         .with_conditions_enabled(conditions_enabled)
         .with_target_validation(TargetValidation::new(Arc::clone(&sessions)))
         .with_draft_hand_backs(hand_backs, Arc::clone(&request_sessions))
@@ -667,22 +687,6 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         .with_github_links(PgGithubInstallationClaims::new(db.clone()))
         .with_code(code, upgrades),
     );
-    let template_flags = config
-        .posthog_api_key
-        .value()
-        .map(|key| {
-            feature_flags::outbound::posthog::PostHogFeatureFlags::new(
-                config
-                    .posthog_host
-                    .value()
-                    .unwrap_or("https://us.i.posthog.com"),
-                key.to_owned(),
-                Duration::from_secs(3),
-                config.environment,
-            )
-        })
-        .transpose()
-        .map_err(|error| anyhow::anyhow!("invalid routine feature flag configuration: {error}"))?;
     // Generations: hidden sessions of the in-process Macro agent on the free
     // tier's model, at onboarding and in each person's night, opened
     // non-billable (`SessionBilling::NonBillable`), so their usage is
@@ -709,7 +713,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         request_sessions,
         generations.clone(),
         generations.clone(),
-        template_flags.clone(),
+        routine_flags.clone(),
         RoutineBriefing {
             guide: agent_code_mode::domain::entity_guide("routines").unwrap_or_default(),
             agent_model: chat::domain::models::FREE_MODEL.to_owned(),
@@ -734,7 +738,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
             // Reading the feed counts paid readers in for nightly runs.
             Arc::new(PaidAudience::new(generations.clone(), Arc::clone(&plans))),
             Arc::new(SuggestionDismissal(Arc::clone(&suggestions))),
-            template_flags.clone(),
+            routine_flags.clone(),
         )
         // Accepting a background prompt suggestion runs it in a hidden session of the
         // in-process Macro agent, as the person, billed as their agent usage.
@@ -763,7 +767,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
             sessions,
             Arc::clone(&suggestions),
             Arc::clone(&feed),
-            template_flags.clone(),
+            routine_flags.clone(),
             GenerationAgent {
                 bot: bot_id::MACRO_NEW_BOT_ID,
                 model: chat::domain::models::FREE_MODEL.to_owned(),
@@ -850,7 +854,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         service: Arc::new(RoutineTemplateServiceImpl::new(
             Arc::clone(&service),
             Arc::new(PgRoutineTemplateRepo::new(db.clone())),
-            template_flags,
+            routine_flags,
         )),
         access_service: Arc::clone(&access),
         authorization_state: authorization_state.clone(),

@@ -176,6 +176,28 @@ export type AiAdmissionErrorBody = {
 };
 
 /**
+ * Named tint keys from the shared tag color palette.
+ */
+export type AppearanceColor = 'gray' | 'red' | 'tomato' | 'orange' | 'amber' | 'yellow' | 'green' | 'teal' | 'blue' | 'indigo' | 'purple' | 'pink';
+
+/**
+ * The source of an entity's custom icon.
+ */
+export type AppearanceIcon = {
+    kind: 'macro';
+    /**
+     * Catalog name without the SVG extension.
+     */
+    name: string;
+} | {
+    kind: 'emoji';
+    /**
+     * Unicode emoji text, not markup or a URL.
+     */
+    value: string;
+};
+
+/**
  * A reply draft a session wrote for an open reply suggestion, as the user,
  * through `macro.email.createDraft`. It replaces the suggestion's draft, if any;
  * nothing is ever sent.
@@ -537,6 +559,14 @@ export type EmptyResponse = {
  * What an entity suggestion suggests doing about its items.
  */
 export type EntityAction = 'reply' | 'review' | 'follow_up';
+
+/**
+ * An entity's optional icon and tint overrides; absent values retain type defaults.
+ */
+export type EntityAppearance = {
+    color?: null | AppearanceColor;
+    icon?: null | AppearanceIcon;
+};
 
 /**
  * The type of an entity in Macro
@@ -1127,6 +1157,7 @@ export type RoutineTemplate = {
      * Routines activated from this template, including stopped ones.
      */
     active_count: number;
+    appearance: EntityAppearance;
     /**
      * Who shared it: the source routine's owner.
      */
@@ -1240,6 +1271,10 @@ export type RunVisibility = 'listed' | 'unlisted';
 export type Schedule = string;
 
 export type ScheduledAction = {
+    /**
+     * Optional presentation overrides; absent values use routine defaults.
+     */
+    appearance?: EntityAppearance;
     claimed?: string | null;
     /**
      * Independent of execution bookkeeping in `updated_at`.
@@ -2148,6 +2183,30 @@ export type UpdateScheduledActionResponses = {
 };
 
 export type UpdateScheduledActionResponse = UpdateScheduledActionResponses[keyof UpdateScheduledActionResponses];
+
+export type SetScheduledActionAppearanceData = {
+    body: EntityAppearance;
+    path: {
+        /**
+         * ID of the scheduled action
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/{id}/appearance';
+};
+
+export type SetScheduledActionAppearanceErrors = {
+    400: unknown;
+    401: unknown;
+    404: unknown;
+};
+
+export type SetScheduledActionAppearanceResponses = {
+    200: EntityAppearance;
+};
+
+export type SetScheduledActionAppearanceResponse = SetScheduledActionAppearanceResponses[keyof SetScheduledActionAppearanceResponses];
 
 export type ListScheduledActionCodeUpgradesData = {
     body?: never;

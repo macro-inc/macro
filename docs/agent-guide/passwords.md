@@ -8,7 +8,8 @@ rail entry and phone dock entry appear only when both hold. By default the rail
 entry sits below Calendar and above Agents; a saved custom rail order without
 it gets it right after Calendar, and the user can reorder it like any other.
 
-The view uses the shared view shell. The inner sidebar (Drive's sidebar
+The view uses the shared view shell and standard shimmering skeletons while
+the team or password list loads. The inner sidebar (Drive's sidebar
 patterns) has a New dropdown, All items, Favorites, Recently used, Shared, and
 a Folders section: a Passwords root row and the folder tree, built from Drive's
 `FolderTree`. Folders nest; selecting one lists its items and its subfolders'
@@ -18,10 +19,12 @@ subfolder, Rename (inline), Move to folder (an inline destination list), and
 Delete folder. Delete confirms in place and says how many items move to All
 items and how many subfolders go too; it never deletes items or their values.
 On a phone, the header pills are All, Favorites, Recent, Shared and Folders;
-Folders shows the same tree, and the floating New button opens the same kinds.
+Folders shows the same tree, and the floating New button opens the item kinds.
+Create folders from the Folders section's "+" on desktop or in the phone's
+Folders tab. A failed create offers Retry with the original name and parent.
 
 New opens a menu to pick the kind first: Login, Card, Secure note, Identity,
-API credential, Verification code, or Folder. Each kind's form and detail label
+API credential, or Verification code. Each kind's form and detail label
 the shared username, password, website and notes values for that kind (Card:
 Cardholder and Card number; API credential: Endpoint, Key and Secret; Identity
 and Card start with labeled custom fields such as Expires or Email; those
