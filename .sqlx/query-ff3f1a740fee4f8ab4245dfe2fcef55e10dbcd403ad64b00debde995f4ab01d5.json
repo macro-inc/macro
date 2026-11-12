@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    SELECT sp.\"linkShare\"\n                    FROM \"ChatPermission\" cp\n                    JOIN \"SharePermission\" sp ON sp.id = cp.\"sharePermissionId\"\n                    WHERE cp.\"chatId\" = $1\n                    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "linkShare",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "ff3f1a740fee4f8ab4245dfe2fcef55e10dbcd403ad64b00debde995f4ab01d5"
+}

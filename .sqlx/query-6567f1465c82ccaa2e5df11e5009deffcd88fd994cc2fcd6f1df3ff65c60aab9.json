@@ -1,0 +1,27 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO \"macro_user\" (\n            \"id\", \"username\", \"stripe_customer_id\", \"email\", \"has_trialed\",\n            \"mailbox_handle_claimed_at\"\n        )\n        VALUES ($1, $2, $3, $4, $5, CASE WHEN $6 THEN now() ELSE NULL END)\n        RETURNING id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Bool",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "6567f1465c82ccaa2e5df11e5009deffcd88fd994cc2fcd6f1df3ff65c60aab9"
+}

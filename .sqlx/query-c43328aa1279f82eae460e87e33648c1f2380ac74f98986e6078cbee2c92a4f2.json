@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO enterprise_audit (id, actor_id, action, resource_id, result) VALUES ($1, $2, $3, $4, 'local_link_created')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c43328aa1279f82eae460e87e33648c1f2380ac74f98986e6078cbee2c92a4f2"
+}

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT id\n        FROM macro_user\n        WHERE username = $1\n        ",
+  "query": "\n        SELECT id\n        FROM macro_user\n        WHERE lower(username) = lower($1)\n          AND mailbox_handle_claimed_at IS NOT NULL\n        ",
   "describe": {
     "columns": [
       {
@@ -18,5 +18,5 @@
       false
     ]
   },
-  "hash": "58bcc36d5e748a63f9f35516f0c0ace37f77dd6806bf7f26211b3faa0fa84422"
+  "hash": "1143029c9b20524c31844ba663081957b7f7132ba751078d118963423b03e2f1"
 }
