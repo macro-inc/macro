@@ -154,7 +154,7 @@ export function RouteTasks() {
             tone: 'tasks',
             glassFrame: true,
           }}
-          title="Linked to GitHub, both ways."
+          title="Linked to Macro GitHub, both ways."
           description="As you create, review, and merge pull requests, the linked task moves through In Progress, In Review, and Completed. Click the GitHub pill to open the pull request from the task, or go back to the task from the pull request. Your team can see where the work stands without you having to update two systems."
         >
           <DemoInteractionBoundary

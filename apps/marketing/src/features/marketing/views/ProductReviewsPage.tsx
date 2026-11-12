@@ -106,7 +106,7 @@ export function RouteGithub() {
           demo={{
             tone: 'github',
           }}
-          title="Tasks move as the pull request moves."
+          title="Macro Tasks move as the pull request moves."
           description="As you create, review, and merge a pull request, the linked task moves through In Progress, In Review, and Completed. Click the GitHub pill to go right to the pull request from the task, or vice versa. It opens in a split screen, so you don’t have to leave Macro."
         >
           <DemoInteractionBoundary

@@ -162,7 +162,7 @@ export function RouteCrm() {
         demo={{
           tone: 'crm',
         }}
-        title="Agents can do everything you can."
+        title="Macro Agents can do everything you can."
         description="Our MCP support is just as important to us as the user interface. Ask your agent to update a deal, draft a follow-up from the customer’s emails, calls, and notes, or set up a routine that moves the deal to the right stage every time a call ends."
       >
         <DemoInteractionBoundary

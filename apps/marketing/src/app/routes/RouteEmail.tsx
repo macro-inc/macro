@@ -183,7 +183,7 @@ export function RouteEmail() {
         demo={{
           tone: 'email',
         }}
-        title="Draft and send from the agent."
+        title="Draft and send with Macro Agents."
         description="The agent can search prior interactions with people and build up context before drafting the email. You can iterate with it and then hit send without leaving the agent."
       >
         <DemoInteractionBoundary
@@ -219,7 +219,7 @@ export function RouteEmail() {
       </FeaturePageSection>
       <FeaturePageSection
         id="auto-tags"
-        title="Let routines watch your email."
+        title="Let Macro Routines watch your email."
         description="Set up a routine that runs when an email arrives. Have an agent tag incoming emails by customer, project, or topic, or notify a channel when an urgent support email comes in. The same tags work across emails, docs, and tasks."
       >
         <PaperFeatureGraphic

@@ -82,7 +82,7 @@ export function RouteDocuments() {
         <FeaturePageSection
           id="document-agents"
           demo={{ tone: 'documents', glassFrame: false }}
-          title="Agents get a live cursor in the document."
+          title="Macro Agents get a live cursor in the doc."
           description="Agents edit the document live, at the same time as you and your team, as opposed to editing the markdown file and giving you a diff. If you go offline and come back on, your changes sync to your peers and conflict resolution happens automatically."
         >
           <DemoInteractionBoundary

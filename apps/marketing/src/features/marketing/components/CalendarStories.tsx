@@ -7,6 +7,7 @@ import ClockIcon from '@icon/system/regular/clock.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
 import { For, type JSX, Show } from 'solid-js';
 import { workspaceFeatures } from '../core/workspace-features';
+import { BookingGuestGraphic } from './BookingLinkStories';
 import { FeatureDemoBackdrop } from './FeatureDemoBackdrop';
 import { FeaturePageSection } from './FeaturePage';
 import { HomepageConversation } from './HomepageConversation';
@@ -39,32 +40,152 @@ const weekDays = [
 ];
 
 const weekEvents: CalendarBlock[] = [
-  { column: 0, start: 9.5, end: 10, title: 'Standup', time: '9:30am', tone: 'blue' },
-  { column: 1, start: 9.5, end: 10, title: 'Standup', time: '9:30am', tone: 'blue' },
-  { column: 2, start: 9.5, end: 10, title: 'Standup', time: '9:30am', tone: 'blue' },
-  { column: 3, start: 9.5, end: 10, title: 'Standup', time: '9:30am', tone: 'blue' },
-  { column: 4, start: 9.5, end: 10, title: 'Standup', time: '9:30am', tone: 'blue' },
-  { column: 0, start: 11, end: 12, title: 'Design review', time: '11am–12pm', tone: 'blue' },
-  { column: 0, start: 13, end: 14, title: 'Dentist', time: '1–2pm', tone: 'green' },
-  { column: 1, start: 10.5, end: 11.5, title: 'Customer demo', time: '10:30–11:30am', tone: 'blue' },
-  { column: 1, start: 12, end: 13, title: 'Lunch with Sam', time: '12–1pm', tone: 'purple' },
-  { column: 2, start: 10, end: 11, title: 'Roadmap review', time: '10–11am', tone: 'blue' },
-  { column: 2, start: 13, end: 14.5, title: 'School pickup', time: '1–2:30pm', tone: 'green' },
-  { column: 3, start: 11, end: 12.5, title: 'Board prep', time: '11am–12:30pm', tone: 'blue' },
-  { column: 3, start: 13.5, end: 14.5, title: 'Gym', time: '1:30–2:30pm', tone: 'purple' },
-  { column: 4, start: 12, end: 13, title: 'Team lunch', time: '12–1pm', tone: 'blue' },
+  {
+    column: 0,
+    start: 9.5,
+    end: 10,
+    title: 'Standup',
+    time: '9:30am',
+    tone: 'blue',
+  },
+  {
+    column: 1,
+    start: 9.5,
+    end: 10,
+    title: 'Standup',
+    time: '9:30am',
+    tone: 'blue',
+  },
+  {
+    column: 2,
+    start: 9.5,
+    end: 10,
+    title: 'Standup',
+    time: '9:30am',
+    tone: 'blue',
+  },
+  {
+    column: 3,
+    start: 9.5,
+    end: 10,
+    title: 'Standup',
+    time: '9:30am',
+    tone: 'blue',
+  },
+  {
+    column: 4,
+    start: 9.5,
+    end: 10,
+    title: 'Standup',
+    time: '9:30am',
+    tone: 'blue',
+  },
+  {
+    column: 0,
+    start: 11,
+    end: 12,
+    title: 'Design review',
+    time: '11am–12pm',
+    tone: 'blue',
+  },
+  {
+    column: 0,
+    start: 13,
+    end: 14,
+    title: 'Dentist',
+    time: '1–2pm',
+    tone: 'green',
+  },
+  {
+    column: 1,
+    start: 10.5,
+    end: 11.5,
+    title: 'Customer demo',
+    time: '10:30–11:30am',
+    tone: 'blue',
+  },
+  {
+    column: 1,
+    start: 12,
+    end: 13,
+    title: 'Lunch with Sam',
+    time: '12–1pm',
+    tone: 'purple',
+  },
+  {
+    column: 2,
+    start: 10,
+    end: 11,
+    title: 'Roadmap review',
+    time: '10–11am',
+    tone: 'blue',
+  },
+  {
+    column: 2,
+    start: 13,
+    end: 14.5,
+    title: 'School pickup',
+    time: '1–2:30pm',
+    tone: 'green',
+  },
+  {
+    column: 3,
+    start: 11,
+    end: 12.5,
+    title: 'Board prep',
+    time: '11am–12:30pm',
+    tone: 'blue',
+  },
+  {
+    column: 3,
+    start: 13.5,
+    end: 14.5,
+    title: 'Gym',
+    time: '1:30–2:30pm',
+    tone: 'purple',
+  },
+  {
+    column: 4,
+    start: 12,
+    end: 13,
+    title: 'Team lunch',
+    time: '12–1pm',
+    tone: 'blue',
+  },
 ];
 
 const teammates = ['Julia', 'Teo', 'Priya'];
 
 const availability: CalendarBlock[] = [
-  { column: 0, start: 11.5, end: 12.5, title: 'Customer demo', time: '11:30am–12:30pm', tone: 'blue' },
-  { column: 0, start: 15, end: 16, title: 'Roadmap review', time: '3–4pm', tone: 'blue' },
+  {
+    column: 0,
+    start: 11.5,
+    end: 12.5,
+    title: 'Customer demo',
+    time: '11:30am–12:30pm',
+    tone: 'blue',
+  },
+  {
+    column: 0,
+    start: 15,
+    end: 16,
+    title: 'Roadmap review',
+    time: '3–4pm',
+    tone: 'blue',
+  },
   { column: 1, start: 11, end: 12, title: 'Busy', tone: 'busy' },
   { column: 1, start: 12.5, end: 14, title: 'Busy', tone: 'busy' },
   { column: 2, start: 11.5, end: 13, title: 'Busy', tone: 'busy' },
   { column: 2, start: 14.5, end: 16, title: 'Busy', tone: 'busy' },
-  { column: 0, span: 3, start: 14, end: 14.5, title: 'Everyone is free', time: '2–2:30pm', tone: 'slot' },
+  {
+    column: 0,
+    span: 3,
+    start: 14,
+    end: 14.5,
+    title: 'Everyone is free',
+    time: '2–2:30pm',
+    tone: 'slot',
+  },
 ];
 
 const hourLabel = (hour: number) => {
@@ -166,7 +287,9 @@ export function CalendarStories() {
             <div class="calendar-app-main">
               <div class="calendar-app-bar">
                 <strong>November 2026</strong>
-                <span class="calendar-app-button calendar-app-today">Today</span>
+                <span class="calendar-app-button calendar-app-today">
+                  Today
+                </span>
                 <CaretLeft />
                 <CaretRight />
                 <span class="calendar-app-button">
@@ -275,7 +398,10 @@ export function CalendarStories() {
               ]}
             />
           </div>
-          <div class="calendar-event-card calendar-story-glass" aria-hidden="true">
+          <div
+            class="calendar-event-card calendar-story-glass"
+            aria-hidden="true"
+          >
             <div class="calendar-event-title">
               <i data-tone="blue" />
               <strong>Design review</strong>
@@ -309,6 +435,16 @@ export function CalendarStories() {
               <span class="calendar-event-confirm">Update event</span>
             </div>
           </div>
+        </div>
+      </FeaturePageSection>
+      <FeaturePageSection
+        id="calendar-booking-links"
+        title={calendar.sections![2].title}
+        description={calendar.sections![2].description}
+        demo={{ tone: 'calls' }}
+      >
+        <div class="booking-link-stories">
+          <BookingGuestGraphic />
         </div>
       </FeaturePageSection>
     </div>

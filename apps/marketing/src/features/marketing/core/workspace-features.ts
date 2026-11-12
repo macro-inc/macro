@@ -36,13 +36,13 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
       'A high performance, agent-native spreadsheet that works with Excel, Google Sheets and CSV.',
     heading: '@mention anything in a cell.',
     detail:
-      'It’s a normal spreadsheet: formulas, number formats, fill down, everything you’d expect from Excel or Google Sheets. The difference is it’s linked to everything else. Type @ in a cell to mention a person, a document from Macro Docs, an email, or a task from Macro Tasks.',
+      'It’s a normal spreadsheet: formulas, number formats, fill down, everything you’d expect from Excel or Google Sheets. The difference is it’s linked to everything else. Type @ in a cell to mention a person, a document from Macro Docs, an email from Macro Mail, or a task from Macro Tasks.',
     sceneTitle: 'Launch budget',
     rows: [],
     message: '',
     sections: [
       {
-        title: 'Agents edit the sheet, just like teammates.',
+        title: 'Macro Agents edit the sheet, like teammates.',
         description:
           'Agents can edit the sheet too, including external agents like ChatGPT or Claude. Ask one to add up the spend by team, or build a forecast for next quarter, and you can all collaborate in the same sheet.',
       },
@@ -81,7 +81,7 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
       'Edit records together with your team and agents. Switch between tables, boards, and timelines.',
     heading: '@mention anything in a column.',
     detail:
-      'Each row is a record, and each column is a field, like text, numbers, dates, a dropdown, or a checkbox. Because it’s Macro, a column can also hold an @mention of people, tasks, documents, emails, or companies. Add another table and link the two together.',
+      'Each row is a record, and each column is a field, like text, numbers, dates, a dropdown, or a checkbox. Because it’s Macro, a column can also hold an @mention of people, tasks, documents, emails, or companies. Add another table and link the two together. Responses from Macro Forms land here as rows.',
     sceneTitle: 'Launch projects',
     rows: [],
     message: 'I added the launch tasks to the table.',
@@ -92,7 +92,7 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
           'Keep records in the view that makes sense for the work. Saved views are shared, so your team opens the same view of the database.',
       },
       {
-        title: 'Ask agents to edit your records.',
+        title: 'Ask Macro Agents to edit your records.',
         description:
           'Attach the database to an agent conversation to ask questions or edit records, columns, and tables. Use a routine for updates you want to happen again.',
       },
@@ -124,7 +124,7 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
     tone: 'chat',
     description:
       'Draw diagrams and plan with your team. Add shapes, notes, and images alongside live mentions of docs and tasks.',
-    heading: '@mention tasks, docs, emails, and calls.',
+    heading: '@mention Macro Tasks, Macro Docs, and Macro Mail.',
     detail:
       'Mention a task, a document from Macro Docs, an email, or a call directly on the canvas. Task mentions show current status and priority, and open the original when you need the details.',
     sceneTitle: 'Website launch',
@@ -177,7 +177,7 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
       {
         title: 'Insert snippets wherever you write.',
         description:
-          'Type ; in Macro Docs or Macro Chat to insert a saved snippet. Snippets also work in tasks, canvas text boxes, and agent instructions. Search by name and insert the snippet with its formatting intact.',
+          'Type ; in Macro Docs or Macro Chat to insert a saved snippet. Snippets also work in Macro Tasks, Macro Canvas text boxes, and agent instructions. Search by name and insert the snippet with its formatting intact.',
       },
       {
         title: 'Keep your team’s templates together.',
@@ -213,12 +213,17 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
       {
         title: 'Find a time with your team.',
         description:
-          'Ask an agent in a channel to find a time for the team to meet. It checks everyone’s availability and finds a time that works. Teammates who share busy blocks show when they’re busy, not what.',
+          'Ask an agent in Macro Chat to find a time for the team to meet. It checks everyone’s availability and finds a time that works. Teammates who share busy blocks show when they’re busy, not what.',
       },
       {
-        title: 'Let agents send and edit invites.',
+        title: 'Let Macro Agents send and edit invites.',
         description:
           'Ask an agent to invite your team, move a meeting, or update the guest list, and review the details before it changes your calendar. The invite shows up right in the channel as a calendar pill, and you can @mention events anywhere in Macro.',
+      },
+      {
+        title: 'Let guests book with Macro Booking Links.',
+        description:
+          'Send a booking link and guests pick from your open times in their own time zone, without a Macro account. Busy times on your connected calendars are left out, and the meeting lands on your calendar with an invitation for everyone.',
       },
     ],
     faq: [
@@ -318,7 +323,7 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
           'Photoshop, Illustrator, Figma, PowerPoint, Word, PDFs: open them right in Macro, without leaving your workspace.',
       },
       {
-        title: 'Agents can read everything in your Drive.',
+        title: 'Macro Agents can read everything in Drive.',
         description:
           'Just ask a question and get an answer from your files. @mention files yourself, or let the agent search your Drive for what it needs. It’s available to your own agents over MCP too, like Claude and ChatGPT, with full-text search.',
       },
@@ -359,9 +364,9 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
     message: 'Send me the open launch blockers each morning.',
     sections: [
       {
-        title: 'Run agents when your work changes.',
+        title: 'Run Macro Agents when your work changes.',
         description:
-          'Start a routine when email arrives in Macro Mail, a task changes, or a call ends. A call-ended routine gets the participants and transcript, so it can work from what was discussed.',
+          'Start a routine when email arrives in Macro Mail, a task changes in Macro Tasks, or a call ends in Macro Calls. A call-ended routine gets the participants and transcript, so it can work from what was discussed.',
       },
       {
         title: 'Review what each agent run did.',
@@ -409,7 +414,7 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
     message: 'Use /release-notes to draft this week’s update.',
     sections: [
       {
-        title: 'Tell the agent when to use it.',
+        title: 'Tell Macro Agents when to use it.',
         description:
           'Give the skill a clear name and describe when it should and shouldn’t be used. Agents can find a matching skill themselves, or you can attach one from the / menu.',
       },
