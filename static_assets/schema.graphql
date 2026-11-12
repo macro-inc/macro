@@ -9993,6 +9993,10 @@ type GraphqlSoupDocument implements GraphqlSoupEntity {
 	"""
 	cacheProjection: SoupCacheProjection
 	"""
+	Entity-owned icon and color overrides.
+	"""
+	appearance: JSON
+	"""
 	User-visible display name.
 	"""
 	displayName: String
@@ -10985,6 +10989,10 @@ type GraphqlSoupInitiative implements GraphqlSoupEntity {
 	Opaque cache projection metadata, unavailable for this entity variant.
 	"""
 	cacheProjection: SoupCacheProjection
+	"""
+	Entity-owned icon and color overrides.
+	"""
+	appearance: JSON
 	"""
 	User-visible project name.
 	"""

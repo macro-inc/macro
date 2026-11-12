@@ -43,11 +43,11 @@ pub async fn handler(
     extract::Query(query_params): extract::Query<SearchPaginationParams>,
     extract::Json(req): extract::Json<UnifiedSearchRequest>,
 ) -> Result<Json<UnifiedSearchResponse>, SearchError> {
-    let user_context = &authorization.authorization.user.user_context;
+    let user = &authorization.authorization.user;
+    let user_context = &user.user_context;
 
     tracing::info!(
         user_id = user_context.user_id,
-        query = ?req.query,
         search_on = ?req.search_on,
         include_crm = req.include_crm,
         "unified_search"
@@ -67,7 +67,7 @@ pub async fn handler(
     };
 
     let (results, next_cursor) =
-        perform_unified_search(&ctx, user_context, crm_access.as_ref(), query_params, req).await?;
+        perform_unified_search(&ctx, user, crm_access.as_ref(), query_params, req).await?;
 
     // Split the results by entity type
     let SplitUnifiedSearchResponseValues {

@@ -775,6 +775,9 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                     {
                         return Err(MessageError::Invalid("bot mentions require the bot tag"));
                     }
+                    if sender.as_user().is_none() && sender.as_bot().is_none() {
+                        return Err(MessageError::Invalid("invalid mentioned user"));
+                    }
                     continue;
                 }
                 MessageReferenceKind::Bot if mention => {

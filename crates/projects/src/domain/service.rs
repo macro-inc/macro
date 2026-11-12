@@ -19,7 +19,9 @@ use model::project::{
     WithProjectId,
 };
 use model_owner::{CreationPrincipal, Owner};
-use models_bulk_upload::{UploadExtractFolderRequest, UploadExtractFolderResponseData};
+use models_bulk_upload::{
+    UploadExtractFolderRequest, UploadExtractFolderResponseData, UploadExtractStatusResponseData,
+};
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::team_share::{
@@ -841,6 +843,29 @@ where
         Ok(UploadExtractFolderResponseData {
             request_id: request_id.to_string(),
             presigned_url,
+        })
+    }
+
+    async fn get_upload_extract_status(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        upload_request_id: &str,
+    ) -> Result<UploadExtractStatusResponseData, ProjectError> {
+        let request = self
+            .bulk_upload_service
+            .find_bulk_upload_request(upload_request_id)
+            .await
+            .map_err(|error| internal_error(error, "unable to read upload request"))?;
+
+        // Someone else's request reads as missing, so ids can't be probed.
+        let Some(request) = request.filter(|request| request.user_id == actor.as_ref()) else {
+            return Err(ProjectError::NotFound(upload_request_id.to_string()));
+        };
+
+        Ok(UploadExtractStatusResponseData {
+            status: request.status,
+            project_id: request.root_project_id,
+            progress: request.progress,
         })
     }
 

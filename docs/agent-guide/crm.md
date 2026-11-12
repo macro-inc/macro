@@ -215,7 +215,10 @@ Company-email and email-less contacts keep a read-only company value. The separa
 contacts; Shift-click opens a separate split on desktop.
 
 Pending controls prevent duplicate saves; rejected edits retain their draft for
-retry. The server enforces add-only email and personal-provider eligibility.
+retry. The server accepts more than these controls offer: it adds and removes
+further addresses, changes the primary and unlinks a company (see
+`docs/design/crm-contact-creation.md`); it still enforces personal-provider
+eligibility for link and switch.
 Another contact with the address in the same team rejects the change without
 merging; restricted matches return generic feedback. Foreign-team destinations
 and new links to archived companies are rejected.
@@ -225,7 +228,7 @@ archive state. Restore a visible child through its archived company before
 moving it. Personal-email sync reuses a unique existing contact, preserving its
 chosen company through sent/received refreshes and source cleanup. Ambiguous
 matches are left unchanged. CRM settings and domain admission still apply.
-Existing email replacement and alias/history redesign are outside this version.
+The web controls for several addresses and for unlinking are not built yet.
 
 Company and contact headers group `Copy link` separately from the side-panel toggle.
 Desktop section tabs collapse to icons in narrow panes; each icon keeps a tooltip.
