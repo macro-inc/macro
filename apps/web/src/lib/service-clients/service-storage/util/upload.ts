@@ -53,7 +53,7 @@ export class DocumentNameTooLongError extends Error {
 
 const uploadWithPresignedUrl = async (params: {
   presignedUrl: string;
-  buffer: ArrayBuffer;
+  buffer: Blob;
   sha: string;
   type: MimeType;
   onProgress?: (sent: number | null) => void;
@@ -194,10 +194,10 @@ async function uploadWithProgress(
   }
   const { sha } = source;
   const putFile = async (presignedUrl: string, type: MimeType) => {
-    if (source.kind === 'bytes') {
+    if (source.kind === 'file') {
       const sent = await uploadWithPresignedUrl({
         presignedUrl,
-        buffer: source.buffer,
+        buffer: source.file,
         sha,
         type,
         onProgress: progress?.sending,
