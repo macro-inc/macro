@@ -8,6 +8,7 @@ use anyhow::Context;
 use async_openai::{
     Client,
     config::OpenAIConfig,
+    error::OpenAIError,
     types::embeddings::{CreateEmbeddingRequestArgs, EmbeddingInput},
 };
 
@@ -93,7 +94,20 @@ impl EmbeddingModel<DIMS> for TextEmbedding3Small {
             .dimensions(DIMS as u32)
             .build()?;
 
-        let response = self.client.embeddings().create(request).await?;
+        let response = self
+            .client
+            .embeddings()
+            .create(request)
+            .await
+            .inspect_err(|error| {
+                if let OpenAIError::ApiError(api_error) = error {
+                    genai_telemetry::provider_account::report_provider_error(
+                        "openai",
+                        None,
+                        &api_error.to_string(),
+                    );
+                }
+            })?;
 
         if response.data.len() != fields.len() {
             anyhow::bail!(
