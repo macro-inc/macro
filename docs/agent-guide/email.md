@@ -767,7 +767,8 @@ card uses a 2% ink wash, brighter than that hover and lighter than a hovered
 settings row. Desktop selection does not add an accent-colored ring; keyboard
 focus has a neutral outline.
 On touch, the floating Reply, Forward, previous/next email, and done controls
-use the mobile dock's chrome fill and icon color in both themes.
+sit on the mobile dock's own surface (`MobileDockIsland`) in both themes. An
+unavailable previous/next control dims its arrow while its island stays opaque.
 Replies appear inline on desktop and in a full-screen composer on touch devices,
 including tablets. Reply, Reply all, and Forward use the same grouped header
 actions as new email: attach, schedule, and send. The schedule clock matches
