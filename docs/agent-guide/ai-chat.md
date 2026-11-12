@@ -1,5 +1,34 @@
 # AI Chat (Agents)
 
+## Recently shared in an agent session
+
+With agent session activity enabled, the first side panel section lists items
+the agent changed in code mode, with a **Live** marker while it works. It
+appears only after the session has activity rows; older sessions without rows
+keep it hidden. Each row shows the item's icon, name, latest step (`Edited
+(xN)` for consecutive repeats) and time, with a dot until you have seen it.
+Clicking a row opens the item (Shift-click for a new split); hovering shows
+Copy link on desktop. Items with more than one step show a count and caret that
+open a chronological timeline on a rail under the icon.
+
+The list has a fixed 300px height, scrolls inside the side panel, and fades
+its edges where it has more. Moved rows slide to their new place and an updated
+row flashes as it lands. While the pointer or keyboard focus is inside the
+list, or it is scrolled away from the top, incoming activity waits behind an
+**N new** pill; a tap's leftover focus on touch does not hold it. Press the
+pill to catch up, or leave the list at the top. An updated item opens its
+timeline when it arrives; a new item stays closed and closes the open one. An
+entity without a resolvable name shows its type and cannot be opened. There is
+no show-in-conversation action because activity correlation does not identify a
+transcript position.
+
+Verify with a code-mode session that changes the same entity several times,
+then changes another. Keep the pointer in the list during the next change and
+confirm its rows and scroll position remain still until **N new** is pressed.
+Repeat with keyboard focus and a scroll position below the top. Check the
+300px section height, the slide and flash on update, row hit targets on touch,
+and the hidden section in an older session.
+
 Agent session split headers show other current viewers' avatars, excluding your
 own, with up to three avatars and a count for additional viewers. Presence uses
 the resolved session ID, including sessions opened from the create menu. Open
@@ -194,6 +223,40 @@ only after `<item>.access.state()` shows edit access. To verify, have a
 view-only user ask an agent to add a task to a project they can only view,
 agree to the request, grant it as the owner, then ask the agent to retry.
 
+## Agents opening items for you
+
+With `enable-agent-navigation` (PostHog on the web and the harness; on in dev
+builds), an agent's program can open an item in the tab you typed the prompt
+in (`macro.ui.open`). It arrives in a new pane beside the agent's
+conversation (a new pane at the end when no pane shows it) and slides in from
+that side while the other panes glide aside; with reduced motion it only fades
+in. Your pane stays active and a composer you were typing in keeps its caret.
+A toast reads **Opened by <agent>** with **Undo**, which slides the pane back
+out and restores the layout; if the pane has unsaved changes and you keep
+them, it stays on screen and **Undo** is offered again. An item already on
+screen, including a list view such as Tasks, is left as it is. When there is
+no room for another split (a narrow window), nothing is replaced: the toast
+says the agent wants to open something and offers **Open**. An item an agent
+opened is not marked read until you click or type in its pane, and Undo
+doesn't mark it read either.
+
+Only the tab you typed in opens the item, not a tab duplicated or opened from
+it. Only prompts typed in the agent composer carry the tab, including the first
+prompt that starts a conversation: channel and DM
+mentions, routines and triggers answer `no_client`, and the agent links the
+item in its reply instead. Agents never open anything on mobile, flag or not:
+in the iOS and Android apps (iPad included) and in a touch browser on a phone,
+held either way, a prompt carries no tab, so the agent links the item, and the
+tab ignores any `ui_command` frame. A phone is a touch screen whose short side
+is under 640px, so a phone turned sideways stays off. Routes are closed to
+agents unless they opt in (`OPEN_TO_AGENTS` in `apps/web/src/routes/routes.ts`),
+so settings, calls, composing mail and debug views are refused on the server
+and again in the tab.
+
+To verify, ask an agent "create a short document called Launch plan, then open
+it next to this chat", watch the pane arrive, press **Undo**, and repeat with a
+channel message link and a settings page (refused; linked instead).
+
 ## Phones with new agents enabled
 
 **Agents** opens the new conversation list on phones,
@@ -268,7 +331,9 @@ horizontal overflow.
 
 `UploadFile` accepts a filename and standard padded base64 contents, up to 25 MiB
 decoded. An optional project ID places the file in a folder the caller can edit.
-Use `CreateDocument` for generated text and native Macro spreadsheets. Agents with
+Use `CreateDocument` (in code mode, `macro.documents.create`,
+`createSpreadsheet` and `upload`) for generated text and native Macro
+spreadsheets. Agents with
 code execution should construct the base64 argument from the original bytes;
 the tool cannot access an agent's local path or download a URL.
 
@@ -1045,8 +1110,9 @@ Session creation and prompt delivery use the shared pending-session flow.
 
 A standalone chat (`/app/chat/<uuid>`) has **Share** and **Copy Share Link** in
 the desktop header; the same **Share** action is on entity list menus and the
-entity sharing shortcut. It opens the same Share dialog (mobile: drawer) as
-documents:
+entity sharing shortcut. With several list rows selected, **Share** opens the
+bulk dialog in [Entity action dialogs](navigation.md#entity-action-dialogs).
+For one chat it opens the same Share dialog (mobile: drawer) as documents:
 
 - People/channels: pick recipients and an access level and send the chat with
   an optional message.
@@ -1242,7 +1308,7 @@ results are presented with `execution.views.present`. The legacy
 chat and workspace SDK namespaces are excluded from agent documentation. Methods
 routed through the SDK are absent from direct schemas, `SearchTools`, and `LoadTools`;
 they remain discoverable through `DescribeCodeTools`. User-review
-tools, `AskUser`, connector discovery, tool loading for connected apps, subagents,
+tools, `AskUser`, connector discovery, tool loading for connected apps,
 and explicit provider code execution retain their direct lifecycle. Connected
 third-party MCP tools remain available.
 
@@ -1627,6 +1693,11 @@ two answers is the rollout's decision, not a second choice in the menu.
 
 ## Agent sessions
 
+With `enableAgentSessionActivity`, an open floating details panel stays open
+when the transcript is clicked in panes at least 900px wide. The transcript and
+composer clear its width, and the panel's open state is remembered. In narrower
+panes, clicking outside the panel closes it.
+
 An agent session is `/app/agent/<uuid>`. The composer placeholder is
 **`Message the agent, @mention anything`**. Creating one (`c` then `a`, or
 `Create` → `Agent`) leaves that composer focused. Type `/` to
@@ -1830,6 +1901,19 @@ at a narrow viewport width. `/app/debug/agent-progress` renders the same replies
 in a DM, as a channel mention, and in the session, one tab each; **Expand all**
 opens every group and tool result at once.
 
+While a turn runs tool calls, the server words them as one live status line
+("Searching your workspace…", "Reading 12 emails…") with a cheap model and
+pushes it to every viewer (`agent_session_activity`). It replaces the
+**Calling N tools** label of the run the turn is in: one with a call in flight,
+or the newest run while the agent thinks between calls. The count stays beside it,
+and the caret still opens the raw calls. It also replaces the open activity line of an agent reply in a
+channel, and shows under a working session's row in the Agents list. It is
+throttled per turn (every 4s for the first 10 lines, then every 15s, at most
+120), never stored, and cleared when the turn ends; a surface opened mid-turn
+shows its usual label until the next line arrives. Sessions owned by no person
+get no line, and the PostHog flag `disable-agent-activity-summary` turns lines
+off for an owner.
+
 A thought row reads **Thinking** and shimmers only while it is the last part
 of the turn the session is working on. Earlier thoughts settle to **Thought**
 as soon as a tool or answer follows, including during long Cursor turns. A
@@ -1877,7 +1961,9 @@ select people or channels, choose their access level, and send the session with
 an optional message using the same Share dialog and mobile drawer as tasks.
 Like other Share composers, it supports pasted images without a paperclip button.
 Sessions also support **Share** from entity list menus and the entity sharing
-shortcut. **People with access** lists the owner and shared conversations;
+shortcut; with several list rows selected, list **Share** opens the bulk dialog
+in [Entity action dialogs](navigation.md#entity-action-dialogs) instead.
+**People with access** lists the owner and shared conversations;
 the owner can change or remove a conversation's access. When that list holds
 nobody but the owner — what a participant who cannot read the other grants
 sees — the section is titled **Owner** instead. **Link sharing** offers
@@ -2316,7 +2402,8 @@ The built-in **Configure Agent** skill walks an agent through changing another
 agent's instructions or settings on the user's behalf. `ListAgents` returns every
 agent the user can manage with its current instructions, runtime, model, channel
 scope, connected apps, permission choice, and coding/chat mode; `ConfigureAgent`
-patches only the fields it is given. A selected MCP app slug must be a real
+patches only the fields it is given. Code mode hides both; the skill there
+uses `macro.agents.list()` and `Agent.update()` in `ExecuteCode`. A selected MCP app slug must be a real
 Pipedream app; an invented slug is rejected and the agent is left unchanged.
 Instructions are replaced whole, so the skill
 has the agent edit the current text and send the complete result. Changes reach
@@ -2604,8 +2691,8 @@ on desktop and mobile. Legacy chat tools are absent from agent context; saved
 legacy tool calls still render in historical conversations.
 
 Use `ListEntities` with `includeTypes: ["agent_session"]`, `NameSearch`, or
-`ContentSearch` to find sessions. `ListAgents` identifies available agents and
-`CreateAgentSession` starts a conversation with the chosen agent. Use
+`ContentSearch` to find sessions. `ListAgents` (`macro.agents.list()` in code
+mode) identifies available agents and `CreateAgentSession` starts a conversation with the chosen agent. Use
 `ManageAgentSession` to rename, archive/unarchive, delete, prompt, or stop one.
 Rename, archive, and delete require ownership; prompt and stop require edit
 access. Prompt acceptance reports sent or queued, not completion. An uncertain

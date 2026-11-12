@@ -894,6 +894,7 @@ async fn run_server() -> anyhow::Result<()> {
         config.posthog_api_key.as_ref().to_owned(),
         // Flag evaluation is on the call-start path; fall back promptly.
         Duration::from_millis(300),
+        config.environment,
     )
     .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))?;
     let call_service_builder = call_service_builder.with_channel_threads(Arc::new(
@@ -1553,7 +1554,7 @@ async fn run_server() -> anyhow::Result<()> {
         admission: admission.clone(),
         recorder: document_ai_usage.clone(),
         // Off when PostHog isn't configured, as for the agents' Canvas tools.
-        artifacts: ai_tools::canvas_artifacts_rollout_from_env()?
+        artifacts: ai_tools::canvas_artifacts_rollout_from_env(config.environment)?
             .unwrap_or_else(|| Arc::new(|_| Box::pin(async { false }))),
         images: Arc::new(crate::outbound::canvas_images::StaticFileCanvasImages(
             static_file_service_client::StaticFileServiceClient::new(
@@ -2426,6 +2427,13 @@ async fn run_server() -> anyhow::Result<()> {
             entity_access_service.clone(),
             authorization_state.clone(),
         ),
+        channel_sections_state: ChannelLabelsRouterState::new(
+            Arc::new(ChannelLabelsServiceImpl::for_sections(
+                PgChannelLabelsRepo::for_sections(db.clone()),
+            )),
+            entity_access_service.clone(),
+            authorization_state.clone(),
+        ),
         account_manager_state: AccountManagerRouterState::new(
             account_manager_service,
             authorization_state.clone(),
@@ -2549,10 +2557,14 @@ async fn run_server() -> anyhow::Result<()> {
             soup_service,
             soup_realtime_service,
             websocket_notification_consumer_service,
-            activity_realtime_service,
+            activity_realtime_service.clone(),
         ),
         agent_session_log_subscriptions: complete_graph::agent_session_log_subscriptions(
             agent_session_log_realtime,
+        ),
+        agent_session_activity_subscriptions: complete_graph::agent_session_activity_subscriptions(
+            activity_realtime_service,
+            db.clone(),
         ),
         graphql_notification_reader,
         // GraphQL reads the activity log through the readonly pool; the

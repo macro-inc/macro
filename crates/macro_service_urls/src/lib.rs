@@ -601,7 +601,7 @@ service_url! {
         /// `McpPublicUrl` broker issues it Macro API tokens.
         pub McpChatgptServiceUrl {
             local: "http://localhost:8103",
-            dev: "https://mcp-chatgpt.dev.macro.com",
+            dev: "https://mcp-chatgpt-worker-dev.macroverse.workers.dev",
             prod: "https://mcp-chatgpt.macro.com",
         },
         /// Public integration callback base, preserving registered OAuth redirect URIs.
