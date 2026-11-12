@@ -80,7 +80,7 @@ pub(super) async fn assert_not_internal(url: &Url) -> Result<(), FetchError> {
         .map_err(FetchError::DnsLookupFailed)?;
 
     for addr in addrs {
-        if is_private_ip(&addr.ip()) {
+        if is_non_public_ip(&addr.ip()) {
             tracing::warn!(host, ip = %addr.ip(), "blocked request to private/internal IP");
             return Err(FetchError::PrivateIp);
         }
@@ -89,12 +89,12 @@ pub(super) async fn assert_not_internal(url: &Url) -> Result<(), FetchError> {
     Ok(())
 }
 
-pub(super) fn is_private_ip(ip: &IpAddr) -> bool {
+pub(super) fn is_non_public_ip(ip: &IpAddr) -> bool {
     match *ip {
-        IpAddr::V4(ip) => is_blocked_ipv4(ip),
-        IpAddr::V6(ip) => match embedded_ipv4(ip) {
-            Some(ip) => is_blocked_ipv4(ip),
-            None => is_blocked_ipv6(ip),
+        IpAddr::V4(v4) => is_blocked_ipv4(v4),
+        IpAddr::V6(v6) => match embedded_ipv4(v6) {
+            Some(embedded) => is_blocked_ipv4(embedded),
+            None => is_blocked_ipv6(v6),
         },
     }
 }
@@ -123,22 +123,15 @@ fn is_blocked_ipv4(ip: Ipv4Addr) -> bool {
 fn is_blocked_ipv6(ip: Ipv6Addr) -> bool {
     let segments = ip.segments();
 
-    ip.is_unspecified()
-        || ip.is_loopback()
-        || ip.is_multicast()
-        // fc00::/7, including the fd00:ec2::254 metadata service.
-        || ip.is_unique_local()
-        || ip.is_unicast_link_local()
-        // fec0::/10: deprecated site-local.
-        || (segments[0] & 0xffc0) == 0xfec0
+    // Only global unicast (2000::/3) is public. Outside it are loopback,
+    // multicast, unique-local (including the fd00:ec2::254 metadata
+    // service), link-local, local-use NAT64, and the unassigned space.
+    (segments[0] & 0xe000) != 0x2000
         // 2001::/32: Teredo, which tunnels to an obfuscated IPv4 address.
         || (segments[0] == 0x2001 && segments[1] == 0)
-        // 2001:db8::/32: documentation.
+        // 2001:db8::/32 and 3fff::/20: documentation.
         || (segments[0] == 0x2001 && segments[1] == 0x0db8)
-        // 64:ff9b:1::/48: local-use NAT64.
-        || (segments[0] == 0x64 && segments[1] == 0xff9b && segments[2] == 1)
-        // 100::/64: discard-only.
-        || segments[..4] == [0x100, 0, 0, 0]
+        || (segments[0] == 0x3fff && (segments[1] & 0xf000) == 0)
 }
 
 /// The IPv4 address an IPv6 address carries: IPv4-mapped (`::ffff:0:0/96`),
@@ -267,21 +260,21 @@ mod tests {
 
     #[test]
     fn ipv6_loopback_is_blocked() {
-        assert!(is_private_ip(&IpAddr::V6(Ipv6Addr::LOCALHOST)));
+        assert!(is_non_public_ip(&IpAddr::V6(Ipv6Addr::LOCALHOST)));
     }
 
     #[test]
     fn ipv6_unspecified_is_blocked() {
-        assert!(is_private_ip(&IpAddr::V6(Ipv6Addr::UNSPECIFIED)));
+        assert!(is_non_public_ip(&IpAddr::V6(Ipv6Addr::UNSPECIFIED)));
     }
 
     #[test]
     fn ipv6_unique_local_is_blocked() {
         // fc00::/7 — IPv6 equivalent of RFC1918.
-        assert!(is_private_ip(&IpAddr::V6(
+        assert!(is_non_public_ip(&IpAddr::V6(
             "fc00::1".parse::<Ipv6Addr>().unwrap()
         )));
-        assert!(is_private_ip(&IpAddr::V6(
+        assert!(is_non_public_ip(&IpAddr::V6(
             "fd12:3456:789a::1".parse::<Ipv6Addr>().unwrap()
         )));
     }
@@ -289,10 +282,10 @@ mod tests {
     #[test]
     fn ipv6_link_local_is_blocked() {
         // fe80::/10 — only reachable on the local link.
-        assert!(is_private_ip(&IpAddr::V6(
+        assert!(is_non_public_ip(&IpAddr::V6(
             "fe80::1".parse::<Ipv6Addr>().unwrap()
         )));
-        assert!(is_private_ip(&IpAddr::V6(
+        assert!(is_non_public_ip(&IpAddr::V6(
             "febf:ffff:ffff:ffff:ffff:ffff:ffff:ffff"
                 .parse::<Ipv6Addr>()
                 .unwrap()
@@ -302,11 +295,11 @@ mod tests {
     #[test]
     fn ipv6_mapped_v4_loopback_is_blocked() {
         // ::ffff:127.0.0.1 should be treated as 127.0.0.1.
-        assert!(is_private_ip(&IpAddr::V6(
+        assert!(is_non_public_ip(&IpAddr::V6(
             "::ffff:127.0.0.1".parse::<Ipv6Addr>().unwrap()
         )));
         // ::ffff:10.0.0.1 should be treated as RFC1918 10.0.0.0/8.
-        assert!(is_private_ip(&IpAddr::V6(
+        assert!(is_non_public_ip(&IpAddr::V6(
             "::ffff:10.0.0.1".parse::<Ipv6Addr>().unwrap()
         )));
     }
@@ -314,24 +307,24 @@ mod tests {
     #[test]
     fn ipv6_public_is_allowed() {
         // 2001:4860:4860::8888 — Google public DNS.
-        assert!(!is_private_ip(&IpAddr::V6(
+        assert!(!is_non_public_ip(&IpAddr::V6(
             "2001:4860:4860::8888".parse::<Ipv6Addr>().unwrap()
         )));
     }
 
     #[test]
     fn ipv4_public_is_allowed() {
-        assert!(!is_private_ip(&IpAddr::V4(Ipv4Addr::new(8, 8, 8, 8))));
+        assert!(!is_non_public_ip(&IpAddr::V4(Ipv4Addr::new(8, 8, 8, 8))));
     }
 
     #[test]
     fn ipv4_private_ranges_blocked() {
-        assert!(is_private_ip(&IpAddr::V4(Ipv4Addr::new(10, 0, 0, 1))));
-        assert!(is_private_ip(&IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1))));
-        assert!(is_private_ip(&IpAddr::V4(Ipv4Addr::new(172, 16, 0, 1))));
-        assert!(is_private_ip(&IpAddr::V4(Ipv4Addr::LOCALHOST)));
-        assert!(is_private_ip(&IpAddr::V4(Ipv4Addr::UNSPECIFIED)));
-        assert!(is_private_ip(&IpAddr::V4(Ipv4Addr::BROADCAST)));
+        assert!(is_non_public_ip(&IpAddr::V4(Ipv4Addr::new(10, 0, 0, 1))));
+        assert!(is_non_public_ip(&IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1))));
+        assert!(is_non_public_ip(&IpAddr::V4(Ipv4Addr::new(172, 16, 0, 1))));
+        assert!(is_non_public_ip(&IpAddr::V4(Ipv4Addr::LOCALHOST)));
+        assert!(is_non_public_ip(&IpAddr::V4(Ipv4Addr::UNSPECIFIED)));
+        assert!(is_non_public_ip(&IpAddr::V4(Ipv4Addr::BROADCAST)));
     }
 
     #[test]
@@ -354,6 +347,10 @@ mod tests {
             "2001:db8::1",
             "64:ff9b:1::1",
             "100::1",
+            "3fff::1",
+            // SIIT IPv4-translated ::ffff:0:127.0.0.1, and unassigned space.
+            "::ffff:0:7f00:1",
+            "4000::1",
             // fd00:ec2::254: the EC2 metadata service over IPv6.
             "fd00:ec2::254",
             // NAT64 wrapping 127.0.0.1 and 169.254.169.254.
@@ -373,7 +370,7 @@ mod tests {
         ];
         for ip in blocked {
             assert!(
-                is_private_ip(&ip.parse().unwrap()),
+                is_non_public_ip(&ip.parse().unwrap()),
                 "{ip} should be blocked"
             );
         }
@@ -393,7 +390,7 @@ mod tests {
         ];
         for ip in allowed {
             assert!(
-                !is_private_ip(&ip.parse().unwrap()),
+                !is_non_public_ip(&ip.parse().unwrap()),
                 "{ip} should be allowed"
             );
         }

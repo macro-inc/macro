@@ -133,7 +133,7 @@ pub async fn assert_not_internal(url: &Url) -> Result<(), FetchError> {
         .map_err(FetchError::DnsLookupFailed)?;
 
     for addr in addrs {
-        if is_private_ip(&addr.ip()) {
+        if is_non_public_ip(&addr.ip()) {
             tracing::warn!(host, ip = %addr.ip(), "blocked request to private/internal IP");
             return Err(FetchError::PrivateIp);
         }
@@ -142,12 +142,12 @@ pub async fn assert_not_internal(url: &Url) -> Result<(), FetchError> {
     Ok(())
 }
 
-pub fn is_private_ip(ip: &IpAddr) -> bool {
+pub fn is_non_public_ip(ip: &IpAddr) -> bool {
     match *ip {
-        IpAddr::V4(ip) => is_blocked_ipv4(ip),
-        IpAddr::V6(ip) => match embedded_ipv4(ip) {
-            Some(ip) => is_blocked_ipv4(ip),
-            None => is_blocked_ipv6(ip),
+        IpAddr::V4(v4) => is_blocked_ipv4(v4),
+        IpAddr::V6(v6) => match embedded_ipv4(v6) {
+            Some(embedded) => is_blocked_ipv4(embedded),
+            None => is_blocked_ipv6(v6),
         },
     }
 }
@@ -176,22 +176,15 @@ fn is_blocked_ipv4(ip: Ipv4Addr) -> bool {
 fn is_blocked_ipv6(ip: Ipv6Addr) -> bool {
     let segments = ip.segments();
 
-    ip.is_unspecified()
-        || ip.is_loopback()
-        || ip.is_multicast()
-        // fc00::/7, including the fd00:ec2::254 metadata service.
-        || ip.is_unique_local()
-        || ip.is_unicast_link_local()
-        // fec0::/10: deprecated site-local.
-        || (segments[0] & 0xffc0) == 0xfec0
+    // Only global unicast (2000::/3) is public. Outside it are loopback,
+    // multicast, unique-local (including the fd00:ec2::254 metadata
+    // service), link-local, local-use NAT64, and the unassigned space.
+    (segments[0] & 0xe000) != 0x2000
         // 2001::/32: Teredo, which tunnels to an obfuscated IPv4 address.
         || (segments[0] == 0x2001 && segments[1] == 0)
-        // 2001:db8::/32: documentation.
+        // 2001:db8::/32 and 3fff::/20: documentation.
         || (segments[0] == 0x2001 && segments[1] == 0x0db8)
-        // 64:ff9b:1::/48: local-use NAT64.
-        || (segments[0] == 0x64 && segments[1] == 0xff9b && segments[2] == 1)
-        // 100::/64: discard-only.
-        || segments[..4] == [0x100, 0, 0, 0]
+        || (segments[0] == 0x3fff && (segments[1] & 0xf000) == 0)
 }
 
 /// The IPv4 address an IPv6 address carries: IPv4-mapped (`::ffff:0:0/96`),

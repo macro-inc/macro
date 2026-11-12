@@ -39,50 +39,52 @@ fn test_validate_url_strips_fragment() {
 }
 
 #[test]
-fn test_is_private_ip_loopback() {
-    assert!(is_private_ip(&"127.0.0.1".parse().unwrap()));
-    assert!(is_private_ip(&"::1".parse().unwrap()));
+fn test_is_non_public_ip_loopback() {
+    assert!(is_non_public_ip(&"127.0.0.1".parse().unwrap()));
+    assert!(is_non_public_ip(&"::1".parse().unwrap()));
 }
 
 #[test]
-fn test_is_private_ip_private_ranges() {
-    assert!(is_private_ip(&"10.0.0.1".parse().unwrap()));
-    assert!(is_private_ip(&"172.16.0.1".parse().unwrap()));
-    assert!(is_private_ip(&"192.168.1.1".parse().unwrap()));
+fn test_is_non_public_ip_private_ranges() {
+    assert!(is_non_public_ip(&"10.0.0.1".parse().unwrap()));
+    assert!(is_non_public_ip(&"172.16.0.1".parse().unwrap()));
+    assert!(is_non_public_ip(&"192.168.1.1".parse().unwrap()));
 }
 
 #[test]
-fn test_is_private_ip_link_local() {
-    assert!(is_private_ip(&"169.254.169.254".parse().unwrap()));
+fn test_is_non_public_ip_link_local() {
+    assert!(is_non_public_ip(&"169.254.169.254".parse().unwrap()));
 }
 
 #[test]
-fn test_is_private_ip_unspecified() {
-    assert!(is_private_ip(&"0.0.0.0".parse().unwrap()));
-    assert!(is_private_ip(&"::".parse().unwrap()));
+fn test_is_non_public_ip_unspecified() {
+    assert!(is_non_public_ip(&"0.0.0.0".parse().unwrap()));
+    assert!(is_non_public_ip(&"::".parse().unwrap()));
 }
 
 #[test]
-fn test_is_private_ip_v6_unique_and_link_local() {
-    assert!(is_private_ip(&"fc00::1".parse().unwrap()));
-    assert!(is_private_ip(&"fd12:3456:789a::1".parse().unwrap()));
-    assert!(is_private_ip(&"fe80::1".parse().unwrap()));
+fn test_is_non_public_ip_v6_unique_and_link_local() {
+    assert!(is_non_public_ip(&"fc00::1".parse().unwrap()));
+    assert!(is_non_public_ip(&"fd12:3456:789a::1".parse().unwrap()));
+    assert!(is_non_public_ip(&"fe80::1".parse().unwrap()));
 }
 
 #[test]
-fn test_is_private_ip_mapped_v4() {
-    assert!(is_private_ip(&"::ffff:127.0.0.1".parse().unwrap()));
-    assert!(is_private_ip(&"::ffff:169.254.169.254".parse().unwrap()));
-    assert!(is_private_ip(&"::ffff:10.0.0.1".parse().unwrap()));
-    assert!(is_private_ip(&"::ffff:192.168.1.1".parse().unwrap()));
-    assert!(!is_private_ip(&"::ffff:8.8.8.8".parse().unwrap()));
+fn test_is_non_public_ip_mapped_v4() {
+    assert!(is_non_public_ip(&"::ffff:127.0.0.1".parse().unwrap()));
+    assert!(is_non_public_ip(&"::ffff:169.254.169.254".parse().unwrap()));
+    assert!(is_non_public_ip(&"::ffff:10.0.0.1".parse().unwrap()));
+    assert!(is_non_public_ip(&"::ffff:192.168.1.1".parse().unwrap()));
+    assert!(!is_non_public_ip(&"::ffff:8.8.8.8".parse().unwrap()));
 }
 
 #[test]
-fn test_is_private_ip_public() {
-    assert!(!is_private_ip(&"8.8.8.8".parse().unwrap()));
-    assert!(!is_private_ip(&"1.1.1.1".parse().unwrap()));
-    assert!(!is_private_ip(&"2607:f8b0:4004:800::200e".parse().unwrap()));
+fn test_is_non_public_ip_public() {
+    assert!(!is_non_public_ip(&"8.8.8.8".parse().unwrap()));
+    assert!(!is_non_public_ip(&"1.1.1.1".parse().unwrap()));
+    assert!(!is_non_public_ip(
+        &"2607:f8b0:4004:800::200e".parse().unwrap()
+    ));
 }
 
 fn redirect_response(location: Option<&str>) -> reqwest::Response {
@@ -160,6 +162,10 @@ fn blocks_every_non_public_range() {
         "2001:db8::1",
         "64:ff9b:1::1",
         "100::1",
+        "3fff::1",
+        // SIIT IPv4-translated ::ffff:0:127.0.0.1, and unassigned space.
+        "::ffff:0:7f00:1",
+        "4000::1",
         // fd00:ec2::254: the EC2 metadata service over IPv6.
         "fd00:ec2::254",
         // NAT64 wrapping 127.0.0.1 and 169.254.169.254.
@@ -179,7 +185,7 @@ fn blocks_every_non_public_range() {
     ];
     for ip in blocked {
         assert!(
-            is_private_ip(&ip.parse().unwrap()),
+            is_non_public_ip(&ip.parse().unwrap()),
             "{ip} should be blocked"
         );
     }
@@ -199,7 +205,7 @@ fn allows_public_addresses_including_wrapped_public_v4() {
     ];
     for ip in allowed {
         assert!(
-            !is_private_ip(&ip.parse().unwrap()),
+            !is_non_public_ip(&ip.parse().unwrap()),
             "{ip} should be allowed"
         );
     }
