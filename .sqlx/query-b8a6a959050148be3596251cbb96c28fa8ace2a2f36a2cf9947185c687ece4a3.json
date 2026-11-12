@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE whatsapp_profile_picture p SET retry_at = now() + interval '5 minutes'\n            FROM whatsapp_linked_account a\n            WHERE a.id = p.account_id AND (p.account_id, p.jid) IN (\n                SELECT account_id, jid FROM whatsapp_profile_picture\n                WHERE state = 'staged' AND retry_at <= now()\n                ORDER BY retry_at LIMIT $1 FOR UPDATE SKIP LOCKED)\n            RETURNING p.account_id, a.user_id, p.jid, p.picture_id AS \"picture_id!\",\n                p.staged AS \"staged!\", p.mime AS \"mime!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "account_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "jid",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "picture_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "staged!",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 5,
+        "name": "mime!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "b8a6a959050148be3596251cbb96c28fa8ace2a2f36a2cf9947185c687ece4a3"
+}

@@ -499,3 +499,40 @@ pub enum LookupAnswer {
     /// The question could not be asked or was not answered.
     Failed,
 }
+
+/// A profile picture the account's session should ask WhatsApp about now.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PictureCheck {
+    /// The person (preferably by LID) or group.
+    pub jid: String,
+    /// The id of the picture already stored; WhatsApp answers "unchanged"
+    /// instead of sending it again.
+    pub existing_id: Option<String>,
+    /// An added group the account shares with this person, which WhatsApp
+    /// expects for people who are not contacts.
+    pub common_group: Option<String>,
+}
+
+/// What WhatsApp answered about a profile picture.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PictureAnswer {
+    /// The stored picture is current.
+    Unchanged,
+    /// A new picture, downloaded.
+    Picture {
+        /// WhatsApp's id of the picture.
+        id: String,
+        /// The preview image, at most [`super::models::PICTURE_LIMIT_BYTES`].
+        bytes: Vec<u8>,
+        /// Its `image/*` type.
+        mime: String,
+    },
+    /// Their privacy setting hides it from this account.
+    Hidden,
+    /// They have no picture.
+    NotSet,
+    /// WhatsApp throttled the account; the check is retried, uncounted.
+    RateLimited,
+    /// The question could not be asked or the download failed.
+    Failed,
+}

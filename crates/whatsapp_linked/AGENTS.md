@@ -74,6 +74,26 @@ They share no HTTP: only MacroDB rows and `NOTIFY` (`external_chat`'s
   found number joins the chat list so `adopt` accepts it unchanged. Pending
   past `LOOKUP_EXPIRY_SECONDS` reads `failed`; rows go with the account's
   consent and after the window.
+- `src/outbound/pg/pictures.rs`: profile pictures
+  (`whatsapp_profile_picture`, per observing account and JID, because
+  WhatsApp's privacy settings differ per viewer; a chat shows what its
+  owner's account sees). Adoption tracks the added group or direct chat by
+  `remote_id`, and ingest each new non-Macro group sender by one of their
+  aliases (LID when known), for the chat owner's account; the unadded chat
+  list never is. The read path joins a chat's picture on `remote_id` and a
+  person's on their `whatsapp_identity_alias` rows. The session claims due checks
+  within `PICTURE_QUERIES_PER_HOUR` / `PICTURE_QUERIES_PER_DAY`
+  (`models.rs`), counted in `whatsapp_picture_query` so the budget survives
+  replica moves; `complete_picture_check` stages a new picture's bytes
+  (`staged`, ≤ 1 MiB, signals `whatsapp_picture_staged`), keeps an unchanged
+  one, and drops a hidden (401) or unset one, rescheduling about a week out
+  (two for hidden); failures back off, then `failed` waits a week.
+  `picture_changed` re-checks a tracked picture with another id and drops a
+  removed one. DSS's `PictureRepository` claims staged rows and records the
+  static file (`picture_stored`, false and the new file queued for deletion
+  when the row moved on) or a failed import. `static_file_id` is the only
+  column the read path joins on; a released file is queued in
+  `external_chat_file_deletion` by a trigger.
 - `src/outbound/pg/sends.rs`: enqueue, claim, dispatch fence, outcome. A
   repeated intent key returns the stored send before any other check.
 - `src/signals.rs`: the DSS ↔ session-service `NOTIFY` channels; payloads,
@@ -89,7 +109,8 @@ They share no HTTP: only MacroDB rows and `NOTIFY` (`external_chat`'s
   tables, the view rule `external_chat_access_level` that entity_access also
   calls, and `whatsapp_roster`/`whatsapp_chat_membership`; released files
   queue in `external_chat_file_deletion`) and its entity type validation, then
-  `*_whatsapp_lookup.sql` (phone-number lookups).
+  `*_whatsapp_lookup.sql` (phone-number lookups), then
+  `*_whatsapp_profile_picture.sql` (pictures and their query budget).
   Deleting a user cascades to their account,
   chats (with their grants, entity record and sharing settings) and sends;
   aliases outlive the account that saw them.

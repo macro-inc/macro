@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT count(*) FILTER (WHERE queried_at > now() - interval '1 hour') AS \"hour!\",\n            count(*) AS \"day!\"\n        FROM whatsapp_picture_query WHERE account_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "hour!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "day!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "b26978ccd063741d1837d3ad4bca0dec48c0749a2a05573687e27934544939f5"
+}
