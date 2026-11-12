@@ -1,7 +1,12 @@
 import type { MessageParent } from '@service-storage/messages';
 import { createRoot, createSignal } from 'solid-js';
-import { expect, it, vi } from 'vitest';
+import { beforeEach, expect, it, vi } from 'vitest';
 import { useMessageParticipants } from './use-message-participants';
+
+const team = vi.hoisted(() => ({ pending: false }));
+beforeEach(() => {
+  team.pending = false;
+});
 
 vi.mock('./use-channel-participants', () => ({
   useChannelParticipants: (channelId: () => string) => ({
@@ -12,14 +17,11 @@ vi.mock('./use-channel-participants', () => ({
     ids: () => [],
   }),
 }));
-vi.mock('@queries/contacts/contacts', () => ({
-  useContacts: () => () => [
-    { id: 'macro|contact@example.com', email: '', name: 'Contact' },
-  ],
-}));
 vi.mock('@queries/team/teams', () => ({
   useCurrentTeamQuery: () => ({
-    isPending: false,
+    get isPending() {
+      return team.pending;
+    },
     data: {
       members: [
         { user_id: 'macro|seller@example.com' },
@@ -29,20 +31,35 @@ vi.mock('@queries/team/teams', () => ({
   }),
 }));
 
-it('offers the owning team on CRM records and contacts on documents', () => {
+it('does not widen a pending CRM roster into the personal directory', () => {
+  team.pending = true;
+  createRoot((dispose) => {
+    try {
+      const participants = useMessageParticipants(() => ({
+        type: 'crm_contact',
+        id: 'record',
+      }));
+      expect(participants()).toEqual([]);
+    } finally {
+      dispose();
+    }
+  });
+});
+
+it('keeps CRM/channel rosters scoped and delegates discussion people to bounded search', () => {
   createRoot((dispose) => {
     const [parent, setParent] = createSignal<MessageParent>({
       type: 'crm_company',
       id: 'company',
     });
     const participants = useMessageParticipants(parent);
-    const ids = () => participants().map((user) => user.id);
+    const ids = () => participants()?.map((user) => user.id);
 
     expect(ids()).toEqual([
       'macro|seller@example.com',
       'macro|owner@example.com',
     ]);
-    expect(participants()[0].email).toBe('seller@example.com');
+    expect(participants()?.[0].email).toBe('seller@example.com');
 
     setParent({ type: 'crm_contact', id: 'contact' });
     expect(ids()).toEqual([
@@ -51,10 +68,12 @@ it('offers the owning team on CRM records and contacts on documents', () => {
     ]);
 
     setParent({ type: 'document', id: 'document' });
-    expect(ids()).toEqual(['macro|contact@example.com']);
+    expect(participants()).toBeUndefined();
 
     setParent({ type: 'call', id: 'call' });
-    expect(ids()).toEqual(['macro|contact@example.com']);
+    expect(participants()).toBeUndefined();
+    setParent({ type: 'initiative', id: 'project' });
+    expect(participants()).toBeUndefined();
 
     setParent({ type: 'channel', id: 'channel' });
     expect(ids()).toEqual(['macro|member@example.com']);

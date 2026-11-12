@@ -4,6 +4,7 @@ import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { useContactFilterLabels } from '@core/user/use-contact-filter-options';
 import { writeClipboardData } from '@core/util/dataTransfer';
 import { fireAndForget } from '@core/util/fireAndForget';
 import PlusIcon from '@icon/system/regular/plus.svg';
@@ -39,6 +40,7 @@ import {
 } from '../../saved-views/views/saved-view-dialogs';
 import { TASK_GROUP_OPTIONS, TASK_SORT_OPTIONS } from '../constants';
 import { TASK_DUE_DATE_BUCKETS } from '../core/task-due-date';
+import { TASK_VIEWER } from '../filters/task-facets';
 import {
   decodeTaskSavedView,
   materializeTaskSavedView,
@@ -70,6 +72,14 @@ function TaskSavedViewSummary(props: {
     return TASK_DUE_DATE_BUCKETS.find((bucket) => bucket.id === filter.type)
       ?.label;
   };
+  const people = useContactFilterLabels(() =>
+    [
+      ...new Set([
+        ...(selection().facets.assignees ?? []),
+        ...(selection().facets['created-by'] ?? []),
+      ]),
+    ].filter((id) => id !== TASK_VIEWER)
+  );
   return (
     <>
       <Show when={props.omittedFilters?.length}>
@@ -85,11 +95,16 @@ function TaskSavedViewSummary(props: {
             <p>
               {group.label}:{' '}
               {(selection().facets[group.id] ?? [])
-                .map(
-                  (id) =>
+                .map((id) => {
+                  if (group.id === 'assignees' || group.id === 'created-by')
+                    return id === TASK_VIEWER
+                      ? 'Me'
+                      : (people().get(id)?.label ?? 'Unavailable option');
+                  return (
                     group.options.find((option) => option.id === id)?.label ??
                     'Unavailable option'
-                )
+                  );
+                })
                 .join(', ')}
             </p>
           </Show>
@@ -387,7 +402,7 @@ function TaskSavedViewRows(props: {
     <Show when={savedViews && savedViewsList}>
       {(views) => (
         <>
-          <SavedViewList.Items>
+          <SavedViewList.Items label={t('viewMenus.savedTaskViews')}>
             <Show when={creating()}>
               <SavedViewList.Draft onSelect={() => run(closeTask)} />
             </Show>

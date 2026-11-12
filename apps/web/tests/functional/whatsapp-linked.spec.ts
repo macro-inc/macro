@@ -576,7 +576,14 @@ async function mount(page: Page, state: LinkedServer, query = '') {
     }
     if (/^\/(auth|dss|notification|connection-gateway)\//.test(url.pathname))
       return route.fulfill({ json: {} });
-    return route.fulfill({ response: await route.fetch() });
+    try {
+      return await route.fulfill({ response: await route.fetch() });
+    } catch (error) {
+      // Late asset reads may finish after Playwright has torn down the test.
+      if (error instanceof Error && error.message.includes('Test ended'))
+        return;
+      throw error;
+    }
   });
   await page.goto(
     `${origin}/tests/functional/whatsapp-linked/index.html${query}`
@@ -1426,6 +1433,10 @@ test('the composer mentions group participants as WhatsApp mentions', async ({
   await expect(page.getByText('+14155550199')).toBeVisible();
   await expect(page.getByText('@here')).toHaveCount(0);
   await page.keyboard.press('Enter');
+  // Wait for inline search to be replaced before typing the next character.
+  await expect(
+    page.getByRole('textbox').locator('.md-inline-search')
+  ).toHaveCount(0);
   await page.keyboard.type('!');
   await page.getByRole('button', { name: 'Send message' }).click();
   await expect.poll(() => state.outgoing.length).toBe(1);

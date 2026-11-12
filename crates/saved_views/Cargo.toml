@@ -4,9 +4,6 @@ name = "saved_views"
 publish = false
 version = "0.1.0"
 
-[lib]
-test = false
-
 [dependencies]
 chrono = { workspace = true }
 macro_uuid = { path = "../macro_uuid" }
@@ -20,3 +17,6 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 rootcause = { workspace = true }
 thiserror = { workspace = true }
 async-trait = { workspace = true }
+
+[dev-dependencies]
+macro_db_migrator = { path = "../macro_db_migrator" }

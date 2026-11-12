@@ -1,4 +1,5 @@
 mod calendar_range;
+mod contact_sync;
 mod email_archive_optimistic;
 mod email_draft_optimistic;
 mod email_participants;
@@ -6,6 +7,7 @@ mod engine;
 mod entity_resolver;
 mod field_changes;
 mod grouped_optimistic;
+mod hydration_scope;
 mod identity_commit;
 mod initiative;
 mod link_patch_null;

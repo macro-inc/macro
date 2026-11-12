@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { featuredTemplates } from '../core/routine-templates';
 import type { RoutineRow } from '../core/types';
 import { TEST_CATALOG } from '../tests/catalog';
-import { RoutinesList } from './routines-list';
+import { type RoutinesDiscover, RoutinesList } from './routines-list';
 
 vi.mock('@service-connection/websocket', () => ({
   ws: { addEventListener: vi.fn(), send: vi.fn() },
@@ -46,6 +46,8 @@ const rows: RoutineRow[] = [
     status: 'Active',
     enabled: true,
     editable: true,
+    children: [],
+    pausedByParent: false,
   },
   {
     id: 'revenue',
@@ -64,6 +66,8 @@ const rows: RoutineRow[] = [
     status: 'Paused',
     enabled: false,
     editable: true,
+    children: [],
+    pausedByParent: false,
   },
 ];
 function setup(overrides: Partial<Parameters<typeof RoutinesList>[0]> = {}) {
@@ -202,5 +206,72 @@ describe('routines list', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Create Routine' }));
     expect(props.onCreate).toHaveBeenCalledOnce();
     expect(screen.queryByText(/templates/i)).toBeNull();
+  });
+
+  describe('with suggestions', () => {
+    function withDiscover(unseen = true) {
+      const onSeen = vi.fn();
+      const discover: RoutinesDiscover = {
+        row: (openDiscover) => (
+          <section aria-label="Suggested for you">
+            <button type="button" onClick={openDiscover}>
+              10 more
+            </button>
+          </section>
+        ),
+        page: (search) => <p>Discover page, search “{search()}”</p>,
+        unseen: () => unseen,
+        onSeen,
+      };
+      const props = setup({
+        discover,
+        templates: featuredTemplates(TEST_CATALOG, true),
+        onTemplate: vi.fn(),
+      });
+      return { props, onSeen };
+    }
+
+    it('shows one row of them above the list instead of the templates', () => {
+      withDiscover();
+      expect(
+        screen.getByRole('region', { name: 'Suggested for you' })
+      ).toBeTruthy();
+      expect(screen.queryByRole('region', { name: 'Templates' })).toBeNull();
+      expect(screen.getByRole('table', { name: 'Routines' })).toBeTruthy();
+      // Only on All, and never over a search.
+      fireEvent.click(screen.getByRole('radio', { name: /^On/ }));
+      expect(
+        screen.queryByRole('region', { name: 'Suggested for you' })
+      ).toBeNull();
+    });
+
+    it('opens Discover from its tab or the row, in place of the list, marking it seen', () => {
+      const { onSeen } = withDiscover();
+      fireEvent.click(screen.getByRole('button', { name: '10 more' }));
+      expect(
+        screen.getByRole('radio', { name: 'Discover', checked: true })
+      ).toBeTruthy();
+      expect(screen.getByText('Discover page, search “”')).toBeTruthy();
+      expect(screen.queryByRole('table', { name: 'Routines' })).toBeNull();
+      expect(onSeen).toHaveBeenCalledOnce();
+      // The list's search narrows Discover too.
+      fireEvent.click(screen.getByRole('button', { name: 'Search routines' }));
+      fireEvent.input(screen.getByRole('searchbox'), {
+        target: { value: 'inbox' },
+      });
+      expect(screen.getByText('Discover page, search “inbox”')).toBeTruthy();
+      fireEvent.click(screen.getByRole('radio', { name: /^All/ }));
+      expect(onSeen).toHaveBeenCalledTimes(2);
+      expect(screen.getByRole('table', { name: 'Routines' })).toBeTruthy();
+    });
+
+    it('keeps the templates where suggestions are off', () => {
+      setup({
+        templates: featuredTemplates(TEST_CATALOG, true),
+        onTemplate: vi.fn(),
+      });
+      expect(screen.getByRole('region', { name: 'Templates' })).toBeTruthy();
+      expect(screen.queryByRole('radio', { name: 'Discover' })).toBeNull();
+    });
   });
 });

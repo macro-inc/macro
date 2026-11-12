@@ -59,6 +59,7 @@ export default defineConfig(({ command }) => ({
           'query-write-scope.html',
           'email-participants.html',
           'search-buckets.html',
+          'people-references.html',
         ].map((name) => [name.replace('.html', ''), resolve(directory, name)])
       ),
     },
