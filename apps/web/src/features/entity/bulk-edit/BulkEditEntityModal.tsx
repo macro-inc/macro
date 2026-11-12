@@ -25,6 +25,8 @@ const BulkEditEntityModalContent = (props: {
   onCancel: () => void;
   onError?: (error: unknown) => void;
   onPartialDelete?: PartialDeleteHandler;
+  /** What else the deletion removes, under its description. */
+  note?: string;
 }) => {
   const handleMoved = (folder: MovedFolder) => {
     const { onMoved } = props;
@@ -36,11 +38,22 @@ const BulkEditEntityModalContent = (props: {
     if (!open) (share?.dismiss ?? props.onCancel)();
   };
 
+  // The delete view's first tab stop is an item chip, whose preview card
+  // opens on focus. Focus the dialog itself so the card waits for a hover.
+  let content: HTMLDivElement | undefined;
+  const focusDialogOnDelete = (event: Event) => {
+    if (props.view !== 'delete') return;
+    event.preventDefault();
+    content?.focus();
+  };
+
   return (
     <Show
       when={props.view === 'share'}
       fallback={
         <Dialog
+          contentRef={(element) => (content = element)}
+          onOpenAutoFocus={focusDialogOnDelete}
           open={props.isOpen()}
           position={props.view === 'moveToProject' ? 'top' : 'center'}
           class={props.view === 'moveToProject' ? 'w-140' : 'w-110'}
@@ -60,6 +73,7 @@ const BulkEditEntityModalContent = (props: {
                 </Show>
                 <Show when={props.view === 'delete'}>
                   <BulkDeleteView
+                    note={props.note}
                     onPartialDelete={props.onPartialDelete}
                     entities={props.entities}
                     onFinish={props.onFinish}
@@ -102,6 +116,8 @@ type BulkEditSession = {
   onCancel?: () => void;
   onError?: (error: unknown) => void;
   onPartialDelete?: PartialDeleteHandler;
+  /** What else the deletion removes, under its description. */
+  note?: string;
 };
 
 const [globalSession, setGlobalSession] = createSignal<BulkEditSession>();
@@ -133,6 +149,7 @@ export const GlobalBulkEditEntityModal = () => (
           onCancel={() => close(session.onCancel)}
           onError={session.onError}
           onPartialDelete={session.onPartialDelete}
+          note={session.note}
         />
       );
     }}

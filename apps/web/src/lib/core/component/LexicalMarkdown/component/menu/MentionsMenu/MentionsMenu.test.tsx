@@ -15,10 +15,12 @@ const mocks = vi.hoisted(() => ({
   whatsappUserIds: [] as string[],
   mobile: false,
   requestedBuckets: [] as string[],
+  searchedLists: [] as { buckets: string[]; enabled?: () => boolean }[],
   contacts: [] as import('@core/context/quickAccess').EntityItem[],
   contactSourceEnabled: undefined as (() => boolean) | undefined,
   setContactSearchDisabled: (_value: boolean) => {},
   hasMoreContacts: false,
+  peopleLoading: (): boolean => false,
   loadMoreContacts: vi.fn(async () => {}),
   calendarEvents:
     [] as import('../../../utils/mentionsUtils').CalendarEventMentionItem[],
@@ -133,15 +135,18 @@ vi.mock('@core/context/quickAccess', () => ({
     useList: (...args: unknown[]) => {
       const [first] = args;
       if (first && typeof first === 'object') {
-        mocks.requestedBuckets.push(
-          ...(first as { buckets: string[] }).buckets
-        );
+        const options = first as {
+          buckets: string[];
+          enabled?: () => boolean;
+        };
+        mocks.requestedBuckets.push(...options.buckets);
+        mocks.searchedLists.push(options);
       }
       return {
         items: () => [],
         totalCount: () => 0,
         hasMore: () => false,
-        isLoading: () => false,
+        isLoading: () => mocks.peopleLoading(),
         isLoadingMore: () => false,
         loadMore: async () => {},
       };
@@ -218,10 +223,12 @@ afterEach(() => {
   mocks.whatsappUserIds = [];
   mocks.mobile = false;
   mocks.requestedBuckets = [];
+  mocks.searchedLists = [];
   mocks.contacts = [];
   mocks.contactSourceEnabled = undefined;
   mocks.setContactSearchDisabled(false);
   mocks.hasMoreContacts = false;
+  mocks.peopleLoading = () => false;
   mocks.loadMoreContacts.mockClear();
   mocks.calendarEvents = [];
   cleanup();
@@ -419,6 +426,33 @@ it('opens an empty continuation and keeps the editor menu open while paging', as
 
   expect(mocks.loadMoreContacts).toHaveBeenCalledTimes(callsBeforeClick + 1);
   expect(menu.isOpen()).toBe(true);
+});
+
+it('keeps every search source idle while the menu is closed', () => {
+  mocks.crmEnabled = true;
+  mockNoEmails();
+  const menu = createMenuOperations();
+  render(() => (
+    <MentionsMenu menu={menu} editor={createEditor()} users={() => []} />
+  ));
+  // Each composer mounts a closed menu; an enabled list would re-run its
+  // cache search on every cache change.
+  expect(mocks.searchedLists.map((list) => list.buckets)).toEqual(
+    expect.arrayContaining([['channel', 'dm'], ['crm_company']])
+  );
+  const emailSearch = vi.mocked(useEmailSearchMention).mock.calls[0][0];
+  expect(mocks.searchedLists.map((list) => list.enabled?.())).not.toContain(
+    true
+  );
+  expect(mocks.searchedLists.every((list) => list.enabled)).toBe(true);
+  expect(emailSearch.enabled?.()).toBe(false);
+
+  menu.openMenu();
+  const entityLists = mocks.searchedLists.filter(
+    (list) => !list.buckets.includes('person')
+  );
+  expect(entityLists.map((list) => list.enabled?.())).not.toContain(false);
+  expect(emailSearch.enabled?.()).toBe(true);
 });
 
 it('only paginates an open mobile menu and resumes on reopen', async () => {
@@ -703,6 +737,41 @@ it('marks an offline agent and refuses to mention it', () => {
   fireEvent.click(screen.getByTitle('Dev box agent — offline'));
   expect(onPick).not.toHaveBeenCalled();
   expect(menu.isOpen()).toBe(true);
+});
+
+it('says it is searching only for a slow search, and never that there are no results before sources answer', async () => {
+  vi.useFakeTimers();
+  mockNoEmails();
+  const [loading, setLoading] = createSignal(true);
+  mocks.peopleLoading = loading;
+  const menu = createMenuOperations();
+  menu.setSearchTerm('jacob');
+  menu.openMenu();
+  render(() => (
+    <MentionsMenu
+      menu={menu}
+      entities={() => []}
+      sources={['users']}
+      anchor={document.createElement('div')}
+      onPick={vi.fn()}
+    />
+  ));
+  // A quick answer shows neither label.
+  await vi.advanceTimersByTimeAsync(200);
+  expect(screen.queryByText('Searching…')).toBeNull();
+  expect(screen.queryByText('No results')).toBeNull();
+
+  await vi.advanceTimersByTimeAsync(300);
+  expect(screen.getByText('Searching…')).toBeTruthy();
+  expect(screen.queryByText('No results')).toBeNull();
+
+  // Once shown it stays long enough to read, then gives the answer.
+  setLoading(false);
+  await vi.advanceTimersByTimeAsync(100);
+  expect(screen.getByText('Searching…')).toBeTruthy();
+  await vi.advanceTimersByTimeAsync(500);
+  expect(screen.getByText('No results')).toBeTruthy();
+  expect(screen.queryByText('Searching…')).toBeNull();
 });
 
 it('picks the highlighted mention on Enter at once, even while typing continues', async () => {

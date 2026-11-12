@@ -137,6 +137,7 @@ export function getActionVerb(type: NotificationType): string {
       .with('agent_session_waiting_for_input', () => 'needs your answer')
       .with('agent_session_mentioned', () => 'mentioned you')
       .with('routine_run_finished', () => 'ran')
+      .with('agent_sign_in_expiry', () => 'needs a new sign-in')
       .exhaustive(() => 'updated')
   );
 }
@@ -213,6 +214,9 @@ export function getTypeNoun(type: NotificationType, count: number): string {
     )
     .with('routine_run_finished', () =>
       count === 1 ? 'routine run' : 'routine runs'
+    )
+    .with('agent_sign_in_expiry', () =>
+      count === 1 ? 'agent sign-in' : 'agent sign-ins'
     )
     .exhaustive(() => (count === 1 ? 'notification' : 'notifications'));
 }
