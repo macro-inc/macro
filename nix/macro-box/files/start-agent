@@ -69,6 +69,10 @@ if ((count >= max_failed_boots)) && [[ -n $good && $good != "$head" ]]; then
     -m "revert(agent): roll back to last-good ${good:0:12} after $count failed boots")
   wgit reset --hard --quiet "$rollback"
   head=$rollback
+  # Last-good's tree, so it is last-good: a boot of it that dies early (Macro
+  # unreachable) is reset by agent-stopped, never counted toward rolling back
+  # from the rollback itself.
+  echo "$rollback" > "$last_good"
   echo 0 > "$failures"
 fi
 # Written before anything here can fail the boot, so agent-stopped counts
