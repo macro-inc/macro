@@ -152,6 +152,7 @@ fn task_assignment_round_trips_and_opens_on_its_discussion() {
         ..posted(document(), None)
     };
     let assigned = NewAgentSessionEvent::AssignedToTask(AgentAssignedToTaskEvent {
+        origin: trigger_context::TriggerOrigin::Unknown,
         bot_id: BotId::TEST_A,
         parent: message.parent.clone(),
         discussion_id: message.message_id,
@@ -431,4 +432,52 @@ fn a_conversation_turn_carries_its_trigger_without_the_channel() {
     assert_eq!(wire["metadata"]["source"], "conversation_message");
     assert_eq!(wire["metadata"]["context"]["kind"], "conversation");
     assert!(wire["metadata"]["context"].get("channel").is_none());
+}
+
+#[test]
+fn a_mention_is_attributed_to_whoever_posted_it() {
+    let message = posted(document(), None);
+    let by_person = NewAgentSessionEvent::Mentioned(AgentMentionedEvent {
+        bot_id: BotId::TEST_A,
+        message: message.clone(),
+        context: None,
+    });
+    let TriggerOrigin::Mentioned { by, message_id } = by_person.origin() else {
+        panic!("expected a mention");
+    };
+    assert_eq!(message_id, message.message_id);
+    assert!(matches!(by, Caller::Person { .. }));
+
+    let user = MacroUserIdStr::try_from_email("user@example.com").unwrap();
+    let by_agent = NewAgentSessionEvent::Mentioned(AgentMentionedEvent {
+        bot_id: BotId::TEST_A,
+        message: MessagePostedMetadata {
+            sender: ChannelSender::new_from_bot(BotId::TEST_B),
+            triggered_by: Some(user.as_ref().to_owned()),
+            ..message.clone()
+        },
+        context: None,
+    });
+    let TriggerOrigin::Mentioned { by, .. } = by_agent.origin() else {
+        panic!("expected a mention");
+    };
+    assert_eq!(
+        by,
+        Caller::Agent(AgentActor {
+            bot: BotId::TEST_B,
+            on_behalf_of: user,
+            lineage: Lineage::Unattributed,
+        })
+    );
+
+    let unprompted = NewAgentSessionEvent::Mentioned(AgentMentionedEvent {
+        bot_id: BotId::TEST_A,
+        message: MessagePostedMetadata {
+            sender: ChannelSender::new_from_bot(BotId::TEST_B),
+            triggered_by: None,
+            ..message
+        },
+        context: None,
+    });
+    assert_eq!(unprompted.origin(), TriggerOrigin::Unknown);
 }

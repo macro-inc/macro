@@ -1,12 +1,14 @@
+import { loadDatabase } from '@app/features/block-database/queries/load-database';
 import type { DatabaseOp } from '@core/database-sql/generated/types';
 import { queryClient } from '@queries/client';
 import type { DatabaseDetail } from '@service-storage/generated/schemas/databaseDetail';
-import { errAsync, okAsync } from 'neverthrow';
+import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   applyDatabaseOps,
   applyDatabaseTableVersions,
   createDatabase,
+  databaseDetailQueryOptions,
   fetchViewerDatabases,
   onDatabaseBatchCommitted,
 } from './databases';
@@ -722,4 +724,42 @@ it('does not hold a cell write while refreshing a newly minted option', async ()
     release();
     invalidate.mockRestore();
   }
+});
+
+it('shares the block loader schema read with the mounted database view', async () => {
+  mock.get.mockReturnValue(okAsync(detail));
+  const loaded = await loadDatabase('db');
+  expect(loaded.isOk()).toBe(true);
+  const mounted = await queryClient.fetchQuery(
+    databaseDetailQueryOptions('db')
+  );
+  expect(mounted).toEqual(detail);
+  expect(mock.get).toHaveBeenCalledOnce();
+});
+
+it('deduplicates a block load with an in-flight schema read', async () => {
+  let finish!: (value: DatabaseDetail) => void;
+  mock.get.mockReturnValue(
+    ResultAsync.fromSafePromise(
+      new Promise<DatabaseDetail>((resolve) => {
+        finish = resolve;
+      })
+    )
+  );
+  const mounted = queryClient.fetchQuery(databaseDetailQueryOptions('db'));
+  const loaded = loadDatabase('db');
+  expect(mock.get).toHaveBeenCalledOnce();
+  finish(detail);
+  await mounted;
+  expect((await loaded).isOk()).toBe(true);
+  expect(mock.get).toHaveBeenCalledOnce();
+});
+
+it('propagates a refused database load without seeding its schema cache', async () => {
+  const errors = [{ code: 'FORBIDDEN', message: 'Access denied' }];
+  mock.get.mockReturnValue(errAsync(errors));
+  const loaded = await loadDatabase('db');
+  expect(loaded.isErr()).toBe(true);
+  expect(loaded._unsafeUnwrapErr()).toEqual(errors);
+  expect(queryClient.getQueryData(key)).toBeUndefined();
 });

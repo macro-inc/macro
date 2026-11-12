@@ -14,7 +14,7 @@ export function homepageChatData() {
       },
       {
         id: 'website-design',
-        person: 'valentina',
+        person: 'austin',
         time: '9:36 AM',
         body: 'The layout is close. The demo should use the same screens people see in the app.',
       },
@@ -39,7 +39,7 @@ export function homepageChatData() {
       },
       {
         id: 'website-check',
-        person: 'valentina',
+        person: 'austin',
         time: '9:44 AM',
         body: 'I’ll review the light version and the phone layout after this pass.',
         replyTo: 'website-plan',

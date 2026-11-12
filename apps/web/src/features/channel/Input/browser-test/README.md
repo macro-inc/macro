@@ -25,6 +25,13 @@ The send regression checks desktop and phone: a pending send clears the editor,
 a rejected send restores its draft, and a rejection preserves a newer draft
 typed while delivery was pending. The fixture controls completion locally.
 
+The formatting regression mounts the production message editor on 320px and
+390px touch screens. It selects part of a draft before opening the add drawer,
+opens the ribbon, removes strikethrough only from that selection, hides the
+ribbon, and saves the edit. It also checks that tapping ribbon padding keeps
+editor focus and the selection, and that the last control stays reachable
+without widening the composer.
+
 The code-paste regression types three backticks to open a code block in the
 production composer and pastes a Macro link, then Markdown. Both land as literal
 code text: the link used to become a mention the code block dropped, and the
@@ -33,3 +40,19 @@ Markdown used to lose its syntax.
 The CRM mention regression uses the real menu and contact query with controlled
 pages. It selects a CRM contact whose email also belongs to a Macro user,
 verifies the stored contact link, and pages CRM results on desktop and phone.
+
+The attach regression taps the add drawer's Attach files on a phone. A phone
+browser opens the file picker within the tap. With the iOS app's Tauri bridge
+stubbed and its photo library picker failing, the composer opens no picker by
+itself, since WKWebView ignores a file input click once the native round trip
+has outlived the tap. It shows a toast whose Choose files button opens the
+picker instead.
+
+The mention-ranking fixture also mounts document discussion composers over a
+bounded virtual 100k contact source. Desktop/phone cases verify lazy activation,
+replaceable pages and scroll reset, a late-directory match, insertion, and an
+explicit empty scope that offers agents without falling back to the directory.
+Each scenario uses its own draft persistence key. The real configured editor,
+MarkdownShell, mention hook and menu run together; this catches dropped window
+transforms that isolated source tests cannot. Channel/CRM scope and agent rollout
+behavior also have unit coverage.

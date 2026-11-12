@@ -3,8 +3,12 @@ import type {
   EntityActionViewContext,
 } from '@app/features/next-soup/actions';
 import { CHANNEL_ACTION_VIEW_CONTEXT } from '@channel/Channel/channel-actions';
+import {
+  consumeOpenInNewTabIntent,
+  disarmOpenInNewTabIntent,
+} from '@components/app/tab-layout/open-in-tab-intent';
 import type { EntityData } from '@entity';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createSoupEntityActions } from './createSoupEntityActions';
 
 const mocks = vi.hoisted(() => ({
@@ -16,6 +20,8 @@ const mocks = vi.hoisted(() => ({
     ) => {}
   ),
   source: {},
+  existingSplit: vi.fn<() => { id: string } | undefined>(() => undefined),
+  tabManager: vi.fn<() => object | undefined>(() => undefined),
 }));
 
 vi.mock('@app/features/next-soup/actions', () => ({
@@ -68,14 +74,18 @@ vi.mock('@app/lib/analytics/posthog', () => ({
 vi.mock('@app/lib/i18n', () => ({ t: (key: string) => key }));
 vi.mock('@app/signal/splitLayout', () => ({
   globalSplitManager: () => ({
-    getSplitByContent: () => undefined,
+    getSplitByContent: mocks.existingSplit,
     canAppendSplit: () => true,
   }),
+}));
+vi.mock('@app/signal/tabLayout', () => ({
+  globalTabManager: mocks.tabManager,
 }));
 vi.mock('@components/app/GlobalAppState', () => ({
   useGlobalNotificationSource: () => mocks.source,
 }));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'user' }));
+vi.mock('@queries/team/teams', () => ({ useIsTeamAdmin: () => () => false }));
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => false }));
 
 const channel = {
@@ -95,7 +105,13 @@ const openFromMenu = async (viewContext: EntityActionViewContext) => {
   await item?.onClick();
 };
 
-beforeEach(() => mocks.open.mockClear());
+beforeEach(() => {
+  mocks.open.mockReset();
+  mocks.existingSplit.mockReset();
+  mocks.tabManager.mockReset();
+});
+
+afterEach(() => disarmOpenInNewTabIntent());
 
 describe('Open in new split on a conversation', () => {
   it('opens a channel rail row at latest with its top-level read scope', async () => {
@@ -124,4 +140,53 @@ describe('Open in new split on a conversation', () => {
     expect(options?.channelNavigation).toBeUndefined();
     expect(options?.channelReadScope).toBeUndefined();
   });
+
+  it('does not duplicate a split opened after the menu was built', async () => {
+    const { buildActionGroups } = createSoupEntityActions();
+    const action = buildActionGroups({} as EntityActionListState, [channel], {
+      viewContext: CHANNEL_ACTION_VIEW_CONTEXT,
+    })
+      .flatMap((group) => group.items)
+      .find(({ id }) => id === 'open-in-split');
+
+    expect(action).toBeDefined();
+    mocks.existingSplit.mockReturnValue({ id: 'existing' });
+    await action?.onClick();
+
+    expect(mocks.open).not.toHaveBeenCalled();
+  });
+});
+
+describe('Open in new tab on a conversation', () => {
+  it.each([true, false])(
+    'opens another tab when the channel is open before the menu: %s',
+    async (alreadyOpen) => {
+      mocks.tabManager.mockReturnValue({});
+      if (alreadyOpen) {
+        mocks.existingSplit.mockReturnValue({ id: 'existing' });
+      }
+      mocks.open.mockImplementationOnce(async () => {
+        expect(consumeOpenInNewTabIntent()).toEqual({ activate: true });
+      });
+      const { buildActionGroups } = createSoupEntityActions();
+      const action = buildActionGroups({} as EntityActionListState, [channel], {
+        viewContext: CHANNEL_ACTION_VIEW_CONTEXT,
+      })
+        .flatMap((group) => group.items)
+        .find(({ id }) => id === 'open-in-tab');
+
+      expect(action).toBeDefined();
+      mocks.existingSplit.mockReturnValue({ id: 'existing' });
+      await action?.onClick();
+
+      expect(mocks.open).toHaveBeenCalledExactlyOnceWith(
+        channel,
+        expect.objectContaining({
+          openInNewSplit: false,
+          channelNavigation: 'latest',
+          channelReadScope: 'top-level',
+        })
+      );
+    }
+  );
 });

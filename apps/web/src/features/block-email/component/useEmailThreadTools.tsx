@@ -37,6 +37,7 @@ import IconShared from '@icon/share.svg';
 import CheckBoldIcon from '@icon/system/bold/check-bold.svg?component-solid';
 import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg?component-solid';
 import ArrowRightIcon from '@icon/system/regular/arrow-right.svg';
+import CalendarPlusIcon from '@icon/system/regular/calendar-plus.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import DownloadIcon from '@icon/system/regular/download-simple.svg';
 import EnvelopeSimpleIcon from '@icon/system/regular/envelope-simple.svg';
@@ -54,6 +55,8 @@ export type EmailThreadToolsOptions = {
   title: string;
   isDraft?: boolean;
   onCreateTask?: () => void;
+  onCreateEvent?: () => boolean;
+  canCreateEvent?: () => boolean;
   onMarkedUnread?: () => void;
   onDeleted?: () => void;
   listNavigation?: EmailThreadListNavigation;
@@ -184,6 +187,8 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
     }
 
     const toastId = toast.success('Moved to Trash', {
+      dismissStyle: 'icon',
+      actionLayout: 'inline',
       actions: [
         {
           label: 'Undo',
@@ -280,6 +285,15 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
       icon: TaskIcon,
       action: () => props.onCreateTask?.(),
       condition: () => !!props.onCreateTask && !!emailCtx.thread()?.db_id,
+    },
+    {
+      get label() {
+        return t('entityActions.createEvent');
+      },
+      icon: CalendarPlusIcon,
+      action: () => props.onCreateEvent?.(),
+      condition: () => props.canCreateEvent?.() === true,
+      hotkeyToken: TOKENS.email.createEvent,
     },
     shareTool,
     {

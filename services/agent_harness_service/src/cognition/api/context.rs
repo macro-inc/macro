@@ -128,13 +128,17 @@ pub type DcsOnboardingService = onboarding::domain::service::OnboardingServiceIm
 >;
 
 /// Concrete Pipedream MCP router state for DCS: the Postgres connection
-/// store plus the Pipedream client (None when not configured — endpoints
+/// store plus the connector backends (None when not configured — endpoints
 /// answer 501).
 pub type DcsPipedreamRouterState = pipedream_mcp::inbound::PipedreamRouterState<
     pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo,
-    pipedream_mcp::outbound::api::PipedreamClient,
+    pipedream_mcp::outbound::dispatch::ConnectorBackends,
     DcsAuthorizationService,
 >;
+
+/// Redis-backed rate limiting for the web routes.
+pub type WebRateLimiter =
+    rate_limit::RateLimitServiceImpl<rate_limit::RedisRateLimitAdapter<redis::Client>>;
 
 #[derive(Clone, FromRef)]
 pub struct ApiContext {
@@ -177,6 +181,8 @@ pub struct ApiContext {
     pub entity_access_service: Arc<DcsEntityAccessService>,
     pub message_service: Arc<DcsMessageService>,
     pub ai_stream_registry: AiStreamRegistry,
+    /// Per-user limit on `/web/search` and `/web/fetch`.
+    pub web_rate_limiter: WebRateLimiter,
     pub mcp_state: DcsMcpRouterState,
     pub pipedream_state: DcsPipedreamRouterState,
     pub granola_sync: Option<Arc<dyn granola_sync::domain::service::SyncService>>,

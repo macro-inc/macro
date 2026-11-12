@@ -90,6 +90,7 @@ function pollDetail(
           gateRules: null,
           gateMessage: '',
           bookingTarget: null,
+          showWhen: null,
           questions: [
             {
               id: 'question',
@@ -127,14 +128,22 @@ function PollExample(props: {
 }) {
   const id = `01a19a29-0000-7000-8000-${String(props.index).padStart(12, '0')}`;
   const detail = pollDetail(id, props.question, props.options);
+  // The card mounts before its preview and its form arrive, as in a channel.
   queryClient.setQueryData(previewKeys.item(id).queryKey, {
     id,
     type: 'form',
-    name: props.question,
-    rawName: props.question,
-    loading: false,
-    access: 'access',
+    loading: true,
   } satisfies PreviewItem);
+  const loadPreview = () =>
+    queryClient.setQueryData(previewKeys.item(id).queryKey, {
+      id,
+      type: 'form',
+      name: props.question,
+      rawName: props.question,
+      owner: 'macro|owner@example.com',
+      loading: false,
+      access: 'access',
+    } satisfies PreviewItem);
   const base = createMockFormContext({ detail });
   const { context } = createMockFormContext({
     detail,
@@ -154,7 +163,6 @@ function PollExample(props: {
       },
     },
   });
-  // The form's detail arrives after its card mounts, as in a channel.
   const [loaded, setLoaded] = createSignal(false);
   const Body = () => (
     <FormProvider value={context}>
@@ -174,7 +182,8 @@ function PollExample(props: {
   );
   return (
     <section aria-label={props.label} class="max-w-xl">
-      <Button onClick={() => setLoaded(true)}>Load {props.label}</Button>
+      <Button onClick={loadPreview}>Load {props.label} preview</Button>
+      <Button onClick={() => setLoaded(true)}>Load {props.label} form</Button>
       <DocumentCard
         key={id}
         documentId={id}

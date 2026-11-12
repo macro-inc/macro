@@ -174,21 +174,49 @@ async fn insert_email_contact(pool: &PgPool, link_id: Uuid, email: &str) -> Uuid
     id
 }
 
-/// An empty link + thread owned by `owner_macro_id`. Returns `(link_id, thread_id)`.
-async fn create_link_and_thread(pool: &PgPool, owner_macro_id: &str) -> (Uuid, Uuid) {
-    let link_id = Uuid::new_v4();
-    let thread_id = Uuid::new_v4();
+async fn create_primary_link(pool: &PgPool, owner_macro_id: &str) -> Uuid {
+    let existing = sqlx::query_scalar!(
+        "SELECT id FROM email_links WHERE macro_id = $1 AND is_primary LIMIT 1",
+        owner_macro_id
+    )
+    .fetch_optional(pool)
+    .await
+    .unwrap();
+    let link_id = existing.unwrap_or_else(Uuid::new_v4);
 
-    sqlx::query!(
-        r#"INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider)
+    if existing.is_none() {
+        sqlx::query!(
+            r#"INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider)
            VALUES ($1, $2, $2, $3, 'GMAIL')"#,
-        link_id,
+            link_id,
+            owner_macro_id,
+            owner_macro_id.strip_prefix("macro|").unwrap(),
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+    link_id
+}
+
+async fn consent_to_email(pool: &PgPool, team_id: Uuid, owner_macro_id: &str) {
+    let link_id = create_primary_link(pool, owner_macro_id).await;
+    sqlx::query!(
+        "INSERT INTO crm_email_consent (team_id, user_id, link_id, enabled) VALUES ($1, $2, $3, TRUE)",
+        team_id,
         owner_macro_id,
-        format!("{owner_macro_id}@mail.test"),
+        link_id,
     )
     .execute(pool)
     .await
     .unwrap();
+}
+
+/// An empty link + thread owned by `owner_macro_id`. Returns `(link_id, thread_id)`.
+/// Creating a mailbox or thread never supplies CRM consent.
+async fn create_link_and_thread(pool: &PgPool, owner_macro_id: &str) -> (Uuid, Uuid) {
+    let link_id = create_primary_link(pool, owner_macro_id).await;
+    let thread_id = Uuid::new_v4();
 
     sqlx::query!(
         r#"INSERT INTO email_threads (id, link_id) VALUES ($1, $2)"#,
@@ -284,20 +312,38 @@ async fn insert_crm_contact(pool: &PgPool, company_id: Uuid, email: &str, hidden
     .unwrap();
 }
 
-/// OWNER + REQUESTER on the same team (with a CRM settings row). Both joined
-/// as plain members — use [`setup_shared_team_as`] when the requester's role
-/// matters (admin/owner can see hidden CRM rows; member cannot).
-async fn setup_shared_team(pool: &PgPool, crm_enabled: bool) -> Uuid {
-    setup_shared_team_as(pool, crm_enabled, "member").await
+/// A contact on `team_id` with no company, as email sync files a personal
+/// address. `email` must be lowercase.
+async fn insert_companyless_contact(pool: &PgPool, team_id: Uuid, email: &str, hidden: bool) {
+    sqlx::query!(
+        r#"INSERT INTO crm_contacts (team_id, email, hidden, first_interaction, last_interaction)
+           VALUES ($1, $2, $3, now(), now())"#,
+        team_id,
+        email,
+        hidden,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
 }
 
-async fn setup_shared_team_as(pool: &PgPool, crm_enabled: bool, requester_role: &str) -> Uuid {
+/// OWNER + REQUESTER on the same team, with optional explicit consent from OWNER.
+/// Both join as plain members — use [`setup_shared_team_as`] when the requester's
+/// role matters (admin/owner can see hidden CRM rows; member cannot).
+async fn setup_shared_team(pool: &PgPool, owner_consented: bool) -> Uuid {
+    setup_shared_team_as(pool, owner_consented, "member").await
+}
+
+async fn setup_shared_team_as(pool: &PgPool, owner_consented: bool, requester_role: &str) -> Uuid {
     let team_id = Uuid::new_v4();
     insert_user(pool, OWNER, "owner@corp.test").await;
     insert_user(pool, REQUESTER, "requester@corp.test").await;
-    insert_team(pool, team_id, OWNER, crm_enabled).await;
+    insert_team(pool, team_id, OWNER, false).await;
     add_team_member(pool, team_id, OWNER).await;
     add_team_user(pool, team_id, REQUESTER, requester_role).await;
+    if owner_consented {
+        consent_to_email(pool, team_id, OWNER).await;
+    }
     team_id
 }
 
@@ -324,6 +370,85 @@ async fn access_with_one_untracked(
     }
 
     access_as_requester(pool, &thread_id).await
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn crm_consent_withdrawal_revokes_direct_access_but_keeps_mailbox_owner_access(pool: PgPool) {
+    let team = setup_shared_team(&pool, true).await;
+    let thread = create_thread(&pool, OWNER, "pat@acme.example.com", &[]).await;
+    assert_eq!(
+        access_as_requester(&pool, &thread).await,
+        Some(AccessLevel::Comment)
+    );
+    let error = sqlx::query!(
+        "UPDATE team_crm_settings SET crm_enabled = FALSE WHERE team_id = $1",
+        team
+    )
+    .execute(&pool)
+    .await
+    .unwrap_err();
+    assert_eq!(
+        error.as_database_error().and_then(|e| e.code()).as_deref(),
+        Some("55000")
+    );
+    assert_eq!(
+        access_as_requester(&pool, &thread).await,
+        Some(AccessLevel::Comment),
+        "legacy team switch is independent of consent"
+    );
+    sqlx::query!(
+        "UPDATE crm_email_consent SET enabled = FALSE WHERE team_id = $1",
+        team
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert_eq!(access_as_requester(&pool, &thread).await, None);
+    let owner = user(OWNER);
+    assert_eq!(
+        get_thread_access(
+            &pool,
+            &thread,
+            &SourceIds(vec![OWNER.to_string()]),
+            Some(&*owner)
+        )
+        .await
+        .unwrap(),
+        Some(AccessLevel::Owner)
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn admin_cannot_bypass_team_or_contributor_blocks_for_untracked_participants(pool: PgPool) {
+    let team = setup_shared_team_as(&pool, true, "admin").await;
+    let thread = create_thread(
+        &pool,
+        OWNER,
+        "pat@acme.example.com",
+        &[("secret@sub.private.example.com", "BCC")],
+    )
+    .await;
+    assert_eq!(
+        access_as_requester(&pool, &thread).await,
+        Some(AccessLevel::Comment)
+    );
+    sqlx::query!("INSERT INTO crm_personal_email_blocklist (team_id, user_id, domain) VALUES ($1, $2, 'private.example.com')", team, OWNER).execute(&pool).await.unwrap();
+    assert_eq!(access_as_requester(&pool, &thread).await, None);
+    sqlx::query!(
+        "DELETE FROM crm_personal_email_blocklist WHERE team_id = $1",
+        team
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "INSERT INTO crm_blocked_domains (team_id, domain) VALUES ($1, 'private.example.com')",
+        team
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert_eq!(access_as_requester(&pool, &thread).await, None);
 }
 
 // ---------------------------------------------------------------------------
@@ -780,18 +905,19 @@ async fn higher_entity_access_edit_wins_over_crm_comment(pool: PgPool) -> anyhow
 }
 
 // ---------------------------------------------------------------------------
-// Team / CRM-enabled gating
+// Team membership / individual consent gating
 // ---------------------------------------------------------------------------
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn denies_when_requester_not_on_owners_team(pool: PgPool) -> anyhow::Result<()> {
-    // Owner on team A, requester on team B (both CRM-enabled). No shared team.
+    // Owner contributes to team A, requester belongs to team B. No shared team.
     insert_user(&pool, OWNER, "owner@corp.test").await;
     insert_user(&pool, REQUESTER, "requester@corp.test").await;
 
     let team_a = Uuid::new_v4();
     insert_team(&pool, team_a, OWNER, true).await;
     add_team_member(&pool, team_a, OWNER).await;
+    consent_to_email(&pool, team_a, OWNER).await;
 
     let team_b = Uuid::new_v4();
     insert_team(&pool, team_b, REQUESTER, true).await;
@@ -806,7 +932,7 @@ async fn denies_when_requester_not_on_owners_team(pool: PgPool) -> anyhow::Resul
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn denies_when_crm_disabled_for_team(pool: PgPool) -> anyhow::Result<()> {
+async fn denies_without_individual_consent(pool: PgPool) -> anyhow::Result<()> {
     let team_id = setup_shared_team(&pool, false).await;
     let thread_id = create_thread(&pool, OWNER, "alice@client.test", &[]).await;
     let company = insert_crm_company(&pool, team_id, true, false).await;
@@ -817,8 +943,8 @@ async fn denies_when_crm_disabled_for_team(pool: PgPool) -> anyhow::Result<()> {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn denies_when_team_crm_settings_row_missing(pool: PgPool) -> anyhow::Result<()> {
-    // No team_crm_settings row at all — treated as disabled (the JOIN finds nothing).
+async fn denies_without_individual_consent_even_when_teammates(pool: PgPool) -> anyhow::Result<()> {
+    // Membership alone does not supply consent, with or without legacy settings.
     let team_id = Uuid::new_v4();
     insert_user(&pool, OWNER, "owner@corp.test").await;
     insert_user(&pool, REQUESTER, "requester@corp.test").await;
@@ -920,6 +1046,51 @@ async fn denies_when_a_contact_is_hidden(pool: PgPool) -> anyhow::Result<()> {
     insert_crm_contact(&pool, company, "bob@client.test", true).await;
 
     assert_eq!(access_as_requester(&pool, &thread_id).await, None);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn denies_when_a_companyless_contact_is_hidden(pool: PgPool) -> anyhow::Result<()> {
+    let team_id = setup_shared_team(&pool, true).await;
+    let thread_id = create_thread(
+        &pool,
+        OWNER,
+        "alice@client.test",
+        &[("bob@personal.test", "TO")],
+    )
+    .await;
+
+    let company = insert_crm_company(&pool, team_id, true, false).await;
+    insert_crm_contact(&pool, company, "alice@client.test", false).await;
+    insert_companyless_contact(&pool, team_id, "bob@personal.test", true).await;
+
+    assert_eq!(access_as_requester(&pool, &thread_id).await, None);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn grants_when_a_companyless_contact_is_visible(pool: PgPool) -> anyhow::Result<()> {
+    let team_id = setup_shared_team(&pool, true).await;
+    let thread_id = create_thread(&pool, OWNER, "bob@personal.test", &[]).await;
+    insert_companyless_contact(&pool, team_id, "bob@personal.test", false).await;
+
+    assert_eq!(
+        access_as_requester(&pool, &thread_id).await,
+        Some(AccessLevel::Comment)
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn admin_grants_despite_hidden_companyless_contact(pool: PgPool) -> anyhow::Result<()> {
+    let team_id = setup_shared_team_as(&pool, true, "admin").await;
+    let thread_id = create_thread(&pool, OWNER, "bob@personal.test", &[]).await;
+    insert_companyless_contact(&pool, team_id, "bob@personal.test", true).await;
+
+    assert_eq!(
+        access_as_requester(&pool, &thread_id).await,
+        Some(AccessLevel::Comment)
+    );
     Ok(())
 }
 

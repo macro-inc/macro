@@ -1,6 +1,7 @@
 import NoDueDateIcon from '@icon/system/regular/calendar-slash.svg';
 import CircleDashedEmpty from '@icon/system/regular/circle-dashed.svg';
 import ProjectIcon from '@icon/system/regular/cube-dashed.svg';
+import SourceIcon from '@icon/system/regular/link.svg';
 import PersonIcon from '@icon/system/regular/user-circle-dashed.svg';
 import PriorityNoneIcon from '@icon/wide-priority-none.svg';
 import { cn } from '@ui';
@@ -17,7 +18,6 @@ export function PropertyEmptyIcon(props: {
     <span
       class={cn('inline-flex size-3 shrink-0', props.class)}
       aria-hidden="true"
-      data-icon-motion="none"
     >
       <Switch
         fallback={
@@ -26,6 +26,9 @@ export function PropertyEmptyIcon(props: {
           />
         }
       >
+        <Match when={props.propertyDefinitionId === SYSTEM_PROPERTY_IDS.SOURCE}>
+          <SourceIcon class={cn('size-full', props.muted && 'opacity-50')} />
+        </Match>
         <Match
           when={props.propertyDefinitionId === SYSTEM_PROPERTY_IDS.DUE_DATE}
         >

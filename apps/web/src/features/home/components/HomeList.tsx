@@ -1,4 +1,9 @@
+import {
+  TutorialRow,
+  TutorialSidebarItem,
+} from '@app/features/video-tutorials';
 import { usePending } from '@app/observability/flow';
+import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import '@entity/composed/ListEntity.css';
 import {
   createListController,
@@ -62,7 +67,6 @@ import {
 import { InboxListEntity } from '../../next-soup/soup-view/views/inbox/InboxListEntity';
 import {
   markChannelNotificationsSeenOnOpen,
-  markRowNotificationsSeenOnOpen,
   openEntityInSplitFromUnifiedList,
 } from '../../next-soup/utils';
 import { useHomeView } from '../home-view-context';
@@ -99,6 +103,25 @@ type HomeListProps = {
   onPreviewActivate?: () => void;
 };
 
+/**
+ * Home's tutorial entry, shaped like the rows under it: desktop Home is a rail
+ * of sidebar items, touch Home a list of inbox rows.
+ */
+function HomeTutorial() {
+  return (
+    <Show
+      when={isTouchDevice()}
+      fallback={
+        <div class="mx-(--sidebar-gutter) my-(--sidebar-row-gap) empty:hidden">
+          <TutorialSidebarItem tutorial="home" />
+        </div>
+      }
+    >
+      <TutorialRow tutorial="home" />
+    </Show>
+  );
+}
+
 /** Compact notification list used by the Notifications workspace. */
 export function HomeList(props: HomeListProps) {
   const channels = useChannelsContext();
@@ -106,7 +129,7 @@ export function HomeList(props: HomeListProps) {
     entity.type === 'channel_thread'
       ? getChannelThreadName(entity, channels.channelsById())
       : undefined;
-  const { state } = useHomeView();
+  const { state, composerFocusRequest, registerListFocus } = useHomeView();
   const panel = useSplitPanelOrThrow();
   const notificationSource = useGlobalNotificationSource();
 
@@ -137,6 +160,7 @@ export function HomeList(props: HomeListProps) {
       controller: list,
       handle: panel.handle,
       openEntityInSplit: (entity, options) => {
+        markRowNotificationsSeenOnOpen(entity, notificationSource);
         fireAndForget(
           openEntityInSplitFromUnifiedList(entity, {
             splitHandle: panel.handle,
@@ -172,15 +196,19 @@ export function HomeList(props: HomeListProps) {
     const newSplit =
       metadata?.newSplit === true || metadata?.event?.shiftKey === true;
 
-    // Projects have no Home preview, so activating one opens it in place
-    // instead of selecting a row that shows nothing.
-    const previewable = sourceRow.entity.type !== 'initiative';
-    if (!isTouchDevice() && !newSplit && previewable) {
-      markEntitySeen(sourceRow.entity);
+    if (!isTouchDevice() && !newSplit) {
+      if (!isNonMemberChannelEntity(sourceRow.entity)) {
+        markChannelNotificationsSeenOnOpen(
+          sourceRow.entity,
+          notificationSource
+        );
+      }
       showPreview(sourceRow.entity, { activate: true });
       props.onPreviewActivate?.();
-      // Home keeps the keyboard only when the item opened in Home itself.
-      if (panel.isPanelActive()) listRoot()?.focus({ preventScroll: true });
+      // Home keeps the keyboard only when the item opened in Home itself,
+      // and gives it to a conversation's composer.
+      if (panel.isPanelActive() && !composerFocusRequest())
+        listRoot()?.focus({ preventScroll: true });
       return;
     }
 
@@ -201,11 +229,13 @@ export function HomeList(props: HomeListProps) {
   }
 
   function showPreview(
-    entity: WithNotification<EntityData>,
+    entity: WithNotification<EntityData> | undefined,
     options?: { activate?: boolean }
   ) {
+    if (entity) markRowNotificationsSeenOnOpen(entity, notificationSource);
+    // A runtime opens in Settings → Machines; it has no preview.
     props.onPreviewEntityChange(
-      entity?.type === 'initiative' ? undefined : entity,
+      entity?.type === 'harness' ? undefined : entity,
       options
     );
   }
@@ -307,13 +337,19 @@ export function HomeList(props: HomeListProps) {
 
     return ({ entity }) => {
       previewAfterNavigation.clear();
-      props.onPreviewEntityChange(
-        entity?.type === 'initiative' ? undefined : entity
-      );
+      showPreview(entity);
     };
   };
 
   const [listRoot, setListRoot] = createSignal<HTMLDivElement>();
+  // Esc from a previewed conversation returns to its row, which stays the
+  // list's focused row while the preview shows it.
+  registerListFocus(() => {
+    const root = listRoot();
+    if (!root?.isConnected) return false;
+    root.focus({ preventScroll: true });
+    return true;
+  });
   const [collapseRow, setCollapseRow] =
     createSignal<(rowId: string) => Promise<void>>();
 
@@ -607,7 +643,19 @@ export function HomeList(props: HomeListProps) {
                   ref={setEmptyViewport}
                   class="min-h-0 flex-1 overflow-y-auto pb-[max(1rem,var(--mobile-content-inset-bottom,0px))]"
                 >
-                  <HomeEmptyState />
+                  {/* A new account's Home starts empty, when the tutorial
+                      matters most. The row then takes the touch top inset. */}
+                  <Show
+                    when={state.tab === 'signal'}
+                    fallback={<HomeEmptyState />}
+                  >
+                    <div class="touch:pt-(--mobile-content-inset-top)">
+                      <HomeTutorial />
+                    </div>
+                    <div class="contents touch:[--mobile-content-inset-top:0px]">
+                      <HomeEmptyState />
+                    </div>
+                  </Show>
                 </div>
               </Match>
 
@@ -620,19 +668,22 @@ export function HomeList(props: HomeListProps) {
                   class="scrollbar-hidden min-h-0 flex-1 overflow-y-auto overscroll-none pb-[max(0.5rem,var(--mobile-content-inset-bottom,0px))]"
                   onScroll={checkNearEnd}
                 >
-                  {/* The spacer scrolls away; the viewport stays behind the filters. */}
-                  <div
-                    ref={setTopSpacer}
-                    aria-hidden="true"
-                    class="h-0 touch:h-(--mobile-content-inset-top)"
-                  />
+                  {/* The spacer scrolls away; the viewport stays behind the filters.
+                      It holds the touch inset and the pinned tutorial row. */}
+                  <div ref={setTopSpacer}>
+                    <div
+                      aria-hidden="true"
+                      class="h-0 touch:h-(--mobile-content-inset-top)"
+                    />
+                    <Show when={state.tab === 'signal'}>
+                      <HomeTutorial />
+                    </Show>
+                  </div>
                   <Virtualizer
                     ref={registerVirtualizer}
                     data={rows()}
                     scrollRef={viewport()}
-                    startMargin={
-                      isTouchDevice() ? (topSpacerSize.height ?? 0) : 0
-                    }
+                    startMargin={topSpacerSize.height ?? 0}
                     bufferSize={500}
                     itemSize={isTouchDevice() ? 44 : 36}
                     keepMounted={

@@ -9,8 +9,13 @@
 //! the channels inside a label that they participate in. Empty labels stay
 //! visible. Personal labels accept joined team, public, and private channels,
 //! but never direct messages.
+//! Scope transfers keep the label and its eligible contents together; shared
+//! sections transferred to personal scope leave the team sidebar.
 //! Smart tags match current channel attributes automatically. Their memberships
 //! may overlap other tags and manual labels, and only include visible channels.
+//! The additive sections API replaces explicit picks when a name rule is applied.
+//! Verified team members can also see unjoined channels of that team in sections;
+//! personal sections and legacy labels remain participant-only.
 //!
 //! # Architecture
 //!

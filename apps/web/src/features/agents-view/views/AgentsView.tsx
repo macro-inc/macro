@@ -1,10 +1,10 @@
 import { ViewShell } from '@app/components/view-shell';
 import { startPendingSession } from '@app/features/block-agent/context/pending-session';
-import { markAgentSessionNotificationsSeenOnOpen } from '@app/features/block-agent/mark-session-notifications-seen';
 import { AgentSettings } from '@app/features/settings/AgentSettings';
 import { IntegrationsPage } from '@app/features/settings/IntegrationsPage';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { ViewTour } from '@app/features/tours/ViewTour';
+import { TutorialPill } from '@app/features/video-tutorials';
 import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
@@ -22,9 +22,11 @@ import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
+import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import { useWarmAgentSessionQuery } from '@queries/agent-session/warm';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
 import {
+  batch,
   createEffect,
   createMemo,
   createSignal,
@@ -34,7 +36,6 @@ import {
   Show,
   Suspense,
   Switch,
-  useTransition,
 } from 'solid-js';
 import { routineContent } from '../../routines/routine-navigation';
 import { RoutinesPage } from '../../routines/routines-page';
@@ -45,6 +46,7 @@ import { enableAgentUpdates } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { AgentSessionEntity } from '@entity';
 import { AgentSessionPane } from '../components/AgentSessionPane';
+import { AgentSessionSkeleton } from '../components/AgentSessionSkeleton';
 import { AgentsSidebar } from '../components/AgentsSidebar';
 import { Topbar } from '../components/Topbar';
 import { DataModeProvider, dataModeFor } from '../context/data-mode';
@@ -60,6 +62,7 @@ import {
 } from '../core/recent-conversations';
 import { kindForBot } from '../core/roster';
 import { type AgentsRoute, agentsRouteId } from '../core/route';
+import { createPersistedComposerDraft } from '../primitives/composer-draft';
 import { createConversationListView } from '../primitives/conversation-list-view';
 import { createWorkspaceMode } from '../primitives/workspace-mode';
 import { agentConversationsQuery } from '../queries/agent-conversations-query';
@@ -113,18 +116,18 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
         }
       : undefined
   );
-  // A conversation suspends until its first load resolves. Switching inside a
-  // transition keeps the current one on screen until then, instead of blanking
-  // the pane to a spinner; the sidebar highlights the target meanwhile.
-  const [switching, startSwitch] = useTransition();
+  // Selecting takes effect at once: the conversation's own Suspense shows a
+  // skeleton until its first load resolves. Selecting the conversation already
+  // on screen keeps it mounted, since the keyed Show remounts on a new object.
   const selectConversation = (conversation: AgentConversationTarget) =>
-    fireAndForget(
-      startSwitch(() => {
-        setPage('new');
-        setSelected({ conversation, activeConversationId: conversation.id });
-      }),
-      'agents-view'
-    );
+    batch(() => {
+      setPage('new');
+      setSelected((current) =>
+        current?.activeConversationId === conversation.id
+          ? current
+          : { conversation, activeConversationId: conversation.id }
+      );
+    });
   // The list and its conversations share one mount (`mountKey` in the routes),
   // so the selection follows navigation, including Back and Forward.
   createEffect(
@@ -148,7 +151,7 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
   );
   const dataMode = () => dataModeFor(selected() ? mode() : workspace.mode());
   const [mobileList, setMobileList] = createSignal(!isRoutinesPage());
-  const [draft, setDraft] = createSignal('');
+  const persistedDraft = createPersistedComposerDraft(undefined, userId);
   const [search, setSearch] = createSignal('');
   // Routines that run often leave their runs unlisted; those stay a click
   // away instead of in the list.
@@ -209,9 +212,10 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
         const content = panel.handle.content();
         if (
           content.type === 'component' &&
-          typeof content.params?.draft === 'string'
+          typeof content.params?.draft === 'string' &&
+          content.params.draft.length > 0
         )
-          setDraft(content.params.draft);
+          persistedDraft.setDraft(content.params.draft);
         showComposer();
       }
     )
@@ -344,7 +348,7 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
       onFilterChange={listView.setSelected}
       onClearFilters={listView.clear}
       onGroupingChange={listView.setGrouping}
-      activePage={selected() || switching() ? undefined : page()}
+      activePage={selected() ? undefined : page()}
       onCreateRoutine={() =>
         layout.popoverSplit({ type: 'component', id: 'routine-compose' })
       }
@@ -360,11 +364,7 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
             : openPage(next)
       }
       modeForConversation={modeForConversation}
-      activeConversationId={
-        switching()
-          ? props.route?.conversation.id
-          : selected()?.activeConversationId
-      }
+      activeConversationId={selected()?.activeConversationId}
       search={search()}
       conversations={partitioned().conversations}
       archived={partitioned().archived}
@@ -376,7 +376,7 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
       showUnlistedRuns={showUnlistedRuns()}
       onShowUnlistedRunsChange={setShowUnlistedRuns}
       onOpenConversation={(conversation, event) => {
-        markAgentSessionNotificationsSeenOnOpen(conversation, notifications);
+        markRowNotificationsSeenOnOpen(conversation, notifications);
         openConversation(
           conversation,
           event,
@@ -419,87 +419,93 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
                   class="main touch:pt-[calc(var(--mobile-content-inset-top,var(--safe-top,0px))+0.5rem)] touch:[&>*]:[--mobile-content-inset-top:0px]"
                   classList={{ hidden: isTouchDevice() && mobileList() }}
                 >
-                  {/* Outside the keyed Show, so a conversation switched to in a
-                      transition keeps the previous one shown while it loads. */}
-                  <Suspense fallback={<LoadingComposer />}>
-                    <Show
-                      when={selected()?.conversation}
-                      keyed
-                      fallback={
-                        <>
-                          <Show when={page() !== 'routines'}>
-                            <Topbar
-                              title={pageTitle()}
-                              onBack={
-                                isTouchDevice()
-                                  ? () => setMobileList(true)
-                                  : undefined
-                              }
-                            />
-                          </Show>
-                          <div class="body">
-                            <Suspense fallback={<LoadingComposer />}>
-                              <Switch>
-                                <Match when={page() === 'routines'}>
-                                  <RoutinesPage />
-                                </Match>
-                                <Match when={page() === 'connections'}>
-                                  <IntegrationsPage />
-                                </Match>
-                                <Match when={page() === 'agents'}>
-                                  <AgentSettings
-                                    createKind={creatingKind()}
-                                    onCloseCreate={() =>
-                                      setCreatingKind(undefined)
-                                    }
-                                  />
-                                </Match>
-                              </Switch>
-                              <div
-                                class="contents"
-                                classList={{ hidden: page() !== 'new' }}
-                              >
-                                <NewChatPage
-                                  showUpdates={
-                                    updatesFlag().enabled && page() === 'new'
+                  <Show
+                    when={selected()?.conversation}
+                    keyed
+                    fallback={
+                      <>
+                        <Show when={page() !== 'routines'}>
+                          <Topbar
+                            title={pageTitle()}
+                            onBack={
+                              isTouchDevice()
+                                ? () => setMobileList(true)
+                                : undefined
+                            }
+                          />
+                        </Show>
+                        <div class="body">
+                          <Suspense fallback={<LoadingComposer />}>
+                            <Switch>
+                              <Match when={page() === 'routines'}>
+                                <RoutinesPage />
+                              </Match>
+                              <Match when={page() === 'connections'}>
+                                <IntegrationsPage />
+                              </Match>
+                              <Match when={page() === 'agents'}>
+                                <AgentSettings
+                                  createKind={creatingKind()}
+                                  onCloseCreate={() =>
+                                    setCreatingKind(undefined)
                                   }
-                                  updateSessions={updateSessions()}
-                                  onOpenUpdateSession={(id) => {
-                                    const session = updateSessions().find(
-                                      (item) => item.id === id
-                                    );
-                                    if (session)
-                                      openConversation(
-                                        session,
-                                        undefined,
-                                        modeForConversation(session)
-                                      );
-                                  }}
-                                  mode={workspace.mode()}
-                                  onModeChange={workspace.setMode}
-                                  active={
-                                    !isTouchDevice() ||
-                                    (!mobileList() && page() === 'new')
-                                  }
-                                  registerFocus={(focus) => {
-                                    composerFocus = focus;
-                                  }}
-                                  workspaceId={panel.handle.id}
-                                  draft={draft()}
-                                  onDraftChange={setDraft}
-                                  roster={rosterSource.roster()}
-                                  rosterLoading={rosterSource.loading()}
-                                  availabilityLoading={rosterSource.availabilityLoading()}
-                                  onStart={startConversation}
-                                  onOpenRoster={openRoster}
                                 />
-                              </div>
-                            </Suspense>
-                          </div>
-                        </>
-                      }
-                    >
-                      {(conversation) => (
+                              </Match>
+                            </Switch>
+                            <div
+                              class="contents"
+                              classList={{ hidden: page() !== 'new' }}
+                            >
+                              <NewChatPage
+                                showUpdates={
+                                  updatesFlag().enabled && page() === 'new'
+                                }
+                                updateSessions={updateSessions()}
+                                onOpenUpdateSession={(id) => {
+                                  const session = updateSessions().find(
+                                    (item) => item.id === id
+                                  );
+                                  if (session)
+                                    openConversation(
+                                      session,
+                                      undefined,
+                                      modeForConversation(session)
+                                    );
+                                }}
+                                mode={workspace.mode()}
+                                onModeChange={workspace.setMode}
+                                active={
+                                  !isTouchDevice() ||
+                                  (!mobileList() && page() === 'new')
+                                }
+                                registerFocus={(focus) => {
+                                  composerFocus = focus;
+                                }}
+                                workspaceId={panel.handle.id}
+                                draft={persistedDraft.draft()}
+                                onDraftChange={persistedDraft.setDraft}
+                                roster={rosterSource.roster()}
+                                rosterLoading={rosterSource.loading()}
+                                availabilityLoading={rosterSource.availabilityLoading()}
+                                onStart={startConversation}
+                                onOpenRoster={openRoster}
+                                belowComposer={
+                                  <TutorialPill
+                                    tutorial="agents"
+                                    class="self-center"
+                                  />
+                                }
+                              />
+                            </div>
+                          </Suspense>
+                        </div>
+                      </>
+                    }
+                  >
+                    {(conversation) => (
+                      // Per conversation, so one switched away from can't hold
+                      // the next in its fallback until its own load settles.
+                      <Suspense fallback={<AgentSessionSkeleton />}>
                         <Switch>
                           <Match when={conversation.type === 'agent_session'}>
                             <AgentSessionPane
@@ -531,9 +537,9 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
                             </div>
                           </Match>
                         </Switch>
-                      )}
-                    </Show>
-                  </Suspense>
+                      </Suspense>
+                    )}
+                  </Show>
                 </main>
                 <Show when={isTouchDevice() && mobileList()}>
                   <div

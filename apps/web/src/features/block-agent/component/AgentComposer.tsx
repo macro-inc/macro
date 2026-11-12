@@ -5,8 +5,6 @@ import {
   speedForModel,
 } from '@core/component/AI/constant/speed';
 import { fastModeEnabled } from '@core/component/AI/signal/speed';
-import ArrowUp from '@icon/system/regular/arrow-up.svg';
-import { Button } from '@ui';
 /**
  * The block's composer container: reads the session from context and drives
  * the dumb `AgentInput` with derived props. Every in-flight state it shows
@@ -24,6 +22,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { uploadFile } from '@core/util/upload';
 import type { AgentAction } from '@service-agent-harness/generated/schemas';
+import { isNoRuntimeAccessError } from '@service-agent-harness/no-runtime-access';
 import { type Component, createSignal, For, Show } from 'solid-js';
 import { useAgentSession } from '../context/AgentSessionContext';
 import {
@@ -79,7 +78,6 @@ export function AgentComposer(props: {
     metadata,
     pending,
     queue,
-    sendNext,
     steer,
     steerFailed,
     turn,
@@ -100,7 +98,9 @@ export function AgentComposer(props: {
     if (readOnly()) return;
     try {
       const result = await issue(action);
-      if (result?.isErr()) toast.failure(failure);
+      // A stopped agent says why in the transcript instead.
+      if (result?.isErr() && !result.error.some(isNoRuntimeAccessError))
+        toast.failure(failure);
     } catch {
       toast.failure(failure);
     }
@@ -248,23 +248,8 @@ export function AgentComposer(props: {
     <>
       <Show when={queuedItems().length > 0}>
         <div class="pb-1.5">
-          <div class="mb-1 flex items-center justify-between gap-2 px-1">
-            <span class="text-xs text-ink-muted">
-              {queuedItems().length} queued
-            </span>
-            <Button
-              variant="secondary"
-              size="sm"
-              class="touch:min-h-11"
-              aria-label="Send next queued message now"
-              disabled={readOnly() || loadFailed() || pending()}
-              onClick={() => {
-                if (!readOnly()) sendNext();
-              }}
-            >
-              <ArrowUp class="size-4" />
-              Send next
-            </Button>
+          <div class="mb-1 px-1 text-xs text-ink-muted">
+            {queuedItems().length} queued
           </div>
           <div class="max-h-[25dvh] overflow-y-auto overscroll-contain">
             <QueuedPrompts
@@ -329,7 +314,6 @@ export function AgentComposer(props: {
         readOnly={readOnly()}
         autofocus={props.autofocus}
         busy={busy()}
-        hasQueuedMessages={queuedItems().length > 0}
         // Prompts go straight to the service, so sending needs a session to
         // post to — a block whose create is still on the wire can be typed
         // into, but not sent from, until the id lands.
@@ -344,9 +328,6 @@ export function AgentComposer(props: {
             'agent-composer'
           )
         }
-        onSendNext={() => {
-          if (!readOnly()) sendNext();
-        }}
         modelName={modelLabel(
           metadata()?.model ?? undefined,
           metadata()?.supportedModels.find(

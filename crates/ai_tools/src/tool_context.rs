@@ -81,6 +81,7 @@ use teams::{inbound::toolset::TeamToolContext, outbound::team_repo::TeamReposito
 use tokio_util::task::TaskTracker;
 
 mod activity_metadata;
+mod agent_name;
 mod channel_media;
 #[cfg(any(test, feature = "test-support"))]
 pub use channel_media::build_channel_media_upload_tool_context_test;
@@ -975,6 +976,45 @@ impl CallRtcClient for NoOpCallRtcClient {
         anyhow::bail!("call RTC client not configured")
     }
 
+    async fn list_live_participants(
+        &self,
+        _room_name: &str,
+    ) -> anyhow::Result<Option<Vec<call::domain::models::LiveCallParticipant>>> {
+        anyhow::bail!("call RTC client not configured")
+    }
+
+    async fn generate_bot_token(
+        &self,
+        _room_name: &str,
+        _bot_id: bot_id::BotId,
+        _name: Option<String>,
+    ) -> anyhow::Result<String> {
+        anyhow::bail!("call RTC client not configured")
+    }
+
+    async fn remove_bot(&self, _room_name: &str, _bot_id: bot_id::BotId) -> anyhow::Result<()> {
+        anyhow::bail!("call RTC client not configured")
+    }
+
+    async fn generate_named_token<'a>(
+        &self,
+        _room_name: &str,
+        _participant_identity: MacroUserIdStr<'a>,
+        _name: &str,
+    ) -> anyhow::Result<String> {
+        anyhow::bail!("call RTC client not configured")
+    }
+
+    async fn generate_program_token<'a>(
+        &self,
+        _room_name: &str,
+        _participant_identity: MacroUserIdStr<'a>,
+        _program: &str,
+        _name: Option<String>,
+    ) -> anyhow::Result<String> {
+        anyhow::bail!("call RTC client not configured")
+    }
+
     async fn build_voip_push_payloads<'a>(
         &self,
         _request: call::domain::models::VoipPushPayloadRequest<'a>,
@@ -1456,6 +1496,7 @@ pub type ToolProjectService = projects::domain::service::ProjectServiceImpl<
     projects::domain::ports::UnavailableShaCounterPort,
     ToolEntityAccessManagementService,
     projects::domain::ports::UnavailableProjectSearchIndexer,
+    projects::domain::ports::UnavailableFiledItemsUnfiler,
     ToolEventBroker,
 >;
 
@@ -1493,6 +1534,7 @@ pub fn build_project_tool_context(
             entity_access_management::outbound::PgRepository::new(pool),
         ),
         projects::domain::ports::UnavailableProjectSearchIndexer,
+        projects::domain::ports::UnavailableFiledItemsUnfiler,
         None,
         macro_event_broker,
     );
@@ -1970,11 +2012,11 @@ impl import::domain::ports::EntityCreator for ToolEntityCreator {
     }
 }
 
-/// Type alias for the import service implementation used by AI tools.
-/// The MCP connection to Pipedream's remote server: `None` on deployments
-/// where Pipedream isn't configured (its toolsets then come up empty).
+/// The connector backends (Pipedream, plus Macro Connect when configured):
+/// `None` on deployments where Pipedream isn't configured (its toolsets then
+/// come up empty).
 pub type ToolPipedreamConnection =
-    Option<std::sync::Arc<pipedream_mcp::outbound::api::PipedreamClient>>;
+    Option<std::sync::Arc<pipedream_mcp::outbound::dispatch::ConnectorBackends>>;
 
 /// The MCP stack selector wired to the concrete DCS stores: the native
 /// server store and the Pipedream connection store. Picks which stack
@@ -1993,7 +2035,7 @@ pub type ToolImportService = import::domain::service::ImportServiceImpl<
     import::outbound::mcp_slack_source::McpSlackSource<ToolMcpSelector>,
     import_notion::outbound::pipedream::PipedreamNotionConnections<
         pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo,
-        pipedream_mcp::outbound::api::PipedreamClient,
+        pipedream_mcp::outbound::dispatch::ConnectorBackends,
     >,
 >;
 
@@ -2061,6 +2103,7 @@ pub struct ToolServiceContext {
     pub activity_tool_context: ToolActivityToolContext,
     #[from_ref(skip)]
     pub document_tool_context: ToolDocumentToolContext,
+    #[from_ref(skip)]
     pub image_generation_tool_context: ToolImageGenerationToolContext,
     /// Shared cognition-backed generation and decisions, attributed per request.
     pub cognition_tool_context: ToolCognitionToolContext,
@@ -2114,6 +2157,9 @@ pub struct ToolServiceContext {
     pub schedule_tool_context: RoutineToolContext,
     #[from_ref(skip)]
     pub anthropic_tool_context: AnthropicToolContext,
+    /// The web search vendor behind `WebSearch` and `WebFetch`.
+    #[from_ref(skip)]
+    pub web_search_provider: Arc<dyn web_search::domain::ports::SearchProvider>,
     /// Shared admission for independently initiated AI work. Hosts must inject
     /// their configured service; request identity always comes from RequestContext.
     pub admission: Arc<dyn ai_billing::domain::admission::AiAdmissionService>,
@@ -2121,13 +2167,13 @@ pub struct ToolServiceContext {
     pub recorder: std::sync::Arc<dyn ai_usage::UsageRecorder>,
     /// The usage context (feature/user/entity) of the request currently using
     /// this context. Set per-session by the caller so AI calls made by tools
-    /// (e.g. subagents) are attributed to the feature that spawned them.
+    /// (e.g. GenerateObject) are attributed to the feature that spawned them.
     pub usage_context: ai_usage::UsageContext,
 }
 
 /// Pipedream discovery dependencies shared by chat tools.
 pub type ToolConnectorToolContext = pipedream_mcp::inbound::toolset::ConnectorToolContext<
-    pipedream_mcp::outbound::api::PipedreamClient,
+    pipedream_mcp::outbound::dispatch::ConnectorBackends,
     pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo,
     mcp_select::NativeOverlayConnections<mcp_client::outbound::NativeServerStore>,
 >;
@@ -2138,7 +2184,7 @@ pub type ToolConnectorToolContext = pipedream_mcp::inbound::toolset::ConnectorTo
 /// native MCP stack; `None` where that stack has no encryption key.
 pub fn build_connector_tool_context(
     pool: sqlx::PgPool,
-    client: Option<Arc<pipedream_mcp::outbound::api::PipedreamClient>>,
+    client: Option<Arc<pipedream_mcp::outbound::dispatch::ConnectorBackends>>,
     native_servers: Option<Arc<mcp_client::outbound::NativeServerStore>>,
 ) -> ToolConnectorToolContext {
     pipedream_mcp::inbound::toolset::ConnectorToolContext {
@@ -2159,6 +2205,28 @@ impl FromRef<ToolServiceContext> for AnthropicToolContext {
         tools.recorder = context.recorder.clone();
         tools.usage_context = context.usage_context.clone();
         tools
+    }
+}
+
+impl FromRef<ToolServiceContext> for web_search::inbound::toolset::WebToolContext {
+    fn from_ref(context: &ToolServiceContext) -> Self {
+        Self {
+            service: Arc::new(web_search::domain::service::WebSearchService::new(
+                context.web_search_provider.clone(),
+                context.admission.clone(),
+                context.recorder.clone(),
+            )),
+            entity: context.usage_context.entity,
+        }
+    }
+}
+
+impl FromRef<ToolServiceContext> for ToolImageGenerationToolContext {
+    fn from_ref(context: &ToolServiceContext) -> Self {
+        context
+            .image_generation_tool_context
+            .clone()
+            .with_agent_session(context.usage_context.agent_session_id)
     }
 }
 
@@ -2193,12 +2261,20 @@ impl ToolServiceContext {
     }
 
     /// Run the tools for `caller`, as the public MCP authenticated it: an
-    /// agent writes as itself; an MCP client writes as the Macro bot with its
-    /// name on the post, shown as the author ("Claude Code · Agent"); a pasted
-    /// API key writes as the Macro bot.
-    pub fn for_caller(self, caller: &ai_toolset::ToolCaller) -> Self {
+    /// agent writes as itself, under its own name; an MCP client writes as the
+    /// Macro bot with its name on the post, shown as the author ("Claude Code ·
+    /// Agent"); a pasted API key writes as the Macro bot.
+    pub async fn for_caller(self, caller: &ai_toolset::ToolCaller) -> Self {
         match caller {
-            ai_toolset::ToolCaller::Agent(agent) => self.with_actor(*agent),
+            ai_toolset::ToolCaller::Agent(agent) => {
+                let name =
+                    agent_name::agent_name(self.bot_tool_context.service.as_ref(), *agent).await;
+                let context = self.with_actor(*agent);
+                match name {
+                    Some(name) => context.with_actor_name(&name),
+                    None => context,
+                }
+            }
             ai_toolset::ToolCaller::McpClient { .. } | ai_toolset::ToolCaller::ApiKey => {
                 match caller.via() {
                     Some(client) => self.with_via(client),

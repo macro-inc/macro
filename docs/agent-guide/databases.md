@@ -64,6 +64,32 @@ require edit access. Pass returned `readVersions` as `baseVersions` to guard a
 follow-up write, check `truncatedTables` before reporting aggregate totals, and
 never automatically retry a write statement.
 
+`POST /databases/queries` saves a question; the service compiles it against the
+caller's databases, refuses anything but one `SELECT`, and, when the request names
+chart columns, refuses columns the `SELECT` does not return. The SDK's
+`database.saveQuery({ sql, title, display })` (or `table.saveQuery`) returns a
+`SavedQuery` whose `toBlock()` is the `<m-db-query>` block to put in a document,
+and whose `withView()` restyles the answer without saving a new question.
+
+The browser compiles table dependencies before reading. Direct `macro.people`
+SELECTs execute filtering, grouping, DISTINCT, ordering and limits in the existing
+local Turso cache, including fresh queries offline after contact synchronization.
+Results are bounded to 500 rows, 64 columns and 512 KiB of scalar text; explicit
+small SQL limits are not marked truncated. Keyed joins read only the current
+bounded identity set; an unbounded people join is an explicit capability error.
+People joins on email, name or generated row IDs are unsupported and must report
+an error rather than treating those keys as user IDs and displaying an empty answer.
+There is no `/databases/read` route and no remote SQL or full-directory fallback.
+Cold/incomplete synchronization and unsupported native binaries remain errors,
+not empty answers. Ordinary tables keep their existing GraphQL/cache row source.
+Account/session, storage generation and input transitions fence publication;
+authority changes clear old answers. One physical local read and one replaceable
+pending input prevent obsolete queries accumulating. Contact hydration/completion
+and committed changes refresh visible results without querying a server.
+Contact synchronization completes after bounded exact-membership verification,
+not merely after downloading pages. Failed/interrupted verification stays incomplete;
+verified removals disappear from local SQL, while delayed older hydration cannot
+restore them. A later successful positive lookup/backfill can add them again.
 ## Feature flag
 
 Databases is behind the `enable-databases` PostHog flag. A deployed app reads it
@@ -154,6 +180,8 @@ row (within the five-second poll) and the company page's **Pipelines** card both
 show the new stage. The company's own Stage, Owner and Revenue properties in the
 side panel are a separate field these tools do not change. A pipeline created or
 renamed from chat appears in the CRM sidebar as soon as the tool finishes.
+In code mode only `CreatePipeline` stays a direct tool; the rest run through
+`macro.crm.pipelines` in `ExecuteCode`, shown as an ExecuteCode row.
 
 ## Properties and records
 
@@ -181,7 +209,9 @@ The current type has a checkmark in **Change type**; selecting it leaves the col
 
 The header arrow menu groups schema and view actions. **Change type** checks the
 column's values against Text, Number, Select, Multi-select, Date, Time range,
-Checkbox, URL, People, Documents, Tasks, and relations to tables in this database, showing
+Checkbox, URL, People, Documents, Tasks, and relations to tables in this database
+(**Related table**) or in any other database you can see (**Other databases**, one
+submenu per database, by name), showing
 "Checking values…" meanwhile, then lists only the types the column can become (a
 checkbox can only become text; only an empty column can become People or a
 relation). A type some values would not survive shows how many, such
@@ -195,7 +225,9 @@ option does. Plain number strings can become numbers; padding, leading zeros and
 ambiguous values count as values that don't fit. A date becomes its `YYYY-MM-DD`
 text, or a one-day range. Text and single selects become ranges when each value
 is `start/end` or one date; a range can only become text. Changing a placement never changes another table that uses the same property.
-A relation can hold multiple records.
+A relation can hold multiple records. A relation into another database reads,
+searches and opens that database's records (in a split when the grid is a full
+database), and people who can't see that database see its cells as unavailable.
 
 **Formula columns.** **Change type → Formula** opens the formula editor under the
 header. On a new, never-filled column the formula column takes its place and name;
@@ -479,10 +511,13 @@ horizontally to reach more lanes; each lane scrolls vertically on its own. A car
 or lane being dragged stays mounted while scrolling. After a card move, its
 destination is revealed. Starting a new card reveals the lane's draft at the
 bottom and focuses its title, including after the lane was offscreen.
+If a move is refused, the card returns to its saved lane and order; other pending
+moves stay visible until their own responses arrive.
 
 Lane headers show a color or type icon, a name, and an adjacent record count.
-Cards use the Tasks board's header and compact, wrapping property layout rather than
-stacked field rows. Cards without fields do not render an empty property area.
+Cards use the Tasks board's header, with wrapping titles and each configured field's
+label above its full-width value. Unset fields show a dash. Cards without fields
+do not render an empty property area.
 Title editing keeps the displayed title's typography, wrapping, and spacing.
 Cards have a six-dot drag handle; their custom fields share a CSS grid with the title
 and align below its left edge. **Open record details** (the expand
@@ -495,8 +530,11 @@ medium-size icon buttons as Drive. View tabs and New use the shared Button styli
 A board has a lane per option (or person). Records without a grouping value are
 currently omitted from the board; they remain available in the table. Drag a card within
 a lane or into another lane; it moves at once, and moving it to another lane also
-sets its Select value. The order is saved for everyone and survives a reload. A
-sorted board keeps the sort's order, so dragging a card asks **Remove sort to
+sets its Select value. The order is saved for everyone and survives a reload.
+Switching boards during a save clears the previous board's temporary placement;
+the response updates only the board where the move started. Verify both a successful
+save and a refused move without changing the newly selected board's order.
+A sorted board keeps the sort's order, so dragging a card asks **Remove sort to
 arrange cards manually?**; **Remove sort** clears the sort and then places the
 card. The insertion marker stays visible above the first card when reordering
 within a lane. Drag a lane header to reorder lanes. Click an editable option lane's name to
@@ -509,7 +547,7 @@ be cleared, but records will not be deleted; **Delete group** uses danger stylin
 **Hide empty lanes** remains only in the board's **Board menu**, with a right-side
 checkmark when enabled. The card's **Move …** menu offers the same moves without
 dragging. Click a card’s title or field to edit it in place using the same editors
-as the table. Card-field inline editors fill the value area beside their icon and
+as the table. Card-field inline editors fill the value area below their label and
 keep its width, height, and typography; longer drafts scroll inside rather than
 pushing neighboring fields.
 Inline field edits save on Enter or leaving the field. Each save changes only that
@@ -717,6 +755,15 @@ Escape cancels. Renaming keeps the question and its saved query unchanged. A sav
 query names databases, tables, and columns by their display names, so renaming one
 it reads makes the answer fail until the question is updated.
 
+AI document editing (the selection toolbar's **AI edit**, `EditDocument`) works with
+database blocks.
+It inserts a saved answer or chart from the `<m-db-query>` block that
+`SaveDatabaseQuery` returns, can change an existing answer's chart type, title,
+or height without changing its question, and can switch an embedded database
+to another table or view. To check, have chat save a chart and add it to a
+document, then select nearby text, choose **AI edit**, and ask for a pie chart; the same question
+should redraw as a pie.
+
 An existing document keeps its answer label when Databases is off and does not
 fetch its database results; see [Feature flag](#feature-flag).
 
@@ -849,6 +896,11 @@ opens the editor. **Collapse** returns it to a small mention. Cell and schema
 edits use the same database grid and authorization as the standalone app. The
 document stores only the database reference and selected table/view, never a
 copy of its rows. See [Databases in documents](documents.md#databases-in-documents).
+Opening a row there (its row-number button, **Open record**, a board card, or a
+timeline bar) opens the database in its own split at that table and view, with
+the row highlighted or its record panel open; the card shows no record panel of
+its own. A record just created in the card still opens in place, and so does
+every record where the card has no splits to open into (call chat).
 
 The shared editor also runs under a host's `DatabaseProvider`, using schema reads,
 row queries and operation batches from that host's API. Verify cell edits and

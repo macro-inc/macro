@@ -25,6 +25,7 @@ export function EventForm(props: EventFormProps) {
       <EventFormParts.SaveError />
       <div class="flex shrink-0 items-center justify-end gap-3">
         <EventFormParts.EditScope class="mr-auto" />
+        <EventFormParts.Status />
         <EventFormParts.Cancel />
         <EventFormParts.Submit />
       </div>

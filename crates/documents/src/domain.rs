@@ -2,6 +2,9 @@
 
 /// Event-to-activity mappings for this domain.
 pub mod activity;
+/// Edits of markdown documents by instructions, for HTTP callers.
+#[cfg(feature = "ai_tools")]
+pub mod ai_edit;
 #[cfg(feature = "ai_tools")]
 pub mod ai_editing;
 pub mod branch_name;
@@ -18,6 +21,9 @@ pub mod entity_mutation;
 pub mod events;
 #[cfg(feature = "ports")]
 pub mod markdown_backfill;
+/// Revision-checked reads and writes of a markdown document's body.
+#[cfg(feature = "ai_tools")]
+pub mod markdown_body;
 
 #[cfg(feature = "document_create")]
 pub mod create;
@@ -38,6 +44,11 @@ pub mod notion_markdown;
 #[cfg(feature = "axum")]
 pub mod permission_token;
 pub mod response;
+/// A skill's one-line routing description.
+pub mod skill_description;
+/// Comment threads anchored to quoted text, for the tool and HTTP callers.
+#[cfg(feature = "ai_tools")]
+pub mod text_comment;
 
 /// Permission-scoped spreadsheet inspection, calculation, and mutation.
 #[cfg(feature = "ai_tools")]

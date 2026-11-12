@@ -1,0 +1,340 @@
+import { formatDateAndTime } from '@entity';
+import ArrowUpRightIcon from '@icon/system/regular/arrow-up-right.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import SparkleIcon from '@icon/system/regular/sparkle.svg';
+import XIcon from '@icon/system/regular/x.svg';
+import { Button, cn } from '@ui';
+import { createSignal, For, Match, Show, Switch } from 'solid-js';
+import { match } from 'ts-pattern';
+import type {
+  CallStatus,
+  CodeActsAs,
+  HistoryCall,
+  HistoryRecord,
+  HistoryStep,
+} from '../core/history';
+import { failedStep, type RunOutcome, runOutcome } from '../core/step-history';
+
+const CODE_ACTS_AS_LABEL: Record<CodeActsAs, string> = {
+  owner: 'Code acted as you',
+  agent: 'Code acted as the agent',
+};
+
+const OUTCOME_LABEL: Record<RunOutcome, string> = {
+  running: 'Running',
+  succeeded: 'Succeeded',
+  failed: 'Failed',
+  skipped: 'Skipped',
+  nothing: 'Changed nothing',
+};
+
+/** What a run ended as, in words. */
+export function outcomeLabel(outcome: RunOutcome): string {
+  return OUTCOME_LABEL[outcome];
+}
+
+function seconds(ms: number): string {
+  if (ms < 60_000) {
+    const value = ms / 1000;
+    return `${value < 10 ? value.toFixed(1) : Math.round(value)} s`;
+  }
+  const total = Math.round(ms / 1000);
+  return `${Math.floor(total / 60)}m ${total % 60}s`;
+}
+
+/** When the run started, how it ended, how long it took, its AI calls, and
+ * whom its code acted as.
+ */
+function runMeta(record: HistoryRecord): string {
+  const parts: string[] = [];
+  if (record.startedAt) parts.push(formatDateAndTime(record.startedAt));
+  parts.push(outcomeLabel(runOutcome(record)));
+  const took =
+    record.startedAt && record.endedAt
+      ? Date.parse(record.endedAt) - Date.parse(record.startedAt)
+      : Number.NaN;
+  if (Number.isFinite(took) && took >= 0) parts.push(`took ${seconds(took)}`);
+  const steps = record.steps ?? [];
+  // The Ask AI step is a call; code's own AI calls are among its calls.
+  const calls = steps.filter((step) => step.kind === 'agent').length;
+  if (calls) parts.push(calls === 1 ? '1 AI call' : `${calls} AI calls`);
+  const actsAs = record.run?.codeActsAs;
+  if (actsAs && steps.some((step) => step.kind === 'code'))
+    parts.push(CODE_ACTS_AS_LABEL[actsAs]);
+  return parts.join(' · ');
+}
+
+/** The step as it would read had it succeeded; its error shows apart. */
+function withoutError(step: HistoryStep): HistoryStep {
+  return { ...step, error: undefined };
+}
+
+/** A step's output as JSON, indented. */
+function outputText(output: unknown): string {
+  return JSON.stringify(output, null, 2) ?? 'null';
+}
+
+/** What a step returned, collapsed until asked for. */
+function StepOutput(props: { output: unknown }) {
+  const [open, setOpen] = createSignal(false);
+  return (
+    <span class="col-start-2 grid min-w-0 gap-1">
+      <button
+        type="button"
+        class="w-fit text-xs text-ink-muted hover:text-ink"
+        aria-expanded={open()}
+        onClick={() => setOpen(!open())}
+      >
+        {open() ? 'Hide output' : 'Show output'}
+      </button>
+      <Show when={open()}>
+        <pre class="max-h-64 min-w-0 overflow-auto rounded-lg border border-edge-frame bg-control px-3 py-2 font-mono text-xs leading-relaxed text-ink">
+          <code>{outputText(props.output)}</code>
+        </pre>
+      </Show>
+    </span>
+  );
+}
+
+/** One step of a run on the timeline: what ran, and how it ended. */
+function RunStep(props: {
+  step: HistoryStep;
+  describe: (step: HistoryStep) => string;
+  last: boolean;
+  onOpenConversation?: () => void;
+}) {
+  const error = () => props.step.error;
+  const ai = () => props.step.kind === 'agent';
+  return (
+    <li class="relative grid grid-cols-[1.375rem_minmax(0,1fr)] gap-x-3 gap-y-1.5 pb-4">
+      <Show when={!props.last}>
+        <span
+          aria-hidden="true"
+          class="absolute bottom-0.5 left-[0.625rem] top-6 w-px bg-edge"
+        />
+      </Show>
+      <span
+        aria-hidden="true"
+        class={cn(
+          'flex size-[1.375rem] items-center justify-center rounded-full',
+          error()
+            ? 'bg-failure-bg text-failure'
+            : ai()
+              ? 'bg-accent-bg text-accent-ink'
+              : 'bg-success-bg text-success'
+        )}
+      >
+        <Switch fallback={<CheckIcon class="size-3" />}>
+          <Match when={error()}>
+            <XIcon class="size-3" />
+          </Match>
+          <Match when={ai()}>
+            <SparkleIcon class="size-3" />
+          </Match>
+        </Switch>
+      </span>
+      <span class="min-w-0 pt-px text-sm font-medium text-ink">
+        {props.describe(withoutError(props.step))}
+      </span>
+      <Show when={error()}>
+        {(message) => (
+          <span class="col-start-2 text-xs text-failure">{message()}</span>
+        )}
+      </Show>
+      <Show
+        when={
+          props.step.kind === 'code' && props.step.calls.length > 0
+            ? props.step
+            : undefined
+        }
+      >
+        {(step) => (
+          <span class="col-start-2 grid gap-1">
+            <CallList calls={step().calls} />
+            <Show when={step().callsTruncated}>
+              <span class="text-xs text-ink-muted">
+                More calls ran than are shown.
+              </span>
+            </Show>
+          </span>
+        )}
+      </Show>
+      <Show
+        when={
+          props.step.kind === 'code' && props.step.output !== undefined
+            ? props.step
+            : undefined
+        }
+      >
+        {(step) => <StepOutput output={step().output} />}
+      </Show>
+      <Show when={props.step.kind === 'agent' && props.onOpenConversation}>
+        {(open) => (
+          <Button
+            variant="secondary"
+            size="sm"
+            class="col-start-2 w-fit"
+            onClick={() => open()()}
+          >
+            Open conversation
+            <ArrowUpRightIcon class="size-3.5" />
+          </Button>
+        )}
+      </Show>
+    </li>
+  );
+}
+
+/** What one run of a routine with steps did, step by step. */
+export function RunDetail(props: {
+  record: HistoryRecord;
+  title: string;
+  describe: (step: HistoryStep) => string;
+  /** What started the run, when, and since when; absent for older runs. */
+  startLine?: string;
+  /** Opens the item the run's event was about, when the app can. */
+  onOpenItem?: () => void;
+  /** Opens the run's agent session, when it has one. */
+  onOpenConversation?: () => void;
+}) {
+  const steps = () => props.record.steps ?? [];
+  // A run can fail outside its steps, e.g. while preparing its agent.
+  const unexplained = () =>
+    props.record.success === false && !failedStep(props.record)
+      ? props.record.error
+      : undefined;
+  return (
+    <section
+      aria-label="Run details"
+      class="flex min-w-0 flex-col gap-5 px-7 py-5 touch:px-4"
+    >
+      <header class="flex min-w-0 flex-wrap items-start gap-3">
+        <div class="grid min-w-0 flex-1 basis-60 gap-1">
+          <h2 class="text-lg font-semibold leading-6 text-ink">
+            {props.title}
+          </h2>
+          <span class="text-xs text-ink-muted">{runMeta(props.record)}</span>
+          <Show when={props.startLine}>
+            {(line) => (
+              <span class="flex min-w-0 flex-wrap items-center gap-x-2 text-xs text-ink-muted">
+                {line()}
+                <Show when={props.onOpenItem}>
+                  {(open) => (
+                    <button
+                      type="button"
+                      class="inline-flex items-center gap-0.5 text-ink-muted underline-offset-2 hover:text-ink hover:underline"
+                      onClick={() => open()()}
+                    >
+                      Open item
+                      <ArrowUpRightIcon class="size-3" />
+                    </button>
+                  )}
+                </Show>
+              </span>
+            )}
+          </Show>
+        </div>
+        <Show
+          when={
+            !steps().some((step) => step.kind === 'agent') &&
+            props.onOpenConversation
+          }
+        >
+          {(open) => (
+            <Button variant="secondary" size="sm" onClick={() => open()()}>
+              Open conversation
+              <ArrowUpRightIcon class="size-3.5" />
+            </Button>
+          )}
+        </Show>
+      </header>
+      <ol aria-label="Steps" class="flex flex-col">
+        <For each={steps()}>
+          {(step, index) => (
+            <RunStep
+              step={step}
+              describe={props.describe}
+              last={index() === steps().length - 1}
+              onOpenConversation={props.onOpenConversation}
+            />
+          )}
+        </For>
+      </ol>
+      <Show when={unexplained()}>
+        {(message) => (
+          <p
+            role="alert"
+            class="flex gap-2.5 rounded-[10px] border border-failure/30 bg-failure-bg px-3 py-2.5 text-sm text-failure"
+          >
+            <XIcon class="mt-0.5 size-3.5 shrink-0" />
+            {message()}
+          </p>
+        )}
+      </Show>
+    </section>
+  );
+}
+
+const STATUS_LABEL: Record<CallStatus, string> = {
+  completed: 'Done',
+  failed: 'Failed',
+  skipped: 'Would do',
+  refused: 'Not allowed',
+  unknown: 'Unknown',
+};
+
+function duration(ms: number | undefined): string {
+  if (ms === undefined) return '';
+  return ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`;
+}
+
+/** A code step's SDK calls in one run, in the order they started. */
+function CallList(props: { calls: HistoryCall[] }) {
+  return (
+    <ol class="grid min-w-0 gap-1 text-xs">
+      <For each={props.calls}>
+        {(call) => (
+          <li class="flex min-w-0 items-center gap-2">
+            <span
+              aria-hidden="true"
+              class={cn(
+                'size-1.5 shrink-0 rounded-full',
+                match(call.status)
+                  .with('completed', () =>
+                    call.write ? 'bg-success' : 'bg-edge'
+                  )
+                  .with('failed', 'refused', () => 'bg-failure')
+                  .with('skipped', 'unknown', () => 'bg-ink-extra-muted')
+                  .exhaustive()
+              )}
+            />
+            <span
+              class={cn(
+                'min-w-0 flex-1 truncate',
+                call.write ? 'text-ink' : 'text-ink-muted'
+              )}
+              title={call.operation}
+            >
+              {call.label}
+            </span>
+            <Show when={call.status !== 'completed'}>
+              <span
+                class={cn(
+                  'shrink-0',
+                  call.status === 'failed' || call.status === 'refused'
+                    ? 'text-failure'
+                    : 'text-ink-muted'
+                )}
+              >
+                {STATUS_LABEL[call.status]}
+              </span>
+            </Show>
+            <span class="w-14 shrink-0 text-right tabular-nums text-ink-extra-muted">
+              {duration(call.durationMs)}
+            </span>
+          </li>
+        )}
+      </For>
+    </ol>
+  );
+}

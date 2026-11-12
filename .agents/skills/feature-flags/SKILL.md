@@ -39,7 +39,8 @@ Add one `defineFlag` next to its neighbors. Do not add `ENABLE_*_FLAG` /
   (`DEV_MODE_ENV || undefined`), not the boolean itself. If it must stay off in
   dev, say why in a comment above it. On a remote flag, `false` is a real
   override and **skips PostHog**. On-in-local only is
-  `LOCAL_ONLY || undefined`.
+  `LOCAL_ONLY || undefined` (the Vite dev server and `just run_local
+  --static-frontend` or `just stack` bundles).
 - Never invert on the flag object. If the product question is "disable X",
   invert at the call site (`!isFeatureEnabled(disableX)`).
 - Env-only exports that are used as `if (ENABLE_FOO)` must be the boolean:
@@ -96,6 +97,14 @@ These are the mistakes past flagged launches had to fix:
 - **Keep the kill switch.** A remote flag that defaults on (`default: true`)
   can no longer be turned off from PostHog; use `undefined` so PostHog stays in
   control.
+
+Dev and prod share one PostHog project and the same user IDs. To roll out to
+dev only, target the person property `environment = dev`; a release
+condition on user IDs alone also matches in prod. Web (`analytics.ts`) and
+backend (`crates/feature_flags`) both send `prod`, `dev`, or `local` (local
+stacks); a web build in any other mode sends `unknown`. Put the condition in
+the same release-condition set as the user IDs, as a person property: cohort
+and group conditions ignore this override.
 
 ## 5. Backend
 

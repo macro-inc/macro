@@ -5,6 +5,7 @@ import type {
   AgentSessionChangesResponse,
   AgentSessionLogResponse,
   AgentSessionResponse,
+  AgentUpdateKind,
   ArchiveCause,
   AutoArchivePreferencesBody,
   CodingPreferencesBody,
@@ -13,6 +14,7 @@ import type {
   PullRequestLinkSource,
   SandboxSize,
   SessionBot,
+  WorkRegistrationResponse,
 } from '../../../generated/agent-harness/types.gen';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
@@ -23,8 +25,15 @@ import {
   type SharePermissionOptions,
   sharePermissionBody,
 } from '../sharing/permissions';
+import { Task } from '../tasks/task';
 import { User } from '../users/user';
+import {
+  type AgentActivityOptions,
+  AgentInvocation,
+  sessionActivity,
+} from './activity';
 import { CodeExecution } from './code-execution';
+import { type SessionOrigin, sessionOrigin } from './origin';
 import { QueuedAction } from './queued-action';
 import { type CreateReviewOptions, SessionReview } from './review';
 import { ToolApproval } from './tool-approval';
@@ -68,6 +77,16 @@ export type FoldedAgentSessionLog = {
 };
 
 /** A GitHub pull request linked to a session. */
+/** An agent session an account registered as its work. */
+export type RegisteredWork = {
+  /** The session registered. */
+  session: AgentSession;
+  /** The account whose work this is. */
+  account: User;
+  /** When the account registered it. */
+  registeredAt: string;
+};
+
 export type SessionPullRequest = {
   /** The pull request's `owner/repo/pull/number` key. */
   githubKey: string;
@@ -79,6 +98,64 @@ export type SessionPullRequest = {
   linkedBy?: User;
   /** When it was linked. */
   createdAt: string;
+};
+
+/** A request a session is waiting on its owner to answer, or a session gone quiet. */
+export type AgentSessionUpdate = {
+  /** The session. */
+  session: AgentSession;
+  /** The session's name. */
+  sessionName: string;
+  /** The runtime the session runs on. */
+  harness: string;
+  /** The session's pull request, if it has one. */
+  pullRequestUrl?: string;
+  /**
+   * What the session waits for: `permission` to run a tool, an `elicitation`
+   * question, a held `tool_approval`, or `stalled` with no activity for over
+   * 20 minutes.
+   */
+  kind: AgentUpdateKind;
+  /** What is asked, or why the session looks stalled. */
+  summary: string;
+  /** When the request was made, or the session's last activity. */
+  since: string;
+  /** The choices a permission request offers; empty for other kinds. */
+  options: string[];
+};
+
+/** The caller's sessions waiting for them, newest activity first. */
+export type AgentSessionUpdates = {
+  /** One entry per pending request or stalled session. */
+  items: AgentSessionUpdate[];
+  /** Whether sessions beyond the 25 most recent were left out. */
+  truncated: boolean;
+  /** Says what was left out, when truncated. */
+  truncationNotice?: string;
+};
+
+/** A tool call the session's runtime holds until its owner answers. */
+export type PendingToolApproval = {
+  /** Answer it with {@link ToolApproval.answer}. */
+  approval: ToolApproval;
+  /** What a person calls the server the tool is on. */
+  serverName: string;
+  /** The tool called. */
+  toolName: string;
+  /** What it was called with. */
+  arguments: unknown;
+  /** Who prompted the turn; absent for a bot on nobody's behalf. */
+  requestedBy?: User;
+};
+
+/** The task a session is linked to. */
+export type LinkedTask = {
+  /** The task. */
+  task: Task;
+  /** Put this in the pull request description so GitHub activity reaches the task. */
+  reference: string;
+  /** The session's pull request, now linked to the task, if it has one. */
+  pullRequestUrl?: string;
 };
 
 /** A GitHub repository the caller can point a managed session at. */
@@ -95,8 +172,8 @@ export type SelectableRepository = {
 /** What a managed session is created with. */
 export type CreateManagedSessionOptions = {
   /**
-   * Persona the session runs as, from {@link AgentNamespace.list} or
-   * {@link Agent.byId}. The caller must be able to use it. Omitted, the
+   * Persona the session runs as, from {@link AgentNamespace.coding} or
+   * {@link AgentNamespace.list}. The caller must be able to use it. Omitted, the
    * deployment's default coding persona, or Cursor when `repoUrl` is set.
    * Its harness, instructions and model apply unless `instructions` or
    * `model` override them.
@@ -133,12 +210,20 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
   /** Access requests and direct user grants. */
   readonly access = new EntityAccess(this.client, 'agent_session', this);
 
-  /** Construct an approval handle scoped to this session. */
+  /**
+   * Construct an approval handle scoped to this session.
+   *
+   * @readonly
+   */
   toolApprovalById(id: string): ToolApproval {
     return ToolApproval.byId(this.client, this, id);
   }
 
-  /** Sharing configuration. */
+  /**
+   * Sharing configuration.
+   *
+   * @readonly
+   */
   async sharePermissions() {
     return unwrap(
       await this.client.agentHarness.getAgentSessionPermissions({
@@ -147,7 +232,12 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     );
   }
 
-  /** Replace sharing grants. */
+  /**
+   * Replace sharing grants.
+   *
+   * @write
+   * @idempotent
+   */
   async updateSharePermissions(options: SharePermissionOptions) {
     return this.mutate((c) =>
       c.agentHarness.updateAgentSessionPermissions({
@@ -155,6 +245,20 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
         body: sharePermissionBody(options),
       }),
     );
+  }
+
+  /**
+   * The session's URL in the Macro web app; hand it to users as the link.
+   *
+   * @readonly
+   */
+  webUrl(): string {
+    return `${this.client.webAppUrl}/app/agent/${this.id}`;
+  }
+
+  /** Identity, loaded detail and {@link webUrl}, so serialized handles carry their link. */
+  override toJSON() {
+    return { ...super.toJSON(), url: this.webUrl() };
   }
 
   /** A handle to an agent session by id. Details load on first access. */
@@ -253,6 +357,21 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
   readonly name = this.field('name');
 
   /**
+   * What opened the session: who or what started it, and what it is about.
+   * Readable by anyone who can view the session, including other agents.
+   *
+   * @readonly
+   */
+  async origin(): Promise<SessionOrigin> {
+    const detail = await this.detail.get();
+    return sessionOrigin(
+      this.client,
+      detail.origin ?? { origin: 'unknown' },
+      detail.threadChannelId ?? undefined,
+    );
+  }
+
+  /**
    * Who archived the session, making it read-only: `'user'`,
    * `'pull_request_merged'` or `'runtime_closed'`. `undefined` while it is not
    * archived.
@@ -307,8 +426,85 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
   }
 
   /**
+   * The caller's coding sessions waiting for an answer from them, or stalled
+   * for over 20 minutes, newest activity first. Only the 25 most recent such
+   * sessions are inspected.
+   */
+  static async updates(client: MacroClient): Promise<AgentSessionUpdates> {
+    const { items, truncated, truncationNotice } = unwrap(
+      await client.agentHarness.listAgentSessionUpdates(),
+    );
+    return {
+      items: items.map((item) => ({
+        session: AgentSession.byId(client, item.sessionId),
+        sessionName: item.sessionName,
+        harness: item.harness,
+        pullRequestUrl: item.pullRequestUrl ?? undefined,
+        kind: item.kind,
+        summary: item.summary,
+        since: item.since,
+        options: item.options,
+      })),
+      truncated,
+      truncationNotice: truncationNotice ?? undefined,
+    };
+  }
+
+  /**
+   * Tool calls this session's runtime holds until its owner approves them,
+   * oldest first. Answer each with {@link ToolApproval.answer}; only the
+   * owner may approve or decline. Permission requests and questions from the
+   * agent itself are answered with {@link control}.
+   *
+   * @readonly
+   */
+  async pendingApprovals(): Promise<PendingToolApproval[]> {
+    const { messages } = await this.foldedLog();
+    return messages.flatMap((message) =>
+      message.parts.flatMap((part) =>
+        part.kind === 'tool_approval' && part.status === 'pending'
+          ? [
+              {
+                approval: ToolApproval.byId(this.client, this, part.approvalId),
+                serverName: part.serverName,
+                toolName: part.toolName,
+                arguments: part.arguments,
+                requestedBy: part.requestedBy
+                  ? User.byId(this.client, part.requestedBy)
+                  : undefined,
+              },
+            ]
+          : [],
+      ),
+    );
+  }
+
+  /**
+   * Link this session to the task it works on, replacing any earlier link.
+   * Only the session's owner can link it, to a task they can view. The
+   * session's pull request, now or later, is linked to the task too.
+   *
+   * @write
+   */
+  async linkTask(task: Task): Promise<LinkedTask> {
+    const linked = unwrap(
+      await this.client.agentHarness.linkAgentSessionTask({
+        path: { session_id: this.id },
+        body: { taskId: task.id },
+      }),
+    );
+    return {
+      task: Task.byId(this.client, linked.taskId),
+      reference: linked.reference,
+      pullRequestUrl: linked.pullRequestUrl ?? undefined,
+    };
+  }
+
+  /**
    * The GitHub pull requests linked to this session: the one its agent
    * opened and any a person linked, oldest first.
+   *
+   * @readonly
    */
   async pullRequests(): Promise<SessionPullRequest[]> {
     const { pullRequests } = unwrap(
@@ -330,6 +526,9 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
   /**
    * Link the GitHub pull request at `url` to this session. Linking one that
    * is already linked changes nothing.
+   *
+   * @write
+   * @idempotent
    */
   async linkPullRequest(url: string): Promise<void> {
     unwrap(
@@ -343,6 +542,9 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
   /**
    * Unlink a GitHub pull request a person linked to this session. The pull
    * request the session's agent opened stays linked.
+   *
+   * @write
+   * @idempotent
    */
   async unlinkPullRequest(url: string): Promise<void> {
     unwrap(
@@ -353,7 +555,11 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     );
   }
 
-  /** This session's auto-archive settings, and when a trigger archived it. */
+  /**
+   * This session's auto-archive settings, and when a trigger archived it.
+   *
+   * @readonly
+   */
   async autoArchive(): Promise<SessionAutoArchive> {
     const { overrides, defaults, autoArchivedAt } = unwrap(
       await this.client.agentHarness.getAgentSessionAutoArchive({
@@ -373,6 +579,9 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
   /**
    * Replace this session's auto-archive choices. Owner only; a trigger left
    * `undefined` follows the owner's default.
+   *
+   * @write
+   * @idempotent
    */
   async setAutoArchive(overrides: AutoArchiveOverrides): Promise<void> {
     unwrap(
@@ -386,7 +595,12 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     );
   }
 
-  /** Rename this session. */
+  /**
+   * Rename this session.
+   *
+   * @write
+   * @idempotent
+   */
   async rename(name: string): Promise<void> {
     await this.mutate((client) =>
       client.agentHarness.renameAgentSession({
@@ -396,12 +610,85 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     );
   }
 
-  /** Archive this session, making it read-only until unarchived. */
+  /**
+   * Register this session as the caller's work, so it shows as what the caller
+   * is working on. Requires edit access. Registering again changes nothing.
+   *
+   * Registering does not share the session: a viewer who cannot open it does
+   * not see it, so share it too with {@link AgentSession.updateSharePermissions}.
+   *
+   * The registration ends on its own when the session's pull requests finish,
+   * when it is archived, after a day without work, or after a week blocked on
+   * input. A later turn does not register it again.
+   *
+   * @write
+   * @idempotent
+   */
+  async registerAsWork(): Promise<RegisteredWork> {
+    return AgentSession.registeredWork(
+      this.client,
+      unwrap(
+        await this.client.agentHarness.registerAgentSessionWork({
+          path: { session_id: this.id },
+        }),
+      ),
+    );
+  }
+
+  /**
+   * End the caller's registration of this session as its work. Doing it again
+   * changes nothing. The session itself is untouched.
+   *
+   * @write
+   * @idempotent
+   */
+  async unregisterAsWork(): Promise<void> {
+    unwrap(
+      await this.client.agentHarness.unregisterAgentSessionWork({
+        path: { session_id: this.id },
+      }),
+    );
+  }
+
+  /** The caller's active registrations, newest first. */
+  static async listRegisteredWork(
+    client: MacroClient,
+  ): Promise<RegisteredWork[]> {
+    const registrations = unwrap(
+      await client.agentHarness.listAgentWorkRegistrations(),
+    );
+    return registrations.map((registration) =>
+      AgentSession.registeredWork(client, registration),
+    );
+  }
+
+  private static registeredWork(
+    client: MacroClient,
+    registration: WorkRegistrationResponse,
+  ): RegisteredWork {
+    return {
+      session: AgentSession.byId(client, registration.agentSessionId),
+      account: User.byId(client, registration.accountId),
+      registeredAt: registration.registeredAt,
+    };
+  }
+
+  /**
+   * Archive this session, making it read-only until unarchived.
+   *
+   * @write
+   * @idempotent
+   */
   async archive(): Promise<void> {
     await this.setArchived(true);
   }
 
-  /** Restore an archived session so it can be edited and prompted again. */
+  /**
+   * Restore an archived session so it can be edited and prompted again.
+   *
+   * @write
+   * @idempotent
+   */
   async unarchive(): Promise<void> {
     await this.setArchived(false);
   }
@@ -415,7 +702,12 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     );
   }
 
-  /** Resize this session's sandbox and remember the size as the owner's default. */
+  /**
+   * Resize this session's sandbox and remember the size as the owner's default.
+   *
+   * @write
+   * @idempotent
+   */
   async setSandboxSize(size: SandboxSize): Promise<SandboxSize> {
     const { size: next } = await this.mutate((client) =>
       client.agentHarness.putAgentSessionSandboxSize({
@@ -488,6 +780,9 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
    * action derives once it dispatches. A `queued` status means a turn was
    * running: the action waits in the session's queue ({@link queue}) and
    * dispatches when that turn ends.
+   *
+   * @destructive
+   * @openworld
    */
   async control(action: AgentAction): Promise<ControlResponse> {
     return this.mutate((client) =>
@@ -504,6 +799,9 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
    * `attachments` are files the prompt refers to, each by a URL the agent
    * can fetch (a static file service URL in practice); they reach the agent
    * as ACP `resource_link` blocks after the text.
+   *
+   * @destructive
+   * @openworld
    */
   prompt(
     text: string,
@@ -519,6 +817,8 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
   /**
    * The actions waiting to dispatch in this session, oldest first. Each can
    * be edited or removed until it dispatches.
+   *
+   * @readonly
    */
   async queue(): Promise<QueuedAction[]> {
     const { entries } = unwrap(
@@ -531,7 +831,11 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     );
   }
 
-  /** Read the latest captured GitHub pull request changes and capture status. */
+  /**
+   * Read the latest captured GitHub pull request changes and capture status.
+   *
+   * @readonly
+   */
   async changes(): Promise<AgentSessionChangesResponse> {
     return unwrap(
       await this.client.agentHarness.getAgentSessionChanges({
@@ -540,7 +844,11 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     );
   }
 
-  /** Read the unified diff of the latest captured changeset. */
+  /**
+   * Read the unified diff of the latest captured changeset.
+   *
+   * @readonly
+   */
   async changesPatch(): Promise<string> {
     return unwrap(
       await this.client.agentHarness.getAgentSessionChangesPatch({
@@ -549,7 +857,13 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     ).patch;
   }
 
-  /** Request a fresh capture and return the current state while it runs. */
+  /**
+   * Request a fresh capture and return the current state while it runs.
+   *
+   * @write
+   * @idempotent
+   * @openworld
+   */
   async refreshChanges(): Promise<AgentSessionChangesResponse> {
     return this.mutate((client) =>
       client.agentHarness.refreshAgentSessionChanges({
@@ -565,6 +879,8 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
    * session the caller can view, live or finished, so it is the way to read
    * what another agent session did. Prefer it to {@link log}, which returns
    * raw protocol frames.
+   *
+   * @readonly
    */
   async foldedLog(): Promise<FoldedAgentSessionLog> {
     const { bot, messages } = unwrap(
@@ -577,7 +893,11 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     return { bot, messages: messages as FoldedMessage[] };
   }
 
-  /** Read the complete raw protocol log for this session. */
+  /**
+   * Read the complete raw protocol log for this session.
+   *
+   * @readonly
+   */
   async log(): Promise<AgentSessionLogResponse> {
     return unwrap(
       await this.client.agentHarness.getAgentSessionLog({
@@ -604,7 +924,26 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
       CodeExecution.byId(this.client, this, id),
   };
 
-  /** Delete this session and any live resources it owns. */
+  /**
+   * Recorded activity caused by this session, lazily paginated newest first.
+   *
+   * @readonly
+   */
+  activity(options: AgentActivityOptions = {}) {
+    return sessionActivity(this.client, this, options);
+  }
+
+  /** Code-mode invocation handles, distinct from saved code executions. */
+  readonly invocations = {
+    byId: (id: string) => AgentInvocation.byId(this.client, this, id),
+  };
+
+  /**
+   * Delete this session and any live resources it owns.
+   *
+   * @destructive
+   * @idempotent
+   */
   async delete(): Promise<void> {
     await this.mutate((client) =>
       client.agentHarness.deleteAgentSession({

@@ -5,7 +5,28 @@ import { isTauri } from './platform';
 const nativeServices = NATIVE_SESSION_SERVICE_URLS.map((url) => new URL(url));
 let originalFetch: typeof fetch | undefined;
 
-/** Called by the entry point before installing the desktop global override. */
+// Third-party APIs that allow any origin and require requests from the user's
+// browser. The native HTTP client's scope doesn't list them and rejects them.
+const WEBVIEW_FETCH_HOSTS = new Set(['api.klipy.com']);
+
+/**
+ * Called once by the entry point: routes Tauri's global fetch through
+ * `createPlatformFetch`, the only place that chooses a transport.
+ */
+export function installPlatformFetch() {
+  if (!isTauri()) return;
+
+  const browserFetch = window.fetch;
+  // The global override must call the transport, never `platformFetch`: that
+  // reads the global back and would recurse until the stack overflows.
+  const transport = initializePlatformFetch(browserFetch);
+  window.fetch = new Proxy(browserFetch, {
+    apply: (_target, thisArg, args: Parameters<typeof fetch>) =>
+      transport.apply(thisArg, args),
+  });
+}
+
+/** Exported for tests; production calls it through `installPlatformFetch`. */
 export function initializePlatformFetch(
   webviewFetch: typeof fetch
 ): typeof fetch {
@@ -23,7 +44,11 @@ export function createPlatformFetch(
 ): typeof window.fetch {
   // Tauri sends invoke calls through global fetch. Preserve its webview-owned
   // endpoint or native HTTP recursively invokes itself and expands each payload.
-  const ipc = isTauri() ? new URL(convertFileSrc('', 'ipc')) : undefined;
+  // Local files (`asset`) are also served only to the webview. Each protocol is
+  // `<name>://localhost` or `http(s)://<name>.localhost`, depending on platform.
+  const tauriProtocols = isTauri()
+    ? ['ipc', 'asset'].map((protocol) => new URL(convertFileSrc('', protocol)))
+    : [];
   return async (input, init) => {
     if (!isTauri()) return webviewFetch(input, init);
     const url = new URL(
@@ -41,15 +66,22 @@ export function createPlatformFetch(
     // Assets share the webview origin; authenticated service prefixes take
     // precedence even when the development proxy shares that origin.
     if (
-      (ipc && url.protocol === ipc.protocol && url.host === ipc.host) ||
+      tauriProtocols.some(
+        (endpoint) =>
+          url.protocol === endpoint.protocol && url.host === endpoint.host
+      ) ||
       (!service && url.origin === new URL(document.baseURI).origin) ||
       url.protocol === 'data:' ||
-      url.protocol === 'blob:'
+      url.protocol === 'blob:' ||
+      WEBVIEW_FETCH_HOSTS.has(url.hostname)
     ) {
       return webviewFetch(input, init);
     }
     const { fetch } = await import('@tauri-apps/plugin-http');
-    return fetch(input, init);
+    // The plugin cancels only on `init.signal`, never on a `Request`'s own.
+    const signal =
+      init?.signal ?? (input instanceof Request ? input.signal : undefined);
+    return fetch(input, { ...init, signal });
   };
 }
 

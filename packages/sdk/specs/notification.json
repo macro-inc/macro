@@ -242,6 +242,122 @@
         }
       }
     },
+    "/unsubscribe/items": {
+      "post": {
+        "tags": ["unsubscribe::items"],
+        "summary": "Atomically mute or snooze items for the authenticated user.",
+        "operationId": "unsubscribe_items",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkSetItemsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["unsubscribe::items"],
+        "summary": "Atomically resume delivery for the authenticated user's items.",
+        "operationId": "remove_unsubscribe_items",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkRemoveItemsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/unsubscribe/mute": {
       "post": {
         "tags": ["unsubscribe::unsubscribe_all"],
@@ -365,6 +481,214 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/user_notifications/bulk": {
+      "delete": {
+        "tags": ["notification_crate::inbound::http"],
+        "summary": "Soft-delete multiple user notifications.",
+        "operationId": "bulk_delete_user_notifications_v2",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationBulkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/user_notifications/bulk/done": {
+      "patch": {
+        "tags": ["notification_crate::inbound::http"],
+        "summary": "Mark notifications as done.",
+        "operationId": "bulk_mark_notifications_done",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationBulkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/user_notifications/bulk/seen": {
+      "patch": {
+        "tags": ["notification_crate::inbound::http"],
+        "summary": "Mark notifications as seen.",
+        "operationId": "bulk_mark_notifications_seen",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationBulkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/user_notifications/bulk/undone": {
+      "patch": {
+        "tags": ["notification_crate::inbound::http"],
+        "summary": "Mark notifications as not done.",
+        "operationId": "bulk_mark_notifications_undone",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationBulkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": ""
           },
           "400": {
             "description": "",
@@ -784,217 +1108,7 @@
             }
           }
         }
-      }
-    },
-    "/v2/user_notifications/bulk": {
-      "delete": {
-        "tags": ["notification_crate::inbound::http"],
-        "summary": "Soft-delete multiple user notifications.",
-        "operationId": "bulk_delete_user_notifications_v2",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/NotificationBulkRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": ""
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v2/user_notifications/bulk/done": {
-      "patch": {
-        "tags": ["notification_crate::inbound::http"],
-        "summary": "Mark notifications as done.",
-        "operationId": "bulk_mark_notifications_done",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/NotificationBulkRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": ""
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v2/user_notifications/bulk/seen": {
-      "patch": {
-        "tags": ["notification_crate::inbound::http"],
-        "summary": "Mark notifications as seen.",
-        "operationId": "bulk_mark_notifications_seen",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/NotificationBulkRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": ""
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v2/user_notifications/bulk/undone": {
-      "patch": {
-        "tags": ["notification_crate::inbound::http"],
-        "summary": "Mark notifications as not done.",
-        "operationId": "bulk_mark_notifications_undone",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/NotificationBulkRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": ""
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v2/user_notifications/{notification_id}": {
+      },
       "delete": {
         "tags": ["notification_crate::inbound::http"],
         "summary": "Soft-delete a single user notification.",
@@ -1294,6 +1408,47 @@
           }
         }
       },
+      "BulkItem": {
+        "type": "object",
+        "required": ["item_type", "item_id"],
+        "properties": {
+          "item_id": {
+            "type": "string"
+          },
+          "item_type": {
+            "$ref": "#/components/schemas/EntityType"
+          }
+        }
+      },
+      "BulkRemoveItemsRequest": {
+        "type": "object",
+        "required": ["items"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BulkItem"
+            }
+          }
+        }
+      },
+      "BulkSetItemsRequest": {
+        "type": "object",
+        "required": ["items"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BulkItem"
+            }
+          },
+          "snoozed_until": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "A future resume time. Omit to mute indefinitely."
+          }
+        }
+      },
       "CalendarEventJoinRequestMetadata": {
         "type": "object",
         "description": "A channel member who sees a calendar event only through a channel share\nasked the person who shared it to add them as a guest. Sent to the sharer,\nwith the requester as sender.",
@@ -1372,6 +1527,30 @@
             "description": "Profile picture URL of the user who started the call, when available."
           }
         }
+      },
+      "ChannelAccessRequestedMetadata": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/CommonChannelMetadata",
+            "description": "Channel the requester asked to join."
+          },
+          {
+            "type": "object",
+            "required": ["requestId"],
+            "properties": {
+              "requestId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The attempt to join, which is also this notification's id."
+              },
+              "senderProfilePictureUrl": {
+                "type": ["string", "null"],
+                "description": "Optional requester profile picture URL."
+              }
+            }
+          }
+        ],
+        "description": "A person asked to join a channel the recipient participates in."
       },
       "ChannelInviteMetadata": {
         "type": "object",
@@ -1847,6 +2026,7 @@
           "crm_contact",
           "crm_pipeline",
           "reminder",
+          "harness",
           "skill",
           "agent_session",
           "scheduled_action",
@@ -2316,6 +2496,14 @@
           "inviteePlan": {
             "$ref": "#/components/schemas/InviteePlan",
             "description": "What the invitee gets by joining, as the team stood when the invite was sent."
+          },
+          "inviterName": {
+            "type": ["string", "null"],
+            "description": "The inviter's display name, when they have set one. It is user-provided, so it is shown\non one line, capped, and escaped; the email falls back to the inviter's address."
+          },
+          "isAgent": {
+            "type": "boolean",
+            "description": "Whether the invite creates an agent account."
           },
           "reminder": {
             "type": "boolean",
@@ -2948,6 +3136,51 @@
                 "enum": ["calendar_event_join_request"]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "Someone asked to join a channel the user participates in.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/ChannelAccessRequestedMetadata",
+                "description": "Someone asked to join a channel the user participates in."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["channel_access_requested"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "One of the user's routines finished a run, successfully or not.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/RoutineRunFinishedMetadata",
+                "description": "One of the user's routines finished a run, successfully or not."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["routine_run_finished"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A runtime's owner removed the user's access to it, and agents of\ntheirs living there stopped.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/RuntimeAccessRemovedMetadata",
+                "description": "A runtime's owner removed the user's access to it, and agents of\ntheirs living there stopped."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["runtime_access_removed"]
+              }
+            }
           }
         ],
         "description": "Mirrors [`model_notifications::NotificationEvent`] but uses `tag` / `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait."
@@ -3243,6 +3476,65 @@
         "type": "string",
         "description": "Permission level used by an access request, excluding ownership.",
         "enum": ["view", "comment", "edit"]
+      },
+      "RoutineRunFinishedMetadata": {
+        "type": "object",
+        "description": "One of the recipient's routines finished a run. Every run notifies,\nwhether it succeeded or failed.",
+        "required": ["routineId", "routineName", "outcome"],
+        "properties": {
+          "outcome": {
+            "$ref": "#/components/schemas/RoutineRunOutcome",
+            "description": "How the run ended."
+          },
+          "routineId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The routine that ran."
+          },
+          "routineName": {
+            "type": "string",
+            "description": "The routine's name when it ran."
+          }
+        }
+      },
+      "RoutineRunOutcome": {
+        "type": "string",
+        "description": "How a routine run ended, as its notification reports it.",
+        "enum": ["succeeded", "failed"]
+      },
+      "RuntimeAccessRemovedMetadata": {
+        "type": "object",
+        "description": "A runtime's owner removed the recipient's access to it, or lowered it to\nRead, and agents the recipient keeps living there stopped.",
+        "required": ["runtimeName", "agents"],
+        "properties": {
+          "agents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StoppedAgent"
+            },
+            "description": "The recipient's agents living on the runtime, which stopped. Never\nempty: without one there is nothing to tell them."
+          },
+          "runtimeName": {
+            "type": "string",
+            "description": "The runtime's name."
+          }
+        }
+      },
+      "StoppedAgent": {
+        "type": "object",
+        "description": "One of the recipient's agents that stopped with their runtime access.",
+        "required": ["botId", "name"],
+        "properties": {
+          "botId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The agent's bot id."
+          },
+          "name": {
+            "type": "string",
+            "description": "The agent's display name."
+          }
+        }
       },
       "TaskAssignedMetadata": {
         "type": "object",

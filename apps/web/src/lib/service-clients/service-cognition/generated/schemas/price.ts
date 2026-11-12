@@ -7,23 +7,26 @@
 import type { PricePricePerAudioMinute } from './pricePricePerAudioMinute';
 import type { PricePricePerMillionCacheRead } from './pricePricePerMillionCacheRead';
 import type { PricePricePerMillionCacheWrite } from './pricePricePerMillionCacheWrite';
+import type { PricePricePerProviderCredit } from './pricePricePerProviderCredit';
 
 /**
  * Rates applied to an invocation and its resolved dollar cost.
  */
 export interface Price {
-  /** Price per audio minute (USD), absent for token billing. */
+  /** Price per audio minute (USD), absent for token and credit billing. */
   price_per_audio_minute?: PricePricePerAudioMinute;
   /** Price per million cache-read input tokens (USD), absent when the model
-has no published rate and for audio billing. */
+has no published rate and for audio and credit billing. */
   price_per_million_cache_read?: PricePricePerMillionCacheRead;
   /** Price per million cache-write input tokens (USD), absent when the model
-has no published rate and for audio billing. */
+has no published rate and for audio and credit billing. */
   price_per_million_cache_write?: PricePricePerMillionCacheWrite;
-  /** Price per million input tokens (USD); zero for audio billing. */
+  /** Price per million input tokens (USD); zero for audio and credit billing. */
   price_per_million_in: number;
-  /** Price per million output tokens (USD); zero for audio billing. */
+  /** Price per million output tokens (USD); zero for audio and credit billing. */
   price_per_million_out: number;
+  /** Price per vendor credit (USD), absent for token and audio billing. */
+  price_per_provider_credit?: PricePricePerProviderCredit;
   /** Total cost (USD). */
   total: number;
 }

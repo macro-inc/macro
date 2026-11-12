@@ -298,6 +298,13 @@ impl FakeAgent {
                     {
                         progress.opening = Some(request.id.clone());
                     }
+                    // An external runtime's connection carries many
+                    // sessions: another one loads after the first is open.
+                    ClientRequest::LoadSessionRequest(_)
+                        if progress.stage == Stage::SessionOpen =>
+                    {
+                        progress.opening = Some(request.id.clone());
+                    }
                     ClientRequest::NewSessionRequest(_)
                     | ClientRequest::LoadSessionRequest(_)
                     | ClientRequest::ResumeSessionRequest(_) => {
@@ -308,6 +315,15 @@ impl FakeAgent {
                             request.method
                         );
                         progress.opening = Some(request.id.clone());
+                    }
+                    // The connection lists sessions right after it initializes.
+                    ClientRequest::ListSessionsRequest(_) => {
+                        assert_ne!(
+                            progress.stage,
+                            Stage::Fresh,
+                            "harness sent {} before initialize completed",
+                            request.method
+                        );
                     }
                     ClientRequest::PromptRequest(_) => {
                         assert_eq!(

@@ -319,6 +319,12 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 			...SoupPropertyFields
 		}
 	}
+	... on GraphqlSoupHarness {
+		harnessName: name
+		ownerId
+		createdAt
+		updatedAt
+	}
 	... on GraphqlSoupForeignEntity {
 		foreignEntityId
 		foreignEntitySource
@@ -556,6 +562,13 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 		entityAccessGrantedFileType: fileType
 		entityAccessGrantedAccessLevel: accessLevel
 	}
+	... on GraphqlRuntimeAccessRemovedMetadata {
+		runtimeAccessRemovedRuntimeName: runtimeName
+		runtimeAccessRemovedAgents: agents {
+			botId
+			name
+		}
+	}
 	... on GraphqlCommentedOnDocumentMetadata {
 		commentedOnDocumentDocumentName: documentName
 		commentedOnDocumentOwner: owner
@@ -606,6 +619,12 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 		channelMessageReactionChannelName: channelName
 		channelMessageReactionSenderProfilePictureUrl: senderProfilePictureUrl
 	}
+	... on GraphqlChannelAccessRequestedMetadata {
+		channelAccessRequestedRequestId: requestId
+		channelAccessRequestedChannelType: channelType
+		channelAccessRequestedChannelName: channelName
+		channelAccessRequestedSenderProfilePictureUrl: senderProfilePictureUrl
+	}
 	... on GraphqlChannelReplyMetadata {
 		channelReplyThreadId: threadId
 		channelReplyMessageId: messageId
@@ -627,6 +646,11 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 	}
 	... on GraphqlInboxReauthRequiredMetadata {
 		inboxReauthRequiredEmailAddress: emailAddress
+	}
+	... on GraphqlRoutineRunFinishedMetadata {
+		routineRunFinishedRoutineId: routineId
+		routineRunFinishedRoutineName: routineName
+		routineRunFinishedSucceeded: succeeded
 	}
 	... on GraphqlInviteToTeamMetadata {
 		inviteToTeamTeamName: teamName

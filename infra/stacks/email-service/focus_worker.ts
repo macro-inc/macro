@@ -5,6 +5,7 @@ import {
   DATADOG_API_KEY,
   DEFAULT_CONTINUE_BEFORE_STEADY_STATE,
   EcsDeploymentFailureAlarm,
+  versionEnvironment,
   withTelemetry,
 } from '../../packages/resources';
 import { EcrImage } from '../../packages/service';
@@ -68,7 +69,8 @@ export class EmailFocusWorker extends pulumi.ComponentResource {
     );
     this.ecr = image.ecr;
 
-    // The worker only calls out: Postgres, Kafka and the classifier API.
+    // The worker only calls out: Postgres, Kafka, the classifier API, the
+    // agent harness and the connection gateway.
     const serviceSg = new aws.ec2.SecurityGroup(
       `${BASE_NAME}-sg-${stack}`,
       {
@@ -123,6 +125,7 @@ export class EmailFocusWorker extends pulumi.ComponentResource {
               environment: [
                 ...containerEnvVars.filter((env) => env.name !== 'DD_SERVICE'),
                 { name: 'DD_SERVICE', value: BASE_NAME },
+                versionEnvironment(image.image.imageUri),
               ],
               secrets: [...dopplerEcsEnvironment.containerSecrets],
               logConfiguration: {

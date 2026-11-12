@@ -1,5 +1,8 @@
 import { useAccessRequestInvalidations } from '@app/features/access-requests/use-access-request-invalidations';
+import { AgentNavigationProvider } from '@app/features/agent-navigation/views/agent-navigation';
 import { IncomingMeetingInvitationsProvider } from '@app/features/meetings/incoming-meeting-invitations';
+import { quietHoursMute } from '@app/features/notification-sounds/core/quiet-hours';
+import { readNotificationSoundSettings } from '@app/features/notification-sounds/primitives/sound-settings';
 import {
   notificationSoundFor,
   useNotificationSounds,
@@ -55,6 +58,17 @@ function ConfiguredGlobalAppStateProvider(props: ParentProps) {
   const userId = useUserId();
   let notificationUpdatePrompted = false;
   async function deliverNotification(notification: UnifiedNotification) {
+    const id = userId();
+    if (
+      id &&
+      quietHoursMute(
+        notification.notification_metadata.tag,
+        readNotificationSoundSettings(id).quietHours,
+        new Date()
+      )
+    ) {
+      return;
+    }
     if (notifInterface === 'not-supported') return;
     const layoutManager = globalSplitManager();
     if (!layoutManager) return;
@@ -125,7 +139,9 @@ export function AppProviders(props: ParentProps) {
             <IncomingMeetingInvitationsProvider>
               {/* Ownerless dialogs inherit app state, not a transient menu owner. */}
               <ImperativeDialogHost />
-              {props.children}
+              <AgentNavigationProvider>
+                {props.children}
+              </AgentNavigationProvider>
             </IncomingMeetingInvitationsProvider>
           </SearchProvider>
         </MutationUndoProvider>

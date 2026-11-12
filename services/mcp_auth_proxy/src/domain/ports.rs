@@ -1,12 +1,39 @@
 //! Domain ports for upstream OAuth providers.
 
-use std::{future::Future, pin::Pin};
+use std::{future::Future, pin::Pin, time::Duration};
 
-use super::models::{RefreshToken, RefreshTokenBinding, RegisteredClient, UpstreamTokens};
+use super::models::{
+    AccessToken, EmailCodeRequest, RefreshToken, RefreshTokenBinding, RegisteredClient,
+    UpstreamLogin, UpstreamTokens,
+};
 
 /// Boxed future returning a token grant from the upstream provider.
 pub type UpstreamTokensFuture<'a> =
-    Pin<Box<dyn Future<Output = anyhow::Result<UpstreamTokens>> + Send + 'a>>;
+    Pin<Box<dyn Future<Output = Result<UpstreamTokens, UpstreamGrantError>> + Send + 'a>>;
+
+/// Why the upstream provider issued no tokens for a grant. Carries no
+/// credential, so it is safe to log.
+#[derive(Debug, thiserror::Error)]
+pub enum UpstreamGrantError {
+    /// The provider refused the code or refresh token itself as invalid,
+    /// expired, or revoked. Only the user authorizing again fixes it.
+    #[error("upstream refused the grant: {detail}")]
+    InvalidGrant {
+        /// The provider's reason, for logs.
+        detail: String,
+    },
+    /// The provider was unreachable or throttling requests; retrying later
+    /// can succeed.
+    #[error("upstream is unavailable")]
+    Unavailable {
+        /// How long the provider asked callers to wait, when it said.
+        retry_after: Option<Duration>,
+    },
+    /// Anything else: a request or client credential the provider rejected,
+    /// which is ours to fix, or an answer we could not use.
+    #[error("upstream grant request failed: {0:#}")]
+    Failed(anyhow::Error),
+}
 
 /// Boxed future returning nothing on success.
 pub type StoreWriteFuture<'a> = Pin<Box<dyn Future<Output = anyhow::Result<()>> + Send + 'a>>;
@@ -74,7 +101,11 @@ pub trait RefreshTokenBindingStore: Send + Sync {
 /// Upstream OAuth provider used by the broker.
 pub trait OAuthProvider: Send + Sync {
     /// Builds the upstream authorize URL for a broker session.
-    fn construct_authorize_url(&self, state: &str) -> anyhow::Result<String>;
+    fn construct_authorize_url(
+        &self,
+        state: &str,
+        login: UpstreamLogin<'_>,
+    ) -> anyhow::Result<String>;
 
     /// Exchanges an upstream authorization code for tokens.
     fn exchange_authorization_code<'a>(&'a self, code: &'a str) -> UpstreamTokensFuture<'a>;
@@ -91,4 +122,73 @@ pub trait OAuthProvider: Send + Sync {
         &'a self,
         refresh_token: &'a RefreshToken,
     ) -> UpstreamRevocationFuture<'a>;
+}
+
+/// Boxed future returning an access token the broker minted.
+pub type MintedAccessTokenFuture<'a> =
+    Pin<Box<dyn Future<Output = anyhow::Result<MintedAccessToken>> + Send + 'a>>;
+
+/// A minted access token and how long it is valid, which a signer may cap
+/// below the lifetime it was asked for.
+pub struct MintedAccessToken {
+    /// The signed token.
+    pub token: AccessToken,
+    /// How long it is valid for.
+    pub lifetime: Duration,
+}
+
+/// Mints the token a resource that hands its bearer straight to Macro's APIs
+/// gets in place of the upstream access token. Those APIs cannot look up which
+/// client a token went to, so the token carries the attribution, signed.
+pub trait MacroApiTokenMinter: Send + Sync {
+    /// A Macro API token for the user `upstream` names, valid for at most
+    /// `lifetime`,
+    /// acting as the Macro bot via the client named `client_name` (`None` when
+    /// its registration has lapsed).
+    fn mint<'a>(
+        &'a self,
+        upstream: &'a AccessToken,
+        client_name: Option<&'a str>,
+        lifetime: Duration,
+    ) -> MintedAccessTokenFuture<'a>;
+}
+
+/// Boxed future returning the upstream's answer to an emailed code request.
+pub type EmailCodeRequestFuture<'a> =
+    Pin<Box<dyn Future<Output = Result<EmailCodeRequest, EmailCodeError>> + Send + 'a>>;
+
+/// Boxed future returning the tokens an emailed code redeems for.
+pub type EmailCodeTokensFuture<'a> =
+    Pin<Box<dyn Future<Output = Result<UpstreamTokens, EmailCodeError>> + Send + 'a>>;
+
+/// Why the upstream refused or failed an emailed code step.
+#[derive(Debug, thiserror::Error)]
+pub enum EmailCodeError {
+    /// The address is malformed.
+    #[error("invalid email address")]
+    InvalidEmail,
+    /// The address may not sign in.
+    #[error("email address may not sign in")]
+    NotAllowed,
+    /// The code is wrong or has expired.
+    #[error("invalid or expired code")]
+    InvalidCode,
+    /// Too many attempts for this address.
+    #[error("too many attempts")]
+    RateLimited,
+    /// The upstream could not be reached or answered unexpectedly.
+    #[error("email sign-in is unavailable")]
+    Unavailable(#[source] anyhow::Error),
+}
+
+/// Signs a user in with a one-time code sent to their email address.
+///
+/// Object-safe, like the other ports here, so the service holds it as a
+/// trait object.
+pub trait EmailCodeProvider: Send + Sync {
+    /// Emails a sign-in code, or reports the single sign-on the address needs.
+    fn request_code<'a>(&'a self, email: &'a str) -> EmailCodeRequestFuture<'a>;
+
+    /// Redeems an emailed code for tokens.
+    fn redeem_code<'a>(&'a self, email: &'a str, code: &'a str) -> EmailCodeTokensFuture<'a>;
 }

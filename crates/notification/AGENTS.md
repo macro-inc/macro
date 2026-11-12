@@ -27,7 +27,7 @@ through the same service.
   `SignedUnsubscribeLinks` signs `domain/models/signing.rs` unsubscribe
   placeholders per recipient), `repository.rs`
   (owned Postgres queries), `withdrawal.rs` (durable suppression),
-  `item_preferences.rs` (snooze/mute).
+  `item_preferences.rs` (owner-scoped single and atomic bulk snooze/mute).
 - `outbound/notification_consumer/health.rs`: periodic per-instance Kafka
   backlog and telemetry-health logs; offsets stay uncommitted.
 - `domain/retention.rs` + `outbound/retention.rs`: bounded 30-day cleanup.
@@ -84,6 +84,8 @@ through the same service.
   notification. Retries preserve original IDs, recipients, and lifecycle state.
 - Access-request withdrawals suppress delayed ingress and queued push/realtime
   delivery; keep tombstone checks when changing either delivery boundary.
+- Channel join requests count in both top-level and channel-feed notification
+  filters; keep these filters aligned with the web notification classifier.
 - A `calendar_event_join_request` insert is skipped by a `notification` trigger
   when its event has gone or been cancelled or its request is no longer pending,
   since queued ingress can run after that cleanup. `create_notification` reads
@@ -95,6 +97,14 @@ through the same service.
   librdkafka out of the self-hosted daemon; keep it that way.
 - Independent Kafka consumers have no durable group lag. Health logs distinguish
   stale/unknown measurements from zero; they are not client-delivery ACKs.
+- `EmailContent` is queued as JSON, so its optional `text`, `from_name` and
+  `reply_to` carry `#[serde(default)]`. `EmailAdapter` turns `from_name` into an
+  `"<name> (via Macro)"` display name on Macro's own From address (quoted when
+  ASCII, RFC 2047 encoded otherwise) and sends `text` as the plain-text part.
+  Unsubscribe placeholders are signed in the HTML `body` only.
+- `EmailAdapter` takes an optional SES configuration set; with one, every send
+  uses it and carries a `notification_type` message tag. A set name that does
+  not exist in SES fails every send, so create the set before configuring it.
 - Notification payloads must not be logged on tracing spans (see the
   `fix(notification): stop recording notification payloads` history).
 - Android call pushes carry W3C trace context inside their existing JSON offer;

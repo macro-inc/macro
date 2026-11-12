@@ -62,10 +62,7 @@ export function buildChannelSectionRows(options: {
 
     rows.push({ kind: 'label', label });
 
-    if (!options.isLabelOpen(label.id)) {
-      continue;
-    }
-
+    if (!options.isLabelOpen(label.id)) continue;
     for (const channel of visible) {
       rows.push({ kind: 'conversation', channel, labelId: label.id });
     }
@@ -87,6 +84,7 @@ type SectionOptions = {
   order?: readonly ChannelSectionKey[];
   channelById: (id: string) => ChannelEntity | undefined;
   unreadChannelIds: ReadonlySet<string>;
+  isLabelOpen?: (labelId: string) => boolean;
   /** Referenced-channel feedback; include custom sections only while expanded. */
   referenceStatuses?: Partial<Record<ChannelSectionKey, 'loading' | 'error'>>;
 };
@@ -94,7 +92,8 @@ type SectionOptions = {
 /** Filter after assigning membership so hidden channels never leak into another section. */
 function applySectionPreferences(
   rows: ChannelRailRow[],
-  options: SectionOptions
+  options: SectionOptions,
+  expandedGroups: Record<ChannelsRailSection, boolean>
 ): ChannelRailRow[] {
   const result: ChannelRailRow[] = [];
   let section: ChannelSectionKey | undefined;
@@ -114,13 +113,28 @@ function applySectionPreferences(
 
   const flush = () => {
     const preference = section ? options.preferences[section] : undefined;
+    let open = true;
+    if (section?.startsWith('label:')) {
+      open = options.isLabelOpen?.(section.slice('label:'.length)) ?? true;
+    } else if (
+      section === 'favorites' ||
+      section === 'direct_messages' ||
+      section === 'team_channels' ||
+      section === 'channels'
+    ) {
+      open = expandedGroups[section];
+    }
     const defaultSort = section === 'favorites' ? 'manual' : undefined;
     const sort = preference?.sort ?? defaultSort;
     const visible = entries.filter((row) => {
       if (row.kind !== 'conversation' && row.kind !== 'favorite') {
-        return true;
+        return open;
       }
 
+      if (!open && preference?.unreadWhenCollapsed === false) return false;
+      if (!open && !options.unreadChannelIds.has(channel(row)?.id ?? '')) {
+        return false;
+      }
       return (
         !preference?.unreadOnly ||
         options.unreadChannelIds.has(channel(row)?.id ?? '')
@@ -233,73 +247,49 @@ export function buildChannelRailRows(
     id: 'section:favorites',
     group: 'favorites',
   });
-  if (expandedGroups.favorites) {
-    rows.push(
-      ...items.favorites.map(
-        (favorite): ChannelRailRow => ({
-          kind: 'favorite',
-          id: rowKeyForFavorite(favorite),
-          group: 'favorites',
-          favorite,
-        })
-      )
-    );
-    appendReferenceStatus('favorites', 'favorites');
-  }
+  rows.push(
+    ...items.favorites.map(
+      (favorite): ChannelRailRow => ({
+        kind: 'favorite',
+        id: rowKeyForFavorite(favorite),
+        group: 'favorites',
+        favorite,
+      })
+    )
+  );
+  appendReferenceStatus('favorites', 'favorites');
 
   rows.push({
     kind: 'section',
     id: 'section:direct_messages',
     group: 'direct_messages',
   });
-  if (expandedGroups.direct_messages) {
-    rows.push(
-      ...items.direct_messages.map(
-        (channel, localIndex): ChannelRailRow => ({
-          kind: 'conversation',
-          id: rowKeyForChannel(channel.id),
-          group: 'direct_messages',
-          scope: 'direct_messages',
-          localIndex,
-          channel,
-        })
-      )
-    );
-    rows.push({
-      kind: 'status',
-      id: 'status:direct_messages',
-      group: 'direct_messages',
-    });
-  }
-
-  const labelledIds = new Set(
-    channelSectionRows.flatMap((row) =>
-      row.kind === 'conversation' && row.labelId ? [row.channel.id] : []
+  rows.push(
+    ...items.direct_messages.map(
+      (channel, localIndex): ChannelRailRow => ({
+        kind: 'conversation',
+        id: rowKeyForChannel(channel.id),
+        group: 'direct_messages',
+        scope: 'direct_messages',
+        localIndex,
+        channel,
+      })
     )
   );
-  // Membership still hides channels when their section is collapsed.
-  for (const row of channelSectionRows) {
-    if (row.kind === 'label') {
-      for (const id of row.label.channelIds) {
-        labelledIds.add(id);
-      }
-    }
-  }
+  rows.push({
+    kind: 'status',
+    id: 'status:direct_messages',
+    group: 'direct_messages',
+  });
 
   for (const group of ['team_channels', 'channels'] as const) {
-    const channels = items[group].filter(
-      (channel) => group === 'team_channels' || !labelledIds.has(channel.id)
-    );
+    const channels = items[group];
 
     if (group === 'channels' && channels.length === 0) {
       continue;
     }
 
     rows.push({ kind: 'section', id: `section:${group}`, group });
-
-    if (!expandedGroups[group]) {
-      continue;
-    }
 
     for (const channel of channels) {
       rows.push({
@@ -360,9 +350,17 @@ export function buildChannelRailRows(
     }
   });
 
-  return sectionOptions
-    ? applySectionPreferences(ordered, sectionOptions)
-    : ordered;
+  if (sectionOptions) {
+    return applySectionPreferences(ordered, sectionOptions, expandedGroups);
+  }
+
+  return ordered.filter(
+    (row) =>
+      row.kind === 'section' ||
+      row.kind === 'label' ||
+      !row.group ||
+      expandedGroups[row.group]
+  );
 }
 
 export type ChannelRailSectionRows = {

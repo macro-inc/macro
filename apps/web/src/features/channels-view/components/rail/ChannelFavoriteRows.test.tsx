@@ -1,3 +1,4 @@
+import { ItemDndProvider } from '@app/components/app/ItemDragAndDrop';
 import type { ChannelEntity } from '@entity';
 import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
@@ -9,18 +10,25 @@ import {
   screen,
   waitFor,
 } from '@solidjs/testing-library';
+import { useDragDropContext } from '@thisbeyond/solid-dnd';
 import {
   type ComponentProps,
   createSignal,
   type JSX,
+  onCleanup,
   type ParentProps,
   type Setter,
   splitProps,
 } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { clampChannelSectionHeight } from '../../constants';
 import { ChannelFavoriteRow } from './ChannelFavoriteRows';
 import { ChannelOption } from './ChannelOption';
 import { ChannelFavoriteRow as DraggableFavoriteRow } from './next/ChannelFavoriteRow';
+import {
+  ChannelSectionHeading,
+  DraggableChannelSectionHeading,
+} from './next/ChannelSectionHeading';
 import { ResizableRailSection } from './next/ResizableRailSection';
 import {
   reorderVisibleFavorites,
@@ -47,9 +55,13 @@ const rail = vi.hoisted(() => ({
 }));
 
 const drag = vi.hoisted(() => ({
+  real: false,
+  activate: vi.fn(),
   viewer: (): string => 'viewer',
   starts: [] as Array<
-    (event: { draggable: { data: Record<string, unknown> } }) => void
+    (event: {
+      draggable: { id?: string; data: Record<string, unknown> };
+    }) => void
   >,
   ends: [] as Array<
     (event: {
@@ -70,6 +82,12 @@ vi.mock('@queries/favorites/favorites', () => ({
   useReorderFavoritesMutation: () => ({ mutateAsync: drag.reorder }),
 }));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => drag.viewer() }));
+vi.mock('@app/components/drag-drop/create-distance-pointer-sensor', () => ({
+  createDistancePointerSensor: () => ({
+    start: (_event: MouseEvent, id: string) => drag.activate(id),
+    cancel: vi.fn(),
+  }),
+}));
 vi.mock('@macro-inc/observability', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@macro-inc/observability')>()),
   Telemetry: {
@@ -89,26 +107,42 @@ vi.mock('@solid-primitives/resize-observer', () => ({
     },
   }),
 }));
-vi.mock('@thisbeyond/solid-dnd', () => ({
-  createDraggable: (id: string, data: Record<string, unknown>) => {
-    drag.draggables.set(id, data);
-    return {
-      ref() {},
-      dragActivators: {},
-      isActiveDraggable: false,
-    };
-  },
-  createDroppable: () => ({ ref() {}, isActiveDroppable: false }),
-  useDragDropContext: () => [
-    { active: {} },
-    {
-      onDragStart: (callback: (typeof drag.starts)[number]) =>
-        drag.starts.push(callback),
-      onDragEnd: (callback: (typeof drag.ends)[number]) =>
-        drag.ends.push(callback),
+vi.mock('@thisbeyond/solid-dnd', async (importOriginal) => {
+  const original =
+    await importOriginal<typeof import('@thisbeyond/solid-dnd')>();
+
+  return {
+    ...original,
+    createDraggable: (id: string, data: Record<string, unknown>) => {
+      if (drag.real) return original.createDraggable(id, data);
+
+      drag.draggables.set(id, data);
+      return {
+        ref() {},
+        dragActivators: { onMouseDown: () => drag.activate(id) },
+        isActiveDraggable: false,
+      };
     },
-  ],
-}));
+    createDroppable: (id: string, data: Record<string, unknown>) => {
+      if (drag.real) return original.createDroppable(id, data);
+
+      return { ref() {}, isActiveDroppable: false };
+    },
+    useDragDropContext: () => {
+      if (drag.real) return original.useDragDropContext();
+
+      return [
+        { active: {} },
+        {
+          onDragStart: (callback: (typeof drag.starts)[number]) =>
+            drag.starts.push(callback),
+          onDragEnd: (callback: (typeof drag.ends)[number]) =>
+            drag.ends.push(callback),
+        },
+      ];
+    },
+  };
+});
 
 vi.mock('./ChannelsRailContext', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./ChannelsRailContext')>()),
@@ -184,7 +218,13 @@ vi.mock('@app/features/favorites/FavoriteIcon', () => ({
 vi.mock('@app/util/favorites', () => ({
   useFavoriteDisplayName: () => () => 'Design',
 }));
-vi.mock('@app/components/view-shell', () => ({
+vi.mock('@app/components/view-shell/ViewSidebar', () => ({
+  ViewSidebar: { Control: () => null },
+}));
+vi.mock('@app/components/view-shell', async () => ({
+  CollapsibleSection: (
+    await import('@app/components/view-shell/CollapsibleSection')
+  ).CollapsibleSection,
   ViewSidebar: {
     Item: (
       props: ComponentProps<'div'> & { as?: string; active?: boolean }
@@ -197,6 +237,17 @@ vi.mock('@app/components/view-shell', () => ({
 }));
 vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => false }));
 vi.mock('@ui', async () => ({
+  Layer: (props: ParentProps) => props.children,
+  Button: (
+    props: ComponentProps<'button'> & {
+      variant?: string;
+      size?: string;
+      tooltip?: string;
+    }
+  ) => {
+    const [, rest] = splitProps(props, ['variant', 'size', 'tooltip']);
+    return <button {...rest} />;
+  },
   Tooltip: (await import('@ui/components/Tooltip')).Tooltip,
   cn: (...values: unknown[]) => values.filter(Boolean).join(' '),
 }));
@@ -221,7 +272,9 @@ beforeEach(() => {
   drag.starts.length = 0;
   drag.ends.length = 0;
   drag.draggables.clear();
+  drag.real = false;
   rail.labels = () => [];
+  rail.sectionPreferences = () => ({ sort: 'manual' });
   rail.sectionOrder = () => [];
   drag.favorites = [];
   drag.viewer = () => 'viewer';
@@ -232,6 +285,62 @@ beforeEach(() => {
     loaded()?.id === channelId ? loaded() : undefined;
 });
 afterEach(cleanup);
+
+describe('section heading dragging', () => {
+  it('drags from the name without toggling after a drop or dragging action buttons', () => {
+    const toggle = vi.fn();
+    const move = vi.fn();
+    render(() => (
+      <DraggableChannelSectionHeading
+        section="channels"
+        label="Channels"
+        reorder={{
+          scope: 'rail:sections',
+          dropEdge: () => undefined,
+          isDragging: () => false,
+          cancel: vi.fn(),
+          move,
+        }}
+      >
+        <ChannelSectionHeading
+          id="channels-heading"
+          label="Channels"
+          open
+          focused={false}
+          unreadCount={0}
+          onToggle={toggle}
+        >
+          <button type="button">Actions</button>
+        </ChannelSectionHeading>
+      </DraggableChannelSectionHeading>
+    ));
+    const heading = screen.getByRole('treeitem');
+
+    fireEvent.pointerDown(heading);
+    fireEvent.mouseDown(heading);
+    expect(drag.activate).toHaveBeenCalledWith('rail:sections:channels');
+    fireEvent.click(heading, { detail: 1 });
+    expect(toggle).toHaveBeenCalledOnce();
+
+    fireEvent.pointerDown(heading);
+    for (const start of drag.starts) {
+      start({ draggable: { id: 'rail:sections:channels', data: {} } });
+    }
+    fireEvent.click(heading, { detail: 1 });
+    expect(toggle).toHaveBeenCalledOnce();
+
+    drag.activate.mockClear();
+    fireEvent.mouseDown(screen.getByRole('button', { name: 'Actions' }));
+    expect(drag.activate).not.toHaveBeenCalled();
+    fireEvent.keyDown(
+      screen.getByRole('button', { name: 'Reorder Channels' }),
+      {
+        key: 'ArrowDown',
+      }
+    );
+    expect(move).toHaveBeenCalledWith('channels', 1);
+  });
+});
 
 describe('channel section drag sources', () => {
   it('keeps the drag identity current when a virtual row is reused', () => {
@@ -423,6 +532,69 @@ describe('favorite reordering', () => {
     );
   });
 
+  it.each(['favorite', 'outside'] as const)(
+    'resolves a %s drop after scrolling between pointer and mouse release',
+    async (destination) => {
+      drag.real = true;
+      drag.favorites = original;
+      const hit = vi.fn((): Element => screen.getAllByRole('treeitem')[0]);
+      Object.defineProperty(globalThis.document, 'elementFromPoint', {
+        configurable: true,
+        value: hit,
+      });
+      const Rows = () => {
+        onCleanup(() => {
+          Reflect.deleteProperty(globalThis.document, 'elementFromPoint');
+        });
+        const reorder = useFavoriteReorder(() => [first, last]);
+        const context = useDragDropContext();
+
+        return (
+          <div
+            data-testid="favorite-list"
+            on:scroll={() => context?.[1].detectCollisions()}
+          >
+            <DraggableFavoriteRow favorite={first} reorder={reorder} />
+            <DraggableFavoriteRow favorite={last} reorder={reorder} />
+          </div>
+        );
+      };
+
+      render(() => (
+        <ItemDndProvider>
+          <Rows />
+        </ItemDndProvider>
+      ));
+
+      const rows = screen.getAllByRole('treeitem');
+      fireEvent.mouseDown(rows[1], { button: 0, clientX: 20, clientY: 60 });
+      fireEvent.mouseMove(globalThis.document, { clientX: 20, clientY: 20 });
+      if (destination === 'outside')
+        hit.mockReturnValue(globalThis.document.body);
+      fireEvent.pointerUp(rows[0], { button: 0, clientX: 20, clientY: 20 });
+      await Promise.resolve();
+      fireEvent.scroll(screen.getByTestId('favorite-list'));
+      fireEvent.mouseUp(globalThis.document, {
+        button: 0,
+        clientX: 20,
+        clientY: 20,
+      });
+
+      if (destination !== 'favorite') {
+        expect(drag.reorder).not.toHaveBeenCalled();
+        return;
+      }
+
+      await waitFor(() =>
+        expect(drag.reorder).toHaveBeenCalledExactlyOnceWith({
+          favorites: [last, document, hidden, first].map(
+            ({ entityId, entityType }) => ({ entityId, entityType })
+          ),
+        })
+      );
+    }
+  );
+
   it('suppresses drag clicks without blocking keyboard or later pointer activation', () => {
     render(() => (
       <DraggableFavoriteRow
@@ -497,10 +669,113 @@ describe('section reordering', () => {
 });
 
 describe('resizable chat sections', () => {
+  it('ignores saved heights while resizing is disabled and cancels in-progress writes', () => {
+    const [enabled, setEnabled] = createSignal(false);
+    rail.sectionPreferences = () => ({ sort: 'manual', height: 180 });
+    let viewport!: HTMLDivElement;
+    render(() => (
+      <ResizableRailSection
+        section="favorites"
+        label="Favorites"
+        open
+        resizingEnabled={enabled()}
+        maxHeight={400}
+        itemCount={12}
+        header={<span>Section</span>}
+        rootRef={() => {}}
+        scrollRef={(element) => {
+          viewport = element;
+          Object.defineProperty(element, 'offsetHeight', { value: 180 });
+        }}
+      >
+        Conversations
+      </ResizableRailSection>
+    ));
+
+    expect(screen.getByText('Conversations')).toBeTruthy();
+    expect(screen.queryByRole('separator')).toBeNull();
+    expect(viewport.style.height).toBe('');
+
+    setEnabled(true);
+    expect(viewport.style.height).toBe('180px');
+    const handle = screen.getByRole('separator');
+    Object.defineProperty(handle, 'setPointerCapture', { value: vi.fn() });
+    const start = new MouseEvent('pointerdown', {
+      bubbles: true,
+      button: 0,
+      clientY: 100,
+    });
+    Object.defineProperty(start, 'pointerId', { value: 1 });
+    handle.dispatchEvent(start);
+
+    setEnabled(false);
+    expect(screen.queryByRole('separator')).toBeNull();
+    expect(viewport.style.height).toBe('');
+    const finish = new MouseEvent('pointerup', { bubbles: true, clientY: 300 });
+    Object.defineProperty(finish, 'pointerId', { value: 1 });
+    handle.dispatchEvent(finish);
+    expect(rail.setSectionPreferences).not.toHaveBeenCalled();
+
+    setEnabled(true);
+    expect(screen.getByRole('separator').getAttribute('aria-valuenow')).toBe(
+      '180'
+    );
+    fireEvent.keyDown(screen.getByRole('separator'), { key: 'ArrowDown' });
+    expect(rail.setSectionPreferences).toHaveBeenCalledExactlyOnceWith(
+      'favorites',
+      { height: 200 }
+    );
+  });
+
+  it('grows the last All channels list to its content while preserving manual heights', () => {
+    const [maximum, setMaximum] = createSignal(Number.POSITIVE_INFINITY);
+    const [savedHeight, setSavedHeight] = createSignal<number>();
+    rail.sectionPreferences = () => ({ sort: 'manual', height: savedHeight() });
+    measurements.contentHeight = () => 1360;
+    let viewport!: HTMLDivElement;
+    render(() => (
+      <ResizableRailSection
+        resizingEnabled
+        section="channels"
+        label="All channels"
+        open
+        maxHeight={maximum()}
+        itemCount={40}
+        header={<span>Section</span>}
+        rootRef={() => {}}
+        scrollRef={(element) => {
+          viewport = element;
+        }}
+      >
+        Conversations
+      </ResizableRailSection>
+    ));
+
+    expect(viewport.style.height).toBe('1360px');
+    setMaximum(252);
+    expect(viewport.style.height).toBe('252px');
+
+    setSavedHeight(180);
+    setMaximum(Number.POSITIVE_INFINITY);
+    expect(viewport.style.height).toBe('180px');
+    setMaximum(252);
+    expect(viewport.style.height).toBe('180px');
+
+    setMaximum(Number.POSITIVE_INFINITY);
+    setSavedHeight(1100);
+    expect(viewport.style.height).toBe('1100px');
+    expect(clampChannelSectionHeight(1100)).toBe(1100);
+    fireEvent.keyDown(screen.getByRole('separator'), { key: 'ArrowDown' });
+    expect(rail.setSectionPreferences).toHaveBeenCalledWith('channels', {
+      height: 1120,
+    });
+  });
+
   it('saves the final zoom-adjusted size and can resize again after collapse cancels a drag', () => {
     const [open, setOpen] = createSignal(true);
     render(() => (
       <ResizableRailSection
+        resizingEnabled
         section="favorites"
         label="Favorites"
         open={open()}
@@ -570,6 +845,7 @@ describe('resizable chat sections', () => {
     let top = 100;
     render(() => (
       <ResizableRailSection
+        resizingEnabled
         section="favorites"
         label="Favorites"
         open
@@ -605,11 +881,102 @@ describe('resizable chat sections', () => {
     });
   });
 
+  it.each(['pointerup', 'pointercancel'])(
+    'scrolls while resizing near the sidebar edge and stops on %s',
+    (endEvent) => {
+      const frames = new Map<number, FrameRequestCallback>();
+      let frameId = 0;
+      const request = vi
+        .spyOn(window, 'requestAnimationFrame')
+        .mockImplementation((callback) => {
+          frames.set(++frameId, callback);
+          return frameId;
+        });
+      const cancel = vi
+        .spyOn(window, 'cancelAnimationFrame')
+        .mockImplementation((id) => {
+          frames.delete(id);
+        });
+      const outer = document.createElement('div');
+      Object.defineProperties(outer, {
+        clientHeight: { value: 280 },
+        scrollHeight: { value: 800 },
+      });
+      vi.spyOn(outer, 'getBoundingClientRect').mockReturnValue(
+        new DOMRect(0, 0, 200, 280)
+      );
+      let viewport!: HTMLDivElement;
+      const view = render(() => (
+        <ResizableRailSection
+          resizingEnabled
+          section="favorites"
+          label="Favorites"
+          open
+          maxHeight={400}
+          itemCount={12}
+          outerScrollRoot={outer}
+          header={<span>Section</span>}
+          rootRef={() => {}}
+          scrollRef={(element) => {
+            viewport = element;
+            Object.defineProperty(element, 'offsetHeight', { value: 136 });
+            vi.spyOn(element, 'getBoundingClientRect').mockImplementation(
+              () => new DOMRect(0, 132 - outer.scrollTop, 200, 136)
+            );
+          }}
+        >
+          Conversations
+        </ResizableRailSection>
+      ));
+      const handle = screen.getByRole('separator');
+      Object.defineProperty(handle, 'setPointerCapture', { value: vi.fn() });
+      const start = new MouseEvent('pointerdown', {
+        bubbles: true,
+        clientX: 100,
+        clientY: 268,
+      });
+      Object.defineProperty(start, 'pointerId', { value: 1 });
+      handle.dispatchEvent(start);
+
+      for (const time of [0, 16, 32]) {
+        const pending = [...frames.values()];
+        frames.clear();
+        for (const callback of pending) callback(time);
+      }
+
+      expect(outer.scrollTop).toBeGreaterThan(0);
+      expect(Number.parseFloat(viewport.style.height)).toBe(
+        Math.round(136 + outer.scrollTop)
+      );
+      const end = new MouseEvent(endEvent, {
+        bubbles: true,
+        clientX: 100,
+        clientY: 268,
+      });
+      Object.defineProperty(end, 'pointerId', { value: 1 });
+      handle.dispatchEvent(end);
+      expect(frames.size).toBe(0);
+      if (endEvent === 'pointerup') {
+        expect(rail.setSectionPreferences).toHaveBeenCalledExactlyOnceWith(
+          'favorites',
+          { height: Math.round(136 + outer.scrollTop) }
+        );
+      } else {
+        expect(rail.setSectionPreferences).not.toHaveBeenCalled();
+      }
+
+      view.unmount();
+      request.mockRestore();
+      cancel.mockRestore();
+    }
+  );
+
   it.each(['pointercancel', 'lostpointercapture'])(
     'does not save after %s and accepts a later resize',
     (cancelEvent) => {
       render(() => (
         <ResizableRailSection
+          resizingEnabled
           section="favorites"
           label="Favorites"
           open
@@ -662,6 +1029,7 @@ describe('resizable chat sections', () => {
   it('clamps keyboard resizing and resets only the section height', () => {
     render(() => (
       <ResizableRailSection
+        resizingEnabled
         section="favorites"
         label="Favorites"
         open
@@ -696,6 +1064,7 @@ describe('resizable chat sections', () => {
     let scrollElement: HTMLDivElement | undefined;
     render(() => (
       <ResizableRailSection
+        resizingEnabled
         section="team_channels"
         label="Team channels"
         open
@@ -743,6 +1112,7 @@ describe('resizable chat sections', () => {
     (section) => {
       render(() => (
         <ResizableRailSection
+          resizingEnabled
           section={section}
           label={section}
           open

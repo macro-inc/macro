@@ -74,7 +74,6 @@ import {
   Show,
   Suspense,
 } from 'solid-js';
-import { installIconMotion } from '../icon/system/icon-motion';
 import { BundleUpdateProgressBar } from './BundleUpdateProgressBar';
 import { DesktopTitleBar } from './DesktopTitleBar';
 import GlobalShortcuts from './GlobalHotkeys';
@@ -169,7 +168,6 @@ export function RootFrame(props: ParentProps) {
 
   onMount(() => {
     onCleanup(installGlassPress());
-    onCleanup(installIconMotion());
     if (sessionStorage.getItem('showUpgradeModal') === 'true') {
       showPaywall();
       sessionStorage.removeItem('showUpgradeModal');
@@ -222,7 +220,8 @@ export function PageContent(props: ParentProps) {
 }
 
 /**
- * Sends first-time desktop users into the onboarding flow at /onboarding.
+ * Sends first-time desktop users into the onboarding flow at /onboarding, and
+ * new agents on any platform to their setup page.
  * App chrome runs it, so it fires on any app destination (marketing SSO lands
  * on /app, not /login) and never on the onboarding pages themselves.
  */
@@ -231,12 +230,17 @@ function useNewOnboardingRedirect() {
   const navigate = useNavigate();
   const location = useLocation();
   createEffect(() => {
-    if (isMobile() || isNativeMobilePlatform()) return;
     // A pending read would suspend the chrome; wait for the user instead.
     const data = userInfoQuery.isSuccess ? userInfoQuery.data : undefined;
     if (data?.authenticated !== true || data.tutorialComplete !== false) {
       return;
     }
+    // Agents skip onboarding: their setup page shows their SDK token.
+    if (data.isAgent) {
+      navigate('/agent-setup', { replace: true });
+      return;
+    }
+    if (isMobile() || isNativeMobilePlatform()) return;
     // Preserve the deep link the user arrived on (a shared doc, an invite)
     // as ?next, and a lifecycle-email ?step, so finish() and the flow can
     // resume. Base-relative so navigate() can resolve it against the router.
@@ -251,6 +255,11 @@ function useNewOnboardingRedirect() {
  * and the mobile dock — around a page. Route shells supply the providers and
  * content; auth, booking, and meeting pages render without this chrome.
  */
+const MobileCallIsland = lazyNamed(
+  () => import('../../features/channel/Call/views/MobileCallIsland'),
+  'MobileCallIsland'
+);
+
 export function AppChrome(props: ParentProps) {
   const isAuthenticated = useIsAuthenticated();
   // A login cookie shows the rail while sign-in is confirmed; a stale one
@@ -263,7 +272,8 @@ export function AppChrome(props: ParentProps) {
   // Route mailto: links (via openExternalUrl) to the in-app email composer.
   registerMailtoComposerHandler();
   useNewOnboardingRedirect();
-  const systemStatus = useBannerStatus();
+  const { status: systemStatus, dismiss: dismissSystemStatus } =
+    useBannerStatus();
 
   const companyDialogUsed = hasOpened(companyCreation.open);
   const contactDialogUsed = hasOpened(
@@ -328,7 +338,9 @@ export function AppChrome(props: ParentProps) {
         </Show>
       </Suspense>
       <Show when={systemStatus()}>
-        {(status) => <StatusBanner {...status()} />}
+        {(status) => (
+          <StatusBanner {...status()} onDismiss={dismissSystemStatus} />
+        )}
       </Show>
       {/* The banner already sits below the status bar on touch devices. */}
       <div
@@ -353,6 +365,9 @@ export function AppChrome(props: ParentProps) {
       </div>
       <Show when={isTouchDevice() && isAuthenticated()}>
         <FloatRegionHost />
+        <Suspense>
+          <MobileCallIsland />
+        </Suspense>
         <Suspense>
           <UserCardDrawer />
         </Suspense>

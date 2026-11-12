@@ -27,7 +27,11 @@ const fakeHost = (): TabLayoutHost => ({
   activateSplit: () => {},
 });
 
-function setup(url: string, userId = `user-${Math.random()}`) {
+function setup(
+  url: string,
+  userId = `user-${Math.random()}`,
+  host = fakeHost()
+) {
   const history = createMemoryHistory(url);
   let created = 0;
   const { router, tabManager, dispose } = createRoot((dispose) => {
@@ -40,7 +44,7 @@ function setup(url: string, userId = `user-${Math.random()}`) {
     });
     const tabManager = createTabManager({
       router,
-      manager: fakeHost(),
+      manager: host,
       userId,
     });
     return { router, tabManager, dispose };
@@ -114,6 +118,35 @@ describe('desktop tab manager', () => {
     await flush(router);
     expect(routeIds(router)).toEqual([['drive']]);
     expect(router.canGo(router.panes()[0]!, -1)).toBe(true);
+  });
+
+  it('scopes blocks to the tab they mount in, leaving the first unscoped', async () => {
+    const { router, tabManager } = track(setup('/mail/t1'));
+    const [first] = tabManager.tabs();
+    expect(tabManager.blockScope()).toBeUndefined();
+
+    tabManager.newTab();
+    await flush(router);
+    expect(tabManager.blockScope()).toBe(tabManager.activeTabId());
+
+    tabManager.activateTab(first!.id);
+    await flush(router);
+    expect(tabManager.blockScope()).toBeUndefined();
+  });
+
+  it('numbers tabs by position, with 9 always the last', async () => {
+    const { router, tabManager } = track(setup('/mail'));
+    tabManager.newTab();
+    await flush(router);
+    tabManager.newTab();
+    await flush(router);
+    const [first, second, third] = tabManager.tabs();
+
+    expect(tabManager.tabByNumber(1)).toBe(first);
+    expect(tabManager.tabByNumber(2)).toBe(second);
+    expect(tabManager.tabByNumber(3)).toBe(third);
+    expect(tabManager.tabByNumber(4)).toBeUndefined();
+    expect(tabManager.tabByNumber(9)).toBe(third);
   });
 
   it('closing the active tab activates its neighbor and restores it', async () => {

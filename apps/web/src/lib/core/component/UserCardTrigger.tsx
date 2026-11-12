@@ -61,6 +61,7 @@ export function UserCardTrigger(props: UserCardTriggerProps) {
         placement={props.placement}
         open={open()}
         onOpenChange={setOpen}
+        isolateClicks
         triggerAs={props.triggerAs ?? 'span'}
         triggerClass={props.triggerClass}
         triggerTabIndex={props.triggerTabIndex}

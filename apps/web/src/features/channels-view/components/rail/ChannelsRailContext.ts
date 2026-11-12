@@ -3,10 +3,11 @@ import type { ChannelPreviewSelection } from '@app/features/next-soup/utils';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import type { ChannelEntity } from '@entity';
 import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
+import type { ChannelLabelRule } from '@service-storage/generated/schemas/channelLabelRule';
+import type { ChannelLabelScopeSelection } from '@service-storage/generated/schemas/channelLabelScopeSelection';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import type { ContextProviderProps } from '@solid-primitives/context';
 import type { Accessor } from 'solid-js';
-import type { VirtualizerHandle } from 'virtua/solid';
 import type { ChannelsSourceScope, ChannelsSources } from '../../queries';
 import type {
   ChannelListSort,
@@ -157,6 +158,7 @@ export type ChannelsRailContext = {
   labelsAvailable: Accessor<boolean>;
   /** Why labels are unavailable, for the create menu and refused drops. */
   labelsUnavailableReason: Accessor<string>;
+  labelsFailed: Accessor<boolean>;
   retryLabels: () => Promise<void>;
   /** Retry unresolved channels referenced by section membership or favorites. */
   retryReferencedChannels: () => Promise<void>;
@@ -171,12 +173,25 @@ export type ChannelsRailContext = {
     channelIds: string[],
     scope?: 'personal' | 'team'
   ) => Promise<void>;
+  updateSection: (
+    label: ChannelLabel,
+    name: string,
+    rule?: ChannelLabelRule,
+    targetScope?: ChannelLabelScopeSelection
+  ) => Promise<void>;
   /** Legacy menu actions retained while the section rollout is off. */
   createSmartTag: () => Promise<void>;
   editSmartTag: (label: ChannelLabel) => Promise<void>;
   canShareSections: Accessor<boolean>;
+  canEditSection: (label: ChannelLabel) => boolean;
+  canChangeSectionScope: (label: ChannelLabel) => boolean;
   /** Pick eligible channels to add to a manual section. */
   addChannelsToLabel: (label: ChannelLabel) => Promise<void>;
+  /** Assign additions without opening the channel picker; return IDs that failed. */
+  addLabelChannels: (
+    label: ChannelLabel,
+    channelIds: string[]
+  ) => Promise<string[]>;
   renameLabel: (label: ChannelLabel) => Promise<void>;
   /** Delete after the user confirms; applies to the whole team. */
   deleteLabel: (label: ChannelLabel) => Promise<void>;
@@ -190,9 +205,10 @@ export type ChannelsRailContext = {
   activeDropTarget: Accessor<ChannelLabelDropTarget | undefined>;
   /** Mark every unread notification in the label's visible channels read. */
   markLabelRead: (label: ChannelLabel) => void;
+  markSectionRead: (section: ChannelSectionKey) => Promise<void>;
   /** Update the viewer's notifications for the section's current full membership. */
   muteSection: (section: ChannelSectionKey, muted: boolean) => Promise<void>;
-  snoozeSection: (section: ChannelSectionKey) => Promise<void>;
+  snoozeSection: (section: ChannelSectionKey, until?: Date) => Promise<void>;
   sectionNotificationsDisabled: (section: ChannelSectionKey) => boolean;
   sortBy: (group: ChannelsSortGroup) => ChannelListSort;
   setSortBy: (group: ChannelsSortGroup, sort: ChannelListSort) => void;
@@ -215,7 +231,7 @@ export type ChannelsRailContext = {
   registerBrowseScrollHandle: (handle: ListScrollHandle) => () => void;
   registerVirtualizer: (
     scope: ChannelsSourceScope,
-    handle: VirtualizerHandle
+    handle: ListScrollHandle
   ) => () => void;
   channelActivity: ChannelRailActivity;
 };

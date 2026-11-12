@@ -1,5 +1,6 @@
 import { SearchBar, ViewSidebar } from '@app/components/view-shell';
 import { runCreateAction } from '@app/features/command/Launcher';
+import { SidebarRoutineSuggestions } from '@app/features/routine-suggestions/routine-suggestions';
 import { SlackImportSidebar } from '@app/features/slack-import/slack-import-sidebar';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
@@ -24,7 +25,6 @@ import {
 } from 'solid-js';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import { canLabelChannel } from '../../core/channel-label-eligibility';
-import { ChannelsLiveCallsSidebar } from '../../live-calls-sidebar';
 import { CHANNELS_TOUR } from '../../tour';
 import type { ChannelsGroup, ChannelsTab } from '../../types';
 import { ChannelsEmptyState } from '../ChannelsEmptyState';
@@ -154,6 +154,7 @@ function ExpandedHeader(props: { search: ChannelRailSearch }) {
         <Show when={!isTouchDevice()}>
           <ConversationsCreateMenu presentation="sidebar" />
         </Show>
+        <SidebarRoutineSuggestions surface="chat" />
         <ViewSidebar.Toolbar class={!isTouchDevice() ? 'px-0' : undefined}>
           <Tabs
             aria-label="Chat sidebar views"
@@ -660,7 +661,6 @@ export function ExpandedChannelsRail(props: { search: ChannelRailSearch }) {
   return (
     <>
       <ExpandedHeader search={props.search} />
-      <ChannelsLiveCallsSidebar />
       <div class="flex min-h-0 flex-1 flex-col">
         <div
           ref={(element) => {

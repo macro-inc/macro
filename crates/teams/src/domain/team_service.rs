@@ -136,8 +136,8 @@ pub struct TeamServiceImpl<
     /// fired from `create_team` / `join_team` / `remove_user_from_team`.
     /// See [`CrmEnqueuer`].
     crm_enqueuer: CE,
-    /// Repository for the `team_crm_settings` row and the bulk CRM
-    /// teardown invoked from `set_team_crm_enabled`.
+    /// Legacy CRM settings repository retained for construction compatibility.
+    /// Team-wide enable/disable commands no longer enroll mailboxes or purge rows.
     team_crm_settings_repository: TCRMS,
     /// Outbound port for best-effort team lifecycle analytics events.
     team_analytics: TA,
@@ -1276,6 +1276,20 @@ where
         Ok(true)
     }
 
+    /// Whether the user's Stripe customer still has an active or trialing
+    /// subscription.
+    async fn has_live_subscription(&self, user_id: &MacroUserIdStr<'_>) -> Result<bool, TeamError> {
+        let Some(customer_id) = self.team_repository.get_stripe_customer_id(user_id).await? else {
+            return Ok(false);
+        };
+        let live = self
+            .customer_repository
+            .get_subscription_id_for_customer(&customer_id)
+            .await
+            .map_err(|error| TeamError::StorageLayerError(error.into()))?;
+        Ok(live.is_some())
+    }
+
     /// Best-effort rollback of a direct team add (from
     /// `try_join_team_by_domain`): removes the membership again and undoes
     /// the team seat count bump. Failures are logged and swallowed, like
@@ -1298,6 +1312,17 @@ where
                 );
             })
             .ok();
+    }
+
+    /// The inviter's display name for invite emails. The email falls back to the
+    /// inviter's address, so a failed lookup is logged rather than failing the invite.
+    async fn inviter_name(&self, inviter: &MacroUserIdStr<'_>) -> Option<String> {
+        self.team_repository
+            .get_user_display_name(inviter)
+            .await
+            .inspect_err(|e| tracing::warn!(error=?e, "unable to look up the inviter's name"))
+            .ok()
+            .flatten()
     }
 
     /// Sends an invite notification for a team invite
@@ -1411,11 +1436,8 @@ where
         subscription_id: Option<&stripe::SubscriptionId>,
         allow_domain_join: bool,
     ) -> Result<Team, CreateTeamError> {
-        // New teams start with `team_crm_settings.crm_enabled = false`
-        // (seeded by `team_repository.create_team`), so there's nothing
-        // for the email-backfill fan-out to populate yet. The fan-out
-        // happens later, on the disabled → enabled transition in
-        // `set_team_crm_enabled`.
+        // CRM records are available immediately. Email backfill is requested
+        // separately when each member explicitly consents to their mailbox.
         let team_slug = team_slug_from_name(team_name);
         // The owner's seat is already billed on their personal subscription;
         // the tier role the Stripe webhook stamped says at which plan.
@@ -1509,6 +1531,7 @@ where
         &self,
         entity_access_receipt: EntityAccessReceipt<MemberTeamRole>,
         invites: non_empty::NonEmpty<&[Email<Lowercase<'_>>]>,
+        is_agent: bool,
     ) -> Result<Vec<TeamInvite<'_>>, InviteUsersToTeamError> {
         let team_id =
             macro_uuid::string_to_uuid(&entity_access_receipt.entity().entity_id).unwrap();
@@ -1604,7 +1627,7 @@ where
 
         let invited = self
             .team_repository
-            .invite_users_to_team(&team_id, invited_by, invites)
+            .invite_users_to_team(&team_id, invited_by, invites, is_agent)
             .await?;
 
         let team_name = if invited.is_empty() {
@@ -1618,6 +1641,7 @@ where
             && let Some(team_name) = team_name.clone()
         {
             let invited_by_owned = invited_by.clone().into_owned();
+            let inviter_name = self.inviter_name(invited_by).await;
             let mut sent_invite_ids = Vec::new();
             for invite in &invited {
                 if self
@@ -1634,6 +1658,8 @@ where
                             sender_profile_picture_url: None,
                             invitee_plan,
                             reminder: false,
+                            is_agent: invite.is_agent,
+                            inviter_name: inviter_name.clone(),
                         },
                     )
                     .await
@@ -2098,7 +2124,7 @@ where
         Ok(team_member)
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self), fields(owner_personal_role = tracing::field::Empty), err)]
     async fn revoke_permissions_for_team_members(
         &self,
         team_id: &uuid::Uuid,
@@ -2116,10 +2142,6 @@ where
             .await?;
         let members = self.team_repository.get_team_members(team_id).await?;
 
-        if members.is_empty() {
-            return Ok(());
-        }
-
         for member in members {
             let roles_to_remove = team_member_roles_to_remove();
 
@@ -2131,6 +2153,25 @@ where
                 .await
                 .map_err(RevokePermissionsForTeamMembersError::RemoveRolesFromUserError)?;
         }
+
+        // Creating or linking a team moves the owner's personal subscription
+        // onto the team, so the personal Pro role it granted lapses with the
+        // team. Keep it while any subscription on their customer is live:
+        // another one pays for it, or this team's is live again and the lapse
+        // event arrived late.
+        let owner = self.team_repository.get_team_owner(team_id).await?;
+        if self.has_live_subscription(&owner).await? {
+            tracing::Span::current().record("owner_personal_role", "kept");
+            return Ok(());
+        }
+        self.user_roles_and_permissions_service
+            .dangerous_remove_roles_from_user(
+                &owner,
+                &non_empty::NonEmpty::new([RoleId::ProfessionalSubscriber].as_slice()).unwrap(),
+            )
+            .await
+            .map_err(RevokePermissionsForTeamMembersError::RemoveRolesFromUserError)?;
+        tracing::Span::current().record("owner_personal_role", "removed");
 
         Ok(())
     }
@@ -2575,80 +2616,18 @@ where
         enabled: bool,
         backfill: bool,
     ) -> Result<PatchTeamCrmSettingsResponse, TeamError> {
-        let team_id =
-            macro_uuid::string_to_uuid(&entity_access_receipt.entity().entity_id).unwrap();
-
-        if enabled {
-            // Fetch the members *before* flipping the flag so a member-list
-            // failure leaves the flag untouched - a retry will then re-run
-            // the full backfill instead of hitting the early-return below.
-            let members = if backfill {
-                self.team_repository.get_team_members(&team_id).await?
-            } else {
-                Vec::new()
-            };
-
-            let changed = self
-                .team_crm_settings_repository
-                .enable_crm(&team_id)
-                .await?;
-
-            if !changed {
-                return Ok(PatchTeamCrmSettingsResponse {
-                    enabled: true,
-                    changed: false,
-                    backfill_enqueued: 0,
-                    backfill_failed: 0,
-                });
-            }
-
-            let mut enqueued = 0usize;
-            let mut failed = 0usize;
-
-            for member in members {
-                match self
-                    .crm_enqueuer
-                    .enqueue_populate_crm_for_user(&member.user_id)
-                    .await
-                {
-                    Ok(()) => enqueued += 1,
-                    Err(e) => {
-                        failed += 1;
-                        tracing::error!(
-                            error = ?e,
-                            team_id = %team_id,
-                            macro_id = %member.user_id,
-                            "Failed to enqueue PopulateCrmForUser during team CRM enable"
-                        );
-                    }
-                }
-            }
-
-            Ok(PatchTeamCrmSettingsResponse {
-                enabled: true,
-                changed: true,
-                backfill_enqueued: enqueued,
-                backfill_failed: failed,
-            })
-        } else {
-            let was_enabled = self
-                .team_crm_settings_repository
-                .get_crm_enabled(&team_id)
-                .await?;
-
-            // Run the disable+purge unconditionally so a stale row left
-            // over from a prior failed disable still gets cleaned up.
-            self.team_crm_settings_repository
-                .disable_crm_and_purge_data(&team_id)
-                .await?;
-
-            Ok(PatchTeamCrmSettingsResponse {
-                enabled: false,
-                changed: was_enabled,
-                backfill_enqueued: 0,
-                backfill_failed: 0,
-            })
+        let _ = (entity_access_receipt, backfill);
+        if !enabled {
+            return Err(TeamError::BadRequest(
+                "CRM is available to every team member; manage individual email contribution in CRM settings".into(),
+            ));
         }
+        Ok(PatchTeamCrmSettingsResponse {
+            enabled: true,
+            changed: false,
+            backfill_enqueued: 0,
+            backfill_failed: 0,
+        })
     }
 
     #[tracing::instrument(skip(self), err)]

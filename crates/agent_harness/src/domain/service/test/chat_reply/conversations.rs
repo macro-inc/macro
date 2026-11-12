@@ -142,6 +142,7 @@ async fn a_message_whose_conversation_was_deleted_is_acknowledged_instead_of_red
         Some(journal),
         Some(policy),
         None,
+        None,
     );
     let mut command = direct_command();
     let owner = mention_origin(&command).sender.clone();
@@ -166,10 +167,7 @@ async fn a_message_whose_conversation_was_deleted_is_acknowledged_instead_of_red
 
     // Deleted after the trigger published the next message: the session row
     // went with the channel, and every redelivery would be refused alike.
-    channels
-        .delete_channel(channel, owner.to_string())
-        .await
-        .unwrap();
+    channels.delete_channel(channel).await.unwrap();
     mention_origin_mut(&mut command).message_id = macro_uuid::generate_uuid_v7();
     assert!(
         service

@@ -23,24 +23,25 @@ import {
   Suspense,
 } from 'solid-js';
 import { buildCallMessageLink } from './build-call-message-link';
-import { CallChatPanel } from './components/CallChatPanel';
+import { CallChatBody } from './components/CallChatBody';
+import { CallChatEmptyState } from './components/CallChatEmptyState';
 import { useCallChat } from './queries/use-call-chat';
 
 export default function CallChat(props: {
   callId: string;
-  id: string;
   open: boolean;
+  focusOnOpen?: boolean;
   onClose: () => void;
 }) {
   // Queries and all shared Markdown descendants stay within the chat boundary.
   return (
     <Suspense
       fallback={
-        <CallChatPanel {...props} composer={null}>
+        <CallChatBody open={props.open} composer={null}>
           <p role="status" class="text-sm text-ink-muted">
             Loading chat…
           </p>
-        </CallChatPanel>
+        </CallChatBody>
       }
     >
       <CallChatContent {...props} />
@@ -50,8 +51,8 @@ export default function CallChat(props: {
 
 function CallChatContent(props: {
   callId: string;
-  id: string;
   open: boolean;
+  focusOnOpen?: boolean;
   onClose: () => void;
 }) {
   const chat = useCallChat(() => props.callId);
@@ -67,7 +68,11 @@ function CallChatContent(props: {
 
   createEffect(
     on([() => props.open, canSend, input], ([open, ready, handle]) => {
-      if (open && ready) handle?.focus();
+      if (open && ready && props.focusOnOpen !== false) {
+        handle?.focus({
+          when: () => props.open && props.focusOnOpen !== false,
+        });
+      }
     })
   );
 
@@ -107,10 +112,8 @@ function CallChatContent(props: {
       }}
     >
       <StaticMarkdownContext>
-        <CallChatPanel
-          id={props.id}
+        <CallChatBody
           open={props.open}
-          onClose={props.onClose}
           composer={
             <div inert={!canSend()} classList={{ 'opacity-50': !canSend() }}>
               <Show when={sendFailed()}>
@@ -137,9 +140,7 @@ function CallChatContent(props: {
             </p>
           </Show>
           <Show when={chat.empty()}>
-            <p class="px-1 text-sm text-ink-muted">
-              Start the conversation. Messages stay with this call.
-            </p>
+            <CallChatEmptyState />
           </Show>
           <Show when={chat.failed()}>
             <p role="alert" class="text-sm text-ink-muted">
@@ -190,7 +191,7 @@ function CallChatContent(props: {
               />
             )}
           </Show>
-        </CallChatPanel>
+        </CallChatBody>
       </StaticMarkdownContext>
     </MessageReferenceNavigation.Provider>
   );

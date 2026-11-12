@@ -10,23 +10,19 @@ pub mod agent_identity;
 pub mod agent_session;
 pub mod channel_mention;
 pub mod citations;
+pub mod code_mode;
 pub mod coding_agents;
 pub mod connected_toolsets;
-pub mod crm_pipelines;
 pub mod databases;
 pub mod deferred_tools;
 pub mod do_not;
-pub mod document_content_links;
-pub mod email;
 pub mod math;
 pub mod mcp_item_links;
 pub mod mentions;
 pub mod privacy;
 pub mod pull_requests;
 pub mod skills;
-pub mod tasks;
 pub mod tone;
-pub mod tool_usage;
 mod types;
 pub mod user_tools;
 
@@ -51,66 +47,39 @@ static SESSION_BASE_PROMPT: ComposedPrompt = math::PROMPT
 
 /// The tool-enabled prompt for hosts whose tools all execute directly in the
 /// agent loop (the channel-mention bot, the MCP server): [`BASE_PROMPT`] with
-/// the tool use instructions, skill-following rules, document-content linking
-/// rules, and email inbox behavior appended. Says nothing about
+/// the skill-following rules appended. How each area of Macro works is the
+/// SDK's `@agent` guidance, which `ai_tools` composes after this. Says nothing about
 /// composer-confirmed user tools — those hosts' toolsets execute
 /// `CreateCalendarEvent` directly and have no `SendEmail` at all.
-pub static DIRECT_TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
-    .compose(&tool_usage::PROMPT)
-    .compose(&databases::PROMPT)
-    .compose(&crm_pipelines::PROMPT)
-    .compose(&skills::PROMPT)
-    .compose(&document_content_links::PROMPT)
-    .compose(&email::PROMPT);
+pub static DIRECT_TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT.compose(&skills::PROMPT);
 
 /// The chat tool-enabled prompt: [`DIRECT_TOOL_USE_PROMPT`] plus the rules
 /// for composer-confirmed user tools (`SendEmail`, deferred execution), which
-/// only apply on surfaces that can render the composer card. Composed as its
-/// own chain so the email section stays last.
+/// only apply on surfaces that can render the composer card.
 pub static TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
-    .compose(&tool_usage::PROMPT)
-    .compose(&databases::PROMPT)
-    .compose(&crm_pipelines::PROMPT)
-    .compose(&user_tools::BOOKING_PROMPT)
     .compose(&user_tools::PROMPT)
-    .compose(&skills::PROMPT)
-    .compose(&document_content_links::PROMPT)
-    .compose(&email::PROMPT);
+    .compose(&skills::PROMPT);
 
 /// The agent-session tool-enabled prompt: [`TOOL_USE_PROMPT`] on
 /// [`SESSION_BASE_PROMPT`], with the user tool rules restated for a host that
 /// reviews those calls in the turn - a review card the user answers while the
 /// agent waits, not a composer left pending after it.
 pub static SESSION_TOOL_USE_PROMPT: ComposedPrompt = SESSION_BASE_PROMPT
-    .compose(&tool_usage::PROMPT)
-    .compose(&databases::PROMPT)
-    .compose(&crm_pipelines::PROMPT)
-    .compose(&user_tools::BOOKING_PROMPT)
     .compose(&user_tools::SESSION_PROMPT)
-    .compose(&skills::PROMPT)
-    .compose(&document_content_links::PROMPT)
-    .compose(&email::PROMPT);
+    .compose(&skills::PROMPT);
 
-/// Agent-session instructions for nonblocking saved reviews in code mode.
+/// Agent-session instructions in code mode: [`SESSION_TOOL_USE_PROMPT`] with
+/// the [`code_mode`] section and nonblocking saved reviews.
 pub static CODE_MODE_SESSION_TOOL_USE_PROMPT: ComposedPrompt = SESSION_BASE_PROMPT
-    .compose(&tool_usage::PROMPT)
-    .compose(&databases::PROMPT)
-    .compose(&crm_pipelines::PROMPT)
-    .compose(&user_tools::BOOKING_PROMPT)
+    .compose(&code_mode::PROMPT)
     .compose(&user_tools::CODE_MODE_SESSION_PROMPT)
-    .compose(&tasks::PROMPT)
-    .compose(&skills::PROMPT)
-    .compose(&document_content_links::PROMPT)
-    .compose(&email::PROMPT);
-
-/// Database-only agent instructions, without unrelated tool capabilities.
-pub static DATABASE_TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT.compose(&databases::PROMPT);
+    .compose(&skills::PROMPT);
 
 /// Database question instructions for hosts that only discover and read data.
 pub static DATABASE_READ_ONLY_TOOL_USE_PROMPT: ComposedPrompt =
     BASE_PROMPT.compose(&databases::READ_ONLY_PROMPT);
 
-/// Citation, do-not, Macro-terms, pull-request, and document-content-linking rules surfaced
+/// Citation, do-not, Macro-terms and pull-request rules surfaced
 /// to external MCP clients, composed together. These are static; the
 /// item-linking rules for the model's own replies are not, because they
 /// depend on the runtime app base URL — see [`mcp_instructions`].
@@ -118,19 +87,12 @@ pub static DATABASE_READ_ONLY_TOOL_USE_PROMPT: ComposedPrompt =
 /// Deliberately omits the in-app [`mentions`] section (MCP clients cannot render
 /// `<m-document-mention>` tags in a chat reply) as well as chat tone/style and
 /// general tool-use instructions, which belong to the host client, not to Macro.
-/// [`document_content_links`] is the exception: it still applies over MCP
-/// because it governs content written *into* a Markdown document (via
-/// `CreateDocument`/`EditDocument`), not the model's chat replies. See
-/// [`mentions`] for the full statement of which surfaces (replies, channel
-/// messages, email bodies, and Markdown documents) these Markdown/mention
-/// rules cover.
+/// The areas MCP clients write into (databases, CRM, document content) are the
+/// SDK's `@agent` guidance, which the MCP server appends.
 static MCP_STATIC_INSTRUCTIONS: ComposedPrompt = citations::PROMPT
     .compose(&do_not::PROMPT)
     .compose(&about_macro::PROMPT)
-    .compose(&pull_requests::PROMPT)
-    .compose(&databases::PROMPT)
-    .compose(&crm_pipelines::PROMPT)
-    .compose(&document_content_links::PROMPT);
+    .compose(&pull_requests::PROMPT);
 
 /// Builds the instructions surfaced to external MCP clients via the server
 /// `instructions` field.
@@ -142,7 +104,8 @@ static MCP_STATIC_INSTRUCTIONS: ComposedPrompt = citations::PROMPT
 /// the in-app `<m-document-mention>` markup, which MCP clients cannot render.
 /// Content the model writes *into* a Macro document via `CreateDocument` or
 /// `EditDocument` is the opposite: it must still use `<m-document-mention>`
-/// tags (see [`document_content_links`]), since the Macro app renders that
+/// tags (`DocumentNamespace`'s `@agent` guidance, which the MCP server
+/// appends), since the Macro app renders that
 /// content regardless of which surface created it. `base_url` should already
 /// have any trailing slash trimmed.
 pub fn mcp_instructions(base_url: &str) -> String {
@@ -193,25 +156,6 @@ mod tests {
     }
 
     #[test]
-    fn mcp_instructions_still_require_mention_tags_inside_document_content() {
-        let instructions = mcp_instructions("https://macro.com");
-
-        // Even though the model's own MCP replies must use plain URLs, content
-        // written into a Macro document via CreateDocument/EditDocument must
-        // still use `<m-document-mention>` tags — the fix for the "CreateDocument
-        // over MCP can't link docs correctly" bug.
-        assert!(instructions.contains("CreateDocument"));
-        assert!(instructions.contains(
-            r#"<m-document-mention>{"documentId":"{id}","documentName":"","blockName":"md","blockParams":{}}</m-document-mention>"#
-        ));
-
-        // The plain-URL rule and the mention-tag rule must not silently
-        // contradict each other: the plain-URL section explicitly scopes
-        // itself to the model's own replies, not to document content.
-        assert!(instructions.contains("does NOT apply to content you write into a Macro document"));
-    }
-
-    #[test]
     fn direct_tool_use_prompt_omits_composer_confirmed_user_tool_rules() {
         // Hosts on the direct prompt (channel bot, MCP) have no composer and
         // no SendEmail tool; describing deferred user tools there would tell
@@ -239,17 +183,23 @@ mod tests {
     }
 
     #[test]
-    fn session_prompts_present_views_unasked_and_leave_what_they_show_unmentioned() {
-        for prompt in [
-            SESSION_TOOL_USE_PROMPT.to_string(),
-            CODE_MODE_SESSION_TOOL_USE_PROMPT.to_string(),
-        ] {
-            assert!(prompt.contains("the user will not ask"));
-            assert!(prompt.contains("presenting them with `execution.views.present`"));
-            // The mention rule says IMPORTANT twice; a view's items are its
-            // one exception, or the agent names them again under the view.
-            assert!(prompt.contains("view opens it, so do not mention it again in your reply"));
-        }
+    fn code_mode_presents_views_unasked_and_mentions_leave_what_they_show_unmentioned() {
+        let code_mode = CODE_MODE_SESSION_TOOL_USE_PROMPT.to_string();
+        assert!(
+            code_mode.contains("present them with `execution.views.present` without being asked")
+        );
+        assert!(
+            !SESSION_TOOL_USE_PROMPT
+                .to_string()
+                .contains("execution.views.present` without")
+        );
+        // The mention rule is the base prompt's; a view's items are its one
+        // exception, or the agent names them again under the view.
+        assert!(
+            BASE_PROMPT
+                .to_string()
+                .contains("the view already opens them")
+        );
     }
 
     #[test]
@@ -318,69 +268,6 @@ mod tests {
     }
 
     #[test]
-    fn tool_use_prompt_also_carries_document_content_link_rules() {
-        // The in-app prompt should keep the same guidance so behavior doesn't
-        // diverge between surfaces.
-        let in_app = TOOL_USE_PROMPT.to_string();
-        assert!(in_app.contains("CreateDocument"));
-        assert!(in_app.contains(
-            r#"<m-document-mention>{"documentId":"{id}","documentName":"","blockName":"md","blockParams":{}}</m-document-mention>"#
-        ));
-    }
-
-    #[test]
-    fn every_in_app_agent_prompt_posts_a_channel_form_as_one_live_poll_card() {
-        for prompt in [
-            &DIRECT_TOOL_USE_PROMPT,
-            &TOOL_USE_PROMPT,
-            &SESSION_TOOL_USE_PROMPT,
-            &CODE_MODE_SESSION_TOOL_USE_PROMPT,
-        ] {
-            let text = prompt.to_string();
-            for guidance in [
-                "A form for a channel is a poll:",
-                "one required single- or multi-select question",
-                "`tallyVisible: true`",
-                "`widget: \"choice\"`",
-                "`channelGrants: []`",
-                r#"<m-document-card>{"documentId":"{form_id}","documentName":"{question}","blockName":"form","previewData":{"poll":{"optionCount":2}}}</m-document-card>"#,
-                "or a second copy.",
-            ] {
-                assert!(text.contains(guidance), "missing poll guidance: {guidance}");
-            }
-        }
-    }
-
-    #[test]
-    fn mentions_and_document_content_links_share_an_identical_document_mention_tag() {
-        // document_content_links deliberately repeats this tag literal (rather
-        // than importing it) so it stays self-contained for MCP composition,
-        // where `mentions` is excluded. Guard against the two silently
-        // diverging by requiring both to contain the exact same string.
-        const TAG: &str = r#"<m-document-mention>{"documentId":"{id}","documentName":"","blockName":"md","blockParams":{}}</m-document-mention>"#;
-        assert!(mentions::PROMPT.instructions.contains(TAG));
-        assert!(document_content_links::PROMPT.instructions.contains(TAG));
-    }
-
-    #[test]
-    fn mentions_and_document_content_links_share_the_github_pr_mention_tag() {
-        // GitHub PRs are mentioned by URL in-app and over MCP alike; the two
-        // sections must hand the model the same tag shape.
-        const TAG: &str = r#"<m-pr-mention>{"url":"https://github.com/{owner}/{repo}/pull/{number}","label":""}</m-pr-mention>"#;
-        assert!(mentions::PROMPT.instructions.contains(TAG));
-        assert!(document_content_links::PROMPT.instructions.contains(TAG));
-        assert!(mcp_instructions("https://macro.com").contains(TAG));
-    }
-
-    #[test]
-    fn mentions_and_document_content_links_share_the_booking_link_mention_tag() {
-        const TAG: &str = r#"<m-booking-link-mention>{"profileId":"{profile_id}","slug":"{slug}","url":"https://macro.com/app/book/{profile_id}/{slug}","label":""}</m-booking-link-mention>"#;
-        assert!(mentions::PROMPT.instructions.contains(TAG));
-        assert!(document_content_links::PROMPT.instructions.contains(TAG));
-        assert!(mcp_instructions("https://macro.com").contains(TAG));
-    }
-
-    #[test]
     fn agent_session_preamble_tells_the_model_to_emit_mention_tags() {
         let preamble = agent_session::PROMPT.to_string();
         assert!(preamble.contains("XML mention tag"));
@@ -394,6 +281,23 @@ mod tests {
         let instructions = mentions::PROMPT.instructions.as_ref();
         assert!(instructions.contains("read-only preview"));
         assert!(instructions.contains("Private and confidential events are never shared"));
+    }
+
+    #[test]
+    fn mentions_prompt_writes_whole_days_as_local_dates_from_the_current_time() {
+        let instructions = mentions::PROMPT.instructions.as_ref();
+        assert!(instructions.contains("local calendar date (`2025-12-01`)"));
+        assert!(instructions.contains("never midnight UTC"));
+        assert!(instructions.contains("`<current_time>`"));
+    }
+
+    #[test]
+    fn mentions_prompt_shows_static_images_inline_never_as_document_mentions() {
+        let instructions = mentions::PROMPT.instructions.as_ref();
+        assert!(instructions.contains("a document mention of its id reads \"Deleted\""));
+        assert!(instructions.contains("<m-image>{\"url\":\"{url}\""));
+        assert!(instructions.contains("`image.toMarkdown()`"));
+        assert!(instructions.contains("\"blockName\":\"canvas\""));
     }
 
     #[test]

@@ -1,199 +1,80 @@
 ---
-title: "Switch to Macro"
+title: "Switching guide"
 icon: "arrow-right-arrow-left"
-description: "Migration guides for moving to Macro from Superhuman, Notion, Slack, Linear, and ClickUp."
+description: "Move your work into Macro with bulk importers for Notion, Linear, and Slack, or use MCP for other tools."
 ---
 
-Macro replaces several tools with one unified system, but you don't have to move over all at once. Most teams like to connect their old tools first to ensure nothing gets lost. Then, when you're ready, you can ask the agent to fully migrate you.
+Use the dedicated importers for high-volume migrations. For other tools, connect them through MCP and ask an agent to bring over the work you need. You can move one project first; you don't need to move everything at once.
 
-If you want to keep most of your existing tools and just use Macro for Email\+Tasks or Docs\+Files, for example, you're able to keep your other tools connected via MCP.
+## Import from Notion
 
-At a glance, here's what maps to what:
+Connect Notion, then ask the Macro Agent to import your workspace or a specific page and everything under it.
 
-| Coming from | The Macro equivalent |
-| :-- | :-- |
-| Superhuman | [Email](/product/email) and [Home](/product/home) (both are Gmail clients) |
-| Notion | [Docs](/product/docs), plus built-in [tasks](/product/tasks) and [CRM](/product/crm) |
-| Slack | [Channels](/product/channels) |
-| Linear | [Tasks](/product/tasks) |
-| ClickUp | [Tasks](/product/tasks), with [docs](/product/docs), [CRM](/product/crm), and [channels](/product/channels) replacing the rest of the suite |
-| Google Drive / Dropbox | [Drive](/product/drive) |
-| Zoom / Meet | [Calls](/product/calls) |
+- Pages become documents, with folders preserving the page hierarchy.
+- Databases become Macro databases, including their rows and relations.
+- Task trackers become tasks.
 
-## From Superhuman
+Try: **“Import our Product space from Notion into Macro.”**
 
-Before creating Macro, we were Superhuman users ourselves, and were heavily inspired by them when designing Macro's email. The main difference between us and Superhuman is that Macro supports multiple accounts in [one inbox](/product/email#multi-account-inbox). It also adds more intelligent [Signal vs. Noise](/product/email#signal-vs-noise) splits, and it fully unifies messaging, tasks, @mentions and more into a single inbox. Another benefit of Macro is that [Agents](/product/agents) can draft, triage, and send mail for you right from AI chat with an embedded email widget.
+The importer prepares a plan for you to review before it creates anything. Choose whether the imported work is personal or shared with your team, then approve the plan. Content already imported and shared by a teammate is linked rather than duplicated.
 
-<Frame>
-  ![The Superhuman app icon with an arrow pointing to the Macro app icon](/images/switch-from-superhuman.svg)
-</Frame>
+## Import from Linear
 
-Both Macro and Superhuman are just clients on top of Gmail, so there's no migration in either direction; your mail stays in Gmail.
+Connect Linear, then ask the Macro Agent to import your workspace.
 
-The <kbd>j</kbd> / <kbd>k</kbd> / <kbd>e</kbd> triage shortcuts you already know work unchanged.
+- Issues become tasks.
+- Teams, projects, and initiatives become Macro projects.
 
-|  | Superhuman | Macro |
-| :-- | :-: | :-: |
-| Built on Gmail (no migration) | ✓ | ✓ |
-| <kbd>j</kbd> / <kbd>k</kbd> / <kbd>e</kbd> triage shortcuts | ✓ | ✓ |
-| Multiple accounts in one unified inbox | X | ✓ |
-| [Signal vs. Noise](/product/email#signal-vs-noise) split | X | ✓ |
-| Messages, tasks, and @mentions in the same inbox | X | ✓ |
-| [Agents](/product/agents) that draft, triage, and send | X | ✓ |
+Try: **“Import our Linear workspace into Macro.”**
 
-<iframe src="https://www.youtube.com/embed/tnsxkywzTvY" title="Email on Macro" frameborder="0" className="w-full aspect-video rounded-xl" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen />
+Review the plan and sharing settings, then approve the import. Your Linear workspace stays unchanged. You can check progress or cancel an import; completed copies stay in Macro.
 
-To switch:
+**To switch:**
 
-1. Connect your Gmail or Google Workspace account (ideally at signup, or later in **Settings**).
-2. Your mail, labels, and history are already there because Macro syncs with Gmail directly.
+1. On Home, click **Connect email** when the feed is empty, or open **Settings → Email** and click **Connect**.
+2. Choose Gmail or Outlook / Microsoft 365 and finish signing in.
+3. Your mail and history are already there because Macro syncs with that account directly.
 
-That's it. You can run both during the transition, or keep Superhuman around if you want.
+If you only need the channel structure, connect Slack and use **Import channels** to recreate channels with the members who are already on your Macro team. This imports channel names and membership, not messages.
 
-## From Notion
+### Keep Slack connected
 
-Notion asks you to build your own tools out of markdown pages and databases: your CRM, your task tracker, and your wiki are all databases of markdown files. We think databases are the wrong level of abstraction for serious business software. Even before AI, when scaling our previous company, we had to migrate off of Notion onto HubSpot, Linear, etc. as the team grew. **Markdown files and databases simply aren't powerful enough compared to domain-specific tools.** The longer version of this argument is in the [FAQ](/faq) and the video below.
+You can keep Slack for older conversations or Slack Connect channels with external companies. In **Settings → Connectors**, add a Slack MCP server so agents can reference the conversations it exposes while you use Macro. The available history and actions depend on that server and its permissions.
 
-<Frame>
-  ![The Notion app icon with an arrow pointing to the Macro app icon](/images/switch-from-notion.svg)
-</Frame>
+## Use MCP for other tools
 
-In Macro, tasks, CRM, email, channels, and files are each their own best-in-class, purpose-built [block](/concepts/blocks), and they all share one data model and one search index. Yes, you give up some of Notion's freeform database flexibility, but **each block works like a real product**, and agents can read all of it as one context vs. paging through a rate-limited API.
+For ClickUp and other tools with an MCP server, connect the source to an agent that can also access Macro. Ask it to read the work you want to move and create the corresponding tasks, documents, or projects in Macro.
 
-|  | Notion | Macro |
-| :-- | :-: | :-: |
-| Markdown-native docs | ✓ | ✓ |
-| Tasks | Sort of | Built in |
-| CRM | No | Built in |
-| Email and channels | X | ✓ |
-| Freeform databases | ✓ | [Properties](/concepts/properties) on built-in blocks |
-| Agent access to your workspace | Rate-limited API | One unified search index |
+Try: **“Bring our open ClickUp tasks into Macro. Show me how you'll map their status, assignee, and project before you start.”**
 
-<iframe src="https://www.youtube.com/embed/hyU1XYmxkYM" title="What We Learned from Notion" frameborder="0" className="w-full aspect-video rounded-xl" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen />
+What can be moved depends on the tools the source's MCP server exposes. Start with one project, check the result, then bring over the rest. You can also leave older work where it is and keep the connection so agents can reference it.
 
-The docs import is clean because both sides are markdown-native:
+**To switch:**
 
-1. Go to **Settings → Agent connections** and connect Notion.
-2. Open an agent chat (<kbd>c</kbd> \+ <kbd>a</kbd>) and ask it to import. For example:
+1. Open **Settings → Integrations**.
+2. Under **MCP integrations**, click **Connect** on Notion and finish signing in.
+3. Open Agents, click **New conversation**, and ask it to import. For example:
 
 ```text
-Import my Notion docs from the "Engineering" workspace as Macro docs.
-Keep the folder structure and skip anything archived.
+Import my Notion workspace. Show me the plan before you create anything.
 ```
 
-The agent reads pages through the Notion connector and recreates them as [Macro documents](/product/docs). For structured Notion databases, think about whether each one is really tasks, CRM records, or a doc with [properties](/concepts/properties) and ask the agent to import them as such.
+Pages become docs, kept in the same folder tree. Databases become databases. Databases that we detect track work become tasks.
 
-You can also keep Notion MCP connected indefinitely so agents can reference legacy content. Don't feel the need to migrate everything — we personally like starting with a clean slate!
+We have a dedicated Notion importer. It reads the connected workspace and shows a plan of the pages, databases, and task lists it found. You choose what to include and whether the team can see it. Nothing is created until you approve the plan, and anything already imported stays.
 
-## From Slack
+[Home](/product/home) brings together your messages, email, tasks, and agent activity. Press **Cmd-K** for the command menu, or **/** to search. Find the full keyboard shortcut list in the app.
 
-The main thing Macro improves on versus Slack is making channels/DM's less noisy and more focused for technical discussions. The first few replies in a thread show inline, so you don't have to open a thread every time someone replies, and a busy channel looks more like Reddit: organized, and easy to remember where a conversation happened.
+To start with an agent, press **C**, then **A**, or mention **@Macro** in a channel. Connect the tools it needs and reference the work you want it to use. You can also [bring your own agent](/AI/bring-your-own).
 
-<Frame>
-  ![The Slack app icon with an arrow pointing to the Macro app icon](/images/switch-from-slack.svg)
-</Frame>
+<span id="next-steps" />
+<span id="demos-case-studies" />
+<span id="demos--case-studies" />
 
-Channel messages and @mentions appear on [Home](/product/home) with your email.
+## Check the import
 
-The other big thing is [channel-based sharing](/permissions): [@mention](/concepts/mentions) a doc or task in a channel and every member gets access to it automatically. This avoids the Slack\+Notion footgun where people need to ask "hey can you share \_\_ with me?"
+Imports copy your work into Macro; they do not keep the original tool in continuous sync. Connected Gmail is different: it stays synced as an email account.
 
-|  | Slack | Macro |
-| :-- | :-: | :-: |
-| Channels, threads, emoji | ✓ | ✓ |
-| Inline thread replies (forum-style reading) | X | ✓ |
-| One inbox shared with your email | X | ✓ |
-| @mention a doc or task to share it automatically | X | ✓ |
-| External channels with customers (Slack Connect) | ✓ | Keep Slack connected as an agent connection |
+Start with one project. Check the imported content, assignees, and sharing before inviting the rest of the team or importing more. Keep the original workspace until you have checked what you need.
 
-<iframe src="https://www.youtube.com/embed/1gDOXUxHo0U" title="What Macro learned from Slack/Superhuman" frameborder="0" className="w-full aspect-video rounded-xl" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen />
-
-To switch:
-
-1. Create a channel per team or project (<kbd>c</kbd> \+ <kbd>g</kbd>).
-2. Add people by email. They don't need a Macro account yet to be included.
-3. Use @mentions to share docs and tasks as you discuss them.
-
-If you're not ready to leave Slack (archives, Slack Connect with customers), connect it under **Settings → Agent connections** as an agent connection so agents in Macro can still search it. Many teams run Macro for internal communication and keep Slack only for external channels during the transition.
-
-## From Linear
-
-In building Macro Tasks we were heavily inspired by Linear: status, priority, assignee, keyboard-first, and a [GitHub integration](/integrations/github) that covers the workflow you're used to. Copy a branch name from a task and it moves through "In Progress," "In Review," and "Completed" as you branch, open the PR, and merge.
-
-<Frame>
-  ![The Linear app icon with an arrow pointing to the Macro app icon](/images/switch-from-linear.svg)
-</Frame>
-
-The difference between Macro and Linear is that on Macro, tasks live in the same app as your email, channels, and docs. You can turn an email or a channel message into a task in one click, and non-engineers can see engineering work without a seat in a separate tool. Tasks are also less ceremonious: fields are minimal by default, and story points, effort, etc. are there via [properties](/concepts/properties) if you really want them, but we advise keeping it light.
-
-|  | Linear | Macro |
-| :-- | :-: | :-: |
-| Status, priority, assignee, keyboard-first | ✓ | ✓ |
-| [GitHub integration](/integrations/github): branch, PR, and merge move the task | ✓ | ✓ |
-| Tasks in the same app as your email, channels, and docs | X | ✓ |
-| Turn an email or channel message into a task in one click | X | ✓ |
-| Non-engineers see engineering work | Separate seat in a separate tool | Same workspace |
-| Deep workflow configuration (cycles, triage, custom flows) | ✓ | Minimal by default, [properties](/concepts/properties) when you want them |
-
-<iframe src="https://www.youtube.com/embed/nHxqE2mVKrA" title="What We Learned from Linear" frameborder="0" className="w-full aspect-video rounded-xl" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen />
-
-For migration, most teams just recreate their open work; finished issues rarely justify carrying over. If you do want history, connect Linear under **Settings → Agent connections** and have an agent bring open issues across.
-
-## From ClickUp
-
-ClickUp covers tasks, docs, chat, goals, and whiteboards through a deep stack of spaces, folders, lists, and custom statuses that you configure yourself. Macro covers the same ground with dedicated [tasks](/product/tasks), [docs](/product/docs), [channels](/product/channels), and [CRM](/product/crm) that share one data model.
-
-There's less setup and fewer knobs because each tool is already built for its job. Tasks keep the essentials (status, priority, assignee, and [properties](/concepts/properties) when you want them), and [agents](/product/agents) can read across all of it as one context.
-
-<Frame>
-  ![The ClickUp app icon with an arrow pointing to the Macro app icon](/images/switch-from-clickup.svg)
-</Frame>
-
-The biggest day-to-day change is that tasks live in the same app as your email, channels, and docs. You can turn a message or an email into a task in one click, and @mentioning a task in a channel shares it automatically.
-
-|  | ClickUp | Macro |
-| :-- | :-: | :-: |
-| Tasks, docs, chat | ✓ | ✓ |
-| Setup required | Spaces, folders, lists, custom statuses | Works out of the box |
-| CRM | Configure it yourself | [Built in](/product/crm) |
-| Email | X | ✓ |
-| One data model, one search index | X | ✓ |
-| [Agents](/product/agents) with your whole workspace as context | X | ✓ |
-
-<iframe src="https://www.youtube.com/embed/gxJquVXRX5A" title="Tasks on Macro" frameborder="0" className="w-full aspect-video rounded-xl" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen />
-
-To switch:
-
-1. Recreate your active lists as Macro tasks. Most teams skip closed work.
-2. If you want history or a gradual cutover, connect ClickUp under **Settings → Agent connections** as an agent connection and ask an agent to bring open tasks across.
-3. Move ClickUp Docs over too: they're markdown-native, so an agent can recreate them as [Macro documents](/product/docs). Open an agent chat (<kbd>c</kbd> \+ <kbd>a</kbd>) and ask it to import. For example:
-
-```text
-Import my ClickUp Docs from the "Engineering" space as Macro docs.
-Keep the folder structure and skip anything archived.
-```
-
-## Everything else
-
-Any tool with an MCP server can be connected under **Settings → Agent connections**, which makes it readable to your agents. That works as a migration path (ask an agent to copy content over) or as a permanent bridge for tools you keep. Files mostly migrate themselves: email attachments are extracted into [Drive](/product/drive) automatically, and anything you drag into a channel or doc is imported and searchable.
-
-## Macro vs. the world
-
-Here's the full picture side by side of how Macro compares to the rest of the toolset.
-
-|  | Macro | Superhuman | Notion | Slack | Linear | ClickUp |
-| :-- | :-: | :-: | :-: | :-: | :-: | :-: |
-| [Email](/product/email) | ✓ | ✓ | X | X | X | X |
-| [Channels](/product/channels) | ✓ | X | X | ✓ | X | ✓ |
-| [Tasks](/product/tasks) | ✓ | X | Via databases | X | ✓ | ✓ |
-| [Docs](/product/docs) | ✓ | X | ✓ | X | X | ✓ |
-| [CRM](/product/crm) | ✓ | X | Via databases | X | X | Via setup |
-| [Drive](/product/drive) | ✓ | X | Attachments | Attachments | X | Attachments |
-| [Calls](/product/calls) | ✓ | X | X | Huddles | X | X |
-| [Agents](/product/agents) | ✓ | X | ✓ | X | ✓ | ✓ |
-| [Home feed](/product/home) | ✓ | X | X | X | X | X |
-| [Unified Search](/product/search) | ✓ | X | X | X | X | X |
-| [Unified Memory](/product/unified-memory) | ✓ | X | X | X | X | X |
-
-<Card title="Want help switching?" icon="calendar" href="https://macro.com/app/book/6de4003c-15e4-549f-b5a9-0e930bbf56e4/macro-demo">
-  Book a call and we'll walk your team through the migration.
-</Card>
+Need help with a larger migration? [Book a demo](https://macro.com/app/book/6de4003c-15e4-549f-b5a9-0e930bbf56e4/macro-demo) with the team. You can also [watch Desync's customer story](https://macro.com/posts/desync-customer-story).

@@ -24,6 +24,21 @@ export type AgentApiKey = {
 export type AgentApiKeyProvider = 'anthropic' | 'openai';
 
 /**
+ * What an agent needs to start using the SDK.
+ */
+export type AgentSetupResponse = {
+    /**
+     * The agent's API key. Shown only here; repeating setup revokes it.
+     */
+    api_key: string;
+    /**
+     * Whether joining the inviting team failed. The invite stays pending:
+     * repeating setup tries again, and the invite link works after confirming.
+     */
+    team_join_failed: boolean;
+};
+
+/**
  * Error response body.
  */
 export type AiBillingErrorBody = {
@@ -330,6 +345,21 @@ export type CreatePortalSessionRequest = {
     returnUrl: string;
 };
 
+export type CreateProfilePictureUploadRequest = {
+    /**
+     * Mime type of the image.
+     */
+    content_type: string;
+    /**
+     * File name, such as `avatar.png`.
+     */
+    file_name: string;
+    /**
+     * Exact size of the image in bytes. Storage rejects a body of any other size.
+     */
+    size_bytes: number;
+};
+
 /**
  * The request body to create a new team
  */
@@ -440,6 +470,11 @@ export type CreditPurchaseStatus = 'paid' | 'declined' | 'payment_method_require
  */
 export type CurrentSystemStatus = SystemStatus & {
     /**
+     * The id of the update that set it; absent when no status was ever set.
+     * Clients remember dismissed banners by this id.
+     */
+    id?: string | null;
+    /**
      * When it was set; absent when no status was ever set. Clients keep the
      * newest status they have seen, whether fetched or pushed.
      */
@@ -458,6 +493,12 @@ export type CurrentSystemStatus = SystemStatus & {
  * that cannot reach KMS does not start.
  */
 export type CursorApiKeyStatus = {
+    /**
+     * The reasoning effort those sessions start on, as the value of the
+     * default model's effort parameter (e.g. `high`). `None` means the
+     * model's own default; never set without `default_model_id`.
+     */
+    defaultEffort?: string | null;
     /**
      * The Cursor model id this user's sessions start on, when they have
      * chosen one. `None` means the deployment default is in effect — the
@@ -688,6 +729,10 @@ export type GetLegacyUserPermissionsResponse = {
      * Whether the user has trialed through stripe
      */
     hasTrialed: boolean;
+    /**
+     * Whether this is an agent account rather than a person
+     */
+    isAgent: boolean;
     /**
      * The user's license status
      */
@@ -1208,6 +1253,17 @@ export type InviteToTeamRequest = {
      * The invites to send, each with an email and tier
      */
     invites: Array<InviteEntry>;
+    /**
+     * Invite these addresses as agents: an address with no account signs up
+     * as an agent and joins the team when it first signs in.
+     */
+    is_agent?: boolean;
+    /**
+     * The team the caller means to invite to. Invites always go to the
+     * caller's current team; when this names another team, nothing is sent
+     * and the request answers 409.
+     */
+    team_id?: string | null;
 };
 
 /**
@@ -1289,6 +1345,12 @@ export type PasswordlessRequest = {
      */
     email: string;
     /**
+     * Create an agent account if this address has no account yet. Otherwise
+     * `true` has no effect, and `false` reverts an agent flag nobody has proven:
+     * see `revert_unconfirmed_agent`.
+     */
+    is_agent?: boolean;
+    /**
      * The redirect uri to redirect to after login
      */
     redirect_uri: string;
@@ -1311,40 +1373,35 @@ export type PasswordlessStartedResponse = {
  */
 export type PatchTeamCrmSettingsRequest = {
     /**
-     * On a disabled → enabled transition, whether to backfill the CRM
-     * from members' existing email history. Ignored when disabling.
+     * Retained for compatibility and ignored. Email backfill requires
+     * each member's explicit consent through CRM email privacy settings.
      */
     backfill?: boolean;
     /**
-     * The desired CRM state for the team.
+     * Legacy compatibility flag. True is a no-op; false is rejected.
      */
     enabled: boolean;
 };
 
 /**
- * Response for `PATCH /team/crm`. Reports both the resulting state
- * and whether this call changed it; for the enable-flip case it also
- * reports the backfill fan-out tallies.
+ * Compatibility response for `PATCH /team/crm`. CRM records are always
+ * available; this endpoint does not enroll mailboxes or backfill emails.
  */
 export type PatchTeamCrmSettingsResponse = {
     /**
-     * Number of members for whom a `PopulateCrmForUser` message was
-     * enqueued. Non-zero only on a disabled → enabled transition;
-     * per-user enqueue failures are logged and swallowed.
+     * Always zero: mailbox contributions require individual consent.
      */
     backfill_enqueued: number;
     /**
-     * Number of members whose enqueue failed (and was swallowed).
-     * Non-zero only on a disabled → enabled transition.
+     * Always zero: this endpoint does not enqueue backfills.
      */
     backfill_failed: number;
     /**
-     * True if this call flipped the value (false → true or true →
-     * false). False if the team was already at the requested state.
+     * Always false: the legacy command does not change availability.
      */
     changed: boolean;
     /**
-     * The resulting `crm_enabled` value after the call.
+     * Always true: CRM records are available to team members.
      */
     enabled: boolean;
 };
@@ -1509,6 +1566,20 @@ export type ProfilePictureQueryParams = {
     url: string;
 };
 
+/**
+ * Where to upload a new profile picture, and the file id to set afterwards.
+ */
+export type ProfilePictureUpload = {
+    /**
+     * Id to pass to `PUT /user/profile_picture/file` once uploaded.
+     */
+    file_id: string;
+    /**
+     * Expiring URL to `PUT` the image bytes to.
+     */
+    upload_url: string;
+};
+
 export type ProfilePictures = {
     pictures: Array<UserProfilePicture>;
 };
@@ -1553,14 +1624,26 @@ export type PutCursorApiKeyRequest = {
 };
 
 /**
- * The model the user chose for their sessions.
+ * The model the user chose for their sessions, and its effort.
  */
 export type PutCursorDefaultModelRequest = {
+    /**
+     * The value of the model's reasoning-effort parameter (e.g. `high`), or
+     * `null` for the model's own default. Ignored without a model.
+     */
+    effort?: string | null;
     /**
      * A Cursor model id (e.g. `grok-4.6`), or `null` to clear the choice and
      * fall back to the deployment default.
      */
     modelId?: string | null;
+};
+
+export type PutProfilePictureFileRequest = {
+    /**
+     * Id of an image the caller uploaded to static file storage.
+     */
+    file_id: string;
 };
 
 export type PutUserNameQueryParams = {
@@ -1817,8 +1900,8 @@ export type Team = {
      */
     auto_join_domain?: string | null;
     /**
-     * Whether the CRM is enabled for this team (from `team_crm_settings`;
-     * `false` when no row exists).
+     * CRM record availability, always true for teams. This compatibility
+     * field does not indicate whether any mailbox contributes emails.
      */
     crm_enabled: boolean;
     default_link_share?: null | LinkShare;
@@ -1855,6 +1938,10 @@ export type TeamInviteDetails = {
      * The user who sent the invitation
      */
     invited_by: string;
+    /**
+     * Whether the invite creates an agent account
+     */
+    is_agent: boolean;
     /**
      * When the invite was last sent
      */
@@ -2176,6 +2263,10 @@ export type UserLinkResponse = {
 export type UserName = {
     first_name?: string | null;
     id: string;
+    /**
+     * Whether this is an agent account rather than a person.
+     */
+    is_agent?: boolean;
     last_name?: string | null;
 };
 
@@ -3482,6 +3573,10 @@ export type SsoLoginData = {
          * **OPTIONAL**. If the user opened a link with a referral code.
          */
         referral_code: string;
+        /**
+         * **OPTIONAL**. If the sign-in started on the agent signup page. A new account becomes an agent.
+         */
+        is_agent: boolean;
     };
     url: '/login/sso';
 };
@@ -3915,6 +4010,7 @@ export type CreateTeamData = {
 export type CreateTeamErrors = {
     400: ErrorResponse;
     403: ErrorResponse;
+    409: ErrorResponse;
     500: ErrorResponse;
 };
 
@@ -4004,6 +4100,10 @@ export type InviteToTeamErrors = {
     400: ErrorResponse;
     401: ErrorResponse;
     404: ErrorResponse;
+    /**
+     * `team_id` names a team other than the caller's current team
+     */
+    409: ErrorResponse;
     500: ErrorResponse;
 };
 
@@ -4147,13 +4247,24 @@ export type DeleteTeamInviteHandlerResponses = {
 export type GetTeamInvitesData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * The team the caller means to list. Invites are always read from the
+         * caller's current team; when this names another team, the request
+         * answers 409.
+         */
+        team_id?: string;
+    };
     url: '/team/invites';
 };
 
 export type GetTeamInvitesErrors = {
     400: ErrorResponse;
     401: ErrorResponse;
+    /**
+     * `team_id` names a team other than the caller's current team
+     */
+    409: ErrorResponse;
     500: ErrorResponse;
 };
 
@@ -4331,6 +4442,34 @@ export type GetUserInvitesResponses = {
 };
 
 export type GetUserInvitesResponse = GetUserInvitesResponses[keyof GetUserInvitesResponses];
+
+export type AgentSetupData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/user/agent_setup';
+};
+
+export type AgentSetupErrors = {
+    401: string;
+    /**
+     * The account is not an agent
+     */
+    403: ErrorResponse;
+    /**
+     * Setup is already confirmed
+     */
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type AgentSetupError = AgentSetupErrors[keyof AgentSetupErrors];
+
+export type AgentSetupResponses = {
+    200: AgentSetupResponse;
+};
+
+export type AgentSetupResponse2 = AgentSetupResponses[keyof AgentSetupResponses];
 
 export type GetUserNamesData = {
     body: PostGetNamesRequestBody;
@@ -4635,6 +4774,10 @@ export type PutProfilePictureData = {
 
 export type PutProfilePictureErrors = {
     401: string;
+    /**
+     * Picture changed less than a second ago
+     */
+    429: ErrorResponse;
     500: ErrorResponse;
 };
 
@@ -4645,6 +4788,70 @@ export type PutProfilePictureResponses = {
 };
 
 export type PutProfilePictureResponse = PutProfilePictureResponses[keyof PutProfilePictureResponses];
+
+export type CreateProfilePictureUploadData = {
+    body: CreateProfilePictureUploadRequest;
+    path?: never;
+    query?: never;
+    url: '/user/profile_picture/file';
+};
+
+export type CreateProfilePictureUploadErrors = {
+    /**
+     * Not a supported image type, or empty
+     */
+    400: ErrorResponse;
+    401: string;
+    /**
+     * The image is larger than 16 MB
+     */
+    413: ErrorResponse;
+    /**
+     * Too many uploads this hour
+     */
+    429: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateProfilePictureUploadError = CreateProfilePictureUploadErrors[keyof CreateProfilePictureUploadErrors];
+
+export type CreateProfilePictureUploadResponses = {
+    200: ProfilePictureUpload;
+};
+
+export type CreateProfilePictureUploadResponse = CreateProfilePictureUploadResponses[keyof CreateProfilePictureUploadResponses];
+
+export type PutProfilePictureFileData = {
+    body: PutProfilePictureFileRequest;
+    path?: never;
+    query?: never;
+    url: '/user/profile_picture/file';
+};
+
+export type PutProfilePictureFileErrors = {
+    /**
+     * The file is not a supported image
+     */
+    400: ErrorResponse;
+    401: string;
+    /**
+     * The caller has no such file
+     */
+    404: ErrorResponse;
+    /**
+     * Picture changed less than a second ago
+     */
+    429: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type PutProfilePictureFileError = PutProfilePictureFileErrors[keyof PutProfilePictureFileErrors];
+
+export type PutProfilePictureFileResponses = {
+    200: EmptyResponse;
+};
+
+export type PutProfilePictureFileResponse = PutProfilePictureFileResponses[keyof PutProfilePictureFileResponses];
 
 export type PostProfilePicturesData = {
     body: GetProfilePicturesRequestBody;

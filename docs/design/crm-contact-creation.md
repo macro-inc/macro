@@ -1,23 +1,27 @@
 # CRM contact creation: staged delivery
 
 The first delivery allows named companies without a domain and manual contacts
-whose email domain differs from the company. It preserves the current team-owned
-records, IDs, visibility checks and email consent behavior. The broader
-company-independent contact model is still open; this change does not deliver
-phone-only contacts or one contact linked to several companies.
+whose email domain differs from the company. The second makes a contact's email
+and company optional, files personal-provider addresses from email sync as
+contacts without a company when the team allows it, and adds a team domain
+blocklist. Both preserve team-owned records, IDs, visibility checks and email
+consent behavior. Phone-only contacts and one contact linked to several
+companies remain open.
 
 ## Current implementation decisions
 
 | Entry point | Decision | Behavior |
 | --- | --- | --- |
 | Company UI, pipeline form, HTTP, CreateCompany tool | Change | Name required; domain optional. An omitted/null domain creates no domain or enrichment entry. A supplied empty/invalid domain is an actionable validation error. |
-| Manual contact UI, pipeline form, HTTP, CreateContact tool | Change | Name, full email and explicit company required. Personal email and mismatched domains are accepted. A domain match can suggest a company in the pipeline form. |
+| Standalone manual contact UI, HTTP, CreateContact tool | Change | Name required; email and company optional. `POST /crm/contacts` adds a contact without a company. Personal email and mismatched domains are accepted. |
+| Pipeline contact form | Keep | Name, email and an explicitly selected company are required. A domain match offers a suggestion; accepting it is a separate action. |
 | Duplicate company domain | Keep | Team-scoped case-insensitive conflict. Company names are labels and may repeat. |
-| Duplicate contact email | Keep for this stage | Unique within the company; duplicates return conflict. No silent merge or cross-team lookup. |
+| Editing existing contacts | Change | Add a missing email only; populated addresses are read-only. Link/switch company only for known personal-provider addresses, with no unlink. Reject same-team duplicates without merging. Preserve ID, references, history and archive state; personal sync reuses one existing identity and preserves its chosen company through cleanup. Email replacement and alias/history redesign are deferred. |
+| Duplicate contact email | Keep for this stage | Unique within the company, and within the team for contacts without a company; duplicates return conflict. Contacts without an email never conflict. No silent merge or cross-team lookup. |
 | CSV company import | Keep | Domain remains its matching key; name-only import needs a durable identifier contract. |
 | CSV contact import | Keep for this stage | Existing contacts are found by email; missing contacts use domain inference. Personal-address creation through import remains follow-on work. |
 | Email-only contact lookup in imports and pipeline actions | Change | Multiple visible matches produce an ambiguity error requiring an explicit contact ID; never choose a company arbitrarily. Hidden and cross-team records do not participate in a member's lookup. |
-| Email sync and backfill | Keep | Existing domain inference, provider exclusions, self-domain checks, sources and consent gates. Explicit creation does not manufacture mailbox-source rows. |
+| Email sync and backfill | Change | Existing domain inference, self-domain checks, sources and consent gates. Sent mail to personal-provider addresses creates a company-less contact only when no same-team identity exists; otherwise sent and received mail refresh the unique existing contact without changing its selected company. Personal sync requires the team to turn off "Keep personal emails out" (on by default); received mail only updates existing contacts. Other generic providers stay excluded. Turning the setting back on stops future sync only; contacts it added stay. An assigned company with email sync disabled suppresses email-derived interaction/source updates without changing the manual contact or relation. Enabled-parent refresh still requires exact-primary consent and eligible stored history. Domain exclusions suppress matching email contribution and backfill; adding or removing an exclusion does not hide, restore or delete company/contact records. Team exclusions apply to all contributors, personal exclusions only to their owner, and whole-thread participant checks also cover subdomains. Explicit creation does not manufacture mailbox-source rows. |
 | Ownership and visibility | Keep | Team membership and company receipt authorize creation; hidden companies remain restricted and contacts inherit hidden state. |
 | Company domains | Keep | Storage supports multiple domains; this stage does not add domain editing or primary selection. |
 
@@ -42,10 +46,27 @@ lookups never create a company or contact; storage and authorization failures
 during lookup still fail the import.
 
 Existing IDs, pipeline rows, custom properties, files, tasks, calls, discussions
-and grants are untouched. There is no schema or data migration. Rollback is an
-application rollback: existing name-only companies remain readable, although
-older creation forms cannot add contacts to them. Cross-domain manual contacts
-remain readable and retain the manual-creation protection against sync cleanup.
+and grants are untouched. The first delivery has no schema or data migration.
+The second adds `crm_contacts.team_id` (backfilled from the company, with an
+insert trigger that fills it for writers on the previous code during a rolling
+deploy), makes `crm_contacts.email` and `company_id` nullable, and adds
+`team_crm_settings.exclude_personal_emails` and `crm_blocked_domains`.
+
+Deploy nullable-aware readers to every consuming service before enabling
+nullable writes; use a reader-only compatibility release before deploying the
+new writers. The insert trigger supports old writers against the expanded
+schema, but does not make old readers compatible with nullable rows. Once such
+rows exist, retain the additive schema and records and roll forward, or roll
+back only to a version that reads nullable contacts. Hiding records does not
+isolate them from old admin readers: an attached contact without an email still
+reaches their non-null decoder. Moving contact rows to a holding table is not
+a verified isolation plan either: deleting contacts cascades source and message
+records, so restoring only the contacts loses dependent data. Do not hide, move
+or delete contacts as a rollback shortcut. Rolling back past nullable-aware
+readers requires a separately verified compatibility or isolation plan; this
+delivery provides neither. Existing name-only companies and cross-domain manual
+contacts remain readable and retain the manual-creation protection against sync
+cleanup.
 
 ## Remaining implementation sequence
 

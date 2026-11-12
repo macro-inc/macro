@@ -11,9 +11,10 @@ import {
   screen,
   waitFor,
 } from '@solidjs/testing-library';
-import { getOwner, onCleanup } from 'solid-js';
+import { createSignal, getOwner, type JSX, onCleanup } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChannelsSources } from '../../queries';
+import type { ChannelSectionKey, ChannelSectionPreferences } from '../../types';
 import type { ChannelRailRow } from './ChannelsRailContext';
 
 vi.mock('@core/context/user', () => ({
@@ -21,7 +22,24 @@ vi.mock('@core/context/user', () => ({
 }));
 const mocks = vi.hoisted(() => ({
   fetchChannel: vi.fn<(id: string) => Promise<ChannelEntity>>(),
+  bulkPreferences: vi.fn(),
+  createSection: vi.fn(),
+  updateSection: vi.fn(),
+  confirmDialog: vi.fn(),
+  promptSection:
+    vi.fn<typeof import('./next/SectionDialog')['promptSection']>(),
   favoriteId: undefined as string | undefined,
+  favorites: [] as Favorite[],
+  referencedChannels: [] as ChannelEntity[],
+  sectionsEnabled: true,
+  unreadRows: [] as ChannelEntity[],
+  closedGroups: [] as string[],
+  sectionPreferences: {} as Partial<
+    Record<ChannelSectionKey, ChannelSectionPreferences>
+  >,
+  actualRows: (): ChannelRailRow[] => [],
+  activityChannels: (): readonly ChannelEntity[] => [],
+  additionalActivityChannels: (): readonly ChannelEntity[] => [],
   fetchGroupIds:
     vi.fn<typeof import('../../queries')['fetchChannelGroupIds']>(),
   hydrate:
@@ -39,6 +57,34 @@ const mocks = vi.hoisted(() => ({
   selected: undefined as ChannelPreviewSelection | undefined,
   userId: 'viewer',
   source: {
+    notifications: vi.fn(() => [
+      {
+        id: 'loaded',
+        entity_type: 'channel',
+        entity_id: 'one',
+        state: 'unseen',
+      },
+      {
+        id: 'off-page',
+        entity_type: 'channel',
+        entity_id: 'unloaded',
+        state: 'unseen',
+      },
+      { id: 'read', entity_type: 'channel', entity_id: 'one', state: 'seen' },
+      {
+        id: 'outside',
+        entity_type: 'channel',
+        entity_id: 'outside',
+        state: 'unseen',
+      },
+      {
+        id: 'document',
+        entity_type: 'document',
+        entity_id: 'one',
+        state: 'unseen',
+      },
+    ]),
+    bulkMarkAsRead: vi.fn(async () => {}),
     muteEntity:
       vi.fn<(entity: { type: string; id: string }) => Promise<void>>(),
     unmuteEntity:
@@ -56,7 +102,15 @@ const mocks = vi.hoisted(() => ({
   focusedRow: undefined as ChannelRailRow | undefined,
   listRows: undefined as ChannelRailRow[] | undefined,
   focusSet: vi.fn(),
+  onNavigate: (_event: { result?: { item: ChannelRailRow } }) => {},
+  focusRailRow: (_channelId: string): boolean => false,
+  shell: {
+    collapsed: false,
+    canCollapse: true,
+    expand: vi.fn(),
+  },
   hotkeys: new Map<string, () => unknown>(),
+  realRenderer: false,
 }));
 vi.mock('@app/components/list', () => ({
   createListController: (options: {
@@ -66,6 +120,7 @@ vi.mock('@app/components/list', () => ({
       metadata: { event: MouseEvent };
     }) => void;
   }) => {
+    mocks.actualRows = options.items;
     mocks.activate = (event) =>
       options.onActivate({
         item: mocks.favoriteId
@@ -93,8 +148,15 @@ vi.mock('@app/components/list', () => ({
 
     return {
       items: { at: (index: number) => items()[index], all: items },
+      activate: {
+        key: (id: string, activation: { metadata: { event: MouseEvent } }) => {
+          const item = items().find((row) => row.id === id);
+          if (item) options.onActivate({ item, metadata: activation.metadata });
+        },
+      },
       focus: {
         item: () => mocks.focusedRow,
+        key: () => undefined,
         set: (id: string, options: { reason: string }) => {
           mocks.focusSet(id, options);
           const index = items().findIndex((row) => row.id === id);
@@ -104,13 +166,33 @@ vi.mock('@app/components/list', () => ({
     };
   },
   listOwnedSlotName: (name: string) => name,
-  useListInteractions: (options: { scrollHandle: () => ListScrollHandle }) => {
+  useListInteractions: (options: {
+    scrollHandle: () => ListScrollHandle;
+    navigation: {
+      onNavigate: (event: { result?: { item: ChannelRailRow } }) => void;
+    };
+  }) => {
     mocks.scroll = (index) => options.scrollHandle().scrollToIndex(index);
+    mocks.onNavigate = options.navigation.onNavigate;
   },
 }));
 vi.mock('@app/components/view-shell', () => ({
+  ViewSidebar: {
+    Header: (props: { children: JSX.Element }) => <div>{props.children}</div>,
+    Primary: (props: { children: JSX.Element }) => <div>{props.children}</div>,
+    CloseButton: () => null,
+    Title: (props: { children: JSX.Element }) => <span>{props.children}</span>,
+  },
+  SearchBar: () => null,
   useViewControlHotkeys: vi.fn(),
   useViewTabHotkeys: vi.fn(),
+  useViewShell: () => ({
+    aside: {
+      isCollapsed: () => mocks.shell.collapsed,
+      canCollapse: () => mocks.shell.canCollapse,
+      expand: mocks.shell.expand,
+    },
+  }),
 }));
 vi.mock('@app/features/next-soup/utils', () => ({
   channelPreviewSelection: (
@@ -156,7 +238,10 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { failure: mocks.failure, success: mocks.success },
 }));
-vi.mock('@core/constant/featureFlags', () => ({ enableChannelTags: {} }));
+vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/constant/featureFlags')>()),
+  enableChannelTags: {},
+}));
 vi.mock('@channel/queries/prefetch-channel-target', () => ({
   prefetchLatestChannelMessages: mocks.prefetch,
 }));
@@ -189,36 +274,67 @@ vi.mock('@queries/channel/notification-selection', () => ({
 vi.mock('@queries/channel/selection-by-id', () => ({
   fetchChannelSelectionById: mocks.fetchChannel,
 }));
+vi.mock('@queries/notification/unsubscribes', () => ({
+  useBulkNotificationPreferencesMutation: () => ({
+    mutateAsync: mocks.bulkPreferences,
+  }),
+}));
 vi.mock('@queries/channel-labels/channel-labels', () => ({
   useChannelLabelsQuery: () => ({ isSuccess: false }),
-  useCreateChannelLabelMutation: () => ({}),
+  useAvailableSectionChannelsQuery: () => ({
+    isPending: false,
+    isError: false,
+    data: [],
+  }),
+  useCreateChannelLabelMutation: () => ({ mutateAsync: mocks.createSection }),
   useDeleteChannelLabelMutation: () => ({}),
-  useRenameChannelLabelMutation: () => ({}),
+  useRenameChannelLabelMutation: () => ({ mutateAsync: mocks.updateSection }),
   useSetChannelLabelMutation: () => ({}),
 }));
 vi.mock('@queries/favorites/favorites', () => ({
-  useFavoritesData: () => () => ({ favorites: [] }),
+  useFavoritesData: () => () => ({ favorites: mocks.favorites }),
+  useReorderFavoritesMutation: () => ({ mutateAsync: vi.fn() }),
 }));
 vi.mock('@queries/soup/search', () => ({
   useSearchSoupQuery: () => ({ isSuccess: false }),
 }));
 vi.mock('@thisbeyond/solid-dnd', () => ({
+  createDroppable: () => ({ ref: () => {}, isActiveDroppable: false }),
   useDragDropContext: () => undefined,
 }));
-vi.mock('@ui', () => ({ confirmDialog: vi.fn() }));
+vi.mock('@ui', () => ({ confirmDialog: mocks.confirmDialog }));
 vi.mock('../../channels-view-context', () => ({
   useChannelsView: () => ({
     state: {
       tab: 'browse',
-      expandedGroups: { channels: true, direct_messages: true },
+      expandedGroups: {
+        get channels() {
+          return !mocks.closedGroups.includes('channels');
+        },
+        get team_channels() {
+          return !mocks.closedGroups.includes('team_channels');
+        },
+        get direct_messages() {
+          return !mocks.closedGroups.includes('direct_messages');
+        },
+      },
       collapsedLabels: [],
-      sectionPreferences: {},
+      sectionPreferences: mocks.sectionPreferences,
+      sortBy: {
+        channels: 'viewed_at',
+        team_channels: 'viewed_at',
+        direct_messages: 'viewed_at',
+        threads: 'viewed_at',
+      },
     },
     tab: () => mocks.tab,
-    sectionsEnabled: () => true,
+    sectionsEnabled: () => mocks.sectionsEnabled,
     threadsEnabled: () => false,
     selectedChannel: () => mocks.selected,
     setSelectedChannel: mocks.select,
+    registerRailRowFocus: (focus: (channelId: string) => boolean) => {
+      mocks.focusRailRow = focus;
+    },
   }),
 }));
 vi.mock('../../queries', () => ({
@@ -229,13 +345,12 @@ vi.mock('../../queries', () => ({
     ).values(),
   ],
   useChannelsByIdsQuery: () => ({ isEnabled: false }),
-  // What the real helper answers for the disabled lookup above.
-  resolveReferencedChannels: (previous: ChannelEntity[]) => previous,
+  resolveReferencedChannels: () => mocks.referencedChannels,
 }));
 vi.mock('@queries/channel/by-ids', () => ({
   useChannelsByIdsQuery: () => ({ isEnabled: false }),
   useCachedChannelsByIds: () => ({
-    channels: () => [],
+    channels: () => mocks.referencedChannels,
     pendingIds: () => new Set<string>(),
     failedIds: () => new Set<string>(),
     error: () => undefined,
@@ -243,7 +358,7 @@ vi.mock('@queries/channel/by-ids', () => ({
     retry: async () => {},
   }),
 }));
-vi.mock('./next/SectionDialog', () => ({ promptSection: vi.fn() }));
+vi.mock('./next/SectionDialog', () => ({ promptSection: mocks.promptSection }));
 vi.mock('./ChannelLabelNameDialog', () => ({
   promptLabelName: vi.fn(),
 }));
@@ -251,29 +366,151 @@ vi.mock('./SmartTagDialog', () => ({ promptSmartTag: vi.fn() }));
 vi.mock('./ExpandedChannelsRail', () => ({ ExpandedChannelsRail: () => null }));
 vi.mock('./hooks/useChannelCalls', () => ({ useChannelCalls: () => ({}) }));
 vi.mock('./hooks/useChannelRailActivity', () => ({
-  useChannelRailActivity: () => ({ unreadChannelIds: () => new Set<string>() }),
+  useChannelRailActivity: (
+    channels: () => readonly ChannelEntity[],
+    _calls: unknown,
+    additionalChannels: () => readonly ChannelEntity[] = () => []
+  ) => {
+    mocks.activityChannels = channels;
+    mocks.additionalActivityChannels = additionalChannels;
+    return {
+      unreadChannelIds: () =>
+        new Set(
+          channels()
+            .filter((channel) =>
+              channel.unreadNotifications?.some(
+                (notification) => notification.state === 'unseen'
+              )
+            )
+            .map((channel) => channel.id)
+        ),
+    };
+  },
 }));
-vi.mock('./next/ExpandedChannelsRail', async () => {
+vi.mock('./next/collapsed-unread-channels', () => ({
+  useCollapsedUnreadChannels: (enabled: () => boolean) => () =>
+    enabled() ? mocks.unreadRows : [],
+}));
+vi.mock('./next/ExpandedChannelsRail', async (importOriginal) => {
+  const { ExpandedChannelsRail: RealRenderer } =
+    await importOriginal<typeof import('./next/ExpandedChannelsRail')>();
   const { useChannelsRail } = await import('./ChannelsRailContext');
   return {
-    ExpandedChannelsRail: () => {
+    ExpandedChannelsRail: (props: Parameters<typeof RealRenderer>[0]) => {
+      if (mocks.realRenderer) {
+        return <RealRenderer {...props} />;
+      }
       const rail = useChannelsRail();
       onCleanup(
         rail.registerBrowseScrollHandle({ scrollToIndex: mocks.scrollBrowse })
       );
       return (
-        <button
-          onPointerDown={(event) => rail.prefetchRow('channel:one', event)}
-          onClick={(event) => mocks.activate(event)}
-        >
-          Open conversation
-        </button>
+        <div ref={rail.registerRootRef} tabIndex={-1} data-testid="rail">
+          <button
+            onPointerDown={(event) => rail.prefetchRow('channel:one', event)}
+            onClick={(event) => mocks.activate(event)}
+          >
+            Open conversation
+          </button>
+        </div>
       );
     },
   };
 });
 
+vi.mock('@queries/team/teams', () => ({
+  useCurrentTeamQuery: () => ({}),
+  useUserTeamsQuery: () => ({}),
+}));
+vi.mock('@ui/components/Tour', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@ui/components/Tour')>()),
+  tourTarget: () => () => {},
+}));
+vi.mock('./next/ChannelFavoriteRow', () => ({
+  ChannelFavoriteRow: () => null,
+}));
+vi.mock('./next/ChannelSectionEmptyState', () => ({
+  ChannelSectionEmptyState: () => null,
+}));
+vi.mock('./next/ChannelLabelRows', () => ({
+  ChannelLabelEmptyState: () => null,
+  ChannelLabelRow: () => null,
+}));
+// Keep the section layout and virtualizer real; isolate unrelated menus and decoration.
+vi.mock('./next/ResizableRailSection', () => ({
+  ResizableRailSection: (props: {
+    header: JSX.Element;
+    children: JSX.Element;
+    rootRef: (element: HTMLDivElement) => void;
+    scrollRef: (element: HTMLDivElement) => void;
+  }) => (
+    <div ref={props.rootRef}>
+      {props.header}
+      <div ref={props.scrollRef}>{props.children}</div>
+    </div>
+  ),
+}));
+vi.mock('./next/ChannelSectionDropZone', () => ({
+  ChannelSectionDropZone: (props: { children: JSX.Element }) => (
+    <div>{props.children}</div>
+  ),
+}));
+vi.mock('./next/ChannelSectionHeading', () => ({
+  ChannelSectionHeading: () => <div />,
+  DraggableChannelSectionHeading: (props: { children: JSX.Element }) => (
+    <div>{props.children}</div>
+  ),
+}));
+vi.mock('./next/ChannelSectionMenu', () => ({
+  ChannelSectionContextMenu: (props: { children: JSX.Element }) => (
+    <div>{props.children}</div>
+  ),
+  ChannelSectionDropdown: () => null,
+}));
+vi.mock('./ChannelOption', async () => {
+  const { useChannelsRail } = await import('./ChannelsRailContext');
+  return {
+    ChannelOption: (props: {
+      channel: ChannelEntity;
+      rowId: ChannelRailRow['id'];
+    }) => {
+      const rail = useChannelsRail();
+      return (
+        <button
+          type="button"
+          onPointerDown={(event) => rail.prefetchRow(props.rowId, event)}
+          onClick={(event) => rail.activateRow(props.rowId, event)}
+        >
+          {props.channel.name}
+        </button>
+      );
+    },
+  };
+});
+vi.mock('@app/components/drag-drop/create-drag-auto-scroll', () => ({
+  createDragAutoScroll: () => {},
+}));
+vi.mock('@app/components/drag-drop/create-layout-animation', () => ({
+  createLayoutAnimation: () => ({
+    cancel: () => {},
+    beginHover: () => () => {},
+  }),
+}));
+vi.mock('@core/util/createScrollTopFade', () => ({
+  createScrollTopFade: () => {},
+}));
+vi.mock('../../live-calls-sidebar', () => ({
+  ChannelsLiveCallsSidebar: () => null,
+}));
+vi.mock('@app/features/slack-import/slack-import-sidebar', () => ({
+  SlackImportSidebar: () => null,
+}));
+vi.mock('../ConversationsCreateMenu', () => ({
+  ConversationsCreateMenu: () => null,
+}));
+
 import { ChannelsRail } from './ChannelsRail';
+import { useChannelLabelActions } from './hooks/useChannelLabelActions';
 import { useChannelSectionNotifications } from './hooks/useChannelSectionNotifications';
 
 const channel: ChannelEntity = {
@@ -323,12 +560,42 @@ const mount = () =>
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.realRenderer = false;
   mocks.focusedRow = undefined;
+  mocks.favorites = [];
+  mocks.referencedChannels = [];
+  mocks.sectionsEnabled = true;
+  mocks.unreadRows = [];
+  mocks.closedGroups = [];
+  mocks.sectionPreferences = {};
   mocks.listRows = undefined;
   mocks.hotkeys.clear();
   mocks.userId = 'viewer';
   mocks.source.muteEntity.mockResolvedValue(undefined);
   mocks.source.unmuteEntity.mockResolvedValue(undefined);
+  mocks.bulkPreferences.mockImplementation(
+    async (args: {
+      items: { item_type: string; item_id: string }[];
+      muted: boolean;
+    }) => {
+      const results = await Promise.allSettled(
+        args.items.map((item) => {
+          const entity = { type: item.item_type, id: item.item_id };
+          return args.muted
+            ? mocks.source.muteEntity(entity)
+            : mocks.source.unmuteEntity(entity);
+        })
+      );
+      return {
+        succeeded: args.items.filter(
+          (_, index) => results[index].status === 'fulfilled'
+        ),
+        failed: args.items.filter(
+          (_, index) => results[index].status === 'rejected'
+        ),
+      };
+    }
+  );
   mocks.fetchGroupIds.mockReset();
   mocks.fetchGroupIds.mockResolvedValue(['one', 'unloaded']);
   mocks.row = channel;
@@ -337,8 +604,108 @@ beforeEach(() => {
   mocks.selected = { type: 'channel', id: channel.id };
   mocks.select.mockReturnValue(true);
   mocks.hydrate.mockReturnValue(hydrated);
+  mocks.shell.collapsed = false;
+  mocks.shell.canCollapse = true;
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+  delete document.documentElement.dataset.modality;
+});
+
+it.each([false, true])(
+  'tracks unread activity for favorites outside loaded channel pages with sections enabled: %s',
+  (enabled) => {
+    mocks.sectionsEnabled = enabled;
+    mocks.favorites = [
+      {
+        entityId: 'outside-page',
+        entityType: 'channel',
+        createdAt: '2026-01-01',
+        sortOrder: 0,
+      },
+    ];
+    mocks.referencedChannels = [{ ...channel, id: 'outside-page' }];
+
+    mount();
+
+    expect(mocks.additionalActivityChannels().map(({ id }) => id)).toContain(
+      'outside-page'
+    );
+    expect(
+      mocks.activityChannels().some(({ id }) => id === 'outside-page')
+    ).toBe(enabled);
+  }
+);
+
+it.each([false, true])(
+  'shows off-page unread channels in collapsed sections only with the flag enabled: %s',
+  (enabled) => {
+    mocks.sectionsEnabled = enabled;
+    mocks.closedGroups = ['team_channels'];
+    mocks.unreadRows = [
+      { ...channel, id: 'outside-page', channelType: 'team' },
+    ];
+    mount();
+    const conversations = mocks
+      .actualRows()
+      .filter((row) => row.kind === 'conversation');
+    expect(conversations.some((row) => row.channel.id === 'outside-page')).toBe(
+      enabled
+    );
+  }
+);
+
+it.each(['team_channels', 'channels', 'direct_messages'] as const)(
+  'adds off-page unread rows only to the collapsed %s group',
+  (collapsedGroup) => {
+    mocks.closedGroups = [collapsedGroup];
+    mocks.unreadRows = [
+      { ...channel, id: 'outside-team_channels', channelType: 'team' },
+      { ...channel, id: 'outside-channels', channelType: 'private' },
+      {
+        ...channel,
+        id: 'outside-direct_messages',
+        channelType: 'direct_message',
+      },
+    ];
+
+    mount();
+
+    const offPageIds = mocks
+      .actualRows()
+      .flatMap((row) =>
+        row.kind === 'conversation' && row.channel.id.startsWith('outside-')
+          ? [row.channel.id]
+          : []
+      );
+    expect(offPageIds).toEqual([`outside-${collapsedGroup}`]);
+  }
+);
+
+it('omits unread rows when the collapsed group disables them', () => {
+  mocks.closedGroups = ['team_channels', 'channels'];
+  mocks.sectionPreferences = {
+    channels: { unreadWhenCollapsed: false },
+  };
+  mocks.unreadRows = [
+    { ...channel, id: 'outside-team', channelType: 'team' },
+    { ...channel, id: 'outside-private', channelType: 'private' },
+  ];
+
+  mount();
+
+  const offPageIds = mocks
+    .actualRows()
+    .flatMap((row) =>
+      row.kind === 'conversation' && row.channel.id.startsWith('outside-')
+        ? [row.channel.id]
+        : []
+    );
+  expect(offPageIds).toEqual(['outside-team']);
+});
 
 it('delegates keyboard scrolling to the sectioned renderer instead of global indexes', () => {
   mount();
@@ -346,11 +713,157 @@ it('delegates keyboard scrolling to the sectioned renderer instead of global ind
   expect(mocks.scrollBrowse).toHaveBeenCalledExactlyOnceWith(0, undefined);
 });
 
+it.each(['team_channels', 'channels'] as const)(
+  'keeps a pressed %s row attached through a live data refresh and activates once',
+  async (scope) => {
+    mocks.realRenderer = true;
+    vi.spyOn(HTMLElement.prototype, 'offsetParent', 'get').mockImplementation(
+      function (this: HTMLElement) {
+        return this.parentElement;
+      }
+    );
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(
+      function (this: HTMLElement) {
+        return this.hasAttribute('data-index') ? 34 : 200;
+      }
+    );
+    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(300);
+    const observers: Array<{
+      callback: ResizeObserverCallback;
+      targets: Element[];
+    }> = [];
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        targets: Element[] = [];
+        constructor(readonly callback: ResizeObserverCallback) {
+          observers.push(this);
+        }
+        observe(target: Element) {
+          this.targets.push(target);
+        }
+        unobserve(target: Element) {
+          this.targets = this.targets.filter((item) => item !== target);
+        }
+        disconnect() {
+          this.targets = [];
+        }
+      }
+    );
+    mocks.selected = undefined;
+    const [channels, setChannels] = createSignal([channel]);
+    const liveSources: ChannelsSources = {
+      ...sources,
+      team_channels: { ...source, items: () => [] },
+      channels: { ...source, items: () => [] },
+      [scope]: { ...source, items: channels },
+      direct_messages: { ...source, items: () => [] },
+    };
+    const { container } = render(() => (
+      <ChannelsRail
+        sources={liveSources}
+        searchQuery=""
+        onSearchQueryChange={() => {}}
+        searchOpen={false}
+        onSearchOpenChange={() => {}}
+      />
+    ));
+    for (let pass = 0; pass < 3; pass++) {
+      await Promise.resolve();
+      for (const observer of observers) {
+        if (observer.targets.length === 0) continue;
+        observer.callback(
+          observer.targets.map((target) => ({
+            target,
+            contentRect: new DOMRect(
+              0,
+              0,
+              300,
+              target.hasAttribute('data-index') ? 34 : 200
+            ),
+            borderBoxSize: [
+              {
+                inlineSize: 300,
+                blockSize: target.hasAttribute('data-index') ? 34 : 200,
+              },
+            ],
+            contentBoxSize: [],
+            devicePixelContentBoxSize: [],
+          })),
+          observer as unknown as ResizeObserver
+        );
+      }
+    }
+    const row = screen.getByRole('button', { name: 'One' });
+    fireEvent.pointerDown(row, { pointerType: 'mouse', button: 0 });
+    setChannels([{ ...channel, name: 'One updated' }]);
+
+    expect(screen.getByRole('button', { name: 'One updated' })).toBe(row);
+    expect(container.contains(row)).toBe(true);
+    fireEvent.pointerUp(row, { pointerType: 'mouse', button: 0 });
+    fireEvent.click(row);
+    expect(mocks.select).toHaveBeenCalledExactlyOnceWith(
+      { type: 'channel', id: 'one', target: undefined },
+      { focusComposer: true }
+    );
+  }
+);
+
+it('opens search over mounted section rows', async () => {
+  mocks.realRenderer = true;
+  vi.spyOn(HTMLElement.prototype, 'offsetParent', 'get').mockImplementation(
+    function (this: HTMLElement) {
+      return this.parentElement;
+    }
+  );
+  vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(
+    function (this: HTMLElement) {
+      return this.hasAttribute('data-index') ? 34 : 200;
+    }
+  );
+  vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(300);
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
+  const [searchOpen, setSearchOpen] = createSignal(false);
+  render(() => (
+    <ChannelsRail
+      sources={{
+        ...sources,
+        team_channels: { ...source, items: () => [] },
+        direct_messages: { ...source, items: () => [] },
+        search: {
+          ...source,
+          items: () => [{ ...channel, id: 'found', name: 'Found' }],
+        },
+      }}
+      searchQuery=""
+      onSearchQueryChange={() => {}}
+      searchOpen={searchOpen()}
+      onSearchOpenChange={setSearchOpen}
+    />
+  ));
+  await Promise.resolve();
+  expect(screen.getByRole('button', { name: 'One' })).toBeTruthy();
+
+  // Disposing the section rows must not rerun the sections being disposed.
+  expect(() => setSearchOpen(true)).not.toThrow();
+  await Promise.resolve();
+
+  expect(screen.getByRole('button', { name: 'Found' })).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'One' })).toBeNull();
+});
+
 describe('section heading navigation', () => {
   it.each([
     ['label:first', ']', 'label:second'],
     ['label:second', '[', 'label:first'],
-    ['section:team_channels', ']', 'section:channels'],
+    ['section:team_channels', ']', 'label:first'],
     ['channel:one:label:first', ']', 'label:second'],
   ])('jumps from %s with %s to %s', (from, hotkey, to) => {
     const first: ChannelLabel = {
@@ -364,12 +877,11 @@ describe('section heading navigation', () => {
     };
     mocks.listRows = [
       { kind: 'section', id: 'section:team_channels', group: 'team_channels' },
-      { kind: 'section', id: 'section:channels', group: 'channels' },
       {
         kind: 'label',
         id: 'label:first',
         group: 'team_channels',
-        localIndex: 2,
+        localIndex: 1,
         label: first,
       },
       {
@@ -377,7 +889,7 @@ describe('section heading navigation', () => {
         id: 'channel:one:label:first',
         group: 'team_channels',
         scope: 'team_channels',
-        localIndex: 3,
+        localIndex: 2,
         channel,
         labelId: 'first',
       },
@@ -385,7 +897,7 @@ describe('section heading navigation', () => {
         kind: 'label',
         id: 'label:second',
         group: 'team_channels',
-        localIndex: 4,
+        localIndex: 3,
         label: { ...first, id: 'second', name: 'Second' },
       },
     ];
@@ -442,10 +954,10 @@ describe('explicit channel activation read marking', () => {
     fireEvent.click(screen.getByRole('button'), { shiftKey: true });
     mocks.favoriteId = 'another';
     fireEvent.click(screen.getByRole('button'));
-    expect(mocks.select).toHaveBeenCalledExactlyOnceWith({
-      type: 'channel',
-      id: 'another',
-    });
+    expect(mocks.select).toHaveBeenCalledExactlyOnceWith(
+      { type: 'channel', id: 'another' },
+      { focusComposer: true }
+    );
     resolve({ ...hydrated, id: 'uncached' });
     await Promise.resolve();
     expect(mocks.openSplit).not.toHaveBeenCalled();
@@ -473,10 +985,10 @@ describe('explicit channel activation read marking', () => {
     mocks.selected = { type: 'channel', id: 'previous' };
     mount();
     fireEvent.click(screen.getByRole('button'));
-    expect(mocks.select).toHaveBeenCalledExactlyOnceWith({
-      type: 'channel',
-      id: channel.id,
-    });
+    expect(mocks.select).toHaveBeenCalledExactlyOnceWith(
+      { type: 'channel', id: channel.id },
+      { focusComposer: true }
+    );
     expect(mocks.hydrate).not.toHaveBeenCalled();
     expect(mocks.markRead).not.toHaveBeenCalled();
   });
@@ -498,11 +1010,14 @@ describe('explicit channel activation read marking', () => {
     };
     mount();
     fireEvent.click(screen.getByRole('button'));
-    expect(mocks.select).toHaveBeenCalledExactlyOnceWith({
-      type: 'channel',
-      id: channel.id,
-      target: { messageId: 'reply', threadId: 'thread' },
-    });
+    expect(mocks.select).toHaveBeenCalledExactlyOnceWith(
+      {
+        type: 'channel',
+        id: channel.id,
+        target: { messageId: 'reply', threadId: 'thread' },
+      },
+      { focusComposer: true }
+    );
     expect(mocks.hydrate).not.toHaveBeenCalled();
   });
 
@@ -517,10 +1032,10 @@ describe('explicit channel activation read marking', () => {
     fireEvent.click(screen.getByRole('button'));
     mocks.row = { ...channel, id: 'two' };
     fireEvent.click(screen.getByRole('button'));
-    expect(mocks.select).toHaveBeenCalledExactlyOnceWith({
-      type: 'channel',
-      id: 'two',
-    });
+    expect(mocks.select).toHaveBeenCalledExactlyOnceWith(
+      { type: 'channel', id: 'two' },
+      { focusComposer: true }
+    );
     resolve(hydrated);
     await Promise.resolve();
     expect(mocks.select).toHaveBeenCalledOnce();
@@ -646,6 +1161,93 @@ describe('explicit channel activation read marking', () => {
   });
 });
 
+describe('composer focus on opening a conversation', () => {
+  beforeEach(() => {
+    mocks.selected = { type: 'channel', id: 'previous' };
+  });
+
+  it.each(['mouse', 'keyboard'])(
+    'asks a conversation opened by %s for its composer focus',
+    (modality) => {
+      document.documentElement.dataset.modality = modality;
+      mount();
+      fireEvent.click(screen.getByRole('button'));
+      expect(mocks.select).toHaveBeenCalledExactlyOnceWith(
+        { type: 'channel', id: channel.id },
+        { focusComposer: true }
+      );
+    }
+  );
+
+  it('asks the open conversation for its composer focus again', () => {
+    mocks.selected = { type: 'channel', id: channel.id };
+    document.documentElement.dataset.modality = 'keyboard';
+    mount();
+    fireEvent.click(screen.getByRole('button'));
+    expect(mocks.select).toHaveBeenCalledExactlyOnceWith(
+      { type: 'channel', id: channel.id },
+      { focusComposer: true }
+    );
+  });
+
+  it('leaves the on-screen keyboard down after a tap', () => {
+    document.documentElement.dataset.modality = 'touch';
+    mount();
+    fireEvent.click(screen.getByRole('button'));
+    expect(mocks.select).toHaveBeenCalledExactlyOnceWith(
+      { type: 'channel', id: channel.id },
+      { focusComposer: false }
+    );
+  });
+
+  it('previews a conversation reached by arrowing without asking for focus', () => {
+    vi.useFakeTimers();
+    document.documentElement.dataset.modality = 'keyboard';
+    mount();
+    mocks.onNavigate({
+      result: {
+        item: {
+          kind: 'conversation',
+          id: 'channel:one',
+          scope: 'channels',
+          localIndex: 0,
+          channel,
+        },
+      },
+    });
+    vi.advanceTimersByTime(150);
+    expect(mocks.select).toHaveBeenCalledExactlyOnceWith(channel);
+  });
+});
+
+describe('Esc back to the sidebar', () => {
+  it('focuses the open conversation on its row', () => {
+    mount();
+    expect(mocks.focusRailRow(channel.id)).toBe(true);
+    expect(document.activeElement).toBe(screen.getByTestId('rail'));
+    expect(mocks.focusSet).toHaveBeenCalledWith('channel:one', {
+      reason: 'keyboard',
+    });
+    expect(mocks.shell.expand).not.toHaveBeenCalled();
+  });
+
+  it('opens a collapsed sidebar for the row', () => {
+    mocks.shell.collapsed = true;
+    mount();
+    expect(mocks.focusRailRow(channel.id)).toBe(true);
+    expect(mocks.shell.expand).toHaveBeenCalledOnce();
+    expect(document.activeElement).toBe(screen.getByTestId('rail'));
+  });
+
+  it('leaves Esc to a narrow split that shows the conversation alone', () => {
+    mocks.shell.collapsed = true;
+    mocks.shell.canCollapse = false;
+    mount();
+    expect(mocks.focusRailRow(channel.id)).toBe(false);
+    expect(mocks.shell.expand).not.toHaveBeenCalled();
+  });
+});
+
 describe('channel row presses', () => {
   // jsdom has no PointerEvent, so a press is a MouseEvent tagged as one.
   const press = (init: { pointerType: string; button: number }) => {
@@ -682,6 +1284,106 @@ describe('channel row presses', () => {
   });
 });
 
+describe('section creation', () => {
+  it('uses the dialog and reveals the saved section only after it closes', async () => {
+    let close!: () => void;
+    const closed = new Promise<void>((resolve) => {
+      close = resolve;
+    });
+    const onSectionCreated = vi.fn();
+    mocks.createSection.mockResolvedValueOnce({ id: 'created-section' });
+    mocks.promptSection.mockImplementationOnce(async (props) => {
+      await props.onConfirm({ name: 'New section', scope: 'personal' });
+      await closed;
+    });
+    let actions!: ReturnType<typeof useChannelLabelActions>;
+    render(() => {
+      const owner = getOwner();
+      actions = useChannelLabelActions({
+        sectionsEnabled: () => true,
+        channelTagsEnabled: () => true,
+        labelsAvailable: () => true,
+        labelsUnavailableReason: () => '',
+        sharedLabels: () => false,
+        labels: () => [],
+        channelsById: () => new Map(),
+        searchResults: () => [],
+        labelDialogOwner: () => owner,
+        setGroupOpen: vi.fn(),
+        setLabelOpen: vi.fn(),
+        onSectionCreated,
+      });
+      return null;
+    });
+    const pending = actions.createLabel([]);
+    await waitFor(() => expect(mocks.createSection).toHaveBeenCalledOnce());
+    expect(onSectionCreated).not.toHaveBeenCalled();
+    close();
+    await pending;
+    expect(onSectionCreated).toHaveBeenCalledExactlyOnceWith('created-section');
+  });
+});
+
+describe('section editing', () => {
+  it.each([false, true])(
+    'confirms a team transfer once and honors cancellation (%s)',
+    async (confirmed) => {
+      const label: ChannelLabel = {
+        id: 'section',
+        teamId: 'team',
+        name: 'Section',
+        channelIds: [],
+        channelCount: 0,
+        sortOrder: 0,
+        createdAt: '2026-01-01',
+        updatedAt: '2026-01-01',
+      };
+      const rule = { attribute: 'name' as const, contains: 'support' };
+      mocks.confirmDialog.mockResolvedValueOnce(confirmed);
+      mocks.updateSection.mockResolvedValueOnce(undefined);
+      mocks.promptSection.mockImplementationOnce(async (props) => {
+        expect(props.initial).toBe(label);
+        expect(
+          await props.onConfirm({ name: 'Support', rule, scope: 'personal' })
+        ).toBe(confirmed);
+      });
+      let actions!: ReturnType<typeof useChannelLabelActions>;
+      render(() => {
+        const owner = getOwner();
+        actions = useChannelLabelActions({
+          sectionsEnabled: () => true,
+          channelTagsEnabled: () => true,
+          labelsAvailable: () => true,
+          labelsUnavailableReason: () => '',
+          sharedLabels: () => true,
+          teamId: () => 'team',
+          labels: () => [label],
+          channelsById: () => new Map(),
+          searchResults: () => [],
+          labelDialogOwner: () => owner,
+          setGroupOpen: vi.fn(),
+          setLabelOpen: vi.fn(),
+        });
+        return null;
+      });
+      await actions.renameLabel(label);
+      expect(mocks.confirmDialog).toHaveBeenCalledOnce();
+      if (confirmed) {
+        expect(mocks.updateSection).toHaveBeenCalledExactlyOnceWith({
+          labelId: 'section',
+          name: 'Support',
+          rule,
+          targetScope: 'personal',
+          actorId: 'viewer',
+          sectionMode: true,
+        });
+      } else {
+        expect(mocks.updateSection).not.toHaveBeenCalled();
+      }
+    }
+  );
+});
+
 describe('section notification actions', () => {
   const label: ChannelLabel = {
     id: 'section',
@@ -714,6 +1416,60 @@ describe('section notification actions', () => {
 
     return actions;
   };
+
+  it('marks only unread channel notifications in the complete section membership', async () => {
+    const actions = mountActions();
+    await actions.markSectionRead('label:section');
+    expect(mocks.source.bulkMarkAsRead).toHaveBeenCalledExactlyOnceWith([
+      {
+        id: 'loaded',
+        entity_type: 'channel',
+        entity_id: 'one',
+        state: 'unseen',
+      },
+      {
+        id: 'off-page',
+        entity_type: 'channel',
+        entity_id: 'unloaded',
+        state: 'unseen',
+      },
+    ]);
+    expect(mocks.bulkPreferences).not.toHaveBeenCalled();
+  });
+
+  it('discards a mark-read action when the account changes during membership lookup', async () => {
+    let finish!: (ids: string[]) => void;
+    mocks.fetchGroupIds.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        })
+    );
+    const actions = mountActions();
+    const pending = actions.markSectionRead('team_channels');
+    mocks.userId = 'another-viewer';
+    finish(['one']);
+    await pending;
+    expect(mocks.source.bulkMarkAsRead).not.toHaveBeenCalled();
+  });
+  it('submits all section members through one bulk operation', async () => {
+    const current = {
+      ...label,
+      channelIds: Array.from({ length: 16 }, (_, index) => `channel-${index}`),
+    };
+    const actions = mountActions(() => [current]);
+    await actions.muteSection('label:section', true);
+
+    expect(mocks.bulkPreferences).toHaveBeenCalledExactlyOnceWith({
+      actorId: 'viewer',
+      items: current.channelIds.map((item_id) => ({
+        item_type: 'channel',
+        item_id,
+      })),
+      muted: true,
+    });
+    expect(actions.sectionNotificationsDisabled('label:section')).toBe(false);
+  });
 
   it('uses the complete current membership instead of loaded rows or a stale snapshot', async () => {
     let current = label;
@@ -887,7 +1643,7 @@ describe('section notification actions', () => {
 
       expect(mocks.fetchGroupIds).toHaveBeenCalledExactlyOnceWith(
         section,
-        section === 'channels' ? label.channelIds : [],
+        [],
         expect.any(AbortSignal)
       );
       expect(mocks.source.unmuteEntity.mock.calls).toEqual([

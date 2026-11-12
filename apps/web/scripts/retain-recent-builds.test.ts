@@ -25,6 +25,8 @@ type Bucket = {
   records: Record<string, string[]>;
   /** Every key currently in the bucket under the prefix. */
   objects: string[];
+  /** Keys S3 refuses to delete, reported in a response that still exits 0. */
+  refuse?: string[];
 };
 
 /**
@@ -43,6 +45,7 @@ function run(
   const state = join(root, 'bucket.json');
   const deletions = join(root, 'deleted.txt');
   const uploads = join(root, 'uploaded.txt');
+  const batches = join(root, 'batches.txt');
   mkdirSync(bin, { recursive: true });
   for (const [path, contents] of Object.entries(distFiles)) {
     const full = join(dist, path);
@@ -52,8 +55,9 @@ function run(
   writeFileSync(state, JSON.stringify(bucket));
   writeFileSync(deletions, '');
   writeFileSync(uploads, '');
+  writeFileSync(batches, '');
 
-  // Only the three shapes the script uses: list keys, read a record, delete.
+  // Only the shapes the script uses: list keys, read a record, delete.
   const fakeAws = join(bin, 'aws');
   writeFileSync(
     fakeAws,
@@ -66,8 +70,11 @@ if (argv[0] === 's3api' && argv[1] === 'list-objects-v2') {
   const keys = prefix.endsWith('_builds/')
     ? Object.keys(bucket.records).map((build) => prefix + build + '.txt')
     : bucket.objects.filter((key) => key.startsWith(prefix));
-  process.stdout.write(keys.length ? keys.join('\\t') + '\\n' : 'None\\n');
-  process.exit(0);
+  // Exit after the write: process.exit() truncates output to a pipe.
+  process.stdout.write(keys.length ? keys.join('\\t') + '\\n' : 'None\\n', () =>
+    process.exit(0)
+  );
+  return;
 }
 if (argv[0] === 's3' && argv[1] === 'cp' && argv[3] === '-') {
   const build = argv[2].replace(/.*\\/(\\d+)\\.txt$/, '$1');
@@ -84,6 +91,24 @@ if (argv[0] === 's3' && argv[1] === 'cp') {
 }
 if (argv[0] === 's3' && argv[1] === 'rm') {
   appendFileSync(${JSON.stringify(deletions)}, argv[2] + '\\n');
+  process.exit(0);
+}
+if (argv[0] === 's3api' && argv[1] === 'delete-objects') {
+  const path = argv[argv.indexOf('--delete') + 1].replace('file://', '');
+  const keys = JSON.parse(readFileSync(path, 'utf8')).Objects.map((o) => o.Key);
+  appendFileSync(${JSON.stringify(batches)}, keys.length + '\\n');
+  const refused = keys.filter((key) => (bucket.refuse ?? []).includes(key));
+  for (const key of keys) {
+    if (!refused.includes(key)) {
+      appendFileSync(${JSON.stringify(deletions)}, 's3://example/' + key + '\\n');
+    }
+  }
+  // S3 reports a refused key in the response and the CLI still exits 0.
+  process.stdout.write(
+    refused.length
+      ? JSON.stringify(refused.map((Key) => ({ Key, Code: 'AccessDenied' })))
+      : 'null'
+  );
   process.exit(0);
 }
 process.stderr.write('unexpected aws call: ' + argv.join(' ') + '\\n');
@@ -106,6 +131,7 @@ process.exit(1);
     result,
     deleted: lines(deletions).map((uri) => uri.replace('s3://example/', '')),
     uploaded: lines(uploads),
+    batchSizes: lines(batches).map(Number),
   };
 }
 
@@ -224,6 +250,48 @@ describe('retaining recent builds', () => {
     );
     expect(deleted).not.toContain('app/c.js');
     expect(deleted).not.toContain('app/index.html');
+  });
+
+  it('deletes in batches no larger than S3 accepts', () => {
+    const orphans = Array.from({ length: 2500 }, (_, i) => `app/orphan-${i}.js`);
+    const { result, deleted, batchSizes } = run(
+      { 'bundle-manifest.json': manifest(300), 'index.html': '' },
+      { records: {}, objects: ['app/index.html', ...orphans] },
+      1
+    );
+
+    expect(result.status).toBe(0);
+    expect(batchSizes).toEqual([1000, 1000, 500]);
+    expect(deleted.toSorted()).toEqual(orphans.toSorted());
+  });
+
+  it('sends no delete request when nothing is prunable', () => {
+    const { result, batchSizes } = run(
+      { 'bundle-manifest.json': manifest(300), 'index.html': '' },
+      { records: {}, objects: ['app/index.html'] },
+      1
+    );
+
+    expect(result.status).toBe(0);
+    expect(batchSizes).toEqual([]);
+  });
+
+  it('fails the deploy when S3 refuses to delete a key', () => {
+    const { result, deleted } = run(
+      { 'bundle-manifest.json': manifest(300), 'index.html': '' },
+      {
+        records: {},
+        objects: ['app/index.html', 'app/a.js', 'app/b.js'],
+        refuse: ['app/b.js'],
+      },
+      1
+    );
+
+    // DeleteObjects exits 0 with per-key errors; the old per-key call failed
+    // the script, so a refusal must not start passing silently.
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('app/b.js');
+    expect(deleted).toEqual(['app/a.js']);
   });
 
   it('refuses to prune output that is not a build', () => {

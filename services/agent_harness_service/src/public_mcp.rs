@@ -1,9 +1,9 @@
 //! Public workspace MCP and OAuth, hosted on the harness's public listener.
 mod analytics;
+mod macro_api_tokens;
 mod markdown_images;
 #[cfg(test)]
 mod test;
-mod tool_mode_cache;
 mod tool_response;
 mod tool_service;
 
@@ -16,9 +16,11 @@ use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use mcp_auth_proxy::{
     domain::{
         redirect_uri::RedirectUriPolicy,
+        resource::McpResources,
         service::{McpAuthProxyService, McpAuthProxyServiceDeps, McpAuthProxyServiceImpl},
     },
     outbound::{
+        email_sign_in::AuthServiceEmailCodes,
         fusionauth::FusionAuthOAuthProvider,
         postgres::PostgresAuthStore,
         redis::{RedisClientRegistry, RedisInflightAuth},
@@ -30,15 +32,15 @@ use rmcp::transport::streamable_http_server::{
 };
 use secretsmanager_client::LocalOrRemoteSecret;
 use std::sync::Arc;
-use tool_mode_cache::CachedToolMode;
 use tool_service::{AuthenticatedToolService, CodeModeSurface};
 
-/// User-scoped code execution and the flag that offers it.
+/// User-scoped code execution.
 pub struct PublicCodeMode {
     pub service: Arc<dyn agent_code_mode::domain::UserCodeMode>,
-    pub selector: Arc<dyn agent_inmem::domain::tool_mode::ToolModeSelector>,
 }
 
+/// Browser-based MCP clients Macro has vetted, whose users skip the consent
+/// screen. Any other `https` client works too, after the user approves it.
 const DEFAULT_MCP_ALLOWED_REDIRECT_HOSTS: [&str; 5] = [
     "claude.ai",
     "chatgpt.com",
@@ -64,8 +66,15 @@ pub async fn router(
     code_mode: Option<PublicCodeMode>,
 ) -> anyhow::Result<axum::Router> {
     let public_url = macro_service_urls::McpPublicUrl::new()?;
-    let (auth_proxy, backfill) =
-        build_auth_proxy(config, secrets, &public_url, db.clone(), kms).await?;
+    let (auth_proxy, backfill) = build_auth_proxy(
+        config,
+        secrets,
+        &public_url,
+        db.clone(),
+        kms,
+        jwt_args.clone(),
+    )
+    .await?;
     let analytics = build_analytics(config, db);
     let item_base_url = macro_service_urls::AppServiceUrl::new()?.to_string();
     let static_file_base_url =
@@ -82,7 +91,6 @@ pub async fn router(
             tools: Arc::new(agent_code_mode::inbound::toolset::user_toolset()),
             service: code_mode.service,
             cognition: tool_context.cognition_tool_context.service.clone(),
-            selector: Arc::new(CachedToolMode::new(code_mode.selector)),
         })
     });
     // Create the MCP service with authenticated tool handler
@@ -109,7 +117,7 @@ pub async fn router(
                 "gateway.macro.com".into(),
                 "dev-gateway.macro.com".into(),
             ]);
-            config.stateful_mode = false;
+            config.legacy_session_mode = false;
             config.json_response = true;
             config
         },
@@ -132,8 +140,15 @@ pub async fn router(
     });
     // OAuth router has its own CORS and bearer middleware; mount outside the
     // browser API layers, with the same tracing layer as the harness API.
+    // Serves the ChatGPT Apps Directory domain verification token.
+    let openai_domain_verification_token =
+        config.openai_domain_verification_token.as_ref().to_string();
     Ok(
         mcp_auth_proxy::inbound::axum_router::mounted_mcp_router(auth_proxy, jwt_args, mcp_service)
+            .route(
+                "/.well-known/openai-apps-challenge",
+                axum::routing::get(move || async move { openai_domain_verification_token }),
+            )
             .layer(
                 macro_tower_layers::MacroRequestIdAndTracingLayer::new(
                     std::time::Duration::from_millis(200),
@@ -151,12 +166,18 @@ async fn build_auth_proxy(
     public_url: &macro_service_urls::McpPublicUrl,
     db: sqlx::PgPool,
     kms: aws_sdk_kms::Client,
+    jwt_args: JwtValidationArgs,
 ) -> anyhow::Result<(
     McpAuthProxyServiceImpl<RedisCutoverAuthStore>,
     impl Future<Output = ()> + Send + 'static,
 )> {
     let mcp_public_url = public_url.to_string();
     let mcp_oauth_redirect_uri = format!("{mcp_public_url}/oauth/callback");
+    let email_codes = AuthServiceEmailCodes::new(
+        &macro_service_urls::AuthServiceUrl::new()?,
+        mcp_oauth_redirect_uri.clone(),
+    )
+    .context("failed to initialize MCP email sign-in")?;
 
     let fusionauth_api_key = LocalOrRemoteSecret::new_from_secret_manager(
         config.fusionauth_api_key_secret_key.as_ref().to_owned(),
@@ -201,6 +222,14 @@ async fn build_auth_proxy(
     let redis_client = redis::Client::open(config.redis_uri.as_ref().to_owned())
         .context("failed to initialize redis client for MCP auth proxy")?;
     let legacy_clients = Arc::new(RedisClientRegistry::new(redis_client.clone()));
+    let macro_api_tokens = macro_api_tokens::SignedMacroApiTokens {
+        signer: agent_egress::outbound::macro_mcp::MacroApiTokenSigner::new(
+            db.clone(),
+            config.macro_api_token_issuer.as_ref(),
+            config.macro_api_token_private_secret_key.as_ref(),
+        ),
+        jwt_args,
+    };
     let postgres = PostgresAuthStore::new(
         db,
         Arc::new(AwsKmsCiphertexts::new(
@@ -227,6 +256,11 @@ async fn build_auth_proxy(
         "initialized MCP OAuth redirect URI policy"
     );
 
+    // The ChatGPT MCP server is its own Worker that the broker signs in for.
+    let resources = McpResources::new(
+        format!("{mcp_public_url}/mcp"),
+        format!("{}/mcp", macro_service_urls::McpChatgptServiceUrl::new()?),
+    );
     let auth_proxy = McpAuthProxyServiceImpl::new(McpAuthProxyServiceDeps {
         public_url: mcp_public_url,
         redirect_uri_policy,
@@ -234,6 +268,9 @@ async fn build_auth_proxy(
         client_registrations: store.clone(),
         refresh_token_bindings: store,
         oauth_provider: Arc::new(auth_provider),
+        email_codes: Arc::new(email_codes),
+        resources,
+        macro_api_tokens: Arc::new(macro_api_tokens),
     });
     Ok((auth_proxy, backfill))
 }
@@ -263,7 +300,8 @@ fn build_analytics(config: &Config, db: sqlx::PgPool) -> McpAnalytics {
 }
 
 /// Builds the redirect URI policy the broker enforces at registration and at
-/// authorize, from the configured host list or the built-in default.
+/// authorize. The configured host list, or the built-in default, names the
+/// `https` hosts trusted without the consent screen.
 fn build_redirect_uri_policy(config: &Config) -> RedirectUriPolicy {
     match config.mcp_allowed_redirect_hosts.value() {
         Some(hosts) => RedirectUriPolicy::new(hosts.split(',')),

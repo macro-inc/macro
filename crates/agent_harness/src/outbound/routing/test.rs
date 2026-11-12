@@ -96,6 +96,16 @@ impl ContainerManager for TaggedManager {
         Ok(())
     }
 
+    async fn release_idle(&self, _session: AgentSessionId) -> Result<()> {
+        self.record("release_idle");
+        Ok(())
+    }
+
+    async fn idle_release_is_lossless(&self, _session: AgentSessionId) -> Result<bool> {
+        self.record("idle_release_is_lossless");
+        Ok(true)
+    }
+
     fn resize_effect(&self, _from: SandboxSize, _to: SandboxSize) -> SandboxResizeEffect {
         unimplemented!("these tests never resize")
     }
@@ -105,9 +115,9 @@ impl ContainerManager for TaggedManager {
     }
 }
 
-/// Answers every session lookup with a fixed bot.
+/// Answers every session lookup with a fixed bot and harness slug.
 #[derive(Clone)]
-struct FixedBotSessions(BotId);
+struct FixedBotSessions(BotId, &'static str);
 
 impl AgentSessionRepo for FixedBotSessions {
     async fn create(&self, _params: CreateAgentSessionParams) -> SessionResult<AgentSession> {
@@ -133,8 +143,20 @@ impl AgentSessionRepo for FixedBotSessions {
         unimplemented!("the router never previews sessions")
     }
 
+    async fn has_unfinished_turn(&self, _id: AgentSessionId) -> SessionResult<bool> {
+        Ok(false)
+    }
+
+    async fn billing(
+        &self,
+        _id: AgentSessionId,
+    ) -> SessionResult<agent_session::domain::model::SessionBilling> {
+        Ok(agent_session::domain::model::SessionBilling::default())
+    }
+
     async fn get(&self, id: AgentSessionId) -> SessionResult<AgentSession> {
         Ok(AgentSession {
+            origin: Default::default(),
             repo_branch: None,
             pull_request_url: None,
             task_id: None,
@@ -148,7 +170,7 @@ impl AgentSessionRepo for FixedBotSessions {
             originating_message_id: None,
             bot_id: self.0,
             model: "auto".to_owned(),
-            harness: "cursor".to_owned(),
+            harness: self.1.to_owned(),
             repo_url: None,
             workspace: "/workspace".to_owned(),
             name: DEFAULT_AGENT_SESSION_NAME.to_owned(),
@@ -222,6 +244,14 @@ impl AgentSessionRepo for FixedBotSessions {
         &self,
         _id: AgentSessionId,
         _prompter: &agent_session::domain::model::TurnPrompter,
+    ) -> SessionResult<()> {
+        unimplemented!("this adapter does not dispatch turns")
+    }
+
+    async fn add_follower(
+        &self,
+        _id: AgentSessionId,
+        _user: &MacroUserIdStr<'static>,
     ) -> SessionResult<()> {
         unimplemented!("this adapter does not dispatch turns")
     }
@@ -341,7 +371,7 @@ async fn the_cursor_bot_routes_to_cursor_and_everything_else_to_the_sandbox() {
         sandbox.clone(),
         cursor.clone(),
         TaggedManager::new("codex"),
-        FixedBotSessions(bot_id::CURSOR_BOT_ID),
+        FixedBotSessions(bot_id::CURSOR_BOT_ID, "cursor"),
     );
 
     let spawned = router
@@ -369,7 +399,7 @@ async fn preflight_routes_by_kind_before_any_session_exists() {
         sandbox.clone(),
         cursor.clone(),
         codex.clone(),
-        FixedBotSessions(bot_id::CURSOR_BOT_ID),
+        FixedBotSessions(bot_id::CURSOR_BOT_ID, "cursor"),
     );
     let owner = MacroUserIdStr::try_from_email("asker@example.com").expect("a valid user id");
 
@@ -404,7 +434,7 @@ async fn resume_and_teardown_route_by_the_stored_bot() {
         sandbox.clone(),
         cursor.clone(),
         TaggedManager::new("codex"),
-        FixedBotSessions(bot_id::CURSOR_BOT_ID),
+        FixedBotSessions(bot_id::CURSOR_BOT_ID, "cursor"),
     );
 
     let session = AgentSessionId::new();
@@ -422,7 +452,7 @@ async fn a_database_backed_cursor_agent_routes_by_its_stored_harness() {
         sandbox.clone(),
         cursor.clone(),
         TaggedManager::new("codex"),
-        FixedBotSessions(BotId::TEST_A),
+        FixedBotSessions(BotId::TEST_A, "cursor"),
     );
 
     let session = AgentSessionId::new();
@@ -445,7 +475,7 @@ async fn codex_routes_all_lifecycle_operations_and_rejects_resize() {
         sandbox.clone(),
         cursor.clone(),
         codex.clone(),
-        FixedBotSessions(bot_id::CODEX_BOT_ID),
+        FixedBotSessions(bot_id::CODEX_BOT_ID, "cursor"),
     );
     router
         .spawn(spawn_for(AgentKind::CodexCloud))
@@ -472,4 +502,27 @@ async fn codex_routes_all_lifecycle_operations_and_rejects_resize() {
         AgentKind::from_harness("codex-cloud"),
         AgentKind::CodexCloud
     );
+}
+
+/// An external session's runtime is its operator's, so deleting it has no
+/// provider to release: teardown succeeds without reaching one, while
+/// operations that would need a provider still refuse.
+#[tokio::test]
+async fn external_teardown_is_a_no_op_and_resume_still_refuses() {
+    let sandbox = TaggedManager::new("sandbox");
+    let cursor = TaggedManager::new("cursor");
+    let codex = TaggedManager::new("codex");
+    let router = RoutedContainerManager::new(
+        sandbox.clone(),
+        cursor.clone(),
+        codex.clone(),
+        FixedBotSessions(BotId::TEST_A, harness_id::MACROD_HARNESS_SLUG),
+    );
+
+    let session = AgentSessionId::new();
+    router.teardown(session).await.expect("teardown");
+    assert!(router.resume(session).await.is_err());
+    assert!(sandbox.calls().is_empty());
+    assert!(cursor.calls().is_empty());
+    assert!(codex.calls().is_empty());
 }

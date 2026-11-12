@@ -15,7 +15,6 @@ import type { ImportedCopy } from '../core/import-plan';
 import type { Review, ReviewActions } from '../core/review';
 import { createImportReview } from '../primitives/import-review';
 import {
-  decodeImportDraft,
   decodeImportProgress,
   decodePlanEntries,
 } from '../queries/import-plan';
@@ -28,13 +27,12 @@ function copyBlock(copy: ImportedCopy) {
 
 /** An import review shows its plan, then the run it started. */
 export function ImportReview(props: {
-  review: Review;
+  review: Extract<Review, { kind: 'import' }>;
   canAct: boolean;
   actions: ReviewActions;
 }) {
   const state = useImportQuery();
-  const source = () =>
-    decodeImportDraft(props.review.items[0]?.draft)?.source ?? 'notion';
+  const source = () => props.review.items[0].draft.source;
   const report = useWorkspaceImportReportQuery(source);
   const cancel = useCancelWorkspaceImportMutation(source);
   const layout = useSplitLayout();

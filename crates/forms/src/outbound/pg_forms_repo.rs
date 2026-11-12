@@ -30,9 +30,9 @@ pub enum PgFormsRepoError {
     /// Underlying database failure.
     #[error("database error")]
     Sqlx(#[from] sqlx::Error),
-    /// A gate's rules could not be encoded as JSON for storage, or stored
-    /// ones decoded.
-    #[error("failed to encode or decode stored gate rules")]
+    /// A section's rules or booking target could not be encoded as JSON for
+    /// storage, or stored ones decoded.
+    #[error("failed to encode or decode a stored section's JSON")]
     Json(#[from] serde_json::Error),
     /// A folder id is not a uuid.
     #[error("folder id is not a uuid")]
@@ -60,6 +60,17 @@ impl PgFormsRepo {
     /// A repository over `pool`.
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
+    }
+
+    /// Return the forms filed directly in any of `project_ids` to the root,
+    /// without the grants those folders passed down. A form is not trashed
+    /// with its folder, so trashing the folder files it at the root, as
+    /// purging the folder does.
+    pub async fn unfile_from_projects(
+        &self,
+        project_ids: &[String],
+    ) -> Result<(), PgFormsRepoError> {
+        folders::unfile_from_projects(&self.pool, project_ids).await
     }
 }
 

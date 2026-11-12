@@ -1,24 +1,30 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import type { ScheduledAction } from '@service-scheduled-action/generated/schemas';
+import type { ScheduledActionResponse } from '@service-scheduled-action/generated/schemas';
 import type { Accessor } from 'solid-js';
-import { createMemo, onMount } from 'solid-js';
+import { createMemo, createSignal, onMount } from 'solid-js';
 import type {
   RoutineCreatorSource,
   RoutineDetailSource,
   RoutineListSource,
 } from '../context/routine-sources';
+import { pendingCodeReview, taskSdk } from '../core/code-review';
+import type { ScheduleDraft } from '../core/draft';
 import type { RoutineSnapshot } from '../core/routine';
+import { withDraftSteps } from '../core/routine-draft';
+import { programSteps } from '../core/routine-steps';
 import { scheduleToEntity } from './entities';
 import {
   draftFromSchedule,
   draftToCreateBody,
   draftToUpdateBody,
+  isUnchangedUpdate,
   scheduleToDuplicateBody,
 } from './routine-draft';
 import { useRoutineQuery } from './routines';
 import { toHistoryRecord } from './run-resource';
 import {
   invalidateSchedules,
+  useCodeUpgradesQuery,
   useCreateScheduleMutation,
   useRunScheduleNowMutation,
   useScheduleHistoryQuery,
@@ -27,7 +33,7 @@ import {
   useUpdateScheduleMutation,
 } from './schedules';
 
-function toRoutine(schedule: ScheduledAction): RoutineSnapshot {
+function toRoutine(schedule: ScheduledActionResponse): RoutineSnapshot {
   if (!schedule.id) throw new Error('Routine has no ID');
   return {
     id: schedule.id,
@@ -42,11 +48,14 @@ function toRoutine(schedule: ScheduledAction): RoutineSnapshot {
       schedule.name,
       schedule.kind,
       schedule.trigger,
-      schedule.task,
+      // The SDK its code was checked against is bookkeeping, not configuration.
+      { ...schedule.task, sdk: undefined },
       schedule.run_visibility,
+      schedule.description,
     ]),
     draft: draftFromSchedule(schedule),
     templateId: schedule.template_id ?? undefined,
+    lastRun: schedule.last_run ? toHistoryRecord(schedule.last_run) : undefined,
   };
 }
 
@@ -93,6 +102,25 @@ export function createRoutineDetailSource(
   const history = useScheduleHistoryQuery(id, () =>
     Boolean(raw() && raw()?.owner === userId())
   );
+  const upgrades = useCodeUpgradesQuery(id, () =>
+    Boolean(raw() && raw()?.owner === userId())
+  );
+  const codeReview = createMemo(() => {
+    const current = raw();
+    return current && upgrades.isSuccess
+      ? pendingCodeReview(upgrades.data ?? [], taskSdk(current.task))
+      : undefined;
+  });
+  const [approving, setApproving] = createSignal(false);
+  const save = async (draft: ScheduleDraft) => {
+    const previous = raw();
+    const body = previous && draftToUpdateBody(draft, previous);
+    if (!body) throw new Error('Choose a valid execution target.');
+    // An edit that changes nothing (a blur, a value picked again) writes
+    // nothing, so queued runs keep their configuration.
+    if (isUnchangedUpdate(body, previous)) return toRoutine(previous);
+    return toRoutine(await update.mutateAsync({ scheduleId: id(), body }));
+  };
   onMount(() => {
     fireAndForget(invalidateSchedules(), 'routines');
   });
@@ -104,12 +132,7 @@ export function createRoutineDetailSource(
     },
     loading: () => detail.isPending,
     error: () => detail.isError,
-    async update(draft) {
-      const previous = raw();
-      const body = previous && draftToUpdateBody(draft, previous);
-      if (!body) throw new Error('Choose a valid execution target.');
-      return toRoutine(await update.mutateAsync({ scheduleId: id(), body }));
-    },
+    update: save,
     run: () => run.mutate({ scheduleId: id() }),
     runPending: () => run.isPending,
     setEnabled: (enabled) => activate.mutate({ scheduleId: id(), enabled }),
@@ -117,7 +140,7 @@ export function createRoutineDetailSource(
     duplicate() {
       const current = raw();
       const body = current && scheduleToDuplicateBody(current);
-      if (body && !duplicate.isPending) duplicate.mutate(body);
+      if (body && !duplicate.isPending) duplicate.mutate({ body });
     },
     duplicationPending: () => duplicate.isPending,
     history: createMemo(() =>
@@ -126,6 +149,26 @@ export function createRoutineDetailSource(
     historyLoading: () => history.isPending,
     historyError: () => history.isError,
     refreshHistory: () => history.refetch(),
+    codeReview,
+    // Saving checks the proposal against the current SDK again.
+    async approveCodeUpdate() {
+      const proposal = codeReview()?.proposal;
+      const current = raw();
+      const steps = proposal && programSteps(proposal.task);
+      const draft = current && toRoutine(current).draft;
+      if (!steps || !draft || approving()) return;
+      setApproving(true);
+      try {
+        await save(withDraftSteps(draft, steps));
+        activate.mutate({ scheduleId: id(), enabled: true });
+        await upgrades.refetch();
+      } catch (error) {
+        callbacks.onError('Failed to update the routine’s code', error);
+      } finally {
+        setApproving(false);
+      }
+    },
+    codeUpdatePending: approving,
   };
 }
 
@@ -134,7 +177,10 @@ export function createRoutineCreatorSource(): RoutineCreatorSource {
   return {
     pending: () => mutation.isPending,
     async create(draft) {
-      const created = await mutation.mutateAsync(draftToCreateBody(draft));
+      const created = await mutation.mutateAsync({
+        body: draftToCreateBody(draft),
+        suggestionId: draft.suggestionId,
+      });
       if (!created.id) throw new Error('Created routine has no ID');
       return created.id;
     },

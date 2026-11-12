@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { ComposerEditor } from '@core/component/LexicalMarkdown/component/ComposerEditor';
@@ -22,6 +23,7 @@ import { isMacroAgentId } from '@core/constant/macroAgent';
 import { isMacroNewId } from '@core/constant/macroNew';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { createMessageComposer } from '@core/messages/create-message-composer';
+import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { IUser } from '@core/user/types';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -35,6 +37,7 @@ import type { EntityData } from '@entity';
 import AtIcon from '@icon/system/regular/at.svg';
 import PaperclipIcon from '@icon/system/regular/paperclip.svg';
 import PhoneIcon from '@icon/system/regular/phone.svg';
+import FormatIcon from '@icon/system/regular/text-aa.svg';
 import ChartBarIcon from '@phosphor/chart-bar-horizontal.svg';
 import GifIcon from '@phosphor/gif.svg';
 import type { MessageParent } from '@service-storage/messages';
@@ -62,7 +65,7 @@ import {
 } from '../../dictation/components/dictation-controls';
 import { createComposerDictation } from '../../dictation/composer-dictation';
 import type { DictationController } from '../../dictation/core/types';
-import { useAgentMentionUsers } from '../use-agent-mention-users';
+import { useAgentMentionUserTransform } from '../use-agent-mention-users';
 import { useMessageBotMentionUsers } from '../use-channel-bot-mention-users';
 import { useMessageParticipants } from '../use-message-participants';
 import { CHANNEL_FILE_PICKER_ACCEPT } from './accepted-file-types';
@@ -146,8 +149,8 @@ export type ChannelInputProps = InputCallbacks & {
   attachmentTracker?: InputAttachmentTracker;
   /**
    * People surfaced in the `@`-mention typeahead. Defaults to the `parent`'s
-   * own people: a channel's participants, or the workspace contacts a
-   * document's composers offer.
+   * scope: channel participants, CRM teammates, or bounded personal suggestions
+   * on documents, projects and calls. An explicit empty list never widens.
    */
   participants?: Accessor<IUser[]>;
   /** Channel bots surfaced in the `@`-mention typeahead alongside users. */
@@ -161,7 +164,8 @@ export type ChannelInputProps = InputCallbacks & {
   onStartCall?: () => void;
   /** A call is live in the channel, so the add menu offers to join it. */
   callInProgress?: boolean;
-  children?: JSX.Element;
+  /** Custom action rows can place the composer's shared add menu. */
+  children?: JSX.Element | ((addMenu: JSX.Element) => JSX.Element);
   /** Whether to auto-focus the input on mount. Defaults to `!isTouchDevice()`. */
   autofocus?: boolean;
   /**
@@ -300,7 +304,7 @@ export function ChannelInput(props: ChannelInputProps) {
         options?: RestoreSnapshotOptions;
       }
     | undefined;
-  let pendingFocus = false;
+  let pendingFocus: (() => boolean) | undefined;
   // Caret placement requested by a `cursor: 'trailing-paragraph'` restore.
   // Applied on the next programmatic focus rather than at restore time.
   let pendingCursor: RestoreSnapshotOptions['cursor'];
@@ -338,18 +342,22 @@ export function ChannelInput(props: ChannelInputProps) {
     markdownEditor.controls.focus();
   };
 
-  const focusEditor = () => {
+  const focusEditor = (when: () => boolean = () => true) => {
+    if (!when()) return;
     if (!isEditorConnected) {
-      pendingFocus = true;
+      pendingFocus = when;
       return;
     }
     focusEditorNow();
   };
 
   const flushPendingFocus = () => {
-    if (!pendingFocus) return;
-    pendingFocus = false;
-    queueMicrotask(() => focusEditorNow());
+    const when = pendingFocus;
+    pendingFocus = undefined;
+    if (!when) return;
+    queueMicrotask(() => {
+      if (when()) focusEditorNow();
+    });
   };
 
   const parentBots =
@@ -361,16 +369,21 @@ export function ChannelInput(props: ChannelInputProps) {
       ? useMessageParticipants(() => props.parent!)
       : () => [];
   // Connection-prompt behavior for the built-in agents lives in
-  // useAgentMentionUsers; participants and parent agents feed it here.
+  // useAgentMentionUserTransform; it decorates only the current directory
+  // window or the explicit participant roster.
   // The editor is configured once, at mount.
   const initialFeatures = features();
   const participantsOnly = initialFeatures.mentions === 'participants';
   const mentionUsers = participantsOnly
     ? () => props.participants?.() ?? []
-    : useAgentMentionUsers(() => [
-        ...(props.participants?.() ?? parentParticipants()),
-        ...(props.bots?.() ?? parentBots()),
-      ]);
+    : () => props.participants?.() ?? parentParticipants();
+  const withAgents = participantsOnly
+    ? undefined
+    : useAgentMentionUserTransform();
+  const transformUsers = withAgents
+    ? (users: readonly IUser[]) =>
+        withAgents([...users, ...(props.bots?.() ?? parentBots())])
+    : undefined;
 
   const groupMentions =
     !participantsOnly && (!props.parent || props.parent.type === 'channel');
@@ -388,6 +401,7 @@ export function ChannelInput(props: ChannelInputProps) {
       ...(initialFeatures.gifs ? [] : ['gif']),
     ],
     users: mentionUsers,
+    transformUsers,
     scrollContainer,
     onMentionCreate: (mention) => {
       mentionsTracker.onMentionCreate(mention);
@@ -466,7 +480,7 @@ export function ChannelInput(props: ChannelInputProps) {
   // Whichever Macro the `@macro` typeahead offers: the classic chat reply or
   // the agent-session bot, depending on rollout.
   const macroUser = () =>
-    mentionUsers().find(
+    (transformUsers ? transformUsers([]) : (mentionUsers() ?? [])).find(
       (user) => isMacroAgentId(user.id) || isMacroNewId(user.id)
     );
   const addMenuGroups = (): ComposerAddMenuGroup[] => {
@@ -496,7 +510,7 @@ export function ChannelInput(props: ChannelInputProps) {
       return [
         {
           id: 'gif',
-          label: 'GIF',
+          label: t('channelComposer.gif'),
           icon: <GifIcon class="size-5" />,
           onSelect: () =>
             runInEditor((editor) => action.action(editor, actionContext), {
@@ -516,7 +530,7 @@ export function ChannelInput(props: ChannelInputProps) {
             ? [
                 {
                   id: 'mention',
-                  label: 'Mention',
+                  label: t('channelComposer.mention'),
                   icon: <AtIcon class="size-5" />,
                   hint: '@',
                   onSelect: () =>
@@ -525,9 +539,24 @@ export function ChannelInput(props: ChannelInputProps) {
                 },
               ]
             : []),
+          ...(isMobile()
+            ? [
+                {
+                  id: 'format-text',
+                  label: t('channelComposer.formatText'),
+                  icon: <FormatIcon class="size-5" />,
+                  onSelect: () => {
+                    collapsedInput.expand();
+                    focusEditor();
+                    commands.toggleFormatRibbon();
+                  },
+                  focusesEditor: true,
+                },
+              ]
+            : []),
           {
             id: 'attach',
-            label: 'Attach files',
+            label: t('channelComposer.attachFiles'),
             icon: <PaperclipIcon class="size-5" />,
             onSelect: () => collapsedInput.attach(),
           },
@@ -535,28 +564,28 @@ export function ChannelInput(props: ChannelInputProps) {
         ],
       },
       {
-        label: 'Create',
+        label: t('channelComposer.create'),
         items: !features().createItems
           ? []
           : [
               ...create(
                 'task',
-                'New task',
+                t('channelComposer.newTask'),
                 <EntityIcon targetType="task" size="xs" />
               ),
               ...create(
                 'poll',
-                'New poll',
+                t('channelComposer.newPoll'),
                 <ChartBarIcon class="size-3.5 text-violet" />
               ),
               ...create(
                 'form',
-                'New form',
+                t('channelComposer.newForm'),
                 <EntityIcon targetType="form" size="xs" />
               ),
               ...create(
                 'document',
-                'New document',
+                t('channelComposer.newDocument'),
                 <EntityIcon targetType="md" size="xs" />
               ),
             ],
@@ -567,7 +596,7 @@ export function ChannelInput(props: ChannelInputProps) {
             ? [
                 {
                   id: 'ask-macro',
-                  label: 'Ask Macro',
+                  label: t('channelComposer.askMacro'),
                   icon: <EntityIcon targetType="agent" size="xs" />,
                   hint: '@macro',
                   onSelect: () =>
@@ -597,7 +626,9 @@ export function ChannelInput(props: ChannelInputProps) {
             ? [
                 {
                   id: 'call',
-                  label: callInProgress ? 'Join call' : 'Start a call',
+                  label: callInProgress
+                    ? t('channelComposer.joinCall')
+                    : t('channelComposer.startCall'),
                   icon: (
                     <PhoneIcon
                       class={cn('size-3.5', callInProgress && 'text-success')}
@@ -704,11 +735,12 @@ export function ChannelInput(props: ChannelInputProps) {
   props.onReady?.({
     snapshot: inputState.snapshot,
     clear: () => markdownEditor.controls.clear(),
-    focus: () => {
+    focus: (options) => {
+      if (options?.when?.() === false) return;
       // A collapsed pill hides the editor; programmatic focus implies intent
       // to type, so expand first.
       collapsedInput.expand();
-      focusEditor();
+      focusEditor(options?.when);
     },
     send: commands.send,
     attachFiles: (files) => inputState.commands.attachFiles(files),
@@ -739,6 +771,9 @@ export function ChannelInput(props: ChannelInputProps) {
       // Block upstream escape handlers when ESC should close inline menus.
       if (markdownEditor.controls.isInlineMenuOpen()) return true;
       if (!props.onEscape) return false;
+      // Lexical's blur, as its own Esc does: it also drops the DOM selection,
+      // which would otherwise pull focus back when the selection next syncs.
+      markdownEditor.lexical.blur();
       props.onEscape();
       return true;
     },
@@ -758,7 +793,12 @@ export function ChannelInput(props: ChannelInputProps) {
         >
           <Input.DropOverlay />
           <Input.Layout.Body>
-            <Input.FormatRibbon>
+            <Input.FormatRibbon
+              class="overflow-x-auto"
+              data-keep-keyboard
+              onPointerDown={(event) => event.preventDefault()}
+              onMouseDown={(event) => event.preventDefault()}
+            >
               <FormatButtons
                 selectionState={() => markdownEditor.selection}
                 onInlineFormat={(format) =>
@@ -806,7 +846,11 @@ export function ChannelInput(props: ChannelInputProps) {
             <Input.Attachments kind="document" />
           </Input.Layout.Body>
           <Switch>
-            <Match when={props.children}>{props.children}</Match>
+            <Match when={props.children}>
+              {typeof props.children === 'function'
+                ? props.children(addMenu())
+                : props.children}
+            </Match>
             <Match when>
               <DefaultActions
                 input={inputState.view()}

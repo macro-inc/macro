@@ -38,6 +38,17 @@ fn a_view_of_every_widget_decodes() {
                 }
             },
             { "type": "channelMessage", "channelId": "channel-1", "messageId": "message-1" },
+            { "type": "events", "title": "This week", "events": [{ "eventId": "event-1", "occurrenceKey": "2026-10-14" }] },
+            { "type": "cards", "title": "Docs", "items": [{ "type": "document", "id": "doc-1" }] },
+            {
+                "type": "tags",
+                "title": "Engineering tags",
+                "tags": [{
+                    "label": "Type",
+                    "description": "What kind of work it is",
+                    "children": [{ "label": "bug", "color": "red", "tagId": "tag-1" }]
+                }]
+            },
             {
                 "type": "container",
                 "direction": "row",
@@ -54,6 +65,34 @@ fn a_view_of_every_widget_decodes() {
         ]
     });
     let decoded = decode_view(&view).expect("every widget decodes");
+    assert_eq!(serde_json::to_value(&decoded).unwrap(), view);
+}
+
+/// The model's schema negates only a clause, but a view that negates a
+/// combination, as the web's query can, still decodes.
+#[test]
+fn a_negated_combination_decodes() {
+    let view = json!({
+        "widgets": [{
+            "type": "list",
+            "source": {
+                "kind": "query",
+                "query": {
+                    "documentWhere": {
+                        "op": "not",
+                        "clause": {
+                            "op": "or",
+                            "clauses": [
+                                { "include": { "documentDone": true } },
+                                { "op": "not", "clause": { "op": "and", "clauses": [] } }
+                            ]
+                        }
+                    }
+                }
+            }
+        }]
+    });
+    let decoded = decode_view(&view).expect("a negated combination decodes");
     assert_eq!(serde_json::to_value(&decoded).unwrap(), view);
 }
 
@@ -79,7 +118,8 @@ fn fields_the_types_do_not_name_are_dropped() {
 /// where the problem is.
 #[test]
 fn what_the_renderer_cannot_draw_is_named_by_its_place() {
-    let widget_types = "`md`, `timeline`, `list`, `channelMessage`, `container`";
+    let widget_types =
+        "`md`, `timeline`, `list`, `channelMessage`, `events`, `cards`, `tags`, `container`";
     let cases = [
         (
             json!({ "widgets": [{ "type": "markdown", "markdown": "### Routines" }] }),
@@ -108,6 +148,19 @@ fn what_the_renderer_cannot_draw_is_named_by_its_place() {
         (
             json!({ "widgets": [{ "type": "container", "gap": 9, "children": [] }] }),
             "view.widgets[0] should be less or equal to 8".to_owned(),
+        ),
+        (
+            json!({ "widgets": [{ "type": "tags", "title": "Created tags" }] }),
+            r#"view.widgets[0] is missing "tags""#.to_owned(),
+        ),
+        (
+            json!({ "widgets": [{ "type": "cards", "items": [{ "type": "spaceship", "id": "s-1" }] }] }),
+            "view.widgets[0] should be one of `document`, `email_thread`, `calendar_event`, `project`, `channel`, `routine`, `form`, `initiative`"
+                .to_owned(),
+        ),
+        (
+            json!({ "widgets": [{ "type": "tags", "tags": [{ "label": "Type", "children": [{ "color": "red" }] }] }] }),
+            r#"view.widgets[0] is missing "label""#.to_owned(),
         ),
         (json!({}), r#"view is missing "widgets""#.to_owned()),
     ];

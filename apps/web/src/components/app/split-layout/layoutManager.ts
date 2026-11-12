@@ -9,16 +9,18 @@ import type {
   SplitNavigateOptions,
   SplitRouter,
   SplitSearchUpdate,
+  SplitSide,
 } from '@app/lib/split-router';
 import { claimOf } from '@app/lib/split-router';
 import { trackNavigationLifecycle } from '@app/observability/navigation-lifecycle';
+import { globalTabManager } from '@app/signal/tabLayout';
+import { consumeOpenInNewTabIntent } from '@components/app/tab-layout/open-in-tab-intent';
 import type {
   BlockAlias,
   BlockAliasContext,
   BlockComponentProps,
   BlockName,
 } from '@core/block';
-import type { ResizeZoneCtx } from '@core/component/Resize/types';
 import { isBlockAlias, resolveBlockAlias } from '@core/constant/allBlocks';
 import type {
   BlockInstanceHandle,
@@ -49,7 +51,7 @@ import {
   type ContentInstance,
   createContentInstanceRegistry,
 } from './contentInstanceRegistry';
-import { DEFAULT_SPLIT_MIN_WIDTH } from './splitContentSizing';
+import { fitsNewColumn, fitsSplit, type TileArea } from './split-geometry';
 import { createViewState, type ViewState } from './view-state';
 
 /** Checked on every route change in a pane, so entry state is captured before the pane moves. */
@@ -204,8 +206,11 @@ export type CreateNewSplitOptions = {
   /** Shell components only; entity blocks are always single-instance. */
   allowDuplicate?: boolean;
   referredFrom: ReferredFrom;
-  insertIndex?: number;
+  beside?: SplitPlacement;
 };
+
+/** A new split beside `split`, on `side`. */
+export type SplitPlacement = { split: SplitId; side: SplitSide };
 
 export type OpenWithSplitOptions = {
   /** Resume an opted-in view; explicit new-split actions stay fresh. */
@@ -224,7 +229,8 @@ export type OpenWithSplitOptions = {
   replaceWhenFull?: boolean;
   /** If true, prefers opening in a new split. May still replace if layout is at capacity. */
   preferNewSplit?: boolean;
-  insertIndex?: number;
+  /** Where a new split goes; a full-height split at the end by default. */
+  beside?: SplitPlacement;
   handle?: SplitHandle;
   /**
    * Ask the block to land on its latest content via the `goToLatest` block
@@ -321,6 +327,8 @@ export type SplitLayoutOptions = {
   stacked?: () => boolean;
   /** Changing the session retires retained snapshots and ownership of existing entries. */
   sessionKey?: Accessor<string | undefined>;
+  /** True once when the click that opened a new split asked for it below its source. */
+  consumeSplitBelowIntent?: () => boolean;
 };
 
 export type SplitManager = {
@@ -340,7 +348,6 @@ export type SplitManager = {
   readonly activeSplit: Accessor<SplitHandle | undefined>;
   readonly lastActiveSplitId: Accessor<SplitId | undefined>;
   readonly events: Accessor<SplitEventWithType | undefined>;
-  readonly resizeContext: Accessor<ResizeZoneCtx | undefined>;
 
   // methods
   /** Get a split by its split id */
@@ -377,7 +384,14 @@ export type SplitManager = {
 
   getOrchestrator: () => BlockOrchestrator;
 
+  /** Whether a new full-height split fits beside the others. */
   canAppendSplit: () => boolean;
+
+  /** Whether splitting `id` toward `side` leaves every split its minimum size. */
+  canSplit: (id: SplitId, side: SplitSide) => boolean;
+
+  /** Divides every split's space equally. */
+  resetSizes: () => void;
 
   /** Replace all splits with a single split containing the given content. */
   replaceAllSplits: (
@@ -403,8 +417,8 @@ export type SplitManager = {
   /** A function to return focus to the most recent split. */
   returnFocus: () => void;
 
-  /** Set the layout resize context from the component tree. */
-  setResizeContext: (cts: ResizeZoneCtx) => void;
+  /** The area the layout measured for its splits. */
+  setTileArea: (area: TileArea) => void;
 
   /** Create a temporary popover split that renders content in a modal dialog */
   createPopoverSplit: (
@@ -589,6 +603,10 @@ function contentIdentity(content: SplitContent) {
     : content;
 }
 
+/** A split is its router pane; the ids are the same string. */
+export const paneOf = (id: SplitId) => id as string as PaneId;
+export const splitOf = (pane: PaneId) => pane as string as SplitId;
+
 export function createSplitLayout(
   orchestrator: BlockOrchestrator,
   options: SplitLayoutOptions
@@ -627,7 +645,12 @@ export function createSplitLayout(
     sessionKey: options.sessionKey,
   });
 
-  const contentInstances = createContentInstanceRegistry();
+  // A view in a parked split (a background desktop tab) keeps its selection
+  // but holds nothing, so another tab can open the same content.
+  const contentInstances = createContentInstanceRegistry(
+    ({ split }) =>
+      split === undefined || state.splits.some(({ id }) => id === split)
+  );
   const unregisterContentInstances = contentInstances.register(() => [
     ...state.splits.map((split) => ({
       owner: split.id,
@@ -669,14 +692,33 @@ export function createSplitLayout(
       };
   }
 
-  const [resizeContext, setResizeContext] = createSignal<ResizeZoneCtx>();
+  // Unmeasured, as on native mobile, every split fits.
+  const [tileArea, setTileArea] = createSignal<TileArea>();
 
   const isFront = (id: SplitId) => state.splits.at(-1)?.id === id;
   const onScreen = (split: SplitState) => !stacked() || isFront(split.id);
 
-  const canAppendSplit = createMemo(
-    () => resizeContext()?.canFit({ minSize: DEFAULT_SPLIT_MIN_WIDTH }) ?? true
-  );
+  const canAppendSplit = createMemo(() => {
+    const area = tileArea();
+
+    return area ? fitsNewColumn(router.layout(), area) : true;
+  });
+
+  const canSplit = (id: SplitId, side: SplitSide) => {
+    const area = tileArea();
+
+    return area ? fitsSplit(router.layout(), area, paneOf(id), side) : true;
+  };
+
+  /** Room for a new split where `beside` puts it. */
+  const hasRoomFor = (beside: SplitPlacement | undefined) =>
+    beside ? canSplit(beside.split, beside.side) : canAppendSplit();
+
+  /** The router's hint for placing a new split. */
+  const placementIntent = (beside: SplitPlacement | undefined) => ({
+    direct: true,
+    split: beside && { pane: paneOf(beside.split), side: beside.side },
+  });
 
   const [splitNamesById, setSplitNamesById] = createStore<{
     [id: SplitId]: string;
@@ -695,9 +737,6 @@ export function createSplitLayout(
    */
   const entryStateCaptors = new Map<SplitId, Map<string, () => unknown>>();
   const entryStates = new Map<string, EntryState>();
-
-  const paneOf = (id: SplitId) => id as string as PaneId;
-  const splitOf = (pane: PaneId) => pane as string as SplitId;
 
   function captureEntry(id: SplitId, entry: Entry): EntryState | undefined {
     const captors = entryStateCaptors.get(id);
@@ -1342,23 +1381,23 @@ export function createSplitLayout(
     };
   };
 
-  /** Opens `content` in a new pane where the policy places it, after the active split by default. */
+  /** Opens `content` in a new pane where the policy places it, at the end by default. */
   function openPane(
     content: SplitContent,
     openOptions: {
-      insertIndex?: number;
+      beside?: SplitPlacement;
       referredFrom?: ReferredFrom;
       activate?: boolean;
       allowDuplicate?: boolean;
     }
   ): MaybePromise<NavigationResult> {
-    const { insertIndex, referredFrom, activate, allowDuplicate } = openOptions;
+    const { beside, referredFrom, activate, allowDuplicate } = openOptions;
     const active = state.activeSplitId;
     const source = active ? paneOf(active) : undefined;
 
     return router.open(
       { location: toLocation(content) },
-      { newPane: true, source, intent: { insertIndex, direct: true } },
+      { newPane: true, source, intent: placementIntent(beside) },
       {
         ...entryOptionsOf(content, { referredFrom, activate }),
         allowDuplicate,
@@ -1369,8 +1408,7 @@ export function createSplitLayout(
   function createNewSplit(
     options: CreateNewSplitOptions
   ): SplitHandle | undefined {
-    const { content, activate, referredFrom, insertIndex, allowDuplicate } =
-      options;
+    const { content, activate, referredFrom, beside, allowDuplicate } = options;
     const initialContent = attachAliasContext(content ?? DEFAULT_SPLIT_CONTENT);
 
     // Direct split creation permits duplicate shells, but never duplicate entities.
@@ -1381,7 +1419,7 @@ export function createSplitLayout(
     }
 
     const result = openPane(initialContent, {
-      insertIndex,
+      beside,
       referredFrom,
       activate: activate ?? false,
       allowDuplicate,
@@ -1416,11 +1454,8 @@ export function createSplitLayout(
     if (!canSwapSplit(id, direction)) return;
     const index = splitIndexById(id);
     const targetIndex = index + (direction === 'left' ? -1 : 1);
-    const target = state.splits[targetIndex];
-    batch(() => {
-      resizeContext()?.swap(id, target.id);
-      router.move(paneOf(id), targetIndex);
-    });
+    // The tiles keep their sizes; the two splits trade places.
+    router.move(paneOf(id), targetIndex);
   }
 
   function hasSplit(type: SplitContentType, id: string): boolean {
@@ -1618,7 +1653,7 @@ export function createSplitLayout(
     };
     const wantsNewPane = stacked()
       ? !options.mergeHistory
-      : options.preferNewSplit === true && canAppendSplit();
+      : options.preferNewSplit === true && hasRoomFor(options.beside);
 
     const result =
       !source || wantsNewPane
@@ -1627,7 +1662,7 @@ export function createSplitLayout(
             {
               newPane: true,
               source: source && paneOf(source.id),
-              intent: { insertIndex: options.insertIndex, direct: true },
+              intent: placementIntent(options.beside),
             },
             navigateOptions
           )
@@ -1676,10 +1711,50 @@ export function createSplitLayout(
     }
   }
 
+  /** A Shift-click that also held Option opens below the split it came from. */
+  function withClickedSide(open: OpenWithSplitOptions): OpenWithSplitOptions {
+    if (stacked() || !open.preferNewSplit || open.beside) return open;
+    if (!options.consumeSplitBelowIntent?.()) return open;
+
+    const source = open.handle ?? activeSplit();
+    if (!source) return open;
+
+    return { ...open, beside: { split: source.id, side: 'below' } };
+  }
+
+  /**
+   * Cmd+click and "Open in new tab" open `content` as a new desktop tab here,
+   * before reuse and the current split's leave guards: the current tab is
+   * not navigated, and a tab may show what this one already has open.
+   */
+  function openAsNewTab(
+    content: SplitContent,
+    options: OpenWithSplitOptions
+  ): boolean {
+    const tabManager = globalTabManager();
+    if (!tabManager) return false;
+    const intent = consumeOpenInNewTabIntent();
+    if (!intent) return false;
+
+    const { props, keepProps, meta } = entryOptionsOf(content, {
+      referredFrom: options.referredFrom ?? null,
+    });
+    const entry: Entry = {
+      id: `entry_${crypto.randomUUID()}`,
+      location: toLocation(content),
+      ...(props !== undefined && { props }),
+      ...(keepProps && { keepProps }),
+      ...(meta && { meta }),
+    };
+    tabManager.openEntryInNewTab(entry, intent);
+    return true;
+  }
+
   function openWithSplit(
     content: SplitContent,
-    options: OpenWithSplitOptions = {}
+    requested: OpenWithSplitOptions = {}
   ): OpenSplitResult {
+    let options = withClickedSide(requested);
     const sourceOwner = options.handle?.id;
     if (options.resume && !options.preferNewSplit) {
       const source = options.handle ?? activeSplit();
@@ -1699,6 +1774,9 @@ export function createSplitLayout(
     }
     if (options.search || options.routeState !== undefined) {
       openThroughRouter(content, options);
+      return { status: 'navigating', sourceOwner };
+    }
+    if (openAsNewTab(content, options)) {
       return { status: 'navigating', sourceOwner };
     }
     const existing = findOpenView(content);
@@ -1759,7 +1837,7 @@ export function createSplitLayout(
     }
 
     const shouldReplaceWhenFull =
-      options.replaceWhenFull !== false && !canAppendSplit();
+      options.replaceWhenFull !== false && !hasRoomFor(options.beside);
 
     const shouldReplace = stacked()
       ? options.mergeHistory === true
@@ -1786,7 +1864,7 @@ export function createSplitLayout(
         activate: options.activate ?? true,
         referredFrom: options.referredFrom ?? null,
         allowDuplicate: options.allowDuplicate,
-        insertIndex: options.insertIndex,
+        beside: options.beside,
       });
       return split
         ? { status: 'opened', split, sourceOwner }
@@ -1884,14 +1962,15 @@ export function createSplitLayout(
     toggleSpotlightSplit,
     tabTitle,
     returnFocus: () => dispatchEvent(SplitEvent.ReturnFocus, undefined),
-    resizeContext,
-    setResizeContext,
+    setTileArea,
     getOrchestrator: () => orchestrator,
     createPopoverSplit,
     getActivePopovers,
     closeAllPopovers,
     popovers: () => state.popovers,
     canAppendSplit,
+    canSplit,
+    resetSizes: router.resetLayoutSizes,
     getVisibleSplits,
     getVisibleSplitCount: () => getVisibleSplits().length,
     contentNavigationReady: router.ready,

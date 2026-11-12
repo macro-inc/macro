@@ -59,13 +59,16 @@ to the browser via `inbound/wasm`.
 - Add a new message/event kind: `src/domain/log.rs` (raw shape) →
   `src/domain/fold.rs` (fold logic) → `src/domain/model.rs` (renderable type)
   → `src/inbound/wire.rs` if the browser needs it → `cargo run -p agent_fold
-  --bin export_types` to regenerate the TypeScript contract.
+  --bin agent_fold_types` to regenerate the TypeScript contract.
 - Debug a fold against a recorded session: `cargo run -p agent_fold --bin
   fold_jsonl -- <path>.jsonl`.
 
 `FoldedMessage::last_text` supplies the same terminal prose to live lifecycle
 signals and harness recovery from a persisted log. Keep these interpretations
 aligned; recovery must never guess the answer from another turn.
+
+`_macro/review_updated` frames project each review's newest saved revision
+into `SessionMetadata.reviewRevisions`; they never touch messages or the turn.
 
 Notification log frames open system turns without user messages. Their events
 project into `SessionMetadata.notifications`, separate from message search and
@@ -93,7 +96,7 @@ session projection carries that state to list rows without loading transcripts.
 
 - `cargo test -p agent_fold`.
 - After changing `inbound/wire.rs` or exported `domain/model.rs` types:
-  `cargo run -p agent_fold --bin export_types` and commit the regenerated
+  `cargo run -p agent_fold --bin agent_fold_types` and commit the regenerated
   TypeScript: the web client's copy and the SDK's
   `packages/sdk/generated/agent-fold/`, which types
   `AgentSession.foldedLog()`.

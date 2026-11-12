@@ -15,6 +15,11 @@ import {
   type AgentSessionRecord,
   type IssueResult,
 } from '@core/agent-session/AgentSession';
+import {
+  forgetRecentlyViewed,
+  isRecentlyViewed,
+  retainRecentlyViewed,
+} from '@core/agent-session/recently-viewed';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { AgentSessionRenamedEvent } from '@queries/agent-session/realtime-protocol';
 import {
@@ -42,7 +47,7 @@ import {
   onCleanup,
   untrack,
 } from 'solid-js';
-import { createStore, produce, reconcile } from 'solid-js/store';
+import { createStore, reconcile, unwrap } from 'solid-js/store';
 import { issueSessionAction } from '../queries/issue-session-action';
 import type { EffortSelection } from '../state/session-config';
 import { configureSessionModel } from './configure-session-model';
@@ -99,10 +104,6 @@ function compareMessages(a: FoldedMessage, b: FoldedMessage): number {
   return authorRank(a) - authorRank(b);
 }
 
-function sameMessage(a: FoldedMessage, b: FoldedMessage): boolean {
-  return a.turn === b.turn && a.author.kind === b.author.kind;
-}
-
 /**
  * `sessionId` is absent while a just-created session's `POST` is still on the
  * wire (`pending-session.ts`). `createResource` treats an absent source as
@@ -139,65 +140,42 @@ export function createAgentSession(
   const [bot, setBot] = createSignal<SessionBot>();
   const [metadata, setMetadata] = createSignal<SessionMetadata>();
 
-  const upsert = (messages: FoldedMessage[]) =>
-    batch(() => {
-      for (const message of messages) {
-        // The list is short and appends dominate, so scan from the tail
-        // rather than binary-searching.
-        let index = list.length - 1;
-        while (index >= 0 && compareMessages(list[index]!, message) > 0) {
-          index--;
-        }
-        if (index >= 0 && sameMessage(list[index]!, message)) {
-          // Path-scoped reconcile: a streaming turn replaces its message
-          // hundreds of times; only the changed content re-renders.
-          setList(index, reconcile(message));
-        } else {
-          const at = index + 1;
-          setList(
-            produce((current: FoldedMessage[]) =>
-              current.splice(at, 0, message)
-            )
-          );
-        }
-      }
-    });
-
-  /** A row's identity in the transcript, and the transcript's render key. */
-  const keyOf = (message: FoldedMessage) =>
-    `${message.turn}:${message.author.kind}`;
-
   // A whole new view of the conversation: what a load reports, and what every
   // rebase reports while something is speculated.
   //
-  // Merged row by row rather than spliced wholesale. A splice hands the store
-  // a fresh object for every index, so Solid remounts every row - the
-  // transcript re-measures, entrance motions replay, and a streaming turn
-  // visibly jumps. A rebase happens on *every* confirmed frame while an
-  // action is pending, so that jump was the whole turn flickering. Reconciling
-  // each row against the one already there keeps identity for everything that
-  // did not actually change.
+  // Keyed by each message's stable `key` (`<turn>:<author kind>`), so a row
+  // the new view still holds stays the same store object, reconciled in place,
+  // and only rows that came or went mount or unmount. A rebase happens on
+  // every confirmed frame while an action is pending; reconciling by position
+  // or swapping in fresh objects would remount the transcript and replay the
+  // whole turn. Not `merge`: a row can move.
   const replace = (messages: FoldedMessage[]) =>
-    batch(() => {
-      const wanted = new Set(messages.map(keyOf));
-      // Tail first, so the indices ahead of each removal still hold.
-      for (let index = list.length - 1; index >= 0; index--) {
-        if (wanted.has(keyOf(list[index]!))) continue;
-        setList(
-          produce((current: FoldedMessage[]) => {
-            current.splice(index, 1);
-          })
-        );
-      }
-      upsert(messages);
-    });
+    setList(reconcile(messages, { key: 'key' }));
+
+  // One streamed message. The fold appends in transcript order, so the tail is
+  // the only row this reads: settled history is never walked per event.
+  const upsert = (message: FoldedMessage) => {
+    const last = list.at(-1);
+    if (last?.key === message.key) {
+      setList(list.length - 1, reconcile(message));
+    } else if (!last || compareMessages(last, message) < 0) {
+      setList(list.length, message);
+    } else {
+      // Out of order or an earlier row's update: rare, so take the keyed
+      // path over the whole list.
+      const next = unwrap(list).filter((row) => row.key !== message.key);
+      const at = next.findIndex((row) => compareMessages(row, message) > 0);
+      next.splice(at === -1 ? next.length : at, 0, message);
+      replace(next);
+    }
+  };
 
   const applyEvents = (events: FoldedStreamEvent[]) =>
     batch(() => {
       for (const event of events) {
         if (event.kind === 'replace') replace(event.messages);
         else if (event.kind === 'metadata') setMetadata(event.metadata);
-        else upsert([event.message]);
+        else upsert(event.message);
       }
     });
 
@@ -257,6 +235,7 @@ export function createAgentSession(
     const record = await session.load();
     if (superseded(session)) return record.session;
     await show(session, record, 'fetched');
+    retainRecentlyViewed(session.id);
     return renameRefresh > renameRefreshAtStart &&
       latestRename?.agentSessionId === session.id
       ? { ...record.session, name: latestRename.name }
@@ -267,6 +246,7 @@ export function createAgentSession(
     live,
     async (session) => {
       const renameRefreshAtStart = renameRefresh;
+      const reused = isRecentlyViewed(session.id);
 
       batch(() => {
         setList(reconcile([]));
@@ -274,6 +254,17 @@ export function createAgentSession(
         setMetadata(undefined);
         setSettleFailure(undefined);
       });
+
+      // Held open since an earlier view: the fold is current, so it goes
+      // straight up. The row is from that view, and is read again behind it.
+      if (reused) {
+        const row = await settle(session, renameRefreshAtStart);
+        // Started as the resource resolves, so its answer cannot land first.
+        if (!superseded(session)) {
+          fireAndForget(revalidateRow(session), 'agent-session');
+        }
+        return row;
+      }
 
       const cached = await session.warm();
       if (!cached || superseded(session)) {
@@ -356,6 +347,27 @@ export function createAgentSession(
       );
     })
   );
+
+  /**
+   * The row of a session held open since an earlier view, read again. A
+   * refusal ends the reopen as a denied load would have; a newer rename or
+   * update wins over this read.
+   */
+  async function revalidateRow(session: AgentSession): Promise<void> {
+    const run = ++updateRefresh;
+    const renameRefreshAtStart = renameRefresh;
+    const row = await session.readRow();
+    if (run !== updateRefresh || superseded(session)) return;
+    if (row.isErr()) {
+      if (row.error === 'denied') {
+        forgetRecentlyViewed(session.id);
+        setSettleFailure(new AgentSessionAccessDenied(session.id));
+      }
+      return;
+    }
+    if (renameRefresh !== renameRefreshAtStart) return;
+    mutate((current) => (current ? row.value : current));
+  }
 
   // A first fetch would suspend; see `openedPending`.
   //

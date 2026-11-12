@@ -3,16 +3,22 @@ import type { ChannelLabelScopeSelection } from '@service-storage/generated/sche
 import type { ChannelLabelsList } from '@service-storage/generated/schemas/channelLabelsList';
 import type { SmartTagPreview } from '@service-storage/generated/schemas/smartTagPreview';
 import { cleanup, render, waitFor } from '@solidjs/testing-library';
-import { type QueryClient, QueryClientProvider } from '@tanstack/solid-query';
+import {
+  focusManager,
+  type QueryClient,
+  QueryClientProvider,
+} from '@tanstack/solid-query';
 import { type Ok, ok } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { authKeys } from '../auth/keys';
 import { channelKeys } from '../channel/keys';
 import { queryClient } from '../client';
 import {
   useAvailableSectionChannelsQuery,
   useChannelLabelsData,
   useChannelLabelsQuery,
+  useRenameChannelLabelMutation,
   useSetChannelLabelMutation,
   useSmartTagPreviewQuery,
 } from './channel-labels';
@@ -24,24 +30,31 @@ const mocks = vi.hoisted(() => ({
   list: vi.fn(),
   preview: vi.fn(),
   assign: vi.fn(),
+  rename: vi.fn(),
   channels: vi.fn(),
 }));
 vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => () => ({ enabled: mocks.enabled() }),
+  useFeatureFlag: (flag: { key: string }) => () => ({
+    enabled:
+      flag.key === 'enable-chat-sidebar-sections' ? false : mocks.enabled(),
+  }),
 }));
 vi.mock('@core/context/user', () => ({
   useUserId: () => () => mocks.userId(),
+  useIsAuthenticated: () => () => true,
 }));
 vi.mock('@service-storage/client', () => ({
   storageServiceClient: {
+    getChannels: async (args: unknown) =>
+      ok({ items: await mocks.channels(args), next_cursor: null }),
     channelLabels: {
       list: mocks.list,
       preview: mocks.preview,
       setChannelLabel: mocks.assign,
+      rename: mocks.rename,
     },
   },
 }));
-vi.mock('../channel/channels', () => ({ fetchAllChannels: mocks.channels }));
 vi.mock('../client', async () => {
   const { QueryClient } = await import('@tanstack/solid-query');
   return { queryClient: new QueryClient() };
@@ -66,12 +79,17 @@ let client: QueryClient;
 beforeEach(() => {
   mocks.userId = () => 'viewer';
   mocks.assign.mockReset().mockResolvedValue(ok(undefined));
+  mocks.rename.mockReset();
   mocks.channels.mockReset().mockResolvedValue([]);
   mocks.list.mockReset().mockResolvedValue(ok(labels));
   mocks.preview
     .mockReset()
     .mockResolvedValue(ok({ channels: [], totalCount: 0 }));
   client = queryClient;
+  client.setQueryData(authKeys.userInfo.queryKey, {
+    id: mocks.userId(),
+    authenticated: true,
+  });
   client.setDefaultOptions({
     queries: { retry: false },
     mutations: { retry: false },
@@ -80,6 +98,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   client.clear();
+  focusManager.setFocused(undefined);
 });
 
 describe('channel tag query rollout', () => {
@@ -106,6 +125,10 @@ describe('channel tag query rollout', () => {
       </QueryClientProvider>
     ));
     await waitFor(() => expect(mocks.channels).toHaveBeenCalledTimes(1));
+    client.setQueryData(authKeys.userInfo.queryKey, {
+      id: 'new-viewer',
+      authenticated: true,
+    });
     setUserId('new-viewer');
     await waitFor(() => expect(query.isPending).toBe(false));
     expect(query.data?.map((channel) => channel.id)).toEqual(['current']);
@@ -115,7 +138,7 @@ describe('channel tag query rollout', () => {
 
     mocks.channels.mockResolvedValueOnce([{ id: 'joined' }]);
     await client.invalidateQueries({
-      queryKey: channelKeys.listChannels.queryKey,
+      queryKey: channelKeys.listChannels._def,
     });
     expect(query.data?.map((channel) => channel.id)).toEqual(['joined']);
   });
@@ -161,6 +184,65 @@ describe('channel tag query rollout', () => {
     expect(
       client.getQueryData(channelLabelKeys.list(undefined, 'viewer').queryKey)
     ).toEqual(labels);
+  });
+
+  it('inherits bounded retries for transient section failures and retains cached labels', async () => {
+    mocks.enabled = () => true;
+    client.setDefaultOptions({ queries: { retry: 1, retryDelay: 0 } });
+    client.setQueryData(
+      channelLabelKeys.list('personal', 'viewer').queryKey,
+      labels
+    );
+    mocks.list.mockRejectedValueOnce(new Error('Network unavailable'));
+    mocks.list.mockResolvedValueOnce(ok(labels));
+    let data!: ReturnType<typeof useChannelLabelsData>;
+    let query!: ReturnType<typeof useChannelLabelsQuery>;
+    const Probe = () => {
+      data = useChannelLabelsData('personal');
+      query = useChannelLabelsQuery('personal');
+      return null;
+    };
+    render(() => (
+      <QueryClientProvider client={client}>
+        <Probe />
+      </QueryClientProvider>
+    ));
+
+    expect(data()).toEqual(labels.labels);
+    await client.invalidateQueries({
+      queryKey: channelLabelKeys.list('personal', 'viewer').queryKey,
+    });
+
+    expect(mocks.list).toHaveBeenCalledTimes(2);
+    expect(query.isError).toBe(false);
+    expect(data()).toEqual(labels.labels);
+  });
+
+  it('recovers an initial section failure when the app regains focus', async () => {
+    mocks.enabled = () => true;
+    client.setDefaultOptions({
+      queries: { retry: false, refetchOnWindowFocus: false },
+    });
+    mocks.list.mockRejectedValueOnce(new Error('Network unavailable'));
+    mocks.list.mockResolvedValueOnce(ok(labels));
+    let query!: ReturnType<typeof useChannelLabelsQuery>;
+    const Probe = () => {
+      query = useChannelLabelsQuery('personal');
+      return null;
+    };
+    render(() => (
+      <QueryClientProvider client={client}>
+        <Probe />
+      </QueryClientProvider>
+    ));
+    await waitFor(() => expect(query.isError).toBe(true));
+
+    focusManager.setFocused(false);
+    focusManager.setFocused(true);
+
+    await waitFor(() => expect(query.isSuccess).toBe(true));
+    expect(query.data?.labels).toEqual(labels.labels);
+    expect(mocks.list).toHaveBeenCalledTimes(2);
   });
 
   it('keeps personal and team list caches independent', async () => {
@@ -324,6 +406,102 @@ describe('channel tag query rollout', () => {
       ).toEqual(labels)
     );
     expect(data()).toEqual([]);
+  });
+
+  it('moves the same section between caches and reconciles destination assignments', async () => {
+    const section = labels.labels[0];
+    const moved = { ...section, name: 'Moved', teamId: 'team' };
+    const personalKey = channelLabelKeys.list('personal', 'viewer').queryKey;
+    const teamKey = channelLabelKeys.list(undefined, 'viewer').queryKey;
+    client.setQueryData(personalKey, labels);
+    client.setQueryData<ChannelLabelsList>(teamKey, {
+      scope: 'team',
+      teamId: 'team',
+      labels: [
+        {
+          ...section,
+          id: 'existing',
+          channelIds: ['channel-1', 'channel-2'],
+          channelCount: 2,
+        },
+      ],
+    });
+    mocks.rename.mockResolvedValue(ok(moved));
+    let rename!: ReturnType<typeof useRenameChannelLabelMutation>;
+    const Probe = () => {
+      rename = useRenameChannelLabelMutation('personal');
+      return null;
+    };
+    render(() => (
+      <QueryClientProvider client={client}>
+        <Probe />
+      </QueryClientProvider>
+    ));
+
+    await rename.mutateAsync({
+      actorId: 'viewer',
+      labelId: section.id,
+      name: 'Moved',
+      targetScope: 'team',
+    });
+
+    expect(mocks.rename).toHaveBeenCalledWith(
+      section.id,
+      { name: 'Moved', rule: undefined, targetScope: 'team' },
+      'personal'
+    );
+    expect(client.getQueryData<ChannelLabelsList>(personalKey)?.labels).toEqual(
+      []
+    );
+    expect(client.getQueryData<ChannelLabelsList>(teamKey)?.labels).toEqual([
+      {
+        ...section,
+        id: 'existing',
+        channelIds: ['channel-2'],
+        channelCount: 1,
+      },
+      moved,
+    ]);
+  });
+
+  it('does not publish a scope change after the acting account changes', async () => {
+    const [userId, setUserId] = createSignal('viewer');
+    mocks.userId = userId;
+    const section = labels.labels[0];
+    const personalKey = channelLabelKeys.list('personal', 'viewer').queryKey;
+    const teamKey = channelLabelKeys.list(undefined, 'viewer').queryKey;
+    client.setQueryData(personalKey, labels);
+    client.setQueryData(teamKey, { scope: 'team', teamId: 'team', labels: [] });
+    let finish!: (result: Ok<typeof section, never>) => void;
+    mocks.rename.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        })
+    );
+    let rename!: ReturnType<typeof useRenameChannelLabelMutation>;
+    const Probe = () => {
+      rename = useRenameChannelLabelMutation('personal');
+      return null;
+    };
+    render(() => (
+      <QueryClientProvider client={client}>
+        <Probe />
+      </QueryClientProvider>
+    ));
+    const request = rename.mutateAsync({
+      actorId: 'viewer',
+      labelId: section.id,
+      name: section.name,
+      targetScope: 'team',
+    });
+    await waitFor(() => expect(mocks.rename).toHaveBeenCalledTimes(1));
+    setUserId('another-viewer');
+    finish(ok({ ...section, teamId: 'team' }));
+    await request;
+
+    expect(client.getQueryData<ChannelLabelsList>(personalKey)).toEqual(labels);
+    expect(client.getQueryData<ChannelLabelsList>(teamKey)?.labels).toEqual([]);
   });
 
   it('rejects queued assignments after an account change', async () => {

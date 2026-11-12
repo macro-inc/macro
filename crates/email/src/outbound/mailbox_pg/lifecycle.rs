@@ -286,13 +286,14 @@ impl InboxLifecycleRepository for PgMailboxSync {
             UserProvider::Outlook => {
                 let stream=sqlx::query!("SELECT id,initial_complete FROM email_sync_streams WHERE link_id = $1 AND generation = $2 AND kind = 'folder_catalog' LIMIT 1",link,current.sync_generation).fetch_optional(&mut *tx).await.map_err(failed)?;
                 let in_progress=sqlx::query_scalar!(r#"SELECT EXISTS(SELECT 1 FROM email_sync_streams WHERE link_id = $1 AND generation = $2 AND kind IN ('folder_catalog','mail_folder') AND NOT initial_complete)
-                    OR EXISTS(SELECT 1 FROM email_message_reconciliation WHERE link_id = $1 AND generation = $2 AND is_import) AS "running!""#,link,current.sync_generation).fetch_one(&mut *tx).await.map_err(failed)?;
+                    OR EXISTS(SELECT 1 FROM email_message_reconciliation WHERE link_id = $1 AND generation = $2 AND is_import AND available_at <> 'infinity') AS "running!""#,link,current.sync_generation).fetch_one(&mut *tx).await.map_err(failed)?;
                 let run_id = stream
                     .as_ref()
                     .map_or_else(macro_uuid::generate_uuid_v7, |stream| stream.id);
                 if !in_progress || stream.is_none() {
                     sqlx::query!("INSERT INTO email_sync_streams(id,link_id,generation,kind,scope_id) VALUES ($1,$2,$3,'folder_catalog','mail') ON CONFLICT DO NOTHING",run_id,link,current.sync_generation).execute(&mut *tx).await.map_err(failed)?;
-                    sqlx::query!(r#"UPDATE email_sync_streams SET position = NULL,initial_complete = false, attachments_rechecked = false,scan_id = gen_random_uuid(),next_run_at = now(),fence = fence + 1,lease_id = NULL,lease_until = NULL
+                    sqlx::query!(r#"UPDATE email_sync_streams SET position = NULL,initial_complete = false, attachments_rechecked = false,scan_id = gen_random_uuid(),next_run_at = now(),fence = fence + 1,lease_id = NULL,lease_until = NULL,
+                            import_started_at = now(),import_completed_at = NULL
                         WHERE link_id = $1 AND generation = $2 AND kind IN ('folder_catalog','mail_folder','contacts_catalog','contacts_profile','contacts')"#,link,current.sync_generation).execute(&mut *tx).await.map_err(failed)?;
                     sqlx::query!(r#"INSERT INTO email_message_reconciliation(link_id,generation,provider_id,is_import)
                         SELECT link_id,$2,provider_id,true FROM email_messages WHERE link_id = $1 AND provider_id IS NOT NULL
@@ -305,26 +306,34 @@ impl InboxLifecycleRepository for PgMailboxSync {
             }
         };
         tx.commit().await.map_err(failed)?;
+        if current.provider == UserProvider::Outlook && !result.already_in_progress {
+            crate::domain::mailbox::progress::log_import_started(link, current.sync_generation);
+        }
         Ok(result)
     }
 
     async fn bindings_for_deleted_user(
         &self,
         owner: &str,
-    ) -> Result<Vec<(InboxActor, Uuid)>, InboxLifecycleError> {
-        let rows=sqlx::query!(r#"SELECT c.link_id AS "link_id!",c.actor_id AS "actor_id!" FROM email_mailbox_custodians c WHERE c.fusionauth_user_id = $1
-            UNION SELECT l.id AS link_id,l.macro_id AS actor_id FROM email_links l WHERE l.fusionauth_user_id = $1
+    ) -> Result<Vec<DeletedUserBinding>, InboxLifecycleError> {
+        let rows=sqlx::query!(r#"SELECT c.link_id AS "link_id!",c.actor_id AS "actor_id!",true AS "is_custodian!" FROM email_mailbox_custodians c WHERE c.fusionauth_user_id = $1
+            UNION SELECT l.id AS link_id,l.macro_id AS actor_id,false AS is_custodian FROM email_links l WHERE l.fusionauth_user_id = $1
                 AND NOT EXISTS(SELECT 1 FROM promoted_shared_mailboxes p WHERE p.macro_id = l.macro_id)"#,owner).fetch_all(&self.db).await.map_err(failed)?;
         rows.into_iter()
             .map(|row| {
-                Ok((
-                    InboxActor {
+                Ok(DeletedUserBinding {
+                    actor: InboxActor {
                         macro_id: macro_user_id::user_id::MacroUserIdStr::try_from(row.actor_id)
                             .map_err(failed)?,
                         credential_owner: owner.into(),
                     },
-                    row.link_id,
-                ))
+                    link_id: row.link_id,
+                    kind: if row.is_custodian {
+                        DeletedUserBindingKind::Custodian
+                    } else {
+                        DeletedUserBindingKind::Owner
+                    },
+                })
             })
             .collect()
     }
@@ -384,8 +393,9 @@ async fn rebind_work(
 ) -> Result<(), InboxLifecycleError> {
     sqlx::query!("UPDATE email_mailbox_watch_work SET next_run_at=now(),revision=revision+1 WHERE link_id=$1",link)
         .execute(&mut **tx).await.map_err(failed)?;
-    sqlx::query!(r#"INSERT INTO email_sync_streams(id,link_id,generation,kind,scope_id,position,initial_complete,scan_id)
-        SELECT gen_random_uuid(),link_id,$3,kind,scope_id,position,initial_complete,scan_id FROM email_sync_streams WHERE link_id = $1 AND generation = $2
+    // The import run continues in the new generation, so it keeps its stamps.
+    sqlx::query!(r#"INSERT INTO email_sync_streams(id,link_id,generation,kind,scope_id,position,initial_complete,scan_id,import_started_at,import_completed_at)
+        SELECT gen_random_uuid(),link_id,$3,kind,scope_id,position,initial_complete,scan_id,import_started_at,import_completed_at FROM email_sync_streams WHERE link_id = $1 AND generation = $2
         ON CONFLICT DO NOTHING"#,link,old,new).execute(&mut **tx).await.map_err(failed)?;
     sqlx::query!(r#"INSERT INTO email_message_reconciliation(link_id,generation,provider_id,is_import)
         SELECT link_id,$3,provider_id,is_import FROM email_message_reconciliation WHERE link_id = $1 AND generation = $2 ON CONFLICT DO NOTHING"#,link,old,new).execute(&mut **tx).await.map_err(failed)?;

@@ -1,3 +1,4 @@
+import type { IUser } from '@core/user/types';
 import { Avatar } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import {
@@ -88,22 +89,28 @@ export function useCalendarJoinRequestsQuery(
     },
   };
 }
+const ANSWER_STATUS = { accept: 'accepted', decline: 'declined' } as const;
+type JoinRequestAnswer = {
+  request: CalendarJoinRequest;
+  decision: keyof typeof ANSWER_STATUS;
+};
+export const isAlreadyAnswered = (
+  answered: CalendarJoinRequest,
+  decision: JoinRequestAnswer['decision']
+) => answered.status !== ANSWER_STATUS[decision];
 export function useRespondToCalendarJoinRequestMutation(callbacks?: {
-  onSuccess?: (answered: CalendarJoinRequest) => void;
+  onSuccess?: (answered: CalendarJoinRequest, args: JoinRequestAnswer) => void;
 }) {
   return {
     isPending: false,
-    mutate: (args: {
-      request: CalendarJoinRequest;
-      decision: 'accept' | 'decline';
-    }) => {
+    mutate: (args: JoinRequestAnswer) => {
       setJoinRequests((current) =>
         current?.filter((request) => request.id !== args.request.id)
       );
-      callbacks?.onSuccess?.({
-        ...args.request,
-        status: args.decision === 'accept' ? 'accepted' : 'declined',
-      });
+      callbacks?.onSuccess?.(
+        { ...args.request, status: ANSWER_STATUS[args.decision] },
+        args
+      );
     },
   };
 }
@@ -160,7 +167,7 @@ export const copyCalendarEventMention = () =>
 export const downloadCalendarEventIcs = () =>
   announce('Download event · Preview only');
 export const openDocument = () => announce('Open document · Preview only');
-export const toast = { success: announce, failure: announce };
+export const toast = { success: announce, alert: announce, failure: announce };
 
 export const createCalendarRsvpController = () => ({
   pending: () => false,
@@ -177,9 +184,10 @@ const names: Record<string, string> = {
   'macro|member@example.com': 'Morgan Member',
   'alex@example.com': 'Alex Morgan',
   'sam@example.com': 'Sam Lee',
+  'quarterly.planning.review.coordinator.northeast@facilities-and-operations.example.com':
+    'Rowan Field',
   'you@example.com': 'You',
 };
-export const useContacts = () => contacts;
 export const useOpenEventEmail = () => () =>
   announce('Email guests · Preview only');
 export const copyGuestEmails = () =>
@@ -193,15 +201,25 @@ export const copyGuestEmails = () =>
 export function PropertyEntitySelector(props: {
   config: {
     placeholder?: string;
-    users?: () => { id: string; email: string; name?: string }[];
+    users?: () => IUser[];
+    additionalUsers?: () => IUser[];
     excludedIds?: () => ReadonlySet<string>;
   };
   selectedOptions: () => Set<string>;
   setSelectedOptions: (options: Set<string>) => void;
+  onUserSelected?: (user: IUser, custom: boolean) => void;
 }) {
   const [query, setQuery] = createSignal('');
   const matches = createMemo(() =>
-    (props.config.users?.() ?? []).filter(
+    (
+      props.config.users?.() ?? [
+        ...new Map(
+          [...contacts(), ...(props.config.additionalUsers?.() ?? [])].map(
+            (user) => [user.id, user]
+          )
+        ).values(),
+      ]
+    ).filter(
       (user) =>
         !props.config.excludedIds?.().has(user.id) &&
         `${user.name ?? ''} ${user.email}`
@@ -234,11 +252,12 @@ export function PropertyEntitySelector(props: {
                   role="option"
                   aria-selected={false}
                   class="flex w-full min-w-0 items-center rounded-lg p-1.5 px-2 text-left text-ink"
-                  onClick={() =>
+                  onClick={() => {
+                    props.onUserSelected?.(user, false);
                     props.setSelectedOptions(
                       new Set([...props.selectedOptions(), user.id])
-                    )
-                  }
+                    );
+                  }}
                 >
                   <span class="truncate">{user.name ?? user.email}</span>
                 </button>

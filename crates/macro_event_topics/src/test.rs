@@ -28,6 +28,7 @@ fn all_topic_names_includes_declared_topics() {
     assert!(all_topic_names().contains(&MacroMessagesTopic::TOPIC_STR));
     assert!(all_topic_names().contains(&MacroBotsTopic::TOPIC_STR));
     assert!(all_topic_names().contains(&MacroCallsTopic::TOPIC_STR));
+    assert!(all_topic_names().contains(&MacroCallNotificationsTopic::TOPIC_STR));
     assert!(all_topic_names().contains(&MacroWebhooksTopic::TOPIC_STR));
     assert!(all_topic_names().contains(&MacroMentionsTopic::TOPIC_STR));
     assert!(all_topic_names().contains(&MacroNotificationsTopic::TOPIC_STR));
@@ -36,4 +37,5 @@ fn all_topic_names_includes_declared_topics() {
     assert!(all_topic_names().contains(&MacroAgentSessionLifecycleTopic::TOPIC_STR));
     assert!(all_topic_names().contains(&MacroDatabasesTopic::TOPIC_STR));
     assert!(all_topic_names().contains(&MacroFormsTopic::TOPIC_STR));
+    assert!(all_topic_names().contains(&MacroUsersTopic::TOPIC_STR));
 }

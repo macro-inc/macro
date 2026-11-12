@@ -7,6 +7,9 @@ pill strip with a leading filter drawer (Status and Type), pull-to-refresh,
 and swipe-left to mark done. On touch, Signal is a pure notification feed — the viewer's own
 touched-by-me recents are not merged in; that merge is desktop Home's Signal
 only, so sent mail and AI chats without notifications appear only on desktop.
+Access requests, grants and removals on a paired machine appear as rows about
+that machine; opening one goes to Settings → Machines with the machine pointed out.
+Signal, including its empty state, starts with the Home tutorial entry (from `features/video-tutorials`) once that video is in its catalog: a `TutorialSidebarItem` in the desktop rail, a `TutorialRow` on touch. It sits outside the virtualized rows, so list keyboard focus skips it.
 
 On a cold launch, notification transport follows the GraphQL Soup flag reactively:
 if the flag arrives after REST starts, the GraphQL notification query must actually
@@ -61,8 +64,8 @@ The menu shares the legacy compact submenus: **Status** offers **Unread**, **Rea
 and **All** as single-select radio items with a checkmark on the right of the selected
 option, and **Type** contains the entity checkboxes. Status closes the menu
 after selection. Type uses the [shared multiselect dropdown pattern](ui-conventions.md#multiselect-dropdowns):
-checkboxes toggle without closing, rows add and close, and Shift/Only selects just
-one type without closing. Press **f** to open the menu.
+clicking a row or its checkbox toggles it without closing, Enter adds and closes,
+and Shift/Only selects just one type without closing. Press **f** to open the menu.
 Entity type checkboxes start checked. Unchecking **Email** hides received
 and sent mail. **Channels** controls
 both channels and reply threads; **Chats** and **Agents** have separate toggles.
@@ -98,6 +101,8 @@ message. Channel names
 prefer the current channel cache, then a matching thread notification's name,
 then **Unknown channel** if neither source has a name. Selecting a
 thread opens that thread in the channel preview; Shift-click opens it in a split.
+A click or Enter gives the conversation's composer focus, and Esc returns to the
+row; see [composer focus and Esc](channels.md#composer-focus-and-esc).
 If the channel is already open in another split or preview, clicking a message
 or reply notification focuses that view and jumps to the specific message,
 without a **Content already open** warning. Verify with two splits and a reply
@@ -126,6 +131,17 @@ notification-driven candidates. Prior notifications or activity must not bring
 them back. The DM remains in Channels/DMs; authorized direct session links and
 explicitly saved favorites still open their context. Verify this alongside an
 ordinary standalone session, which remains listed.
+
+A session started from a thread (a mention in a channel, document or call, or a
+task assignment) stays out of Home, Recent and the Agents sidebar for everyone,
+owner included, whichever agent runs it; the thread is where it is reached.
+Follow-up mentions in that thread list it for nobody either. A person who
+prompts the session from the session view itself (after **Open session**)
+follows it: from then on it lists for them in Home, Recent and Agents while they
+can still open it, and nobody else's lists change. Prompting never changes
+anyone's access. Verify with two accounts: mention an agent in a document
+thread and check neither lists it, then have the second account open the
+session, send a prompt, and check the row appears for that account only.
 
 The Agents workspace uses a single left dot for activity and unread state in
 place of the sparkle. Clicking a session row in Home or the Agents sidebar
@@ -169,6 +185,14 @@ arrow-key browsing keeps it open. Preview headers start with **Home >**. Clickin
 **Home** clears the preview and returns to the starting pane without changing
 sidebar visibility. Use the hamburger to reopen the feed. Mobile continues to
 show the activity list alone.
+
+Project rows, including unread discussion notifications, open the project Overview
+inside Home on desktop. The preview keeps the Home return breadcrumb, project
+properties, description, and discussion; a discussion notification targets its
+message. Overview/Tasks tabs stay inside the Home preview, and reloading its URL
+restores the section and discussion target. Shift-click still opens the project
+in a split; touch opens the full-screen project page. Verify clicking an unread
+project row, switching tabs, returning Home, and reopening the same comment.
 
 Desktop previews use the same header controls as their standalone views, with
 the **Home >** return breadcrumb added. Calendar shares its date, search,
@@ -231,6 +255,8 @@ On mobile, the dock uses the bell icon and **Notifications**
 label; Home is desktop-only. Notifications has no merged own-activity feed or
 chat starting pane. Opening a row navigates to its entity. On iOS, rows fade
 underneath the filters and status bar using the shared top edge gradient.
+With `enable-unified-notifications` on, the bell opens the unified
+Notifications view instead (see [notifications.md](notifications.md)).
 
 Notifications have three lifecycle states: `unseen`, `seen`, and `done`. Active means
 unseen or seen. Viewing must not reopen a done notification; undoing done (`Ctrl+Z`

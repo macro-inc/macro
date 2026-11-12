@@ -34,6 +34,7 @@ import BellSimpleIcon from '@icon/system/regular/bell-simple.svg?component-solid
 import CalendarBlankIcon from '@icon/system/regular/calendar-blank.svg?component-solid';
 import ChatTeardropIcon from '@icon/system/regular/chat-teardrop.svg?component-solid';
 import ChatTextIcon from '@icon/system/regular/chat-text.svg?component-solid';
+import ClockIcon from '@icon/system/regular/clock-clockwise.svg?component-solid';
 import FilesIcon from '@icon/system/regular/files.svg';
 import GitMergeIcon from '@icon/system/regular/git-merge.svg';
 import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
@@ -254,6 +255,7 @@ const tagBubbleIcon = (tag: NotificationTag) =>
       'entity_access_requested',
       'entity_access_granted',
       'channel_invite',
+      'channel_access_requested',
       'invite_to_team',
       () => () => <UserPlusIcon class={AVATAR_GLYPH_CLASS} />
     )
@@ -266,6 +268,9 @@ const tagBubbleIcon = (tag: NotificationTag) =>
     ))
     .with('agent_session_mentioned', () => () => (
       <AtIcon class={AVATAR_GLYPH_CLASS} />
+    ))
+    .with('routine_run_finished', () => () => (
+      <ClockIcon class={AVATAR_GLYPH_CLASS} />
     ))
     .with('reminder', () => () => <BellSimpleIcon class={AVATAR_GLYPH_CLASS} />)
     .with('calendar_event_reminder', () => () => (
@@ -528,6 +533,7 @@ function BaseCard(props: {
   title: JSX.Element;
   /** Adornment before the title text (e.g. draft badge, block-type icon). */
   titleLeading?: JSX.Element;
+  trailing?: JSX.Element;
   children?: JSX.Element;
 }) {
   return (
@@ -559,10 +565,19 @@ function BaseCard(props: {
           {props.children}
         </div>
       </InboxCard.Body>
-      <InboxTimestamp
-        timestamp={props.item.timestamp}
-        class="col-start-3 row-start-1 self-start justify-self-end"
-      />
+      <Show
+        when={props.trailing}
+        fallback={
+          <InboxTimestamp
+            timestamp={props.item.timestamp}
+            class="col-start-3 row-start-1 self-start justify-self-end"
+          />
+        }
+      >
+        <div class="col-start-3 row-start-1 self-center justify-self-end">
+          {props.trailing}
+        </div>
+      </Show>
     </InboxCard.Root>
   );
 }
@@ -621,7 +636,13 @@ const attachmentSummary = (count: number): string | undefined =>
     ? undefined
     : `sent ${count === 1 ? 'an' : count} ${plural('attachment', count)}`;
 
-export function ChannelCardLayout(props: InboxCardLayoutProps) {
+export function ChannelCardLayout(
+  props: InboxCardLayoutProps & {
+    icon?: JSX.Element;
+    trailing?: JSX.Element;
+    preview?: JSX.Element;
+  }
+) {
   const entity = createMemo(() => props.item.entity);
 
   const messageSenderId = createMemo(() => {
@@ -699,34 +720,43 @@ export function ChannelCardLayout(props: InboxCardLayoutProps) {
     <BaseCard
       {...props}
       icon={
-        <Show
-          when={!isDM()}
-          fallback={<InboxAvatar senderId={senderAvatarId()} />}
-        >
-          <EntityIcon
-            class={AVATAR_GLYPH_CLASS}
-            targetType={getEntityIconType(entity())}
-            size="fill"
-            theme="monochrome"
-          />
-        </Show>
+        props.icon ?? (
+          <Show
+            when={!isDM()}
+            fallback={<InboxAvatar senderId={senderAvatarId()} />}
+          >
+            <EntityIcon
+              class={AVATAR_GLYPH_CLASS}
+              targetType={getEntityIconType(entity())}
+              size="fill"
+              theme="monochrome"
+            />
+          </Show>
+        )
       }
       title={text().title}
     >
-      <CardClampedMarkdown
-        inert
-        text={text().content}
-        prefix={
-          <>
-            <Show when={senderLabel()}>
-              <span class="whitespace-nowrap mr-1">{senderLabel()}:</span>
-            </Show>
-            <Show when={text().contentIsAttachmentSummary}>
-              <PaperclipIcon class="mr-0.5 inline size-3.5 align-[-0.125em]" />
-            </Show>
-          </>
+      <Show
+        when={props.preview}
+        fallback={
+          <CardClampedMarkdown
+            inert
+            text={text().content}
+            prefix={
+              <>
+                <Show when={senderLabel()}>
+                  <span class="whitespace-nowrap mr-1">{senderLabel()}:</span>
+                </Show>
+                <Show when={text().contentIsAttachmentSummary}>
+                  <PaperclipIcon class="mr-0.5 inline size-3.5 align-[-0.125em]" />
+                </Show>
+              </>
+            }
+          />
         }
-      />
+      >
+        {props.preview}
+      </Show>
     </BaseCard>
   );
 }

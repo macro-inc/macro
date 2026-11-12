@@ -17,6 +17,7 @@ import {
   removeValue,
   toggleValue,
 } from '@app/lib/signals/store-array-updaters';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { HotkeyTags } from '@core/hotkey/constants';
@@ -34,6 +35,7 @@ import {
 import { soupPropertyToProperty } from '@entity/extractors-property';
 import CheckIcon from '@icon/system/regular/check.svg';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
+import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
@@ -89,10 +91,13 @@ export type TaskListProps = {
   loadingContent?: JSX.Element;
   errorContent?: JSX.Element;
   referencePropertyIds?: readonly string[];
+  /** Pinned above the rows, such as the main Tasks list's tutorial row. */
+  listStart?: JSX.Element;
 };
 
 export function TaskList(props: TaskListProps) {
   const panel = useSplitPanelOrThrow();
+  const notificationSource = useGlobalNotificationSource();
   const {
     state,
     calendar,
@@ -126,6 +131,7 @@ export function TaskList(props: TaskListProps) {
       mergeHistory?: boolean;
     } = {}
   ) {
+    markRowNotificationsSeenOnOpen(entity, notificationSource);
     fireAndForget(
       openEntityInSplitFromUnifiedList(entity, {
         splitHandle: panel.handle,
@@ -549,6 +555,7 @@ export function TaskList(props: TaskListProps) {
                     items={visibleRows()}
                     isSticky={(row) => row.kind === 'group-header'}
                     focusedIndex={list.focus.index()}
+                    start={props.listStart}
                     onScroll={() => {
                       recordScrollAnchor();
                       checkNearEnd();

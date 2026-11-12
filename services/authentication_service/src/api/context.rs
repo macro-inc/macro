@@ -227,6 +227,9 @@ pub(crate) struct ApiContext {
     >,
     pub document_storage_service_client:
         Arc<document_storage_service_client::DocumentStorageServiceClient>,
+    pub static_file_service_client: Arc<static_file_service_client::StaticFileServiceClient>,
+    /// Browser-facing base URL of static files, which profile pictures use.
+    pub static_file_public_url: String,
     pub user_deletion: Arc<
         crate::outbound::user_deletion::UserDeletionAdapter<
             TeamsServiceType,
@@ -260,6 +263,8 @@ pub(crate) struct ApiContext {
     pub user_language_service: Arc<UserLanguageServiceType>,
     pub system_status_service: Arc<SystemStatusServiceType>,
     pub rate_limit_service: RateLimiter,
+    /// Publishes user profile events such as `user.picture_changed`.
+    pub event_broker: AuthenticationEventBroker,
     /// The stripe price ids for each paid plan's seat
     pub stripe_prices: crate::api::user::stripe::StripePrices,
     /// AI allowances, credits, and overage

@@ -51,6 +51,16 @@ Editable list cells use the shared ghost `Property.Pill` styling. Project hover
 cards use a cube header with the assigned value below it; empty Project hover
 cards retain the one-line empty message.
 
+The single-item Source property uses `SourceLinkPill` in composers, inline pills,
+and the side panel: its item opens through the shared mention-link navigation,
+including `specific_message_id`; its caret opens the host's existing picker.
+Inline Source pills use the link glyph instead of a `Source:` prefix, followed by
+the item's icon and title; side panels retain the separate property label.
+Let the linked item's renderer fill its icon slot with `iconSize: 'fill'`; a
+fixed-size child in a smaller wrapper shifts the icon below the label.
+Empty Source values use the same link glyph; unsupported references retain the
+ordinary property editor.
+
 `EntityRowTags.collapse` connects to the host's shared priority-overflow controller.
 Show at most three individual chips by default and keep the rest in overflow.
 Measure actual title, tag, and control widths; collapse more trailing chips when
@@ -79,6 +89,33 @@ Tag chips, overflow chips, and inline tag pills retain their compact desktop
 height on touch instead of adopting the shared button touch minimum. Only
 the task-detail title-row tags selector uses the 36px touch target; document
 title-row tags retain their compact height.
+
+## Assignee selection
+
+The system Assignees property uses the existing selected-first ordering at opening
+with available agents and the current team roster. Row positions stay stable while
+selecting. Search uses these options without contact discovery; preserve the
+existing Add/Change property and command-menu search placeholders.
+Existing selected outsiders remain visible and removable, including references
+absent from contacts. Removing an outsider removes that row immediately; the
+picker cannot add that person again unless they join the team.
+
+This applies to task/project composers, property pills, side panels, bulk
+editors, and touch picker sheets. References remain `USER` values. Company owner
+stays strictly team-only, and custom people properties keep their existing pool.
+`src/lib/queries/team/members.ts` owns the shared non-suspending roster hook.
+The property-aware wrapper in `editors/popover/EntityEditor.tsx` owns roster
+scope, outsider retention, and roster-status UI. Keep that policy out of
+`PropertyEntitySelector`; its empty-state content remains generic. Reuse existing
+picker ordering rather than adding Assignee-specific priority APIs. The command-menu
+composer/bulk editor lives in `editor/entity-property-editor.tsx`; both editor compositions share
+`editors/selectors/scoped-user-options.ts`.
+
+`PropertyEntitySelector` handles keyboard navigation on its search input, before
+an enclosing dropdown consumes the event. Do not move that handler to `document`:
+Kobalte can prevent the arrow key's default before a document listener runs.
+Ignore IME confirmation keys, including WebKit's key code 229; composing Escape
+must cancel composition without dismissing the popover.
 
 ## Side-panel collections
 
@@ -142,10 +179,16 @@ Inline Tags property rows retain their compact treatment.
 
 ## Side-panel row actions
 
-Compose `PropertyRowActions.Root`, `.Pin`, and `.Remove` through children so
-callers own action order. Multi-value layouts and collections accept JSX children,
-not action render callbacks. Each collection row owns one saving signal shared
-with its collection editor and row actions.
+Compose `PropertyRowActions.Root`, `.Remove`, and `.Pin` through children, in
+that order, so the trash sits left of the pin. When the panel supports an action
+a row cannot take, the action renders an empty slot of the same size, keeping
+every row's pin in one column. Rows with an add button (multi-value layouts and
+collections) wrap the layout in `PropertyRowActions.Provider` and pass `.Remove`
+and `.Pin` as the `actionsBeforeAdd` and `actionsAfterAdd` JSX slots, so the row
+reads trash, add, pin and the add button sits next to the pin. A collection's
+add button stays one element when its first item arrives, because an open picker
+is anchored to it. Each collection row owns one saving signal shared with its
+collection editor and row actions.
 
 ## Side-panel header actions
 

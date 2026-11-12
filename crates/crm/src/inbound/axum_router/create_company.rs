@@ -26,7 +26,7 @@ pub struct CreateCrmCompanyRequest {
 }
 
 /// Manually create a CRM company for the caller's team. Any team member
-/// may create one. The domain must not already be tracked by the team
+/// may create one. A domain, when given, must not already be tracked by the team
 /// (409), and the team's CRM killswitch must be on (403). Returns the
 /// created company in the same shape as `GET /crm/companies/{id}` (its
 /// contact list is empty until emails populate it).

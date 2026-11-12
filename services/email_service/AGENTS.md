@@ -18,7 +18,12 @@ the gateway `/email` prefix.
 - `src/backfill_outbox.rs`, `src/backfill_init_service.rs`,
   `src/backfill_completion_service.rs`: Gmail history backfill orchestration.
 - `src/crm_enrichment_worker.rs`: periodic pass that resolves pending CRM
-  company directory entries (names/logos) left by binaries without a resolver.
+  company directory entries (names/logos) left by binaries without a resolver,
+  using the public-homepage `UnfurlCompanyMetadataResolver` wired in
+  `pubsub_workers`. It requires no enrichment-provider key or selection flag.
+- `src/mailbox_sync_worker.rs`: the Outlook mailbox loops (sync, projections,
+  contacts, drafts, commands, settings, watches) and `run_health`, the
+  per-minute Outlook health snapshot.
 - `src/bin/`: standalone binaries — `pubsub_workers` (the queue consumer
   process), plus one-off backfill/cleanup scripts.
 
@@ -51,6 +56,13 @@ the gateway `/email` prefix.
 
 ## Gotchas
 
+- The API's server spans come from `macro_tower_layers`
+  (`api::traced`). tower-http's default `TraceLayer` span is DEBUG, below the
+  exporter's INFO filter, so an API wrapped in it sends no server spans.
+- `models_email`'s `Link` `Debug` prints only opaque fields. Keep addresses,
+  `macro_id`, contact emails and whole messages out of span fields: skip them
+  in `#[tracing::instrument]` and record `link_id` or provider ids instead.
+
 - Provider-sync deletions deferred by active sends publish no deletion event; scheduled recovery reconciles the retained marker before trying to claim delivery.
 
 - Draft edit routes carry `draft_generation` from the editing lifetime, including attachments, deletion, transfer, and schedules; regenerate OpenAPI clients when this contract changes.
@@ -62,6 +74,10 @@ the gateway `/email` prefix.
   domain rechecks the scheduled actor's access before cross-inbox downloads.
 - Macro's own digest emails are filtered out of Signal/email notifications
   (#7039) — don't reintroduce a path that notifies on our own sends.
+- Remote signature images and contact photos are fetched only through
+  `util/process_pre_insert/sfs_map/public_http.rs`, whose resolver and
+  redirect policy refuse non-public addresses. Don't fetch them with another
+  client.
 - Long attachment names are truncated to the DSS limit before upload (#7893);
   don't remove that truncation when touching `util/upload_attachment.rs`.
 - Scheduled Gmail sends recheck forwarded source inbox access before resolving
@@ -84,6 +100,13 @@ the gateway `/email` prefix.
   would spend the queue's 20 deliveries.
   Inbox sync releases the upload claims of a refused attachment fetch and
   requeues the upsert, because a claimed attachment is never offered again.
+- An attachment row can be deleted after it is claimed: a Gmail draft gets a
+  new message id on every save, and deleting the old revision cascades its
+  attachments. DSS then answers the import with a coded 404
+  (`EMAIL_ATTACHMENT_NOT_FOUND`), surfaced as
+  `UploadAttachmentError::AttachmentDeleted`. Every caller treats it as nothing
+  left to do: skip, no retry, no claim to release. The newer revision imports
+  its own rows.
 - BackfillThread reads a whole thread with one Gmail `threads.get` and writes
   the thread row and all of its messages in one transaction
   (`insert_backfilled_thread`), so a failed write leaves nothing for a retry
@@ -108,6 +131,10 @@ the gateway `/email` prefix.
   `BackfillWriteSlot::hold`, which renews the 120 s lease while the write runs,
   so a stalled write can't lose its slot to another writer. Live inbox
   sync writes take no slot. Keep new bulk backfill writes behind the same slots.
+- Each CRM contact population holds one of four per-team Redis slots
+  (`acquire_crm_population_slot`), so one team's consent backfill can't hold a
+  database connection per worker. A refused slot, or a population that timed
+  out on a CRM lock (`CrmError::Contended`), is deferred like a busy write.
 - `gmail_ops` workers decode both label write forms: single-message
   `ModifyMessageLabels` and `ModifyMessageLabelsBatch` (up to 1,000 messages).
   From ten messages up a batch is one `batchModify`, which a permanent failure
@@ -158,6 +185,25 @@ the gateway `/email` prefix.
   visibility while processing. Don't raise its receive batch: messages queued
   behind a long mailbox purge would be redelivered and purged twice.
   `PurgePacing` (`email_db_client::links::delete`) sets the purge's write rate.
+  Refresh and HealthCheck probes are capped at 240 s so a stalled probe is
+  redelivered instead of held in flight. A probe returns an error, and so is
+  redelivered toward the DLQ, only for transient failures. An `AuthRequired`
+  watch renewal retries once with a fresh token so the token source can set
+  `needs_reauth`, and finishes once that flag is stored.
+- `run_health` runs in every `pubsub_workers` task: each flushes its in-memory
+  Outlook import counts every minute, and the task that wins the Redis key
+  `outlook:health_snapshot` logs one "outlook mailbox health" line per Outlook
+  mailbox. Its fields, the `outlook.sync.*`, `outlook.graph_request` and
+  `outlook.token.acquire` spans and the import lifecycle logs are read by the
+  Outlook sync monitors in `infra/stacks/monitoring`; rename them only
+  together. Loops whose domain service logs its own deferrals use `reported`,
+  the others `record`, which logs gate refusals at DEBUG.
+- `GET /internal/recent_messages/{user_id}` reads the user's own syncing
+  inboxes straight from Gmail and Outlook (`outbound/recent_inbox.rs`), not
+  the synced mailbox, so it answers before a backfill finishes. Every call
+  spends live provider quota; Gmail reads three messages at a time to stay
+  under the gate's live cap. Don't record message content or addresses on
+  its spans.
 - `GET /opens/{token}` is public and must return the same uncacheable GIF for
   every token. Gmail sends add the pixel only to the provider copy in
   `outbound/scheduled_delivery.rs`; Outlook adds it through the materializer
@@ -167,3 +213,5 @@ the gateway `/email` prefix.
 ## Related
 
 - Rules: `.agents/rules/config-and-service-urls.md` · Skill: `new-service`
+
+- Validate optional agent correlation at the HTTP boundary; delayed Gmail completion restores it from the scheduled-message row.

@@ -251,6 +251,53 @@ input ChannelSharePolicyInput {
 }
 
 """
+One batch of clearing the viewer's notification inbox.
+"""
+input ClearNotificationInboxInput {
+	"""
+	Which rows are cleared; the inbox the caller shows.
+	"""
+	scope: NotificationInboxScopeInput
+	"""
+	Clear only unread rows.
+	"""
+	unreadOnly: Boolean @deprecated(reason: "Set scope.unreadOnly. Remove after 2026-12-06.")
+	"""
+	RFC 3339 time; clear only rows whose newest notification arrived at or
+	after it.
+	"""
+	since: String
+	"""
+	Groups read in this batch; defaults to 100, capped at 200.
+	"""
+	limit: Int
+	"""
+	Opaque cursor from the previous batch's `nextCursor`; absent for the
+	first. Send it with the same scope, filters and `since`.
+	"""
+	cursor: String
+}
+
+"""
+The result of one batch of clearing the inbox.
+"""
+type ClearNotificationInboxPayload {
+	"""
+	How many rows the batch cleared.
+	"""
+	rowCount: Int!
+	"""
+	Opaque token that reverses exactly this batch.
+	"""
+	undoToken: String!
+	"""
+	Send as the next batch's `cursor` to keep clearing; absent once
+	nothing is left.
+	"""
+	nextCursor: String
+}
+
+"""
 Mutation root combining independent domain GraphQL adapters.
 """
 type CompleteMutationRoot {
@@ -431,6 +478,41 @@ type CompleteMutationRoot {
 	"""
 	undoWorkFeedItemsDone(input: UndoWorkFeedItemsDoneInput!): UndoWorkFeedItemsDonePayload!
 	"""
+	Mark notification inbox rows done for the authenticated user:
+	acknowledge the notifications each row shows and hides, and archive
+	an email row's thread. Notifications newer than a row's `revision`
+	stay active. Tasks, requests, reviews and pull requests themselves
+	are not completed.
+	"""
+	markNotificationInboxRowsDone(input: MarkNotificationInboxRowsDoneInput!): MarkNotificationInboxRowsDonePayload!
+	"""
+	Mark one notification of a row done for the authenticated user, with
+	the hidden notifications about the same message or comment. A row's last
+	shown notification completes the row, as marking the row done does.
+	Returns the row's group's place in the requested inbox.
+	"""
+	markNotificationInboxNotificationDone(input: MarkNotificationInboxNotificationDoneInput!): MarkNotificationInboxNotificationDonePayload!
+	"""
+	Clear the authenticated user's notification inbox one batch at a time:
+	every matching row the batch reads is marked done, its shown and hidden
+	notifications. Email threads are not archived. Repeat with
+	`nextCursor` until it is absent; each batch's undo token reverses that
+	batch.
+	"""
+	clearNotificationInbox(input: ClearNotificationInboxInput!): ClearNotificationInboxPayload!
+	"""
+	Reverse one mark-done for the authenticated user without overwriting
+	anything that happened since, and return the restored groups' places
+	in the requested inbox.
+	"""
+	undoNotificationInboxRowsDone(input: UndoNotificationInboxRowsDoneInput!): UndoNotificationInboxRowsDonePayload!
+	"""
+	Mark notification inbox rows seen for the authenticated user: the
+	notifications each row shows and hides become read. Returns the
+	updated groups' places in the requested inbox.
+	"""
+	markNotificationInboxRowsSeen(input: MarkNotificationInboxRowsSeenInput!): MarkNotificationInboxRowsSeenPayload!
+	"""
 	Create once; replaying the same owned ID returns its existing record.
 	"""
 	createSavedView(input: CreateSavedViewInput!): GraphqlSavedView!
@@ -442,11 +524,16 @@ type CompleteMutationRoot {
 	Delete the expected owned revision; repeating a completed deletion returns the ID.
 	"""
 	deleteSavedView(input: DeleteSavedViewInput!): ID!
+	"""
+	Set the authenticated viewer's personal order; definitions and their
+	revisions are unchanged. Returns the views in their new order.
+	"""
+	reorderSavedViews(input: ReorderSavedViewsInput!): [GraphqlSavedView!]!
 }
 
 """
 Root subscription object combining realtime Soup, notification,
-activity, and work feed adapters.
+activity, work feed and notification inbox adapters.
 """
 type CompleteSubscriptionRoot {
 	"""
@@ -461,6 +548,11 @@ type CompleteSubscriptionRoot {
 	were missed, and the log must be refetched.
 	"""
 	agentSessionLogAppended(sessionId: ID!): [GraphqlAgentSessionLogEntry!]!
+	"""
+	Recorded activity from any invocation associated with this accessible session.
+	The stream errors when rows were missed; clients must refetch its REST page.
+	"""
+	agentSessionActivityAppended(sessionId: ID!): [GraphqlActivityEvent!]!
 	"""
 	Subscribe to realtime notifications for the authenticated user.
 	"""
@@ -478,6 +570,26 @@ type CompleteSubscriptionRoot {
 	client resubscribes and refetches.
 	"""
 	workFeedUpdates(scope: WorkFeedScopeInput): [WorkFeedPatch!]!
+	"""
+	Changes to the authenticated user's notification inbox in `scope`:
+	groups to insert or move with their current rows, groups to remove,
+	and an invalidation when changes may have been missed. Each payload
+	is one batch to apply together. Start it before fetching the first
+	page and refetch after an invalidation; the stream ends with an error
+	when its sources end, after which the client resubscribes and
+	refetches.
+	"""
+	notificationInboxUpdates(scope: NotificationInboxScopeInput): [NotificationInboxPatch!]!
+	"""
+	Changes to the registered work of `accountIds` that the authenticated
+	user can see: entries to show, entries to stop showing, and an
+	invalidation when changes may have been missed or sharing changed.
+	Each payload is one batch to apply together. Start it before fetching
+	`registeredWork` and refetch after an invalidation; the stream ends
+	with an error when its source ends, after which the client resubscribes
+	and refetches.
+	"""
+	registeredWorkUpdates(accountIds: [ID!]!): [GraphqlRegisteredWorkPatch!]!
 }
 
 """
@@ -1584,6 +1696,14 @@ type GraphqlActivityEvent {
 	"""
 	subjectId: String!
 	"""
+	Originating code-mode invocation, when present.
+	"""
+	agentCorrelationId: ID
+	"""
+	Display verb supplied by a validated code-mode invocation.
+	"""
+	agentVerb: String
+	"""
 	The kind of entity acted on.
 	"""
 	entityType: GraphqlEntityType!
@@ -1595,6 +1715,10 @@ type GraphqlActivityEvent {
 	What the principal did.
 	"""
 	action: GraphqlActivityAction!
+	"""
+	The stored action tag, for clients that do not need its typed payload.
+	"""
+	actionTag: String!
 	"""
 	When it happened, in RFC 3339 format.
 	"""
@@ -2108,6 +2232,24 @@ type GraphqlAllDayEventTime {
 	Exclusive local end date (`YYYY-MM-DD`).
 	"""
 	endDate: String!
+}
+
+"""
+GraphQL input naming a kind of email attachment.
+"""
+enum GraphqlAttachmentKind {
+	"""
+	PDF files.
+	"""
+	PDF
+	"""
+	PNG, JPEG, GIF, WebP or SVG images.
+	"""
+	IMAGE
+	"""
+	Word, Excel and PowerPoint files, plain text and CSV.
+	"""
+	DOCUMENT
 }
 
 """
@@ -3144,6 +3286,28 @@ enum GraphqlCallStatus {
 }
 
 """
+Metadata for someone asking to join a channel the recipient participates in.
+"""
+type GraphqlChannelAccessRequestedMetadata {
+	"""
+	The attempt to join; its current outcome is served by the channel.
+	"""
+	requestId: ID!
+	"""
+	Channel type.
+	"""
+	channelType: GraphqlNotificationChannelType!
+	"""
+	Channel display name.
+	"""
+	channelName: String!
+	"""
+	Requester profile-picture URL.
+	"""
+	senderProfilePictureUrl: String
+}
+
+"""
 GraphQL fields for authoritative channel activity.
 """
 type GraphqlChannelActivity {
@@ -3700,6 +3864,61 @@ type GraphqlCommentedOnDocumentMetadata {
 	Display name for a non-user sender.
 	"""
 	senderDisplayName: String
+}
+
+"""
+One viewer's directory entry, not a globally shared user profile or CRM contact.
+"""
+type GraphqlContact {
+	"""
+	Stable identity of the viewer/person pair. Names do not affect this key.
+	"""
+	id: ID!
+	"""
+	Target user identifier, also used for people who have not joined Macro.
+	"""
+	userId: ID!
+	"""
+	Email address derived from the target user identifier.
+	"""
+	email: String!
+	"""
+	Macro profile name, then this viewer's address-book name; null means use email fallback.
+	"""
+	name: String
+}
+
+"""
+Optional exact matching stages for bounded reference-resolution fallback.
+Omission keeps ordinary subsequence search unchanged.
+"""
+enum GraphqlContactMatching {
+	"""
+	Whole name, address or user identity.
+	"""
+	EXACT
+	"""
+	First word of the resolved name (full address when no name exists).
+	"""
+	FIRST_NAME
+	"""
+	Whole and first names, addresses and identities at the same priority.
+	"""
+	ANY_NAME
+}
+
+"""
+A bounded contact-ID-ordered page; an empty page may still have a continuation.
+"""
+type GraphqlContactPage {
+	"""
+	Authorized contacts, including self in sorted position.
+	"""
+	nodes: [GraphqlContact!]!
+	"""
+	Opaque continuation, or null only when the source is exhausted.
+	"""
+	nextCursor: String
 }
 
 """
@@ -4423,7 +4642,8 @@ enum GraphqlEmailFocusCategory {
 	"""
 	OTHER
 	"""
-	A calendar invite, update or RSVP.
+	In Focus, a reschedule, update, cancellation or proposed new time for an
+	event that isn't over. Left out, a new invite or an RSVP notice.
 	"""
 	CALENDAR
 	"""
@@ -4438,6 +4658,24 @@ enum GraphqlEmailFocusCategory {
 	Nothing marks the thread as relevant.
 	"""
 	LOW_RELEVANCE
+}
+
+"""
+Which way a thread's importance is moving.
+"""
+enum GraphqlEmailImportanceTrend {
+	"""
+	Rising, towards 100.
+	"""
+	UP
+	"""
+	Falling, towards 0.
+	"""
+	DOWN
+	"""
+	Not moving.
+	"""
+	FLAT
 }
 
 """
@@ -4550,6 +4788,10 @@ input GraphqlEmailLiteral @oneOf {
 	"""
 	recipient: GraphqlEmailValue
 	"""
+	A message whose subject contains this text, ignoring case (1-200 characters).
+	"""
+	subject: String
+	"""
 	The thread id option.
 	"""
 	threadId: ID
@@ -4585,6 +4827,10 @@ input GraphqlEmailLiteral @oneOf {
 	The calendar only option.
 	"""
 	calendarOnly: Boolean
+	"""
+	Threads with at least one attachment of this kind.
+	"""
+	attachment: GraphqlAttachmentKind
 	"""
 	The created at option.
 	"""
@@ -4667,21 +4913,33 @@ type GraphqlEmailThreadFocus {
 	"""
 	category: GraphqlEmailFocusCategory!
 	"""
-	Sort key for the Focus list, 0 to 100.
+	How much the thread matters right now, 0 to 100.
 	"""
 	importance: Int!
 	"""
-	The latest message waits on the owner's answer.
+	Someone else sent the latest message and it waits on the owner's answer.
+	Never true together with `needs_follow_up`.
 	"""
 	needsReply: Boolean!
 	"""
-	An open loop the owner should come back to.
+	The owner sent the latest message and should come back to the thread: it
+	has an open loop or has waited for an answer. Never true together with
+	`needs_reply`.
 	"""
 	needsFollowUp: Boolean!
 	"""
 	When the classification was made, in RFC 3339 format.
 	"""
 	classifiedAt: String!
+	"""
+	Which way `importance` is moving.
+	"""
+	importanceTrend: GraphqlEmailImportanceTrend!
+	"""
+	The day the thread's mail says it is due, as `YYYY-MM-DD`: a calendar date
+	the viewer's time zone never shifts. Absent when it names no open deadline.
+	"""
+	dueOn: String
 }
 
 """
@@ -5120,6 +5378,10 @@ enum GraphqlEntityType {
 	chats replaced WhatsApp groups. Never returned; rejected as input.
 	"""
 	WHATSAPP_GROUP @deprecated(reason: "Use EXTERNAL_CHAT. Never returned; rejected as input. Remove after 2026-11-30.")
+	"""
+	A registered runtime.
+	"""
+	HARNESS
 }
 
 """
@@ -6427,7 +6689,7 @@ type GraphqlNewNotification {
 """
 Typed GraphQL union containing every supported notification event payload.
 """
-union GraphqlNotifEvent = GraphqlExternalChatMessageMetadata | GraphqlEntityAccessGrantedMetadata | GraphqlEntityAccessRequestedMetadata | GraphqlChannelMentionMetadata | GraphqlDocumentMentionMetadata | GraphqlMentionedInDocumentCommentMetadata | GraphqlRepliedToDocumentCommentThreadMetadata | GraphqlCommentedOnDocumentMetadata | GraphqlInitiativeDiscussionMetadata | GraphqlCrmDiscussionMetadata | GraphqlChannelInviteMetadata | GraphqlChannelMessageSendMetadata | GraphqlChannelMessageReactionMetadata | GraphqlChannelReplyMetadata | GraphqlCallStartedMetadata | GraphqlNewEmailMetadata | GraphqlInboxReauthRequiredMetadata | GraphqlInviteToTeamMetadata | GraphqlTaskAssignedMetadata | GraphqlReminderMetadata | GraphqlCalendarEventReminderMetadata | GraphqlAiResponseMetadata | GraphqlGithubPrStatusChangedMetadata | GraphqlGithubPrCheckRunMetadata | GraphqlGithubReviewRequestedMetadata | GraphqlGithubPrCommentMetadata | GraphqlGithubPrMentionMetadata | GraphqlGithubPrReviewMetadata | GraphqlAgentSessionSettledMetadata | GraphqlAgentSessionWaitingForInputMetadata | GraphqlAgentSessionMentionedMetadata | GraphqlCalendarEventJoinRequestMetadata | GraphqlWhatsappGroupMessageMetadata
+union GraphqlNotifEvent = GraphqlExternalChatMessageMetadata | GraphqlEntityAccessGrantedMetadata | GraphqlEntityAccessRequestedMetadata | GraphqlChannelMentionMetadata | GraphqlDocumentMentionMetadata | GraphqlMentionedInDocumentCommentMetadata | GraphqlRepliedToDocumentCommentThreadMetadata | GraphqlCommentedOnDocumentMetadata | GraphqlInitiativeDiscussionMetadata | GraphqlCrmDiscussionMetadata | GraphqlChannelInviteMetadata | GraphqlChannelMessageSendMetadata | GraphqlChannelMessageReactionMetadata | GraphqlChannelReplyMetadata | GraphqlCallStartedMetadata | GraphqlNewEmailMetadata | GraphqlInboxReauthRequiredMetadata | GraphqlInviteToTeamMetadata | GraphqlTaskAssignedMetadata | GraphqlReminderMetadata | GraphqlCalendarEventReminderMetadata | GraphqlAiResponseMetadata | GraphqlGithubPrStatusChangedMetadata | GraphqlGithubPrCheckRunMetadata | GraphqlGithubReviewRequestedMetadata | GraphqlGithubPrCommentMetadata | GraphqlGithubPrMentionMetadata | GraphqlGithubPrReviewMetadata | GraphqlAgentSessionSettledMetadata | GraphqlAgentSessionWaitingForInputMetadata | GraphqlAgentSessionMentionedMetadata | GraphqlCalendarEventJoinRequestMetadata | GraphqlChannelAccessRequestedMetadata | GraphqlRoutineRunFinishedMetadata | GraphqlWhatsappGroupMessageMetadata | GraphqlRuntimeAccessRemovedMetadata
 
 """
 A notification associated with a shared entity, including entities outside Soup.
@@ -7074,6 +7336,63 @@ A property value represented by a type-safe GraphQL union.
 union GraphqlPropertyValue = GraphqlBooleanPropertyValue | GraphqlNumberPropertyValue | GraphqlStringPropertyValue | GraphqlDatePropertyValue | GraphqlDateRangePropertyValue | GraphqlSelectOptionPropertyValue | GraphqlEntityReferencePropertyValue | GraphqlLinkPropertyValue
 
 """
+An agent session an account registered as its work.
+"""
+type GraphqlRegisteredWork {
+	"""
+	The registration.
+	"""
+	id: ID!
+	"""
+	The account whose work this is.
+	"""
+	accountId: ID!
+	"""
+	When the account registered it, in RFC 3339.
+	"""
+	registeredAt: String!
+	"""
+	The session registered.
+	"""
+	session: GraphqlSoupAgentSession!
+}
+
+"""
+Changes may have been missed or sharing changed: refetch the list.
+"""
+type GraphqlRegisteredWorkInvalidate {
+	"""
+	Always true.
+	"""
+	refresh: Boolean!
+}
+
+"""
+One change to the registered work of the subscribed accounts.
+"""
+union GraphqlRegisteredWorkPatch = GraphqlRegisteredWorkUpsert | GraphqlRegisteredWorkRemove | GraphqlRegisteredWorkInvalidate
+
+"""
+A registration that ended or whose session was archived.
+"""
+type GraphqlRegisteredWorkRemove {
+	"""
+	The registration to stop showing.
+	"""
+	id: ID!
+}
+
+"""
+A registration to show, new or with its session's list fields changed.
+"""
+type GraphqlRegisteredWorkUpsert {
+	"""
+	The registration.
+	"""
+	entry: GraphqlRegisteredWork!
+}
+
+"""
 The two operands of a recursive reminder filter expression. Ignored.
 Remove after 2026-11-30.
 """
@@ -7217,6 +7536,38 @@ type GraphqlRepliedToDocumentCommentThreadMetadata {
 }
 
 """
+Metadata for a finished routine run.
+"""
+type GraphqlRoutineRunFinishedMetadata {
+	"""
+	Routine id.
+	"""
+	routineId: ID!
+	"""
+	Routine name when it ran.
+	"""
+	routineName: String!
+	"""
+	Whether the run succeeded.
+	"""
+	succeeded: Boolean!
+}
+
+"""
+Metadata for removed runtime access that stopped the recipient's agents.
+"""
+type GraphqlRuntimeAccessRemovedMetadata {
+	"""
+	The runtime's name.
+	"""
+	runtimeName: String!
+	"""
+	The recipient's agents that stopped.
+	"""
+	agents: [GraphqlStoppedAgent!]!
+}
+
+"""
 A saved filter definition, not a snapshot of matching entities.
 """
 type GraphqlSavedView {
@@ -7255,7 +7606,8 @@ type GraphqlSavedView {
 }
 
 """
-A page ordered by creation time and ID after effective visibility checks.
+A page in the viewer's own order, then by creation time and ID, after
+effective visibility checks.
 """
 type GraphqlSavedViewPage {
 	"""
@@ -7289,7 +7641,8 @@ type GraphqlScheduledAction {
 	"""
 	trigger: GraphqlScheduledActionTrigger!
 	"""
-	Agent task for this routine. Null when the stored task is not an agent task.
+	The agent step this routine hands off to: its only one, or the first of
+	several in different branches. Null when no step runs an agent.
 	"""
 	agentTask: GraphqlScheduledActionAgentTask
 	"""
@@ -7330,11 +7683,11 @@ type GraphqlScheduledActionAgentTask {
 	"""
 	agent: GraphqlScheduledActionAgent
 	"""
-	System prompt for the agent.
+	Always empty: the agent step's instructions are in `userPrompt`.
 	"""
 	prompt: String!
 	"""
-	User prompt for the agent.
+	The agent step's instructions.
 	"""
 	userPrompt: String!
 }
@@ -7377,6 +7730,10 @@ type GraphqlScheduledActionEventFilter {
 	Exact payload tests a GitHub delivery must pass, as a reader would state them.
 	"""
 	payloadMatch: [String!]!
+	"""
+	The task property that must have changed, and the values it must gain.
+	"""
+	property: GraphqlScheduledActionPropertySelector
 	"""
 	Yes/no question the triggering content must answer with yes before the routine runs.
 	"""
@@ -7494,15 +7851,47 @@ type GraphqlScheduledActionMultipleTrigger {
 	"""
 	schedules: [GraphqlScheduledActionCronTrigger!]!
 	"""
+	Single runs at exact times.
+	"""
+	once: [GraphqlScheduledActionOnceTrigger!]!
+	"""
 	Events that can also trigger this routine.
 	"""
 	events: GraphqlScheduledActionEventsTrigger
 }
 
 """
+A routine that runs a single time.
+"""
+type GraphqlScheduledActionOnceTrigger {
+	"""
+	When the routine runs, as RFC 3339.
+	"""
+	at: String!
+	"""
+	Whether that run is still ahead. False once it has run.
+	"""
+	pending: Boolean!
+}
+
+"""
+A task property a filter watches.
+"""
+type GraphqlScheduledActionPropertySelector {
+	"""
+	The property definition that must have changed.
+	"""
+	definitionId: ID!
+	"""
+	Select option or referenced entity ids, one of which the change must add. Empty matches any change.
+	"""
+	values: [String!]!
+}
+
+"""
 The way a routine starts.
 """
-union GraphqlScheduledActionTrigger = GraphqlScheduledActionCronTrigger | GraphqlScheduledActionEventsTrigger | GraphqlScheduledActionMultipleTrigger
+union GraphqlScheduledActionTrigger = GraphqlScheduledActionCronTrigger | GraphqlScheduledActionEventsTrigger | GraphqlScheduledActionOnceTrigger | GraphqlScheduledActionMultipleTrigger
 
 """
 The persisted state of a scheduled delivery.
@@ -8621,17 +9010,29 @@ type GraphqlSoupCrmContact implements GraphqlSoupEntity {
 	"""
 	teamId: ID!
 	"""
-	Parent company.
+	Parent company; null for a contact without a company.
 	"""
-	companyId: ID!
+	parentCompanyId: ID
 	"""
-	Parent company's display name.
+	Parent company's display name; null without a company.
 	"""
-	companyName: String!
+	parentCompanyName: String
 	"""
-	Full email address.
+	Full email address; null for a contact added by name alone.
 	"""
-	email: String!
+	emailAddress: String
+	"""
+	Parent company, or the nil ID for a contact without a company.
+	"""
+	companyId: ID! @deprecated(reason: "Use parentCompanyId. Remove after 2026-12-10.")
+	"""
+	Parent company's display name, or empty without a company.
+	"""
+	companyName: String! @deprecated(reason: "Use parentCompanyName. Remove after 2026-12-10.")
+	"""
+	Full email address, or empty for a contact added by name alone.
+	"""
+	email: String! @deprecated(reason: "Use emailAddress. Remove after 2026-12-10.")
 	"""
 	Team-local display name.
 	"""
@@ -9613,6 +10014,10 @@ enum GraphqlSoupEntityType {
 	Row of a Macro database table.
 	"""
 	DATABASE_ROW
+	"""
+	A paired runtime, listed only by attention feeds.
+	"""
+	HARNESS
 }
 
 """
@@ -9659,6 +10064,75 @@ type GraphqlSoupForeignEntity implements GraphqlSoupEntity {
 	Source-specific metadata.
 	"""
 	sourceMetadata: JSON!
+	"""
+	The created timestamp in RFC 3339 format.
+	"""
+	createdAt: String!
+	"""
+	The updated timestamp in RFC 3339 format.
+	"""
+	updatedAt: String!
+	"""
+	Properties assigned to this entity that the authenticated user may view.
+	"""
+	properties: [GraphqlProperty!]!
+	"""
+	Notifications associated with this entity for the authenticated user.
+	"""
+	notifications(filter: GraphqlNotificationFilter, limit: Int): [GraphqlNotification!]!
+	"""
+	Whether the authenticated viewer has favorited this entity.
+	"""
+	isFavorited: Boolean!
+	"""
+	The authenticated viewer's effective permission for this entity.
+	"""
+	viewerPermission: GraphqlEntityPermission
+	"""
+	The newest activity on this entity, newest first. Loaded lazily and
+	batched across entities; an activity outage degrades to an empty
+	timeline. Deeper history belongs to the viewer's activity feed.
+	"""
+	activity(limit: Int): [GraphqlActivityEvent!]!
+	"""
+	The viewer's frecency score for this entity, when loaded.
+	"""
+	frecencyScore: Float
+}
+
+"""
+A paired runtime (a macrod machine). Only attention feeds list it, for
+the access notifications filed under it; it opens in Settings → Machines.
+"""
+type GraphqlSoupHarness implements GraphqlSoupEntity {
+	"""
+	The harness identifier.
+	"""
+	id: ID!
+	"""
+	Canonical entity kind.
+	"""
+	entityType: GraphqlSoupEntityType!
+	"""
+	Server-only projection facts are unavailable for runtimes.
+	"""
+	cacheProjection: SoupCacheProjection
+	"""
+	The machine's name.
+	"""
+	displayName: String
+	"""
+	Common runtime metadata.
+	"""
+	metadata: GraphqlEntityMetadata!
+	"""
+	The machine's name.
+	"""
+	name: String!
+	"""
+	The principal identifier of the owner: a user or a team.
+	"""
+	ownerId: String!
 	"""
 	The created timestamp in RFC 3339 format.
 	"""
@@ -9977,6 +10451,20 @@ type GraphqlSoupReminderReference {
 }
 
 """
+An agent that stopped with its owner's runtime access.
+"""
+type GraphqlStoppedAgent {
+	"""
+	The agent's bot id.
+	"""
+	botId: ID!
+	"""
+	The agent's display name.
+	"""
+	name: String!
+}
+
+"""
 Text stored by a string select option.
 """
 type GraphqlStringPropertyOptionValue {
@@ -10164,6 +10652,45 @@ type GraphqlUser {
 	"""
 	activityOverview(input: ActivityOverviewInput!): GraphqlActivityOverview!
 	"""
+	Resolve up to 500 exact target user IDs, omitting unrelated or unknown people.
+	"""
+	contactsByUserIds(
+		"""
+		Target user IDs, not GraphqlContact record IDs; empty input returns no contacts.
+		"""
+		userIds: [ID!]!
+	): [GraphqlContact!]!
+	"""
+	Resolve up to 500 exact email addresses, restricted to the viewer's contacts or self.
+	"""
+	contactsByEmails(
+		"""
+		Email addresses normalized by the user-ID parser; empty input returns no contacts.
+		"""
+		emails: [String!]!
+	): [GraphqlContact!]!
+	"""
+	Read one page of the viewer's personal contacts with resolved names.
+	"""
+	contacts(
+		"""
+		Maximum contacts to read, from 1 to 500; defaults to 100.
+		"""
+		limit: Int,
+		"""
+		Opaque nextCursor from an earlier page in this directory.
+		"""
+		after: String,
+		"""
+		Optional name/email subsequence filter, at most 512 UTF-8 bytes. Results stay in source-ID order; a scan-budget-limited page may be empty with nextCursor.
+		"""
+		search: String,
+		"""
+		Optional exact reference-matching stage, applied before limiting. Requires a nonempty search; the same scan budget and continuation rules apply.
+		"""
+		matching: GraphqlContactMatching
+	): GraphqlContactPage!
+	"""
 	Every calendar visible across owned and delegated inboxes, primaries
 	and writables first.
 	"""
@@ -10187,6 +10714,19 @@ type GraphqlUser {
 	"""
 	workFeed(input: WorkFeedInput): WorkFeedPage!
 	"""
+	The agent sessions `accountIds` registered as their work that the
+	authenticated user can view, newest first, at most 50 accounts.
+	Registrations of sessions the user cannot view are completely hidden.
+	"""
+	registeredWork(accountIds: [ID!]!): [GraphqlRegisteredWork!]!
+	"""
+	A page of the authenticated user's notifications inbox, newest group
+	first: their pending notifications grouped by the entity they are
+	filed under and cut into rows, one per conversation thread, channel
+	top level, email thread, task, request or agent session.
+	"""
+	notificationInbox(input: NotificationInboxInput): NotificationInboxPage!
+	"""
 	Labels across every owned or delegated inbox accessible to the authenticated user.
 	"""
 	emailLabels: [GraphqlSoupEmailLabel!]!
@@ -10207,10 +10747,10 @@ type GraphqlUser {
 	"""
 	emailThread(input: EmailThreadInput!): GraphqlSoupEmailThread
 	"""
-	The viewer's Focus: signal threads in their own inboxes worth their
-	attention, highest priority first (importance, halved for every 2 days
-	since the latest inbound mail), with mail in the last `days` days
-	(default 30, at most 90). Each thread's `focus` field explains why.
+	The viewer's Focus: threads in their own inboxes worth their attention,
+	newest first by latest message time in either direction, with mail in
+	the last `days` days (default 30, at most 90). Each thread carries a
+	`focus` field that explains why.
 	"""
 	emailFocus(days: Int): [GraphqlSoupEmailThread!]!
 	"""
@@ -10537,6 +11077,87 @@ input MarkEmailThreadUnreadInput {
 }
 
 """
+Input for marking one notification of a row done.
+"""
+input MarkNotificationInboxNotificationDoneInput {
+	"""
+	The row showing the notification.
+	"""
+	rowId: ID!
+	"""
+	The notification, as the row lists it.
+	"""
+	notificationId: ID!
+	"""
+	The inbox the row's group is placed in.
+	"""
+	scope: NotificationInboxScopeInput
+}
+
+"""
+The result of marking one notification of a row done.
+"""
+type MarkNotificationInboxNotificationDonePayload {
+	"""
+	The row's group's place in the requested inbox.
+	"""
+	patches: [NotificationInboxPatch!]!
+	"""
+	Opaque token that reverses exactly this operation.
+	"""
+	undoToken: String!
+}
+
+"""
+Input for marking inbox rows done.
+"""
+input MarkNotificationInboxRowsDoneInput {
+	"""
+	The rows to complete, at most 200.
+	"""
+	rows: [NotificationInboxRowTargetInput!]!
+}
+
+"""
+The result of marking inbox rows done.
+"""
+type MarkNotificationInboxRowsDonePayload {
+	"""
+	The completed rows; remove them from every inbox. Rows that were
+	already gone are included.
+	"""
+	rowIds: [ID!]!
+	"""
+	Opaque token that reverses exactly this operation.
+	"""
+	undoToken: String!
+}
+
+"""
+Input for marking inbox rows seen.
+"""
+input MarkNotificationInboxRowsSeenInput {
+	"""
+	The rows to mark seen, at most 200.
+	"""
+	rowIds: [ID!]!
+	"""
+	The inbox the updated groups are placed in.
+	"""
+	scope: NotificationInboxScopeInput
+}
+
+"""
+The result of marking inbox rows seen.
+"""
+type MarkNotificationInboxRowsSeenPayload {
+	"""
+	The updated groups' places in the requested inbox.
+	"""
+	patches: [NotificationInboxPatch!]!
+}
+
+"""
 Input for marking work feed items done.
 """
 input MarkWorkFeedItemsDoneInput {
@@ -10587,6 +11208,372 @@ input NotificationEntityInput {
 	Canonical entity identifier.
 	"""
 	entityId: ID!
+}
+
+"""
+Who a row is from: a person, an agent, or Macro itself.
+"""
+type NotificationInboxActor {
+	"""
+	The kind of principal.
+	"""
+	kind: NotificationInboxActorKind!
+	"""
+	The user id for a user, the bot id for an agent; absent for Macro.
+	Not `id`: the client cache reads an `id` field as entity identity.
+	"""
+	principalId: String
+	"""
+	The display name when the row carries it (an agent's bot name);
+	users are looked up by id.
+	"""
+	name: String
+}
+
+"""
+The kind of principal a row is from. Values may be added; present one
+you do not know without an author.
+"""
+enum NotificationInboxActorKind {
+	"""
+	A Macro user.
+	"""
+	USER
+	"""
+	An agent.
+	"""
+	AGENT
+	"""
+	Macro itself.
+	"""
+	MACRO
+}
+
+"""
+The matching rows of the notifications filed under one entity. Entries
+belong to one inbox scope and have no id of their own; rows are shared.
+"""
+type NotificationInboxEntry {
+	"""
+	The group the rows are filed under: `<entity type>:<entity id>`.
+	"""
+	groupId: ID!
+	"""
+	The entity the rows are filed under.
+	"""
+	entity: GraphqlSoupEntity!
+	"""
+	Where the entry sits, in RFC 3339: the group's newest pending
+	notification.
+	"""
+	sortAt: String!
+	"""
+	The matching rows, newest first; never empty.
+	"""
+	rows: [NotificationInboxRow!]!
+}
+
+"""
+A group with no matching row left in the subscribed inbox: done,
+filtered out or inaccessible. The entity itself is not necessarily
+deleted.
+"""
+type NotificationInboxEntryRemoved {
+	"""
+	The removed group's id.
+	"""
+	groupId: ID!
+}
+
+"""
+A group that belongs in the subscribed inbox, with its current rows and
+placement. Insert it, or move it to its new `sortAt`.
+"""
+type NotificationInboxEntryUpserted {
+	"""
+	The entry.
+	"""
+	entry: NotificationInboxEntry!
+}
+
+"""
+Page request for the viewer's notification inbox.
+"""
+input NotificationInboxInput {
+	"""
+	Which rows the inbox shows.
+	"""
+	scope: NotificationInboxScopeInput
+	"""
+	Entries per page; defaults to 50, capped at 100.
+	"""
+	limit: Int
+	"""
+	Opaque cursor from the previous page's `nextCursor`; absent for the
+	first page. Send it with the same scope.
+	"""
+	cursor: String
+}
+
+"""
+Changes may have been missed: refetch the inbox.
+"""
+type NotificationInboxInvalidated {
+	"""
+	Always true.
+	"""
+	refresh: Boolean!
+}
+
+"""
+One page of the viewer's notification inbox, newest group first.
+"""
+type NotificationInboxPage {
+	"""
+	The page's entries.
+	"""
+	entries: [NotificationInboxEntry!]!
+	"""
+	Cursor for the next page; absent once the inbox is exhausted.
+	"""
+	nextCursor: String
+	"""
+	Where this page's read stopped, the position `nextCursor` resumes
+	after; absent once the inbox is exhausted. A filtered page can read
+	past its last entry, so a live change placed after that entry but not
+	after this position belongs to this page rather than a later one.
+	"""
+	nextPosition: NotificationInboxPosition
+}
+
+"""
+One change to an inbox's membership, placement or rows.
+"""
+union NotificationInboxPatch = NotificationInboxEntryUpserted | NotificationInboxEntryRemoved | NotificationInboxInvalidated
+
+"""
+A place in the inbox's order: newest `sortAt` first, then entity id
+descending.
+"""
+type NotificationInboxPosition {
+	"""
+	The sort time, RFC 3339.
+	"""
+	sortAt: String!
+	"""
+	The entity id that breaks ties at `sortAt`.
+	"""
+	entityId: String!
+}
+
+"""
+One inbox row: the notifications shown together for one thread, a
+channel's top level, an email thread, a task, a request or a review. A
+row's contents depend only on the viewer's notifications, so one id is
+one row in every scope.
+"""
+type NotificationInboxRow {
+	"""
+	Stable per-viewer row id: `<groupId>#<slot>`. Opaque.
+	"""
+	id: ID!
+	"""
+	The row's kind.
+	"""
+	rowType: NotificationInboxRowType!
+	"""
+	For a thread row, the channel root message or discussion root
+	comment it is about.
+	"""
+	threadId: String
+	"""
+	When the row's newest shown notification was created, in RFC 3339.
+	"""
+	latestAt: String!
+	"""
+	Who the row is from, per its newest shown notification; absent when
+	that is no one in Macro (outside email senders, GitHub users).
+	"""
+	actor: NotificationInboxActor
+	"""
+	What the viewer can do from the row, in presentation order; empty
+	when the row only opens.
+	"""
+	actions: [NotificationInboxRowAction!]!
+	"""
+	Whether the row is unread.
+	"""
+	unseen: Boolean!
+	"""
+	How many notifications the row shows.
+	"""
+	count: Int!
+	"""
+	Opaque token of what the row stands for; send it with done so
+	notifications that arrive later stay active.
+	"""
+	revision: String!
+	"""
+	The row's shown notifications, newest first. Defaults to 20, capped
+	at 100; `count` is the full size.
+	"""
+	notifications(limit: Int): [GraphqlNotification!]!
+}
+
+"""
+One thing the viewer can do from a row, described as data. Perform it
+through the API of the thing it acts on; the inbox only says it is
+available.
+"""
+type NotificationInboxRowAction {
+	"""
+	What the action does.
+	"""
+	kind: NotificationInboxRowActionKind!
+	"""
+	What the action acts on when it is not the row's group: an access or
+	join request.
+	"""
+	targetId: ID
+	"""
+	The page the action opens outside Macro, such as a pull request.
+	"""
+	url: String
+}
+
+"""
+What the viewer can do from a row. Values are added with the row types
+that offer them; skip one you do not know.
+"""
+enum NotificationInboxRowActionKind {
+	"""
+	Open what the row is about.
+	"""
+	OPEN
+	"""
+	Answer the agent that is waiting for the viewer.
+	"""
+	ANSWER
+	"""
+	Review the pull request at `url`.
+	"""
+	REVIEW
+	"""
+	Grant the access request `targetId`.
+	"""
+	APPROVE
+	"""
+	Refuse the access request `targetId`.
+	"""
+	DENY
+	"""
+	Accept the join request `targetId`.
+	"""
+	ACCEPT
+	"""
+	Decline the join request `targetId`.
+	"""
+	DECLINE
+}
+
+"""
+One row to mark done.
+"""
+input NotificationInboxRowTargetInput {
+	"""
+	The row's id.
+	"""
+	id: ID!
+	"""
+	The row's `revision` the caller observed. Notifications newer than it
+	stay active. Omit to acknowledge everything current.
+	"""
+	revision: String
+}
+
+"""
+The kinds of notification inbox row. Values are added as the inbox
+learns new sources; present a value you do not know as a generic row.
+"""
+enum NotificationInboxRowType {
+	"""
+	An agent session's or AI chat's latest response or question.
+	"""
+	AGENT
+	"""
+	An email thread.
+	"""
+	EMAIL
+	"""
+	A top-level channel message that mentions the viewer, with its thread.
+	"""
+	CHANNEL_MENTION
+	"""
+	A channel's top-level messages, reactions to them and invites.
+	"""
+	CHANNEL_MESSAGES
+	"""
+	A channel thread's replies, mentions and reactions.
+	"""
+	CHANNEL_THREAD
+	"""
+	A top-level discussion comment that mentions the viewer, with its
+	thread.
+	"""
+	DISCUSSION_MENTION
+	"""
+	An entity's top-level discussion comments.
+	"""
+	DISCUSSION_MESSAGES
+	"""
+	One discussion thread's replies.
+	"""
+	DISCUSSION_THREAD
+	"""
+	A task assigned to the viewer.
+	"""
+	TASK
+	"""
+	A GitHub pull request's activity.
+	"""
+	PULL_REQUEST
+	"""
+	Reminders of an upcoming calendar event.
+	"""
+	CALENDAR_EVENT
+	"""
+	A request to join a calendar event the viewer shared.
+	"""
+	CALENDAR_JOIN_REQUEST
+	"""
+	A request for access to something the viewer can share.
+	"""
+	ACCESS_REQUESTED
+	"""
+	Access the viewer requested was granted.
+	"""
+	ACCESS_GRANTED
+	"""
+	The viewer's access to a runtime was removed, and agents of theirs
+	living there stopped.
+	"""
+	ACCESS_REMOVED
+}
+
+"""
+Which rows a notification inbox shows. Pages, subscriptions, seen and
+undo for one inbox send the same scope.
+"""
+input NotificationInboxScopeInput {
+	"""
+	Row kinds to include; omitted or empty means every kind.
+	"""
+	rowTypes: [NotificationInboxRowType!]
+	"""
+	Only unread rows; pages, cursors and updates then cover unread rows
+	alone. Defaults to false.
+	"""
+	unreadOnly: Boolean
 }
 
 """
@@ -10689,6 +11676,21 @@ input ReorderFavoritesInput {
 	Favorited entities in the desired order.
 	"""
 	favorites: [EntityRefInput!]!
+}
+
+"""
+Inputs for setting the viewer's own order of one kind of saved view.
+"""
+input ReorderSavedViewsInput {
+	"""
+	Consumer kind whose order is replaced, such as `email`.
+	"""
+	kind: String!
+	"""
+	Visible views of that kind in their new order, at most 200; views left
+	out follow them by creation time.
+	"""
+	ids: [ID!]!
 }
 
 """
@@ -11232,6 +12234,30 @@ input TimedEventTimeInput {
 """
 Input for undoing one mark-done.
 """
+input UndoNotificationInboxRowsDoneInput {
+	"""
+	The `undoToken` the mark-done returned.
+	"""
+	undoToken: String!
+	"""
+	The inbox the restored groups are placed in.
+	"""
+	scope: NotificationInboxScopeInput
+}
+
+"""
+The result of undoing a mark-done.
+"""
+type UndoNotificationInboxRowsDonePayload {
+	"""
+	The restored groups' places in the requested inbox.
+	"""
+	patches: [NotificationInboxPatch!]!
+}
+
+"""
+Input for undoing one mark-done.
+"""
 input UndoWorkFeedItemsDoneInput {
 	"""
 	The `undoToken` the mark-done returned.
@@ -11658,6 +12684,10 @@ enum WorkFeedItemType {
 	Agent sessions.
 	"""
 	AGENT_SESSION
+	"""
+	Paired runtimes, through their access notifications.
+	"""
+	RUNTIME
 }
 
 """

@@ -1,50 +1,16 @@
-import { showAiUsageLimit } from '@app/features/paywall/ai-usage-limit-handling';
-import type { SendBuilder } from '@block-chat/blockClient';
+import { openChatWithAgent } from '@app/features/chat/ChatWithAgentButton';
 import { TopBar } from '@block-chat/component/TopBar';
-import type { ChatData } from '@block-chat/definition';
+import { type ChatData, DEFAULT_CHAT_NAME } from '@block-chat/definition';
 import { pendingLocationParamsSignal } from '@block-chat/signal/pendingLocationParams';
 import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
 import { useCanAutofocusSplitContent } from '@components/app/split-layout/layoutUtils';
-import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { useNavigatedFromJK } from '@components/app/useNavigatedFromJK';
-import { useHasPaidAccess } from '@core/auth/license';
-import { useBlockId, useIsNestedBlock } from '@core/block';
-import { DragDropWrapper } from '@core/component/AI/component/DragDrop';
-import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
-import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
-import { useSendChatMessage } from '@core/component/AI/component/input/buildRequest';
-import { ChatInput } from '@core/component/AI/component/input/ChatInput';
+import { useIsNestedBlock } from '@core/block';
 import { ChatMessages } from '@core/component/AI/component/message/ChatMessages';
-import {
-  alternateProviderModel,
-  MODEL_PROVIDER,
-  modelsForPlan,
-} from '@core/component/AI/constant';
-import {
-  ChatInputProvider,
-  ChatProvider,
-  useChatContext,
-  useChatInputContext,
-} from '@core/component/AI/context';
-import { useEntityDropAttachment } from '@core/component/AI/hook/useEntityDropAttachment';
-import { useGetChatAttachmentInfo } from '@core/component/AI/signal/attachment';
-import { createMentionAttachmentCallbacks } from '@core/component/AI/signal/mention-attachment-callbacks';
-import {
-  getPendingSend,
-  peekPendingSend,
-} from '@core/component/AI/signal/pendingSend';
+import { ChatProvider, useChatContext } from '@core/component/AI/context';
 import { registerToolHandler } from '@core/component/AI/signal/tool';
-import { insertChatAttachmentMention } from '@core/component/AI/util/chatAttachmentMention';
-import { deriveChatName } from '@core/component/AI/util/deriveName';
 import { resolveChatInputModel } from '@core/component/AI/util/parse';
-import {
-  getChatInputStoredState,
-  type StoredStuff,
-  storeChatState,
-  storeChatStateImmediate,
-} from '@core/component/AI/util/storage';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
-import { usePaywallState } from '@core/constant/PaywallState';
 import { TOKENS } from '@core/hotkey/tokens';
 import { registerScopeSignalHotkey } from '@core/hotkey/utils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -54,195 +20,44 @@ import {
   blockHotkeyScopeSignal,
 } from '@core/signal/blockElement';
 import { blockHandleSignal } from '@core/signal/load';
-import { useCanEdit } from '@core/signal/permissions';
+import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { markMessageSent } from '@core/util/message-send-motion';
-import { createRenameDssEntityMutation } from '@entity';
-import { Telemetry } from '@macro-inc/observability';
-import { invalidateUserQuota } from '@queries/auth';
 import { cognitionApiServiceClient } from '@service-cognition/client';
-import { createCallback } from '@solid-primitives/rootless';
-import { createEffect, createSignal, getOwner, Show, Suspense } from 'solid-js';
-
-export function Chat(props: { data: ChatData }) {
-  const loadedState = getChatInputStoredState(props.data.chat.id);
-
-  // Seed the model selector, highest priority first:
-  //  1. peekPendingSend — the model the user just sent with in the soup chat
-  //     input, carried over the new-chat redirect and reflected in the new chat.
-  //  2. loadedState.model — the per-chat draft: a model picked in this chat's
-  //     input but not yet sent (persisted per chat id, so it survives reload /
-  //     navigation, just like the draft text and attachments).
-  //  3. the chat's stored model.
-  // The chat input reconciles to an available model if the user isn't entitled
-  // to this one.
-  const initialModel =
-    peekPendingSend()?.model ??
-    resolveChatInputModel(props.data.chat.model, loadedState.model);
-
-  return (
-    <ChatInputProvider
-      initialAttachments={loadedState.attachments}
-      model={initialModel}
-    >
-      <ChatWithController
-        data={props.data}
-        loadedInputText={loadedState.input}
-      />
-    </ChatInputProvider>
-  );
-}
+import { Button } from '@ui';
+import { createEffect, createSignal, Show, Suspense } from 'solid-js';
 
 /**
- * Sits inside `ChatInputProvider` so the controller can be wired to model
- * state — specifically, so a provider-outage error toast can switch the chat
- * to a model from a different provider.
+ * A legacy AI chat, read-only: its history renders and a response already
+ * streaming can be stopped, but nothing new is sent. New conversations are
+ * agent sessions, and "Continue in Agents" starts one that mentions this
+ * chat.
  */
-function ChatWithController(props: {
-  data: ChatData;
-  loadedInputText: string | undefined;
-}) {
-  const { showPaywall } = usePaywallState();
-  const input = useChatInputContext();
-  const hasPaidAccess = useHasPaidAccess();
-
-  // Providers that have failed during this chat session. We avoid bouncing the
-  // user back to a provider we already know is down (e.g. Anthropic → OpenAI →
-  // back to Anthropic). Lives for the life of this chat component.
-  const failedProviders = new Set<string>();
-
-  // The model we'd fall back to if the current one failed: a different,
-  // non-failed provider drawn from the user's accessible models.
-  const nextModel = () =>
-    alternateProviderModel(input.model(), {
-      candidates: [...modelsForPlan(hasPaidAccess())],
-      failedProviders,
-    });
-
-  const onSwitchModel = () => {
-    const alternate = nextModel();
-    if (!alternate) return;
-    // Record the provider that just failed before moving off it.
-    failedProviders.add(MODEL_PROVIDER[input.model()]);
-    input.setModel(alternate);
-  };
-
+export function Chat(props: { data: ChatData }) {
   return (
     <ChatProvider
       chatId={props.data.chat.id}
       messages={props.data.chat.messages}
-      controllerOptions={{
-        onShowPaywall: showPaywall,
-        onShowUsageLimit: showAiUsageLimit,
-        onSwitchModel,
-        hasAlternateModel: () => nextModel() !== undefined,
-      }}
     >
-      <ChatInner data={props.data} loadedInputText={props.loadedInputText} />
+      <ChatInner data={props.data} />
     </ChatProvider>
   );
 }
 
-function ChatInner(props: {
-  data: ChatData;
-  loadedInputText: string | undefined;
-}) {
-  const owner = getOwner();
-  const input = useChatInputContext();
+function ChatInner(props: { data: ChatData }) {
   const chat = useChatContext();
-  const canEdit = useCanEdit();
-  const disabled = () => !canEdit();
+  const name = useBlockDocumentName(DEFAULT_CHAT_NAME);
   const scopeId = blockHotkeyScopeSignal.get;
   const blockElement = blockElementSignal.get;
   const { navigatedFromJK } = useNavigatedFromJK();
   const canAutofocusSplitContent = useCanAutofocusSplitContent();
   const [scrollRef, setScrollRef] = createSignal<HTMLElement>();
   const [showStreamDebug, setShowStreamDebug] = createSignal(false);
-  const [markdownText, setMarkdownText] = createSignal(
-    props.loadedInputText ?? ''
-  );
-
-  const { getAttachmentFromMention } = useGetChatAttachmentInfo();
-  const attachmentMentionCallbacks = createMentionAttachmentCallbacks(
-    input.attachments,
-    getAttachmentFromMention
-  );
-  const editor = buildChatEditor()
-    .withAppLinkResolver(useMacroMentionLinkResolver())
-    .withMentions({
-      ...attachmentMentionCallbacks,
-      block: 'chat',
-      showOpenTabs: true,
-    });
-
-  // Sync isGenerating from controller phase
-  createEffect(() => {
-    input.setIsGenerating(chat.isGenerating());
-    if (chat.isGenerating()) fireAndForget(invalidateUserQuota(), 'chat-quota');
-  });
-
-  const blockHandle = blockHandleSignal.get;
-
-  // Entity drag-and-drop support
-  const chatId = useBlockId();
-  const { droppable, isDraggingOver } = useEntityDropAttachment(
-    'chat-input-' + chatId,
-    input.attachments,
-    (mention) =>
-      insertChatAttachmentMention(editor.controls.getLexical(), mention)
-  );
-  false && droppable;
+  const [opening, setOpening] = createSignal(false);
 
   registerToolHandler(() => {
     const s = chat.stream();
     if (!s) return undefined;
     return { data: s.data };
-  });
-
-  const sendChatMessage = useSendChatMessage();
-  const renameMutation = createRenameDssEntityMutation();
-
-  const onSend = createCallback(async (request: ChatSendInput) => {
-    const isFirstMessage = chat.messages().length === 0;
-    const optimisticId = crypto.randomUUID();
-
-    markMessageSent(`chat:${optimisticId}`);
-    chat.dispatch({
-      type: 'send_started',
-      optimisticMessage: {
-        id: optimisticId,
-        content: request.content,
-        role: 'user',
-        attachments: request.attachments ?? [],
-      },
-    });
-
-    if (isFirstMessage) {
-      const name = deriveChatName(request.content);
-      if (name) {
-        renameMutation.mutate({
-          entity: { type: 'chat', id: chat.chatId(), name: '', ownerId: '' },
-          newName: name,
-        });
-      }
-    }
-
-    const result = await sendChatMessage({
-      ...request,
-      chatId: chat.chatId(),
-    });
-
-    if ('error' in result) {
-      chat.dispatch({
-        type: 'send_failed',
-        paymentError: result.paymentError,
-        usageLimit: result.usageLimit,
-      });
-      return;
-    }
-
-    chat.dispatch({ type: 'stream_connected', stream: result.stream, owner });
-    fireAndForget(invalidateUserQuota(), 'chat-quota');
   });
 
   const onStop = async () => {
@@ -255,64 +70,24 @@ function ChatInner(props: {
     });
   };
 
-  const saveChatState = (state: StoredStuff) => {
-    storeChatState(props.data.chat.id, state);
+  const continueInAgent = async () => {
+    if (opening()) return;
+    setOpening(true);
+    try {
+      await openChatWithAgent({
+        type: 'chat',
+        id: chat.chatId(),
+        name: name() ?? DEFAULT_CHAT_NAME,
+      });
+    } finally {
+      setOpening(false);
+    }
   };
 
-  createEffect(() => {
-    const inputText = markdownText();
-    const attached = input.attachments.attached();
-    const model_ = input.model();
-    const state = { attachments: attached, input: inputText, model: model_ };
-    // An empty composer is the sent state. Write it now and drop any
-    // debounced copy of the prompt, so a remount cannot put that prompt
-    // back in the box beside the message already in the transcript.
-    if (inputText.length === 0 && attached.length === 0) {
-      storeChatStateImmediate(props.data.chat.id, state);
-      return;
-    }
-    saveChatState(state);
-  });
-
-  const setPendingLocation = pendingLocationParamsSignal.set;
-
-  createMethodRegistration(blockHandle, {
-    sendMessage: async (sendRequest: SendBuilder) => {
-      await onSend({
-        content: sendRequest.userRequest,
-        model: sendRequest.model ?? input.model(),
-        attachments: sendRequest.attachments ?? [],
-        toolset: { type: 'all' },
-      });
-    },
+  createMethodRegistration(blockHandleSignal.get, {
     goToLocationFromParams: (params: Record<string, string>) => {
-      setPendingLocation(params);
+      pendingLocationParamsSignal.set(params);
     },
-  });
-
-  // Check for pending send data (e.g., from SoupChatInput) and send it
-  const pendingSend = getPendingSend();
-  if (pendingSend) {
-    onSend({
-      content: pendingSend.content,
-      model: pendingSend.model ?? input.model(),
-      speed: pendingSend.speed,
-      attachments: pendingSend.attachments ?? [],
-      toolset: { type: 'all' },
-    }).catch((error) =>
-      Telemetry.error(error, { surface: 'chat-pending-send' })
-    );
-  }
-
-  registerScopeSignalHotkey(scopeId, {
-    hotkey: 'enter',
-    description: 'Focus Chat Input',
-    keyDownHandler: () => {
-      editor.controls.focus();
-      return true;
-    },
-    hotkeyToken: TOKENS.block.focus,
-    hide: true,
   });
 
   // Ctrl+C while AI is generating stops the stream.
@@ -341,13 +116,11 @@ function ChatInner(props: {
   const isNestedBlock = useIsNestedBlock();
 
   return (
-    <DragDropWrapper
-      class="size-full overscroll-none overflow-hidden flex flex-col"
-      isEntityDraggingOver={isDraggingOver}
-    >
+    <div class="size-full overscroll-none overflow-hidden flex flex-col">
       <Show when={!isNestedBlock}>
         <Suspense>
           <TopBar
+            model={resolveChatInputModel(props.data.chat.model)}
             showStreamDebug={showStreamDebug}
             toggleStreamDebug={() => setShowStreamDebug((p) => !p)}
           />
@@ -366,7 +139,6 @@ function ChatInner(props: {
         </div>
       </Show>
       <div class="size-full flex-1 min-h-0 px-2 relative">
-        <div class="absolute inset-0 pointer-events-none" use:droppable />
         <div
           data-chat-scroll
           class="h-full min-h-0 overflow-auto scrollbar-hidden"
@@ -374,35 +146,52 @@ function ChatInner(props: {
         >
           <div class="mx-auto w-full max-w-3xl touch:pt-[calc(var(--mobile-content-inset-top,0)+0.5rem)] touch:pb-(--mobile-content-inset-bottom)">
             <ChatMessages
-              editDisabled={disabled()}
+              editDisabled
               pendingLocationParams={pendingLocationParamsSignal.get}
             />
           </div>
         </div>
         <CustomScrollbar scrollContainer={scrollRef} />
       </div>
-      <Show when={!disabled()}>
-        <FloatRegionOrInline region="accessory">
-          {/* Same wrapper as the home composer, so the box is the same width
-              and sits at the same offset whether a chat is being started or
-              continued. Inline on desktop it is the pane's last row, so the
-              corner prompt waits. */}
+      <FloatRegionOrInline region="accessory">
+        <div
+          class="mx-auto w-full max-w-3xl shrink-0 px-4 pb-3 pointer-events-auto touch:px-(--mobile-chrome-gutter) touch:pb-0"
+          data-holds-prompts={isTouchDevice() ? undefined : ''}
+        >
           <div
-            class="mx-auto w-full max-w-3xl shrink-0 px-4 pb-3 pointer-events-auto touch:px-(--mobile-chrome-gutter) touch:pb-0"
-            data-holds-prompts={isTouchDevice() ? undefined : ''}
+            role="status"
+            class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-edge-muted bg-surface px-4 py-3 text-sm text-ink-muted"
           >
-            <ChatInput
-              editor={editor}
-              initialValue={props.loadedInputText}
-              onChange={setMarkdownText}
-              chatId={chat.chatId()}
-              onSend={onSend}
-              onStop={onStop}
-              autoFocusOnMount={canAutofocusSplitContent && !navigatedFromJK()}
-            />
+            <div class="min-w-0">
+              <p class="font-medium text-ink">Macro Chats are now Agents.</p>
+              <p>
+                This chat is read-only. Continue it in Agents to keep going.
+              </p>
+            </div>
+            <div class="flex shrink-0 items-center gap-2">
+              <Show when={chat.isGenerating()}>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => fireAndForget(onStop(), 'chat-stop')}
+                >
+                  Stop
+                </Button>
+              </Show>
+              <Button
+                variant="primary"
+                size="sm"
+                disabled={opening()}
+                onClick={() =>
+                  fireAndForget(continueInAgent(), 'chat-continue-in-agent')
+                }
+              >
+                Continue in Agents
+              </Button>
+            </div>
           </div>
-        </FloatRegionOrInline>
-      </Show>
-    </DragDropWrapper>
+        </div>
+      </FloatRegionOrInline>
+    </div>
   );
 }

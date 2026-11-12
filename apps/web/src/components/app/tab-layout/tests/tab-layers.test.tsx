@@ -6,6 +6,7 @@ import {
   type SplitRouter,
   type SplitRoutes,
 } from '@app/lib/split-router';
+import { SplitRouterProvider } from '@app/lib/split-router/solid/context';
 import { paneRoute } from '@app/routes/app-route';
 import {
   appRoute,
@@ -16,10 +17,16 @@ import {
   notFoundRoute,
 } from '@app/routes/routes';
 import { setGlobalTabManager } from '@app/signal/tabLayout';
-import { SplitLayoutContext } from '@components/app/split-layout/context';
+import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
+import {
+  SplitLayoutContext,
+  SplitPanelContext,
+  type SplitPanelContextType,
+} from '@components/app/split-layout/context';
 import {
   createSplitLayout,
   type SplitManager,
+  splitOf,
 } from '@components/app/split-layout/layoutManager';
 import { SplitLayout } from '@components/app/split-layout/SplitLayout';
 import { createAppPanePolicy } from '@components/app/split-layout/split-router/app-pane-policy';
@@ -27,16 +34,17 @@ import {
   resolveContentLocation,
   splitContentFromLocation,
 } from '@components/app/split-layout/split-router/legacy-route';
+import { toast } from '@core/component/Toast/Toast';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import { cleanup, render } from '@solidjs/testing-library';
-import { onCleanup, type ParentProps } from 'solid-js';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { onCleanup } from 'solid-js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTabManager, type TabManager } from '../tab-manager';
 
 const panels = vi.hoisted(() => ({ mounted: 0, unmounted: 0 }));
 
-// Stand-ins that count mounts: the layers decide what stays mounted, not the
-// panel or the resize zone.
+// A stand-in that counts mounts: the layers decide what stays mounted, not
+// the panel.
 vi.mock('@components/app/split-layout/components/SplitPanel', () => ({
   SplitPanel: (props: { split: { id: string } }) => {
     panels.mounted += 1;
@@ -44,12 +52,6 @@ vi.mock('@components/app/split-layout/components/SplitPanel', () => ({
       panels.unmounted += 1;
     });
     return <div data-panel={props.split.id} />;
-  },
-}));
-vi.mock('@core/component/Resize', () => ({
-  Resize: {
-    Zone: (props: ParentProps) => <div>{props.children}</div>,
-    Panel: (props: ParentProps) => <div>{props.children}</div>,
   },
 }));
 
@@ -71,7 +73,9 @@ const routes: SplitRoutes = {
 function setup(url: string) {
   let router!: SplitRouter;
   let manager!: SplitManager;
-  let tabManager!: TabManager;
+  let tabManager: TabManager | undefined;
+  /** The tab each block instance was created for. */
+  const blockScopes: (string | undefined)[] = [];
   render(() => {
     router = createSplitRouter({
       routes,
@@ -86,7 +90,10 @@ function setup(url: string) {
     });
     const orchestrator = {
       isBlockMounted: () => false,
-      createBlockInstance: vi.fn(),
+      createBlockInstance: () => {
+        blockScopes.push(tabManager?.blockScope());
+        return { element: () => null };
+      },
     } as unknown as BlockOrchestrator;
     manager = createSplitLayout(orchestrator, {
       router,
@@ -101,12 +108,34 @@ function setup(url: string) {
     });
     setGlobalTabManager(tabManager);
     return (
-      <SplitLayoutContext.Provider value={{ manager }}>
-        <SplitLayout />
-      </SplitLayoutContext.Provider>
+      <SplitRouterProvider router={router}>
+        <SplitLayoutContext.Provider value={{ manager }}>
+          <SplitLayout />
+        </SplitLayoutContext.Provider>
+      </SplitRouterProvider>
     );
   });
-  return { router, tabManager };
+  return { router, tabManager: tabManager!, manager, blockScopes };
+}
+
+/** A view's preview guard, as a host mounted in the router's first open pane creates it. */
+function guardInFirstPane(router: SplitRouter, manager: SplitManager) {
+  const handle = manager.getSplit(splitOf(router.panes()[0]!));
+  let guard!: ReturnType<typeof createPreviewSelectionGuard>;
+  function Host() {
+    guard = createPreviewSelectionGuard();
+    return null;
+  }
+  render(() => (
+    <SplitLayoutContext.Provider value={{ manager }}>
+      <SplitPanelContext.Provider
+        value={{ handle } as unknown as SplitPanelContextType}
+      >
+        <Host />
+      </SplitPanelContext.Provider>
+    </SplitLayoutContext.Provider>
+  ));
+  return guard;
 }
 
 async function flush(router: SplitRouter) {
@@ -118,7 +147,20 @@ async function flush(router: SplitRouter) {
 const layer = (id: string) =>
   document.querySelector<HTMLElement>(`[data-split-layer="${id}"]`);
 
+// jsdom has no layout; the tiled layout only needs to observe something.
+class ResizeObserverStub {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
+beforeEach(() => {
+  vi.stubGlobal('ResizeObserver', ResizeObserverStub);
+});
+
 afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
   setGlobalTabManager(undefined);
   cleanup();
   panels.mounted = 0;
@@ -155,6 +197,83 @@ describe('desktop tab layers', () => {
     expect(document.querySelector('[data-panel]')).toBe(firstPanel);
     expect(layer(first)?.inert).toBe(false);
     expect(layer(second)?.inert).toBe(true);
+  });
+
+  it('selecting a preview held by a background tab opens it in this tab', async () => {
+    const alert = vi.spyOn(toast, 'alert').mockReturnValue(0);
+    const { router, tabManager, manager } = setup('/channels');
+    await flush(router);
+    const channel = { type: 'channel', id: 'channel-two' } as const;
+    expect(guardInFirstPane(router, manager)(channel, 'navigate')).toBe(true);
+
+    tabManager.newTab();
+    await flush(router);
+    const second = tabManager.activeTabId();
+    expect(manager.findOpenView(channel)).toBeUndefined();
+
+    expect(guardInFirstPane(router, manager)(channel, 'navigate')).toBe(true);
+    await flush(router);
+
+    expect(tabManager.activeTabId()).toBe(second);
+    expect(alert).not.toHaveBeenCalled();
+  });
+
+  it('a preview held in the same tab still blocks a second one', async () => {
+    const alert = vi.spyOn(toast, 'alert').mockReturnValue(0);
+    const { router, manager } = setup('/channels');
+    await flush(router);
+    const channel = { type: 'channel', id: 'channel-two' } as const;
+    expect(guardInFirstPane(router, manager)(channel, 'navigate')).toBe(true);
+
+    expect(guardInFirstPane(router, manager)(channel, 'navigate')).toBe(false);
+    expect(alert).toHaveBeenCalledOnce();
+  });
+
+  it('a document open in a background tab mounts again in this tab', async () => {
+    const { router, tabManager, manager, blockScopes } = setup('/md/doc-one');
+    await flush(router);
+    expect(blockScopes).toEqual([undefined]);
+
+    tabManager.newTab();
+    await flush(router);
+    const second = tabManager.activeTabId();
+
+    const result = manager.openWithSplit({ type: 'md', id: 'doc-one' });
+    await flush(router);
+
+    expect(result.status).not.toBe('reused');
+    expect(blockScopes).toEqual([undefined, second]);
+    expect(tabManager.activeTabId()).toBe(second);
+  });
+
+  it('a tab mounting onto a document another tab holds gets its own instance', async () => {
+    const { router, tabManager, blockScopes } = setup('/md/doc-one');
+    await flush(router);
+    const entry = router.entry(router.panes()[0]!)!;
+
+    tabManager.openEntryInNewTab(entry, { activate: true });
+    await flush(router);
+
+    expect(blockScopes).toEqual([undefined, tabManager.activeTabId()]);
+  });
+
+  it('a stacked tab parks and comes back stacked without remounting', async () => {
+    const { router, tabManager } = setup(
+      '/channels/channel-one/~/home?layout=c2pp'
+    );
+    await flush(router);
+    const first = tabManager.activeTabId();
+    const stacked = router.layout();
+    expect(stacked).toMatchObject({ axis: 'column' });
+
+    tabManager.newTab();
+    await flush(router);
+    tabManager.activateTab(first);
+    await flush(router);
+
+    expect(router.layout()).toEqual(stacked);
+    expect(panels.mounted).toBe(3);
+    expect(panels.unmounted).toBe(0);
   });
 
   it('closing a tab unmounts only its panes', async () => {

@@ -24,18 +24,24 @@ pub(super) enum Dispatch {
 
 pub(super) type SessionWorkers = DashMap<AgentSessionId, mpsc::UnboundedSender<QueuedCommand>>;
 
+/// How long a session's command worker waits for its next command before it
+/// releases the quiet session's local state (`idle.rs`) and exits, unless
+/// the host sets another (`AgentHarnessService::with_worker_idle_timeout`).
+/// The next command starts a new worker.
+pub(super) const WORKER_IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15 * 60);
+
 pub(super) struct QueuedCommand {
-    command: HarnessCommand,
-    completed: oneshot::Sender<Result<CommandOutcome>>,
+    pub(super) command: HarnessCommand,
+    pub(super) completed: oneshot::Sender<Result<CommandOutcome>>,
     /// The caller's span, carried across the queue so the work the worker does
     /// on its own task still hangs off whatever triggered it.
-    span: tracing::Span,
+    pub(super) span: tracing::Span,
     /// Whether the worker resolves the session's managing replica before
     /// executing. Commands admitted at an ingress route; a command received
     /// *as* a forward executes here unconditionally, which is what makes
     /// forwarding single-hop - two replicas with momentarily different lease
     /// views cannot bounce a command between each other.
-    route: bool,
+    pub(super) route: bool,
 }
 
 /// [`CommandForwarder`], object-safe.
@@ -102,29 +108,19 @@ where
     pub(super) fn enqueue(
         &self,
         session_id: AgentSessionId,
-        mut command: HarnessCommand,
+        command: HarnessCommand,
         route: bool,
     ) -> impl Future<Output = Result<CommandOutcome>> + Send + 'static {
-        let caller = tracing::Span::current();
-        let result = loop {
-            let commands = self.commands(session_id);
-            let (completed, result) = oneshot::channel();
-            let queued = QueuedCommand {
+        let (completed, result) = oneshot::channel();
+        self.send_to_worker(
+            session_id,
+            QueuedCommand {
                 command,
                 completed,
-                span: caller.clone(),
+                span: tracing::Span::current(),
                 route,
-            };
-
-            match commands.send(queued) {
-                Ok(()) => break result,
-                Err(error) => {
-                    command = error.0.command;
-                    self.workers
-                        .remove_if(&session_id, |_, current| current.same_channel(&commands));
-                }
-            }
-        };
+            },
+        );
 
         async move {
             result
@@ -133,17 +129,36 @@ where
         }
     }
 
-    pub(super) fn commands(
-        &self,
-        session_id: AgentSessionId,
-    ) -> mpsc::UnboundedSender<QueuedCommand> {
-        match self.workers.entry(session_id) {
-            Entry::Occupied(entry) => entry.get().clone(),
-            Entry::Vacant(entry) => {
-                let (commands, receiver) = mpsc::unbounded_channel();
-                entry.insert(commands.clone());
-                self.spawn_worker(session_id, receiver);
-                commands
+    /// Hand `queued` to the session's worker, starting one if it has none.
+    ///
+    /// The send happens while this holds the session's map entry. A worker
+    /// leaves only through [`retire_worker`], which removes its entry under
+    /// the same lock and only while its channel is empty, so every command
+    /// either lands in a channel whose worker will still read it or finds no
+    /// entry and starts a new worker.
+    fn send_to_worker(&self, session_id: AgentSessionId, mut queued: QueuedCommand) {
+        loop {
+            match self.workers.entry(session_id) {
+                Entry::Occupied(entry) => match entry.get().send(queued) {
+                    Ok(()) => return,
+                    // The worker is gone without retiring (its task ended
+                    // some other way): replace it.
+                    Err(error) => {
+                        queued = error.0;
+                        entry.remove();
+                    }
+                },
+                Entry::Vacant(entry) => {
+                    let (commands, receiver) = mpsc::unbounded_channel();
+                    let own = commands.downgrade();
+                    if let Err(error) = commands.send(queued) {
+                        queued = error.0;
+                        continue;
+                    }
+                    entry.insert(commands);
+                    self.spawn_worker(session_id, own, receiver);
+                    return;
+                }
             }
         }
     }
@@ -151,13 +166,53 @@ where
     pub(super) fn spawn_worker(
         &self,
         session_id: AgentSessionId,
+        own: mpsc::WeakUnboundedSender<QueuedCommand>,
         receiver: mpsc::UnboundedReceiver<QueuedCommand>,
     ) {
         // The worker outlives the call that created it, so it has to carry the
         // subscriber forward itself or every command it runs traces nowhere.
         let inner = self.inner.clone();
-        tokio::spawn(run_session_worker(session_id, inner, receiver).with_current_subscriber());
+        let workers = Arc::clone(&self.workers);
+        tokio::spawn(
+            run_session_worker(session_id, inner, workers, own, receiver).with_current_subscriber(),
+        );
     }
+}
+
+/// How long a worker waits for a command before it tries to release its
+/// session, after `backoffs` tries that replayed the log and kept the session,
+/// or failed ([`IdleRelease::backs_off`](super::idle::IdleRelease::backs_off)).
+/// A session that stays unreleasable (its log rebuilds differently) is
+/// checked again at `timeout`, twice it, four times it, then every sixteen
+/// times it: each check reads and replays the session's whole log.
+pub(super) fn idle_wait(timeout: std::time::Duration, backoffs: u32) -> std::time::Duration {
+    let factor = match backoffs {
+        0 => 1,
+        1 => 2,
+        2 => 4,
+        _ => 16,
+    };
+    timeout.saturating_mul(factor)
+}
+
+/// Remove the worker's own entry, if its channel is still the session's and
+/// holds nothing. Answers whether it did, in which case the worker exits.
+///
+/// Checked and removed under the entry's lock, the one
+/// [`AgentHarnessService::send_to_worker`] sends under: a command sent
+/// before this keeps the worker alive to run it, and one sent after starts a
+/// new worker.
+pub(super) fn retire_worker(
+    workers: &SessionWorkers,
+    session_id: AgentSessionId,
+    own: &mpsc::WeakUnboundedSender<QueuedCommand>,
+    receiver: &mpsc::UnboundedReceiver<QueuedCommand>,
+) -> bool {
+    workers
+        .remove_if(&session_id, |_, current| {
+            receiver.is_empty() && own.upgrade().is_some_and(|own| own.same_channel(current))
+        })
+        .is_some()
 }
 
 impl<
@@ -384,6 +439,7 @@ where
                             action: open.origin.into_action(),
                             announce: Some(origin),
                             context,
+                            client: None,
                         })
                     }
                     Err(AgentSessionError::NotFound(_)) => HarnessCommand::Open(open),
@@ -439,6 +495,7 @@ where
             | HarnessCommand::ToolApproval(_)
             | HarnessCommand::PresentTool { .. }
             | HarnessCommand::SessionStopped { .. }
+            | HarnessCommand::Reattach
             | HarnessCommand::Delete => {}
             HarnessCommand::SetSandboxSize(_) => {
                 if self.sessions.get_session(session_id).await?.is_archived() {
@@ -889,6 +946,15 @@ where
                 self.apply_sandbox_size(session_id, size).await?;
                 Ok(CommandOutcome::Completed)
             }
+            HarnessCommand::Reattach => {
+                // Prompts queued behind a turn the drop interrupted are
+                // restored with the session; only a turn end or a new prompt
+                // dispatches otherwise, and an idle session gets neither.
+                if self.reattach(session_id).await? && !self.busy.is_pending(session_id) {
+                    self.dispatch_next(session_id).await?;
+                }
+                Ok(CommandOutcome::Completed)
+            }
             HarnessCommand::Delete => {
                 self.notification_finished
                     .lock()
@@ -902,8 +968,7 @@ where
                 // would leak them for the life of the process. The published
                 // empty snapshot is the viewers' goodbye.
                 self.busy.clear(session_id);
-                self.queues.drop_session(session_id);
-                self.hydrated.remove(&session_id);
+                self.forget_queue(session_id);
                 self.publish_queue(session_id).await;
                 match identity {
                     Ok(identity) => {
@@ -950,6 +1015,7 @@ where
         command: DeliverAction,
     ) -> Result<CommandOutcome> {
         self.authorize_action(&command).await?;
+        self.authorize_runtime(session_id, &command).await?;
         let action_id = command.id;
         if let Some(store) = &self.external_replies
             && store
@@ -1001,7 +1067,7 @@ where
                     command.id,
                     command.actor.clone(),
                     None,
-                    *failure,
+                    (*failure).into(),
                 )
                 .await;
             }
@@ -1032,6 +1098,7 @@ where
             actor: command.actor,
             announce: command.announce,
             context: command.context,
+            client: command.client,
             announced: None,
             created_at: dm_record
                 .as_ref()
@@ -1169,6 +1236,7 @@ where
                         actor,
                         announce: None,
                         context: None,
+                        client: None,
                     },
                 )
                 .await
@@ -1211,6 +1279,7 @@ where
                     actor: actor.cloned(),
                     announce: None,
                     context: None,
+                    client: None,
                 },
             )
             .await
@@ -1316,9 +1385,17 @@ where
         Ok(())
     }
 
+    /// Forget this process's working copy of the session's queue and its
+    /// `hydrated` mark, which only change together: the next command reloads
+    /// the durable queue.
+    pub(super) fn forget_queue(&self, session_id: AgentSessionId) {
+        self.queues.drop_session(session_id);
+        self.hydrated.remove(&session_id);
+    }
+
     /// Load the durable queue the first time this process handles the session,
     /// so a later persist cannot wipe waiting actions this replica never saw.
-    async fn ensure_hydrated(&self, session_id: AgentSessionId) -> Result<()> {
+    pub(super) async fn ensure_hydrated(&self, session_id: AgentSessionId) -> Result<()> {
         if self.hydrated.contains(&session_id) {
             return Ok(());
         }
@@ -1440,6 +1517,36 @@ where
                         self.requeue_claimed(session_id, entry).await?;
                         return Err(error.into());
                     }
+                }
+            }
+
+            // Access can be removed while a prompt waits. One that may no
+            // longer run is refused rather than delivered, and the next
+            // entry dispatches in its place. Refusing is safe to repeat, so a
+            // failure puts the entry back for the next attempt.
+            let refusal = self
+                .runtime_refusal(session_id, &entry.action, entry.actor.as_ref())
+                .await;
+            let refused = match refusal {
+                Ok(None) => Ok(false),
+                Ok(Some(reason)) => self
+                    .refuse_prompt(
+                        session_id,
+                        entry.action_id,
+                        entry.announce.as_ref(),
+                        entry.actor.clone(),
+                        &reason,
+                    )
+                    .await
+                    .map(|()| true),
+                Err(error) => Err(error),
+            };
+            match refused {
+                Ok(true) => continue,
+                Ok(false) => {}
+                Err(error) => {
+                    self.requeue_claimed(session_id, entry).await?;
+                    return Err(error);
                 }
             }
 
@@ -1605,20 +1712,26 @@ where
             // moment the prompt lands: the egress proxy judges every call by who
             // prompted the turn it belongs to, and it may be serving the call on
             // another replica.
-            if let Err(error) = self
-                .sessions
-                .set_turn_prompter(
-                    session_id,
-                    &TurnPrompter {
-                        action_id: entry.action_id,
-                        user: entry.actor.clone(),
-                        kind: if matches!(&entry.action, AgentAction::Prompt(prompt) if prompt.notifications.as_ref().is_some_and(|input| input.system_turn)) {
-                            agent_session::domain::model::PrompterKind::System
-                        } else { agent_session::domain::model::PrompterKind::User },
-                    },
-                )
-                .await
-            {
+            // A prompt typed into the session itself also follows it for its
+            // sender, which lists a session started from a thread for them.
+            let recorded = async {
+                self.sessions
+                    .set_turn_prompter(
+                        session_id,
+                        &TurnPrompter {
+                            action_id: entry.action_id,
+                            user: entry.actor.clone(),
+                            kind: entry.prompter_kind(),
+                            client: entry.client,
+                        },
+                    )
+                    .await?;
+                if let Some(user) = entry.direct_prompter() {
+                    self.sessions.add_follower(session_id, user).await?;
+                }
+                Ok::<_, AgentSessionError>(())
+            };
+            if let Err(error) = recorded.await {
                 // A claimed conversation turn fails as an undelivered one
                 // does, so its journal never shows it running.
                 if let Some(store) = conversation_store {
@@ -1643,6 +1756,7 @@ where
                 announce: entry.announce.clone(),
                 // Already composed into the action above.
                 context: None,
+                client: None,
             };
             flight.announcement_message_id = entry.announced;
             if let Some(store) = conversation_store
@@ -1781,6 +1895,8 @@ pub(super) async fn run_session_worker<
         Mentions,
         Notifier,
     >,
+    workers: Arc<SessionWorkers>,
+    own: mpsc::WeakUnboundedSender<QueuedCommand>,
     mut receiver: mpsc::UnboundedReceiver<QueuedCommand>,
 ) where
     Sessions: AgentSessionService,
@@ -1794,13 +1910,49 @@ pub(super) async fn run_session_worker<
     Mentions: PromptMentions,
     Notifier: AgentSessionNotifier,
 {
-    while let Some(queued) = receiver.recv().await {
+    let mut deleted = false;
+    // Releases tried since the session's last command that left something
+    // held here.
+    let mut attempts: u32 = 0;
+    // Of those, the ones that replayed the log or failed: what the wait
+    // before the next try grows with.
+    let mut backoffs: u32 = 0;
+    loop {
+        let queued = tokio::select! {
+            queued = receiver.recv() => queued,
+            () = tokio::time::sleep(idle_wait(inner.worker_idle_timeout, backoffs)) => {
+                // Before retiring, while commands for the session still queue
+                // behind this worker rather than racing it on a new one.
+                let outcome = inner.release_idle(session_id, attempts).await;
+                // A session still held stays with its worker, or nothing
+                // would ever try again before its next command, unless the
+                // kill switch turns retries off.
+                if outcome.holds_nothing() || !inner.retries_idle_release(session_id).await {
+                    if retire_worker(&workers, session_id, &own, &receiver) {
+                        return;
+                    }
+                } else {
+                    attempts = attempts.saturating_add(1);
+                    if outcome.backs_off() {
+                        backoffs = backoffs.saturating_add(1);
+                    }
+                }
+                continue;
+            }
+        };
+        // Every sender is gone: the map no longer holds this channel.
+        let Some(queued) = queued else {
+            return;
+        };
+        attempts = 0;
+        backoffs = 0;
         let QueuedCommand {
             command,
             completed,
             span,
             route,
         } = queued;
+        let deletes = matches!(command, HarnessCommand::Delete);
         let conversation_action = match (&command, &inner.conversation_turns) {
             (HarnessCommand::ConversationMessage(open), Some(store)) => {
                 match store
@@ -1831,6 +1983,15 @@ pub(super) async fn run_session_worker<
         {
             tracing::error!(?error, %session_id, "failed to persist conversation command failure");
         }
+        // A deleted session takes no more commands, so its worker goes with
+        // it, before the caller hears the delete finished. Anything already
+        // queued behind the delete (its actor's stopped callback) keeps it
+        // running until that is answered, and it retires right after.
+        deleted |= deletes && result.is_ok();
+        let retired = deleted && retire_worker(&workers, session_id, &own, &receiver);
         let _ = completed.send(result);
+        if retired {
+            return;
+        }
     }
 }

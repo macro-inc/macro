@@ -15,12 +15,13 @@ export function canLabelChannel(
   );
 }
 
-/** Writes require a known matching team, unlike server-authorized membership display. */
+/** Manual writes require a matching team and cannot override name rules. */
 export function canAssignChannel(
   channel: Pick<ChannelEntity, 'channelType' | 'teamId'> | undefined,
-  label?: Pick<ChannelLabel, 'teamId'>
+  label?: Pick<ChannelLabel, 'teamId' | 'rule'>
 ): boolean {
   return (
+    !label?.rule &&
     canLabelChannel(channel, label) &&
     (!label?.teamId || channel?.teamId === label.teamId)
   );
@@ -39,6 +40,31 @@ export function filterChannelLabelMembers(
     const channel = channelsById.get(id);
     return channel === undefined || canLabelChannel(channel, label);
   });
+}
+
+/** Scope changes keep every member; unavailable channels cannot be silently dropped. */
+export function channelSectionScopeChangeError(
+  label: Pick<ChannelLabel, 'channelIds' | 'channelCount'>,
+  channelsById: ReadonlyMap<
+    string,
+    Pick<ChannelEntity, 'channelType' | 'teamId' | 'isParticipant'>
+  >,
+  target: Pick<ChannelLabel, 'teamId'>
+): 'unavailable' | 'team-only' | undefined {
+  if (new Set(label.channelIds).size !== label.channelCount) {
+    return 'unavailable';
+  }
+
+  for (const id of label.channelIds) {
+    const channel = channelsById.get(id);
+    if (!channel || channel.isParticipant === false) {
+      return 'unavailable';
+    }
+
+    if (!canAssignChannel(channel, target)) {
+      return target.teamId ? 'team-only' : 'unavailable';
+    }
+  }
 }
 
 /** Explain blocked section drops with the same membership rules as the picker. */
