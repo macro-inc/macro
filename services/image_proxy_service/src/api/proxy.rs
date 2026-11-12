@@ -508,7 +508,10 @@ pub fn router() -> Router<crate::api::context::ApiContext> {
 fn with_sandbox_headers<State: Clone + Send + Sync + 'static>(
     router: Router<State>,
 ) -> Router<State> {
-    router.layer(axum::middleware::map_response(sandbox_headers))
+    // The fallback keeps unmatched paths under /proxy inside the layer.
+    router
+        .fallback(|| async { StatusCode::NOT_FOUND })
+        .layer(axum::middleware::map_response(sandbox_headers))
 }
 
 #[cfg(test)]

@@ -114,16 +114,20 @@ async fn proxy_rejects_missing_credentials() {
 
 #[tokio::test]
 async fn proxy_error_responses_are_sandboxed() {
-    for uri in [
-        "/proxy?url=http://127.0.0.1/image.png",
-        "/image-proxy/proxy",
+    for (uri, status) in [
+        (
+            "/proxy?url=http://127.0.0.1/image.png",
+            StatusCode::UNAUTHORIZED,
+        ),
+        ("/image-proxy/proxy", StatusCode::UNAUTHORIZED),
+        ("/proxy/unknown", StatusCode::NOT_FOUND),
     ] {
         let response = app(test_context())
             .oneshot(proxy_request(uri).body(Body::empty()).unwrap())
             .await
             .expect("application should return a response");
 
-        assert_eq!(response.status(), StatusCode::UNAUTHORIZED, "{uri}");
+        assert_eq!(response.status(), status, "{uri}");
         let headers = response.headers();
         assert_eq!(headers["x-content-type-options"], "nosniff", "{uri}");
         assert_eq!(
