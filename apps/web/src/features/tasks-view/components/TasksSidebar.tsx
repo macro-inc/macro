@@ -36,6 +36,7 @@ import {
 import { isProjectTab, projectScopeForTab } from '../core/task-navigation';
 import { TasksCreateAction } from '../tasks-create-action';
 import { useTasksView } from '../tasks-view-context';
+import type { TasksTab } from '../types';
 import { TaskSavedViewsList } from '../views/task-saved-views';
 import { TAB_ICONS } from './task-view-icons';
 

@@ -124,8 +124,14 @@ test('phone project picker creates and reopens a saved view', async ({
 }, info) => {
   test.skip(info.project.name !== 'phone');
   await open(page);
+  await page.getByRole('button', { name: 'My projects', exact: true }).click();
+  const views = page.getByRole('dialog', { name: 'Projects' });
+  await expect(
+    views.getByRole('button', { name: 'My projects' })
+  ).toHaveAttribute('aria-current', 'page');
+  await views.getByRole('button', { name: 'All projects' }).click();
   await page.getByRole('button', { name: 'All projects', exact: true }).click();
-  await page.getByRole('button', { name: 'Create view', exact: true }).click();
+  await views.getByRole('button', { name: 'New view' }).click();
   await page.getByRole('button', { name: 'Save view', exact: true }).click();
   const save = page.getByRole('dialog', { name: 'Save view' });
   await save.getByRole('textbox', { name: 'Name' }).fill('Phone projects');
@@ -134,15 +140,9 @@ test('phone project picker creates and reopens a saved view', async ({
   await page
     .getByRole('button', { name: 'Phone projects', exact: true })
     .click();
-  await page
-    .getByRole('button', { name: 'Assigned to me', exact: true })
-    .click();
-  await page
-    .getByRole('button', { name: 'Assigned to me', exact: true })
-    .click();
-  await page
-    .getByRole('button', { name: 'Phone projects', exact: true })
-    .click();
+  await views.getByRole('button', { name: 'My projects' }).click();
+  await page.getByRole('button', { name: 'My projects', exact: true }).click();
+  await views.getByRole('button', { name: 'Phone projects' }).click();
   await expect(
     page.getByRole('button', { name: 'Phone projects', exact: true })
   ).toBeVisible();

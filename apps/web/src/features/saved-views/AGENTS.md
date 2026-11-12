@@ -31,6 +31,7 @@ Reusable named view definitions. Consumers are main Tasks, Projects, and Email; 
 - Snapshot saved configuration when adapting query data; reconciled Solid stores must not mutate a confirmed draft baseline.
 - Mount picker menus inside the drawer portal scope, close menus before opening dialogs, then close the drawer and restore focus before opening another dialog.
 - Render the mobile picker trigger with the shared pill button and preserve the selected state supplied by its consumer.
+- Use the optional icon and hidden-title picker props only for the Projects title island and sheet; keep Tasks picker presentation unchanged. Use mobile list composition for grouped cards and 48px rows without changing desktop list menus.
 - Compose unsaved list entries with the draft row; keep draft lifecycle and confirmed-record reconciliation in the consumer.
 - Keep header creation consumer-owned and forward its control ref so the host can isolate its keyboard scope.
 - Bind deferred picker actions to the opening account and discard them after an account change.

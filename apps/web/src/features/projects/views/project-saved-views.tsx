@@ -148,6 +148,7 @@ function createProjectViewDialogs(views: ProjectViews, owner = getOwner()) {
 export function ProjectSavedViewRows(props: {
   onAction?: (action: () => void) => void;
   dialogOwner?: Owner | null;
+  mobile?: boolean;
 }) {
   const views = useProjectSavedViews();
   if (!views) return null;
@@ -172,14 +173,18 @@ export function ProjectSavedViewRows(props: {
   };
   return (
     <>
-      <SavedViewList.Items label="Saved project views">
+      <SavedViewList.Items label="Saved project views" mobile={props.mobile}>
         <Show when={views.creating()}>
-          <SavedViewList.Draft onSelect={() => run(() => views.select())} />
+          <SavedViewList.Draft
+            mobile={props.mobile}
+            onSelect={() => run(() => views.select())}
+          />
         </Show>
         <For each={items()}>
           {(record) => (
             <SavedViewListRow
               view={record}
+              mobile={props.mobile}
               selected={views.active() && views.selectedId() === record.id}
               scopeKey={views.viewerId()}
               onSelect={() => run(() => views.select(record.id))}
@@ -220,7 +225,10 @@ export function ProjectSavedViewRows(props: {
       </Show>
       <Show
         when={
-          !views.list.loading() && items()?.length === 0 && !views.creating()
+          !props.mobile &&
+          !views.list.loading() &&
+          items()?.length === 0 &&
+          !views.creating()
         }
       >
         <div class="mx-2 my-1 flex flex-col items-start gap-2 rounded-lg border border-edge-muted p-3">

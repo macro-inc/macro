@@ -56,8 +56,11 @@ enabled, the collapsible `Projects` section appears above task `Saved views`.
 It contains `My projects` (assigned to the viewer), `All projects`, `Created by me`,
 and saved project views. The plus beside the section opens the project composer.
 Phones have a separate `Projects` destination in the bottom navigation's More
-menu (or dock after customization), not a Projects pill inside Tasks. Its picker
-contains the same built-in and saved project views; the leading filter button
+menu (or dock after customization), not a Projects pill inside Tasks. The phone
+header has one title island with the current view icon, name, and caret; the filter
+island sits on the right. Its views sheet groups built-in and saved project views
+in 48px cards, marks the selected view with accent and a check, and puts New view
+at the bottom. Saved views show sharing marks and action menus. The filter button
 opens Sort, Group, Status, Priority, Assignee, and Due date controls. Project rows
 keep Status, Priority, Assignees, Due date, and Updated columns on desktop/tablet.
 A 14px progress ring follows the project name; hover or focus reveals its count.
