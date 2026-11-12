@@ -29,15 +29,15 @@ test('successful email additions retain keyboard focus in header and Record deta
           .press('Enter');
       else await input.press('Enter');
       await expect(input).toBeHidden();
-      const values = page.getByText('focus@example.com', { exact: true });
       await expect(
-        (details ? values.last() : values.first()).locator('..')
-      ).toBeFocused();
+        page.getByText('focus@example.com', { exact: true }).first()
+      ).toBeVisible();
+      await expect(details ? trigger.last() : trigger.first()).toBeFocused();
     }
   }
 });
 
-test('email add validates, retains a rejected draft and becomes read-only after commit', async ({
+test('email add validates, retains a rejected draft and lists the address after commit', async ({
   page,
 }, info) => {
   const address = `contact@${'gmail.com'}`;
@@ -78,11 +78,8 @@ test('email add validates, retains a rejected draft and becomes read-only after 
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(input).toBeHidden();
   await expect(
-    page.getByRole('button', {
-      name: /Add email|Edit contact email|Remove email/,
-    })
-  ).toHaveCount(0);
-  await expect(page.getByText(address, { exact: true }).first()).toBeVisible();
+    page.getByRole('button', { name: `Email options for ${address}` }).first()
+  ).toBeVisible();
   await expect(
     page.getByRole('button', { name: 'Add company', exact: true }).first()
   ).toBeVisible();
@@ -232,7 +229,7 @@ test('company-email and blank-email contacts stay read-only with company navigat
   ).toBeVisible();
   await expect(
     page.getByRole('button', {
-      name: /Change contact company|Add company|Edit contact email/,
+      name: /Change contact company|Add company|Remove company/,
     })
   ).toHaveCount(0);
   await page
@@ -488,4 +485,140 @@ test('property controls keep compact faces and distinct expanded touch targets',
     ).toBeVisible();
     expect(await page.evaluate(() => window.archiveFixture.writes())).toBe(0);
   }
+});
+
+test('several addresses: make primary, reject a duplicate, add, remove, and keep the company address', async ({
+  page,
+}, info) => {
+  const personal = `person1@${'gmail.com'}`;
+  await page.goto('/?several');
+  const options = page.getByRole('button', { name: /^Email options for/ });
+  await expect(options).toHaveText([
+    'person1@example.com',
+    personal,
+    'person1.alt@example.org',
+  ]);
+  await page.screenshot({
+    animations: 'disabled',
+    path: info.outputPath('several-addresses.png'),
+  });
+
+  await options.nth(1).click();
+  await page.evaluate(() => window.archiveFixture.holdNext());
+  await page.getByRole('button', { name: 'Make primary', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: 'Make primary', exact: true })
+  ).toBeDisabled();
+  expect(
+    await page.evaluate(
+      () => window.archiveFixture.snapshot().contacts[0].email
+    )
+  ).toBe('person1@example.com');
+  await page.evaluate(() => window.archiveFixture.release());
+  await expect(options).toHaveText([
+    personal,
+    'person1@example.com',
+    'person1.alt@example.org',
+  ]);
+
+  // The one address on the company's domain links the contact to it.
+  await options.nth(1).click();
+  await expect(
+    page.getByText('links the contact to its company')
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Remove', exact: true })
+  ).toHaveCount(0);
+  await page.screenshot({
+    animations: 'disabled',
+    path: info.outputPath('company-address.png'),
+  });
+  await page.keyboard.press('Escape');
+  await expect(page.getByText('links the contact to its company')).toBeHidden();
+
+  const add = page.getByRole('button', { name: 'Add email', exact: true });
+  await add.first().click();
+  const input = page.getByRole('textbox', { name: 'Email', exact: true });
+  await input.fill('person2@example.com');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page.getByRole('alert')).toHaveText(
+    'This email is already associated with another contact in this team.'
+  );
+  await expect(input).toHaveValue('person2@example.com');
+  await input.fill('added@example.org');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(input).toBeHidden();
+  await expect(options).toHaveCount(4);
+
+  await options.nth(2).click();
+  await page.getByRole('button', { name: 'Remove', exact: true }).click();
+  await expect(options).toHaveText([
+    personal,
+    'person1@example.com',
+    'added@example.org',
+  ]);
+  const record = await page.evaluate(
+    () => window.archiveFixture.snapshot().contacts[0]
+  );
+  expect(record.emails).toEqual([
+    personal,
+    'person1@example.com',
+    'added@example.org',
+  ]);
+  expect(record.companyId).toBe('company-1');
+  await expect(
+    page.getByRole('button', {
+      name: /Change contact company|Remove company/,
+    })
+  ).toHaveCount(0);
+});
+
+test('Remove company keeps a rejected relation and unlinks once the server commits', async ({
+  page,
+}, info) => {
+  await page.goto('/?personal');
+  await page
+    .getByRole('button', { name: 'Change contact company', exact: true })
+    .first()
+    .click();
+  const remove = page.getByRole('button', {
+    name: 'Remove company',
+    exact: true,
+  });
+  await page.evaluate(() => window.archiveFixture.failNext());
+  await remove.click();
+  await expect(page.getByRole('alert')).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => window.archiveFixture.snapshot().contacts[0].companyId
+    )
+  ).toBe('company-1');
+  await page.screenshot({
+    animations: 'disabled',
+    path: info.outputPath('remove-company-rejected.png'),
+  });
+  await remove.click();
+  await expect(
+    page.getByRole('button', { name: 'Add company', exact: true }).first()
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Go to company', exact: true })
+  ).toHaveCount(0);
+  expect(
+    await page.evaluate(
+      () => window.archiveFixture.snapshot().contacts[0].companyId
+    )
+  ).toBeNull();
+});
+
+test('a server without the address list keeps addresses and company read-only', async ({
+  page,
+}) => {
+  await page.goto('/?legacy&personal');
+  await expect(page.getByText(/^person1@/).first()).toBeVisible();
+  await expect(
+    page.getByRole('button', {
+      name: /Email options for|Add email|Change contact company|Remove company/,
+    })
+  ).toHaveCount(0);
 });

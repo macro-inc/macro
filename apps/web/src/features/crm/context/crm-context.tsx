@@ -101,7 +101,7 @@ export type CrmContext = {
     signal: Accessor<CrmEmailSignal>
   ): ItemListSource;
   createContactEmails(
-    email: Accessor<string | undefined>,
+    emails: Accessor<string[]>,
     scope: Accessor<CrmEmailScope>,
     signal: Accessor<CrmEmailSignal>
   ): ItemListSource;
@@ -204,11 +204,15 @@ export type CrmContext = {
     name: string;
   }>;
   editContactEmail(): CrmMutation<
-    { contact: CrmContact; email: string },
+    {
+      contact: CrmContact;
+      email: string;
+      change: 'add' | 'remove' | 'primary';
+    },
     CrmContact
   >;
   editContactCompany(): CrmMutation<
-    { contact: CrmContact; companyId: string },
+    { contact: CrmContact; companyId: string | null },
     CrmContact
   >;
   hideCompany(): CrmMutation<{ companyId: string; hidden: boolean }>;

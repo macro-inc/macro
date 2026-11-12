@@ -7,24 +7,33 @@ import BuildingsIcon from '@icon/system/regular/buildings.svg';
 import { EditorPopover } from '@property/editors/popover/EditorPopover';
 import { PropertyEntitySelector } from '@property/editors/selectors/PropertyEntitySelector';
 import { propertyPillClasses } from '@property/extractors/property-pill-classes';
-import { Badge, Button, Dropdown, Tooltip } from '@ui';
+import { Badge, Button, Dialog, Dropdown, Tooltip } from '@ui';
 import { createSignal, onCleanup, Show, Suspense } from 'solid-js';
 import {
   contactPropertyIconTouchTarget,
   contactPropertyTouchTarget,
 } from './contact-property-styles';
 
-/** A singleton company relation with separate edit and navigation actions. */
+/**
+ * A singleton company relation with separate edit and navigation actions.
+ * `editable` offers link and switch; `removable` offers Remove company.
+ */
 export function ContactCompanyProperty(props: {
   companyId: string | null | undefined;
   companyName: string | undefined;
   editable: boolean;
-  save(companyId: string): Promise<void>;
+  removable: boolean;
+  /** Why a linked company can be neither switched nor removed. */
+  lockedReason: string | undefined;
+  /** Null removes the company. */
+  save(companyId: string | null): Promise<void>;
   openCompany(event: MouseEvent): void;
   errorMessage(error: unknown): string;
 }) {
   const [open, setOpen] = createSignal(false);
   const [draft, setDraft] = createSignal<string | null>(null);
+  // The last save requested, so Retry repeats a removal as a removal.
+  const [attempt, setAttempt] = createSignal<{ companyId: string | null }>();
   const [saving, setSaving] = createSignal(false);
   const [error, setError] = createSignal<string>();
   let triggerElement: HTMLButtonElement | undefined;
@@ -33,8 +42,10 @@ export function ContactCompanyProperty(props: {
     active = false;
   });
 
+  const removable = () => props.removable && !!props.companyId;
+  const actionable = () => props.editable || removable();
   const changeOpen = (next: boolean) => {
-    if (saving() || !props.editable) return;
+    if (saving() || !actionable()) return;
     if (next) {
       setDraft(props.companyId ?? null);
       setError(undefined);
@@ -42,9 +53,11 @@ export function ContactCompanyProperty(props: {
     setOpen(next);
     if (!next && !isTouchDevice()) triggerElement?.focus();
   };
-  const save = async (companyId: string) => {
-    if (saving() || !props.editable) return;
-    setDraft(companyId);
+  const save = async (companyId: string | null) => {
+    if (saving()) return;
+    if (companyId ? !props.editable : !removable()) return;
+    if (companyId) setDraft(companyId);
+    setAttempt({ companyId });
     setSaving(true);
     setError(undefined);
     try {
@@ -69,31 +82,38 @@ export function ContactCompanyProperty(props: {
   };
   const editor = () => (
     <>
-      <div
-        inert={saving()}
-        class="flex min-h-0 flex-1 flex-col"
-        classList={{ 'opacity-50': saving() }}
-      >
-        <Suspense
-          fallback={
-            <p role="status" class="p-3 text-sm text-ink-muted">
-              {t('crm.loadingCompanies')}
-            </p>
-          }
+      <Show when={!props.editable}>
+        <p class="ph-no-capture truncate px-3 pt-3 text-sm">
+          {props.companyName ?? t('crm.company')}
+        </p>
+      </Show>
+      <Show when={props.editable}>
+        <div
+          inert={saving()}
+          class="flex min-h-0 flex-1 flex-col"
+          classList={{ 'opacity-50': saving() }}
         >
-          <PropertyEntitySelector
-            config={{
-              specificEntityType: 'COMPANY',
-              isMultiSelect: false,
-              placeholder: t('crm.searchCompanies'),
-              fillHeight: isTouchDevice(),
-            }}
-            selectedOptions={() => new Set(draft() ? [draft()!] : [])}
-            setSelectedOptions={select}
-            onCancel={() => changeOpen(false)}
-          />
-        </Suspense>
-      </div>
+          <Suspense
+            fallback={
+              <p role="status" class="p-3 text-sm text-ink-muted">
+                {t('crm.loadingCompanies')}
+              </p>
+            }
+          >
+            <PropertyEntitySelector
+              config={{
+                specificEntityType: 'COMPANY',
+                isMultiSelect: false,
+                placeholder: t('crm.searchCompanies'),
+                fillHeight: isTouchDevice(),
+              }}
+              selectedOptions={() => new Set(draft() ? [draft()!] : [])}
+              setSelectedOptions={select}
+              onCancel={() => changeOpen(false)}
+            />
+          </Suspense>
+        </div>
+      </Show>
       <Show when={error()}>
         {(message) => (
           <p role="alert" class="px-3 py-2 text-sm text-failure">
@@ -102,21 +122,32 @@ export function ContactCompanyProperty(props: {
         )}
       </Show>
       <div
-        class="flex flex-wrap items-center justify-between gap-2 border-t border-edge-muted p-2"
+        class="flex flex-wrap items-center justify-between gap-2 p-2"
+        classList={{ 'border-t border-edge-muted': props.editable }}
         on:keydown={(event) => event.stopPropagation()}
       >
+        <Show when={removable()}>
+          <Button
+            variant="danger-ghost"
+            size="sm"
+            disabled={saving()}
+            onClick={() => fireAndForget(save(null), 'crm')}
+          >
+            {t('crm.removeCompany')}
+          </Button>
+        </Show>
         <Show when={saving()}>
           <span role="status" class="text-sm text-ink-muted">
             {t('crm.savingContact')}
           </span>
         </Show>
-        <Show when={error() && !isTouchDevice()}>
+        <Show when={error() && !isTouchDevice() && attempt()?.companyId}>
           <Button
             variant="primary"
             size="sm"
             disabled={saving()}
             onClick={() => {
-              const id = draft();
+              const id = attempt()?.companyId;
               if (id) fireAndForget(save(id), 'crm');
             }}
           >
@@ -164,15 +195,20 @@ export function ContactCompanyProperty(props: {
   return (
     <div class="flex min-w-0 max-w-full items-center gap-1">
       <Show
-        when={props.editable}
+        when={actionable()}
         fallback={
-          <Badge variant="ghost" size="sm" class="min-w-0 shrink">
-            <BuildingsIcon class="size-3 shrink-0" />
-            <span class="truncate">
-              {props.companyName ??
-                (props.companyId ? t('crm.company') : t('crm.noCompany'))}
-            </span>
-          </Badge>
+          <Tooltip
+            label={props.lockedReason ?? ''}
+            disabled={!props.lockedReason}
+          >
+            <Badge variant="ghost" size="sm" class="min-w-0 shrink">
+              <BuildingsIcon class="size-3 shrink-0" />
+              <span class="truncate">
+                {props.companyName ??
+                  (props.companyId ? t('crm.company') : t('crm.noCompany'))}
+              </span>
+            </Badge>
+          </Tooltip>
         }
       >
         <Show
@@ -195,7 +231,25 @@ export function ContactCompanyProperty(props: {
           }
         >
           {trigger()}
-          <PickerSheet.Root open={open()} onCancel={() => changeOpen(false)}>
+          <Show when={!props.editable && open()}>
+            <Dialog
+              open
+              onOpenChange={changeOpen}
+              onEscapeKeyDown={(event) => {
+                event.preventDefault();
+                changeOpen(false);
+              }}
+            >
+              <Dialog.Title class="px-3 pt-3 text-base font-semibold">
+                {t('crm.company')}
+              </Dialog.Title>
+              {editor()}
+            </Dialog>
+          </Show>
+          <PickerSheet.Root
+            open={open() && props.editable}
+            onCancel={() => changeOpen(false)}
+          >
             <div on:keydown={(event) => event.stopPropagation()}>
               <PickerSheet.Header
                 title={t('crm.company')}

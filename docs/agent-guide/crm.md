@@ -203,22 +203,30 @@ already in the trail (such as the contact's own company from `Companies >
 Forward restore the trail; a reloaded or shared record URL shows only `<list> >
 <record>`. The CRM sidebar stays visible throughout.
 Contact properties use Tasks-style pills in the header and **Record details**.
-**Add email** appears only when the address is absent. Save adds the address;
-Cancel or Escape discards the draft, and invalid input stays open. Populated
-addresses are read-only: no replacement, clearing or additional email identity.
+The email property lists every address the contact holds, the primary first,
+followed by an add control (**Add email** while blank, a plus afterwards). Save
+adds the address; Cancel or Escape discards the draft, and invalid input stays
+open. Each address pill opens its own actions: **Make primary** and **Remove**.
+Removing an address deletes nothing; the contact's Emails tab and the email
+attachments in Files then stop covering it. Removing the primary promotes the
+oldest address left. Emails and Files cover every address of the contact.
 
-Only contacts with a known personal-provider email can link or switch company.
-Their company pill opens the Tasks singleton picker; on touch, select a company
-then **Done**. Cancel keeps the original relation. There is no unlink action.
-Company-email and email-less contacts keep a read-only company value. The separate
+Contacts whose primary is a known personal-provider address, and that hold no
+address on their company's domain, can link or switch company. Their company
+pill opens the Tasks singleton picker; on touch, select a company then **Done**.
+Cancel keeps the original relation. **Remove company** sits in the same editor
+for every linked contact that holds no address on the company's domain; a
+contact that cannot switch gets an editor with that action alone. A contact
+with an address on its company's domain has a read-only company value, with
+the reason in its tooltip, and the one address that links it to the company
+shows no Remove. Extra addresses can still be added to it. The separate
 **Go to company** action opens an existing company, including for read-only
 contacts; Shift-click opens a separate split on desktop.
 
 Pending controls prevent duplicate saves; rejected edits retain their draft for
-retry. The server accepts more than these controls offer: it adds and removes
-further addresses, changes the primary and unlinks a company (see
-`docs/design/crm-contact-creation.md`); it still enforces personal-provider
-eligibility for link and switch.
+retry. The server enforces the same eligibility (see
+`docs/design/crm-contact-creation.md`). A server that does not list a
+contact's addresses leaves them read-only, with **Add email** only when blank.
 Another contact with the address in the same team rejects the change without
 merging; restricted matches return generic feedback. Foreign-team destinations
 and new links to archived companies are rejected.
@@ -228,7 +236,6 @@ archive state. Restore a visible child through its archived company before
 moving it. Personal-email sync reuses a unique existing contact, preserving its
 chosen company through sent/received refreshes and source cleanup. Ambiguous
 matches are left unchanged. CRM settings and domain admission still apply.
-The web controls for several addresses and for unlinking are not built yet.
 
 Company and contact headers group `Copy link` separately from the side-panel toggle.
 Desktop section tabs collapse to icons in narrow panes; each icon keeps a tooltip.

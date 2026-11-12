@@ -2991,6 +2991,30 @@ export const storageServiceClient = {
       }
     );
   },
+  async addContactEmail({
+    contactId,
+    email,
+  }: {
+    contactId: string;
+    email: string;
+  }) {
+    return await fetchWithToken<CrmContactResponse, 'BAD_REQUEST'>(
+      `${dssHost}/crm/contacts/${contactId}/emails/${encodeURIComponent(email)}`,
+      { method: 'PUT', errorResponseHandler: contactEditErrorHandler }
+    );
+  },
+  async removeContactEmail({
+    contactId,
+    email,
+  }: {
+    contactId: string;
+    email: string;
+  }) {
+    return await fetchWithToken<CrmContactResponse, 'BAD_REQUEST'>(
+      `${dssHost}/crm/contacts/${contactId}/emails/${encodeURIComponent(email)}`,
+      { method: 'DELETE', errorResponseHandler: contactEditErrorHandler }
+    );
+  },
   async setContactCompany({
     contactId,
     ...body
@@ -3002,6 +3026,12 @@ export const storageServiceClient = {
         body: JSON.stringify(body),
         errorResponseHandler: contactEditErrorHandler,
       }
+    );
+  },
+  async unlinkContactCompany({ contactId }: { contactId: string }) {
+    return await fetchWithToken<CrmContactResponse, 'BAD_REQUEST'>(
+      `${dssHost}/crm/contacts/${contactId}/company`,
+      { method: 'DELETE', errorResponseHandler: contactEditErrorHandler }
     );
   },
   async setContactHidden({
