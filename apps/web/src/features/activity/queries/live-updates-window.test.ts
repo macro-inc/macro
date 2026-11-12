@@ -1,9 +1,7 @@
 import type { ActivityEventFieldsFragment } from '@service-storage/graphql/generated/graphql';
 import { liveUpdatesGateExchange } from '@service-storage/graphql-live-updates';
-import {
-  createGraphqlSoupSubscriptionsLifecycle,
-  createGraphqlSoupWebSocketEvents,
-} from '@service-storage/graphql-soup-websocket';
+// ast-grep-ignore: ts-feature-layers-use-context -- The test drives the feed through the app's real websocket wiring on purpose.
+import * as soupWebsocket from '@service-storage/graphql-soup-websocket';
 import {
   createClient,
   type Exchange,
@@ -158,12 +156,12 @@ const disposals: Array<() => void> = [];
  */
 function startApp(options: { gated: boolean; acknowledgeAfterMs: number }) {
   const server = createServer(options);
-  const lifecycle = createGraphqlSoupSubscriptionsLifecycle();
+  const lifecycle = soupWebsocket.createGraphqlSoupSubscriptionsLifecycle();
   const websocket = createWsClient({
     url: 'wss://dss.test/items/soup/graphql/ws',
     webSocketImpl: server.FakeSocket,
     retryAttempts: 0,
-    on: createGraphqlSoupWebSocketEvents({
+    on: soupWebsocket.createGraphqlSoupWebSocketEvents({
       terminate: () => websocket.terminate(),
       lifecycle,
     }),
