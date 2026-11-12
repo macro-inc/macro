@@ -106,6 +106,13 @@ async fn a_dev_only_flag_stays_off_in_prod_for_the_same_user() {
     assert!(dev.is_enabled("dev-only"));
 }
 
+#[test]
+fn environment_values_are_the_targeting_contract() {
+    assert_eq!(environment_value(Environment::Production), "prod");
+    assert_eq!(environment_value(Environment::Develop), "dev");
+    assert_eq!(environment_value(Environment::Local), "local");
+}
+
 #[tokio::test]
 async fn accepts_an_explicitly_healthy_empty_snapshot() {
     let server = MockServer::start().await;

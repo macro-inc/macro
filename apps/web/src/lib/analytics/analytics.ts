@@ -8,7 +8,11 @@ import {
   initializeMetaPixel,
 } from '@app/lib/analytics/providers';
 import { frontendInstanceId } from '@app/observability/frontend-instance';
-import { DEV_MODE_ENV, PROD_MODE_ENV } from '@core/constant/featureFlags';
+import {
+  DEV_MODE_ENV,
+  LOCAL_ONLY,
+  PROD_MODE_ENV,
+} from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getPlatform, isTauri } from '@core/util/platform';
 import {
@@ -172,7 +176,8 @@ function setFlagEnvironment(
   instance: Pick<PostHog, 'setPersonPropertiesForFlags'>
 ) {
   instance.setPersonPropertiesForFlags(
-    { [FLAG_ENVIRONMENT_PROPERTY]: getEnvironment() },
+    // Local stack bundles say `local`, as local backends do.
+    { [FLAG_ENVIRONMENT_PROPERTY]: LOCAL_ONLY ? 'local' : getEnvironment() },
     false
   );
 }

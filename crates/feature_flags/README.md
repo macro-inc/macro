@@ -68,8 +68,8 @@ provide experiment exposure tracking.
 
 Dev and prod share one PostHog project and the same Macro user IDs, so a flag
 targeted only at user IDs turns on in both. Target dev-only rollouts with
-`environment = dev`. The web client sends the same property from its build
-mode (`dev` or `prod`).
+`environment = dev`. The web client sends the same property: `prod`, `dev`,
+or `local` for local stack bundles.
 
 The response must contain a `flags` map and explicit boolean
 `errorsWhileComputingFlags`. Computation errors, any nonempty `quotaLimited`

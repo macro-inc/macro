@@ -11,6 +11,19 @@ use std::{collections::HashMap, time::Duration};
 #[cfg(test)]
 mod test;
 
+/// Person property every load sends; the web client sends the same key.
+const ENVIRONMENT_PROPERTY: &str = "environment";
+
+/// The `environment` value flags target. Spelled out here, not taken from
+/// `Display`, so a log-format change cannot move targeting.
+fn environment_value(environment: Environment) -> &'static str {
+    match environment {
+        Environment::Production => "prod",
+        Environment::Develop => "dev",
+        Environment::Local => "local",
+    }
+}
+
 /// Remote loader with one reusable HTTP connection pool.
 ///
 /// Construct once per service and clone to share the pool. Each load makes one
@@ -91,7 +104,7 @@ impl PostHogFeatureFlags {
                 "distinct_id": user_id.as_ref(),
                 "evaluation_runtime": "server",
                 "geoip_disable": true,
-                "person_properties": {"environment": self.environment.to_string()},
+                "person_properties": {ENVIRONMENT_PROPERTY: environment_value(self.environment)},
             }))
             .send()
             .await

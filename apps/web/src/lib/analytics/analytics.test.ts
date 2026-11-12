@@ -28,6 +28,7 @@ vi.mock('@core/mobile/isTouchDevice', () => ({
 }));
 vi.mock('@core/constant/featureFlags', () => ({
   DEV_MODE_ENV: false,
+  LOCAL_ONLY: false,
   PROD_MODE_ENV: true,
 }));
 vi.mock('posthog-js', () => ({
