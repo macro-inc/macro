@@ -198,7 +198,9 @@ test('the stored model applies Source import defaults to alt and scale', () => {
   }
 });
 
-test('an image without a text url stays rejected, as the component reads it as text', () => {
+// Retained boundary: the component reads the url as text, so a null or missing
+// one is refused here. This is not evidence of what Source does with it.
+test('an image without a text url is refused at the projector boundary', () => {
   for (const image of [
     { srcType: 'url', url: null, alt: 'Null url', scale: 1 },
     { srcType: 'local', alt: 'Missing url', scale: 1 },

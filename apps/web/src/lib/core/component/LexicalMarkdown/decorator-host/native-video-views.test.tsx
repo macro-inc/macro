@@ -204,7 +204,10 @@ test('the stored model applies Source import defaults to controls and scale', ()
   }
 });
 
-test('a video without a text url stays rejected, as the component types it as text', () => {
+// Known gap blocking the native switch: a null or missing video url is refused
+// here because the component types it as text. This keeps that boundary; it is
+// not evidence of what Source does with the same stored data.
+test('a video without a text url is refused at the projector boundary (known gap)', () => {
   for (const video of [
     { srcType: 'url', url: null, scale: 1 },
     { srcType: 'dss', id: 'd', scale: 1 },
