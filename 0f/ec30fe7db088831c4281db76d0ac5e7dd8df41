@@ -1,0 +1,19 @@
+nix/cloud-storage.nix
+  s_106b370a94699c::t_42a338f3968683 1264-1268
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "0fec30fe7db088831c4281db76d0ac5e7dd8df41",
+  "prompts": {},
+  "sessions": {
+    "s_106b370a94699c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "15417373-ef56-4860-8ae9-d30139bf69c9",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
