@@ -69,7 +69,6 @@ name = "activity"
 version = "0.1.0"
 dependencies = [
  "agent_correlation",
- "ai_toolset",
  "async-trait",
  "axum",
  "bot_id",

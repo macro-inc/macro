@@ -5,9 +5,6 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use ai_toolset::{
-    AsyncTool, RequestContext, ServiceContext, schema::generate_validated_input_schema,
-};
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
@@ -19,6 +16,7 @@ use crate::domain::{
         ActivityFeedPage, ActivityMetadataResolver, ActivityPropertyMetadata, ActivityRange,
         ActivityReads, EntityActivityMap,
     },
+    service::ActivityReadService,
 };
 
 #[derive(Debug)]
@@ -165,13 +163,6 @@ impl ActivityMetadataResolver for FakeMetadata {
     }
 }
 
-#[test]
-fn read_activity_schema_is_valid() {
-    let validated = generate_validated_input_schema::<ReadActivity>().unwrap();
-    assert_eq!(validated.name, "ReadActivity");
-    assert!(validated.description.contains("authenticated user"));
-}
-
 #[tokio::test]
 async fn reads_only_the_authenticated_users_activity_with_a_fixed_cap() {
     let from = time("2026-08-17T12:00:00Z");
@@ -181,15 +172,14 @@ async fn reads_only_the_authenticated_users_activity_with_a_fixed_cap() {
         truncated: true,
     });
     let queries = Arc::clone(&reads.queries);
-    let tool = ReadActivity { from, to };
-
-    let response = tool
-        .call(
-            ServiceContext(ActivityToolContext::new(reads)),
-            RequestContext::new(user("macro|caller@example.com")),
-        )
-        .await
-        .unwrap();
+    let response = ReadActivityResponse::read(
+        &ActivityReadService::new(reads),
+        &user("macro|caller@example.com"),
+        from,
+        to,
+    )
+    .await
+    .unwrap();
 
     assert_eq!(
         queries.lock().unwrap().as_slice(),
@@ -216,25 +206,21 @@ async fn rejects_an_empty_or_reversed_range_before_reading() {
         truncated: false,
     });
     let queries = Arc::clone(&reads.queries);
-    let tool = ReadActivity { from: at, to: at };
+    let error = ReadActivityResponse::read(
+        &ActivityReadService::new(reads),
+        &user("macro|caller@example.com"),
+        at,
+        at,
+    )
+    .await
+    .unwrap_err();
 
-    let error = tool
-        .call(
-            ServiceContext(ActivityToolContext::new(reads)),
-            RequestContext::new(user("macro|caller@example.com")),
-        )
-        .await
-        .unwrap_err();
-
-    assert_eq!(
-        error.description,
-        "activity range `from` must be before `to`"
-    );
+    assert!(matches!(error, ReadActivityError::InvalidRange));
     assert!(queries.lock().unwrap().is_empty());
 }
 
 #[tokio::test]
-async fn resolves_property_and_option_names_for_the_model() {
+async fn resolves_property_and_option_names_for_the_reader() {
     let property = "00000000-0000-0000-0000-000000000002";
     let option = "00000000-0000-0000-0000-000000000001";
     let mut record = record();
@@ -251,13 +237,11 @@ async fn resolves_property_and_option_names_for_the_model() {
         truncated: false,
     });
 
-    let response = ReadActivity {
-        from: time("2026-08-17T12:00:00Z"),
-        to: time("2026-08-17T14:00:00Z"),
-    }
-    .call(
-        ServiceContext(ActivityToolContext::new(reads).with_metadata_resolver(FakeMetadata)),
-        RequestContext::new(user("macro|caller@example.com")),
+    let response = ReadActivityResponse::read(
+        &ActivityReadService::new(reads).with_metadata_resolver(FakeMetadata),
+        &user("macro|caller@example.com"),
+        time("2026-08-17T12:00:00Z"),
+        time("2026-08-17T14:00:00Z"),
     )
     .await
     .unwrap();
