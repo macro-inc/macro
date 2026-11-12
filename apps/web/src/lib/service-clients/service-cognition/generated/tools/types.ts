@@ -16650,7 +16650,10 @@ export interface CodeGuide {
  *
  */
 export interface ExecuteCode {
-  execution_id: ExecutionId;
+  /**
+   * Optional; usually omit it. The server assigns an ID and the receipt reports it as executionId. Pass a new random UUID only when a repeated write would be harmful: if the reply is lost, resending the same execution_id with identical source returns the saved receipt instead of running again. Never use an example or placeholder UUID or an ID from another session; an ID already taken runs under a new ID.
+   */
+  execution_id?: ExecutionId | null;
   acting_as: ToolActor;
   /**
    * Copy the current server-issued turn_id from the prompt's execution context.

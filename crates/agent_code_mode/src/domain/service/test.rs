@@ -201,19 +201,32 @@ async fn run_uses_session_owner_and_records_source_and_result_without_credential
     assert_eq!(credentials.0.lock().unwrap().len(), 1);
     let mut changed = request();
     changed.source.push(' ');
-    assert!(matches!(
-        service
-            .execute(
-                &session,
-                id,
-                ai_toolset::actor::ToolActor::Owner,
-                macro_uuid::Uuid::from_u128(1),
-                changed,
-                CancellationToken::new()
-            )
-            .await,
-        Err(CodeModeError::Duplicate)
-    ));
+    let reused = service
+        .execute(
+            &session,
+            id,
+            ai_toolset::actor::ToolActor::Owner,
+            macro_uuid::Uuid::from_u128(1),
+            changed.clone(),
+            CancellationToken::new(),
+        )
+        .await
+        .unwrap();
+    assert_ne!(reused.execution_id, id);
+    assert_eq!(reused.status, ExecutionStatus::Succeeded);
+    assert_eq!(credentials.0.lock().unwrap().len(), 2);
+    assert_eq!(
+        store
+            .get(session.id, reused.execution_id)
+            .await
+            .unwrap()
+            .source,
+        changed.source
+    );
+    assert_eq!(
+        store.get(session.id, id).await.unwrap().source,
+        request().source
+    );
 }
 #[tokio::test]
 async fn archived_or_inactive_sessions_never_receive_credentials() {
@@ -255,7 +268,7 @@ async fn archived_or_inactive_sessions_never_receive_credentials() {
     assert!(credentials.0.lock().unwrap().is_empty());
 }
 #[tokio::test]
-async fn collision_does_not_lookup_another_session_or_issue_a_credential() {
+async fn collision_runs_under_a_fresh_id_without_reading_another_session() {
     let (service, credentials, store, _) = service();
     let session = test_agent_session(AgentSessionId::new_from_uuid(macro_uuid::generate_uuid_v7()));
     let id = ExecutionId::mint();
@@ -272,21 +285,23 @@ async fn collision_does_not_lookup_another_session_or_issue_a_credential() {
         .unwrap();
     let mut other = session.clone();
     other.id = AgentSessionId::new_from_uuid(macro_uuid::generate_uuid_v7());
-    assert!(matches!(
-        service
-            .execute(
-                &other,
-                id,
-                ai_toolset::actor::ToolActor::Owner,
-                macro_uuid::Uuid::from_u128(1),
-                request(),
-                CancellationToken::new()
-            )
-            .await,
-        Err(CodeModeError::Invalid(_))
-    ));
+    let receipt = service
+        .execute(
+            &other,
+            id,
+            ai_toolset::actor::ToolActor::Owner,
+            macro_uuid::Uuid::from_u128(1),
+            request(),
+            CancellationToken::new(),
+        )
+        .await
+        .unwrap();
+    assert_ne!(receipt.execution_id, id);
+    assert_eq!(receipt.status, ExecutionStatus::Succeeded);
     assert_eq!(*store.1.lock().unwrap(), [other.id]);
-    assert_eq!(credentials.0.lock().unwrap().len(), 1);
+    assert_eq!(credentials.0.lock().unwrap().len(), 2);
+    assert!(store.get(other.id, receipt.execution_id).await.is_ok());
+    assert!(store.get(session.id, id).await.is_ok());
 }
 
 #[tokio::test]
@@ -639,7 +654,7 @@ async fn cancellation_is_not_blocked_by_a_stalled_activity_save() {
 
 #[tokio::test]
 async fn execution_retries_cannot_change_accounts_or_move_between_turns() {
-    let (service, credentials, _, turns) = service();
+    let (service, credentials, store, turns) = service();
     let session = test_agent_session(AgentSessionId::new());
     let id = ExecutionId::mint();
     service
@@ -653,34 +668,41 @@ async fn execution_retries_cannot_change_accounts_or_move_between_turns() {
         )
         .await
         .unwrap();
-    assert!(matches!(
-        service
-            .execute(
-                &session,
-                id,
-                ai_toolset::actor::ToolActor::Requester,
-                macro_uuid::Uuid::from_u128(1),
-                request(),
-                CancellationToken::new()
-            )
-            .await,
-        Err(CodeModeError::Duplicate)
-    ));
+    // A retry under another account or turn never adopts the saved result; it
+    // runs as a new execution with its own ID and credential.
+    let requester = service
+        .execute(
+            &session,
+            id,
+            ai_toolset::actor::ToolActor::Requester,
+            macro_uuid::Uuid::from_u128(1),
+            request(),
+            CancellationToken::new(),
+        )
+        .await
+        .unwrap();
+    assert_ne!(requester.execution_id, id);
     *turns.0.lock().unwrap() = Some(macro_uuid::Uuid::from_u128(2));
-    assert!(matches!(
-        service
-            .execute(
-                &session,
-                id,
-                ai_toolset::actor::ToolActor::Owner,
-                macro_uuid::Uuid::from_u128(2),
-                request(),
-                CancellationToken::new()
-            )
-            .await,
-        Err(CodeModeError::Duplicate)
-    ));
-    assert_eq!(credentials.0.lock().unwrap().len(), 1);
+    let next_turn = service
+        .execute(
+            &session,
+            id,
+            ai_toolset::actor::ToolActor::Owner,
+            macro_uuid::Uuid::from_u128(2),
+            request(),
+            CancellationToken::new(),
+        )
+        .await
+        .unwrap();
+    assert_ne!(next_turn.execution_id, id);
+    assert_ne!(next_turn.execution_id, requester.execution_id);
+    assert_eq!(credentials.0.lock().unwrap().len(), 3);
+    let original = store.get(session.id, id).await.unwrap();
+    assert_eq!(
+        original.acting_as,
+        Some(ai_toolset::actor::ToolActor::Owner)
+    );
+    assert_eq!(original.turn_id, Some(macro_uuid::Uuid::from_u128(1)));
 }
 
 #[tokio::test]

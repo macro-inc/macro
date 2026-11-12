@@ -33,6 +33,17 @@ impl BulkUploadRequestPort for DynamoBulkUploadAdapter {
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn find_bulk_upload_request(
+        &self,
+        upload_request_id: &str,
+    ) -> anyhow::Result<Option<BulkUploadRequest>> {
+        self.client
+            .bulk_upload
+            .find_bulk_upload_request(upload_request_id)
+            .await
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn get_bulk_upload_document_statuses(
         &self,
         upload_request_id: &str,
