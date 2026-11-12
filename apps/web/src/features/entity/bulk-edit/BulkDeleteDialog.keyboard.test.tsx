@@ -81,6 +81,33 @@ describe('delete item dialog keyboard', () => {
     expect(mutateAsync).toHaveBeenCalledOnce();
   });
 
+  it('does not delete with the Enter press that opened the dialog', async () => {
+    // A menu item selects on Enter keydown and lets the keypress continue.
+    render(() => (
+      <>
+        <GlobalBulkEditEntityModal />
+        <div
+          role="menuitem"
+          tabIndex={0}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              openBulkEditModal({ view: 'delete', entities: [task] });
+            }
+          }}
+        >
+          Delete
+        </div>
+      </>
+    ));
+    screen.getByRole('menuitem').focus();
+
+    await userEvent.keyboard('{Enter}');
+
+    const deleteButton = screen.getByRole('button', { name: 'Delete item' });
+    await vi.waitFor(() => expect(document.activeElement).toBe(deleteButton));
+    expect(mutateAsync).not.toHaveBeenCalled();
+  });
+
   it('cancels on Escape without deleting, and focuses Delete again on reopen', async () => {
     const { onFinish, onCancel } = await openDeleteDialog();
 
