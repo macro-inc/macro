@@ -16,7 +16,7 @@ companies remain open.
 | Standalone manual contact UI, HTTP, CreateContact tool | Change | Name required; email and company optional. `POST /crm/contacts` adds a contact without a company. Personal email and mismatched domains are accepted. |
 | Pipeline contact form | Keep | Name, email and an explicitly selected company are required. A domain match offers a suggestion; accepting it is a separate action. |
 | Duplicate company domain | Keep | Team-scoped case-insensitive conflict. Company names are labels and may repeat. |
-| Editing existing contacts | Change | Add a missing email only; populated addresses are read-only. Link/switch company only for known personal-provider addresses, with no unlink. Reject same-team duplicates without merging. Preserve ID, references, history and archive state; personal sync reuses one existing identity and preserves its chosen company through cleanup. Email replacement and alias/history redesign are deferred. |
+| Editing existing contacts | Change | A contact holds several addresses, one of them primary: add one, remove one, or choose the primary. An added address must not belong to another contact in the team; duplicates that already exist under different companies stay. Link/switch company only for a personal-provider primary. Unlink a company unless the contact is a company-domain contact (it has an address on one of the company's domains); such a contact also cannot switch, and its last address on those domains cannot be removed while linked. Removing an address deletes nothing else: the contact stops showing that address's mail, the address is not remembered, and later mail from it may file a fresh contact. Removing the primary promotes the oldest address left. Reject same-team duplicates without merging. Preserve ID, references, history and archive state; sync reuses the contact that holds an address and preserves its chosen company through cleanup. |
 | Duplicate contact email | Keep for this stage | Unique within the company, and within the team for contacts without a company; duplicates return conflict. Contacts without an email never conflict. No silent merge or cross-team lookup. |
 | CSV company import | Keep | Domain remains its matching key; name-only import needs a durable identifier contract. |
 | CSV contact import | Keep for this stage | Existing contacts are found by email; missing contacts use domain inference. Personal-address creation through import remains follow-on work. |
@@ -57,8 +57,21 @@ known by, with `crm_contacts.email` kept as the primary. A trigger records the
 primary there, so writers from before the table keep it complete during a
 rolling deploy, and a backfill covers existing contacts. Address lookups (personal
 sync and teardown, email scope prechecks, thread access, call linking, lookup
-by email) read that table; the team-wide activity scope still reads the primary. Until an API adds further addresses
-the table mirrors the primary and behavior is unchanged.
+by email) read that table; the team-wide activity scope still reads the primary.
+
+The contact API then writes further addresses: `PUT` and `DELETE
+/crm/contacts/{id}/emails/{email}` add and remove one, `PUT
+/crm/contacts/{id}/email` chooses the primary (adding the address when the
+contact does not hold it), and `DELETE /crm/contacts/{id}/company` unlinks.
+Contact responses list `emails` (primary first, then oldest first) and
+`companyDomainEmails`, with `companyDomain` as the flag clients gate unlink and
+switch on. Company-domain sync looks for a contact that holds the address as a
+further one before it files a new contact, so mail from any of a contact's
+addresses refreshes that contact; without further addresses it files exactly as
+before, including the same address under two companies. Teardown keeps a
+mailbox source while that mailbox still has mail with another of the contact's
+addresses. Stale sources left by a removed address are not cleaned up; they
+only matter to orphan deletion, which never touches an edited contact.
 
 Deploy nullable-aware readers to every consuming service before enabling
 nullable writes; use a reader-only compatibility release before deploying the

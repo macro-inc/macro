@@ -13,6 +13,7 @@ pub mod set_company_name;
 /// Toggle the `hidden` flag on a `crm_contacts` row.
 pub mod set_contact_hidden;
 
+pub mod contact_emails;
 pub mod set_contact_company;
 pub mod set_contact_email;
 /// Set the display name (`name`) on a `crm_contacts` row.
@@ -193,8 +194,14 @@ where
             put(set_contact_email::handler::<C, St, Eas, Auth>),
         )
         .route(
+            "/contacts/{contact_id}/emails/{email}",
+            put(contact_emails::add_handler::<C, St, Eas, Auth>)
+                .delete(contact_emails::remove_handler::<C, St, Eas, Auth>),
+        )
+        .route(
             "/contacts/{contact_id}/company",
-            put(set_contact_company::handler::<C, St, Eas, Auth>),
+            put(set_contact_company::handler::<C, St, Eas, Auth>)
+                .delete(set_contact_company::unlink_handler::<C, St, Eas, Auth>),
         )
         .route(
             "/contacts/{contact_id}/name",
