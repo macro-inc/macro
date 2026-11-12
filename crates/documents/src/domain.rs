@@ -19,6 +19,9 @@ pub mod docx_export;
 #[cfg(feature = "service")]
 pub mod entity_mutation;
 pub mod events;
+/// Model-free edits of markdown documents as Lexical state.
+#[cfg(feature = "ai_tools")]
+pub mod lexical;
 #[cfg(feature = "ports")]
 pub mod markdown_backfill;
 /// Revision-checked reads and writes of a markdown document's body.

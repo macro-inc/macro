@@ -10,6 +10,12 @@ use macro_sync_service_jwt::DocumentPermissionToken;
 use reqwest::Client;
 use std::sync::Arc;
 
+// Let the worker report its own 20-second read and 30-second commit deadlines.
+#[cfg(feature = "ai_tools")]
+const LEXICAL_STATE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+#[cfg(feature = "ai_tools")]
+const LEXICAL_COMMIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(40);
+
 /// The meaning of a failed spreadsheet worker response: a 400 or 413 is an
 /// invalid request and a 409 a stale revision, both saving nothing; anything
 /// else may follow a save.
@@ -580,6 +586,181 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
             clarification: body["clarification"].as_str().map(str::to_owned),
             revision: body["revision"].as_str().map(str::to_owned),
         })
+    }
+
+    #[cfg(feature = "ai_tools")]
+    #[tracing::instrument(
+        skip_all,
+        fields(%document_id, http.status_code, outcome, otel.status_code),
+        err
+    )]
+    async fn lexical_state(
+        &self,
+        document_id: &str,
+        document_token: &DocumentPermissionToken,
+    ) -> anyhow::Result<crate::domain::lexical::DocumentLexicalState> {
+        let mut headers = reqwest::header::HeaderMap::new();
+        macro_tower_layers::inject_trace_headers(&mut headers);
+        let response = self
+            .client
+            .post(format!("{}/lexical-state", self.worker_url))
+            .headers(headers)
+            .timeout(LEXICAL_STATE_TIMEOUT)
+            .json(&serde_json::json!({
+                "documentId": document_id,
+                "documentToken": document_token.as_str(),
+            }))
+            .send()
+            .await
+            .inspect_err(|error| {
+                if error.is_timeout() {
+                    let span = tracing::Span::current();
+                    span.record("outcome", "timeout");
+                    span.record("otel.status_code", "ERROR");
+                }
+            })
+            .context("editing worker request failed")?;
+
+        let status = response.status();
+        tracing::Span::current().record("http.status_code", status.as_u16());
+        if !status.is_success() {
+            let body = response.text().await.unwrap_or_default();
+            anyhow::bail!("editing worker returned {status}: {body}");
+        }
+
+        response
+            .json()
+            .await
+            .inspect_err(|error| {
+                if error.is_timeout() {
+                    let span = tracing::Span::current();
+                    span.record("outcome", "timeout");
+                    span.record("otel.status_code", "ERROR");
+                }
+            })
+            .context("editing worker reported a malformed lexical state")
+    }
+
+    /// A connection that never opened sent nothing, so it is an error; any
+    /// later transport failure, and any worker 5xx, may have left the commit
+    /// applied, so it is an unknown outcome.
+    #[cfg(feature = "ai_tools")]
+    #[tracing::instrument(
+        skip_all,
+        fields(
+            %document_id,
+            blocks = commit.blocks.len(),
+            removed = commit.removed.len(),
+            http.status_code,
+            outcome,
+            otel.status_code,
+        ),
+        err
+    )]
+    async fn lexical_commit(
+        &self,
+        document_id: &str,
+        document_token: &DocumentPermissionToken,
+        commit: &crate::domain::lexical::DocumentLexicalCommitRequest,
+        editor: Option<EditorName>,
+    ) -> anyhow::Result<crate::domain::lexical::LexicalCommitOutcome> {
+        use crate::domain::lexical::LexicalCommitOutcome;
+
+        let mut request_body = serde_json::json!({
+            "documentId": document_id,
+            "documentToken": document_token.as_str(),
+            "revision": commit.revision,
+            "blocks": commit.blocks,
+            "removed": commit.removed,
+        });
+        if let Some(editor) = editor {
+            request_body["editor"] = serde_json::json!({ "name": editor.as_str() });
+        }
+        let mut headers = reqwest::header::HeaderMap::new();
+        macro_tower_layers::inject_trace_headers(&mut headers);
+
+        let sent = self
+            .client
+            .post(format!("{}/lexical-commit", self.worker_url))
+            .headers(headers)
+            .timeout(LEXICAL_COMMIT_TIMEOUT)
+            .json(&request_body)
+            .send()
+            .await
+            .inspect_err(|error| {
+                if error.is_timeout() {
+                    let span = tracing::Span::current();
+                    span.record("outcome", "timeout");
+                    span.record("otel.status_code", "ERROR");
+                }
+            });
+        let response = match sent {
+            Ok(response) => response,
+            Err(error) if error.is_connect() => {
+                return Err(anyhow::Error::new(error).context("editing worker request failed"));
+            }
+            Err(error) => {
+                return Ok(LexicalCommitOutcome::Unacknowledged(format!(
+                    "editing worker request failed after it was sent: {error}"
+                )));
+            }
+        };
+
+        let status = response.status();
+        tracing::Span::current().record("http.status_code", status.as_u16());
+        let body = match response
+            .json::<serde_json::Value>()
+            .await
+            .inspect_err(|error| {
+                if error.is_timeout() {
+                    let span = tracing::Span::current();
+                    span.record("outcome", "timeout");
+                    span.record("otel.status_code", "ERROR");
+                }
+            }) {
+            Ok(body) => body,
+            Err(error) if status.is_client_error() => {
+                anyhow::bail!("editing worker returned {status} with an unreadable body: {error}")
+            }
+            Err(error) => {
+                return Ok(LexicalCommitOutcome::Unacknowledged(format!(
+                    "editing worker returned {status} with an unreadable body: {error}"
+                )));
+            }
+        };
+        let error = body.get("error").and_then(serde_json::Value::as_str);
+
+        match (status, error) {
+            (reqwest::StatusCode::OK, _) => match serde_json::from_value(body) {
+                Ok(committed) => Ok(LexicalCommitOutcome::Committed(committed)),
+                Err(error) => Ok(LexicalCommitOutcome::Unacknowledged(format!(
+                    "editing worker reported a malformed commit: {error}"
+                ))),
+            },
+            (reqwest::StatusCode::CONFLICT, Some("conflict")) => {
+                Ok(LexicalCommitOutcome::Conflict(
+                    serde_json::from_value(body["conflicts"].clone())
+                        .context("editing worker reported malformed conflicts")?,
+                ))
+            }
+            (reqwest::StatusCode::UNPROCESSABLE_ENTITY, Some("invalid")) => {
+                Ok(LexicalCommitOutcome::Invalid(
+                    body["message"].as_str().unwrap_or_default().to_owned(),
+                ))
+            }
+            (reqwest::StatusCode::BAD_REQUEST, _) => Ok(LexicalCommitOutcome::Invalid(format!(
+                "editing worker refused the request: {body}"
+            ))),
+            (reqwest::StatusCode::BAD_GATEWAY, Some("unacknowledged")) => {
+                Ok(LexicalCommitOutcome::Unacknowledged(
+                    body["message"].as_str().unwrap_or_default().to_owned(),
+                ))
+            }
+            (status, _) if status.is_server_error() => Ok(LexicalCommitOutcome::Unacknowledged(
+                format!("editing worker returned {status}: {body}"),
+            )),
+            _ => anyhow::bail!("editing worker returned {status}: {body}"),
+        }
     }
 
     #[tracing::instrument(skip_all, fields(document_id), err)]

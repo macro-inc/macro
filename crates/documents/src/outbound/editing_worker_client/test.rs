@@ -194,6 +194,318 @@ async fn edit_reports_the_revision_the_worker_left() {
 
 #[cfg(feature = "ai_tools")]
 #[tokio::test]
+async fn lexical_state_reads_the_state_and_revision_and_surfaces_worker_errors() {
+    use crate::domain::lexical::DocumentLexicalState;
+    use axum::{Json, Router, http::StatusCode, routing::post};
+
+    let bodies = Arc::new(std::sync::Mutex::new(Vec::<serde_json::Value>::new()));
+    let seen = bodies.clone();
+    let app = Router::new().route(
+        "/lexical-state",
+        post(move |Json(body): Json<serde_json::Value>| {
+            let seen = seen.clone();
+            async move {
+                let reply = match body["documentId"].as_str() {
+                    Some("doc") => (
+                        StatusCode::OK,
+                        serde_json::json!({
+                            "state": { "root": { "type": "root", "children": [] } },
+                            "revision": "AQID",
+                        }),
+                    ),
+                    _ => (
+                        StatusCode::BAD_GATEWAY,
+                        serde_json::json!({ "error": "sync_failed", "message": "sync service closed" }),
+                    ),
+                };
+                seen.lock().unwrap().push(body);
+                (reply.0, Json(reply.1))
+            }
+        }),
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}", listener.local_addr().unwrap());
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    let client = ReqwestEditingWorkerClient::new(
+        url,
+        Arc::new(Client::builder().no_proxy().build().unwrap()),
+    );
+    let token = "test-token".to_owned().into();
+
+    assert_eq!(
+        client.lexical_state("doc", &token).await.unwrap(),
+        DocumentLexicalState {
+            state: serde_json::json!({ "root": { "type": "root", "children": [] } }),
+            revision: "AQID".to_string(),
+        }
+    );
+    assert_eq!(
+        client
+            .lexical_state("unsynced", &token)
+            .await
+            .unwrap_err()
+            .to_string(),
+        r#"editing worker returned 502 Bad Gateway: {"error":"sync_failed","message":"sync service closed"}"#
+    );
+    assert_eq!(
+        bodies.lock().unwrap()[0],
+        serde_json::json!({ "documentId": "doc", "documentToken": "test-token" })
+    );
+}
+
+#[cfg(feature = "ai_tools")]
+#[tokio::test]
+async fn lexical_commit_sends_the_blocks_and_maps_each_worker_outcome() {
+    use crate::domain::lexical::{
+        DocumentLexicalBlock, DocumentLexicalCommitRequest, DocumentLexicalCommitted,
+        DocumentLexicalConflictReason, DocumentLexicalNodeConflict, LexicalCommitOutcome,
+    };
+    use axum::{Json, Router, http::StatusCode, routing::post};
+
+    let bodies = Arc::new(std::sync::Mutex::new(Vec::<serde_json::Value>::new()));
+    let seen = bodies.clone();
+    let app = Router::new().route(
+        "/lexical-commit",
+        post(move |Json(body): Json<serde_json::Value>| {
+            let seen = seen.clone();
+            async move {
+                let reply = match body["documentId"].as_str() {
+                    Some("committed") => (
+                        StatusCode::OK,
+                        serde_json::json!({
+                            "revision": "BAUG",
+                            "state": { "root": { "type": "root", "children": [] } },
+                        }),
+                    ),
+                    Some("conflict") => (
+                        StatusCode::CONFLICT,
+                        serde_json::json!({
+                            "error": "conflict",
+                            "conflicts": [
+                                { "id": "k3Fq", "reason": "moved" },
+                                { "id": null, "reason": "revision" },
+                            ],
+                        }),
+                    ),
+                    Some("invalid") => (
+                        StatusCode::UNPROCESSABLE_ENTITY,
+                        serde_json::json!({ "error": "invalid", "message": "unknown node type: banner" }),
+                    ),
+                    Some("bad_request") => (
+                        StatusCode::BAD_REQUEST,
+                        serde_json::json!({ "success": false, "error": { "name": "ZodError" } }),
+                    ),
+                    Some("unacknowledged") => (
+                        StatusCode::BAD_GATEWAY,
+                        serde_json::json!({ "error": "unacknowledged", "message": "sync service timed out" }),
+                    ),
+                    Some("aborted") => (
+                        StatusCode::GATEWAY_TIMEOUT,
+                        serde_json::json!({ "error": "aborted" }),
+                    ),
+                    _ => (
+                        StatusCode::FORBIDDEN,
+                        serde_json::json!({ "error": "token lacks edit access" }),
+                    ),
+                };
+                seen.lock().unwrap().push(body);
+                (reply.0, Json(reply.1))
+            }
+        }),
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}", listener.local_addr().unwrap());
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    let client = ReqwestEditingWorkerClient::new(
+        url,
+        Arc::new(Client::builder().no_proxy().build().unwrap()),
+    );
+    let token = "test-token".to_owned().into();
+    let commit = DocumentLexicalCommitRequest {
+        revision: "AQID".to_string(),
+        blocks: vec![DocumentLexicalBlock {
+            id: "k3Fq".to_string(),
+            after: None,
+            node: serde_json::json!({ "type": "paragraph", "version": 1, "$": { "id": "k3Fq" }, "children": [] }),
+        }],
+        removed: vec!["p9Zx".to_string()],
+    };
+
+    assert_eq!(
+        client
+            .lexical_commit("committed", &token, &commit, EditorName::new("Macro"))
+            .await
+            .unwrap(),
+        LexicalCommitOutcome::Committed(DocumentLexicalCommitted {
+            revision: "BAUG".to_string(),
+            state: serde_json::json!({ "root": { "type": "root", "children": [] } }),
+        })
+    );
+    assert_eq!(
+        client
+            .lexical_commit("conflict", &token, &commit, None)
+            .await
+            .unwrap(),
+        LexicalCommitOutcome::Conflict(vec![
+            DocumentLexicalNodeConflict {
+                id: Some("k3Fq".to_string()),
+                reason: DocumentLexicalConflictReason::Moved,
+            },
+            DocumentLexicalNodeConflict {
+                id: None,
+                reason: DocumentLexicalConflictReason::Revision,
+            },
+        ])
+    );
+    assert_eq!(
+        client
+            .lexical_commit("invalid", &token, &commit, None)
+            .await
+            .unwrap(),
+        LexicalCommitOutcome::Invalid("unknown node type: banner".to_string())
+    );
+    assert!(matches!(
+        client
+            .lexical_commit("bad_request", &token, &commit, None)
+            .await
+            .unwrap(),
+        LexicalCommitOutcome::Invalid(message) if message.contains("ZodError")
+    ));
+    assert_eq!(
+        client
+            .lexical_commit("unacknowledged", &token, &commit, None)
+            .await
+            .unwrap(),
+        LexicalCommitOutcome::Unacknowledged("sync service timed out".to_string())
+    );
+    assert_eq!(
+        client
+            .lexical_commit("aborted", &token, &commit, None)
+            .await
+            .unwrap(),
+        LexicalCommitOutcome::Unacknowledged(
+            r#"editing worker returned 504 Gateway Timeout: {"error":"aborted"}"#.to_string()
+        )
+    );
+    assert_eq!(
+        client
+            .lexical_commit("forbidden", &token, &commit, None)
+            .await
+            .unwrap_err()
+            .to_string(),
+        r#"editing worker returned 403 Forbidden: {"error":"token lacks edit access"}"#
+    );
+
+    let bodies = bodies.lock().unwrap();
+    assert_eq!(
+        bodies[0],
+        serde_json::json!({
+            "documentId": "committed",
+            "documentToken": "test-token",
+            "revision": "AQID",
+            "blocks": [{
+                "id": "k3Fq",
+                "after": null,
+                "node": { "type": "paragraph", "version": 1, "$": { "id": "k3Fq" }, "children": [] },
+            }],
+            "removed": ["p9Zx"],
+            "editor": { "name": "Macro" },
+        })
+    );
+    assert_eq!(bodies[1].get("editor"), None);
+}
+
+#[cfg(feature = "ai_tools")]
+#[tokio::test]
+async fn a_lexical_commit_that_never_connects_fails() {
+    use crate::domain::lexical::DocumentLexicalCommitRequest;
+
+    let commit = DocumentLexicalCommitRequest {
+        revision: "AQID".to_string(),
+        blocks: Vec::new(),
+        removed: vec!["p9Zx".to_string()],
+    };
+    let token = "test-token".to_owned().into();
+    // Reserve a port without listening so connection attempts are refused.
+    let socket = tokio::net::TcpSocket::new_v4().unwrap();
+    socket.bind("127.0.0.1:0".parse().unwrap()).unwrap();
+    let refused = ReqwestEditingWorkerClient::new(
+        format!("http://{}", socket.local_addr().unwrap()),
+        Arc::new(Client::builder().no_proxy().build().unwrap()),
+    );
+    let error = refused
+        .lexical_commit("doc", &token, &commit, None)
+        .await
+        .unwrap_err();
+    assert_eq!(error.to_string(), "editing worker request failed");
+    assert!(error.downcast_ref::<reqwest::Error>().unwrap().is_connect());
+}
+
+#[cfg(feature = "ai_tools")]
+#[tokio::test]
+async fn lexical_worker_deadlines_fail_reads_and_leave_sent_commits_unknown() {
+    use crate::domain::lexical::{DocumentLexicalCommitRequest, LexicalCommitOutcome};
+    use axum::{Router, http::StatusCode, routing::post};
+
+    let (received, mut requests) = tokio::sync::mpsc::unbounded_channel();
+    let stalled = post(move || {
+        let received = received.clone();
+        async move {
+            received.send(()).unwrap();
+            std::future::pending::<StatusCode>().await
+        }
+    });
+    let app = Router::new()
+        .route("/lexical-state", stalled.clone())
+        .route("/lexical-commit", stalled);
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let client = Arc::new(ReqwestEditingWorkerClient::new(
+        format!("http://{}", listener.local_addr().unwrap()),
+        Arc::new(Client::builder().no_proxy().build().unwrap()),
+    ));
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    let reader = client.clone();
+    let read = tokio::spawn(async move {
+        reader
+            .lexical_state("doc", &"test-token".to_owned().into())
+            .await
+    });
+    let commit = tokio::spawn(async move {
+        client
+            .lexical_commit(
+                "doc",
+                &"test-token".to_owned().into(),
+                &DocumentLexicalCommitRequest {
+                    revision: "AQID".to_string(),
+                    blocks: Vec::new(),
+                    removed: Vec::new(),
+                },
+                None,
+            )
+            .await
+    });
+
+    // Freeze time only after both requests reached the worker, so connection
+    // setup cannot race the request deadlines.
+    requests.recv().await.unwrap();
+    requests.recv().await.unwrap();
+    tokio::time::pause();
+    let (read, commit) = tokio::time::timeout(Duration::from_secs(41), async {
+        tokio::join!(read, commit)
+    })
+    .await
+    .expect("both requests must finish within their own deadlines");
+    let error = read.unwrap().unwrap_err();
+    assert!(error.downcast_ref::<reqwest::Error>().unwrap().is_timeout());
+    let outcome = commit.unwrap().unwrap();
+    assert!(
+        matches!(&outcome, LexicalCommitOutcome::Unacknowledged(message) if message.starts_with("editing worker request failed after it was sent")),
+        "{outcome:?}"
+    );
+}
+
+#[cfg(feature = "ai_tools")]
+#[tokio::test]
 async fn spreadsheet_statuses_keep_their_meaning() {
     use crate::domain::spreadsheet::{SpreadsheetError, SpreadsheetRequest};
     use wiremock::{Mock, MockServer, ResponseTemplate, matchers};

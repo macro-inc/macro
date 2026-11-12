@@ -460,6 +460,9 @@ export const storageExcluded = [
 ] as const satisfies readonly (keyof StorageSdk)[];
 
 export const storageBacklog = [
+  // `Document.lexical()` wraps both in the SDK layer of the Lexical stack.
+  'commitDocumentLexical',
+  'getDocumentLexical',
   // CRM privacy settings use the generated client.
   'getCrmEmailPrivacy',
   'updateCrmEmailPrivacy',

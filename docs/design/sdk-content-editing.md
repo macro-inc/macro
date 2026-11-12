@@ -542,7 +542,7 @@ generated at build time), and adds the direct tool it replaces to
      worker's `/edit` returns the revision. Hides `EditDocument`.
    - With #9333: `opts.queries`.
    - Tests for round trips, concurrent typing during an edit, aborts, and
-     refused edits.
+     refused edits and batches.
 3. **Documents with Lexical** (MACRO-4631), stacked PRs, tests first:
    1. This design's Lexical layer, and lexical-core: `zod` replaced in
       `transformers/tables.ts`, the curated `sdk.ts` entry.

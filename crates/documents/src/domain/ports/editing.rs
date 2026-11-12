@@ -190,6 +190,27 @@ pub trait EditingWorkerService: Send + Sync + 'static {
         editor: Option<EditorName>,
     ) -> impl Future<Output = anyhow::Result<EditResult>> + Send;
 
+    /// Read the live document as a normalized Lexical state with the
+    /// revision it was read at.
+    #[cfg(feature = "ai_tools")]
+    fn lexical_state(
+        &self,
+        document_id: &str,
+        document_token: &DocumentPermissionToken,
+    ) -> impl Future<Output = anyhow::Result<crate::domain::lexical::DocumentLexicalState>> + Send;
+
+    /// Merge changed top-level Lexical blocks into the live document, all or
+    /// nothing, against the revision they were read at. `editor` labels the
+    /// cursor readers see, as in [`Self::edit`].
+    #[cfg(feature = "ai_tools")]
+    fn lexical_commit(
+        &self,
+        document_id: &str,
+        document_token: &DocumentPermissionToken,
+        commit: &crate::domain::lexical::DocumentLexicalCommitRequest,
+        editor: Option<EditorName>,
+    ) -> impl Future<Output = anyhow::Result<crate::domain::lexical::LexicalCommitOutcome>> + Send;
+
     /// Delete all AI edit trace records for `document_id`. Called during
     /// document deletion so traces (which hold full document content) don't
     /// outlive the document.
