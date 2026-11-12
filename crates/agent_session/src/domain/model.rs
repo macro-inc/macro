@@ -565,6 +565,18 @@ pub struct AgentSessionRenamed {
     pub name: String,
 }
 
+/// A running session's newest one-line status, summarizing its tool calls
+/// for live viewers. Never stored: it describes the turn in flight and means
+/// nothing once that turn ends.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AgentSessionActivitySummarized {
+    /// The running session.
+    pub agent_session_id: AgentSessionId,
+    /// The status line, such as "Reading 12 emails…"; `None` once the turn
+    /// that had one has ended.
+    pub text: Option<String>,
+}
+
 /// The provider-side identity of a session served by an external provider.
 ///
 /// For a Cursor-backed session this is the cloud agent: its `bc-…` id, the
