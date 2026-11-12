@@ -14289,6 +14289,14 @@
       "crates/user_quota",
       "crates/workspace-hack"
     ],
+    "slack_client": [
+      "crates/slack_client",
+      "crates/workspace-hack"
+    ],
+    "slack_fake_server": [
+      "crates/slack_fake_server",
+      "crates/workspace-hack"
+    ],
     "slack_import_worker": [
       "crates/activity",
       "crates/agent",

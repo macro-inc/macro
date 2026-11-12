@@ -1,0 +1,31 @@
+[package]
+edition = "2024"
+name = "slack_client"
+publish = false
+version = "0.1.0"
+description = "Typed client for the Slack web client's session API: login, Web API methods, and the real-time websocket."
+
+[dependencies]
+bytes = { workspace = true }
+chrono = { workspace = true }
+futures = { workspace = true }
+lazy-regex = { workspace = true }
+rand = { workspace = true }
+reqwest = { workspace = true, features = ["multipart"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+strum = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["sync", "time"] }
+tokio-tungstenite = { workspace = true }
+tokio-util = { workspace = true, features = ["rt"] }
+tracing = { workspace = true }
+url = { workspace = true }
+urlencoding = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+zeroize = { workspace = true, features = ["derive"] }
+
+[dev-dependencies]
+slack_fake_server = { path = "../slack_fake_server" }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "test-util"] }

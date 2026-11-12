@@ -150,6 +150,8 @@ members = [
   "crates/soup_filter_cache_adapter",
   "crates/soup_filter_projection",
   "crates/soup_realtime",
+  "crates/slack_client",
+  "crates/slack_fake_server",
   "crates/system_skills",
   "crates/system_status",
   "crates/task_dedup",

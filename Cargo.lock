@@ -19027,6 +19027,47 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
 
 [[package]]
+name = "slack_client"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "chrono",
+ "futures",
+ "lazy-regex",
+ "rand 0.9.4",
+ "reqwest 0.13.4",
+ "serde",
+ "serde_json",
+ "slack_fake_server",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-tungstenite 0.28.0",
+ "tokio-util",
+ "tracing",
+ "url",
+ "urlencoding",
+ "uuid",
+ "workspace-hack",
+ "zeroize",
+]
+
+[[package]]
+name = "slack_fake_server"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "bytes",
+ "futures",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
 name = "slack_import_worker"
 version = "0.1.0"
 dependencies = [
