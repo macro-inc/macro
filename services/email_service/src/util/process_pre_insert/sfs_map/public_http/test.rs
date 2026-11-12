@@ -1,4 +1,7 @@
-use super::{HostLookup, PublicAddressResolver, client_builder, is_blocked_ip, is_fetchable};
+use super::{
+    HostLookup, PublicAddressResolver, RefusedImageUrl, client_builder, is_blocked_ip, is_fetchable,
+};
+use crate::util::process_pre_insert::sfs_map::fetch_image;
 use axum::Router;
 use axum::http::{StatusCode, header};
 use axum::response::IntoResponse;
@@ -259,7 +262,11 @@ async fn fetch_image_refuses_ip_literal_hosts() {
         format!("http://127.0.0.1:{port}/secret"),
         format!("http://[::ffff:127.0.0.1]:{port}/secret"),
     ] {
-        assert!(super::super::fetch_image(&url).await.is_err(), "{url}");
+        let error = fetch_image(&url).await.unwrap_err();
+        assert!(
+            error.downcast_ref::<RefusedImageUrl>().is_some(),
+            "{error:#}"
+        );
     }
 
     assert_eq!(host.secret_hits.load(Ordering::SeqCst), 0);

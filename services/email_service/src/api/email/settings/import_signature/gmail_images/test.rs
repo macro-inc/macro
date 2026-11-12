@@ -1,5 +1,5 @@
 use super::{GmailMessageImage, GmailSignatureImages, ImageLocation};
-use crate::util::process_pre_insert::sfs_map::ImageSource;
+use crate::util::process_pre_insert::sfs_map::{ImageSource, RefusedImageUrl};
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
@@ -196,7 +196,7 @@ async fn fetches_other_images_only_from_public_addresses() {
         .unwrap_err();
 
     assert!(
-        error.to_string().contains("not a public address"),
+        error.downcast_ref::<RefusedImageUrl>().is_some(),
         "{error:#}"
     );
 }

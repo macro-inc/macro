@@ -12,6 +12,7 @@ use std::error::Error;
 use url::Url;
 
 mod public_http;
+pub(crate) use public_http::RefusedImageUrl;
 
 pub(crate) const MAX_IMAGE_SIZE_BYTES: usize = 10 * 1024 * 1024; // 10 MB
 
@@ -278,7 +279,7 @@ pub async fn fetch_and_upload_to_sfs(
     Ok(Some((original_url_str.to_string(), sfs_url)))
 }
 
-// fetches image data from the given URL, returning None for non-HTTP(S) or unparseable URLs
+// fetches image data from the given URL, returning None for unparseable URLs
 #[tracing::instrument(
     skip(original_url_str),
     fields(host = tracing::field::Empty),
@@ -289,13 +290,6 @@ async fn fetch_image(original_url_str: &str) -> anyhow::Result<Option<Bytes>> {
         tracing::warn!("Skipping non-URL for SFS storage");
         return Ok(None);
     };
-    if url_to_fetch.scheme() != "http" && url_to_fetch.scheme() != "https" {
-        tracing::warn!(
-            scheme = url_to_fetch.scheme(),
-            "Skipping URL with non-HTTP(S) scheme"
-        );
-        return Ok(None);
-    }
     url_to_fetch.set_fragment(None); // normalizing
 
     // Logs and errors name only the host: query strings can carry secrets.
@@ -303,7 +297,7 @@ async fn fetch_image(original_url_str: &str) -> anyhow::Result<Option<Bytes>> {
     tracing::Span::current().record("host", host.as_str());
 
     if !public_http::is_fetchable(&url_to_fetch) {
-        bail!("Refusing to fetch image from {host}: not a public address");
+        return Err(RefusedImageUrl { host }.into());
     }
 
     let client = public_http::public_image_client()?;

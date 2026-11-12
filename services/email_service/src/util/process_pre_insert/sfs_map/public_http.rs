@@ -54,6 +54,13 @@ fn follow_redirect(attempt: redirect::Attempt) -> redirect::Action {
     attempt.follow()
 }
 
+/// An image URL that is not http(s), or whose host is a non-public IP literal.
+#[derive(Debug, thiserror::Error)]
+#[error("refusing to fetch an image from {host}: not a public http(s) address")]
+pub(crate) struct RefusedImageUrl {
+    pub(super) host: String,
+}
+
 /// Whether `url` is http(s) and its host is a name (checked when resolved)
 /// or a public IP literal.
 pub(super) fn is_fetchable(url: &Url) -> bool {
