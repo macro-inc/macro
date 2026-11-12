@@ -36,6 +36,7 @@ import {
 } from '@app/features/next-soup/utils';
 import { useAllProperties } from '@app/features/property/editor/hooks/useAllProperties';
 import { openPropertyEditor } from '@app/features/property/editor/state/propertyEditor';
+import { openProjectEntityAction } from '@app/features/projects/project-entity-actions';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
@@ -192,6 +193,17 @@ export function createSoupEntityActions(
     const canExecuteAll = (canExecute: (e: EntityData) => boolean) =>
       entities.length > 0 && entities.every(canExecute);
 
+    // Projects act through the Projects view's dialogs. Rows carry no access
+    // level, so rename and delete wait for ownership, which allows both.
+    const projectIds = canExecuteAll((entity) => entity.type === 'initiative')
+      ? entities.map((entity) => entity.id)
+      : [];
+    const ownsProjects =
+      projectIds.length > 0 &&
+      entities.every((entity) => entity.ownerId === userId());
+    const singleProject =
+      projectIds.length === 1 ? entities[0] : undefined;
+
     const handle =
       (
         execute: (
@@ -345,6 +357,18 @@ export function createSoupEntityActions(
         label: t('entityActions.rename'),
         hotkeyToken: TOKENS.entity.action.rename,
         onClick: handle(renameAction.executeWithSoup),
+      });
+    } else if (singleProject && ownsProjects) {
+      middleItems.push({
+        id: 'rename',
+        label: t('entityActions.rename'),
+        onClick: () => {
+          openProjectEntityAction({
+            kind: 'rename',
+            id: singleProject.id,
+            name: singleProject.name,
+          });
+        },
       });
     }
 
@@ -564,6 +588,14 @@ export function createSoupEntityActions(
         label: t('entityActions.share'),
         onClick: handle(shareAction.executeWithSoup),
       });
+    } else if (singleProject) {
+      middleItems.push({
+        id: 'share',
+        label: t('entityActions.share'),
+        onClick: () => {
+          openProjectEntityAction({ kind: 'share', id: singleProject.id });
+        },
+      });
     }
 
     // Sender group: Sender → Signal, Sender → Noise, Block Sender
@@ -617,6 +649,15 @@ export function createSoupEntityActions(
           ? TOKENS.email.trash
           : TOKENS.entity.action.delete,
         onClick: handle(deleteAction.executeWithSoup),
+        destructive: true,
+      });
+    } else if (ownsProjects) {
+      deleteItems.push({
+        id: 'delete',
+        label: t('entityActions.delete'),
+        onClick: () => {
+          openProjectEntityAction({ kind: 'delete', ids: projectIds });
+        },
         destructive: true,
       });
     }
