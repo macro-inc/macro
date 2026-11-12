@@ -151,3 +151,8 @@ export const LIKELY_NEXT_VIEWS = [
   AgentsRouteView,
   CalendarRouteView,
 ];
+
+export const PasswordsRouteView = lazyNamed(
+  () => import('@app/features/passwords/route-views'),
+  'PasswordsRouteView'
+);
