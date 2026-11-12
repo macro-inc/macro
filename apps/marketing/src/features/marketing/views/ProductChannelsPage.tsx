@@ -1,5 +1,7 @@
 import { setPageSeo } from '../../../app/utils/utilSeo';
 import {
+  ChannelAgentDemo,
+  ChannelInboxDemo,
   ChannelPermissionsDemo,
   ChannelThreadDemo,
 } from '../components/channels/ChannelStories';
@@ -7,10 +9,8 @@ import { FeatureComparisons } from '../components/comparisons/FeatureComparisons
 import { DemoInteractionBoundary } from '../components/DemoInteractionBoundary';
 import { FeaturePageFaq, FeaturePageSection } from '../components/FeaturePage';
 import { HomepageClosing } from '../components/HomepageClosing';
-import { PaperChatCall } from '../components/paper/PaperChatCall';
 import { PaperChatCreate } from '../components/paper/PaperChatCreate';
 import { PaperFeatureGraphic } from '../components/paper/PaperFeatureGraphic';
-import { PaperChatInbox } from '../components/paper/PaperInbox';
 import { ProductHero, ProductPage } from '../components/product/ProductPage';
 import { chatComparisons } from '../core/feature-comparisons';
 
@@ -54,16 +54,16 @@ export function RouteChannels() {
       </FeaturePageSection>
       <FeaturePageSection
         id="channel-agents"
+        demo={{
+          tone: 'chat',
+        }}
         title="Agents are first-class members, like humans."
         description="@mention an agent to get it working on something, with the whole conversation as context. Or let it listen in and reply when it’s needed, like a teammate would."
       >
-        <PaperFeatureGraphic
-          height={632}
-          mobileHeight={666}
-          label="In a channel, the Macro agent replies to a message without being mentioned, then creates tasks once a teammate mentions it."
-        >
-          <PaperChatCall />
-        </PaperFeatureGraphic>
+        <DemoInteractionBoundary
+          class="feature-page-visual"
+          render={() => <ChannelAgentDemo />}
+        />
       </FeaturePageSection>
       <FeaturePageSection
         id="channel-threads"
@@ -80,17 +80,17 @@ export function RouteChannels() {
       </FeaturePageSection>
       <FeaturePageSection
         id="chat-inbox"
+        demo={{
+          tone: 'chat',
+        }}
         title="A real inbox, like email."
         description="Slack has no real inbox, only read and unread. Macro keeps messages waiting for later, so you don’t have to remember to reply, and you mark them done as you go. Mark a channel as Signal or Noise to decide what reaches your main inbox."
       >
         <span id="catch-up" />
-        <PaperFeatureGraphic
-          height={390}
-          mobileHeight={354}
-          label="An inbox of channel messages: two unread, one saved for tomorrow, and one marked done."
-        >
-          <PaperChatInbox />
-        </PaperFeatureGraphic>
+        <DemoInteractionBoundary
+          class="feature-page-visual"
+          render={() => <ChannelInboxDemo />}
+        />
       </FeaturePageSection>
       <FeatureComparisons
         title="Compare Team Chat Apps"

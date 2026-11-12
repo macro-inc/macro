@@ -5,6 +5,7 @@ import { EmailAutoTagDemo } from '../../features/marketing/components/email/Emai
 import { EmailComparison } from '../../features/marketing/components/email/EmailComparison';
 import { EmailKeyboardDemo } from '../../features/marketing/components/email/EmailKeyboardDemo';
 import { EmailShareStory } from '../../features/marketing/components/email/EmailShareStory';
+import { EmailSignalNoiseDemo } from '../../features/marketing/components/email/EmailSignalNoiseDemo';
 import {
   FeaturePage,
   FeaturePageCta,
@@ -15,7 +16,6 @@ import { HomepageClosing } from '../../features/marketing/components/HomepageClo
 import { PaperEmailAccounts } from '../../features/marketing/components/paper/PaperEmailAccounts';
 import { PaperEmailTask } from '../../features/marketing/components/paper/PaperEmailTask';
 import { PaperFeatureGraphic } from '../../features/marketing/components/paper/PaperFeatureGraphic';
-import { PaperEmailSignalNoise } from '../../features/marketing/components/paper/PaperInbox';
 import { ProductIntroduction } from '../../features/marketing/components/product/ProductIntroduction';
 import { ProductBrand } from '../../features/marketing/components/product/ProductPage';
 import { TutorialVideoEmbed } from '../../features/marketing/components/TutorialVideoEmbed';
@@ -156,16 +156,16 @@ export function RouteEmail() {
       </FeaturePageSection>
       <FeaturePageSection
         id="signal-noise"
+        demo={{
+          tone: 'email',
+        }}
         title="Signal vs. Noise."
         description="Signal is your important email. Noise is the newsletters, receipts, and inbound you don’t need to see first. Macro separates them for you, so you can focus on what matters."
       >
-        <PaperFeatureGraphic
-          height={280}
-          mobileHeight={482}
-          label="Important emails from people in Signal, beside newsletters and receipts in Noise."
-        >
-          <PaperEmailSignalNoise />
-        </PaperFeatureGraphic>
+        <DemoInteractionBoundary
+          class="feature-page-visual"
+          render={() => <EmailSignalNoiseDemo />}
+        />
       </FeaturePageSection>
       <FeaturePageSection
         id="email-sharing"
