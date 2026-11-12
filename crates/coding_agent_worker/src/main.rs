@@ -16,9 +16,12 @@
 //! `agent_trigger.new` delivery opens a session and forwards the first prompt;
 //! `agent_trigger.existing` deliveries forward follow-up messages.
 
+mod computer;
 mod config;
 mod daemon;
 mod dispatch;
+#[cfg(unix)]
+mod enroll;
 mod executable;
 #[cfg(unix)]
 mod handoff;
@@ -31,6 +34,7 @@ mod repository;
 mod runtime;
 mod self_knowledge;
 mod service;
+mod telemetry;
 mod trigger;
 mod tui;
 mod turns;
@@ -123,6 +127,9 @@ enum Command {
     /// app: no terminal panel, state changes as JSON lines on stdout, and
     /// shutdown on SIGTERM, Ctrl-C, or stdin closing.
     Service {
+        /// Keep running when stdin closes, for system service managers.
+        #[arg(long)]
+        ignore_stdin_eof: bool,
         /// Config file; defaults to `~/.macrod/macrod.toml`, created when the
         /// setup flags are given.
         #[arg(long, conflicts_with = "profile")]
@@ -137,6 +144,27 @@ enum Command {
         /// Absolute directory sessions run in; created when missing.
         #[arg(long)]
         workspace: Option<std::path::PathBuf>,
+    },
+    /// Join this Macro computer to Macro at first boot: write the config,
+    /// and claim the pre-approved pairing.
+    #[cfg(unix)]
+    Enroll {
+        /// `incus` (the instance's `user.macro.enrollment` key) or
+        /// `file:<path>`.
+        #[arg(long)]
+        from: enroll::EnrollmentSource,
+        /// The config `macrod service` runs from; takes its directory's owner.
+        #[arg(long)]
+        config: std::path::PathBuf,
+        /// Workspace for a newly created config.
+        #[arg(long, default_value = "/home/macro/work")]
+        workspace: std::path::PathBuf,
+        /// Agent preset id for a newly created config.
+        #[arg(long, default_value = "claude-code")]
+        agent: String,
+        /// Prefix for system paths (`/dev/incus`, `/etc`, `/var/lib`).
+        #[arg(long, default_value = "/", hide = true)]
+        root: std::path::PathBuf,
     },
     /// List the ACP agents installed on this machine as JSON.
     DetectAgents,
@@ -279,16 +307,16 @@ async fn main() -> ExitCode {
     }
     match args.command {
         Some(Command::Service {
+            ignore_stdin_eof,
             config,
             profile,
             agent,
             workspace,
         }) => {
             // stdout is the event protocol: logs go to stderr, like herdr-acp.
-            tracing_subscriber::fmt()
-                .with_writer(std::io::stderr)
-                .init();
+            let _telemetry = telemetry::install();
             return match service::run(service::ServiceOptions {
+                ignore_stdin_eof,
                 config,
                 profile,
                 agent,
@@ -300,6 +328,31 @@ async fn main() -> ExitCode {
                 Err(error) => {
                     service::emit_fatal(&format!("{error}"));
                     eprintln!("macrod service: {error:?}");
+                    ExitCode::FAILURE
+                }
+            };
+        }
+        #[cfg(unix)]
+        Some(Command::Enroll {
+            from,
+            config,
+            workspace,
+            agent,
+            root,
+        }) => {
+            let _telemetry = telemetry::install();
+            return match enroll::run_enroll(enroll::EnrollOptions {
+                from,
+                config,
+                workspace,
+                agent,
+                root,
+            })
+            .await
+            {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(error) => {
+                    eprintln!("macrod enroll: {error:?}");
                     ExitCode::FAILURE
                 }
             };

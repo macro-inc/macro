@@ -16,7 +16,8 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   locked by `<config>.lock` while running. Name, ownership, and permission
   bypass live only on the web (Settings → Machines); a file that still
   has `[identity]` or a `scope` in `[credentials]` fails to load with an error
-  naming that page.
+  naming that page; desktop setup (`macrod service --agent/--workspace`)
+  drops those and the retired `[server]` table instead (`drop_retired_settings`).
 - `src/profiles.rs`: which config a macrod serves. One runtime per config:
   the default one and named profiles at `~/.macrod/profiles/<name>.toml`
   (`--profile` on the TUI, `service`, and `inspect`; `macrod profiles` lists
@@ -30,10 +31,41 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   on each connect. `[macro]` is a dev override that defaults to production.
 - `src/daemon.rs` + `src/runtime.rs`: the serving core — persistent harness
   service connection, ACP process bridge, start/stop/restart on re-pair.
+- Pass `macrod service --ignore-stdin-eof` under system service managers;
+  embedded services keep the default shutdown when their parent's stdin closes.
 - `src/self_knowledge.rs`: the `<macrod-runtime>` section the bridge
   (`src/harness.rs`) prefixes to each new session's first prompt — macrod
   version, workspace, forwarded MCP servers, permission bypass, listing only
   what the session has. General Macro guidance stays in the `SelfKnowledge` tool.
+- `src/enroll.rs`: `macrod enroll --from incus|file:<path> --config <path>`,
+  run as root by the box image's `macrod-enroll.service` on a Macro computer.
+  Reads the `hosted_runtimes` `Enrollment` (Incus guest API
+  `/dev/incus/sock`, key `user.macro.enrollment`, or a file), writes
+  `macrod.toml` with the enrollment's typed deployment (API, storage, app and
+  computer-reachable egress URLs; macrod.toml stays the one URL source at runtime).
+  It claims the pre-approved pairing, chowns the config to its directory's owner,
+  then writes `/var/lib/macrod/enrolled`. A stored credential skips the claim, so
+  retries are safe; a failed claim retries every 250 ms for up to five
+  minutes. `--root` (hidden) prefixes system paths for tests. Enrollment
+  writes only the config, the credential and its markers: no systemd units,
+  users or anything under `/etc`, which is read-only on the NixOS guest (the
+  image declares every unit). The marker (`<computer id>\n<generation>`)
+  lives on the data disk, so a new root disk (reboot onto a new image) finds it and macrod reconnects
+  with its stored credential. A newer generation (a guest recreated on the
+  old disk) or a marker-less disk enrolls again; the credential records the
+  pairing it was claimed from (`credentials.pairing_id`), so only a new
+  pairing is claimed, and nothing else on the disk is touched. No enrollment
+  in the source (removed after macrod connects) with a marker means enrolled.
+- `src/computer.rs`: the one Macro-computer hook in sessions. On an enrolled Macro
+  computer only (the marker exists), each Claude Code session's env: `ANTHROPIC_BASE_URL` (the
+  session's `macro_internal` MCP URL with `/mcp/internal` → `/anthropic`),
+  `ANTHROPIC_AUTH_TOKEN` (its bearer) and
+  `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` go to `session/new|load|resume`
+  as `_meta.claudeCode.options.env`, always. It calls nothing in Claude and
+  reads no Claude files: harnessd (`crates/harnessd`) owns Claude sign-in, and the
+  image's `claude` wrapper swaps the gateway env for the computer's own
+  credential when harnessd holds one. ACP trace logs contain only direction
+  and byte counts.
 - `src/trigger.rs` + `src/dispatch.rs`: agent-trigger broker events → session
   create/dial/prompt against the live harness service.
 - `src/daemon.rs` `watch_presence`: each minute a connection has held, asks
@@ -136,8 +168,13 @@ external chat replies depend on it. Direct session controls still mint IDs.
 
 ## Gotchas
 
+- Paired credentials remain scope-free. Resolve webhook scope from current
+  `shared_team_ids`, never a team owner variant; every harness has a human owner.
+
 - `src/herdr.rs` and its submodule are Unix-only (`#[cfg(unix)]`); don't add
   Windows-breaking code there without a cfg gate.
+- Set the PTY master's close-on-exec flag with `fcntl` on macOS; its
+  `posix_openpt` does not accept `O_CLOEXEC`.
 - The ACP child is killed with its whole tree: a process group on Unix, a Job
   Object on Windows (`src/outbound/acp_process/job.rs`).
 - The musl release allocates with mimalloc (`src/main.rs`). zig's libc
@@ -171,3 +208,14 @@ external chat replies depend on it. Direct session controls still mint IDs.
   update it alongside `src/herdr/` changes.
 - MCP server selection is supplied by `agent_harness` when the session binds;
   native launch forwards that list, with credentials refreshed on launch/resume.
+
+Macro computers replace the managed `/workspace` placeholder with their configured
+workspace on session start. The enrollment deployment's egress URL is
+stored as `[macro].egress_url`; computer sessions route first-party MCP and
+Anthropic requests through it without changing custom external MCP addresses.
+
+Service/enrollment telemetry opts in with `OTEL_EXPORTER_OTLP_ENDPOINT`
+(gRPC). Only enrollment spans (`run_enroll`, `macrod.enroll.claim`) export,
+with the marker's computer UUID as a resource attribute. Enrollment joins the
+setup trace from `Enrollment.traceparent`; its claim sends the setup
+`traceparent`. stdout remains the daemon protocol.
