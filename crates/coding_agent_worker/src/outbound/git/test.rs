@@ -112,5 +112,8 @@ async fn reopening_a_linked_worktree_uses_the_main_checkout_as_herdr_source() {
     )
     .await
     .unwrap();
-    assert_eq!(primary_worktree(&linked).await.unwrap(), source);
+    assert_eq!(
+        std::fs::canonicalize(primary_worktree(&linked).await.unwrap()).unwrap(),
+        std::fs::canonicalize(&source).unwrap()
+    );
 }
