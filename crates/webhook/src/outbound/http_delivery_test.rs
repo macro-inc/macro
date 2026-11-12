@@ -1,11 +1,25 @@
 use super::*;
 use crate::domain::{
-    models::{WebhookFilter, WebhookStatus},
+    models::{WebhookEndpointSchemePolicy, WebhookFilter, WebhookStatus},
     ports::WebhookDeliveryClient,
 };
 use chrono::Utc;
+use reqwest::dns::{Addrs, Name, Resolve, Resolving};
 use serde_json::json;
-use std::collections::BTreeMap;
+use std::{
+    collections::BTreeMap,
+    iter,
+    net::{IpAddr, SocketAddr},
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
+};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::TcpListener,
+    time::timeout,
+};
 
 fn webhook(endpoint_url: &str, headers: WebhookHeaders) -> Webhook {
     Webhook {
@@ -256,35 +270,30 @@ async fn reserved_header_configuration_is_permanent_without_dns_lookup() {
 
 /// Answers each lookup with the next address in `answers`, repeating the last.
 struct SequencedResolver {
-    answers: Vec<std::net::IpAddr>,
-    lookups: std::sync::atomic::AtomicUsize,
+    answers: Vec<IpAddr>,
+    lookups: AtomicUsize,
 }
 
-impl reqwest::dns::Resolve for SequencedResolver {
-    fn resolve(&self, _name: reqwest::dns::Name) -> reqwest::dns::Resolving {
-        let lookup = self
-            .lookups
-            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+impl Resolve for SequencedResolver {
+    fn resolve(&self, _name: Name) -> Resolving {
+        let lookup = self.lookups.fetch_add(1, Ordering::SeqCst);
         let ip = self.answers[lookup.min(self.answers.len() - 1)];
         Box::pin(async move {
-            let addresses: reqwest::dns::Addrs =
-                Box::new(std::iter::once(std::net::SocketAddr::new(ip, 0)));
+            let addresses: Addrs = Box::new(iter::once(SocketAddr::new(ip, 0)));
             Ok(addresses)
         })
     }
 }
 
-async fn no_connection_was_accepted(listener: &tokio::net::TcpListener) -> bool {
-    tokio::time::timeout(Duration::ZERO, listener.accept())
-        .await
-        .is_err()
+async fn no_connection_was_accepted(listener: &TcpListener) -> bool {
+    timeout(Duration::ZERO, listener.accept()).await.is_err()
 }
 
 #[tokio::test]
 async fn connect_time_answer_is_checked_after_a_public_preflight_answer() {
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
-    let resolver = std::sync::Arc::new(SequencedResolver {
+    let resolver = Arc::new(SequencedResolver {
         answers: vec![
             "93.184.215.14".parse().unwrap(),
             "127.0.0.1".parse().unwrap(),
@@ -292,7 +301,7 @@ async fn connect_time_answer_is_checked_after_a_public_preflight_answer() {
         lookups: Default::default(),
     });
     let client = ReqwestWebhookDeliveryClient::with_resolver(
-        crate::domain::models::WebhookEndpointSchemePolicy::HttpsOnly,
+        WebhookEndpointSchemePolicy::HttpsOnly,
         resolver.clone(),
     )
     .unwrap();
@@ -312,10 +321,7 @@ async fn connect_time_answer_is_checked_after_a_public_preflight_answer() {
         panic!("blocked connect-time address should fail");
     };
     assert_eq!(details.error_kind.as_deref(), Some("network"));
-    assert_eq!(
-        resolver.lookups.load(std::sync::atomic::Ordering::SeqCst),
-        2
-    );
+    assert_eq!(resolver.lookups.load(Ordering::SeqCst), 2);
     assert!(no_connection_was_accepted(&listener).await);
 }
 
@@ -342,9 +348,7 @@ async fn ipv4_mapped_ipv6_literal_is_permanent_configuration_failure() {
 
 #[tokio::test]
 async fn local_http_endpoints_are_delivered_without_following_redirects() {
-    use tokio::io::{AsyncReadExt, AsyncWriteExt};
-
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
     let server = tokio::spawn(async move {
         let (mut stream, _) = listener.accept().await.unwrap();
@@ -362,7 +366,7 @@ async fn local_http_endpoints_are_delivered_without_following_redirects() {
         listener
     });
     let client = ReqwestWebhookDeliveryClient::new_with_endpoint_scheme_policy(
-        crate::domain::models::WebhookEndpointSchemePolicy::HttpAndHttps,
+        WebhookEndpointSchemePolicy::HttpAndHttps,
     )
     .unwrap();
 

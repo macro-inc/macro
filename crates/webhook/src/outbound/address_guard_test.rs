@@ -97,33 +97,45 @@ impl Resolve for FixedResolver {
     }
 }
 
-async fn filtered(addresses: &[&str]) -> Result<Vec<IpAddr>, String> {
-    let resolver = BlockedAddressFilteringResolver {
-        inner: Arc::new(FixedResolver(
-            addresses.iter().map(|ip| ip.parse().unwrap()).collect(),
-        )),
-    };
-    resolver
-        .resolve(Name::from_str("example.test").unwrap())
-        .await
-        .map(|addresses| addresses.map(|address| address.ip()).collect())
-        .map_err(|error| error.to_string())
-}
-
 #[tokio::test]
 async fn filtering_resolver_drops_blocked_answers() {
-    let allowed = filtered(&["127.0.0.1", "93.184.215.14", "::ffff:10.0.0.1"])
-        .await
-        .unwrap();
+    let resolver = BlockedAddressFilteringResolver {
+        inner: Arc::new(FixedResolver(vec![
+            "127.0.0.1".parse().unwrap(),
+            "93.184.215.14".parse().unwrap(),
+            "::ffff:10.0.0.1".parse().unwrap(),
+        ])),
+    };
 
+    let Ok(addresses) = resolver
+        .resolve(Name::from_str("example.test").unwrap())
+        .await
+    else {
+        panic!("a public answer should remain");
+    };
+
+    let allowed: Vec<IpAddr> = addresses.map(|address| address.ip()).collect();
     assert_eq!(allowed, vec!["93.184.215.14".parse::<IpAddr>().unwrap()]);
 }
 
 #[tokio::test]
 async fn filtering_resolver_fails_when_every_answer_is_blocked() {
-    let error = filtered(&["127.0.0.1", "::ffff:127.0.0.1"])
-        .await
-        .unwrap_err();
+    let resolver = BlockedAddressFilteringResolver {
+        inner: Arc::new(FixedResolver(vec![
+            "127.0.0.1".parse().unwrap(),
+            "::ffff:127.0.0.1".parse().unwrap(),
+        ])),
+    };
 
-    assert_eq!(error, "webhook endpoint resolved only to blocked addresses");
+    let Err(error) = resolver
+        .resolve(Name::from_str("example.test").unwrap())
+        .await
+    else {
+        panic!("every answer is blocked");
+    };
+
+    let error = error
+        .downcast_ref::<io::Error>()
+        .expect("blocked answers fail with an io error");
+    assert_eq!(error.kind(), io::ErrorKind::PermissionDenied);
 }
