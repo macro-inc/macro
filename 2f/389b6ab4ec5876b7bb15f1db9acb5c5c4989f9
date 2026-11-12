@@ -1,0 +1,23 @@
+apps/web/src/features/channel/Call/views/CallQuickControls.tsx
+  s_e28579a043217e::t_4c2c74125c5f16 19,231-243
+packages/sdk-mcp/src/__snapshots__/tools.entity.json
+  s_e28579a043217e::t_841ecc51147ac7 20
+packages/sdk-mcp/src/__snapshots__/tools.method.json
+  s_e28579a043217e::t_4ff921d74f73c8 145
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "2f389b6ab4ec5876b7bb15f1db9acb5c5c4989f9",
+  "prompts": {},
+  "sessions": {
+    "s_e28579a043217e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "490a404d-4c83-41f2-b737-127d76ca9d95",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
