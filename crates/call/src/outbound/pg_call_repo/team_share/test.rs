@@ -39,6 +39,7 @@ fn args(
     team_share: Option<AuthorizedTeamShareCommand>,
 ) -> EditCallRecordRepoArgs {
     EditCallRecordRepoArgs {
+        actor_id: Some(USER_A.deref().copied()),
         share_permission,
         custom_name: None,
         team_share,
@@ -48,6 +49,7 @@ fn args(
 
 fn live_args(share: bool, custom_name: Option<&str>) -> EditCallRecordRepoArgs {
     EditCallRecordRepoArgs {
+        actor_id: Some(USER_A.deref().copied()),
         share_permission: None,
         custom_name: custom_name.map(str::to_string),
         team_share: None,
@@ -671,6 +673,7 @@ async fn patch_with_team_level_but_no_command_is_forbidden_and_rolls_back(
         .patch_call_record(
             &CALL_ARCHIVED,
             &EditCallRecordRepoArgs {
+                actor_id: Some(USER_A.deref().copied()),
                 share_permission: Some(level_request(Some(AccessLevel::View))),
                 custom_name: Some("must not persist".to_string()),
                 team_share: None,
@@ -772,6 +775,7 @@ async fn patch_untracked_legacy_grant_returns_conflict_without_partial_writes(
         .patch_call_record(
             &CALL_ARCHIVED,
             &EditCallRecordRepoArgs {
+                actor_id: Some(USER_A.deref().copied()),
                 share_permission: Some(level_request(Some(AccessLevel::View))),
                 custom_name: Some("must not persist".to_string()),
                 team_share: Some(command(&facts, Some(AccessLevel::View))),
@@ -800,6 +804,7 @@ async fn patch_team_share_link_share_and_name_in_one_call_persist_together(
     repo.patch_call_record(
         &CALL_ARCHIVED,
         &EditCallRecordRepoArgs {
+            actor_id: Some(USER_A.deref().copied()),
             share_permission: Some(UpdateSharePermissionRequestV2 {
                 link_share: Some(Some(LinkShare::Public)),
                 link_share_access_level: None,

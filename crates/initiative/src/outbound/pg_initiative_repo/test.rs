@@ -19,10 +19,34 @@ use models_permissions::share_permission::team_share::{
 use models_permissions::share_permission::{
     LinkShare, SharePermissionV2, UpdateSharePermissionRequestV2,
 };
-use sqlx::PgPool;
+use sqlx::{PgPool, Row};
 use uuid::Uuid;
 
 use super::PgInitiativeRepo;
+
+async fn migrate_for_test(pool: &PgPool) {
+    // Keep both colliding migration bodies in the isolated test database,
+    // remapping only the mailbox migration's in-memory version.
+    let migrations = MACRO_DB_MIGRATIONS
+        .iter()
+        .map(|migration| {
+            let mut migration = migration.clone();
+            if migration.version == 20261110150956 && migration.description == "rox mailbox handles"
+            {
+                migration.version = 20261110150959;
+            }
+            migration
+        })
+        .collect::<Vec<_>>();
+    sqlx::migrate::Migrator {
+        migrations: std::borrow::Cow::Owned(migrations),
+        ..sqlx::migrate::Migrator::DEFAULT
+    }
+    .run(pool)
+    .await
+    .unwrap();
+}
+
 use crate::domain::models::{
     CreateInitiativeRepoArgs, InitiativeError, InitiativeId, UpdateInitiativeRepoArgs,
 };
@@ -60,6 +84,7 @@ fn share_link(link: LinkShare) -> SharePermissionV2 {
 
 fn update_args(id: InitiativeId) -> UpdateInitiativeRepoArgs {
     UpdateInitiativeRepoArgs {
+        actor_id: Some(user(OWNER)),
         id,
         name: None,
         member_ids_added: Vec::new(),
@@ -308,6 +333,49 @@ fn ids(list: &crate::domain::models::InitiativeList) -> Vec<Uuid> {
         .iter()
         .map(|summary| summary.id.as_uuid())
         .collect()
+}
+
+#[sqlx::test(migrations = false)]
+async fn share_link_enable_writes_one_audit_and_repeated_enable_does_not_duplicate(pool: PgPool) {
+    migrate_for_test(&pool).await;
+    insert_user(&pool, OWNER).await.unwrap();
+    let repo = repo(pool.clone());
+    let created = repo
+        .create(
+            create_args(OWNER, "Private initiative", &[]),
+            share_off(),
+            TeamShareCreation::Unshared,
+        )
+        .await
+        .unwrap();
+    let enable_link = || UpdateInitiativeRepoArgs {
+        share_permission: Some(UpdateSharePermissionRequestV2 {
+            link_share: Some(Some(LinkShare::Public)),
+            link_share_access_level: Some(Some(AccessLevel::Edit)),
+            team_share_access_level: None,
+            channel_share_permissions: None,
+        }),
+        ..update_args(created.id)
+    };
+
+    repo.update(enable_link()).await.unwrap();
+    repo.update(enable_link()).await.unwrap();
+
+    let audits = sqlx::query(
+        "SELECT actor_id, action, resource_id, result FROM enterprise_audit WHERE resource_id = $1",
+    )
+    .bind(created.id.to_string())
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(audits.len(), 1);
+    assert_eq!(audits[0].get::<String, _>("actor_id"), OWNER);
+    assert_eq!(audits[0].get::<String, _>("action"), "share_link_create");
+    assert_eq!(
+        audits[0].get::<String, _>("resource_id"),
+        created.id.to_string()
+    );
+    assert_eq!(audits[0].get::<String, _>("result"), "success");
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

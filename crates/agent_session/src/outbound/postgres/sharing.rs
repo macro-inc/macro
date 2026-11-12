@@ -9,6 +9,7 @@ use crate::domain::{
 use anyhow::Context;
 use entity_access_db_utils::update_entity_access_channel_share_permissions;
 use entity_registry::BotFacts;
+use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use models_permissions::share_permission::{
     LinkShare, SharePermissionV2, UpdateSharePermissionRequestV2,
@@ -102,6 +103,7 @@ impl<B: BotFacts + 'static> SessionSharingRepo for PgAgentSessionRepo<B> {
     async fn update_permissions(
         &self,
         id: AgentSessionId,
+        actor: MacroUserIdStr<'static>,
         request: UpdateSharePermissionRequestV2,
         team_share: Option<AuthorizedTeamShareCommand>,
     ) -> Result<SharePermissionV2> {
@@ -142,6 +144,19 @@ impl<B: BotFacts + 'static> SessionSharingRepo for PgAgentSessionRepo<B> {
                 permission_id
             }
         };
+        let share_link_created = if matches!(request.link_share, Some(Some(_))) {
+            let existing = sqlx::query_scalar!(
+                r#"SELECT "linkShare" FROM "SharePermission" WHERE id = $1"#,
+                permission_id,
+            )
+            .fetch_one(tx.as_mut())
+            .await
+            .context("read current session link sharing")?;
+            existing.is_none()
+        } else {
+            false
+        };
+
         let update_scope = request.link_share.is_some();
         let scope = request.link_share.flatten().map(|scope| scope.to_string());
         let update_level = request.link_share_access_level.is_some();
@@ -167,6 +182,19 @@ impl<B: BotFacts + 'static> SessionSharingRepo for PgAgentSessionRepo<B> {
         .execute(tx.as_mut())
         .await
         .context("update session link sharing")?;
+        if share_link_created {
+            enterprise::audit::append(
+                &mut tx,
+                &enterprise::audit::AuditRecord::new(
+                    &actor,
+                    enterprise::audit::AuditAction::ShareLinkCreate,
+                    id.to_string(),
+                    enterprise::audit::AuditResult::Success,
+                ),
+            )
+            .await
+            .context("audit session share link create")?;
+        }
         if let Some(channels) = request.channel_share_permissions {
             update_entity_access_channel_share_permissions(
                 &mut tx,

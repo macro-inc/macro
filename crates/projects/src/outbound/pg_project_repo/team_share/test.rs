@@ -71,6 +71,7 @@ async fn edit_team_share(
 ) -> Result<(), ProjectError> {
     let facts = repo.get_team_share_facts(project_id).await?;
     repo.edit_project(EditProjectArgs {
+        actor_id: Some(MacroUserIdStr::try_from(OWNER).unwrap()),
         project_id: project_id.to_string(),
         name: None,
         update_parent: false,
@@ -416,6 +417,7 @@ async fn edit_with_team_level_but_no_command_returns_unauthorized(pool: PgPool) 
 
     let result = repo
         .edit_project(EditProjectArgs {
+            actor_id: Some(MacroUserIdStr::try_from(OWNER).unwrap()),
             project_id: project_id.clone(),
             name: Some("Renamed".to_string()),
             update_parent: false,
@@ -451,6 +453,7 @@ async fn edit_rejects_command_for_other_project_or_mismatched_level(pool: PgPool
 
     let wrong_project = repo
         .edit_project(EditProjectArgs {
+            actor_id: Some(MacroUserIdStr::try_from(OWNER).unwrap()),
             project_id: project_id.clone(),
             name: None,
             update_parent: false,
@@ -463,6 +466,7 @@ async fn edit_rejects_command_for_other_project_or_mismatched_level(pool: PgPool
 
     let wrong_level = repo
         .edit_project(EditProjectArgs {
+            actor_id: Some(MacroUserIdStr::try_from(OWNER).unwrap()),
             project_id: project_id.clone(),
             name: None,
             update_parent: false,
@@ -496,6 +500,7 @@ async fn edit_stale_command_returns_conflict(pool: PgPool) {
 
     let replay = repo
         .edit_project(EditProjectArgs {
+            actor_id: Some(MacroUserIdStr::try_from(OWNER).unwrap()),
             project_id: project_id.clone(),
             name: None,
             update_parent: false,
@@ -519,6 +524,7 @@ async fn edit_team_share_and_link_share_in_one_call_persists_both(pool: PgPool) 
     let facts = repo.get_team_share_facts(&project_id).await.unwrap();
 
     repo.edit_project(EditProjectArgs {
+        actor_id: Some(MacroUserIdStr::try_from(OWNER).unwrap()),
         project_id: project_id.clone(),
         name: Some("Renamed".to_string()),
         update_parent: false,

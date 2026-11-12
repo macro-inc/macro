@@ -455,6 +455,7 @@ where
         let mut detail = self
             .repo
             .update(UpdateInitiativeRepoArgs {
+                actor_id: receipt.acting_user_id().cloned(),
                 id,
                 name,
                 member_ids_added,

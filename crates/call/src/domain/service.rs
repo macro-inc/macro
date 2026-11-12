@@ -2217,6 +2217,7 @@ impl<
             .patch_call_record(
                 &call_id,
                 &EditCallRecordRepoArgs {
+                    actor_id: receipt.acting_user_id().cloned(),
                     share_permission,
                     custom_name: request.custom_name,
                     team_share,
@@ -2296,6 +2297,7 @@ impl<
                 .patch_call_record(
                     &call_id,
                     &EditCallRecordRepoArgs {
+                        actor_id: receipt.acting_user_id().cloned(),
                         share_permission: None,
                         custom_name: None,
                         team_share: None,

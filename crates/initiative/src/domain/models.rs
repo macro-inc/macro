@@ -187,6 +187,8 @@ pub struct CreateInitiativeRepoArgs {
 /// Arguments for updating an initiative row. No serde: repository-only.
 #[derive(Debug, Clone)]
 pub struct UpdateInitiativeRepoArgs {
+    /// Authenticated actor, required when this update enables a share link.
+    pub actor_id: Option<MacroUserIdStr<'static>>,
     /// Initiative to update.
     pub id: InitiativeId,
     /// Replacement name when present.

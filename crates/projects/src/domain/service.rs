@@ -537,6 +537,7 @@ where
 
         self.repo
             .edit_project(EditProjectArgs {
+                actor_id: receipt.acting_user_id().cloned(),
                 project_id: project.id.clone(),
                 name: args.name,
                 update_parent: args.project_parent_id.is_some(),
