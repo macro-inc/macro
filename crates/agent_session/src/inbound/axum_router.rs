@@ -1804,20 +1804,25 @@ pub async fn get_agent_session_folded_log_handler<
 /// Nothing about the gateway: a runtime dials once per bot, at an address its
 /// own configuration names, so creating a session says nothing about where to
 /// connect.
-pub struct CreateSessionState<Opener, Bots, Requests, Auth> {
+pub struct CreateSessionState<Opener, Bots, Requests, Controls, Auth> {
     opener: Arc<Opener>,
     bots: Arc<Bots>,
     requests: Arc<Requests>,
+    /// Delivers the first prompt to a session its operator's runtime opened.
+    controls: Arc<Controls>,
     authorization_state: MacroAuthorizationState<Auth>,
     non_user_owners: NonUserOwners,
 }
 
-impl<Opener, Bots, Requests, Auth> CreateSessionState<Opener, Bots, Requests, Auth> {
+impl<Opener, Bots, Requests, Controls, Auth>
+    CreateSessionState<Opener, Bots, Requests, Controls, Auth>
+{
     /// Create route state.
     pub fn new(
         opener: Arc<Opener>,
         bots: Arc<Bots>,
         requests: Arc<Requests>,
+        controls: Arc<Controls>,
         authorization_state: MacroAuthorizationState<Auth>,
         non_user_owners: NonUserOwners,
     ) -> Self {
@@ -1825,6 +1830,7 @@ impl<Opener, Bots, Requests, Auth> CreateSessionState<Opener, Bots, Requests, Au
             opener,
             bots,
             requests,
+            controls,
             authorization_state,
             non_user_owners,
         }
@@ -1832,46 +1838,51 @@ impl<Opener, Bots, Requests, Auth> CreateSessionState<Opener, Bots, Requests, Au
 }
 
 // Manual Clone impl so the ports don't need to be Clone (all behind Arcs).
-impl<Opener, Bots, Requests, Auth> Clone for CreateSessionState<Opener, Bots, Requests, Auth> {
+impl<Opener, Bots, Requests, Controls, Auth> Clone
+    for CreateSessionState<Opener, Bots, Requests, Controls, Auth>
+{
     fn clone(&self) -> Self {
         Self {
             opener: Arc::clone(&self.opener),
             bots: Arc::clone(&self.bots),
             requests: Arc::clone(&self.requests),
+            controls: Arc::clone(&self.controls),
             authorization_state: self.authorization_state.clone(),
             non_user_owners: self.non_user_owners,
         }
     }
 }
 
-impl<Opener, Bots, Requests, Auth> FromRef<CreateSessionState<Opener, Bots, Requests, Auth>>
+impl<Opener, Bots, Requests, Controls, Auth>
+    FromRef<CreateSessionState<Opener, Bots, Requests, Controls, Auth>>
     for MacroAuthorizationState<Auth>
 {
-    fn from_ref(state: &CreateSessionState<Opener, Bots, Requests, Auth>) -> Self {
+    fn from_ref(state: &CreateSessionState<Opener, Bots, Requests, Controls, Auth>) -> Self {
         state.authorization_state.clone()
     }
 }
 
 /// Build the router serving `POST /agent-sessions`. Mount it under the same
 /// prefix as [`agent_session_read_router`] and [`agent_session_control_router`].
-pub fn agent_session_create_router<Opener, Bots, Requests, Auth, S>(
-    state: CreateSessionState<Opener, Bots, Requests, Auth>,
+pub fn agent_session_create_router<Opener, Bots, Requests, Controls, Auth, S>(
+    state: CreateSessionState<Opener, Bots, Requests, Controls, Auth>,
 ) -> Router<S>
 where
     Opener: SessionOpener,
     Bots: BotDirectory,
     Requests: ExternalSessionRequester,
+    Controls: AgentSessionNotificationRecipient,
     Auth: MacroAuthorizationService,
     S: Clone + Send + Sync + 'static,
 {
     Router::new()
         .route(
             "/",
-            post(create_agent_session_handler::<Opener, Bots, Requests, Auth>),
+            post(create_agent_session_handler::<Opener, Bots, Requests, Controls, Auth>),
         )
         .route(
             "/warm",
-            post(warm_agent_session_handler::<Opener, Bots, Requests, Auth>),
+            post(warm_agent_session_handler::<Opener, Bots, Requests, Controls, Auth>),
         )
         .with_state(state)
 }
@@ -1912,9 +1923,11 @@ pub struct CreateAgentSessionRequest {
     /// for an external session, absent for a managed one, which runs in the
     /// path baked into its image.
     pub workspace: Option<String>,
-    /// First prompt to deliver once the session is running. Managed sessions
-    /// only - an external runtime sends its own first prompt through the
-    /// control endpoint. Omitted, the session opens idle.
+    /// First prompt to deliver once the session is running. The managed shape
+    /// only: a persona its operator runs gets it through the session's control
+    /// path once its runtime opens the session, while a runtime opening its
+    /// own (the `workspace` shape) sends its first prompt through the control
+    /// endpoint. Omitted, the session opens idle.
     pub prompt: Option<String>,
     /// Id to deliver `prompt` under, minted by the caller so the prompt it
     /// already shows is the row the log confirms. Requires `prompt`; omitted,
@@ -2069,9 +2082,6 @@ pub enum CreateSessionApiError {
     PromptDetailsWithoutPrompt,
     /// A runtime named the app tab a first prompt was typed in.
     PromptClientFromRuntime,
-    /// A field the request cannot honour for a persona whose runtime is its
-    /// operator's: they configure it, or the caller sends it separately.
-    ExternalPersonaUnsupported(&'static str),
     /// The thread already routes to a session; carries it for recovery.
     ThreadSessionExists {
         /// The existing session, when it could be resolved.
@@ -2140,10 +2150,6 @@ impl IntoResponse for CreateSessionApiError {
             Self::PromptClientFromRuntime => (
                 StatusCode::FORBIDDEN,
                 PROMPT_CLIENT_FROM_RUNTIME_MESSAGE.to_owned(),
-            ),
-            Self::ExternalPersonaUnsupported(field) => (
-                StatusCode::UNPROCESSABLE_ENTITY,
-                format!("{field} is not supported for an agent that runs on its own machine"),
             ),
             Self::ThreadSessionExists { session_id } => {
                 let body = ThreadSessionExistsResponse {
@@ -2326,9 +2332,10 @@ pub async fn create_agent_session_handler<
     Opener: SessionOpener,
     Bots: BotDirectory,
     Requests: ExternalSessionRequester,
+    Controls: AgentSessionNotificationRecipient,
     Auth: MacroAuthorizationService,
 >(
-    State(state): State<CreateSessionState<Opener, Bots, Requests, Auth>>,
+    State(state): State<CreateSessionState<Opener, Bots, Requests, Controls, Auth>>,
     caller: MacroAuthorizationExtractor<Auth, UserBotOrHarness>,
     headers: axum::http::HeaderMap,
     Json(request): Json<CreateAgentSessionRequest>,
@@ -2407,21 +2414,14 @@ pub async fn create_agent_session_handler<
                 // session itself, exactly as it does for a mention: the
                 // request goes out as a trigger and the runtime creates the
                 // session under the id we hand it. Nothing is announced,
-                // there being no thread, and no prompt travels with it - the
-                // caller delivers its first prompt through the control
-                // endpoint once this answers, as it does for a managed one.
+                // there being no thread. A first prompt follows through the
+                // session's control path once the runtime has created it,
+                // as CreateAgentSession and DispatchCodingAgent deliver theirs.
                 SelectedPersona::External { bot_id } => {
                     let repo_url = crate::domain::ports::external_repository(
                         request.repo_url,
                         request.repo_branch.as_deref(),
                     )?;
-                    // Refused rather than dropped: nothing delivers it, and a
-                    // caller that sent one would otherwise never learn it was
-                    // ignored. A model is different - it is applied when the
-                    // session binds, like the persona's own.
-                    if first_prompt.is_some() {
-                        return Err(CreateSessionApiError::ExternalPersonaUnsupported("prompt"));
-                    }
                     let owner = owner
                         .as_user()
                         .cloned()
@@ -2438,13 +2438,37 @@ pub async fn create_agent_session_handler<
                                 .unwrap_or_else(AgentSessionId::new),
                             bot_id,
                             repo_url,
-                            owner,
+                            owner: owner.clone(),
                             model: request.model.filter(|model| !model.trim().is_empty()),
                             source: SessionSource::User,
                             visibility: SessionVisibility::Listed,
                             origin,
                         })
                         .await?;
+                    if let Some(first_prompt) = first_prompt {
+                        let client = first_prompt.client;
+                        let (action_id, action) = first_prompt.into_action();
+                        state
+                            .controls
+                            .control_event(
+                                session.id,
+                                ControlEvent {
+                                    action,
+                                    action_id: Some(action_id),
+                                    actor: Some(owner),
+                                    context: None,
+                                    client,
+                                },
+                            )
+                            .await
+                            .inspect_err(|error| {
+                                tracing::warn!(
+                                    error = ?error,
+                                    session_id = %session.id,
+                                    "an operator-run session opened but its first prompt was refused"
+                                );
+                            })?;
+                    }
                     return Ok((
                         StatusCode::CREATED,
                         Json(CreateAgentSessionResponse {
@@ -2620,9 +2644,10 @@ pub async fn warm_agent_session_handler<
     Opener: SessionOpener,
     Bots: BotDirectory,
     Requests: ExternalSessionRequester,
+    Controls: AgentSessionNotificationRecipient,
     Auth: MacroAuthorizationService,
 >(
-    State(state): State<CreateSessionState<Opener, Bots, Requests, Auth>>,
+    State(state): State<CreateSessionState<Opener, Bots, Requests, Controls, Auth>>,
     caller: MacroAuthorizationExtractor<Auth, UserOnly>,
     Json(request): Json<WarmAgentSessionRequest>,
 ) -> Result<Json<WarmAgentSessionResponse>, CreateSessionApiError> {

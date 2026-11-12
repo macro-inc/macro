@@ -65,7 +65,7 @@ fn health_router(ready: tokio::sync::watch::Receiver<bool>) -> Router {
 pub struct ApiStates<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes> {
     read: AgentSessionRouterState<T, Access, Auth>,
     control: AgentSessionControlState<R, Access, Auth>,
-    create: CreateSessionState<Opener, Bots, Requests, Auth>,
+    create: CreateSessionState<Opener, Bots, Requests, R, Auth>,
     gateway: RuntimeGatewayState<Auth>,
     models: AgentModelsRouterState<Models, Auth>,
     repositories: AgentRepositoriesRouterState<Auth>,
@@ -111,7 +111,7 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
     pub fn new(
         read: AgentSessionRouterState<T, Access, Auth>,
         control: AgentSessionControlState<R, Access, Auth>,
-        create: CreateSessionState<Opener, Bots, Requests, Auth>,
+        create: CreateSessionState<Opener, Bots, Requests, R, Auth>,
         gateway: RuntimeGatewayState<Auth>,
         models: AgentModelsRouterState<Models, Auth>,
         repositories: AgentRepositoriesRouterState<Auth>,
