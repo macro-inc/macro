@@ -1,3 +1,4 @@
+import { touchHandler } from '@core/directive/touchHandler';
 import DotsThreeIcon from '@icon/system/regular/dots-three.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { cn } from '@ui';
@@ -54,6 +55,8 @@ export type PillTabItem<T extends string = string> = {
   iconOnly?: boolean;
   /** Accessible name; required for icon-only pills. */
   ariaLabel?: string;
+  /** Open item actions on a long press or a keyboard/pointer context menu. */
+  onContextMenu?: () => void;
 };
 
 type PillTabsProps<T extends string> = {
@@ -339,6 +342,22 @@ function ScrollablePillTabs<T extends string>(props: PillTabsProps<T>) {
               active={props.value === item.value}
               iconOnly={item.iconOnly}
               aria-label={item.ariaLabel}
+              aria-haspopup={item.onContextMenu ? 'dialog' : undefined}
+              ref={(element) => {
+                if (!item.onContextMenu) return;
+                touchHandler(element, () => ({
+                  onLongPress: item.onContextMenu,
+                  moveThreshold: PAN_SLOP_PX,
+                }));
+              }}
+              onContextMenu={
+                item.onContextMenu
+                  ? (event) => {
+                      event.preventDefault();
+                      item.onContextMenu?.();
+                    }
+                  : undefined
+              }
               onClick={() => props.onChange(item.value)}
             >
               {item.label}
@@ -453,6 +472,22 @@ function MenuOverflowPillTabs<T extends string>(props: PillTabsProps<T>) {
             active={props.value === item.value}
             iconOnly={item.iconOnly}
             aria-label={item.ariaLabel}
+            aria-haspopup={item.onContextMenu ? 'dialog' : undefined}
+            ref={(element) => {
+              if (!item.onContextMenu) return;
+              touchHandler(element, () => ({
+                onLongPress: item.onContextMenu,
+                moveThreshold: PAN_SLOP_PX,
+              }));
+            }}
+            onContextMenu={
+              item.onContextMenu
+                ? (event) => {
+                    event.preventDefault();
+                    item.onContextMenu?.();
+                  }
+                : undefined
+            }
             onClick={() => props.onChange(item.value)}
           >
             {item.label}

@@ -56,6 +56,13 @@ the gateway `/email` prefix.
 
 ## Gotchas
 
+- The API's server spans come from `macro_tower_layers`
+  (`api::traced`). tower-http's default `TraceLayer` span is DEBUG, below the
+  exporter's INFO filter, so an API wrapped in it sends no server spans.
+- `models_email`'s `Link` `Debug` prints only opaque fields. Keep addresses,
+  `macro_id`, contact emails and whole messages out of span fields: skip them
+  in `#[tracing::instrument]` and record `link_id` or provider ids instead.
+
 - Provider-sync deletions deferred by active sends publish no deletion event; scheduled recovery reconciles the retained marker before trying to claim delivery.
 
 - Draft edit routes carry `draft_generation` from the editing lifetime, including attachments, deletion, transfer, and schedules; regenerate OpenAPI clients when this contract changes.
@@ -67,6 +74,10 @@ the gateway `/email` prefix.
   domain rechecks the scheduled actor's access before cross-inbox downloads.
 - Macro's own digest emails are filtered out of Signal/email notifications
   (#7039) — don't reintroduce a path that notifies on our own sends.
+- Remote signature images and contact photos are fetched only through
+  `util/process_pre_insert/sfs_map/public_http.rs`, whose resolver and
+  redirect policy refuse non-public addresses. Don't fetch them with another
+  client.
 - Long attachment names are truncated to the DSS limit before upload (#7893);
   don't remove that truncation when touching `util/upload_attachment.rs`.
 - Scheduled Gmail sends recheck forwarded source inbox access before resolving
@@ -120,6 +131,10 @@ the gateway `/email` prefix.
   `BackfillWriteSlot::hold`, which renews the 120 s lease while the write runs,
   so a stalled write can't lose its slot to another writer. Live inbox
   sync writes take no slot. Keep new bulk backfill writes behind the same slots.
+- Each CRM contact population holds one of four per-team Redis slots
+  (`acquire_crm_population_slot`), so one team's consent backfill can't hold a
+  database connection per worker. A refused slot, or a population that timed
+  out on a CRM lock (`CrmError::Contended`), is deferred like a busy write.
 - `gmail_ops` workers decode both label write forms: single-message
   `ModifyMessageLabels` and `ModifyMessageLabelsBatch` (up to 1,000 messages).
   From ten messages up a batch is one `batchModify`, which a permanent failure

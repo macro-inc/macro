@@ -1,15 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { normalizeInboxSelection } from './inbox-selection';
 
-describe('inbox selection migration', () => {
-  it('chooses the first saved inbox without changing the input', () => {
-    const saved = ['inbox-b', 'inbox-a'];
-    expect(normalizeInboxSelection(saved)).toEqual(['inbox-b']);
-    expect(saved).toEqual(['inbox-b', 'inbox-a']);
-  });
-
-  it('preserves a single selected inbox', () => {
-    expect(normalizeInboxSelection(['inbox-a'])).toEqual(['inbox-a']);
+describe('inbox selection', () => {
+  it('keeps every chosen inbox once, without changing the input', () => {
+    const saved = ['inbox-b', 'inbox-a', 'inbox-b'];
+    expect(normalizeInboxSelection(saved)).toEqual(['inbox-b', 'inbox-a']);
+    expect(saved).toEqual(['inbox-b', 'inbox-a', 'inbox-b']);
   });
 
   it('restores All inboxes for empty or cleared selections', () => {

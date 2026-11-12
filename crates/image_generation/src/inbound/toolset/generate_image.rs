@@ -164,6 +164,7 @@ where
                         .copied()
                         .map(Into::into)
                         .collect(),
+                    agent_session_id: service_context.agent_session_id,
                 },
             )
             .await

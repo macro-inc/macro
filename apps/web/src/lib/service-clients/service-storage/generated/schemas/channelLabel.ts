@@ -4,23 +4,27 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { ChannelLabelExplicitChannelIds } from './channelLabelExplicitChannelIds';
 import type { ChannelLabelRuleProperty } from './channelLabelRuleProperty';
 import type { ChannelLabelTeamId } from './channelLabelTeamId';
 
 /**
  * A shared or account-private label grouping chat channels in the sidebar.
 
-`channel_ids` is viewer-relative: it lists only the labelled channels the
-requesting user participates in. `channel_count` counts every channel in
-the label so clients can warn accurately before a delete.
+`channel_ids` is viewer-relative: legacy labels include joined channels;
+sections also include viewable unjoined channels in the verified team.
+Legacy manual counts include every assignment; section counts reflect
+effective channels visible to the viewer.
  */
 export interface ChannelLabel {
-  /** All assignments for a manual label; visible matches for a smart tag. */
+  /** Legacy assignments or smart matches; visible effective channels for sections. */
   channelCount: number;
-  /** Channels in this label that the requesting user participates in. */
+  /** Effective channels visible to the viewer in this label or section. */
   channelIds: string[];
   /** When the label was created. */
   createdAt: string;
+  /** Explicit picks visible to the viewer (section responses only). */
+  explicitChannelIds?: ChannelLabelExplicitChannelIds;
   /** Stable label id. */
   id: string;
   /** Display name, unique within the scope (case-insensitive). */

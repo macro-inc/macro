@@ -310,6 +310,88 @@ describe('independent email dispatch', () => {
     await runner.wake();
   });
 
+  it('holds a reply until the message it answers is delivered', async () => {
+    const storage = await setup();
+    await storage.journal.putSend(storage.session, intent('first'), true);
+    const reply = intent('reply');
+    reply.metadata.payload.input.message.replyingToId = 'draft-first';
+    await storage.journal.putSend(storage.session, reply, true);
+    let delivered = false;
+    const submit = vi.fn(async (row: EmailSendIntent) => ({
+      ...accepted,
+      attemptId: row.uuid,
+    }));
+    const status = vi.fn(async (row: EmailSendIntent) => ({
+      ...accepted,
+      attemptId: row.uuid,
+      status: delivered ? ('SENT' as const) : ('ACCEPTED' as const),
+    }));
+    const runner = run({
+      ...storage,
+      submit,
+      status,
+      cancel: vi.fn(),
+      report: vi.fn(),
+    });
+    await runner.wake();
+    vi.setSystemTime(Date.now() + 6_000);
+    await runner.wake();
+    expect(submit.mock.calls.map(([row]) => row.uuid)).toEqual(['first']);
+
+    delivered = true;
+    vi.setSystemTime(Date.now() + 6_000);
+    await runner.wake();
+    await runner.wake();
+    expect(submit.mock.calls.map(([row]) => row.uuid)).toEqual([
+      'first',
+      'reply',
+    ]);
+  });
+
+  it('releases a held reply when the message it answers is cancelled', async () => {
+    const storage = await setup();
+    const first = await storage.journal.putSend(
+      storage.session,
+      intent('first'),
+      true
+    );
+    const reply = intent('reply');
+    reply.metadata.payload.input.message.replyingToId = 'draft-first';
+    await storage.journal.putSend(storage.session, reply, true);
+    const submit = vi.fn(async (row: EmailSendIntent) => ({
+      ...accepted,
+      attemptId: row.uuid,
+    }));
+    const runner = run({
+      ...storage,
+      submit,
+      status: vi.fn(async () => null),
+      cancel: vi.fn(async (row: EmailSendIntent) => ({
+        ...accepted,
+        attemptId: row.uuid,
+        status: 'CANCELLED' as const,
+      })),
+      report: vi.fn(),
+    });
+    await runner.wake();
+    expect(submit.mock.calls.map(([row]) => row.uuid)).toEqual(['first']);
+
+    const current = (await storage.journal.sends(storage.session)).find(
+      (row) => row.uuid === first.uuid
+    )!;
+    await storage.journal.putSend(storage.session, {
+      ...current,
+      cancellationRequested: true,
+    });
+    vi.setSystemTime(Date.now() + 6_000);
+    await runner.wake();
+    await runner.wake();
+    expect(submit.mock.calls.map(([row]) => row.uuid)).toEqual([
+      'first',
+      'reply',
+    ]);
+  });
+
   it('reconciles an uncertain provider outcome without resubmitting', async () => {
     const storage = await setup();
     const row = await storage.journal.putSend(storage.session, intent(), true);

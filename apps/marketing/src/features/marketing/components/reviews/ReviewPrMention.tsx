@@ -1,5 +1,5 @@
-import OpenIcon from '@phosphor/arrows-out.svg';
-import ChatCircle from '@phosphor/chat-circle.svg';
+import OpenIcon from '@icon/system/regular/arrows-out.svg';
+import ChatCircle from '@icon/system/regular/chat-circle.svg';
 import { cn } from '@ui';
 import type { JSX } from 'solid-js';
 import { PrIcon, prRef } from './ReviewPullRequest';

@@ -32,6 +32,9 @@ before touching the edit flow.
   `spreadsheet.ts`, `comment-mark.ts`, `markdown.ts`, `lexical-state.ts`, `lexical-commit.ts`. `spreadsheet.ts` also serves
   `/spreadsheet/instructions`, the SDK's spreadsheet writer model
   (`src/spreadsheet/writer.ts`).
+- `src/provider-account.ts`: model middleware recording an
+  `ai.provider_account_unavailable` span when a provider refuses Macro's
+  account; `infra/stacks/monitoring/monitors/ai-providers.ts` alerts on it.
 - `src/sync-document.ts`: sync-service's `/state` and revision-checked
   `/update`, shared by spreadsheets and markdown bodies; callers word its typed
   failures for their users.

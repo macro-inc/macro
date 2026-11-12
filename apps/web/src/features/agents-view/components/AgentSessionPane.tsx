@@ -23,8 +23,10 @@ import {
   ReviewNotesDock,
 } from '@app/features/changes/changes';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
+import { SessionAgentRuntime } from '@app/features/runtime-sharing/views/SessionAgentRuntime';
 import { LocalRuntimePrompt } from '@app/features/settings/components/local-runtime-prompt';
-import { SidePanel } from '@components/app/side-panel';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { SidePanel, useSidePanel } from '@components/app/side-panel';
 import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
 import {
   SplitTitleFileMenu,
@@ -40,6 +42,7 @@ import { LoadErrorPanel } from '@core/component/EntityLoadGate';
 import { Permissions } from '@core/component/SharePermissions';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
+import { enableAgentSessionActivity } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { openExternalUrl } from '@core/util/url';
@@ -49,11 +52,32 @@ import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg';
 import type { NotificationSource } from '@notifications/notification-source';
 import { isSessionArchived } from '@service-agent-harness/session-archive';
 import { EmptyStatePanel } from '@ui';
-import { Show } from 'solid-js';
+import { type ParentProps, Show } from 'solid-js';
 import { changeSessionArchiveState } from '../../block-agent/queries/change-session-archive-state';
 import { ChatSessionInput } from './ChatComposer';
 import { SessionModelSelector } from './ModelSelector';
 import { Topbar } from './Topbar';
+
+function SessionClearance(
+  props: ParentProps<{
+    class: string;
+    enabled: boolean;
+    holdsPrompts?: boolean;
+  }>
+) {
+  const sidePanel = useSidePanel();
+  return (
+    <div
+      class={props.class}
+      data-holds-prompts={props.holdsPrompts ? '' : undefined}
+      style={{
+        '--details-clearance': `${props.enabled && sidePanel?.isOpen() && !isTouchDevice() ? SidePanel.FLOATING_CLEARANCE_PX : 0}px`,
+      }}
+    >
+      {props.children}
+    </div>
+  );
+}
 
 function SessionCommands(props: {
   entity: AgentSessionEntity;
@@ -86,6 +110,8 @@ function SessionContent(props: {
   const searchTarget = createAgentRouteTarget();
   const panel = useSplitPanelOrThrow();
   const userId = useUserId();
+  const activityFlag = useFeatureFlag(enableAgentSessionActivity);
+  const persistentFloating = () => activityFlag().enabled;
 
   const title = () => agentSessionTitle(session(), metadata()?.title);
   const permissions = () =>
@@ -145,7 +171,12 @@ function SessionContent(props: {
         active={panel.isPanelActive()}
         notificationSource={props.notificationSource}
       />
-      <SidePanel.Root floating defaultOpen={false} persistKey="agent">
+      <SidePanel.Root
+        floating
+        persistentFloating={persistentFloating()}
+        defaultOpen={false}
+        persistKey="agent"
+      >
         <Topbar
           title={title()}
           titleContent={
@@ -241,10 +272,14 @@ function SessionContent(props: {
           <SidePanel.Toggle />
         </Topbar>
         <div class="relative min-h-0 min-w-0 flex-1">
-          <SidePanel.Layout headerToggle={false} floating>
+          <SidePanel.Layout
+            headerToggle={false}
+            floating
+            persistentFloating={persistentFloating()}
+          >
             <AgentSidePanelSections />
             <section
-              class="page pane size-full min-w-0"
+              class="page pane size-full min-w-0 @container/agent-session"
               data-active
               aria-label="Agent session"
             >
@@ -282,15 +317,19 @@ function SessionContent(props: {
                 }
               >
                 <AgentPreviewBanner />
-                <div class="transcript-host">
+                <SessionClearance
+                  enabled={persistentFloating()}
+                  class="transcript-host @min-[900px]/agent-session:pr-(--details-clearance)"
+                >
                   <AgentConnections>
                     <Transcript searchTarget={searchTarget()} />
                   </AgentConnections>
-                </div>
+                </SessionClearance>
                 {/* The pane's last row on desktop, where the corner prompt sits. */}
-                <div
-                  class="dock"
-                  data-holds-prompts={isTouchDevice() ? undefined : ''}
+                <SessionClearance
+                  enabled={persistentFloating()}
+                  holdsPrompts={!isTouchDevice()}
+                  class="dock @min-[900px]/agent-session:pr-(--details-clearance)"
                 >
                   <div class="composer-anchor flex flex-col gap-2">
                     <Show
@@ -306,6 +345,11 @@ function SessionContent(props: {
                       <ChangesHandoff />
                       <ReviewNotesDock />
                       <LocalRuntimePrompt />
+                      <Show when={session()?.botId}>
+                        {(botId) => (
+                          <SessionAgentRuntime botId={botId()} class="px-1" />
+                        )}
+                      </Show>
                       <AgentComposer
                         autofocus={!searchTarget()}
                         input={ChatSessionInput}
@@ -313,7 +357,7 @@ function SessionContent(props: {
                       />
                     </Show>
                   </div>
-                </div>
+                </SessionClearance>
               </Show>
             </section>
           </SidePanel.Layout>
