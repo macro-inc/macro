@@ -1,4 +1,4 @@
-//! Opt-in read-only comparison against the already-seeded channels stack.
+//! Opt-in read-only comparison against a seeded local channel database.
 use std::{hint::black_box, str::FromStr, time::Instant};
 
 use activity::outbound::pg_activity_repo::PgActivityRepo;
@@ -120,13 +120,13 @@ fn percentile_ms(samples: &[std::time::Duration], percentile: usize) -> f64 {
 /// response serialization. The REST comparison includes the same domain read
 /// and serialization of the exact DTO returned by the REST timeline handler.
 /// Both use the same warmed pool; authentication and access checks are stubbed,
-/// and HTTP/network time is excluded. The extra sequence read is included as
-/// soon as it is wired into the resolver.
+/// and HTTP/network time is excluded. The sequence read is included in the
+/// GraphQL execution and its own wall-time span.
 #[tokio::test]
 #[ignore = "requires read-only seeded channel database"]
 async fn channel_latest_graphql_and_rest_server_timings() {
     let database_url = std::env::var("CHANNEL_PERF_DATABASE_URL")
-        .expect("CHANNEL_PERF_DATABASE_URL must target the existing channels stack");
+        .expect("CHANNEL_PERF_DATABASE_URL must target a local performance fixture");
     let channel_id = Uuid::parse_str(
         &std::env::var("CHANNEL_PERF_CHANNEL_ID")
             .expect("CHANNEL_PERF_CHANNEL_ID must identify the seeded 50,000-message channel"),
@@ -134,11 +134,13 @@ async fn channel_latest_graphql_and_rest_server_timings() {
     .expect("valid channel UUID");
     let options =
         PgConnectOptions::from_str(&database_url).expect("valid performance database URL");
-    assert!(matches!(options.get_host(), "localhost" | "127.0.0.1"));
-    assert_eq!(
-        options.get_port(),
-        22900,
-        "only the channels stack is allowed"
+    let private_fixture = options.get_port() == 35432;
+    assert!(
+        matches!(
+            (options.get_host(), options.get_port()),
+            ("localhost" | "127.0.0.1", 22900) | ("localhost" | "127.0.0.1" | "/tmp", 35432)
+        ),
+        "only the read-only channels stack or private local fixture is allowed"
     );
     let options = options
         .application_name("channel_graphql_readonly_perf")
@@ -151,7 +153,7 @@ async fn channel_latest_graphql_and_rest_server_timings() {
         .max_connections(4)
         .connect_with(options)
         .await
-        .expect("connect to existing channels stack without changing it");
+        .expect("connect to the performance fixture without changing it");
     assert!(
         sqlx::query_scalar!(
             "SELECT current_setting('transaction_read_only') = 'on' AS \"read_only!\""
@@ -244,6 +246,23 @@ async fn channel_latest_graphql_and_rest_server_timings() {
                 let serialization_started = Instant::now();
                 black_box(serde_json::to_vec(&response).expect("serialize GraphQL response"));
                 graphql_phases = Some((execution_elapsed, serialization_started.elapsed()));
+                if iteration == 0 {
+                    let data = response
+                        .data
+                        .clone()
+                        .into_json()
+                        .expect("GraphQL data JSON");
+                    let seq = data["user"]["channelTimeline"]["seq"]
+                        .as_str()
+                        .expect("timeline sequence string")
+                        .parse::<u64>()
+                        .expect("nonnegative timeline sequence");
+                    assert!(
+                        !private_fixture || seq > 0,
+                        "private fixture needs a nonzero sequence"
+                    );
+                    eprintln!("benchmark timeline seq={seq}, private_fixture={private_fixture}");
+                }
             } else {
                 let page = reads
                     .timeline_entries(
