@@ -143,8 +143,8 @@ word docs, Illustrator/Photoshop files).
   standalone.
 - The markdown backfill binary defaults to dry-run; the `_apply`/prod `just`
   recipes require a typed confirmation before writing.
-- Shared message contention keeps its retry guidance in Discussion tools and
-  maps to a safe 503 with `Retry-After: 1` on the text-comment route.
+- Preserve shared `MessageError` text and retry guidance in Discussion tools
+  and the text-comment route's safe 503 with `Retry-After: 1`.
 
 ## Related
 
