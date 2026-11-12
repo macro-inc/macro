@@ -54,6 +54,21 @@ impl ActivityRepo for PgChannelActivityRepo {
             return self.activity.insert_activities(activities).await;
         }
 
+        // Acquire each channel once, in a common order, before occupying a
+        // database connection. Retain every permit through the batch commit.
+        let mut admitted_channels = channel_ids.clone();
+        admitted_channels.sort_unstable();
+        admitted_channels.dedup();
+        let mut permits = Vec::with_capacity(admitted_channels.len());
+        for channel_id in admitted_channels {
+            permits.push(
+                message_write_gate::acquire("channel", &channel_id.to_string())
+                    .await
+                    .map_err(|error| {
+                        sqlx::Error::Io(std::io::Error::new(std::io::ErrorKind::TimedOut, error))
+                    })?,
+            );
+        }
         let mut tx = self.pool.begin().await?;
         self.activity
             .insert_activities_in(&mut tx, activities)

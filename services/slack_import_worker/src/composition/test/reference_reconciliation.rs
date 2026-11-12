@@ -20,6 +20,76 @@ fn reconciler(pool: &PgPool) -> WorkerReferenceReconciler {
     WorkerReferenceReconciler::new(pool.clone(), ImportLimits::default())
 }
 
+async fn pending_job(pool: &PgPool, team: TeamId, seconds: u32, eligible: bool) -> JobId {
+    let context = claim(pool, team, ConversationKind::PublicChannel, 1).await;
+    let plan = plan(pool, &context).await;
+    let sink = sink(pool);
+    sink.create(&context.lease, &plan).await.unwrap();
+    sink.bind(&context.lease, &plan, &[]).await.unwrap();
+    let mut input = batch(&context, plan.channel_id, &[seconds], end());
+    linked(&mut input.messages[0], "<#C1|source>");
+    sink.commit(input).await.unwrap();
+    if eligible {
+        repo(pool)
+            .finalize(team, context.lease.event.job_id)
+            .await
+            .unwrap();
+        repo(pool)
+            .settle(&context.lease, ConversationStatus::Completed, None)
+            .await
+            .unwrap();
+    }
+    context.lease.event.job_id
+}
+
+#[sqlx::test(migrations = "../../crates/macro_db_client/migrations")]
+async fn discovery_cursor_survives_a_full_pass_of_ineligible_jobs(pool: PgPool) {
+    let team = team(&pool).await;
+    for seconds in 2..53 {
+        pending_job(&pool, team, seconds, false).await;
+    }
+    let eligible = pending_job(&pool, team, 53, true).await;
+    let worker = reconciler(&pool);
+    worker.reconcile_references(50).await.unwrap();
+    assert!(sqlx::query_scalar!(
+        "SELECT completed_at IS NULL AS \"pending!\" FROM slack_import_message_reference WHERE job_id = $1",
+        Uuid::from(eligible),
+    ).fetch_one(&pool).await.unwrap());
+    worker.reconcile_references(50).await.unwrap();
+    assert!(sqlx::query_scalar!(
+        "SELECT completed_at IS NOT NULL AS \"completed!\" FROM slack_import_message_reference WHERE job_id = $1",
+        Uuid::from(eligible),
+    ).fetch_one(&pool).await.unwrap());
+}
+
+#[sqlx::test(migrations = "../../crates/macro_db_client/migrations")]
+async fn a_locked_first_job_does_not_starve_a_later_job(pool: PgPool) {
+    let team = team(&pool).await;
+    let first = pending_job(&pool, team, 2, true).await;
+    let second = pending_job(&pool, team, 3, true).await;
+    let mut holder = pool.begin().await.unwrap();
+    let fenced = slack_integration::outbound::pg_slack_import_repo::references::next_for_job_in(
+        &mut holder,
+        first,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let worker = reconciler(&pool);
+    worker.reconcile_references(50).await.unwrap();
+    assert!(sqlx::query_scalar!(
+        "SELECT completed_at IS NOT NULL AS \"completed!\" FROM slack_import_message_reference WHERE job_id = $1",
+        Uuid::from(second),
+    ).fetch_one(&pool).await.unwrap());
+    drop(fenced);
+    holder.rollback().await.unwrap();
+    worker.reconcile_references(50).await.unwrap();
+    assert!(sqlx::query_scalar!(
+        "SELECT completed_at IS NOT NULL AS \"completed!\" FROM slack_import_message_reference WHERE job_id = $1",
+        Uuid::from(first),
+    ).fetch_one(&pool).await.unwrap());
+}
+
 #[sqlx::test(migrations = "../../crates/macro_db_client/migrations")]
 async fn patches_intents_and_search_rollback_at_every_boundary(pool: PgPool) {
     let team = team(&pool).await;

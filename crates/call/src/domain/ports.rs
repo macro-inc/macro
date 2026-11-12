@@ -507,10 +507,11 @@ pub trait CallRepository: Send + Sync + 'static {
     /// segments are removed via `ON DELETE CASCADE`. No-op if no row matches.
     /// Returns the deleted row's storage object keys so the caller can clean
     /// up the associated recording and preview objects.
+    /// Admission contention returns `CallError::Contended` without deleting a row.
     fn delete_call_record(
         &self,
         call_record_id: &Uuid,
-    ) -> impl Future<Output = Result<Option<DeletedCallRecordStorageKeys>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Option<DeletedCallRecordStorageKeys>, CallError>> + Send;
 
     /// Patches a call record (link/channel sharing, team sharing, display name)
     /// in one transaction.
