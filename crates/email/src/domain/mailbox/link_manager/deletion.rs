@@ -11,10 +11,7 @@ use super::{LinkDeletion, purge::PurgePacing};
 use crate::domain::events::{EmailMacroEvent, LinkDisconnectReason, LinkDisconnectedMetadata};
 use anyhow::Context;
 use macro_event_broker::MacroEventBroker;
-use models_email::{
-    api::refresh::RefreshEmailEvent,
-    service::{link::Link, pubsub::DeletionReason},
-};
+use models_email::service::{link::Link, pubsub::DeletionReason};
 
 /// Coordinates physical deletion after the lifecycle service permits it.
 pub struct LinkDeletionService<R, G, A, C, P, N, B> {
@@ -115,10 +112,7 @@ where
         // The teardown is async relative to the delete request, so signal completion
         // now that the rows are gone — a client showing this inbox can drop its data.
         self.refresh
-            .refresh_email(
-                link.macro_id.as_ref(),
-                RefreshEmailEvent::LinkRemoved { link_id: link.id },
-            )
+            .link_removed(link.macro_id.as_ref(), link.id)
             .await;
 
         let _ = self
