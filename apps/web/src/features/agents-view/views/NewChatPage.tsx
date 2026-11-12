@@ -218,8 +218,9 @@ export function NewChatPage(props: {
     effortConfigOption(
       capabilities.isSuccess ? capabilities.data.configOptions : []
     );
-  /** The selected model's tier option, when it offers more than standard. */
+  /** The selected model's tier option, when Macro's agent offers more than standard. */
   const speedOption = () => {
+    if (capabilityTarget()?.harness !== 'in-memory') return;
     const option = selectConfigOption(
       capabilities.isSuccess ? capabilities.data.configOptions : [],
       'speed',

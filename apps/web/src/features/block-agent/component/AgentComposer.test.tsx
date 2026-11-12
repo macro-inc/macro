@@ -24,7 +24,7 @@ const speedOption = (values: string[]) => ({
 });
 
 const mocks = vi.hoisted(() => ({
-  session: () => ({ canEdit: false as boolean | undefined }),
+  session: (): { canEdit?: boolean; harness?: string } => ({ canEdit: false }),
   turn: () => 'idle' as TurnState,
   issue: vi.fn(),
   selectModel: vi.fn(),
@@ -205,7 +205,7 @@ it('keeps steering queued messages while the turn transitions', () => {
 });
 
 it('retains an unsent draft when speed configuration is rejected', async () => {
-  mocks.session = () => ({ canEdit: true });
+  mocks.session = () => ({ canEdit: true, harness: 'in-memory' });
   mocks.metadata = () => ({
     model: 'openai/gpt-6-astra',
     configOptions: [speedOption(['standard', 'priority', 'ultrafast'])],
@@ -221,7 +221,7 @@ it('retains an unsent draft when speed configuration is rejected', async () => {
 });
 
 it('skips the tier round trip when the session already runs the preferred tier', () => {
-  mocks.session = () => ({ canEdit: true });
+  mocks.session = () => ({ canEdit: true, harness: 'in-memory' });
   setPreferredSpeed('standard');
   mocks.metadata = () => ({
     model: 'openai/gpt-6-astra',
@@ -232,11 +232,14 @@ it('skips the tier round trip when the session already runs the preferred tier',
   expect(mocks.selectModel).not.toHaveBeenCalled();
 });
 
-it('leaves external agent speed settings alone', () => {
-  mocks.session = () => ({ canEdit: true });
+it.each([
+  ['macrod', ['standard', 'priority', 'fast']],
+  ['in-memory', ['default', 'turbo']],
+])('leaves %s speed values %j alone', (harness, values) => {
+  mocks.session = () => ({ canEdit: true, harness });
   mocks.metadata = () => ({
     model: 'external/model',
-    configOptions: [speedOption(['default', 'turbo'])],
+    configOptions: [speedOption(values)],
   });
   render(() => <AgentComposer />);
   mocks.input?.onSend('Use external settings', []);
@@ -249,7 +252,7 @@ it('leaves external agent speed settings alone', () => {
 
 it('retains the draft if editing access is revoked while applying speed', async () => {
   const [canEdit, setCanEdit] = createSignal(true);
-  mocks.session = () => ({ canEdit: canEdit() });
+  mocks.session = () => ({ canEdit: canEdit(), harness: 'in-memory' });
   mocks.metadata = () => ({
     model: 'openai/gpt-6-astra',
     configOptions: [speedOption(['standard', 'priority', 'ultrafast'])],

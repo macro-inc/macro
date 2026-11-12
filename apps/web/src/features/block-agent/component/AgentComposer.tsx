@@ -12,6 +12,7 @@ import {
  * combined model-and-effort change waits for runtime confirmation.
  */
 
+import { isMacroHarness } from '@app/features/agents-view/core/agent-kind';
 import { useOptionalChanges } from '@app/features/changes/context/changes-controller';
 import {
   type InputAttachmentData,
@@ -125,8 +126,10 @@ export function AgentComposer(props: {
   };
 
   const effort = () => effortConfigOption(metadata()?.configOptions ?? []);
-  /** Macro's tier option, when the current model offers more than standard. */
+  /** Macro's tier option, when the current model offers more than standard.
+   * Other harnesses' speed values are theirs to interpret, so they are left alone. */
   const speedOption = () => {
+    if (!isMacroHarness(session()?.harness)) return;
     const option = selectConfigOption(
       metadata()?.configOptions ?? [],
       'speed',
