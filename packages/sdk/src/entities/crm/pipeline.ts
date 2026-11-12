@@ -345,6 +345,7 @@ export class CrmPipeline extends MacroEntity<AccessiblePipeline> {
       })),
       allowDuplicates: options.allowDuplicates ?? false,
     };
+    const recordType = await this.trackedRecordType();
     const result = unwrap(
       await this.client.storage.addCrmPipelineEntries({
         path: { id: this.id },
@@ -352,7 +353,6 @@ export class CrmPipeline extends MacroEntity<AccessiblePipeline> {
       }),
     );
     this.tableDetail.clear();
-    const recordType = await this.trackedRecordType();
     const entry = (record: (typeof result.added)[number]) =>
       PipelineEntry.from(this.client, this, recordType, record);
     return {
@@ -389,6 +389,7 @@ export class CrmPipeline extends MacroEntity<AccessiblePipeline> {
       })),
       baseVersion: options.baseVersion,
     };
+    const recordType = await this.trackedRecordType();
     const result = unwrap(
       await this.client.storage.updateCrmPipelineEntries({
         path: { id: this.id },
@@ -396,7 +397,6 @@ export class CrmPipeline extends MacroEntity<AccessiblePipeline> {
       }),
     );
     this.tableDetail.clear();
-    const recordType = await this.trackedRecordType();
     return {
       updated: result.updated.map((updated) => {
         const fields = Object.fromEntries(
@@ -436,6 +436,7 @@ export class CrmPipeline extends MacroEntity<AccessiblePipeline> {
         entryIds.push(target.id);
       } else recordIds.push(target.id);
     }
+    const recordType = await this.trackedRecordType();
     const result = unwrap(
       await this.client.storage.removeCrmPipelineEntries({
         path: { id: this.id },
@@ -443,7 +444,6 @@ export class CrmPipeline extends MacroEntity<AccessiblePipeline> {
       }),
     );
     this.tableDetail.clear();
-    const recordType = await this.trackedRecordType();
     return {
       removed: result.removed.map((entry) =>
         PipelineEntry.from(this.client, this, recordType, entry),
@@ -585,7 +585,10 @@ export class CrmPipeline extends MacroEntity<AccessiblePipeline> {
     };
   }
 
-  /** @internal Whether entries track companies or contacts; `undefined` for a generic pipeline. */
+  /**
+   * @internal Whether entries track companies or contacts; `undefined` for a generic pipeline.
+   * Writes read it first, so a failed read cannot hide a committed write that a retry would repeat.
+   */
   private async trackedRecordType(): Promise<
     'company' | 'contact' | undefined
   > {
