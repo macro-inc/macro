@@ -637,6 +637,7 @@ export * from './completeUploadsSeal';
 export * from './computerId';
 export * from './conferenceProvider';
 export * from './conjunction';
+export * from './contactEmailRequest';
 export * from './conversationId';
 export * from './conversationKind';
 export * from './conversationMetadata';

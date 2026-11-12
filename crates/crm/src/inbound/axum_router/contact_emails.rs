@@ -12,18 +12,27 @@ use axum::{
 use entity_access::domain::{models::EditAccessLevel, ports::EntityAccessService};
 use macro_authorization::MacroAuthorizationService;
 use model_error_response::ErrorResponse;
+use serde::Deserialize;
+use utoipa::ToSchema;
 use uuid::Uuid;
+
+/// One of a contact's addresses. It travels in the body, never the path, so
+/// request telemetry does not record it.
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ContactEmailRequest {
+    /// The address to add or remove. An identical retry is accepted.
+    pub email: String,
+}
 
 /// Add an address to a contact. It must not belong to another contact in the
 /// team, and becomes the primary only when the contact has none. Idempotent.
 #[utoipa::path(
     put,
-    path = "/crm/contacts/{contact_id}/emails/{email}",
+    path = "/crm/contacts/{contact_id}/emails",
     operation_id = "add_crm_contact_email",
-    params(
-        ("contact_id" = Uuid, Path, description = "The contact to update"),
-        ("email" = String, Path, description = "The address to add"),
-    ),
+    params(("contact_id" = Uuid, Path, description = "The contact to update")),
+    request_body = ContactEmailRequest,
     responses(
         (status = 200, body = CrmContactResponse),
         (status = 400, body = ErrorResponse),
@@ -43,11 +52,12 @@ pub async fn add_handler<
 >(
     access: CrmContactAccessLevelExtractor<EditAccessLevel, Eas, Auth>,
     State(state): State<CrmRouterState<C, St, Eas, Auth>>,
-    Path((contact_id, email)): Path<(Uuid, String)>,
+    Path(contact_id): Path<Uuid>,
+    Json(req): Json<ContactEmailRequest>,
 ) -> Result<Json<CrmContactResponse>, CrmError> {
     let contact = state
         .service
-        .add_contact_email(&access.receipt, &email)
+        .add_contact_email(&access.receipt, &req.email)
         .await?;
     Ok(Json(contact.into()))
 }
@@ -58,12 +68,10 @@ pub async fn add_handler<
 /// company cannot be removed while the contact is linked to it. Idempotent.
 #[utoipa::path(
     delete,
-    path = "/crm/contacts/{contact_id}/emails/{email}",
+    path = "/crm/contacts/{contact_id}/emails",
     operation_id = "remove_crm_contact_email",
-    params(
-        ("contact_id" = Uuid, Path, description = "The contact to update"),
-        ("email" = String, Path, description = "The address to remove"),
-    ),
+    params(("contact_id" = Uuid, Path, description = "The contact to update")),
+    request_body = ContactEmailRequest,
     responses(
         (status = 200, body = CrmContactResponse),
         (status = 400, body = ErrorResponse),
@@ -83,11 +91,12 @@ pub async fn remove_handler<
 >(
     access: CrmContactAccessLevelExtractor<EditAccessLevel, Eas, Auth>,
     State(state): State<CrmRouterState<C, St, Eas, Auth>>,
-    Path((contact_id, email)): Path<(Uuid, String)>,
+    Path(contact_id): Path<Uuid>,
+    Json(req): Json<ContactEmailRequest>,
 ) -> Result<Json<CrmContactResponse>, CrmError> {
     let contact = state
         .service
-        .remove_contact_email(&access.receipt, &email)
+        .remove_contact_email(&access.receipt, &req.email)
         .await?;
     Ok(Json(contact.into()))
 }

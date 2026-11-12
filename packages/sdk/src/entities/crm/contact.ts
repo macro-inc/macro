@@ -192,7 +192,8 @@ export class Contact extends FavoritableEntity<ContactDetail> {
   async addEmail(email: string): Promise<void> {
     await this.mutate((c) =>
       c.storage.addCrmContactEmail({
-        path: { contact_id: this.id, email },
+        path: { contact_id: this.id },
+        body: { email },
       }),
     );
   }
@@ -209,7 +210,8 @@ export class Contact extends FavoritableEntity<ContactDetail> {
   async removeEmail(email: string): Promise<void> {
     await this.mutate((c) =>
       c.storage.removeCrmContactEmail({
-        path: { contact_id: this.id, email },
+        path: { contact_id: this.id },
+        body: { email },
       }),
     );
   }

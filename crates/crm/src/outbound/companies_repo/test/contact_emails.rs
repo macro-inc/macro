@@ -456,6 +456,9 @@ async fn company_sync_reaches_a_further_address_held_outside_its_domain(
     assert_eq!(after.name.as_deref(), Some("Jane"));
 
     // Teardown finds the same contact once the mailbox has no such mail.
+    sqlx::query!("DELETE FROM email_messages WHERE link_id = $1", link)
+        .execute(&pool)
+        .await?;
     assert!(
         service
             .has_depopulate_target(&team, "jane@acme.example.com")
@@ -590,7 +593,11 @@ async fn teardown_keeps_a_source_another_address_still_justifies(
 async fn teardown_of_a_single_address_contact_is_unchanged(pool: PgPool) -> anyhow::Result<()> {
     let (team, link, service) = team_with_mailbox(&pool).await?;
     sync(&pool, &service, team, link, "jane@acme.example.com", true).await?;
-    // Mail with an address the contact does not hold justifies nothing.
+    // The mailbox no longer has mail with the address; mail with an address
+    // the contact does not hold justifies nothing.
+    sqlx::query!("DELETE FROM email_messages WHERE link_id = $1", link)
+        .execute(&pool)
+        .await?;
     insert_interaction(&pool, link, "someone@acme.example.com", Utc::now(), true).await?;
 
     let outcome = service
@@ -599,5 +606,28 @@ async fn teardown_of_a_single_address_contact_is_unchanged(pool: PgPool) -> anyh
 
     assert!(outcome.source_deleted && outcome.contact_deleted && outcome.company_deleted);
     assert_eq!(team_contact_count(&pool, team).await?, 0);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_unfiled_primary_holder_does_not_hide_a_further_address_holder(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let (team, link, service) = team_with_mailbox(&pool).await?;
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+    let further = repo
+        .create_contact_for_team(&team, Some("jane@example.net"), "Jane", Utc::now())
+        .await?;
+    add(&repo, team, further.id, "jane@acme.example.com").await?;
+    // Added by hand afterwards, without a company; no company holds the domain.
+    let unfiled = repo
+        .create_contact_for_team(&team, Some("jane@acme.example.com"), "Other", Utc::now())
+        .await?;
+
+    sync(&pool, &service, team, link, "jane@acme.example.com", false).await?;
+
+    assert_eq!(source_count(&pool, further.id, link).await?, 1);
+    assert_eq!(source_count(&pool, unfiled.id, link).await?, 0);
+    assert_eq!(team_contact_count(&pool, team).await?, 2);
     Ok(())
 }

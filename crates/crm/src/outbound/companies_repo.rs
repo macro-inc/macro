@@ -147,9 +147,11 @@ impl CompaniesRepositoryImpl {
         .await
         .map_err(|e| CrmError::StorageLayerError(e.into()))?;
         let domain_company = existing.map(|(id, _)| id);
-        let filed_under_domain = holders
-            .iter()
-            .any(|holder| holder.is_primary && holder.company_id == domain_company);
+        let filed_under_domain = domain_company.is_some_and(|company_id| {
+            holders
+                .iter()
+                .any(|holder| holder.is_primary && holder.company_id == Some(company_id))
+        });
         let mut further_holders = holders.iter().filter(|holder| !holder.is_primary);
         if !filed_under_domain
             && let (Some(holder), None) = (further_holders.next(), further_holders.next())
@@ -600,7 +602,9 @@ impl CompaniesRepositoryImpl {
               AND (NOT $4 OR (SELECT COUNT(*) FROM crm_contact_emails other_email
                    JOIN crm_contacts other ON other.id = other_email.contact_id
                    WHERE other_email.email = $2 AND other.team_id = $1) = 1)
-            ORDER BY ct.company_id IS NULL, ct.id
+            -- The contact sync files this address under comes before one that
+            -- holds it as a further address.
+            ORDER BY LOWER(BTRIM(ct.email)) IS DISTINCT FROM ce.email, ct.company_id IS NULL, ct.id
             LIMIT 1
             "#,
             team_id,
@@ -1407,6 +1411,9 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
+        // Address edits hold this lock exclusively, so the addresses read
+        // below are committed ones. Same order as population.
+        Self::lock_email_privacy(&mut tx, *team_id, false).await?;
         // A population of this address from this mailbox holds the contact
         // lock from its mailbox scan to its commit; wait it out so the scan's
         // snapshot can't re-add what this teardown removes.

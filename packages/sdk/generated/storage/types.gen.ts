@@ -4695,6 +4695,17 @@ export type ConferenceProvider = 'microsoft_teams' | 'google_meet' | 'other';
 export type Conjunction = 'and' | 'or';
 
 /**
+ * One of a contact's addresses. It travels in the body, never the path, so
+ * request telemetry does not record it.
+ */
+export type ContactEmailRequest = {
+    /**
+     * The address to add or remove. An identical retry is accepted.
+     */
+    email: string;
+};
+
+/**
  * Source Slack conversation ID (C, G or D prefix); unique only within a source.
  */
 export type ConversationId = string;
@@ -27142,19 +27153,15 @@ export type SetCrmContactEmailResponses = {
 export type SetCrmContactEmailResponse = SetCrmContactEmailResponses[keyof SetCrmContactEmailResponses];
 
 export type RemoveCrmContactEmailData = {
-    body?: never;
+    body: ContactEmailRequest;
     path: {
         /**
          * The contact to update
          */
         contact_id: string;
-        /**
-         * The address to remove
-         */
-        email: string;
     };
     query?: never;
-    url: '/crm/contacts/{contact_id}/emails/{email}';
+    url: '/crm/contacts/{contact_id}/emails';
 };
 
 export type RemoveCrmContactEmailErrors = {
@@ -27175,19 +27182,15 @@ export type RemoveCrmContactEmailResponses = {
 export type RemoveCrmContactEmailResponse = RemoveCrmContactEmailResponses[keyof RemoveCrmContactEmailResponses];
 
 export type AddCrmContactEmailData = {
-    body?: never;
+    body: ContactEmailRequest;
     path: {
         /**
          * The contact to update
          */
         contact_id: string;
-        /**
-         * The address to add
-         */
-        email: string;
     };
     query?: never;
-    url: '/crm/contacts/{contact_id}/emails/{email}';
+    url: '/crm/contacts/{contact_id}/emails';
 };
 
 export type AddCrmContactEmailErrors = {

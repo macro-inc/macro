@@ -194,7 +194,7 @@ where
             put(set_contact_email::handler::<C, St, Eas, Auth>),
         )
         .route(
-            "/contacts/{contact_id}/emails/{email}",
+            "/contacts/{contact_id}/emails",
             put(contact_emails::add_handler::<C, St, Eas, Auth>)
                 .delete(contact_emails::remove_handler::<C, St, Eas, Auth>),
         )

@@ -7555,8 +7555,19 @@ team, and becomes the primary only when the contact has none. Idempotent.
  */
 export const addCrmContactEmailParams = zod.object({
   contact_id: zod.uuid().describe('The contact to update'),
-  email: zod.string().describe('The address to add'),
 });
+
+export const addCrmContactEmailBody = zod
+  .object({
+    email: zod
+      .string()
+      .describe(
+        'The address to add or remove. An identical retry is accepted.'
+      ),
+  })
+  .describe(
+    "One of a contact's addresses. It travels in the body, never the path, so\nrequest telemetry does not record it."
+  );
 
 export const addCrmContactEmailResponse = zod
   .object({
@@ -7631,8 +7642,19 @@ company cannot be removed while the contact is linked to it. Idempotent.
  */
 export const removeCrmContactEmailParams = zod.object({
   contact_id: zod.uuid().describe('The contact to update'),
-  email: zod.string().describe('The address to remove'),
 });
+
+export const removeCrmContactEmailBody = zod
+  .object({
+    email: zod
+      .string()
+      .describe(
+        'The address to add or remove. An identical retry is accepted.'
+      ),
+  })
+  .describe(
+    "One of a contact's addresses. It travels in the body, never the path, so\nrequest telemetry does not record it."
+  );
 
 export const removeCrmContactEmailResponse = zod
   .object({

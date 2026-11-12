@@ -1595,7 +1595,14 @@ export class Sdk extends HeyApiClient {
      * company cannot be removed while the contact is linked to it. Idempotent.
      */
     public removeCrmContactEmail<ThrowOnError extends boolean = false>(options: Options<RemoveCrmContactEmailData, ThrowOnError>): RequestResult<RemoveCrmContactEmailResponses, RemoveCrmContactEmailErrors, ThrowOnError> {
-        return (options.client ?? this.client).delete<RemoveCrmContactEmailResponses, RemoveCrmContactEmailErrors, ThrowOnError>({ url: '/crm/contacts/{contact_id}/emails/{email}', ...options });
+        return (options.client ?? this.client).delete<RemoveCrmContactEmailResponses, RemoveCrmContactEmailErrors, ThrowOnError>({
+            url: '/crm/contacts/{contact_id}/emails',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
     }
 
     /**
@@ -1603,7 +1610,14 @@ export class Sdk extends HeyApiClient {
      * team, and becomes the primary only when the contact has none. Idempotent.
      */
     public addCrmContactEmail<ThrowOnError extends boolean = false>(options: Options<AddCrmContactEmailData, ThrowOnError>): RequestResult<AddCrmContactEmailResponses, AddCrmContactEmailErrors, ThrowOnError> {
-        return (options.client ?? this.client).put<AddCrmContactEmailResponses, AddCrmContactEmailErrors, ThrowOnError>({ url: '/crm/contacts/{contact_id}/emails/{email}', ...options });
+        return (options.client ?? this.client).put<AddCrmContactEmailResponses, AddCrmContactEmailErrors, ThrowOnError>({
+            url: '/crm/contacts/{contact_id}/emails',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
     }
 
     /**
