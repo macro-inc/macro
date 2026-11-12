@@ -2,29 +2,61 @@ use std::os::unix::fs::PermissionsExt;
 
 use super::*;
 
+fn rendered() -> serde_yaml::Value {
+    serde_yaml::from_str(
+        &crate::workflows::render_patched(build_web_app, patch).expect("workflow yaml"),
+    )
+    .expect("parse workflow")
+}
+
+fn build_steps() -> Vec<serde_yaml::Value> {
+    rendered()["jobs"]["build"]["steps"]
+        .as_sequence()
+        .expect("build steps")
+        .clone()
+}
+
+fn uses(step: &serde_yaml::Value, action: &str) -> bool {
+    step["uses"]
+        .as_str()
+        .is_some_and(|uses| uses.starts_with(&format!("{action}@")))
+}
+
+fn runs(step: &serde_yaml::Value, command: &str) -> bool {
+    step["run"]
+        .as_str()
+        .is_some_and(|script| script.contains(command))
+}
+
+/// Pull request jobs write the `web-ci` sccache and the cargo and wasm-pack
+/// directories on the cache volume. Dev deploys on main save the wasm packages
+/// production releases restore, so no deploy build reads from the volume more
+/// than the production release's own build job did: the Nix store and Bun's
+/// package cache.
 #[test]
-fn build_uses_remote_sccache_and_wasm_cache() {
-    let yaml = build_web_app().to_string().expect("workflow yaml");
-    let job = yaml.split("\n  build:\n").nth(1).expect("build job");
-    assert!(
-        job.contains("nsc cache sccache setup --cache_name web-ci"),
-        "build must use the shared web-ci remote sccache: {job}"
-    );
-    let configure = job
-        .find("nsc cache sccache setup")
-        .expect("remote cache configuration");
-    let start = job
-        .find("run: sccache --start-server")
-        .expect("start the server in a separate step with the exported credentials");
-    let build_command = job.find("just build-").expect("web build command");
-    assert!(configure < start && start < build_command);
-    assert!(
-        job.contains(".wasm-pack"),
-        "build must persist wasm-pack's wasm-opt cache: {job}"
+fn deploy_builds_read_no_cache_pull_requests_write_beyond_nix_and_bun() {
+    let steps = build_steps();
+    let mounts: Vec<&serde_yaml::Value> = steps
+        .iter()
+        .filter(|step| uses(step, "namespacelabs/nscloud-cache-action"))
+        .collect();
+    assert_eq!(mounts.len(), 1, "{mounts:?}");
+    assert_eq!(mounts[0]["with"]["cache"].as_str(), Some("nix"));
+    assert_eq!(
+        mounts[0]["with"]["path"].as_str(),
+        Some(vars::BUN_CACHE_VOLUME_DIR)
     );
     assert!(
-        job.contains("just build-${{ inputs.environment }}"),
-        "build still runs via just: {job}"
+        !steps
+            .iter()
+            .any(|step| runs(step, "nsc cache sccache setup")),
+        "deploy builds must not read the web-ci sccache"
+    );
+    assert!(
+        steps
+            .iter()
+            .any(|step| runs(step, "just build-${{ inputs.environment }}")),
+        "build still runs via just"
     );
 }
 
@@ -42,23 +74,10 @@ fn build_reuses_wasm_packages_only_from_the_actions_cache() {
     // PR jobs write the Namespace HTTP cache and the cache volume; a deploy
     // must read neither.
     assert!(!job.contains("WASM_PKG_HTTP_CACHE"), "{job}");
-    let mount = job
-        .split("- name: Mount Namespace cache volume")
-        .nth(1)
-        .and_then(|rest| rest.split("\n    - ").next())
-        .expect("volume mount step");
-    let mounted: Vec<&str> = mount
-        .lines()
-        .map(|line| line.trim().trim_start_matches("path: |-").trim())
-        .filter(|line| line.starts_with('/'))
-        .collect();
-    assert!(!mounted.is_empty(), "{mount}");
-    for path in mounted {
-        assert!(
-            !vars::DEPLOY_WASM_PKG_CACHE_DIR.starts_with(path),
-            "the deploy's packages must stay off the PR-writable volume ({path}): {mount}"
-        );
-    }
+    assert!(
+        !vars::DEPLOY_WASM_PKG_CACHE_DIR.starts_with(vars::BUN_CACHE_VOLUME_DIR),
+        "the deploy's packages must stay off the PR-writable volume"
+    );
 
     let restore = job.find("actions/cache/restore@").expect("restore step");
     let wasm = job.find("just build-wasm").expect("wasm packages step");
@@ -77,6 +96,72 @@ fn build_reuses_wasm_packages_only_from_the_actions_cache() {
     assert!(
         job.contains("if: steps.wasm.outputs.key != ''"),
         "the wasm step decides whether the set is new: {job}"
+    );
+}
+
+/// `release-production.yml` is hand-written, so nothing else ties it to this
+/// workflow's inputs, secrets and artifact.
+#[test]
+fn the_production_release_builds_through_this_workflow() {
+    let release: serde_yaml::Value = serde_yaml::from_str(
+        &std::fs::read_to_string(
+            xtask_paths::repo_root().join(".github/workflows/release-production.yml"),
+        )
+        .expect("read the release workflow"),
+    )
+    .expect("parse the release workflow");
+    let jobs = &release["jobs"];
+    let build = &jobs["build"];
+    assert_eq!(
+        build["uses"].as_str(),
+        Some("./.github/workflows/build_web_app.yml")
+    );
+    assert_eq!(build["with"]["environment"].as_str(), Some("prod"));
+
+    let ours = rendered();
+    let secrets: Vec<&str> = ours["on"]["workflow_call"]["secrets"]
+        .as_mapping()
+        .expect("secrets")
+        .keys()
+        .filter_map(serde_yaml::Value::as_str)
+        .collect();
+    assert_eq!(secrets, ["SEGMENT_WRITE_KEY", "POSTHOG_API_KEY"]);
+    // The release's own job built with these.
+    assert_eq!(
+        build["secrets"]["SEGMENT_WRITE_KEY"].as_str(),
+        Some("${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}")
+    );
+    assert_eq!(
+        build["secrets"]["POSTHOG_API_KEY"].as_str(),
+        Some("${{ secrets.POSTHOG_API_KEY }}")
+    );
+
+    let artifact = ARTIFACT.replace("${{ inputs.environment }}", "prod");
+    for job in ["deploy", "upload"] {
+        let downloads: Vec<&str> = jobs[job]["steps"]
+            .as_sequence()
+            .expect("steps")
+            .iter()
+            .filter(|step| uses(step, "actions/download-artifact"))
+            .filter_map(|step| step["with"]["name"].as_str())
+            .collect();
+        assert_eq!(downloads, [artifact.as_str()], "{job}");
+        assert!(
+            jobs[job]["needs"]
+                .as_sequence()
+                .expect("needs")
+                .contains(&"build".into()),
+            "{job}"
+        );
+    }
+    // The release kept its build a week, so its jobs can be re-run later.
+    let upload = build_steps()
+        .into_iter()
+        .find(|step| uses(step, "actions/upload-artifact"))
+        .expect("upload step");
+    assert_eq!(
+        upload["with"]["retention-days"].as_str(),
+        Some("${{ inputs.environment == 'prod' && 7 || 1 }}")
     );
 }
 

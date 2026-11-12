@@ -71,10 +71,25 @@ jobs:
     secrets:
       IOS_RELEASE_DOPPLER_TOKEN: ${{ secrets.IOS_RELEASE_DOPPLER_TOKEN }}
 
+  # The same build as dev deploys and manual web deploys. It reuses unchanged
+  # wasm packages from main's Actions cache, which those deploy builds fill,
+  # and like them reads nothing pull requests write beyond the Nix and Bun
+  # caches this job always read.
   build:
     if: github.event_name == 'release'
     name: Build Web App
+    uses: ./.github/workflows/build_web_app.yml
+    with:
+      environment: prod
+    secrets:
+      SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}
+      POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
+
+  deploy:
+    name: Deploy Web App
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
+    # New clients require the worker's sync protocol support before publication.
+    needs: [build, deploy-cloud-storage, deploy-sync-service]
     env:
       CI: "true"
     steps:
@@ -94,51 +109,10 @@ jobs:
         uses: ./.github/actions/setup-nix
       - name: Setup Prereqs
         uses: ./.github/actions/setup-reqs-web
-      - name: Build for Production
-        working-directory: apps/web
-        run: just build-prod
-        # MIN_NATIVE_BUILD_ANDROID / MIN_NATIVE_BUILD_IOS come from
-        # apps/web/min-native-build.json inside `just build-prod`.
-        env:
-          VITE_SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}
-          VITE_POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
-          VITE_OTEL_EXPORTER_URL: https://macro-prox-prod.macroverse.workers.dev/i/otlp/v1/traces
-          VITE_OTEL_ENV: prod
-      - name: Upload Build Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: web-app-prod-build
-          path: apps/web/dist
-          retention-days: 7
-      - name: Teardown Nix
-        if: ${{ always() }}
-        uses: ./.github/actions/teardown-nix
-
-  deploy:
-    name: Deploy Web App
-    runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
-    # New clients require the worker's sync protocol support before publication.
-    needs: [build, deploy-cloud-storage, deploy-sync-service]
-    env:
-      CI: "true"
-    steps:
-      - name: Checkout Repo
-        uses: actions/checkout@v6
-      # See the build job's mount/setup-nix notes.
-      - name: Mount Namespace cache volume
-        continue-on-error: true
-        uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0 # v1.4.3
-        with:
-          cache: nix
-          path: /home/runner/.bun/install/cache
-      - name: Setup Nix
-        uses: ./.github/actions/setup-nix
-      - name: Setup Prereqs
-        uses: ./.github/actions/setup-reqs-web
       - name: Download Build Artifact
         uses: actions/download-artifact@v5
         with:
-          name: web-app-prod-build
+          name: web-app-dist-prod
           path: apps/web/dist
       - name: Install infra dependencies
         run: |
@@ -183,7 +157,7 @@ jobs:
       - name: Download Build Artifact
         uses: actions/download-artifact@v5
         with:
-          name: web-app-prod-build
+          name: web-app-dist-prod
           path: apps/web/dist
       - name: Create Web App Artifact
         run: tar -czf web-app-${{ github.ref_name }}.tar.gz -C apps/web/dist .
