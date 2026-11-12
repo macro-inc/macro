@@ -104,6 +104,18 @@ export default defineConfig({
         },
       },
       {
+        extends: '../../services/ai-editing-worker/vitest.config.ts',
+        test: {
+          name: 'lexical-commit-editing-worker',
+          environment: 'node',
+          root: '../../services/ai-editing-worker',
+          include: [
+            'src/lexical-commit/**/*.test.ts',
+            'src/endpoints/lexical.test.ts',
+          ],
+        },
+      },
+      {
         // Core package tests
         extends: './src/lib/core/vitest.config.ts',
         test: {

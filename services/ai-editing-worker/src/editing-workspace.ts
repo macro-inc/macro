@@ -32,6 +32,12 @@ export type EditingWorkspaceOptions = {
   pool?: PeerPool;
 };
 
+export type PeerLease = {
+  propagate: () => void;
+  awarenessSource: AwarenessSource;
+  release: () => void;
+};
+
 export class EditingWorkspace {
   readonly session: LexicalSession;
   private readonly engine: SyncEngine<typeof MARKDOWN_LORO_SCHEMA, unknown>;
@@ -79,8 +85,13 @@ export class EditingWorkspace {
   /** Borrow a writer: its own `Doc` (authoring under a pooled peer) + cursor.
    *  `release` (on the returned writer) clears the cursor and returns the peer. */
   async borrowWriter(): Promise<Writer> {
+    const { propagate, awarenessSource, release } = await this.borrowPeer();
+    return { doc: new Doc(this.session, propagate), awarenessSource, release };
+  }
+
+  /** Borrow a pooled peer and its cursor; `propagate` pushes the session out as its edit. */
+  async borrowPeer(): Promise<PeerLease> {
     const peer = await this.pool.borrow();
-    const doc = new Doc(this.session, () => this.propagate(peer.peerId));
     const awarenessSource = realAwarenessSource({
       mirror: this.manager.mirror!,
       doc: this.manager.doc,
@@ -94,12 +105,25 @@ export class EditingWorkspace {
       awarenessSource.clear();
       this.pool.release(peer);
     };
-    return { doc, awarenessSource, release };
+    return {
+      propagate: () => this.propagate(peer.peerId),
+      awarenessSource,
+      release,
+    };
   }
 
   /** Perform one final catch-all sync and wait for all queued propagation to finish. */
   flush(): Promise<void> {
     this.propagate(nextAiPeerId());
+    return this.chain;
+  }
+
+  /**
+   * Wait for queued propagation to finish, without `flush`'s catch-all sync:
+   * that snapshots the session later, when a remote edit Loro already holds
+   * may not have been folded into it yet, and would revert that edit.
+   */
+  settled(): Promise<void> {
     return this.chain;
   }
 
