@@ -62,8 +62,20 @@ function daysAgo(days: number): string {
   return subDays(NOW, days).toISOString();
 }
 
+/** The opened channels of the last `knownChannels`, most recent first. */
+let recentlyOpened: string[] = [];
+
+/** A run with the unread channels and, unless given, the opened ones. */
+function maintain(unread: string[] = [], recent: string[] = recentlyOpened) {
+  return maintainChannelCache({ unread, recent });
+}
+
 /** The viewer's loaded channel list and activity, as the shell holds them. */
 function knownChannels(opened: Record<string, string | null>) {
+  recentlyOpened = Object.entries(opened)
+    .flatMap(([id, viewed_at]) => (viewed_at ? [{ id, viewed_at }] : []))
+    .sort((a, b) => b.viewed_at.localeCompare(a.viewed_at))
+    .map(({ id }) => id);
   testQueryClient.setQueryData(
     channelKeys.listChannels('user').queryKey,
     Object.entries(opened).map(([id, viewed_at]) => ({ id, viewed_at }))
@@ -116,6 +128,12 @@ beforeEach(() => {
     authenticated: true,
   });
   resetChannelPrewarm();
+  recentlyOpened = [];
+  // The pause between two channels would make each run take seconds.
+  const realSetTimeout = setTimeout;
+  vi.stubGlobal('setTimeout', (callback: () => void, delay = 0) =>
+    realSetTimeout(callback, delay > 1_000 ? delay : 0)
+  );
   for (const mock of Object.values(mocks)) mock.mockReset();
   mocks.channelCacheHost.mockReturnValue(HOST);
   mocks.writeCachedLatestPage.mockResolvedValue(undefined);
@@ -138,36 +156,27 @@ afterEach(() => {
 });
 
 describe('choosing channels to warm', () => {
-  it('takes every unread channel, then the 20 most recently opened, once each', () => {
-    const channelIds = Array.from({ length: 25 }, (_, index) => `c${index}`);
-    const lastOpened = new Map(
-      channelIds.map((channelId, index) => [channelId, index])
-    );
+  it('takes the first 40 unread, then the first 20 recently opened, once each', () => {
+    const unread = Array.from({ length: 300 }, (_, index) => `u${index}`);
+    const recent = Array.from({ length: 25 }, (_, index) => `c${index}`);
     const chosen = chooseChannelsToPrewarm({
-      unread: ['u1', 'c24'],
-      channelIds,
-      lastOpened,
-      isLoaded: (channelId) => channelId === 'c23',
+      unread,
+      recent: ['u1', ...recent],
+      isLoaded: (channelId) => channelId === 'c3',
     });
     expect(chosen).toEqual([
-      'u1',
-      'c24',
-      ...Array.from({ length: 18 }, (_, index) => `c${22 - index}`),
+      ...unread.slice(0, 40),
+      ...recent.slice(0, 19).filter((channelId) => channelId !== 'c3'),
     ]);
   });
 
-  it('ranks only channels in the list, and leaves out unopened ones', () => {
+  it('keeps the order the server gave each list', () => {
     const chosen = chooseChannelsToPrewarm({
-      unread: [],
-      channelIds: ['a', 'b', 'never'],
-      lastOpened: new Map([
-        ['left', 30],
-        ['a', 10],
-        ['b', 20],
-      ]),
+      unread: ['z', 'a'],
+      recent: ['m', 'b'],
       isLoaded: () => false,
     });
-    expect(chosen).toEqual(['b', 'a']);
+    expect(chosen).toEqual(['z', 'a', 'm', 'b']);
   });
 });
 
@@ -184,7 +193,7 @@ describe('warming a channel', () => {
         )
       ),
     });
-    await maintainChannelCache([]);
+    await maintain();
     expect(mocks.readCachedLatestPage).toHaveBeenCalledWith(
       HOST,
       'a',
@@ -212,7 +221,7 @@ describe('warming a channel', () => {
         })
       )
       .mockResolvedValueOnce(changes(9, { removed: ['m1'] }));
-    await maintainChannelCache([]);
+    await maintain();
     expect(mocks.fetchChannelChanges.mock.calls).toEqual([
       ['a', 7],
       ['a', 8],
@@ -229,7 +238,7 @@ describe('warming a channel', () => {
       page: page([messageEntry('m1', 1)]),
     });
     mocks.fetchChannelChanges.mockResolvedValue(changes(7));
-    await maintainChannelCache([]);
+    await maintain();
     expect(mocks.writeCachedLatestPage).not.toHaveBeenCalled();
   });
 
@@ -246,11 +255,11 @@ describe('warming a channel', () => {
       userId: 'user',
       page: page([messageEntry('m9', 9)]),
     });
-    await maintainChannelCache([]);
+    await maintain();
     expect(writtenIds()).toEqual({ channelId: 'a', seq: 40, ids: ['m9'] });
   });
 
-  it('reads the page again past the catch-up page limit', async () => {
+  it('reads the page again past two change pages', async () => {
     knownChannels({ a: daysAgo(1) });
     mocks.readCachedLatestPage.mockResolvedValue({
       seq: 1,
@@ -267,8 +276,8 @@ describe('warming a channel', () => {
       userId: 'user',
       page: page([messageEntry('m9', 9)]),
     });
-    await maintainChannelCache([]);
-    expect(mocks.fetchChannelChanges).toHaveBeenCalledTimes(20);
+    await maintain();
+    expect(mocks.fetchChannelChanges).toHaveBeenCalledTimes(2);
     expect(writtenIds()).toEqual({ channelId: 'a', seq: 99, ids: ['m9'] });
   });
 
@@ -285,7 +294,7 @@ describe('warming a channel', () => {
           : undefined
       );
       mocks[failing].mockRejectedValue(new TypeError('Failed to fetch'));
-      await maintainChannelCache([]);
+      await maintain();
       expect(mocks[failing]).toHaveBeenCalled();
       expect(mocks.writeCachedLatestPage).not.toHaveBeenCalled();
     }
@@ -294,7 +303,7 @@ describe('warming a channel', () => {
   it('neither reads nor writes when the cache cannot read the page', async () => {
     knownChannels({ a: daysAgo(1) });
     mocks.readCachedLatestPage.mockRejectedValue(new Error('engine busy'));
-    await maintainChannelCache([]);
+    await maintain();
     expect(mocks.fetchLatestChannelPage).not.toHaveBeenCalled();
     expect(mocks.writeCachedLatestPage).not.toHaveBeenCalled();
   });
@@ -311,7 +320,7 @@ describe('warming a channel', () => {
       userId: 'user',
       page: page([messageEntry('m1', 1)]),
     });
-    await maintainChannelCache(['a']);
+    await maintain(['a']);
     expect(mocks.readCachedLatestPage.mock.calls.map(([, id]) => id)).toEqual([
       'b',
     ]);
@@ -331,7 +340,7 @@ describe('warming a channel', () => {
       queryKey: getMessageTimelineQueryKey({ type: 'channel', id: 'b' }, null),
       queryFn: () => opening.promise,
     });
-    const run = maintainChannelCache([]);
+    const run = maintain();
     await vi.advanceTimersByTimeAsync(10_000);
     expect(mocks.readCachedLatestPage).not.toHaveBeenCalled();
     opening.resolve(null);
@@ -350,11 +359,11 @@ describe('warming a channel', () => {
       userId: 'user',
       page: page([messageEntry('m1', 1)]),
     });
-    await maintainChannelCache(['a']);
-    await maintainChannelCache(['a']);
+    await maintain(['a']);
+    await maintain(['a']);
     expect(mocks.writeCachedLatestPage).toHaveBeenCalledOnce();
-    await maintainChannelCache([]);
-    await maintainChannelCache(['a']);
+    await maintain();
+    await maintain(['a']);
     expect(mocks.writeCachedLatestPage).toHaveBeenCalledTimes(2);
   });
 });
@@ -390,7 +399,7 @@ describe('evicting cached pages', () => {
           ])
         )
     );
-    await maintainChannelCache(['unreadStale']);
+    await maintain(['unreadStale']);
     const [, looked] = mocks.readCachedPageRecords.mock.calls[0];
     expect([...looked].sort()).toEqual(['never', 'stale']);
     expect(mocks.deleteRecords).toHaveBeenCalledOnce();
@@ -406,7 +415,7 @@ describe('evicting cached pages', () => {
     testQueryClient.setQueryData(channelKeys.listChannels('user').queryKey, [
       { id: 'stale', viewed_at: daysAgo(90) },
     ]);
-    await maintainChannelCache([]);
+    await maintain();
     expect(mocks.readCachedPageRecords).not.toHaveBeenCalled();
     expect(mocks.deleteRecords).not.toHaveBeenCalled();
   });
@@ -426,11 +435,11 @@ describe('evicting cached pages', () => {
     mocks.readCachedPageRecords.mockResolvedValue(
       new Map([['never', ['GraphqlChannelMessages:never']]])
     );
-    await maintainChannelCache([]);
+    await maintain();
     expect(mocks.readCachedPageRecords).not.toHaveBeenCalled();
     // Once the lists are read again, the unopened channel's page goes.
     knownChannels({ never: null });
-    await maintainChannelCache([]);
+    await maintain();
     expect(mocks.deleteRecords).toHaveBeenCalledWith([
       'GraphqlChannelMessages:never',
     ]);
@@ -444,15 +453,15 @@ describe('evicting cached pages', () => {
       userId: 'user',
       page: page([]),
     });
-    await maintainChannelCache([]);
+    await maintain();
     expect(writtenIds().channelId).toBe('stale');
     expect(mocks.deleteRecords).not.toHaveBeenCalled();
   });
 
   it('looks again only a day later', async () => {
     knownChannels({ never: null });
-    await maintainChannelCache([]);
-    await maintainChannelCache([]);
+    await maintain();
+    await maintain();
     expect(mocks.readCachedPageRecords).toHaveBeenCalledOnce();
   });
 });
@@ -461,7 +470,7 @@ describe('when nothing runs', () => {
   it('does nothing with the channel cache off', async () => {
     mocks.channelCacheHost.mockReturnValue(undefined);
     knownChannels({ a: daysAgo(1), stale: daysAgo(90) });
-    await maintainChannelCache(['a']);
+    await maintain(['a']);
     expect(mocks.readCachedLatestPage).not.toHaveBeenCalled();
     expect(mocks.readCachedPageRecords).not.toHaveBeenCalled();
     expect(mocks.writeCachedLatestPage).not.toHaveBeenCalled();
@@ -470,12 +479,12 @@ describe('when nothing runs', () => {
   it('does nothing for a hidden tab', async () => {
     visibility = 'hidden';
     knownChannels({ a: daysAgo(1), stale: daysAgo(90) });
-    await maintainChannelCache(['a']);
+    await maintain(['a']);
     expect(mocks.readCachedLatestPage).not.toHaveBeenCalled();
     expect(mocks.readCachedPageRecords).not.toHaveBeenCalled();
   });
 
-  it('stops between steps once the tab is hidden', async () => {
+  it('stops between channels once the tab is hidden', async () => {
     knownChannels({
       a: daysAgo(1),
       b: daysAgo(2),
@@ -487,8 +496,8 @@ describe('when nothing runs', () => {
       visibility = 'hidden';
       return { seq: 1, userId: 'user', page: page([]) };
     });
-    await maintainChannelCache([]);
-    expect(mocks.readCachedLatestPage).toHaveBeenCalledTimes(3);
+    await maintain();
+    expect(mocks.readCachedLatestPage).toHaveBeenCalledOnce();
     expect(mocks.readCachedPageRecords).not.toHaveBeenCalled();
   });
 
@@ -503,7 +512,10 @@ describe('when nothing runs', () => {
     });
     visibility = 'hidden';
     const dispose = createRoot((dispose) => {
-      useChannelCachePrewarm(() => []);
+      useChannelCachePrewarm(
+        () => [],
+        () => ['a']
+      );
       return dispose;
     });
     await vi.advanceTimersByTimeAsync(10_000);
@@ -515,6 +527,52 @@ describe('when nothing runs', () => {
       'a',
       'background'
     );
+    dispose();
+  });
+
+  it('warms one channel at a time', async () => {
+    knownChannels({ a: daysAgo(1), b: daysAgo(2), c: daysAgo(3) });
+    mocks.readCachedLatestPage.mockResolvedValue(undefined);
+    let inFlight = 0;
+    let most = 0;
+    mocks.fetchLatestChannelPage.mockImplementation(async () => {
+      inFlight += 1;
+      most = Math.max(most, inFlight);
+      await Promise.resolve();
+      inFlight -= 1;
+      return { seq: 1, userId: 'user', page: page([]) };
+    });
+    await maintain();
+    expect(mocks.fetchLatestChannelPage).toHaveBeenCalledTimes(3);
+    expect(most).toBe(1);
+  });
+
+  it('the hook waits for the person to stop typing', async () => {
+    // The pauses are what is measured here: put the real timer back.
+    vi.unstubAllGlobals();
+    vi.useFakeTimers();
+    vi.stubGlobal('requestIdleCallback', (callback: () => void) =>
+      setTimeout(callback, 0)
+    );
+    mocks.readCachedLatestPage.mockResolvedValue(undefined);
+    mocks.fetchLatestChannelPage.mockResolvedValue({
+      seq: 1,
+      userId: 'user',
+      page: page([]),
+    });
+    const dispose = createRoot((dispose) => {
+      useChannelCachePrewarm(
+        () => [],
+        () => ['a']
+      );
+      return dispose;
+    });
+    await vi.advanceTimersByTimeAsync(2_400);
+    document.dispatchEvent(new KeyboardEvent('keydown'));
+    await vi.advanceTimersByTimeAsync(600);
+    expect(mocks.readCachedLatestPage).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(mocks.readCachedLatestPage).toHaveBeenCalledOnce();
     dispose();
   });
 });

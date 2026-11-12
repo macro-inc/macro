@@ -33,6 +33,9 @@ vi.mock('@app/lib/analytics/posthog', () => ({
 vi.mock('@queries/channel/unread-presence', () => ({
   createChannelUnreadQuery: mocks.channels,
 }));
+vi.mock('@queries/channel/recently-opened', () => ({
+  createRecentlyOpenedChannelsQuery: () => ({ isEnabled: false }),
+}));
 vi.mock('@queries/messages/graphql/prewarm', () => ({
   useChannelCachePrewarm: mocks.prewarm,
 }));

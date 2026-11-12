@@ -117,13 +117,17 @@ live events that keep them current.
   to the 1024 most recently written channel pages (`cache-core`
   `page_retention.rs`); a page whose link it dropped reads as a miss, and its
   records stay until the next write or eviction deletes them.
-- While the tab is visible and idle, the unread channels and the 20 most
-  recently opened are warmed three at a time (`useChannelCachePrewarm`,
-  mounted with the navigation unread state): no page reads the latest; a
-  cached page catches up from its number like an open and is written back.
-  A channel whose timeline is in TanStack Query is never touched, and a
-  timeline read in flight goes first. A channel is warmed once per session,
-  again when it turns unread again.
+- While the tab is visible and idle, the first 40 unread channels and the 20
+  most recently opened are warmed (`useChannelCachePrewarm`, mounted with
+  the navigation unread state). Both lists are soup queries in the server's
+  order (`updated_at`, `viewed_at`); don't rank or filter channels for
+  warming in TypeScript. One channel at a time, at least half a second
+  apart, and none within a second of a press, key or scroll or while a
+  timeline read is in flight. No page reads the latest (one request); a
+  cached page catches up from its number (one request, at most two change
+  pages before it reads the latest instead: three at most) and is written
+  back. A channel whose timeline is in TanStack Query is never touched. A
+  channel is warmed once per session, again when it turns unread again.
 - "Last opened" is the later `viewed_at` of the channel list and the activity
   list (which opening a channel moves). In each page load, once both lists
   have been read from the server (lists restored from the device can be a

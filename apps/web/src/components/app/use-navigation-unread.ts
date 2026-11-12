@@ -13,6 +13,7 @@ import { enableGraphqlSoup } from '@core/constant/featureFlags';
 import { notificationIsRead } from '@entity/utils/notification';
 import { notificationStateFromGraphql } from '@notifications/notification-state';
 import { isUnreadChannelMessageNotification } from '@notifications/top-level-channel-notification';
+import { createRecentlyOpenedChannelsQuery } from '@queries/channel/recently-opened';
 import { createChannelUnreadQuery } from '@queries/channel/unread-presence';
 import { queryReadyGate } from '@queries/gate';
 import { useChannelCachePrewarm } from '@queries/messages/graphql/prewarm';
@@ -45,6 +46,19 @@ export function useNavigationUnread() {
         queryStateFrom(
           defineQueryFilters({
             include: { channelSeen: false },
+          })
+        )
+      ),
+    }),
+    () => graphqlFlag().enabled
+  );
+  const recentChannels = createRecentlyOpenedChannelsQuery(
+    makeGraphqlSoupInput({
+      params: { limit: 20, sort_method: 'viewed_at' },
+      body: compileToAst(
+        queryStateFrom(
+          defineQueryFilters({
+            include: { channelIsParticipant: [true] },
           })
         )
       ),
@@ -90,8 +104,13 @@ export function useNavigationUnread() {
       })
       .map((notification) => notification.channelId);
   });
-  // The channels with unread messages are the likeliest to be opened next.
-  useChannelCachePrewarm(unreadChannelIds);
+  // The channels with unread messages and the ones opened last are the
+  // likeliest to be opened next. Both lists keep the server's order.
+  useChannelCachePrewarm(unreadChannelIds, () =>
+    recentChannels.isEnabled && queryReadyGate(recentChannels)
+      ? recentChannels.data
+      : []
+  );
   const channelsUnread = createMemo(() => {
     if (graphqlFlag().enabled) return unreadChannelIds().length > 0;
     return notificationSource

@@ -14,7 +14,7 @@ import { queryClient } from '../../client';
 import { messageKeys } from '../keys';
 import { getMessageTimelineQueryKeyPrefix } from '../timeline';
 import { applyChangesToLatestPage, trimLatestPage } from './apply';
-import { CURSOR_PAGE_LIMIT, MAX_CATCH_UP_PAGES } from './channel-sync';
+import { CURSOR_PAGE_LIMIT } from './channel-sync';
 import { activityFromGraphql, entryFromGraphql } from './convert';
 import {
   channelCacheHost,
@@ -26,12 +26,21 @@ import {
   writeCachedLatestPage,
 } from './source';
 
+/** Unread channels warmed, most recently active first. */
+const UNREAD_CHANNELS = 40;
 /** Recently opened channels warmed beside the unread ones. */
 const RECENT_CHANNELS = 20;
+/**
+ * Change pages a warm reads before it reads the latest page instead, so a
+ * channel costs three requests at most.
+ */
+const PREWARM_CHANGE_PAGES = 2;
+/** The least time between two channels: 120 channels a minute at most. */
+const CHANNEL_SPACING_MS = 500;
+/** Warming waits this long after the person last pressed, typed or scrolled. */
+const INPUT_QUIET_MS = 1_000;
 /** A channel not opened for this long loses its cached page. */
 const KEEP_OPENED_DAYS = 30;
-/** Channels warmed together between idle moments. */
-const CHANNELS_PER_STEP = 3;
 /** Channels whose cached pages one idle moment looks up for eviction. */
 const EVICT_CHANNELS_PER_STEP = 50;
 /** Leave the first seconds to the landing view, as route warming does. */
@@ -82,8 +91,16 @@ type PrewarmSession = {
   /** When the session next looks for pages to evict. */
   nextEviction: Date;
   running: Promise<void> | null;
-  /** Unread channels a call during a run asked for: the run goes again. */
-  pending: readonly string[] | null;
+  /** What a call during a run asked for: the run goes again. */
+  pending: PrewarmRequest | null;
+};
+
+/** Both in the server's order: what the viewer is likeliest to open next. */
+type PrewarmRequest = {
+  /** Channels with unread messages, most recently active first. */
+  unread: readonly string[];
+  /** Channels the viewer opened, most recently opened first. */
+  recent: readonly string[];
 };
 
 let session: PrewarmSession | undefined;
@@ -125,6 +142,17 @@ function idle(): Promise<void> {
   });
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+let lastInputAt = -Infinity;
+
+/** The person pressed, typed or scrolled: warming waits for them to stop. */
+function noteInput() {
+  lastInputAt = performance.now();
+}
+
 function timelineReadInFlight(): boolean {
   return queryClient.isFetching({ queryKey: messageKeys.messages._def }) > 0;
 }
@@ -141,11 +169,21 @@ function timelineReadsSettled(): Promise<void> {
   });
 }
 
-/** An idle moment with no timeline read in flight: an open goes first. */
+/**
+ * An idle moment with no timeline read in flight and no recent input: an open
+ * and whatever the person is doing go first.
+ */
 async function nextQuietMoment(): Promise<void> {
   await idle();
-  while (timelineReadInFlight()) {
-    await timelineReadsSettled();
+  for (;;) {
+    const quietFor = performance.now() - lastInputAt;
+    if (quietFor < INPUT_QUIET_MS) {
+      await sleep(INPUT_QUIET_MS - quietFor);
+    } else if (timelineReadInFlight()) {
+      await timelineReadsSettled();
+    } else {
+      return;
+    }
     await idle();
   }
 }
@@ -189,33 +227,29 @@ function readKnownChannels(userId: string): KnownChannels | undefined {
 }
 
 /**
- * The channels to warm: every unread one, then the viewer's 20 most recently
- * opened, each once, leaving out those whose timeline is loaded.
+ * The channels to warm: the first 40 unread, then the first 20 recently
+ * opened, each once, leaving out those whose timeline is loaded. Both lists
+ * arrive in the server's order, so the head of each is the likeliest to open.
  */
 export function chooseChannelsToPrewarm({
   unread,
-  channelIds,
-  lastOpened,
+  recent,
   isLoaded,
-}: {
-  unread: readonly string[];
-  channelIds: readonly string[];
-  lastOpened: LastOpened;
+}: PrewarmRequest & {
   isLoaded: (channelId: string) => boolean;
 }): string[] {
-  const recent = channelIds
-    .filter((channelId) => lastOpened.has(channelId))
-    .sort((a, b) => (lastOpened.get(b) ?? 0) - (lastOpened.get(a) ?? 0))
-    .slice(0, RECENT_CHANNELS);
-  return [...new Set([...unread, ...recent])].filter(
-    (channelId) => !isLoaded(channelId)
-  );
+  return [
+    ...new Set([
+      ...unread.slice(0, UNREAD_CHANNELS),
+      ...recent.slice(0, RECENT_CHANNELS),
+    ]),
+  ].filter((channelId) => !isLoaded(channelId));
 }
 
 /**
  * The cached page with every change after its number applied, or `undefined`
- * when the server says it must be read again: a reset, or more change pages
- * than an open would catch up.
+ * when it must be read again: a reset, or more change pages than one
+ * read of the latest page is worth.
  */
 async function catchUpCachedPage(
   channelId: string,
@@ -223,7 +257,7 @@ async function catchUpCachedPage(
   span: Span
 ): Promise<LatestChannelPage | undefined> {
   let latest = cached;
-  for (let pages = 1; pages <= MAX_CATCH_UP_PAGES; pages += 1) {
+  for (let pages = 1; pages <= PREWARM_CHANGE_PAGES; pages += 1) {
     span.setAttr('channel.prewarm.change_pages', pages);
     const since = latest.seq;
     const changes = await span.run(() => fetchChannelChanges(channelId, since));
@@ -321,7 +355,7 @@ async function warmChannel(
   return outcome;
 }
 
-/** Warm the channels a few at a time, each step in an idle moment. */
+/** Warm the channels one at a time, each in a quiet moment. */
 async function prewarmChannels(
   current: PrewarmSession,
   channelIds: readonly string[]
@@ -332,35 +366,25 @@ async function prewarmChannels(
     const outcomes = new Map<PrewarmOutcome, number>();
     let stopped = false;
     try {
-      for (
-        let offset = 0;
-        offset < channelIds.length;
-        offset += CHANNELS_PER_STEP
-      ) {
+      for (const [index, channelId] of channelIds.entries()) {
+        if (index > 0) await sleep(CHANNEL_SPACING_MS);
         await nextQuietMoment();
         if (!canContinue(current)) {
           stopped = true;
           return;
         }
-        const step = channelIds.slice(offset, offset + CHANNELS_PER_STEP);
-        const results = await Promise.all(
-          step.map((channelId) =>
-            span.span('channel.prewarm_page', (child) =>
-              warmChannel(current, channelId, child)
-            )
-          )
+        const outcome = await span.span('channel.prewarm_page', (child) =>
+          warmChannel(current, channelId, child)
         );
-        results.forEach((outcome, index) => {
-          outcomes.set(outcome, (outcomes.get(outcome) ?? 0) + 1);
-          // A failed one is tried again on the next run.
-          if (
-            outcome !== 'loaded' &&
-            outcome !== 'superseded' &&
-            outcome !== 'failed'
-          ) {
-            current.warmed.add(step[index]);
-          }
-        });
+        outcomes.set(outcome, (outcomes.get(outcome) ?? 0) + 1);
+        // A failed one is tried again on the next run.
+        if (
+          outcome !== 'loaded' &&
+          outcome !== 'superseded' &&
+          outcome !== 'failed'
+        ) {
+          current.warmed.add(channelId);
+        }
       }
     } finally {
       span.setAttr('channel.prewarm.stopped', stopped);
@@ -439,37 +463,34 @@ async function evictStaleChannelPages(
 
 async function runMaintenance(current: PrewarmSession): Promise<void> {
   while (current.pending && canContinue(current)) {
-    const unread = current.pending;
+    const request = current.pending;
     current.pending = null;
-    const known = readKnownChannels(current.userId);
-    if (!known) return;
-    const unreadNow = new Set(unread);
+    const chosen = chooseChannelsToPrewarm({
+      ...request,
+      isLoaded: isChannelTimelineLoaded,
+    });
+    const unreadNow = new Set(request.unread);
     for (const channelId of unreadNow) {
       if (!current.unread.has(channelId)) current.warmed.delete(channelId);
     }
     current.unread = unreadNow;
-    const chosen = chooseChannelsToPrewarm({
-      unread,
-      channelIds: known.channelIds,
-      lastOpened: known.lastOpened,
-      isLoaded: isChannelTimelineLoaded,
-    });
     await prewarmChannels(
       current,
       chosen.filter((channelId) => !current.warmed.has(channelId))
     );
     const now = new Date();
+    const known = readKnownChannels(current.userId);
     // A channel opened on another device since restored lists were read
     // would look unopened; evict only from lists read since the page loaded.
     if (
+      !known?.readThisLoad ||
       !canContinue(current) ||
-      !known.readThisLoad ||
       isBefore(now, current.nextEviction)
     ) {
       continue;
     }
     current.nextEviction = addDays(now, 1);
-    const keep = new Set([...unread, ...chosen]);
+    const keep = new Set([...request.unread, ...chosen]);
     if (!(await evictStaleChannelPages(current, known, keep, now))) {
       current.nextEviction = now;
     }
@@ -481,11 +502,9 @@ async function runMaintenance(current: PrewarmSession): Promise<void> {
  * channels not opened for 30 days: on the first run of each page load whose
  * lists came from the server, then at most once a day. Does nothing without
  * the channel cache, a signed-in account, or a visible tab. A call during a
- * run makes it go again with the latest unread channels.
+ * run makes it go again with the latest channels.
  */
-export function maintainChannelCache(
-  unreadChannelIds: readonly string[]
-): Promise<void> {
+export function maintainChannelCache(request: PrewarmRequest): Promise<void> {
   const host = channelCacheHost();
   const account = currentQueryAccount();
   if (!host || !account || document.visibilityState !== 'visible') {
@@ -503,7 +522,7 @@ export function maintainChannelCache(
     };
   }
   const current = session;
-  current.pending = unreadChannelIds;
+  current.pending = request;
   if (current.running) return current.running;
   const running = (async () => {
     try {
@@ -524,17 +543,35 @@ export function resetChannelPrewarm() {
 /**
  * Keep channel pages warm while the app is open: shortly after it starts, and
  * again when the unread channels, the channel list or the viewer's channel
- * activity change, or the tab is shown again.
+ * activity change, or the tab is shown again. One request is in flight at a
+ * time, and none while the person is pressing, typing or scrolling.
  */
 export function useChannelCachePrewarm(
-  unreadChannelIds: Accessor<readonly string[]>
+  unreadChannelIds: Accessor<readonly string[]>,
+  recentChannelIds: Accessor<readonly string[]>
 ) {
   const { channels, activity } = useChannelsContext();
   const schedule = debounce(() => {
     if (document.visibilityState !== 'visible') return;
-    fireAndForget(maintainChannelCache(unreadChannelIds()), SURFACE);
+    fireAndForget(
+      maintainChannelCache({
+        unread: unreadChannelIds(),
+        recent: recentChannelIds(),
+      }),
+      SURFACE
+    );
   }, START_DELAY_MS);
-  createEffect(on([unreadChannelIds, channels, activity], () => schedule()));
+  createEffect(
+    on([unreadChannelIds, recentChannelIds, channels, activity], () =>
+      schedule()
+    )
+  );
   makeEventListener(document, 'visibilitychange', () => schedule());
+  for (const input of ['pointerdown', 'keydown', 'wheel'] as const) {
+    makeEventListener(document, input, noteInput, {
+      capture: true,
+      passive: true,
+    });
+  }
   onCleanup(() => schedule.clear());
 }
