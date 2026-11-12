@@ -14,6 +14,12 @@ export type ChannelNotificationReader = {
   channelId?: string;
   filtered: boolean;
   notificationIds: readonly string[];
+  /**
+   * True when the reader's own query carries `FOLLOWS_LIVE_UPDATES` and reaches
+   * the network on mount: its first read waits for the websocket's
+   * subscriptions, so the first connection need not read its job again.
+   */
+  followsLiveUpdates?: boolean;
 };
 type Waiter = {
   generation: number;
@@ -172,6 +178,22 @@ export class ChannelNotificationRefresh {
   reconnect() {
     for (const job of this.jobs.values()) {
       if (this.enabled(job)) this.invalidate(job);
+    }
+    this.schedule();
+  }
+
+  /**
+   * The first connection's subscriptions are live. A job whose readers all
+   * follow them read after this; any other may show an older read.
+   */
+  live() {
+    for (const job of this.jobs.values()) {
+      if (
+        [...job.readers].some(
+          (reader) => reader.enabled && !reader.followsLiveUpdates
+        )
+      )
+        this.invalidate(job);
     }
     this.schedule();
   }

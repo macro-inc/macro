@@ -255,6 +255,21 @@ describe('shared channel notification refresh', () => {
     ]);
   });
 
+  it('reads again at the first live connection only jobs a reader did not hold', async () => {
+    const f = setup();
+    f.register('a', { followsLiveUpdates: true });
+    f.register('b');
+    f.register('c', { followsLiveUpdates: true });
+    f.register('c');
+    f.register('d', { enabled: false });
+    f.queue.live();
+    await tick();
+    expect(f.query.mock.calls.map(([, variables]) => variables)).toEqual([
+      { id: 'b' },
+      { id: 'c' },
+    ]);
+  });
+
   it('holds dirty work while hidden/offline, then resumes without another notification', async () => {
     const f = setup();
     f.register();

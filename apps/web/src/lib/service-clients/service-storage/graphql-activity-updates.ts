@@ -13,6 +13,7 @@ export function createActivityUpdatesHandler(
   client: Pick<Client, 'query' | 'subscription'>
 ) {
   let pending: ActivityInvalidation = new Set<string>();
+  let refreshNonFollowers = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let disposed = false;
   let running = false;
@@ -23,9 +24,13 @@ export function createActivityUpdatesHandler(
     running = true;
     dirty = false;
     const entities = pending;
+    const nonFollowers = refreshNonFollowers;
     pending = new Set();
+    refreshNonFollowers = false;
     try {
-      await revalidateActivityQueries(client, entities);
+      await revalidateActivityQueries(client, entities, {
+        refreshNonFollowers: nonFollowers,
+      });
     } finally {
       running = false;
       if (dirty) schedule();
@@ -61,11 +66,22 @@ export function createActivityUpdatesHandler(
       dirty = true;
       schedule();
     },
+    /**
+     * The first connection's subscriptions are live. Queries that follow
+     * them read after this; the others may show older reads.
+     */
+    live() {
+      if (disposed) return;
+      refreshNonFollowers = true;
+      dirty = true;
+      schedule();
+    },
     dispose() {
       disposed = true;
       if (timer !== undefined) clearTimeout(timer);
       document.removeEventListener('visibilitychange', visible);
       pending = new Set();
+      refreshNonFollowers = false;
       dirty = false;
     },
   };

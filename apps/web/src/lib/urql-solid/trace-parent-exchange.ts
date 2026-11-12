@@ -8,8 +8,10 @@ export const TRACE_PARENT_CONTEXT_KEY = 'macroTraceParent';
 /**
  * The caller's context for the operation's first request only: a re-sent
  * operation (cache revalidation, refetch) must not join a trace that ended.
+ * Running anything in it uses it up, so an exchange that does must store a
+ * fresh one for the request.
  */
-function firstRequestIn(parent: TraceContext): TraceContext {
+export function firstRequestIn(parent: TraceContext): TraceContext {
   let used = false;
   return {
     run(work) {

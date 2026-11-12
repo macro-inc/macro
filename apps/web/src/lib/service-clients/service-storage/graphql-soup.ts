@@ -114,11 +114,12 @@ import {
   type SoupPropertyFieldsFragment,
   type SoupQuery,
 } from './graphql/generated/graphql';
+import { liveUpdatesGateExchange } from './graphql-live-updates';
 import { shouldRetryGraphqlMutation } from './graphql-mutation-retry';
 import { notificationReceiptExchange } from './graphql-notification-receipt';
 import {
   createGraphqlSoupSubscriptionsLifecycle,
-  createGraphqlSoupWebSocketLiveness,
+  createGraphqlSoupWebSocketEvents,
   createGraphqlSoupWebSocketUrlResolver,
   publishNotificationPatch,
   SOUP_GRAPHQL_WEBSOCKET_RETRY_ATTEMPTS,
@@ -459,18 +460,17 @@ export function subscribeGraphqlSoupReconnected(
 }
 
 function createGraphqlSoupWebSocketClient(
-  onConnected: () => void,
-  onState: (state: MutationQueueEnvironment['websocket']) => void = () =>
-    undefined
+  lifecycle: Parameters<
+    typeof createGraphqlSoupWebSocketEvents
+  >[0]['lifecycle'],
+  onState?: (state: MutationQueueEnvironment['websocket']) => void
 ): GraphqlWsClient {
-  let connections = 0;
   const resolveWebSocketUrl = createGraphqlSoupWebSocketUrlResolver({
     dssHost,
     bearerTokenAuth: ENABLE_BEARER_TOKEN_AUTH,
     getApiToken: getMacroApiToken,
     refreshCookieAuth: fetchToken,
   });
-  const liveness = createGraphqlSoupWebSocketLiveness(() => client.terminate());
   const client = createGraphqlWsClient({
     url: resolveWebSocketUrl,
     connectionParams: () =>
@@ -488,22 +488,14 @@ function createGraphqlSoupWebSocketClient(
         : undefined,
     retryAttempts: SOUP_GRAPHQL_WEBSOCKET_RETRY_ATTEMPTS,
     retryWait: waitToRetryGraphqlSoupWebSocket,
-    on: {
-      connecting: () => onState('connecting'),
-      closed: () => {
-        liveness.closed();
-        onState('disconnected');
-      },
-      pong: liveness.pong,
-      connected: (socket) => {
-        liveness.connected(socket);
-        onState('connected');
-        onConnected();
-        connections += 1;
-        if (connections === 1) return;
+    on: createGraphqlSoupWebSocketEvents({
+      terminate: () => client.terminate(),
+      lifecycle,
+      onState,
+      onReconnected: () => {
         for (const listener of reconnectListeners) listener();
       },
-    },
+    }),
     shouldRetry: shouldRetryGraphqlSoupWebSocket,
   });
   return client;
@@ -544,7 +536,7 @@ function getUncachedRealtimeClient(): Client {
     suspendOnPagehide: !isTauri(),
   });
   const websocketClient = createGraphqlSoupWebSocketClient(
-    subscriptionsLifecycle.connected
+    subscriptionsLifecycle
   );
   const client = createClient({
     url: `${dssHost}/items/soup/graphql`,
@@ -552,6 +544,7 @@ function getUncachedRealtimeClient(): Client {
     exchanges: [
       captureTraceParentExchange,
       networkRevalidationExchange(),
+      liveUpdatesGateExchange(subscriptionsLifecycle.liveUpdates),
       notificationReceiptExchange(publishNotificationPatch),
       graphqlSoupSubscriptionExchange(websocketClient),
       traceParentExchange,
@@ -871,7 +864,7 @@ export function getGraphqlSoupClient(): Client {
       host = createHost(true);
       let websocketState: MutationQueueEnvironment['websocket'] = 'none';
       const graphqlWsClient = createGraphqlSoupWebSocketClient(
-        subscriptionsLifecycle.connected,
+        subscriptionsLifecycle,
         (state) => {
           websocketState = state;
         }
@@ -924,6 +917,8 @@ export function getGraphqlSoupClient(): Client {
             delegateRevalidation: delegateChannelNotificationRefresh,
             externalWriteTypes: resolveCrmExternalWriteTypes,
           }),
+          // After the cache, so cached results still show at once.
+          liveUpdatesGateExchange(subscriptionsLifecycle.liveUpdates),
           notificationReceiptExchange(publishNotificationPatch),
           graphqlSoupSubscriptionExchange(graphqlWsClient),
           traceParentExchange,

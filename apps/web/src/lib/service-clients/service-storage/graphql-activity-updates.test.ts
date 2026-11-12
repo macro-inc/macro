@@ -48,6 +48,28 @@ describe('activity connection revalidation', () => {
     await flush();
     expect(refresh).toHaveBeenCalledExactlyOnceWith(null);
   });
+  it('refreshes only queries that did not wait once the first connection is live', async () => {
+    const { client, handler, refresh } = setup();
+    const followed = vi.fn();
+    cleanups.push(
+      registerActivityRevalidator({
+        client: () => client,
+        refresh: followed,
+        followsLiveUpdates: true,
+      })
+    );
+    handler.live();
+    await flush();
+    expect(refresh).toHaveBeenCalledExactlyOnceWith(null);
+    expect(followed).not.toHaveBeenCalled();
+
+    // A push that arrives with it still reaches every query.
+    handler.live();
+    handler.onResult(push('one'));
+    await flush();
+    expect(refresh).toHaveBeenLastCalledWith(null);
+    expect(followed).toHaveBeenCalledExactlyOnceWith(new Set(['one']));
+  });
   it('recovers purge invalidations through fresh authorized reads', async () => {
     const { handler, refresh } = setup();
     handler.onResult({

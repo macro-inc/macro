@@ -500,6 +500,9 @@ vi.mock('./graphql/generated/graphql', () => ({
   GroupSoupDocument: {},
   SoupDocument: {},
 }));
+vi.mock('./graphql-live-updates', () => ({
+  liveUpdatesGateExchange: () => ({ kind: 'live-updates' }),
+}));
 vi.mock('./graphql-notification-receipt', () => ({
   notificationReceiptExchange: () => ({ kind: 'notification-receipt' }),
 }));
@@ -509,12 +512,9 @@ vi.mock('./graphql-soup-websocket', () => ({
   shouldRetryGraphqlSoupWebSocket: () => false,
   waitToRetryGraphqlSoupWebSocket: vi.fn(),
   createGraphqlSoupWebSocketUrlResolver: () => () => 'ws://dss.test',
-  createGraphqlSoupWebSocketLiveness: () => ({
-    connected: vi.fn(),
-    pong: vi.fn(),
-    closed: vi.fn(),
-  }),
+  createGraphqlSoupWebSocketEvents: () => ({}),
   createGraphqlSoupSubscriptionsLifecycle: () => ({
+    liveUpdates: {},
     replace: mocks.replaceSubscriptions,
     dispose: vi.fn(() => mocks.recordSubscriptionDisposal()),
   }),
@@ -538,6 +538,13 @@ vi.mock('@urql/core', () => ({
       expect(receiptIndex).toBeGreaterThanOrEqual(0);
       expect(receiptIndex).toBeLessThan(subscriptionIndex);
       if (cacheIndex >= 0) expect(receiptIndex).toBeGreaterThan(cacheIndex);
+      // Held reads still show cached results, and nothing reaches the
+      // network before the gate.
+      const gateIndex = options.exchanges.findIndex(
+        ({ kind }) => kind === 'live-updates'
+      );
+      expect(gateIndex).toBeGreaterThan(cacheIndex);
+      expect(gateIndex).toBeLessThan(receiptIndex);
     }
     const cacheExchange = options.exchanges[cacheIndex];
     if (!cacheExchange?.host) {

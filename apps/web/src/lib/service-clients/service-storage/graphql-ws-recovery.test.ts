@@ -62,7 +62,8 @@ vi.mock('@tauri-apps/api/core', () => ({
 
 import { TauriWebSocketWrapper } from '@macro-inc/collaboration/websocket/platform/tauri-websocket';
 import {
-  createGraphqlSoupWebSocketLiveness,
+  createGraphqlSoupSubscriptionsLifecycle,
+  createGraphqlSoupWebSocketEvents,
   createGraphqlSoupWebSocketUrlResolver,
   GRAPHQL_SOUP_WEBSOCKET_PONG_TIMEOUT_MS,
   SOUP_GRAPHQL_WEBSOCKET_RETRY_ATTEMPTS,
@@ -179,9 +180,13 @@ describe('GraphQL websocket liveness on resume', () => {
   // Wired as createGraphqlSoupWebSocketClient wires it.
   function livenessClient() {
     const connected: boolean[] = [];
-    const liveness = createGraphqlSoupWebSocketLiveness(() =>
-      client.terminate()
-    );
+    const lifecycle = createGraphqlSoupSubscriptionsLifecycle();
+    const reconnected = vi.fn();
+    const events = createGraphqlSoupWebSocketEvents({
+      terminate: () => client.terminate(),
+      lifecycle,
+      onReconnected: reconnected,
+    });
     const client = createClient({
       url: 'wss://dss.test/items/soup/graphql/ws',
       webSocketImpl: TauriWebSocketWrapper,
@@ -189,15 +194,14 @@ describe('GraphQL websocket liveness on resume', () => {
       retryWait: async () => {},
       shouldRetry: shouldRetryGraphqlSoupWebSocket,
       on: {
-        closed: () => liveness.closed(),
-        pong: liveness.pong,
+        ...events,
         connected: (socket, _payload, wasRetry) => {
-          liveness.connected(socket);
+          events.connected(socket);
           connected.push(wasRetry);
         },
       },
     });
-    return { client, connected };
+    return { client, connected, lifecycle, reconnected };
   }
 
   function follow(client: ReturnType<typeof createClient>) {
@@ -221,7 +225,7 @@ describe('GraphQL websocket liveness on resume', () => {
   it('reconnects a socket that stopped answering while the app slept', async () => {
     vi.useFakeTimers();
     plugin.live = true;
-    const { client, connected } = livenessClient();
+    const { client, connected, reconnected } = livenessClient();
     const subscription = follow(client);
     await vi.waitFor(() =>
       expect(subscription.values).toEqual([{ data: { ping: 1 } }])
@@ -239,6 +243,7 @@ describe('GraphQL websocket liveness on resume', () => {
       ])
     );
     expect(connected).toEqual([false, true]);
+    expect(reconnected).toHaveBeenCalledOnce();
     expect(subscription.errors).toEqual([]);
     subscription.unsubscribe();
     await client.dispose();
@@ -258,6 +263,25 @@ describe('GraphQL websocket liveness on resume', () => {
 
     expect(plugin.connects).toHaveLength(1);
     expect(connected).toEqual([false]);
+    subscription.unsubscribe();
+    await client.dispose();
+  });
+
+  it('pings a new connection after its subscriptions and opens the gate on the pong', async () => {
+    vi.useFakeTimers();
+    plugin.live = true;
+    const { client, lifecycle, reconnected } = livenessClient();
+    const resumed = vi.fn();
+    lifecycle.liveUpdates.hold(resumed);
+    const subscription = follow(client);
+    await vi.waitFor(() =>
+      expect(subscription.values).toEqual([{ data: { ping: 1 } }])
+    );
+
+    await vi.waitFor(() => expect(resumed).toHaveBeenCalledWith('live'));
+    const frames = plugin.received.map(({ type }) => type);
+    expect(frames.indexOf('ping')).toBeGreaterThan(frames.indexOf('subscribe'));
+    expect(reconnected).not.toHaveBeenCalled();
     subscription.unsubscribe();
     await client.dispose();
   });
