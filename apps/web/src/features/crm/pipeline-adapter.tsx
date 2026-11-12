@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { usePreference } from '@app/preferences/use-preference';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { getPermissions } from '@core/component/SharePermissions';
@@ -21,6 +22,7 @@ import {
 } from 'solid-js';
 import { match } from 'ts-pattern';
 import {
+  DatabaseLinkValue,
   DatabaseMentionPicker,
   DatabaseMentionValue,
   DatabaseTextEditor,
@@ -46,7 +48,7 @@ import { DatabaseRecords } from '../database/views/database-records';
 import type { DatabaseRecordsActions } from '../database/views/database-records-view';
 import { CrmListSkeleton } from './components/list-state';
 import { StageRequirementsDialog } from './components/stage-requirements-dialog';
-import type { Pipeline } from './core/pipeline';
+import { isTrackedPipeline, type Pipeline } from './core/pipeline';
 import { createPipelineApi } from './queries/pipeline-data';
 import {
   createPipelineViews,
@@ -193,9 +195,12 @@ function PipelineRecords(props: {
             changeView({ query: { ...view().query, filter: null } })
           }
           boardPositions={boardPositions}
-          onComposeRecord={setComposing}
+          onComposeRecord={
+            isTrackedPipeline(props.pipeline) ? setComposing : undefined
+          }
           renderTextEditor={(editor) => <DatabaseTextEditor {...editor} />}
           renderTextValue={(value) => <DatabaseTextValue value={value} />}
+          renderLinkValue={(url) => <DatabaseLinkValue url={url} />}
           renderMentionPicker={(picker) => (
             <DatabaseMentionPicker {...picker} />
           )}
@@ -252,6 +257,8 @@ function PipelineToolbar(props: {
     props.pipeline.id
   );
   const [configuring, setConfiguring] = createSignal(false);
+  const tracked = () =>
+    isTrackedPipeline(props.pipeline) ? props.pipeline : undefined;
   const columns = () => database.data.rows.columns();
   // A column added with a board shows once the table is read again.
   const refreshColumns = () => {
@@ -314,7 +321,16 @@ function PipelineToolbar(props: {
       }}
       actions={
         <>
-          <Show when={props.canEdit}>
+          <Show when={props.canEdit && !tracked()}>
+            <Button
+              variant="secondary"
+              onClick={() => fireAndForget(props.actions.createRecord(), 'crm')}
+            >
+              <PlusIcon class="size-4" />
+              {t('crm.addEntry')}
+            </Button>
+          </Show>
+          <Show when={props.canEdit && tracked()}>
             <Button
               variant="secondary"
               disabled={!queryReadyGate(requirements.query)}
@@ -341,35 +357,42 @@ function PipelineToolbar(props: {
                 : 'Add contact'}
             </Button>
           </Show>
-          <Show when={props.canEdit && props.composing} keyed>
-            {(initialValues) => (
-              <AddPipelineRecordDialog
-                pipeline={props.pipeline}
-                columns={columns()}
-                initialValues={initialValues}
-                requirements={
-                  queryReadyGate(requirements.query)
-                    ? requirements.query.data
-                    : undefined
-                }
-                requirementsLoading={requirements.query.isPending}
-                requirementsError={
-                  !queryReadyGate(requirements.query) &&
-                  requirements.query.isError
-                }
-                onCreate={props.actions.createRow}
-                onClose={() => props.onCompose(undefined)}
-                renderTextEditor={(editor) => (
-                  <DatabaseTextEditor {...editor} />
+          <Show when={tracked()}>
+            {(pipeline) => (
+              <Show when={props.canEdit && props.composing} keyed>
+                {(initialValues) => (
+                  <AddPipelineRecordDialog
+                    pipeline={pipeline()}
+                    columns={columns()}
+                    initialValues={initialValues}
+                    requirements={
+                      queryReadyGate(requirements.query)
+                        ? requirements.query.data
+                        : undefined
+                    }
+                    requirementsLoading={requirements.query.isPending}
+                    requirementsError={
+                      !queryReadyGate(requirements.query) &&
+                      requirements.query.isError
+                    }
+                    onCreate={props.actions.createRow}
+                    onClose={() => props.onCompose(undefined)}
+                    renderTextEditor={(editor) => (
+                      <DatabaseTextEditor {...editor} />
+                    )}
+                    renderTextValue={(value) => (
+                      <DatabaseTextValue value={value} />
+                    )}
+                    renderLinkValue={(url) => <DatabaseLinkValue url={url} />}
+                    renderMentionPicker={(picker) => (
+                      <DatabaseMentionPicker {...picker} />
+                    )}
+                    renderMentionValue={(id, entityType) => (
+                      <DatabaseMentionValue id={id} entityType={entityType} />
+                    )}
+                  />
                 )}
-                renderTextValue={(value) => <DatabaseTextValue value={value} />}
-                renderMentionPicker={(picker) => (
-                  <DatabaseMentionPicker {...picker} />
-                )}
-                renderMentionValue={(id, entityType) => (
-                  <DatabaseMentionValue id={id} entityType={entityType} />
-                )}
-              />
+              </Show>
             )}
           </Show>
           {props.pipelineActions}

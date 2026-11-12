@@ -91,6 +91,9 @@ Missing or blank confirmation is rejected before calling the scheduling service.
 As with confirmed email/calendar tools, the quote is not verified against conversation
 history. There is no booking review card, elicitation, or deferred user-tool result.
 The agent discovers internal identities through tools instead of asking users for IDs.
+Code mode reaches the same workflows through `macro.calendar.booking` in the SDK, over
+`GET/POST /scheduling/links` and `PUT /scheduling/links/{id}`; the HTTP writes take the
+same required `userConfirmation`.
 
 The scheduling service owns authorization and validates the complete draft. Edits
 replace only the chosen event type; changed hours use a separate schedule to

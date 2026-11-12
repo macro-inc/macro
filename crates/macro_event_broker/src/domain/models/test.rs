@@ -186,14 +186,19 @@ fn exposes_each_declared_topic_in_order() {
 
 #[test]
 fn decodes_each_declared_topic_into_its_enum_variant() {
-    let example_payload = serde_json::to_vec(&example_event()).unwrap();
+    let correlation_id = Uuid::from_u128(42);
+    let mut event = example_event();
+    event.agent_correlation_id = Some(correlation_id);
+    let example_payload = serde_json::to_vec(&event).unwrap();
     let example_message = MessageWrapper::<_, DeclaredMacroEvent>::new(TestMessage {
         topic: MacroExampleTopic::TOPIC_STR,
         key: Some("example-key"),
         payload: Some(example_payload),
     });
 
-    match example_message.decode_payload().unwrap() {
+    let decoded = example_message.decode_payload().unwrap();
+    assert_eq!(decoded.agent_correlation_id(), Some(correlation_id));
+    match decoded {
         DeclaredMacroEvent::ExampleMacroEvent(event) => {
             assert_eq!(event.key(), "example-key");
         }
@@ -207,7 +212,9 @@ fn decodes_each_declared_topic_into_its_enum_variant() {
         payload: Some(documents_payload),
     });
 
-    match documents_message.decode_payload().unwrap() {
+    let decoded = documents_message.decode_payload().unwrap();
+    assert_eq!(decoded.agent_correlation_id(), None);
+    match decoded {
         DeclaredMacroEvent::DocumentsMacroEvent(event) => {
             assert_eq!(event.key(), "documents-key");
         }
@@ -281,4 +288,88 @@ fn rejects_an_unsupported_schema_version() {
             actual: 2,
         }) if topic == MacroExampleTopic::TOPIC_STR
     ));
+}
+
+#[tokio::test]
+async fn envelope_round_trip_preserves_correlation_and_legacy_events_default_to_none() {
+    let id = Uuid::now_v7();
+    let event = agent_correlation::context::scope_with_verb(
+        Some(id),
+        Some(agent_correlation::AgentVerb::Edited),
+        async { example_event() },
+    )
+    .await;
+    let decoded: Event<ExampleTopicEvent> =
+        serde_json::from_slice(&serde_json::to_vec(&event).unwrap()).unwrap();
+    assert_eq!(decoded.agent_correlation_id, Some(id));
+    assert_eq!(decoded.agent_verb.as_deref(), Some("edited"));
+    let mut future = serde_json::to_value(&decoded).unwrap();
+    future["agent_verb"] = serde_json::json!("future_verb");
+    let future: Event<ExampleTopicEvent> = serde_json::from_value(future).unwrap();
+    assert_eq!(future.agent_verb.as_deref(), Some("future_verb"));
+    let mut legacy = serde_json::to_value(event).unwrap();
+    legacy
+        .as_object_mut()
+        .unwrap()
+        .remove("agent_correlation_id");
+    legacy.as_object_mut().unwrap().remove("agent_verb");
+    assert_eq!(
+        serde_json::from_value::<Event<ExampleTopicEvent>>(legacy.clone())
+            .unwrap()
+            .agent_correlation_id,
+        None
+    );
+    assert_eq!(
+        serde_json::from_value::<Event<ExampleTopicEvent>>(legacy)
+            .unwrap()
+            .agent_verb,
+        None
+    );
+}
+
+#[tokio::test]
+async fn event_built_for_a_routine_run_carries_its_routine() {
+    let routine_id = Uuid::from_u128(0x7001);
+    let attribution = agent_correlation::context::Attribution {
+        correlation_id: None,
+        routine_id: Some(routine_id),
+        verb: None,
+    };
+
+    let event =
+        agent_correlation::context::scope_attribution(attribution, async { example_event() }).await;
+
+    assert_eq!(event.routine_id, Some(routine_id));
+    assert_eq!(
+        serde_json::to_value(&event).unwrap(),
+        json!({
+            "event_id": "00000000-0000-0000-0000-000000000001",
+            "schema_version": 1,
+            "routine_id": "00000000-0000-0000-0000-000000007001",
+            "event_type": "example.created",
+            "metadata": {
+                "name": "hello",
+                "count": 7,
+            },
+        })
+    );
+    let decoded = ExampleMacroEvent::decode("msg-123", &serde_json::to_vec(&event).unwrap())
+        .expect("routine event decodes");
+    assert_eq!(decoded.event().routine_id, Some(routine_id));
+}
+
+#[test]
+fn event_without_routine_id_decodes() {
+    let payload = json!({
+        "event_id": "00000000-0000-0000-0000-000000000001",
+        "schema_version": 1,
+        "event_type": "example.created",
+        "metadata": { "name": "hello", "count": 7 },
+    });
+
+    let decoded =
+        ExampleMacroEvent::decode("msg-123", &serde_json::to_vec(&payload).unwrap()).unwrap();
+
+    assert_eq!(decoded.event(), &example_event());
+    assert_eq!(decoded.event().routine_id, None);
 }

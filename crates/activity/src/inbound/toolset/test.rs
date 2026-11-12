@@ -124,6 +124,8 @@ fn user(value: &str) -> MacroUserIdStr<'static> {
 
 fn record() -> ActivityRecord {
     ActivityRecord {
+        agent_correlation_id: None,
+        agent_verb: None,
         id: Uuid::from_u128(1),
         actor: Actor::new_from_user(user("macro|agent@example.com")),
         subject_id: "macro|caller@example.com".to_string(),

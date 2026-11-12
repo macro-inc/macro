@@ -55,6 +55,7 @@ function setup(initial: NativeCallSnapshot | null = first) {
         token: 'token',
         serverUrl: 'ws://localhost',
         participantId: 'macro|test@example.com',
+        started: false,
         shareToken: null,
       })),
       connect: vi.fn(async () => {}),
@@ -74,6 +75,7 @@ function setup(initial: NativeCallSnapshot | null = first) {
       beginJoin: vi.fn(),
       rollbackJoin: vi.fn(),
       setError: vi.fn(),
+      microphoneBlocked: vi.fn(),
       watch: vi.fn((_call, _onDisconnect, onNativeEnd: () => void) => {
         nativeEnded = onNativeEnd;
         return unwatch;
@@ -522,6 +524,7 @@ describe('native snapshot events and call ownership', () => {
           token: 'token',
           serverUrl: 'ws://localhost',
           participantId: 'macro|test@example.com',
+          started: false,
           shareToken: null,
         };
       });
@@ -579,6 +582,7 @@ describe('native snapshot events and call ownership', () => {
       token: 'new-token',
       serverUrl: 'ws://localhost',
       participantId: 'macro|test@example.com',
+      started: false,
       shareToken: null,
     });
     native.setSnapshot(first);
@@ -654,6 +658,7 @@ describe('native snapshot events and call ownership', () => {
         token: 'new-token',
         serverUrl: 'ws://localhost',
         participantId: 'macro|test@example.com',
+        started: false,
         shareToken: null,
       };
     });

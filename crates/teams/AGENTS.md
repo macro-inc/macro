@@ -61,15 +61,29 @@ event contract (schema, sanitization, delivery semantics).
 
 ## Gotchas
 
+- A user is on at most one team, enforced only by the `team_owner_id_unique`
+  and `team_user_user_id_unique` constraints. `create_team` maps either
+  violation to `CreateTeamError::AlreadyOnTeam` (409); a new insert path into
+  `team` or `team_user` must map them too, or it answers 500.
 - A trialing subscription that gains its first Max seat ends the trial and
   starts a new billing cycle immediately. Every other seat change keeps the
   trial, including on a subscription already trialing on Max, so its scheduled
   downgrades still apply at the trial's end.
+- Creating or linking a team moves the owner's personal subscription onto the
+  team, but the owner keeps the `professional_subscriber` role it granted. When
+  the team subscription lapses, `revoke_permissions_for_team_members` removes
+  that role too, unless the owner's Stripe customer still has an active or
+  trialing subscription (another one, or the team's own when the lapse event
+  is stale).
 - Team routes resolve the caller's current team from the principal. A client
   holding a team (the SDK's `Team` handle) passes it as `team_id` to
   `POST /team/invite` and `GET /team/invites`, and `is_expected_team` answers
   409 in that same request when it is no longer the caller's team; without
   `team_id` the routes act on whatever team is current.
+
+- Invite and reminder emails carry the inviter's display name
+  (`TeamRepository::get_user_display_name`). A failed lookup is logged and the
+  email falls back to the inviter's address, so it never blocks an invite.
 
 - `team_invite.is_agent` makes an address with no account sign up as an agent.
   `authentication_service`'s agent setup joins the team, so the seat is added

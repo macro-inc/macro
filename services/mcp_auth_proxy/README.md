@@ -30,12 +30,48 @@ client may sign in is decided only by its redirect URI.
 
 ## How a user signs in
 
-`/authorize` sends the browser straight to Google through FusionAuth. Clients on
-`SIGN_IN_CHOICE_HOSTS` (ChatGPT) get a small chooser first: Google, or
-FusionAuth's own login page, where an account with a password can sign in.
-OpenAI's reviewers need that path, because a shared Google account trips
-Google's challenges. The chooser stores nothing; each link is the same
-`/authorize` request with `sign_in` added.
+`/authorize` first shows every client's user a chooser, because the client cannot
+know how that user's account signs in. The chooser stores nothing; its form is
+the same `/authorize` request with `sign_in` added.
+
+- **Google** goes straight to Google through FusionAuth.
+- **Email** is the one-time code the Macro app uses. `/authorize` records the
+  pending flow and redirects to `email-sign-in`, the broker's own form. The form
+  calls the authentication service's public endpoints
+  (`outbound/email_sign_in.rs`), so its address checks, per-address rate limits,
+  and signup policy apply as they do in the app. An address on a single sign-on
+  domain is sent to its provider instead, on the same pending flow. The form is
+  tied to the browser like the consent form, and a mistyped code leaves the flow
+  pending: only a redeemed code consumes it.
+- **Password** goes to FusionAuth's own login page. Accounts created by an emailed
+  code have only a random password, so this is for accounts that set one, such as
+  shared review accounts that cannot pass Google's challenges.
+
+## Signing in from another machine
+
+An MCP client on a server, reached over SSH or in a container, registers a
+loopback redirect URI, but the user's browser is on a different machine, so a
+redirect to it goes nowhere. The chooser therefore offers loopback clients an
+option to finish elsewhere (`delivery=manual`). After sign-in, the broker shows
+the client's callback URL instead of redirecting to it, for the user to either:
+
+- paste into a client that asks for it, as `claude mcp login <name> --no-browser`
+  does, or
+- fetch with `curl` on the client's machine, which reaches the listener of any
+  waiting loopback client, such as `codex mcp login <name>`, with no client support
+  needed.
+
+The authorization code still needs the client's PKCE verifier. Because the code
+leaves the user's own machine, which is what made a loopback redirect trustworthy,
+manual delivery goes through the consent screen first. The URL is shown inside a
+command the user is told to run and registration is open, so a redirect URI with
+anything that could break out of the quotes, or make `curl` and the broker
+disagree about its host, cannot use it (`RedirectUriPolicy::allows_manual_delivery`).
+
+The broker does not implement the device authorization grant (RFC 8628). The MCP
+authorization spec does not include it and no client we checked requests it for
+MCP servers, so advertising a `device_authorization_endpoint` would not change what
+any user sees. Add it if a client starts using it.
 
 ## Which redirect URIs are usable
 
@@ -58,7 +94,8 @@ groups, and a registration can only narrow what it allows:
   not themselves trusted.
 - **Delivered after consent.** `https` on any other host, such as a self-hosted
   MCP gateway. `/authorize` shows the consent screen described below before
-  sending the user to sign in.
+  sending the user to sign in. So does a loopback redirect when the user asks to
+  carry the code to another machine.
 - **Refused.** Every other scheme, `http` off loopback, and any URI carrying a
   fragment or credentials in its authority.
 
@@ -89,7 +126,8 @@ becomes a redirector to a host the user just refused.
 
 Two checks keep a flow tied to the person approving it, using one random secret
 in the `__Host-macro_mcp_oauth` cookie (`Secure`, `HttpOnly`, `SameSite=Lax`),
-which `/authorize` sets on every flow (`domain/browser_binding.rs`):
+which `/authorize` sets on every flow past the chooser
+(`domain/browser_binding.rs`). The email sign-in form is held to the same checks:
 
 - **The consent form only counts from the browser that was shown it.** It
   carries a token derived from the cookie's secret, compared in constant time.
@@ -135,8 +173,16 @@ SHA-256 digest taken with a fixed prefix so it can never match a refresh token's
 binding (`domain/access_token_clients.rs`). The bearer middleware reads the
 binding and the client's registered `client_name` and attaches the request's
 caller (`ai_toolset::ToolCaller`) for the tools, which label what the client
-writes "via <client_name>". The name is self-reported at `/register`: a display
-label, never an identity or permission. A token issued before its binding was
+writes as "<client_name> · Agent". The name is self-reported at `/register`: a
+display label, never an identity or permission. `domain/client_name.rs` bounds
+it: only ASCII letters, digits, spaces and plain punctuation survive (no
+control, bidi, zero-width, lookalike or mention characters), at most 64 of them,
+and a name that is Macro's own ("Macro", "Macro Agent", a first-party Macro
+bot's name or handle; compared ignoring case, spaces and punctuation) is
+refused with a 400. A name that only mentions Macro ("Claude Code (macro)") is
+fine. A name with nothing left registers as "MCP
+client". Reads apply the same rules, so a name stored before they existed is
+shown normalized, or unnamed if reserved. A token issued before its binding was
 recorded carries no name; the client's next refresh records one. Reading the
 records only through the existing ports keeps them working on any store
 backend.
@@ -145,6 +191,52 @@ Refresh tokens issued before this scheme existed have no binding, so the clients
 holding them authorize once more. Rate limiting of `/register` belongs at the
 edge; the broker bounds each registration's size but not how many a caller may
 create.
+
+## Which MCP server a token is for
+
+The broker signs clients in for two MCP servers, which a client names with the
+RFC 8707 `resource` parameter (`domain/resource.rs`):
+
+- **The harness's public MCP** (`McpPublicUrl` + `/mcp`). It gets the
+  FusionAuth access token, and labels what the client writes from that token's
+  recorded client (previous section). Any `resource` other than the ChatGPT
+  server's, or none, is for this server: deployed clients send whatever
+  resource they derive from the URL their user configured (the gateway URL, a
+  bare origin), so the broker does not refuse one it does not recognize.
+- **The ChatGPT MCP server** (`McpChatgptServiceUrl` + `/mcp`, a Cloudflare
+  Worker). It passes its bearer unchanged to Macro's APIs, which accept a
+  FusionAuth token but cannot look up its client, so writes would show as the
+  user's own. This resource gets a Macro API token instead, minted at `/token`
+  for the same user through the `MacroApiTokenMinter` port: the Macro bot via
+  the client's registered name, the attribution public MCP's `ExecuteCode`
+  signs. It expires with the FusionAuth token it was minted from, and the
+  refresh token stays FusionAuth's, so a refresh naming this resource mints a
+  fresh one.
+
+Only the ChatGPT server's exact URL (a trailing slash aside) selects it; a
+lookalike such as its bare origin or an `http` URL gets the harness's token.
+The resource is not stored with the code: it changes only which credential for
+the same user and client is returned, so `/token` decides from its own
+`resource`, which MCP clients send on both grants. A ChatGPT refresh that omits
+it gets a FusionAuth token, which Macro's APIs accept without the client label.
+
+## Token endpoint errors
+
+`/token` answers errors in the RFC 6749 section 5.2 JSON shape
+(`{"error", "error_description"}`, `Cache-Control: no-store`). The status says
+who has to act:
+
+- `400 invalid_request` or `unsupported_grant_type`: the request is malformed.
+- `400 invalid_grant`: the code or refresh token is unusable, whether the
+  broker refused it (unbound, another client's, revoked grant) or FusionAuth
+  did (for example `refresh_token_not_found`). Retrying cannot help; the client
+  must authorize again.
+- `503 temporarily_unavailable`: FusionAuth is down or throttling. A `Retry-After`
+  from a throttling response (429) is passed on; one on a 5xx is not.
+- `502 server_error`: FusionAuth answered with something else.
+
+FusionAuth's error and reason are logged with the client and grant ids,
+never the token itself, and are not returned to the client.
 
 ## Disconnecting a client
 
@@ -173,7 +265,7 @@ binding goes last, so a client that sees a `503` can retry. A token the broker
 does not hold (never issued, expired, or already revoked) gets `200`, as RFC
 7009 section 2.2 requires.
 
-Access tokens are FusionAuth JWTs and are not revocable: presenting one gets
+Access tokens, FusionAuth JWTs or Macro API tokens, are not revocable: presenting one gets
 `400 unsupported_token_type`. Revocation does not cut them short, so an access
 token issued before the revocation stays valid until it expires. Every token
 response carries `expires_in`, which is that remaining window; FusionAuth signs

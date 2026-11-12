@@ -251,7 +251,7 @@ fn a_logged_turn_replays_as_the_history_the_live_agent_recorded() {
 }
 
 #[test]
-fn mcp_calls_replay_their_canonical_names_instead_of_display_titles() {
+fn mcp_calls_replay_as_the_mcp_calls_the_live_agent_recorded() {
     let input = serde_json::json!({"query": "standup"});
     let output = serde_json::json!({"hits": 1});
     let history = replay_history(vec![
@@ -280,8 +280,10 @@ fn mcp_calls_replay_their_canonical_names_instead_of_display_titles() {
     assert_eq!(
         parts,
         &[
-            AssistantMessagePart::ToolCall {
-                name: "mcp__slack__search".to_owned(),
+            AssistantMessagePart::McpToolCall {
+                name: "search".to_owned(),
+                service: "slack".to_owned(),
+                display_name: Some("Search Slack".to_owned()),
                 json: input,
                 id: "call-1".to_owned(),
             },
@@ -722,9 +724,116 @@ fn streamed_mcp_call_replays_its_tool_name_metadata_instead_of_its_label() {
         panic!("one turn should replay");
     };
     assert!(
-        matches!(&parts[0], AssistantMessagePart::ToolCall { name, json, .. } if name == "mcp__files__search" && json == &serde_json::json!({"query":"plan"}))
+        matches!(&parts[0], AssistantMessagePart::McpToolCall { name, service, display_name, json, .. } if name == "search" && service == "files" && display_name.as_deref() == Some("Search files") && json == &serde_json::json!({"query":"plan"}))
     );
     assert!(
         matches!(&parts[1], AssistantMessagePart::ToolCallResponseJson { name, .. } if name == "mcp__files__search")
+    );
+}
+
+/// Cards presented before they carried `_meta.macro.presented` are in old
+/// logs as they were written: a view or review card under its `view_` or
+/// `review_` id, opened in progress and completed by the service. The agent
+/// never saw them, so a session holding one must still rebuild as it runs.
+#[test]
+fn cards_presented_before_the_marker_are_left_out_of_the_conversation() {
+    let code = serde_json::json!({"code": "execution.views.present(view)"});
+    let result = serde_json::json!({"status": "succeeded"});
+    let history = replay_history(vec![
+        prompt_frame("show me the cards"),
+        update_frame(SessionUpdate::ToolCall(
+            AcpToolCall::new("call-code", "mcp__macro_internal__ExecuteCode")
+                .status(ToolCallStatus::InProgress)
+                .raw_input(code.clone())
+                .meta(serde_json::Map::from_iter([(
+                    "macro".to_owned(),
+                    serde_json::json!({"toolName": "mcp__macro_internal__ExecuteCode"}),
+                )])),
+        )),
+        update_frame(SessionUpdate::ToolCall(
+            AcpToolCall::new("view_01", "mcp__macro_internal__PresentView")
+                .status(ToolCallStatus::InProgress)
+                .raw_input(serde_json::json!({"view": {"widgets": []}})),
+        )),
+        update_frame(SessionUpdate::ToolCallUpdate(ToolCallUpdate::new(
+            "view_01",
+            ToolCallUpdateFields::new()
+                .status(ToolCallStatus::Completed)
+                .raw_output(serde_json::json!({"view": {"widgets": []}})),
+        ))),
+        update_frame(SessionUpdate::ToolCall(
+            AcpToolCall::new("review_02", "mcp__macro_internal__PresentReview")
+                .status(ToolCallStatus::InProgress)
+                .raw_input(serde_json::json!({"reviewId": "02"})),
+        )),
+        update_frame(SessionUpdate::ToolCallUpdate(ToolCallUpdate::new(
+            "review_02",
+            ToolCallUpdateFields::new()
+                .status(ToolCallStatus::Completed)
+                .raw_output(
+                    serde_json::json!({"reviewId": "02", "message": "Presented to the user"}),
+                ),
+        ))),
+        update_frame(SessionUpdate::ToolCallUpdate(ToolCallUpdate::new(
+            "call-code",
+            ToolCallUpdateFields::new()
+                .status(ToolCallStatus::Completed)
+                .raw_output(result.clone()),
+        ))),
+        answer("show me the cards", "end_turn"),
+    ]);
+
+    let [HistoryEntry::User { .. }, HistoryEntry::Assistant(parts)] = history.as_slice() else {
+        panic!("one tool turn should replay, got {history:#?}");
+    };
+    assert_eq!(
+        parts,
+        &[
+            AssistantMessagePart::McpToolCall {
+                name: "ExecuteCode".to_owned(),
+                service: "macro_internal".to_owned(),
+                display_name: None,
+                json: code,
+                id: "call-code".to_owned(),
+            },
+            AssistantMessagePart::ToolCallResponseJson {
+                name: "mcp__macro_internal__ExecuteCode".to_owned(),
+                json: result,
+                id: "call-code".to_owned(),
+            },
+        ]
+    );
+}
+
+/// Only the presented shape is left out: a call the model made keeps its
+/// place even under a presentation's name, since its id is the model's.
+#[test]
+fn a_call_named_like_a_presentation_with_the_models_id_still_replays() {
+    let input = serde_json::json!({"view": {"widgets": []}});
+    let history = replay_history(vec![
+        prompt_frame("present it"),
+        update_frame(SessionUpdate::ToolCall(
+            AcpToolCall::new("call-7", "mcp__macro_internal__PresentView")
+                .status(ToolCallStatus::InProgress)
+                .raw_input(input.clone()),
+        )),
+        update_frame(SessionUpdate::ToolCallUpdate(ToolCallUpdate::new(
+            "call-7",
+            ToolCallUpdateFields::new()
+                .status(ToolCallStatus::Completed)
+                .raw_output(serde_json::json!({})),
+        ))),
+        answer("present it", "end_turn"),
+    ]);
+
+    let [HistoryEntry::User { .. }, HistoryEntry::Assistant(parts)] = history.as_slice() else {
+        panic!("one tool turn should replay, got {history:#?}");
+    };
+    assert!(
+        parts.iter().any(|part| matches!(
+            part,
+            AssistantMessagePart::McpToolCall { id, .. } if id == "call-7"
+        )),
+        "the model's own call replays: {parts:#?}"
     );
 }

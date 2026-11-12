@@ -6,7 +6,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use calendar_events::domain::models::google_calendar_scope_parameter;
-use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
+use macro_authorization::{AccountHolderOrInternal, MacroAuthorizationExtractor};
 use macro_middleware::tracking::ClientIp;
 use model::response::ErrorResponse;
 use roles_and_permissions::domain::model::PermissionId;
@@ -319,7 +319,7 @@ impl IntoResponse for GmailLinkStatusError {
 pub async fn check_gmail_link_status_handler(
     State(ctx): State<ApiContext>,
     ip_context: ClientIp,
-    authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
+    authorization: MacroAuthorizationExtractor<AuthorizationService, AccountHolderOrInternal>,
 ) -> Result<Json<GmailLinkStatusResponse>, GmailLinkStatusError> {
     // Check if the user has an email link in db
     if macro_db_client::email::check_user_email_link(

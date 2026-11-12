@@ -30,12 +30,34 @@ first DM, with or without CRM. Existing one-to-one DMs replace person rows while
 preserving name/email matches; selecting a person opens their DM, which the
 first message creates when there isn't one yet. Verify both
 categories with a teammate who has no conversation or CRM record.
-Name search here, in Command K, and in the Chat sidebar finds a conversation by
-its participants in any order, separated by spaces or commas, with name prefixes
-allowed. A query naming exactly its participants ranks it right after exact
-names, above a larger group holding the same people. In Command K and mobile
-name search, a person's first name alone also counts as exact for their DM or
-person row.
+Conversation search here, in Command K, and in the Chat sidebar matches participants
+in any order, separated by spaces or commas, with name prefixes allowed. Naming
+exactly its participants ranks a conversation after exact names, above a larger
+group holding the same people. Ordinary DM entity matches also treat a first name
+as exact; bounded personal-contact windows use their separate policy below.
+
+Ordinary entity relevance keeps its fixed per-item score. Personal contacts use
+exact normalized names, then every query word prefixing a name word in any order,
+then literal contains. Each tier is recent-first with stable identity ties: `jo sm`
+and `sm jo` can find John Smith; `jhn` cannot, while `ohn` can. Complete email
+addresses and Macro IDs are exact identities, never display-name aliases.
+Incomplete typed addresses use email-prefix matching.
+
+Personal-contact suggestions now use bounded windows. Paging replaces the person
+window and resets its virtual focus/scroll instead of retaining the directory.
+CRM aliases resolve against personal contacts for only their current window;
+late resolution must preserve the row's UI identity. Sender/speaker/creator facets
+search local contact windows while open and retain selected labels independently.
+Assignee facets keep their team/agent roster, including selected outsiders.
+Verify off-page selection and Only on desktop and phone. A short/empty window
+may still offer Next; it is not proof that the directory is exhausted.
+Returning to a previously paged query or exclusion policy restarts at its first
+window. An offline picker waiting for local context should recover when that
+context arrives. Partial caches stay local even online; Refresh schedules background
+sync rather than remote search. Hydration/context changes restart stale windows and
+must not revive earlier replies or clear authorization errors. Current-search DM metadata wins over an older stored
+person target. Resolving 500 selected people keeps all 500 and looks up self
+separately when that would otherwise overflow the batch.
 On phones, name-result icons and avatars are scaled to 150% (16px artwork
 becomes 24px), preserving row height and text alignment.
 
@@ -76,6 +98,12 @@ live search. Closing Search clears the input and its unsent suggested form.
 For Search intent, extraction selects a search type before extracting only that
 type's supported filters. Task status/priority/assignee/creator filters and channel
 In/From filters use the same controls and resolution as desktop Command K.
+The task Assignee facet reuses selected-first ordering when opening the picker,
+with available agents, team members, and the **Search assignees...** placeholder.
+Rows stay in place while selecting or deselecting. Existing selected outsiders
+remain removable, but contact discovery is not available. Desktop chips and the
+mobile filter drawer share this behavior.
+Created by, channel senders, and call speakers retain their existing people pools.
 The shared global-search filters and results update live above the bar. Open a
 filtered result directly; there is no separate Search submit action.
 Opening a result hides search chrome while

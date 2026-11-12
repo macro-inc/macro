@@ -1,7 +1,8 @@
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { Popover } from '@kobalte/core/popover';
 import PlugsIcon from '@phosphor/plugs.svg';
 import { usePipedreamConnectedSlugs } from '@queries/pipedream-connectors';
-import { badgeTriggerClasses } from '@ui';
+import { Button, badgeTriggerClasses } from '@ui';
 import { type Accessor, Show } from 'solid-js';
 import { PipedreamAppPicker } from '../settings/PipedreamAppPicker';
 import type { RoutineApp } from './core/draft';
@@ -18,6 +19,8 @@ export function createRoutineConnectedApps(): Accessor<
 export function RoutineApps(props: {
   apps: RoutineApp[];
   onChange: (apps: RoutineApp[]) => void;
+  /** A chip listing the apps (default), or an "Add connection" button. */
+  variant?: 'chip' | 'button';
 }) {
   const connections = usePipedreamConnectedSlugs();
   let triggerRef: HTMLButtonElement | undefined;
@@ -38,27 +41,44 @@ export function RoutineApps(props: {
       gutter={6}
       boundary={() => document.documentElement}
     >
-      <Popover.Trigger
-        ref={triggerRef}
-        aria-label={
-          props.apps.length === 0 ? 'Add required apps' : 'Required apps'
+      <Show
+        when={props.variant === 'button'}
+        fallback={
+          <Popover.Trigger
+            ref={triggerRef}
+            aria-label={
+              props.apps.length === 0 ? 'Add required apps' : 'Required apps'
+            }
+            title={
+              missing() ? 'Connect every app this routine requires' : label()
+            }
+            class={badgeTriggerClasses({
+              variant: 'outline',
+              size: 'sm',
+              class: 'min-w-0 max-w-full text-left text-ink-muted',
+            })}
+          >
+            <PlugsIcon class="size-3 shrink-0" />
+            <span class="min-w-0 truncate">{label()}</span>
+            <Show when={missing()}>
+              <span
+                aria-hidden="true"
+                class="size-1.5 shrink-0 rounded-full bg-failure"
+              />
+            </Show>
+          </Popover.Trigger>
         }
-        title={missing() ? 'Connect every app this routine requires' : label()}
-        class={badgeTriggerClasses({
-          variant: 'outline',
-          size: 'sm',
-          class: 'min-w-0 max-w-full text-left text-ink-muted',
-        })}
       >
-        <PlugsIcon class="size-3 shrink-0" />
-        <span class="min-w-0 truncate">{label()}</span>
-        <Show when={missing()}>
-          <span
-            aria-hidden="true"
-            class="size-1.5 shrink-0 rounded-full bg-failure"
-          />
-        </Show>
-      </Popover.Trigger>
+        <Popover.Trigger
+          as={Button}
+          ref={triggerRef}
+          variant="secondary"
+          size="sm"
+        >
+          <PlusIcon class="size-3.5" />
+          Add connection
+        </Popover.Trigger>
+      </Show>
       <Popover.Portal
         mount={dialog()}
         ref={(element) => {
@@ -72,7 +92,7 @@ export function RoutineApps(props: {
           onFocusOutside={(event) => event.preventDefault()}
         >
           <Popover.Title class="text-sm font-medium">
-            Required apps
+            {props.variant === 'button' ? 'Connections' : 'Required apps'}
           </Popover.Title>
           <Popover.Description class="mb-3 mt-1 text-xs text-ink-muted">
             Every run gets these apps on top of the agent's own. Connect each

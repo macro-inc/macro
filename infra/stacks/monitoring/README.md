@@ -6,7 +6,8 @@ Datadog monitors and synthetic tests as code.
 Datadog. This stack **adopts** them — it does not recreate them. `import.json`
 lists every one by id. Everything else is declared here first and is created
 on deploy: the prod threshold and anomaly monitors (`monitors/macrodb.ts`,
-`redis.ts`, `queues.ts`, `regressions.ts`, `outlook-sync.ts`) and their dashboards, the rollout monitors, the GoAlert webhooks and health check, the Outlook sync metrics and retention filter, one other log-based metric, and one downtime.
+`redis.ts`, `queues.ts`, `regressions.ts`, `outlook-sync.ts`,
+`routine-suggestions.ts`, `harness-runtimes.ts`) and their dashboards, the rollout monitors, the GoAlert webhooks and health check, the Outlook sync, routine suggestions and agent runtime metrics, the Outlook retention filter, one other log-based metric, and one downtime.
 
 ## Routing
 
@@ -42,14 +43,14 @@ and has two services, each with its pair of webhooks declared in `goalert.ts`:
 Paging monitors: the app-down synthetic, ALB non-200 responses and low healthy
 hosts, Lambda error count, web-app source errors, macro-cache memory, RDS high
 CPU, RDS storage, RDS proxy connections, the three SES reputation monitors, the
-GraphQL soup DSS 5xx and DB connections monitors, and macrodb blocked
-connections. `error-logs-overall` notifies without paging because it crosses
+GraphQL soup DSS 5xx and DB connections monitors, macrodb blocked
+connections, and the AI provider account monitor. `error-logs-overall` notifies without paging because it crosses
 its thresholds many times a day.
 
 ## Prod threshold monitors
 
-`monitors/macrodb.ts`, `redis.ts`, `queues.ts`, `regressions.ts` and
-`outlook-sync.ts` declare the prod threshold, forecast and anomaly monitors with `prodMonitor()`. The ones
+`monitors/macrodb.ts`, `redis.ts`, `queues.ts`, `regressions.ts`,
+`outlook-sync.ts`, `routine-suggestions.ts` and `harness-runtimes.ts` declare the prod threshold, forecast and anomaly monitors with `prodMonitor()`. The ones
 on CloudWatch metrics have hand-written copies in Grafana
 (`infra/stacks/observability/nixos/prod-alerts.nix`), and Grafana pages on-call for
 the critical ones through GoAlert. Their Datadog copies only notify (GoAlert's
@@ -58,7 +59,7 @@ anomaly monitor reads `macro.logs.errors`, a log-based metric declared in
 `regressions.ts`, because log monitors have no anomaly function.
 
 Each of those files also declares a dashboard (MacroDB, Redis, Queue,
-Regression alerts and Outlook sync) with one graph per monitor, titled like the monitor, its
+Regression alerts, Outlook sync and Routine suggestions) with one graph per monitor, titled like the monitor, its
 critical and warning thresholds drawn as markers; anomaly graphs show the band
 instead. Every prod monitor's message links to its dashboard. Change a query or
 threshold in the graph too; `routing.test.ts` checks that each monitor has a
@@ -115,11 +116,13 @@ The gate is that preview:
   of the channel), and the GraphQL soup volume, websocket upgrade, gateway
   connections and task count monitors their `query` and thresholds (volume
   and websocket upgrades also gain recovery thresholds).
-- **90 resources to create**: 70 monitors (31 prod threshold and anomaly, 19 GraphQL soup, 9
-  notification retention, 10 WhatsApp session, 1 native call push), 2 webhooks,
-  7 log-based metrics, 3 span-based metrics and 1 APM retention filter (6, 3
-  and 1 of them for Outlook sync), the GoAlert synthetic test, the five prod
-  alert dashboards, and the notification retention dashboard. If the paging
+- **116 resources to create**: 79 monitors (35 prod threshold and anomaly, 19 GraphQL soup, 9
+  notification retention, 10 WhatsApp session, 1 native call push, 2 harness
+  presence, 3 OAuth), 2 webhooks,
+  16 log-based metrics, 9 span-based metrics and 1 APM retention filter (6, 3
+  and 1 of them for Outlook sync, 8 log-based metrics for routine
+  suggestions, 1 log-based and 6 span-based metrics for agent runtimes), the
+  GoAlert synthetic test, the seven prod alert dashboards, and the notification retention dashboard. If the paging
   webhooks and GoAlert synthetic are already deployed, expect only the 2
   Notify webhooks among the webhooks.
 - **1 downtime to create**, muting `[PROD] Notification consumer: no
@@ -220,6 +223,36 @@ Android call push, excluding stale device registrations.
 It sees only publishes SNS rejects. A push that SNS accepts and the device then
 drops leaves no backend trace.
 
+## OAuth connection coverage
+
+`monitors/oauth.ts` adds three production log monitors through GoAlert's
+Notify service. They post to the alerts channel without phoning on-call,
+renotify hourly, and recover when their rolling count falls below the threshold:
+
+| Signal | Threshold | First check |
+| --- | --- | --- |
+| Linked GitHub token lookup errors | 3 in 15 minutes | Internal auth response and the caller's resolved authentication-service key; user OAuth can succeed while this lookup fails. |
+| Native MCP token exchange/provider rejection or Pipedream connection failure | 3 in 1 hour | Provider error, redirect URL, scopes, app configuration and organization permissions. Explicit `access_denied`, `user_cancelled` and `user_canceled` codes are excluded. |
+| OAuth client rejection codes in `error` or `reason` | 1 in 15 minutes | Client ID/secret, app status and allowed grant types for `invalid_client`, `unauthorized_client` or `incorrect_client_credentials`. |
+
+The first two read existing logs from `mcp_client` and `pipedream_mcp`;
+the third is provider-independent. Log samples are not included in notifications;
+follow the filtered log links for investigation. The linked-token log was
+verified in production during the internal-key failure. Ordinary unlinked or
+expired GitHub grants return no token rather than emitting that failure log.
+
+These are failure signals, not synthetic sign-in tests. They cannot detect an
+unused provider breaking, a browser-only failure, or an error that is not
+logged in one of these forms. Repeated failures from one user's permissions
+can trigger the flow monitor and need triage. Generic HTTP 401s, `invalid_grant`,
+and routine expired grants do not by themselves trigger the client-rejection
+monitor. Recovery means the error count fell below threshold, not that a sign-in succeeded.
+
+After deploying a credential fix, verify the internal token lookup succeeds
+and a read-only MCP tool call works with the linked account. This stack needs
+its own explicitly approved manual deployment; merging the service fix does
+not activate these alerts.
+
 ## GraphQL soup rollout coverage
 
 `monitors/graphql-soup.ts` declares 19 new monitors for the `enable-graphql-soup`
@@ -258,6 +291,24 @@ These signals do not acknowledge delivery through PostgreSQL NOTIFY or WebSocket
 See [the rollout runbook](../../../docs/runbooks/notification-retention.md) for
 limitations and the post-deploy verification gates.
 
+## AI provider coverage
+
+`monitors/ai-providers.ts` adds **four monitors, one dashboard, two log-based
+metrics and one span-based metric** for Macro's AI provider accounts. Its
+header lists every log and span field it reads; [the
+runbook](../../../docs/runbooks/ai-providers.md) covers each alert.
+
+- A provider refusing Macro's key as suspended or out of credit pages from the
+  Rust services' `ai provider account unavailable` log, and notifies from the
+  AI editing worker's `ai.provider_account_unavailable` span.
+- Month-to-date priced spend, from the `ai usage priced` log, warns at 50% and
+  80% of a provider's monthly cap and alerts at 100%. `MONTHLY_CAPS` lists only
+  documented caps: Fireworks ($30). The spend monitors use a calendar-month
+  cumulative window (`current_1mo`).
+
+Deploy the services that emit those logs and the span before these; until then
+the metrics are empty and the monitors do not alert.
+
 ## Outlook sync coverage
 
 `monitors/outlook-sync.ts` adds **six monitors, one dashboard, six log-based
@@ -278,3 +329,45 @@ per-mailbox tags before Outlook leaves its rollout flag.
 Thresholds come from the first production import (2026-11-03, two mailboxes,
 about 2,100 messages in 15 minutes); retune them against a few weeks of data.
 The reauthorization thresholds have no baseline yet.
+
+## Routine suggestions coverage
+
+`monitors/routine-suggestions.ts` adds **one monitor, one dashboard and eight
+log-based metrics** for routine suggestions in agent-harness-service. Its
+header lists every log field it reads;
+[the runbook](../../../docs/runbooks/routine-suggestions.md) covers the alert
+and where each generation's trace is.
+
+The dashboard shows generations by outcome, the fallback rate (generations
+that left Macro's templates only), time to first suggestion, per-surface fill,
+rejected suggestions, and saves and dismissals by surface, origin and kind.
+The monitor notifies when more than 10% of an hour's finished generations,
+plus two, fail; it does not page while suggestions are behind
+`enable-routine-suggestions`.
+
+Deploy the agent-harness-service release that emits the
+`routine_suggestions.*` logs before these. Log-based metrics count from deploy
+onward. There is no baseline yet; the 10% threshold is a starting point.
+
+## Agent runtime coverage
+
+`monitors/harness-runtimes.ts` adds **four monitors, one dashboard, six
+span-based metrics and one log-based metric** for agent-harness-service
+runtimes. Its header lists every field it reads;
+[the runbook](../../../docs/runbooks/agent-harness-runtimes.md) covers each
+alert. None of them page.
+
+Per runtime, the monitors notify when one dials more than 15 times in
+15 minutes or lists more than 500 sessions to reattach; across the service,
+when it logs more than 1,000 tokio runtime starvation warnings in 15 minutes;
+and per task, when its resident memory passes 75% of its limit over 15
+minutes.
+Over the seven days to 2026-11-10 quiet 15 minutes stayed at or under 12
+dials, 263 sessions and 451 warnings. Every reattach storm crossed the
+sessions or dials threshold and the starvation one; the storm at 17:15Z on
+2026-11-10 was one runtime listing about 1,450 sessions in three dials.
+
+The eager, lazy and skipped metrics stay empty until the agent-harness-service
+release that records those span fields; the dials, sessions and starvation
+metrics read fields prod emits today. Span-based metrics count from deploy
+onward.

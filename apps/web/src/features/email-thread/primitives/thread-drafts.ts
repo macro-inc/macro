@@ -8,6 +8,7 @@ export function createThreadDrafts(
     | {
         db_id: string;
         draftMap: Record<string, EmailMessage>;
+        filtered: EmailMessage[];
       }
     | undefined
   >
@@ -20,6 +21,8 @@ export function createThreadDrafts(
   // revalidation of a stale cache wins, but an out-of-order response can't
   // downgrade a draft. Entries missing from a fetch are kept: deletes are
   // handled locally below, and dropping one would collapse an open composer.
+  // A draft the snapshot lists as a sent message is gone for good: keeping it
+  // would reopen the sent email as an editable draft.
   const serverDrafts = createMemo<
     { threadDbId: string; map: Record<string, EmailMessage> } | undefined
   >((prev) => {
@@ -29,9 +32,11 @@ export function createThreadDrafts(
     if (!prev || prev.threadDbId !== data.db_id) {
       return { threadDbId: data.db_id, map: next };
     }
+    const sent = new Set(data.filtered.map((message) => message.db_id));
     const map: Record<string, EmailMessage> = { ...next };
     for (const [messageId, prevDraft] of Object.entries(prev.map)) {
       const nextDraft = map[messageId];
+      if (sent.has(prevDraft.db_id)) continue;
       if (
         !nextDraft ||
         (nextDraft.db_id === prevDraft.db_id &&

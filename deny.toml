@@ -91,6 +91,7 @@ ignore = [
   { id = "RUSTSEC-2026-0258", reason = "h2 0.3 (via Stripe 0.41's hyper-0.14 client) has no patched release; the hyper 1.x line is bumped to the patched 0.4.16" },
   { id = "RUSTSEC-2026-0346", reason = "Temporarily accepted for rustls 0.21 pinned by Stripe 0.41; other consumers use patched rustls 0.23.46" },
   { id = "RUSTSEC-2026-0349", reason = "Temporarily accepted for rustls 0.21 pinned by Stripe 0.41; other consumers use patched rustls 0.23.46" },
+  { id = "RUSTSEC-2026-0441", reason = "pin-utils is unmaintained, not unsound; transitive via aws-smithy-http, -runtime and -types, no release without it yet" },
   # 0.26.11 only re-exports webpki-roots 1.x; the bans below require patched roots.
   # Remove this exception when SQLx and the remaining callers stop using the wrapper.
   { id = "RUSTSEC-2026-0381", reason = "webpki-roots 0.26.11 contains no certificates and re-exports patched 1.0.10; bans reject every other version below 1.0.10" },
@@ -223,8 +224,11 @@ deny = [
     "agent_session",             # GenAI span tests
     "ai_billing",                # Background usage span propagation tests only
     "ai_toolset",                # GenAI span tests
+    "authentication_service",    # Session-code and token redaction span tests only (dev-dependency)
+    "calendar_service",          # HTTP server span export tests only (dev-dependency)
     "channels",                  # Dev logging only
     "coding_agent_worker",       # Standalone daemon logging setup
+    "convert_service",           # process_message span status tests only (dev-dependency)
     "cursor_cloud_agents",       # Standalone ACP binary logging; stdout is the protocol, so macro_entrypoint cannot own it
     "dictation",                 # Metadata tracing and content-redaction tests only
     "document_storage_service",  # GraphQL telemetry span and log tests only (dev-dependency)
@@ -232,7 +236,9 @@ deny = [
     "email",                     # Dev logging only
     "email_api_client",          # Outlook transport span tests only
     "email_db_client",           # Purge phase span tests only
+    "email_service",             # CRM backfill trace propagation and HTTP server span tests only (dev-dependency)
     "forms",                     # Anonymous-response span and log leak tests only (dev-dependency)
+    "fusionauth",                # Credential log leak tests only (dev-dependency)
     "genai_telemetry",           # GenAI span tests
     "graphql_email",             # Unavailable-thread warning field and span tests only
     "graphql_entity_mutation",   # Batch failure span field tests only

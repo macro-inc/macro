@@ -21,7 +21,7 @@ export default {
   stepDetect: 'Find an agent',
   stepDetectDone: 'Found {{agent}}',
   stepConnect: 'Connect this computer',
-  stepConnectStarting: 'Starting the local runtime…',
+  stepConnectStarting: 'Starting Macro on this computer…',
   stepConnectInstalling: 'Installing the {{agent}} connector…',
   stepConnectPairing: 'Linking this computer to your account…',
   stepAgent: 'Create your agent',

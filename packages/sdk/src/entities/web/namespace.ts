@@ -34,7 +34,7 @@ export interface WebFetchOptions {
  * Search the public web and read web pages, charged to the acting user's AI
  * allowance.
  *
- * @routing Use when finding or reading information on the public internet, or reading a URL's preview metadata (`macro.unfurls`); not searching the user's Macro workspace (`macro.search`).
+ * @routing Use when finding or reading information on the public internet; not searching the user's Macro workspace (`macro.search`) or reading a URL's preview card (`macro.unfurls`).
  *
  * @agent Search returns snippets, which often answer the question on their
  * own; fetch a result's URL only when you need the whole page. Cite the URL of
@@ -54,6 +54,9 @@ export class WebNamespace {
    *   maxResults: 3,
    * });
    * for (const result of results) console.log(result.title, result.url, result.snippet);
+   *
+   * @write
+   * @openworld
    */
   async search(
     query: string,
@@ -81,6 +84,9 @@ export class WebNamespace {
    * @example
    * const page = await macro.web.fetch('https://tokio.rs/blog/2025-10-tokio-1-48');
    * console.log(page.content);
+   *
+   * @write
+   * @openworld
    */
   async fetch(
     url: string,

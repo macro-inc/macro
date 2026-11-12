@@ -6,6 +6,7 @@ import { openNotification } from '@notifications';
 import type { UnifiedNotification } from '@notifications/types';
 import type { NotificationInboxRow } from './context/notifications-inbox-context';
 import { agentTurnParams } from './primitives/notification-location';
+import { rowEntity } from './primitives/row-entity';
 
 type OpenOptions = { newSplit: boolean; splitHandle: SplitHandle };
 
@@ -34,7 +35,7 @@ async function openStackNotification(
       options.splitHandle
     ));
   if (!opened || opened.isErr()) {
-    await openEntityInSplitFromUnifiedList(row.content.entityAt(notification), {
+    await openEntityInSplitFromUnifiedList(rowEntity(row, notification), {
       openInNewSplit: options.newSplit,
       splitHandle: options.splitHandle,
     });
@@ -57,10 +58,17 @@ export function openNotificationInSplit(
   row: NotificationInboxRow,
   options: OpenOptions & { notification?: UnifiedNotification }
 ) {
+  // A runtime has no page of its own: its newest notification opens
+  // Settings → Machines at it, with Share open when a request waits there.
+  const notification =
+    options.notification ??
+    (row.content.entity.type === 'harness'
+      ? row.content.notifications[0]
+      : undefined);
   fireAndForget(
-    options.notification
-      ? openStackNotification(row, options.notification, options)
-      : openEntityInSplitFromUnifiedList(row.content.entity, {
+    notification
+      ? openStackNotification(row, notification, options)
+      : openEntityInSplitFromUnifiedList(rowEntity(row), {
           openInNewSplit: options.newSplit,
           splitHandle: options.splitHandle,
         }),

@@ -79,11 +79,17 @@ import type {
  * (owner principal), `src` and `vis`. Filters remain server-validated.
  * CRM, initiatives and database rows have their own namespaces and are not
  * included in this browsing surface.
+ *
+ * @routing Use when browsing the user's recent or filtered workspace items, such as what changed today; not keyword search (`macro.search`).
  */
 export class WorkspaceNamespace {
   constructor(private readonly client: MacroClient) {}
 
-  /** One bounded page of recent items, newest first by default; resume using nextCursor and the same options. */
+  /**
+   * One bounded page of recent items, newest first by default; resume using nextCursor and the same options.
+   *
+   * @readonly
+   */
   async page(options: WorkspacePageOptions = {}): Promise<WorkspacePage> {
     const query = new WorkspaceQuery(this.client);
     return this.fetch(query, await query.body(options), options.cursor);
@@ -94,6 +100,8 @@ export class WorkspaceNamespace {
    * page size, not a total result limit.
    * Break a `for await` loop to stop; no speculative next page is fetched.
    * Tag/inbox resolution is reused within this iterator.
+   *
+   * @readonly
    */
   async *list(
     options: WorkspaceListOptions = {},
