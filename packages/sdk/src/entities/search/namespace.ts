@@ -178,7 +178,9 @@ export class SearchNamespace {
    *
    * `unavailable` lists the kinds that could not be checked this time; a
    * name with no match may still name an item of one of them, so look those
-   * kinds up another way before saying it does not exist.
+   * kinds up another way before saying it does not exist. The same goes for
+   * a document or task named in under 3 characters, which isn't looked for,
+   * and one whose name more than 50 newer documents contain.
    *
    * @readonly
    *

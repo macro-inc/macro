@@ -16,6 +16,9 @@ pub enum SearchNamesError {
     /// The search service could not be reached or did not answer in time.
     #[error("the search service could not be reached")]
     Unreachable(#[source] reqwest::Error),
+    /// The search service answered OK with a body that isn't matches.
+    #[error("the search service's matches couldn't be read")]
+    Undecodable(#[source] reqwest::Error),
     /// The search service answered with something other than matches.
     #[error("unexpected response from the search service, status {status}: {body}")]
     Unexpected {
@@ -49,7 +52,7 @@ impl SearchServiceClient {
             .map_err(SearchNamesError::Unreachable)?;
         let status = response.status();
         if status == reqwest::StatusCode::OK {
-            return response.json().await.map_err(SearchNamesError::Unreachable);
+            return response.json().await.map_err(SearchNamesError::Undecodable);
         }
         let body = response
             .text()

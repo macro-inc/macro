@@ -16,6 +16,7 @@ use entity_access::domain::models::{
     Entity, EntityAccessReceipt, EntityPermission, EntityType, MemberTeamRole,
 };
 use entity_access::domain::ports::EntityAccessService;
+use futures::{StreamExt, TryStreamExt};
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_user_id::user_id::MacroUserIdStr;
 use model::response::ErrorResponse;
@@ -34,6 +35,7 @@ use crate::{
     },
     domain::names::{
         Candidate, NameLookup, NameLookupError, NameSource, NameSourceError, NameViewer, Needle,
+        READS_PER_SOURCE,
     },
     outbound::names::ChannelNames,
 };
@@ -44,7 +46,9 @@ mod test;
 /// The shortest name the document index is searched for.
 const MIN_INDEXED_NAME_CHARS: usize = 3;
 
-/// How many documents one name's index search reads.
+/// How many documents one name's index search reads. The index returns the
+/// most recently updated first, so an exact name that more than this many
+/// newer documents contain is missed.
 const DOCUMENTS_PER_NAME: u32 = 50;
 
 /// The nil id, which leaves a kind out of a unified search.
@@ -56,9 +60,6 @@ pub enum NamesError {
     /// The request asked for no names, too many, or an empty or overlong one.
     #[error(transparent)]
     Invalid(#[from] NameLookupError),
-    /// The caller's id isn't a Macro user id.
-    #[error("invalid user id")]
-    InvalidUserId,
     /// The caller's team couldn't be read.
     #[error("internal error")]
     Internal(rootcause::Report),
@@ -68,7 +69,6 @@ impl IntoResponse for NamesError {
     fn into_response(self) -> Response {
         let status = match &self {
             Self::Invalid(_) => StatusCode::BAD_REQUEST,
-            Self::InvalidUserId => StatusCode::UNAUTHORIZED,
             Self::Internal(error) => {
                 tracing::error!(error = ?error, "name lookup failed");
                 StatusCode::INTERNAL_SERVER_ERROR
@@ -105,9 +105,8 @@ pub(in crate::api) async fn handler(
     authorization: MacroAuthorizationExtractor<SearchAuthorizationService, UserOrInternal>,
     Json(request): Json<NameSearchRequest>,
 ) -> Result<Json<NameSearchResponse>, NamesError> {
+    let user = authorization.authorization.user.macro_user_id;
     let user_context = authorization.authorization.user.user_context;
-    let user = MacroUserIdStr::try_from(user_context.user_id.clone())
-        .map_err(|_| NamesError::InvalidUserId)?;
     let team = if wants_team(&request) {
         team_receipt(&ctx, &user).await?
     } else {
@@ -185,15 +184,18 @@ impl NameSource for IndexedDocuments {
         _kinds: &[NameKind],
         needles: &[Needle],
     ) -> Result<Vec<Candidate>, NameSourceError> {
-        let searches = needles
+        // Futures built up front: a stream `map` closure that borrows the
+        // needles isn't `Send` enough for `async_trait`.
+        let searches: Vec<_> = needles
             .iter()
             .filter(|needle| needle.as_str().chars().count() >= MIN_INDEXED_NAME_CHARS)
-            .map(|needle| self.search(needle));
-        let hits: Vec<Uuid> = futures::future::try_join_all(searches)
-            .await?
-            .into_iter()
-            .flatten()
+            .map(|needle| self.search(needle))
             .collect();
+        let found: Vec<Vec<Uuid>> = futures::stream::iter(searches)
+            .buffer_unordered(READS_PER_SOURCE)
+            .try_collect()
+            .await?;
+        let hits: Vec<Uuid> = found.into_iter().flatten().collect();
         if hits.is_empty() {
             return Ok(Vec::new());
         }

@@ -25,7 +25,9 @@ per-entity-type search plus a unified search across them — mounted into
   kinds as `unavailable`. This crate's own sources are channels
   (`src/outbound/names.rs`, Postgres) and documents and tasks
   (`IndexedDocuments` in `src/api/search/names.rs`, the name index); the host
-  supplies every other kind through `SearchHandlerState::name_sources`.
+  supplies every other kind through `SearchHandlerState::name_sources`. A
+  source that queries once per name runs at most `READS_PER_SOURCE` of them
+  at a time, so one lookup can't drain a connection pool.
 - `src/outbound.rs` + `src/outbound/agent_session.rs`: the OpenSearch query
   builders.
 

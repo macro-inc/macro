@@ -7,8 +7,11 @@ use contacts::domain::{
     models::people::{PeopleSearchLimit, PeopleSearchQuery, PersonMatch},
     ports::PeopleSearchService,
 };
+use futures::{StreamExt, TryStreamExt};
 use models_search::names::{NameKind, NamedItem};
-use search_service::names::{Candidate, NameSource, NameSourceError, NameViewer, Needle};
+use search_service::names::{
+    Candidate, NameSource, NameSourceError, NameViewer, Needle, READS_PER_SOURCE,
+};
 
 #[cfg(test)]
 mod test;
@@ -59,12 +62,20 @@ impl<S: PeopleSearchService> NameSource for PeopleNames<S> {
             .collect();
         tracing::Span::current().record("searched", queries.len());
 
-        let found = futures::future::try_join_all(queries.iter().map(|query| {
-            self.service
-                .search_people(viewer.user.clone(), query, limit)
-        }))
-        .await
-        .map_err(NameSourceError::Internal)?;
+        // Futures built up front: a stream `map` closure that borrows the
+        // queries isn't `Send` enough for `async_trait`.
+        let searches: Vec<_> = queries
+            .iter()
+            .map(|query| {
+                self.service
+                    .search_people(viewer.user.clone(), query, limit)
+            })
+            .collect();
+        let found: Vec<Vec<PersonMatch>> = futures::stream::iter(searches)
+            .buffer_unordered(READS_PER_SOURCE)
+            .try_collect()
+            .await
+            .map_err(NameSourceError::Internal)?;
 
         // A person several names found is one candidate.
         let mut seen = HashSet::new();

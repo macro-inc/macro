@@ -193,8 +193,9 @@ fn to_property_filter_args(filters: &[item_filters::PropertyFilter]) -> Vec<Prop
 
 /// Creates a unified search request and performs the search
 /// by calling individual simple search endpoints for each entity type
+// `req` is skipped: its query is what the user typed, often a person's name.
 #[tracing::instrument(
-    skip(ctx, user_context, query_params),
+    skip(ctx, user_context, query_params, req),
     fields(
         user_id = %user_context.user_id,
         search.match_type = %req.match_type,

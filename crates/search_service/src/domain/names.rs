@@ -18,6 +18,10 @@ mod test;
 /// How long one source may take before its kinds are reported unavailable.
 pub const SOURCE_TIMEOUT: Duration = Duration::from_secs(3);
 
+/// How many queries a source that reads once per name runs at a time, so one
+/// lookup of ten names can't take ten pooled connections.
+pub const READS_PER_SOURCE: usize = 3;
+
 /// Who is looking names up.
 #[derive(Clone, Debug)]
 pub struct NameViewer {

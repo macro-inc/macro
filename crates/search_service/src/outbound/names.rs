@@ -5,11 +5,14 @@ use std::collections::HashSet;
 use channels::outbound::channel_name::{
     ChannelNameSearch, batch_resolve_channel_names, match_channel_names,
 };
+use futures::{StreamExt, TryStreamExt};
 use models_search::names::{NameKind, NamedItem};
 use readonly_pool::ReadOnlyPool;
 use uuid::Uuid;
 
-use crate::domain::names::{Candidate, NameSource, NameSourceError, NameViewer, Needle};
+use crate::domain::names::{
+    Candidate, NameSource, NameSourceError, NameViewer, Needle, READS_PER_SOURCE,
+};
 
 /// How many channels one name reads.
 const CHANNELS_PER_NAME: i64 = 100;
@@ -67,9 +70,16 @@ impl NameSource for ChannelNames {
         _kinds: &[NameKind],
         needles: &[Needle],
     ) -> Result<Vec<Candidate>, NameSourceError> {
-        let found =
-            futures::future::try_join_all(needles.iter().map(|needle| self.search(viewer, needle)))
-                .await?;
+        // Futures built up front: a stream `map` closure that borrows the
+        // viewer isn't `Send` enough for `async_trait`.
+        let searches: Vec<_> = needles
+            .iter()
+            .map(|needle| self.search(viewer, needle))
+            .collect();
+        let found: Vec<Vec<Uuid>> = futures::stream::iter(searches)
+            .buffer_unordered(READS_PER_SOURCE)
+            .try_collect()
+            .await?;
         let ids: Vec<Uuid> = found
             .into_iter()
             .flatten()
