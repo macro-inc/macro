@@ -21,9 +21,13 @@ milliseconds instead of waiting on container provisioning.
   (history without reasoning parts and with adjacent text merged, as
   `agent::to_rig_messages` builds it; model, effort, speed, identity,
   instructions) must equal the live one, with no summary in flight, failed, or
-  image descriptions cached, since none of that is in the log. A replay change
-  that drifts from the live history stops sessions from releasing; the
-  manager tests with MCP calls and a failed turn guard it.
+  image descriptions cached, since none of that is in the log. Cards the
+  session presents on a turn's behalf (code-mode views and reviews) never
+  reached the agent, so replay skips them: those marked
+  `_meta.macro.presented`, and older ones by their shape
+  (`agent_session::domain::model::is_presented`). A replay change that drifts
+  from the live history stops sessions from releasing; the manager tests with
+  MCP calls and a failed turn guard it.
 - `src/domain/tool_stream.rs`: throttled, bounded argument previews for pending
   calls; replay ignores previews and retains only calls that began execution.
 - `src/domain/session.rs` / `src/domain/replay.rs`: in-process session state
@@ -74,6 +78,14 @@ retains notification ACP inputs and their replies; the transcript fold separatel
 omits system input from its message projection. PresentReview, GetReview and
 DecideReview are eager internal tools in both standard and code modes.
 
+A user's conversation turns run code mode when the turn's MCP catalog lists
+every `mcp__macro_internal__` code tool, and otherwise fall back to the direct
+tools (`tool_mode` in `src/rig_engine.rs`). The owner's
+`ai-session-code-mode-only` PostHog flag (`domain/tool_mode.rs`) removes the
+fallback: a conversation turn without the code tools fails. Summaries advertise
+no tools in either mode and never read the flag. Unset, false or unreadable
+flags keep the fallback.
+
 - Owner memory is composed by the memory domain on each read; daily generation is hosted by cognition, not agent turns.
 
 ## Checks
@@ -82,11 +94,15 @@ DecideReview are eager internal tools in both standard and code modes.
 
 ## Gotchas
 
+- A native tool call held for owner approval must watch `request_context.cancel`
+  (`check_unless_cancelled`): the agent loop waits for running tools on cancel,
+  so an unwatched hold keeps a stopped turn alive.
 - Owners with `auto-skills` (`domain::entity_routing`) route SDK entities on
   code-mode turns: the prompt is `routed_prompt` (no area guidance) and the
   entities `select_documentation` picks bring their `@agent` guide with their
   index into the turn part. Everyone else keeps `prompt`, which inlines every
-  guide.
+  guide. Like skill routing, it ranks on the latest user message and the one
+  before it, so a follow-up keeps the previous turn's entities.
 - `auto` is a picker entry, not a routable id: `RigTurnEngine` asks its
   `AutoModelSelector` (Jev through cognition's named decisions, 1 s budget) per turn and runs
   Opus 5.5 (hard), GPT-6.1 Sol (mid) or Gemini 3.8 Flash (simple, and

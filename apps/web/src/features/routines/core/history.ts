@@ -70,4 +70,9 @@ export type HistoryRecord = {
    */
   revision?: number;
   error?: string;
+  /** The sub-routines the run created that still follow the routine. */
+  created?: CreatedRoutine[];
 };
+
+/** A routine a run created. */
+export type CreatedRoutine = { id: string; name: string };
