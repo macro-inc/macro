@@ -12,7 +12,7 @@ import {
 export type NativeUserMentionsOptions = NativeUserMentionSource &
   Pick<MentionsMenuOptions, 'users' | 'entities' | 'portalScope'>;
 
-/** USER is the first stage; remaining source kinds retain explicit coverage gaps. */
+/** Keep the actual shared providers and ordering for supported mention sources. */
 export function NativeUserMentionsOverlay(props: {
   view: EditorView;
   menu: MenuOperations;
@@ -30,7 +30,7 @@ export function NativeUserMentionsOverlay(props: {
         disableMentionTracking={props.source.disableMentionTracking}
         useBlockBoundary={true}
         showOpenTabs
-        sources={['users']}
+        sources={['users', 'documents', 'channels']}
         includeGroups={false}
         includeContacts={false}
         createHost={(blockId) =>
@@ -40,6 +40,8 @@ export function NativeUserMentionsOverlay(props: {
               blockName: useMaybeBlockName(),
               sourceDocumentId: blockId ?? props.source.sourceDocumentId,
               onUserMention: props.source.onUserMention,
+              onDocumentMention: props.source.onDocumentMention,
+              onEmailMention: props.source.onEmailMention,
               disableMentionTracking: props.source.disableMentionTracking,
             },
             props.alive

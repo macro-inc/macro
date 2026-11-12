@@ -1,8 +1,14 @@
+import type { EntityItem } from '@core/context/quickAccess';
 import type { IUser } from '@core/user';
+import {
+  initializeNativeSurfaceTests,
+  nativeSurface,
+} from '@macro-inc/lexical-wasm-view/view/test/native-surface';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createEditor, type LexicalEditor } from 'lexical';
 import { createSignal, type ParentProps } from 'solid-js';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, expect, it, vi } from 'vitest';
+import { NativeUserMentionsOverlay } from '../../../editing/NativeUserMentionsOverlay';
 import { createMenuOperations } from '../../../shared/inlineMenu';
 import { useEmailSearchMention } from './hooks/useEmailSearchMention';
 import { MentionsMenu } from './MentionsMenu';
@@ -660,4 +666,95 @@ it('feeds the native presentation from the same live providers without DOM keybo
   expect(onPick).toHaveBeenCalledTimes(1);
   menu.closeMenu();
   expect(publish.mock.lastCall?.[0].items).toEqual([]);
+});
+
+// This composition control supplies identical provider inputs to the real shared
+// UI. The native view is actual; no insertion or live-service result is inferred.
+beforeAll(initializeNativeSurfaceTests);
+it('native body exposes the same document/task/channel rows and View all ordering as Source', () => {
+  Element.prototype.scrollIntoView = vi.fn();
+  const entities: EntityItem[] = Array.from({ length: 10 }, (_, index) => ({
+    kind: 'entity',
+    bucket: index === 0 ? 'task' : 'note',
+    id: `reference-${index}`,
+    sortTimestamp: 10 - index,
+    searchText: `Reference ${index}`,
+    timestamps: {},
+    data: {
+      type: 'document',
+      id: `reference-${index}`,
+      name: `Reference ${index}`,
+      ownerId: 'fixture-owner',
+      fileType: 'md',
+      ...(index === 0 ? { subType: { type: 'task' } } : {}),
+    },
+  }));
+  entities.push({
+    kind: 'entity',
+    bucket: 'channel',
+    id: 'channel-reference',
+    sortTimestamp: 0,
+    searchText: 'Fixture channel',
+    timestamps: {},
+    data: {
+      type: 'channel',
+      id: 'channel-reference',
+      name: 'Fixture channel',
+      ownerId: 'fixture-owner',
+      channelType: 'public',
+    },
+  });
+  const users: IUser[] = [
+    { id: 'fixture-user', name: 'Fixture user', email: 'fixture@example.com' },
+  ];
+  const labels = ['People', 'Documents, Agents, & Tasks', 'Channels'];
+  const capture = () => ({
+    headings: [...document.querySelectorAll('span')]
+      .map((el) => el.textContent)
+      .filter((text) => labels.includes(text ?? '')),
+    rows: [...document.querySelectorAll('[title]')].map((el) =>
+      el.getAttribute('title')
+    ),
+    more: [...document.querySelectorAll('button')]
+      .map((el) => el.textContent)
+      .filter((text) => text?.includes('View all')),
+  });
+  const sourceMenu = createMenuOperations();
+  sourceMenu.openMenu();
+  const source = render(() => (
+    <MentionsMenu
+      menu={sourceMenu}
+      users={() => users}
+      entities={() => entities}
+      anchor={document.createElement('div')}
+      onPick={() => {}}
+      showOpenTabs
+    />
+  ));
+  const expected = capture();
+  expect(expected.headings).toEqual(labels);
+  expect(expected.more.length).toBeGreaterThan(0);
+  source.unmount();
+  const fixture = nativeSurface();
+  const menu = createMenuOperations();
+  menu.openMenu();
+  const native = render(() => (
+    <NativeUserMentionsOverlay
+      view={fixture.view}
+      menu={menu}
+      source={{
+        sourceDocumentId: 'source-document',
+        users: () => users,
+        entities: () => entities,
+        disableMentionTracking: true,
+      }}
+      alive={() => true}
+    />
+  ));
+  try {
+    expect(capture()).toEqual(expected);
+  } finally {
+    native.unmount();
+    fixture.close();
+  }
 });

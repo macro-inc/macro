@@ -486,9 +486,19 @@ User choices complete real settled REMOVE before shared notification/tracking,
 then insert through current Session admission and selection. An unhandled REMOVE
 is a completed operation. Disposal cancels late host insertion and unmounts UI
 before the user renderer context and runtime close. No captured selection is
-restored. The initial USER-only stage leaves all other Source catalog kinds open;
-it must expand to the complete Source configuration before catalog parity is
-claimed.
+restored. The native body also enables the existing document/task and channel
+providers through the same shared menu. Their rows, section order, ranking and
+View all behavior come from the Source controller, rather than a second native
+catalog. `handleEntityMentionWithInsertion` shares the real entity mapping,
+tracking and attachment callbacks; the Source adapter captures its real editor
+inside the async prepare call and resolves dispatch before lazy payload getters.
+Native entity selection completes global REMOVE, then tracking I/O, then the
+current-selection `group-b.insert-document-mention` action. Each native command
+uses actual queued SessionEdit admission and KeepModel selection. A UI-only
+read-only transition does not cancel accepted tracking; retired views and changed
+model generations do not receive late insertion. The complete Source catalog is
+still a separate requirement: groups, contacts, dates, booking, agent sessions
+and other source kinds are not activated by this document/channel change.
 
 
 Native overlay installation can precede the document's first projection. A null

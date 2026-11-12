@@ -68,6 +68,14 @@ while the editor retains a focused range leaves that range in place. Queued
 focus waits for native completion and rechecks disposal/editability before
 browser focus. These checks do not establish slash-menu or full document-app acceptance.
 
+For native body `@` mentions, compare the People, Documents, Agents, & Tasks,
+and Channels sections with Off using the same account and search. Check section
+order, row order, View all and paging. Pick a document, task and channel by both
+keyboard and pointer; the literal search must disappear and the referenced
+mention must render at the current caret after tracking completes. The native
+document/channel provider activation does not qualify the remaining date, group,
+booking, contact or agent-session insertion kinds.
+
 In the native body, `#` opens the same tags menu as the Off engine: after a
 space, an opening bracket or a quote, and not inside code. Filter by typing,
 pick a tag to insert it, then confirm **Add tag to Document** (or Task) to apply
