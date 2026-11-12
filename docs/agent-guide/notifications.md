@@ -415,8 +415,7 @@ settings, so a phone and a computer can differ. A sound preview still plays.
 Mobile push sent while the app is not open is unchanged.
 
 The backend-free desktop/phone regression drives the real settings section,
-persistence, previews, keyboard activation, rendered audio, and delivery
-through a stand-in notification feed:
+persistence, previews, and delivery through a stand-in notification feed:
 `bunx playwright test --config src/features/notification-sounds/browser-test/playwright.config.ts`
 (from `apps/web`). To check real delivery, turn sounds on, click anywhere in
 Macro, and trigger a mention from another session; then turn Mentions off and
