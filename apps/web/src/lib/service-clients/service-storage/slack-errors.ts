@@ -8,8 +8,6 @@ import { z } from 'zod';
  */
 export const slackErrorCodes = [
   'invalid_input',
-  'wrong_step',
-  'expired',
   'not_found',
   'forbidden',
   'conflict',
