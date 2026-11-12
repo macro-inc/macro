@@ -114,7 +114,9 @@ check *ARGS:
     if [ "{{ ARGS }}" = "full" ]; then
       if [ -n "$js" ]; then
         echo "── tsc (apps/web)"
-        bun run check || fail=1
+        # apps/web is large enough that Node's default heap aborts tsc with
+        # SIGABRT (exit 134). 16 GiB is the smallest value verified to finish.
+        NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=16384}" bun run check || fail=1
       fi
       if [ -n "$rs" ]; then
         echo "── clippy (root workspace)"
