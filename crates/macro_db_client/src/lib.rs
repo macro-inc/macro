@@ -8,6 +8,7 @@ pub mod call_record;
 pub mod chat;
 pub mod chat_history;
 pub mod convert;
+mod database_key;
 pub mod dcs;
 pub mod document;
 pub mod document_text;

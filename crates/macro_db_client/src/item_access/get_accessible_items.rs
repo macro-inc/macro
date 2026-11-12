@@ -1,13 +1,28 @@
 #[cfg(not(test))]
 use cached::proc_macro::cached;
 
+use std::sync::{Arc, LazyLock};
+
 use model::item::UserAccessibleItem;
+use single_flight::SingleFlight;
 use sqlx::{Pool, Postgres};
+
+use crate::database_key::DatabaseKey;
+
+type AccessibleItemsKey = (DatabaseKey, String, Option<String>, bool);
+type AccessibleItems = Result<Vec<UserAccessibleItem>, Arc<sqlx::Error>>;
+
+static RUNNING_LOOKUPS: LazyLock<SingleFlight<AccessibleItemsKey, AccessibleItems>> =
+    LazyLock::new(SingleFlight::new);
 
 /// Gets all accessible items for a user by querying entity_access with the user's source IDs
 /// (user ID, team memberships, and channel participations). Soft-deleted items and grants
 /// whose item row no longer exists are excluded.
-#[tracing::instrument(skip(db))]
+///
+/// Callers that miss the cache at the same time for the same database, user and
+/// filters share one run of the queries. A failure reaches all of them as an
+/// `Arc<sqlx::Error>`.
+#[tracing::instrument(skip(db), fields(coalesced = tracing::field::Empty))]
 #[cfg_attr(
     not(test),
     cached(
@@ -23,8 +38,31 @@ pub async fn get_user_accessible_items(
     item_type_filter: Option<String>,
     exclude_owned: bool,
 ) -> anyhow::Result<Vec<UserAccessibleItem>> {
+    let key = (
+        DatabaseKey::of(db),
+        user_id.to_string(),
+        item_type_filter.clone(),
+        exclude_owned,
+    );
+    let db = db.clone();
+    let user_id = user_id.to_string();
+    let lookup = async move {
+        query_accessible_items(&db, &user_id, item_type_filter.as_deref(), exclude_owned)
+            .await
+            .map_err(Arc::new)
+    };
+
+    Ok(RUNNING_LOOKUPS.run(key, lookup).await?)
+}
+
+async fn query_accessible_items(
+    db: &Pool<Postgres>,
+    user_id: &str,
+    item_type_filter: Option<&str>,
+    exclude_owned: bool,
+) -> sqlx::Result<Vec<UserAccessibleItem>> {
     let source_ids = user_source_ids(db, user_id).await?;
-    match item_type_filter.as_deref() {
+    match item_type_filter {
         Some("document") => accessible_documents(db, user_id, &source_ids, exclude_owned).await,
         Some("chat") => accessible_chats(db, user_id, &source_ids, exclude_owned).await,
         Some("project") => accessible_projects(db, user_id, &source_ids, exclude_owned).await,
@@ -82,7 +120,7 @@ async fn accessible_documents(
     user_id: &str,
     source_ids: &[String],
     exclude_owned: bool,
-) -> anyhow::Result<Vec<UserAccessibleItem>> {
+) -> sqlx::Result<Vec<UserAccessibleItem>> {
     let ids = sqlx::query_scalar!(
         r#"
         SELECT d.id
@@ -112,7 +150,7 @@ async fn accessible_chats(
     user_id: &str,
     source_ids: &[String],
     exclude_owned: bool,
-) -> anyhow::Result<Vec<UserAccessibleItem>> {
+) -> sqlx::Result<Vec<UserAccessibleItem>> {
     let ids = sqlx::query_scalar!(
         r#"
         SELECT c.id
@@ -142,7 +180,7 @@ async fn accessible_projects(
     user_id: &str,
     source_ids: &[String],
     exclude_owned: bool,
-) -> anyhow::Result<Vec<UserAccessibleItem>> {
+) -> sqlx::Result<Vec<UserAccessibleItem>> {
     let ids = sqlx::query_scalar!(
         r#"
         SELECT p.id

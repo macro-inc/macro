@@ -7899,6 +7899,7 @@ dependencies = [
  "rootcause",
  "serde",
  "serde_json",
+ "single_flight",
  "sqlx",
  "thiserror 2.0.18",
  "tokio",
@@ -12658,6 +12659,7 @@ dependencies = [
  "rootcause",
  "serde",
  "serde_json",
+ "single_flight",
  "sqlx",
  "system_properties",
  "thiserror 2.0.18",
@@ -18963,6 +18965,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f4fb3bc3cdce07a7d7d4caa4c54f8aa967f6be41690482b54b24100a2253fa70"
 dependencies = [
  "cc",
+]
+
+[[package]]
+name = "single_flight"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "tokio",
+ "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
