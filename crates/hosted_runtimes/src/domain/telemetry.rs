@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 use crate::domain::lifecycle::ComputerState;
+use crate::domain::models::HostAllocation;
 use crate::domain::setup::{PhaseTiming, SetupTimeline};
 
 /// Current W3C context, absent when no tracing provider is enabled.
@@ -181,6 +182,94 @@ pub fn record_setup_waits(
 
 fn seconds(started: chrono::DateTime<chrono::Utc>, ended: chrono::DateTime<chrono::Utc>) -> f64 {
     (ended - started).num_milliseconds().max(0) as f64 / 1000.0
+}
+
+/// A resource counted by `computer.capacity.*`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::IntoStaticStr)]
+#[strum(serialize_all = "snake_case")]
+enum CapacityResource {
+    SoldUnits,
+    Vcpus,
+    MemoryGib,
+    DiskGib,
+}
+
+/// What computers hold against capacity, on one host or summed over the fleet.
+#[derive(Default)]
+struct Held {
+    sold_units: u64,
+    sold_capacity_units: u64,
+    vcpus: u64,
+    memory_gib: u64,
+    disk_gib: u64,
+}
+
+impl Held {
+    fn add(&mut self, allocation: &HostAllocation) {
+        self.sold_units += u64::from(allocation.sold_units);
+        self.sold_capacity_units += u64::from(allocation.host.sold_capacity_units);
+        self.vcpus += u64::from(allocation.vcpus);
+        self.memory_gib += u64::from(allocation.memory_gib);
+        self.disk_gib += u64::from(allocation.disk_gib);
+    }
+
+    /// Each resource's allocation, and its capacity where the model bounds it.
+    /// Hosts record no separate vCPU, memory or disk capacity: units bound
+    /// vCPU and memory together, and disk is not bounded.
+    fn readings(&self) -> [(CapacityResource, u64, Option<u64>); 4] {
+        [
+            (
+                CapacityResource::SoldUnits,
+                self.sold_units,
+                Some(self.sold_capacity_units),
+            ),
+            (CapacityResource::Vcpus, self.vcpus, None),
+            (CapacityResource::MemoryGib, self.memory_gib, None),
+            (CapacityResource::DiskGib, self.disk_gib, None),
+        ]
+    }
+}
+
+/// Gauge what computers hold on each host and across the fleet as
+/// `computer.capacity.allocated`, with `computer.capacity.total` beside it.
+fn capacity(meter: &opentelemetry::metrics::Meter, allocations: &[HostAllocation]) {
+    let allocated = meter.u64_gauge("computer.capacity.allocated").build();
+    let total = meter.u64_gauge("computer.capacity.total").build();
+    let record = |held: &Held, scope: &[KeyValue]| {
+        for (resource, value, capacity) in held.readings() {
+            let resource: &'static str = resource.into();
+            let attributes: Vec<KeyValue> = scope
+                .iter()
+                .cloned()
+                .chain([KeyValue::new("resource", resource)])
+                .collect();
+            allocated.record(value, &attributes);
+            if let Some(capacity) = capacity {
+                total.record(capacity, &attributes);
+            }
+        }
+    };
+
+    let mut fleet = Held::default();
+    for allocation in allocations {
+        let mut host = Held::default();
+        host.add(allocation);
+        fleet.add(allocation);
+        record(
+            &host,
+            &[
+                KeyValue::new("scope", "host"),
+                KeyValue::new("host_id", allocation.host.id.to_string()),
+                KeyValue::new("host", allocation.host.name.clone()),
+            ],
+        );
+    }
+    record(&fleet, &[KeyValue::new("scope", "fleet")]);
+}
+
+/// [`capacity`] through the process-wide meter provider.
+pub fn record_capacity(allocations: &[HostAllocation]) {
+    capacity(&global::meter("hosted_runtimes"), allocations);
 }
 
 /// Link an already-running callback to the durable provisioning trace.

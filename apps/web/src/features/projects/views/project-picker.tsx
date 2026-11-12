@@ -1,8 +1,8 @@
+import { EntityIcon } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { debouncedDependent } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
-import ProjectIcon from '@icon/system/regular/cube.svg';
 import LoadingSpinner from '@icon/system/regular/spinner.svg';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import {
@@ -23,11 +23,11 @@ import {
   Switch,
 } from 'solid-js';
 import { useProjectsContext } from '../context/projects-context';
-import { canEditProject } from '../core/project';
+import { canEditProject, type Project } from '../core/project';
 
 type PickerItem =
   | { type: 'clear' }
-  | { type: 'project'; id: string; name: string };
+  | ({ type: 'project' } & Pick<Project, 'id' | 'name' | 'appearance'>);
 
 /** Project list for the property popover, laid out like the select editor. */
 export function ProjectPicker(props: {
@@ -88,6 +88,7 @@ export function ProjectPicker(props: {
         type: 'project',
         id: row.project.id,
         name: row.project.name,
+        appearance: row.project.appearance,
       }));
     // Matches the select editor: the "no value" row only shows unsearched.
     return dropdown.searchQuery().trim()
@@ -184,7 +185,12 @@ export function ProjectPicker(props: {
                       >
                         {(project) => (
                           <>
-                            <ProjectIcon class="size-3 shrink-0" />
+                            <EntityIcon
+                              targetType="initiative"
+                              appearance={project().appearance}
+                              theme="monochrome"
+                              class="size-3"
+                            />
                             <p class="flex-1 min-w-0 truncate">
                               {project().name}
                             </p>

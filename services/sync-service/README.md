@@ -156,6 +156,13 @@ CI=true npx wrangler d1 migrations apply USER_PEER_MAPPING --local
 npx wrangler dev
 ```
 
+The Docker-local worker defaults to an empty OTLP endpoint. The local stack
+launcher enables its HTTP exporter only for runs requesting tracing with a
+collector available; see [local tracing](../../docs/development/running-locally.md).
+The Docker command forwards the resolved endpoint with Wrangler `--var`, so
+`--traces off` cannot fall back to a collector hostname. Deployed Worker
+configuration is unchanged.
+
 If you run into build errors related to clang, follow [this fix](https://github.com/briansmith/ring/issues/1824#issuecomment-2059955073):
 
 Ensure you have llvm installed and available on your `PATH`. For mac with zsh this looks like:
