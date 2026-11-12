@@ -2960,6 +2960,1153 @@ export const guestCallChatPostResponse = zod
   );
 
 /**
+ * @summary Post a guest message to the shared call thread.
+ */
+export const guestCallChatPostMessageParams = zod.object({
+  call_id: zod.uuid(),
+});
+
+export const guestCallChatPostMessageBody = zod
+  .object({
+    content: zod.string().describe('Text to append to the call discussion.'),
+    id: zod
+      .uuid()
+      .describe(
+        'UUIDv7 used to deduplicate retries, including the first message.'
+      ),
+  })
+  .describe(
+    'Guests may send text only; attribution and parent are server-owned.'
+  );
+
+export const guestCallChatPostMessageResponse = zod
+  .object({
+    attachments: zod
+      .array(
+        zod
+          .object({
+            created_at: zod.iso
+              .datetime({})
+              .describe('When the attachment was added.'),
+            entity_id: zod.string().describe('Attached entity identifier.'),
+            entity_type: zod.string().describe('Attached entity type.'),
+            height: zod.number().nullish().describe('Optional media height.'),
+            id: zod.uuid().describe('Attachment UUID.'),
+            width: zod.number().nullish().describe('Optional media width.'),
+          })
+          .describe('An entity attached to a message.')
+      )
+      .describe('Attached entities.'),
+    bot_profile: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            avatar_url: zod.string().nullish().describe('Bot avatar URL.'),
+            name: zod.string().describe('Bot display name.'),
+          })
+          .describe('Public bot profile attached to bot-authored messages.'),
+      ])
+      .optional(),
+    content: zod.string().describe('Macro Markdown body.'),
+    created_at: zod.iso.datetime({}).describe('Creation time.'),
+    deleted_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Message tombstone, independent of thread deletion.'),
+    edited_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Last content edit, if any.'),
+    guest_name: zod
+      .string()
+      .nullish()
+      .describe(
+        'Display name of a verified call guest, retained after the call ends.'
+      ),
+    id: zod.uuid().describe('Message UUID.'),
+    imported_author: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            name: zod
+              .string()
+              .describe(
+                'Original author text; never interpreted as an authenticated principal.'
+              ),
+          })
+          .describe(
+            'Display attribution for a comment imported from an external document.'
+          ),
+      ])
+      .optional(),
+    kind: zod
+      .enum(['message', 'call_root'])
+      .optional()
+      .describe(
+        'What a persisted message is. Set by the server, never by a client.'
+      ),
+    mentions: zod
+      .array(
+        zod
+          .object({
+            entity_id: zod.string().describe('Mentioned entity identifier.'),
+            entity_type: zod.string().describe('Mentioned entity type.'),
+          })
+          .describe('A mention tracked in a message body.')
+      )
+      .describe(
+        'Tracked mentions, retained when a caller changes attachments only.'
+      ),
+    parent: zod
+      .union([
+        zod
+          .object({
+            id: zod.uuid().describe('A channel, including direct messages.'),
+            type: zod.enum(['channel']),
+          })
+          .describe('A channel, including direct messages.'),
+        zod
+          .object({
+            id: zod
+              .string()
+              .describe(
+                'A validated document identifier. Historical document ids need not be UUIDs.'
+              ),
+            type: zod.enum(['document']),
+          })
+          .describe('A document, including tasks and PDFs.'),
+        zod
+          .object({
+            id: zod
+              .uuid()
+              .describe(
+                'An initiative, presented as a project in the application.'
+              ),
+            type: zod.enum(['initiative']),
+          })
+          .describe(
+            'An initiative, presented as a project in the application.'
+          ),
+        zod
+          .object({
+            id: zod.uuid().describe('A CRM company.'),
+            type: zod.enum(['crm_company']),
+          })
+          .describe('A CRM company.'),
+        zod
+          .object({
+            id: zod.uuid().describe('A CRM contact.'),
+            type: zod.enum(['crm_contact']),
+          })
+          .describe('A CRM contact.'),
+        zod
+          .object({
+            id: zod
+              .uuid()
+              .describe('A video call and its persistent chat thread.'),
+            type: zod.enum(['call']),
+          })
+          .describe('A video call and its persistent chat thread.'),
+      ])
+      .describe('The entity whose permissions and lifecycle govern a message.'),
+    reactions: zod
+      .array(
+        zod
+          .object({
+            emoji: zod.string().describe('Emoji being reacted with.'),
+            names: zod
+              .record(zod.string(), zod.string())
+              .optional()
+              .describe(
+                'Display names for reactors whose account identity is not visible to this viewer.'
+              ),
+            users: zod.array(zod.string()).describe('User identifiers.'),
+          })
+          .describe('Reaction emoji and the users who added it.')
+      )
+      .describe('Aggregated reactions.'),
+    sender_id: zod
+      .string()
+      .describe('Authenticated actor or owner of imported content.'),
+    thread_id: zod
+      .uuid()
+      .nullish()
+      .describe('Root message UUID for replies; absent on roots.'),
+    triggered_by: zod
+      .string()
+      .nullish()
+      .describe('User who triggered a bot-authored message.'),
+    triggered_via: zod
+      .string()
+      .nullish()
+      .describe(
+        'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
+      ),
+    updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
+  })
+  .describe(
+    'Shared message representation for channel timelines and entity discussions.'
+  );
+
+/**
+ * @summary Delete a message owned by this guest.
+ */
+export const guestCallChatDeleteMessageParams = zod.object({
+  call_id: zod.uuid(),
+  message_id: zod.uuid(),
+});
+
+/**
+ * @summary Edit a message owned by this guest.
+ */
+export const guestCallChatPatchMessageParams = zod.object({
+  call_id: zod.uuid(),
+  message_id: zod.uuid(),
+});
+
+export const guestCallChatPatchMessageBody = zod
+  .object({
+    content: zod.string().describe('Replacement message body.'),
+  })
+  .describe('Text-only update to a guest-authored message.');
+
+export const guestCallChatPatchMessageResponse = zod
+  .object({
+    attachments: zod
+      .array(
+        zod
+          .object({
+            created_at: zod.iso
+              .datetime({})
+              .describe('When the attachment was added.'),
+            entity_id: zod.string().describe('Attached entity identifier.'),
+            entity_type: zod.string().describe('Attached entity type.'),
+            height: zod.number().nullish().describe('Optional media height.'),
+            id: zod.uuid().describe('Attachment UUID.'),
+            width: zod.number().nullish().describe('Optional media width.'),
+          })
+          .describe('An entity attached to a message.')
+      )
+      .describe('Attached entities.'),
+    bot_profile: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            avatar_url: zod.string().nullish().describe('Bot avatar URL.'),
+            name: zod.string().describe('Bot display name.'),
+          })
+          .describe('Public bot profile attached to bot-authored messages.'),
+      ])
+      .optional(),
+    content: zod.string().describe('Macro Markdown body.'),
+    created_at: zod.iso.datetime({}).describe('Creation time.'),
+    deleted_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Message tombstone, independent of thread deletion.'),
+    edited_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Last content edit, if any.'),
+    guest_name: zod
+      .string()
+      .nullish()
+      .describe(
+        'Display name of a verified call guest, retained after the call ends.'
+      ),
+    id: zod.uuid().describe('Message UUID.'),
+    imported_author: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            name: zod
+              .string()
+              .describe(
+                'Original author text; never interpreted as an authenticated principal.'
+              ),
+          })
+          .describe(
+            'Display attribution for a comment imported from an external document.'
+          ),
+      ])
+      .optional(),
+    kind: zod
+      .enum(['message', 'call_root'])
+      .optional()
+      .describe(
+        'What a persisted message is. Set by the server, never by a client.'
+      ),
+    mentions: zod
+      .array(
+        zod
+          .object({
+            entity_id: zod.string().describe('Mentioned entity identifier.'),
+            entity_type: zod.string().describe('Mentioned entity type.'),
+          })
+          .describe('A mention tracked in a message body.')
+      )
+      .describe(
+        'Tracked mentions, retained when a caller changes attachments only.'
+      ),
+    parent: zod
+      .union([
+        zod
+          .object({
+            id: zod.uuid().describe('A channel, including direct messages.'),
+            type: zod.enum(['channel']),
+          })
+          .describe('A channel, including direct messages.'),
+        zod
+          .object({
+            id: zod
+              .string()
+              .describe(
+                'A validated document identifier. Historical document ids need not be UUIDs.'
+              ),
+            type: zod.enum(['document']),
+          })
+          .describe('A document, including tasks and PDFs.'),
+        zod
+          .object({
+            id: zod
+              .uuid()
+              .describe(
+                'An initiative, presented as a project in the application.'
+              ),
+            type: zod.enum(['initiative']),
+          })
+          .describe(
+            'An initiative, presented as a project in the application.'
+          ),
+        zod
+          .object({
+            id: zod.uuid().describe('A CRM company.'),
+            type: zod.enum(['crm_company']),
+          })
+          .describe('A CRM company.'),
+        zod
+          .object({
+            id: zod.uuid().describe('A CRM contact.'),
+            type: zod.enum(['crm_contact']),
+          })
+          .describe('A CRM contact.'),
+        zod
+          .object({
+            id: zod
+              .uuid()
+              .describe('A video call and its persistent chat thread.'),
+            type: zod.enum(['call']),
+          })
+          .describe('A video call and its persistent chat thread.'),
+      ])
+      .describe('The entity whose permissions and lifecycle govern a message.'),
+    reactions: zod
+      .array(
+        zod
+          .object({
+            emoji: zod.string().describe('Emoji being reacted with.'),
+            names: zod
+              .record(zod.string(), zod.string())
+              .optional()
+              .describe(
+                'Display names for reactors whose account identity is not visible to this viewer.'
+              ),
+            users: zod.array(zod.string()).describe('User identifiers.'),
+          })
+          .describe('Reaction emoji and the users who added it.')
+      )
+      .describe('Aggregated reactions.'),
+    sender_id: zod
+      .string()
+      .describe('Authenticated actor or owner of imported content.'),
+    thread_id: zod
+      .uuid()
+      .nullish()
+      .describe('Root message UUID for replies; absent on roots.'),
+    triggered_by: zod
+      .string()
+      .nullish()
+      .describe('User who triggered a bot-authored message.'),
+    triggered_via: zod
+      .string()
+      .nullish()
+      .describe(
+        'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
+      ),
+    updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
+  })
+  .describe(
+    'Shared message representation for channel timelines and entity discussions.'
+  );
+
+/**
+ * @summary Add or remove this guest's reaction.
+ */
+export const guestCallChatReactMessageParams = zod.object({
+  call_id: zod.uuid(),
+  message_id: zod.uuid(),
+});
+
+export const guestCallChatReactMessageBody = zod
+  .object({
+    add: zod.boolean().describe('Add when true, remove when false.'),
+    emoji: zod.string().describe('Emoji.'),
+    nonce: zod.string().nullish().describe('Client nonce.'),
+  })
+  .describe('Reaction mutation for the authenticated user.');
+
+export const guestCallChatReactMessageResponse = zod
+  .object({
+    attachments: zod
+      .array(
+        zod
+          .object({
+            created_at: zod.iso
+              .datetime({})
+              .describe('When the attachment was added.'),
+            entity_id: zod.string().describe('Attached entity identifier.'),
+            entity_type: zod.string().describe('Attached entity type.'),
+            height: zod.number().nullish().describe('Optional media height.'),
+            id: zod.uuid().describe('Attachment UUID.'),
+            width: zod.number().nullish().describe('Optional media width.'),
+          })
+          .describe('An entity attached to a message.')
+      )
+      .describe('Attached entities.'),
+    bot_profile: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            avatar_url: zod.string().nullish().describe('Bot avatar URL.'),
+            name: zod.string().describe('Bot display name.'),
+          })
+          .describe('Public bot profile attached to bot-authored messages.'),
+      ])
+      .optional(),
+    content: zod.string().describe('Macro Markdown body.'),
+    created_at: zod.iso.datetime({}).describe('Creation time.'),
+    deleted_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Message tombstone, independent of thread deletion.'),
+    edited_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Last content edit, if any.'),
+    guest_name: zod
+      .string()
+      .nullish()
+      .describe(
+        'Display name of a verified call guest, retained after the call ends.'
+      ),
+    id: zod.uuid().describe('Message UUID.'),
+    imported_author: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            name: zod
+              .string()
+              .describe(
+                'Original author text; never interpreted as an authenticated principal.'
+              ),
+          })
+          .describe(
+            'Display attribution for a comment imported from an external document.'
+          ),
+      ])
+      .optional(),
+    kind: zod
+      .enum(['message', 'call_root'])
+      .optional()
+      .describe(
+        'What a persisted message is. Set by the server, never by a client.'
+      ),
+    mentions: zod
+      .array(
+        zod
+          .object({
+            entity_id: zod.string().describe('Mentioned entity identifier.'),
+            entity_type: zod.string().describe('Mentioned entity type.'),
+          })
+          .describe('A mention tracked in a message body.')
+      )
+      .describe(
+        'Tracked mentions, retained when a caller changes attachments only.'
+      ),
+    parent: zod
+      .union([
+        zod
+          .object({
+            id: zod.uuid().describe('A channel, including direct messages.'),
+            type: zod.enum(['channel']),
+          })
+          .describe('A channel, including direct messages.'),
+        zod
+          .object({
+            id: zod
+              .string()
+              .describe(
+                'A validated document identifier. Historical document ids need not be UUIDs.'
+              ),
+            type: zod.enum(['document']),
+          })
+          .describe('A document, including tasks and PDFs.'),
+        zod
+          .object({
+            id: zod
+              .uuid()
+              .describe(
+                'An initiative, presented as a project in the application.'
+              ),
+            type: zod.enum(['initiative']),
+          })
+          .describe(
+            'An initiative, presented as a project in the application.'
+          ),
+        zod
+          .object({
+            id: zod.uuid().describe('A CRM company.'),
+            type: zod.enum(['crm_company']),
+          })
+          .describe('A CRM company.'),
+        zod
+          .object({
+            id: zod.uuid().describe('A CRM contact.'),
+            type: zod.enum(['crm_contact']),
+          })
+          .describe('A CRM contact.'),
+        zod
+          .object({
+            id: zod
+              .uuid()
+              .describe('A video call and its persistent chat thread.'),
+            type: zod.enum(['call']),
+          })
+          .describe('A video call and its persistent chat thread.'),
+      ])
+      .describe('The entity whose permissions and lifecycle govern a message.'),
+    reactions: zod
+      .array(
+        zod
+          .object({
+            emoji: zod.string().describe('Emoji being reacted with.'),
+            names: zod
+              .record(zod.string(), zod.string())
+              .optional()
+              .describe(
+                'Display names for reactors whose account identity is not visible to this viewer.'
+              ),
+            users: zod.array(zod.string()).describe('User identifiers.'),
+          })
+          .describe('Reaction emoji and the users who added it.')
+      )
+      .describe('Aggregated reactions.'),
+    sender_id: zod
+      .string()
+      .describe('Authenticated actor or owner of imported content.'),
+    thread_id: zod
+      .uuid()
+      .nullish()
+      .describe('Root message UUID for replies; absent on roots.'),
+    triggered_by: zod
+      .string()
+      .nullish()
+      .describe('User who triggered a bot-authored message.'),
+    triggered_via: zod
+      .string()
+      .nullish()
+      .describe(
+        'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
+      ),
+    updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
+  })
+  .describe(
+    'Shared message representation for channel timelines and entity discussions.'
+  );
+
+/**
+ * @summary Read the shared call thread with identities redacted.
+ */
+export const guestCallChatReadThreadParams = zod.object({
+  call_id: zod.uuid(),
+});
+
+export const guestCallChatReadThreadResponse = zod
+  .object({
+    thread: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            replies: zod
+              .array(
+                zod
+                  .object({
+                    attachments: zod
+                      .array(
+                        zod
+                          .object({
+                            created_at: zod.iso
+                              .datetime({})
+                              .describe('When the attachment was added.'),
+                            entity_id: zod
+                              .string()
+                              .describe('Attached entity identifier.'),
+                            entity_type: zod
+                              .string()
+                              .describe('Attached entity type.'),
+                            height: zod
+                              .number()
+                              .nullish()
+                              .describe('Optional media height.'),
+                            id: zod.uuid().describe('Attachment UUID.'),
+                            width: zod
+                              .number()
+                              .nullish()
+                              .describe('Optional media width.'),
+                          })
+                          .describe('An entity attached to a message.')
+                      )
+                      .describe('Attached entities.'),
+                    bot_profile: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .object({
+                            avatar_url: zod
+                              .string()
+                              .nullish()
+                              .describe('Bot avatar URL.'),
+                            name: zod.string().describe('Bot display name.'),
+                          })
+                          .describe(
+                            'Public bot profile attached to bot-authored messages.'
+                          ),
+                      ])
+                      .optional(),
+                    content: zod.string().describe('Macro Markdown body.'),
+                    created_at: zod.iso.datetime({}).describe('Creation time.'),
+                    deleted_at: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'Message tombstone, independent of thread deletion.'
+                      ),
+                    edited_at: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe('Last content edit, if any.'),
+                    guest_name: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Display name of a verified call guest, retained after the call ends.'
+                      ),
+                    id: zod.uuid().describe('Message UUID.'),
+                    imported_author: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .object({
+                            name: zod
+                              .string()
+                              .describe(
+                                'Original author text; never interpreted as an authenticated principal.'
+                              ),
+                          })
+                          .describe(
+                            'Display attribution for a comment imported from an external document.'
+                          ),
+                      ])
+                      .optional(),
+                    kind: zod
+                      .enum(['message', 'call_root'])
+                      .optional()
+                      .describe(
+                        'What a persisted message is. Set by the server, never by a client.'
+                      ),
+                    mentions: zod
+                      .array(
+                        zod
+                          .object({
+                            entity_id: zod
+                              .string()
+                              .describe('Mentioned entity identifier.'),
+                            entity_type: zod
+                              .string()
+                              .describe('Mentioned entity type.'),
+                          })
+                          .describe('A mention tracked in a message body.')
+                      )
+                      .describe(
+                        'Tracked mentions, retained when a caller changes attachments only.'
+                      ),
+                    parent: zod
+                      .union([
+                        zod
+                          .object({
+                            id: zod
+                              .uuid()
+                              .describe(
+                                'A channel, including direct messages.'
+                              ),
+                            type: zod.enum(['channel']),
+                          })
+                          .describe('A channel, including direct messages.'),
+                        zod
+                          .object({
+                            id: zod
+                              .string()
+                              .describe(
+                                'A validated document identifier. Historical document ids need not be UUIDs.'
+                              ),
+                            type: zod.enum(['document']),
+                          })
+                          .describe('A document, including tasks and PDFs.'),
+                        zod
+                          .object({
+                            id: zod
+                              .uuid()
+                              .describe(
+                                'An initiative, presented as a project in the application.'
+                              ),
+                            type: zod.enum(['initiative']),
+                          })
+                          .describe(
+                            'An initiative, presented as a project in the application.'
+                          ),
+                        zod
+                          .object({
+                            id: zod.uuid().describe('A CRM company.'),
+                            type: zod.enum(['crm_company']),
+                          })
+                          .describe('A CRM company.'),
+                        zod
+                          .object({
+                            id: zod.uuid().describe('A CRM contact.'),
+                            type: zod.enum(['crm_contact']),
+                          })
+                          .describe('A CRM contact.'),
+                        zod
+                          .object({
+                            id: zod
+                              .uuid()
+                              .describe(
+                                'A video call and its persistent chat thread.'
+                              ),
+                            type: zod.enum(['call']),
+                          })
+                          .describe(
+                            'A video call and its persistent chat thread.'
+                          ),
+                      ])
+                      .describe(
+                        'The entity whose permissions and lifecycle govern a message.'
+                      ),
+                    reactions: zod
+                      .array(
+                        zod
+                          .object({
+                            emoji: zod
+                              .string()
+                              .describe('Emoji being reacted with.'),
+                            names: zod
+                              .record(zod.string(), zod.string())
+                              .optional()
+                              .describe(
+                                'Display names for reactors whose account identity is not visible to this viewer.'
+                              ),
+                            users: zod
+                              .array(zod.string())
+                              .describe('User identifiers.'),
+                          })
+                          .describe(
+                            'Reaction emoji and the users who added it.'
+                          )
+                      )
+                      .describe('Aggregated reactions.'),
+                    sender_id: zod
+                      .string()
+                      .describe(
+                        'Authenticated actor or owner of imported content.'
+                      ),
+                    thread_id: zod
+                      .uuid()
+                      .nullish()
+                      .describe(
+                        'Root message UUID for replies; absent on roots.'
+                      ),
+                    triggered_by: zod
+                      .string()
+                      .nullish()
+                      .describe('User who triggered a bot-authored message.'),
+                    triggered_via: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
+                      ),
+                    updated_at: zod.iso
+                      .datetime({})
+                      .describe('Last persisted update.'),
+                  })
+                  .describe(
+                    'Shared message representation for channel timelines and entity discussions.'
+                  )
+              )
+              .describe('Replies in display order.'),
+            root: zod
+              .object({
+                attachments: zod
+                  .array(
+                    zod
+                      .object({
+                        created_at: zod.iso
+                          .datetime({})
+                          .describe('When the attachment was added.'),
+                        entity_id: zod
+                          .string()
+                          .describe('Attached entity identifier.'),
+                        entity_type: zod
+                          .string()
+                          .describe('Attached entity type.'),
+                        height: zod
+                          .number()
+                          .nullish()
+                          .describe('Optional media height.'),
+                        id: zod.uuid().describe('Attachment UUID.'),
+                        width: zod
+                          .number()
+                          .nullish()
+                          .describe('Optional media width.'),
+                      })
+                      .describe('An entity attached to a message.')
+                  )
+                  .describe('Attached entities.'),
+                bot_profile: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .object({
+                        avatar_url: zod
+                          .string()
+                          .nullish()
+                          .describe('Bot avatar URL.'),
+                        name: zod.string().describe('Bot display name.'),
+                      })
+                      .describe(
+                        'Public bot profile attached to bot-authored messages.'
+                      ),
+                  ])
+                  .optional(),
+                content: zod.string().describe('Macro Markdown body.'),
+                created_at: zod.iso.datetime({}).describe('Creation time.'),
+                deleted_at: zod.iso
+                  .datetime({})
+                  .nullish()
+                  .describe(
+                    'Message tombstone, independent of thread deletion.'
+                  ),
+                edited_at: zod.iso
+                  .datetime({})
+                  .nullish()
+                  .describe('Last content edit, if any.'),
+                guest_name: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Display name of a verified call guest, retained after the call ends.'
+                  ),
+                id: zod.uuid().describe('Message UUID.'),
+                imported_author: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .object({
+                        name: zod
+                          .string()
+                          .describe(
+                            'Original author text; never interpreted as an authenticated principal.'
+                          ),
+                      })
+                      .describe(
+                        'Display attribution for a comment imported from an external document.'
+                      ),
+                  ])
+                  .optional(),
+                kind: zod
+                  .enum(['message', 'call_root'])
+                  .optional()
+                  .describe(
+                    'What a persisted message is. Set by the server, never by a client.'
+                  ),
+                mentions: zod
+                  .array(
+                    zod
+                      .object({
+                        entity_id: zod
+                          .string()
+                          .describe('Mentioned entity identifier.'),
+                        entity_type: zod
+                          .string()
+                          .describe('Mentioned entity type.'),
+                      })
+                      .describe('A mention tracked in a message body.')
+                  )
+                  .describe(
+                    'Tracked mentions, retained when a caller changes attachments only.'
+                  ),
+                parent: zod
+                  .union([
+                    zod
+                      .object({
+                        id: zod
+                          .uuid()
+                          .describe('A channel, including direct messages.'),
+                        type: zod.enum(['channel']),
+                      })
+                      .describe('A channel, including direct messages.'),
+                    zod
+                      .object({
+                        id: zod
+                          .string()
+                          .describe(
+                            'A validated document identifier. Historical document ids need not be UUIDs.'
+                          ),
+                        type: zod.enum(['document']),
+                      })
+                      .describe('A document, including tasks and PDFs.'),
+                    zod
+                      .object({
+                        id: zod
+                          .uuid()
+                          .describe(
+                            'An initiative, presented as a project in the application.'
+                          ),
+                        type: zod.enum(['initiative']),
+                      })
+                      .describe(
+                        'An initiative, presented as a project in the application.'
+                      ),
+                    zod
+                      .object({
+                        id: zod.uuid().describe('A CRM company.'),
+                        type: zod.enum(['crm_company']),
+                      })
+                      .describe('A CRM company.'),
+                    zod
+                      .object({
+                        id: zod.uuid().describe('A CRM contact.'),
+                        type: zod.enum(['crm_contact']),
+                      })
+                      .describe('A CRM contact.'),
+                    zod
+                      .object({
+                        id: zod
+                          .uuid()
+                          .describe(
+                            'A video call and its persistent chat thread.'
+                          ),
+                        type: zod.enum(['call']),
+                      })
+                      .describe('A video call and its persistent chat thread.'),
+                  ])
+                  .describe(
+                    'The entity whose permissions and lifecycle govern a message.'
+                  ),
+                reactions: zod
+                  .array(
+                    zod
+                      .object({
+                        emoji: zod
+                          .string()
+                          .describe('Emoji being reacted with.'),
+                        names: zod
+                          .record(zod.string(), zod.string())
+                          .optional()
+                          .describe(
+                            'Display names for reactors whose account identity is not visible to this viewer.'
+                          ),
+                        users: zod
+                          .array(zod.string())
+                          .describe('User identifiers.'),
+                      })
+                      .describe('Reaction emoji and the users who added it.')
+                  )
+                  .describe('Aggregated reactions.'),
+                sender_id: zod
+                  .string()
+                  .describe(
+                    'Authenticated actor or owner of imported content.'
+                  ),
+                thread_id: zod
+                  .uuid()
+                  .nullish()
+                  .describe('Root message UUID for replies; absent on roots.'),
+                triggered_by: zod
+                  .string()
+                  .nullish()
+                  .describe('User who triggered a bot-authored message.'),
+                triggered_via: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
+                  ),
+                updated_at: zod.iso
+                  .datetime({})
+                  .describe('Last persisted update.'),
+              })
+              .describe(
+                'Shared message representation for channel timelines and entity discussions.'
+              ),
+            state: zod
+              .object({
+                anchor: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .union([
+                        zod
+                          .object({
+                            mark_id: zod
+                              .uuid()
+                              .describe(
+                                'Mark UUID serialized in the document.'
+                              ),
+                            marked_text: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The marked text as it read when the discussion was created, already\ntrimmed and bounded. Absent on threads created or imported before\nsnapshots were captured: the text a mark covers cannot be recovered\nfrom the mark id alone.'
+                              ),
+                            type: zod.enum(['markdown']),
+                          })
+                          .describe(
+                            'Stable Lexical mark identity, independent of transient node keys.'
+                          ),
+                        zod
+                          .object({
+                            anchor_id: zod
+                              .uuid()
+                              .describe('Highlight annotation UUID.'),
+                            marked_text: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'The text the highlight covers, trimmed and bounded like a markdown\nsnapshot. The highlight owns it and it can be edited there, so it is\nread from the highlight whenever the thread is, never stored on the\nthread. Absent when the highlight carries no text.'
+                              ),
+                            type: zod.enum(['pdf_highlight']),
+                          })
+                          .describe('An independently existing PDF highlight.'),
+                        zod
+                          .object({
+                            anchor_id: zod
+                              .uuid()
+                              .describe('Placeable annotation UUID.'),
+                            type: zod.enum(['pdf_placeable']),
+                          })
+                          .describe(
+                            'A comment-only placeable PDF annotation. It marks a point on a page,\nnot a span of text, so it has no marked text.'
+                          ),
+                        zod
+                          .object({
+                            range: zod
+                              .string()
+                              .describe(
+                                'A1 cell or range, such as B4 or B4:C9.'
+                              ),
+                            sheetId: zod
+                              .string()
+                              .describe(
+                                'Stable sheet identity within the workbook.'
+                              ),
+                            sheetName: zod
+                              .string()
+                              .describe(
+                                'Sheet name when the discussion was created.'
+                              ),
+                            type: zod.enum(['spreadsheet']),
+                          })
+                          .describe(
+                            'A cell or rectangular range in a native spreadsheet.'
+                          ),
+                        zod
+                          .object({
+                            nodeId: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Layer the pin follows; absent for a pin on the bare canvas.'
+                              ),
+                            pageId: zod
+                              .string()
+                              .describe('Page (canvas) the pin is on.'),
+                            type: zod.enum(['fig']),
+                            x: zod
+                              .number()
+                              .describe(
+                                "Horizontal offset from the layer's origin, or the page's when\nthe pin is on no layer, in design units."
+                              ),
+                            y: zod
+                              .number()
+                              .describe('Vertical offset, measured like `x`.'),
+                          })
+                          .describe(
+                            'A point pinned on a design (`.fig`): on a layer, or on the page\ncanvas when no layer was under it.'
+                          ),
+                      ])
+                      .describe(
+                        "A thread's location within its document. PDF geometry remains annotation-owned."
+                      ),
+                  ])
+                  .optional(),
+                created_at: zod.iso
+                  .datetime({})
+                  .describe('Creation time of the discussion.'),
+                deleted_at: zod.iso
+                  .datetime({})
+                  .nullish()
+                  .describe(
+                    'Explicit deletion of the entire thread, distinct from root deletion.'
+                  ),
+                resolved: zod
+                  .boolean()
+                  .describe('Whether this discussion has been resolved.'),
+                root_id: zod
+                  .uuid()
+                  .describe(
+                    'Root message UUID; there is no separate thread identity.'
+                  ),
+                updated_at: zod.iso.datetime({}).describe('Last state change.'),
+                user_id: zod
+                  .string()
+                  .describe(
+                    'User who owns this discussion, including imported discussions.'
+                  ),
+              })
+              .describe(
+                'State belonging to a whole thread, keyed by its root message.'
+              ),
+          })
+          .describe(
+            'A discussion with its root and ordered replies, including root tombstones.'
+          ),
+      ])
+      .optional(),
+    viewer_id: zod
+      .string()
+      .describe('Guest sender ID used for own-message controls.'),
+  })
+  .describe("A call thread and the verified viewer's sender identity.");
+
+/**
  * @summary Handle `GET /call/join/{token}` through the call domain service.
  */
 export const meetingLookupParams = zod.object({
@@ -25000,6 +26147,12 @@ export const commentOnDocumentTextResponse = zod
             zod
               .object({
                 emoji: zod.string().describe('Emoji being reacted with.'),
+                names: zod
+                  .record(zod.string(), zod.string())
+                  .optional()
+                  .describe(
+                    'Display names for reactors whose account identity is not visible to this viewer.'
+                  ),
                 users: zod.array(zod.string()).describe('User identifiers.'),
               })
               .describe('Reaction emoji and the users who added it.')
@@ -71735,6 +72888,12 @@ export const messageTimelineResponse = zod
                 zod
                   .object({
                     emoji: zod.string().describe('Emoji being reacted with.'),
+                    names: zod
+                      .record(zod.string(), zod.string())
+                      .optional()
+                      .describe(
+                        'Display names for reactors whose account identity is not visible to this viewer.'
+                      ),
                     users: zod
                       .array(zod.string())
                       .describe('User identifiers.'),
@@ -72090,6 +73249,12 @@ export const messageTimelineResponse = zod
                                   emoji: zod
                                     .string()
                                     .describe('Emoji being reacted with.'),
+                                  names: zod
+                                    .record(zod.string(), zod.string())
+                                    .optional()
+                                    .describe(
+                                      'Display names for reactors whose account identity is not visible to this viewer.'
+                                    ),
                                   users: zod
                                     .array(zod.string())
                                     .describe('User identifiers.'),
@@ -72469,6 +73634,12 @@ export const entityMessageCreateResponse = zod
         zod
           .object({
             emoji: zod.string().describe('Emoji being reacted with.'),
+            names: zod
+              .record(zod.string(), zod.string())
+              .optional()
+              .describe(
+                'Display names for reactors whose account identity is not visible to this viewer.'
+              ),
             users: zod.array(zod.string()).describe('User identifiers.'),
           })
           .describe('Reaction emoji and the users who added it.')
@@ -72643,6 +73814,12 @@ export const entityMessageGetMessageResponse = zod
         zod
           .object({
             emoji: zod.string().describe('Emoji being reacted with.'),
+            names: zod
+              .record(zod.string(), zod.string())
+              .optional()
+              .describe(
+                'Display names for reactors whose account identity is not visible to this viewer.'
+              ),
             users: zod.array(zod.string()).describe('User identifiers.'),
           })
           .describe('Reaction emoji and the users who added it.')
@@ -72821,6 +73998,12 @@ export const entityMessageDeleteMessageResponse = zod
         zod
           .object({
             emoji: zod.string().describe('Emoji being reacted with.'),
+            names: zod
+              .record(zod.string(), zod.string())
+              .optional()
+              .describe(
+                'Display names for reactors whose account identity is not visible to this viewer.'
+              ),
             users: zod.array(zod.string()).describe('User identifiers.'),
           })
           .describe('Reaction emoji and the users who added it.')
@@ -73095,6 +74278,12 @@ export const entityMessageEditResponse = zod
         zod
           .object({
             emoji: zod.string().describe('Emoji being reacted with.'),
+            names: zod
+              .record(zod.string(), zod.string())
+              .optional()
+              .describe(
+                'Display names for reactors whose account identity is not visible to this viewer.'
+              ),
             users: zod.array(zod.string()).describe('User identifiers.'),
           })
           .describe('Reaction emoji and the users who added it.')
@@ -73277,6 +74466,12 @@ export const entityMessageReactResponse = zod
         zod
           .object({
             emoji: zod.string().describe('Emoji being reacted with.'),
+            names: zod
+              .record(zod.string(), zod.string())
+              .optional()
+              .describe(
+                'Display names for reactors whose account identity is not visible to this viewer.'
+              ),
             users: zod.array(zod.string()).describe('User identifiers.'),
           })
           .describe('Reaction emoji and the users who added it.')
@@ -73458,6 +74653,12 @@ export const entityMessageLegacyResponse = zod
         zod
           .object({
             emoji: zod.string().describe('Emoji being reacted with.'),
+            names: zod
+              .record(zod.string(), zod.string())
+              .optional()
+              .describe(
+                'Display names for reactors whose account identity is not visible to this viewer.'
+              ),
             users: zod.array(zod.string()).describe('User identifiers.'),
           })
           .describe('Reaction emoji and the users who added it.')
@@ -73657,6 +74858,12 @@ export const entityMessageGetThreadResponse = zod
                 zod
                   .object({
                     emoji: zod.string().describe('Emoji being reacted with.'),
+                    names: zod
+                      .record(zod.string(), zod.string())
+                      .optional()
+                      .describe(
+                        'Display names for reactors whose account identity is not visible to this viewer.'
+                      ),
                     users: zod
                       .array(zod.string())
                       .describe('User identifiers.'),
@@ -73836,6 +75043,12 @@ export const entityMessageGetThreadResponse = zod
             zod
               .object({
                 emoji: zod.string().describe('Emoji being reacted with.'),
+                names: zod
+                  .record(zod.string(), zod.string())
+                  .optional()
+                  .describe(
+                    'Display names for reactors whose account identity is not visible to this viewer.'
+                  ),
                 users: zod.array(zod.string()).describe('User identifiers.'),
               })
               .describe('Reaction emoji and the users who added it.')
@@ -74440,6 +75653,12 @@ export const messageTimelineEntriesResponse = zod
                             emoji: zod
                               .string()
                               .describe('Emoji being reacted with.'),
+                            names: zod
+                              .record(zod.string(), zod.string())
+                              .optional()
+                              .describe(
+                                'Display names for reactors whose account identity is not visible to this viewer.'
+                              ),
                             users: zod
                               .array(zod.string())
                               .describe('User identifiers.'),
@@ -74824,6 +76043,12 @@ export const messageTimelineEntriesResponse = zod
                                             .string()
                                             .describe(
                                               'Emoji being reacted with.'
+                                            ),
+                                          names: zod
+                                            .record(zod.string(), zod.string())
+                                            .optional()
+                                            .describe(
+                                              'Display names for reactors whose account identity is not visible to this viewer.'
                                             ),
                                           users: zod
                                             .array(zod.string())
@@ -75088,6 +76313,12 @@ export const messageTimelineEntriesResponse = zod
                             emoji: zod
                               .string()
                               .describe('Emoji being reacted with.'),
+                            names: zod
+                              .record(zod.string(), zod.string())
+                              .optional()
+                              .describe(
+                                'Display names for reactors whose account identity is not visible to this viewer.'
+                              ),
                             users: zod
                               .array(zod.string())
                               .describe('User identifiers.'),
@@ -75472,6 +76703,12 @@ export const messageTimelineEntriesResponse = zod
                                             .string()
                                             .describe(
                                               'Emoji being reacted with.'
+                                            ),
+                                          names: zod
+                                            .record(zod.string(), zod.string())
+                                            .optional()
+                                            .describe(
+                                              'Display names for reactors whose account identity is not visible to this viewer.'
                                             ),
                                           users: zod
                                             .array(zod.string())
