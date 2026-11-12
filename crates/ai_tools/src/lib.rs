@@ -26,7 +26,6 @@ mod search_tools;
 mod self_knowledge;
 pub mod serde_utils;
 mod tool_context;
-pub mod user_tool_review;
 
 pub use anthropic::toolset::AnthropicToolContext;
 use anthropic::toolset::anthropic_toolset;

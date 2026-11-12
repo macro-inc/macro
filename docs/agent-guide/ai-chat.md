@@ -1303,10 +1303,13 @@ and applies edit batches; `ReadSpreadsheet`, `CalculateSpreadsheet` and
 results are presented with `execution.views.present`. The legacy
 chat and workspace SDK namespaces are excluded from agent documentation. Methods
 routed through the SDK are absent from direct schemas, `SearchTools`, and `LoadTools`;
-they remain discoverable through `DescribeCodeTools`. User-review
-tools, `AskUser`, connector discovery, tool loading for connected apps,
-and explicit provider code execution retain their direct lifecycle. Connected
-third-party MCP tools remain available.
+they remain discoverable through `DescribeCodeTools`. The only native tools a
+session keeps are the ones a program cannot replace: `RenderCanvas`,
+`ListAgentUpdates` (its answer cards), `IssueBotCredential` (its credential
+card), `ListCompanies`, the Notion, Linear and Jira import planners,
+`SelfKnowledge`, explicit provider code execution, `AskUser`, and tool loading
+for connected apps. Connector discovery is `macro.connectedApps.discover`.
+Connected third-party MCP tools remain available.
 
 Sessions without a user owner can't run in-process turns at all.
 Summary/compaction calls advertise no tools. The mode
@@ -2604,8 +2607,8 @@ not wait for a response. Code and native tools use the same presentation path. T
 chat composer. Their status is read from the session's review API, not reconstructed
 from text claimed by the model.
 
-In code mode, the blocking `SendEmail` and `CreateCalendarEvent`
-tools are not advertised or available through lazy discovery. Email and calendar
+Agent sessions run code mode, so the blocking `SendEmail` and
+`CreateCalendarEvent` tools are not registered there at all. Email and calendar
 drafts use these saved reviews instead. Presenting a draft must not produce an
 `elicitation/create` request or leave the session blocked waiting for approval.
 An already-running turn from before this change can still have an old elicitation;

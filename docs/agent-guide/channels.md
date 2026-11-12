@@ -802,19 +802,17 @@ later — the reply includes an `<m-document-mention>` task chip, not a URL or
 When the agent stops to ask a question the question takes the area in the passage's
 place, cropped and expandable the same way: the prompt, then what is asked - a form's
 fields (choice rows with an accent box, an `Other` row when the agent allows a free-text
-answer, text and number inputs, a yes/no), a URL request's host and address, or a Macro
-user tool's draft (`SendEmail`, `CreateCalendarEvent`) in the tool's own composer - the
-same email compose or calendar event form the session shows, editable in place; expand
-the area to reach its `Send`/`Create`, which answers with the edited draft. A row at the
-bottom of the area carries the other decisions, refusal first: `Dismiss · Open in session`
-for a tool draft, `Decline · Submit · Open in session` (or `Open` for a URL) for a question.
+answer, text and number inputs, a yes/no) or a URL request's host and address. Sessions
+from before code mode can still show a Macro user tool's draft (`SendEmail`,
+`CreateCalendarEvent`) there in the tool's own composer, with `Dismiss · Open in session`.
+A row at the bottom of the area carries the other decisions, refusal first:
+`Decline · Submit · Open in session` (or `Open` for a URL) for a question.
 Only the session's owner can act; other viewers see the question read-only and the header
 names who is being waited on. Once answered, the area shows the agent's passage again.
 A prompt the agent read out of a channel or document thread opens no review card at all:
 the reply writes the whole email or calendar event into the thread and asks whether to go
 ahead, and a reply in that same thread approving it ("yes, send it" / "go ahead") is the
-confirmation - the agent then sends or creates directly (`SendConfirmedEmail` and
-`CreateConfirmedCalendarEvent`, or in code mode `macro.email.sendConfirmed`,
+confirmation - the agent then sends or creates directly (`macro.email.sendConfirmed`,
 `EmailMessage.forwardConfirmed`, `EmailDraft.send` and `macro.calendar.createConfirmed`),
 with no session visit needed. Being asked to send or
 schedule something only produces the draft; nothing goes out before that approving reply.
