@@ -40,12 +40,11 @@ live events that keep them current.
 
 - The text of a refused channel post is never dropped
   (`keepUnsentPostText`, `features/channel/Input/utils/unsent-text.ts`).
-  A channel composer creates the send hook with `keepRefusedText`, and the
-  hook calls it a task after its `onError`, so the composer that sent it
-  restores the full draft first; other callers of the hook keep their own
-  text. A post restored from the queue after a reload has no hook and calls
-  it when it settles as failed; `useChannelCachePrewarm` reads the queue at
-  mount so that holds with no channel open. It fills an empty mounted
+  The send hook calls it a task after its `onError`, for every caller, so
+  the composer that sent it restores the full draft first. A post restored
+  from the queue after a reload has no hook and calls it when it settles as
+  failed; `useChannelCachePrewarm` reads the queue once the cache host is
+  there so that holds with no channel open. It fills an empty mounted
   composer (text only, attachments stay), else offers the text for copying;
   with no composer mounted it also writes the stored draft. A new composer
   with a `persistenceKey` is registered by `ChannelInput`; a new way to fail
