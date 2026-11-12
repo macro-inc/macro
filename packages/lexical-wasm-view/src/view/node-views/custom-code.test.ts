@@ -8,13 +8,13 @@ import {
 import { beforeAll, expect, test } from 'vitest';
 import type { RenderContext } from '../registry';
 import { selectionMessage } from '../session-port';
-import type { ViewNode } from '../types';
-import { createBuiltinRegistry } from './builtins';
-import { registerMacroElementViews } from './macro';
 import {
   initializeNativeSurfaceTests,
   nativeSurface,
 } from '../test/native-surface';
+import type { ViewNode } from '../types';
+import { createBuiltinRegistry } from './builtins';
+import { registerMacroElementViews } from './macro';
 
 beforeAll(initializeNativeSurfaceTests);
 

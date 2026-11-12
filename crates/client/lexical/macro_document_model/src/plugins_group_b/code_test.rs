@@ -400,7 +400,8 @@ fn highlighting_surface() -> EditorBuilder {
 // highlighting, so it writes no default language (local or remote), reports nothing and keeps an
 // orphaned code-highlight as it is.
 #[test]
-fn a_view_attached_surface_without_a_tokenizer_installs_no_code_highlighting() -> Result<(), Error> {
+fn a_view_attached_surface_without_a_tokenizer_installs_no_code_highlighting() -> Result<(), Error>
+{
     let mut editor =
         surface::preset_builder_with_mode(EditorType::MarkdownSync, EditorMode::ViewAttached)
             .build()
@@ -465,10 +466,7 @@ fn code_language(editor: &Editor, key: NodeKey) -> Option<String> {
 
 #[test]
 fn view_attached_body_defaults_an_unset_code_language_to_plaintext() -> Result<(), Error> {
-    let mut editor =
-        highlighting_surface()
-            .build()
-            .expect("surface");
+    let mut editor = highlighting_surface().build().expect("surface");
     let (unset, _) = editor.update(|tx| {
         let code = lexical_rich_nodes::code::create_code_node(tx, None, None)
             .map_err(|_| Error::Invariant("create code node"))?;
@@ -528,11 +526,10 @@ fn opening_a_document_leaves_an_unset_code_language_until_a_local_edit() -> Resu
                 "detail": 0, "mode": "normal", "style": ""}]
         }]
     }}))?;
-    let mut editor =
-        highlighting_surface()
-            .initial_state(state)
-            .build()
-            .expect("surface");
+    let mut editor = highlighting_surface()
+        .initial_state(state)
+        .build()
+        .expect("surface");
     let code = editor.state().view().children_keys(NodeKey::ROOT)?[0];
     assert_eq!(code_language(&editor, code), None);
     let text = editor.state().view().children_keys(code)?[0];
@@ -548,10 +545,7 @@ fn opening_a_document_leaves_an_unset_code_language_until_a_local_edit() -> Resu
 // the host learns each run through a typed event and checks its own grammar table.
 #[test]
 fn every_code_transform_run_reports_its_language_to_the_host() -> Result<(), Error> {
-    let mut editor =
-        highlighting_surface()
-            .build()
-            .expect("surface");
+    let mut editor = highlighting_surface().build().expect("surface");
     let (code, commit) = editor.update(|tx| {
         let code = lexical_rich_nodes::code::create_code_node(tx, None, None)
             .map_err(|_| Error::Invariant("create code node"))?;

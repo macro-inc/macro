@@ -45,7 +45,9 @@ fn receive_unset_remote_code(tokens: CodeTokens) -> (Option<Value>, Option<Value
     let policy = local_config.policy;
     let doc = lexical_loro::new_doc(7).unwrap();
     let mut local = EditorSurface::new(local_config, 7, now()).unwrap();
-    local.init(&doc, now(), Access::Edit, &mut Vec::new()).unwrap();
+    local
+        .init(&doc, now(), Access::Edit, &mut Vec::new())
+        .unwrap();
 
     let remote_doc = lexical_loro::fork_doc(&doc, 60).unwrap();
     let mut remote = EditorSurface::new(config(CodeTokens::none()), 60, now()).unwrap();
@@ -95,7 +97,11 @@ fn receive_unset_remote_code(tokens: CodeTokens) -> (Option<Value>, Option<Value
         .cloned();
     let stored = lexical_loro::reconstruct_state(&doc, policy).unwrap();
     let stored_language = stored.root["children"][0].get("language").cloned();
-    (local_language, stored_language, fixups.load(Ordering::Relaxed))
+    (
+        local_language,
+        stored_language,
+        fixups.load(Ordering::Relaxed),
+    )
 }
 
 #[test]
