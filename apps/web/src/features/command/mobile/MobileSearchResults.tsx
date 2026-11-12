@@ -227,7 +227,7 @@ function MobileNameResults(props: {
         </VList>
       </Show>
       <Show when={searchingShown() && items().length > 0}>
-        <p role="status" class="px-3 py-2 text-sm text-ink-muted">
+        <p role="status" class="px-2 py-2 text-sm text-ink-muted">
           {t('commandMenu.searching')}
         </p>
       </Show>
