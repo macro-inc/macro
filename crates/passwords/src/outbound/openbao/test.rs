@@ -343,7 +343,7 @@ impl crate::domain::ports::Availability for Available {
     async fn require_enabled(&self, _: &Actor) -> Result<(), Error> {
         Ok(())
     }
-    async fn require_service_enabled(&self) -> Result<(), Error> {
+    fn require_provider(&self) -> Result<(), Error> {
         Ok(())
     }
 }

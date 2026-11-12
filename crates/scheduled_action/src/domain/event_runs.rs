@@ -147,6 +147,8 @@ pub enum CancellationReason {
     ConditionNotMet,
     /// The condition could not be checked before the retry window closed.
     ConditionUnavailable,
+    /// The owner is not in the event routines rollout.
+    NotEnabled,
 }
 
 /// All outcomes are terminal. In particular, failure and interruption never
