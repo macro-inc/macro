@@ -50,6 +50,10 @@ export function TutorialVideoEmbed(props: {
     const entry = tutorial();
     return 'preview' in entry && entry.preview === 'benefit';
   };
+  // The diagram stands in for the video until it starts. This is a class and
+  // not a `:has()` on the diagram: the video must never be hidden when play is
+  // requested, and some mobile browsers restyle `:has()` late.
+  const showsBenefitPoster = () => usesBenefitPoster() && !started();
 
   const track = (action: 'played') => {
     analytics.track('tutorial_video', {
@@ -82,7 +86,10 @@ export function TutorialVideoEmbed(props: {
   return (
     <section
       class="tutorial-video-embed"
-      classList={{ 'tutorial-video-embed-backdrop': props.backdrop }}
+      classList={{
+        'tutorial-video-embed-backdrop': props.backdrop,
+        'tutorial-video-embed-diagram': showsBenefitPoster(),
+      }}
       aria-label={tutorial().title}
     >
       <Show when={props.backdrop}>
@@ -90,12 +97,17 @@ export function TutorialVideoEmbed(props: {
       </Show>
       <div
         class="tutorial-video-stage"
-        classList={{ 'tutorial-video-stage-benefit': usesBenefitPoster() }}
+        classList={{
+          'tutorial-video-stage-benefit': usesBenefitPoster(),
+          'tutorial-video-stage-diagram': showsBenefitPoster(),
+        }}
       >
         <video
           ref={video}
           src={tutorialVideoUrl(props.tutorial)}
-          poster={tutorialPosterUrl(props.tutorial)}
+          poster={
+            usesBenefitPoster() ? undefined : tutorialPosterUrl(props.tutorial)
+          }
           preload="none"
           playsinline
           tabIndex={-1}
@@ -103,7 +115,7 @@ export function TutorialVideoEmbed(props: {
           onPlaying={recordPlay}
         />
         <Show when={!started()}>
-          <Show when={usesBenefitPoster()}>
+          <Show when={showsBenefitPoster()}>
             <BenefitVideoPoster tutorial={props.tutorial} />
           </Show>
           <Show when={!usesBenefitPoster()}>

@@ -1,12 +1,48 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { createHiddenDeferral } from './visible-refresh';
+import { createHiddenDeferral, createVisibleRefresh } from './visible-refresh';
 
 const setVisibility = (value: DocumentVisibilityState) => {
   vi.spyOn(document, 'visibilityState', 'get').mockReturnValue(value);
 };
 const dispatch = () => document.dispatchEvent(new Event('visibilitychange'));
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.useRealTimers();
+});
+
+it('refreshes at once after a quiet interval and never closer together than it', () => {
+  vi.useFakeTimers();
+  const refresh = vi.fn();
+  const visible = createVisibleRefresh(refresh, { intervalMs: 2_000 });
+
+  visible.markDirty();
+  expect(refresh).toHaveBeenCalledTimes(1);
+
+  visible.markDirty();
+  visible.markDirty();
+  vi.advanceTimersByTime(1_999);
+  expect(refresh).toHaveBeenCalledTimes(1);
+
+  vi.advanceTimersByTime(1);
+  expect(refresh).toHaveBeenCalledTimes(2);
+
+  // A change right after a delayed refresh waits out the interval too.
+  vi.advanceTimersByTime(1);
+  visible.markDirty();
+  expect(refresh).toHaveBeenCalledTimes(2);
+
+  vi.advanceTimersByTime(1_999);
+  expect(refresh).toHaveBeenCalledTimes(2);
+
+  vi.advanceTimersByTime(1);
+  expect(refresh).toHaveBeenCalledTimes(3);
+
+  vi.advanceTimersByTime(2_000);
+  visible.markDirty();
+  expect(refresh).toHaveBeenCalledTimes(4);
+  visible.dispose();
+});
 
 it('runs every request synchronously while visible', () => {
   const run = vi.fn();
