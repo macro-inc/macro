@@ -38,6 +38,9 @@ pub struct UpsertEmailArgs {
     pub bcc_names: Vec<String>,
     /// The labels of the email message
     pub labels: Vec<String>,
+    /// Whether the inbox shows the message's thread as Signal. Thread-level,
+    /// so identical across every message doc of the thread.
+    pub is_signal: bool,
     /// The link id of the email message
     pub link_id: String,
     /// The user id of the email message

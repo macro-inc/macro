@@ -149,6 +149,7 @@ fn upsert_args(
             .iter()
             .map(|label| label.name.clone())
             .collect(),
+        is_signal: message.thread_is_signal,
         content,
         updated_at_millis: sent_at_millis.unwrap_or(now_millis),
         sent_at_millis,

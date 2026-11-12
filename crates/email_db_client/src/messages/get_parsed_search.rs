@@ -66,8 +66,12 @@ pub async fn get_parsed_search_message_by_id(
         db_message, sender, recipients, None, labels,
     );
 
-    Ok(Some(ParsedSearchMessage::from(
+    let signals = thread_signals(&mut conn, [service_message.thread_db_id]).await?;
+    let thread_is_signal = signals.contains(&service_message.thread_db_id);
+
+    Ok(Some(ParsedSearchMessage::new(
         MessageWithBodyReplyless::from(service_message),
+        thread_is_signal,
     )))
 }
 
@@ -128,6 +132,7 @@ pub async fn get_parsed_search_messages_by_thread_ids(
     let recipients_map =
         contacts::get::fetch_db_recipients_in_bulk(&mut *conn, &message_ids).await?;
     let labels_map = labels::get::fetch_message_labels_in_bulk(&mut *conn, &message_ids).await?;
+    let signals = thread_signals(&mut conn, db_messages.iter().map(|m| m.thread_id)).await?;
 
     let tasks: Vec<_> = db_messages
         .into_iter()
@@ -135,6 +140,7 @@ pub async fn get_parsed_search_messages_by_thread_ids(
             let senders_map = &senders_map;
             let recipients_map = &recipients_map;
             let labels_map = &labels_map;
+            let signals = &signals;
 
             async move {
                 let sender = message
@@ -147,7 +153,11 @@ pub async fn get_parsed_search_messages_by_thread_ids(
                     message, sender, recipients, None, labels,
                 );
 
-                ParsedSearchMessage::from(MessageWithBodyReplyless::from(service_message))
+                let thread_is_signal = signals.contains(&service_message.thread_db_id);
+                ParsedSearchMessage::new(
+                    MessageWithBodyReplyless::from(service_message),
+                    thread_is_signal,
+                )
             }
         })
         .collect();
@@ -224,6 +234,7 @@ pub async fn get_paginated_parsed_search_messages_by_thread_id(
         contacts::get::fetch_db_recipients_in_bulk(&mut *conn, &message_ids).await?;
 
     let labels_map = labels::get::fetch_message_labels_in_bulk(&mut *conn, &message_ids).await?;
+    let signals = thread_signals(&mut conn, db_messages.iter().map(|m| m.thread_id)).await?;
 
     let tasks: Vec<_> = db_messages
         .into_iter()
@@ -231,6 +242,7 @@ pub async fn get_paginated_parsed_search_messages_by_thread_id(
             let senders_map = &senders_map;
             let recipients_map = &recipients_map;
             let labels_map = &labels_map;
+            let signals = &signals;
 
             async move {
                 let sender = message
@@ -243,7 +255,11 @@ pub async fn get_paginated_parsed_search_messages_by_thread_id(
                     message, sender, recipients, None, labels,
                 );
 
-                ParsedSearchMessage::from(MessageWithBodyReplyless::from(service_message))
+                let thread_is_signal = signals.contains(&service_message.thread_db_id);
+                ParsedSearchMessage::new(
+                    MessageWithBodyReplyless::from(service_message),
+                    thread_is_signal,
+                )
             }
         })
         .collect();
@@ -251,4 +267,21 @@ pub async fn get_paginated_parsed_search_messages_by_thread_id(
     let result = join_all(tasks).await;
 
     Ok(result)
+}
+
+/// The threads among `thread_ids` the inbox shows as Signal.
+async fn thread_signals(
+    conn: &mut sqlx::PgConnection,
+    thread_ids: impl IntoIterator<Item = Uuid>,
+) -> anyhow::Result<std::collections::HashSet<Uuid>> {
+    let mut thread_ids: Vec<Uuid> = thread_ids.into_iter().collect();
+    thread_ids.sort_unstable();
+    thread_ids.dedup();
+    let signals = sqlx::query_scalar!(
+        "SELECT id FROM email_threads WHERE id = ANY($1) AND is_signal",
+        &thread_ids,
+    )
+    .fetch_all(conn)
+    .await?;
+    Ok(signals.into_iter().collect())
 }
