@@ -6,8 +6,9 @@
 //! plus the team's admins and owner: [`ClaudeSignInStage::ExpiresSoon`]
 //! within [`EXPIRES_SOON_WITHIN`] of the expiry, [`ClaudeSignInStage::ExpiresToday`]
 //! within [`EXPIRES_TODAY_WITHIN`], and [`ClaudeSignInStage::Expired`] once it
-//! passed or macrod reports Claude signed out. Each stage is sent at most
-//! once per sign-in; a later stage skips the earlier ones it overtook.
+//! passed. The expiry is the one harnessd last reported for the computer's
+//! credential. Each stage is sent at most once per sign-in; a later stage
+//! skips the earlier ones it overtook.
 
 #[cfg(test)]
 mod test;
@@ -46,18 +47,6 @@ pub enum ClaudeSignInStage {
     Expired,
 }
 
-/// What macrod last reported about Claude Code's sign-in on the computer.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ClaudeReport {
-    /// Claude has no account: the sign-in was rejected or removed.
-    SignedOut,
-    /// Claude is signed in.
-    SignedIn {
-        /// When the sign-in stops refreshing; unknown for some credentials.
-        expires_at: Option<DateTime<Utc>>,
-    },
-}
-
 /// A notice sent, or due, for one sign-in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ClaudeSignInNotice {
@@ -65,7 +54,7 @@ pub struct ClaudeSignInNotice {
     pub signed_in_at: DateTime<Utc>,
     /// How close the sign-in was to no longer working.
     pub stage: ClaudeSignInStage,
-    /// The expiry it warned about; `None` when macrod reported Claude signed out.
+    /// The expiry it warned about.
     pub expires_at: Option<DateTime<Utc>>,
 }
 
@@ -87,45 +76,31 @@ pub struct ClaudeSignIn {
     pub signed_in_by: Option<MacroUserIdStr<'static>>,
     /// When the sign-in was recorded.
     pub signed_in_at: DateTime<Utc>,
-    /// macrod's latest Claude report, if it sent one.
-    pub report: Option<ClaudeReport>,
-    /// When macrod sent `report`.
-    pub reported_at: Option<DateTime<Utc>>,
+    /// When the credential stops working, as harnessd last reported it;
+    /// unknown for some credentials.
+    pub expires_at: Option<DateTime<Utc>>,
     /// The last notice sent for this login.
     pub last_notice: Option<ClaudeSignInNotice>,
 }
 
 /// The notice `sign_in` is due at `now`, if any.
 ///
-/// Only a report macrod sent after the sign-in counts: an older one describes
-/// the account before it. A notice already sent for this sign-in and expiry at
-/// the same or a later stage suppresses it, and nothing follows `Expired`
-/// until someone signs in again.
+/// A notice already sent for this sign-in and expiry at the same or a later
+/// stage suppresses it, and nothing follows `Expired` until someone signs in
+/// again.
 pub fn due_notice(now: DateTime<Utc>, sign_in: &ClaudeSignIn) -> Option<ClaudeSignInNotice> {
-    let reported_after_sign_in = sign_in
-        .reported_at
-        .is_some_and(|reported_at| reported_at > sign_in.signed_in_at);
-    if !reported_after_sign_in {
+    let expires_at = sign_in.expires_at?;
+    let left = expires_at - now;
+    let stage = if left <= Duration::zero() {
+        ClaudeSignInStage::Expired
+    } else if left <= EXPIRES_TODAY_WITHIN {
+        ClaudeSignInStage::ExpiresToday
+    } else if left <= EXPIRES_SOON_WITHIN {
+        ClaudeSignInStage::ExpiresSoon
+    } else {
         return None;
-    }
-
-    let (stage, expires_at) = match sign_in.report? {
-        ClaudeReport::SignedOut => (ClaudeSignInStage::Expired, None),
-        ClaudeReport::SignedIn { expires_at } => {
-            let expires_at = expires_at?;
-            let left = expires_at - now;
-            let stage = if left <= Duration::zero() {
-                ClaudeSignInStage::Expired
-            } else if left <= EXPIRES_TODAY_WITHIN {
-                ClaudeSignInStage::ExpiresToday
-            } else if left <= EXPIRES_SOON_WITHIN {
-                ClaudeSignInStage::ExpiresSoon
-            } else {
-                return None;
-            };
-            (stage, Some(expires_at))
-        }
     };
+    let expires_at = Some(expires_at);
 
     if let Some(last) = sign_in.last_notice
         && last.signed_in_at == sign_in.signed_in_at
@@ -147,7 +122,7 @@ pub fn due_notice(now: DateTime<Utc>, sign_in: &ClaudeSignIn) -> Option<ClaudeSi
 
 /// A notice to deliver.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ClaudeSignInExpiry {
+pub struct SignInExpiry {
     /// The computer.
     pub computer_id: ComputerId,
     /// Its harness.
@@ -190,7 +165,7 @@ pub trait ClaudeSignInNotices: Send + Sync + 'static {
     /// must not notify twice.
     fn send(
         &self,
-        expiry: ClaudeSignInExpiry,
+        expiry: SignInExpiry,
         recipients: HashSet<MacroUserIdStr<'static>>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
@@ -278,7 +253,7 @@ where
     let mut recipients: HashSet<_> = sign_in.signed_in_by.into_iter().collect();
     recipients.extend(admins);
 
-    let expiry = ClaudeSignInExpiry {
+    let expiry = SignInExpiry {
         computer_id,
         harness_id: sign_in.harness_id,
         computer_name: sign_in.computer_name,

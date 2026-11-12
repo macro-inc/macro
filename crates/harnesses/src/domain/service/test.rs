@@ -39,7 +39,6 @@ fn harness(owner: HarnessOwner) -> Harness {
         updated_at: Utc::now(),
         connected: false,
         last_connected_at: None,
-        capabilities: HarnessCapabilities::default(),
         computer_id: None,
         claude_mode: ClaudeMode::MacroCredits,
     }
@@ -67,7 +66,6 @@ struct Calls {
     updated: Vec<(HarnessId, HarnessChanges)>,
     team_lookups: Vec<(String, Uuid)>,
     hosted_upserts: Vec<(NewPairing, NewHarness)>,
-    capability_reports: Vec<(HarnessId, HarnessCapabilities)>,
     account_logins: Vec<(HarnessId, AccountLoginChange)>,
     team_access: Vec<(Uuid, bool)>,
 }
@@ -85,7 +83,6 @@ struct FakeRepo {
     delete_result: bool,
     user_has_team: bool,
     user_owns_team: bool,
-    set_capabilities_result: bool,
     hosted_upsert: HostedPairingUpsert,
     calls: Arc<Mutex<Calls>>,
 }
@@ -104,7 +101,6 @@ impl Default for FakeRepo {
             delete_result: false,
             user_has_team: false,
             user_owns_team: false,
-            set_capabilities_result: false,
             hosted_upsert: HostedPairingUpsert::Created,
             calls: Arc::default(),
         }
@@ -189,19 +185,6 @@ impl HarnessRepo for FakeRepo {
             .harness
             .as_ref()
             .and_then(|harness| harness.computer_id))
-    }
-
-    async fn set_capabilities(
-        &self,
-        harness_id: HarnessId,
-        capabilities: HarnessCapabilities,
-    ) -> Result<bool, Self::Err> {
-        self.calls
-            .lock()
-            .unwrap()
-            .capability_reports
-            .push((harness_id, capabilities));
-        Ok(self.set_capabilities_result)
     }
 
     async fn record_account_login(
@@ -1200,45 +1183,6 @@ async fn harness_computer_maps_hosted_harnesses_only() {
             .unwrap(),
         None
     );
-}
-
-#[tokio::test]
-async fn capability_reports_reach_the_repo_and_unknown_harnesses_are_not_found() {
-    let repo = FakeRepo {
-        set_capabilities_result: true,
-        ..FakeRepo::default()
-    };
-    service(repo.clone())
-        .report_capabilities(
-            HarnessId::TEST_A,
-            HarnessCapabilities {
-                screen: true,
-                claude: None,
-            },
-        )
-        .await
-        .unwrap();
-    assert_eq!(
-        repo.calls.lock().unwrap().capability_reports,
-        [(
-            HarnessId::TEST_A,
-            HarnessCapabilities {
-                screen: true,
-                claude: None
-            }
-        )]
-    );
-
-    let result = service(FakeRepo::default())
-        .report_capabilities(
-            HarnessId::TEST_A,
-            HarnessCapabilities {
-                screen: true,
-                claude: None,
-            },
-        )
-        .await;
-    assert!(matches!(result, Err(HarnessError::NotFound(_))));
 }
 
 #[tokio::test]

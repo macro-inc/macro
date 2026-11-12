@@ -17,16 +17,20 @@ use std::time::Duration;
 use chrono::{DateTime, Utc};
 use incus_client::generated::types;
 use incus_client::{
-    ImageReference, ImageSource, IncusClient, IncusEndpoint, IncusError, InstanceInfo,
-    InstanceKind, InstanceName, InvalidName, ProfileName, StoragePoolName, StorageVolumeName,
+    AttachedExec, ExecCommand, ImageReference, ImageSource, IncusClient, IncusEndpoint, IncusError,
+    InstanceInfo, InstanceKind, InstanceName, InvalidName, ProfileName, StoragePoolName,
+    StorageVolumeName,
 };
 
 use crate::domain::enrollment::{EnrollmentGeneration, EnrollmentIssueError, INCUS_ENROLLMENT_KEY};
 use crate::domain::ids::{ComputerId, PairingId};
 use crate::domain::image::{GuestImage, ROOT_DISK_GIB, data_disk_gib};
 use crate::domain::models::{Computer, ControlPlaneId, HostRegistration};
-use crate::domain::ports::{Fleet, FleetEnrollment, FleetError, FleetInstance, InstanceStatus};
+use crate::domain::ports::{
+    Fleet, FleetEnrollment, FleetError, FleetInstance, GUEST_USER, GuestProcess, InstanceStatus,
+};
 use crate::domain::size::ComputerResources;
+use crate::outbound::stderr_tail::{STDERR_TAIL_BYTES, log_failure, read_tail};
 
 #[cfg(test)]
 mod test;
@@ -457,6 +461,57 @@ impl Fleet for IncusFleet {
             reserve_gb: self.config.reserve_gb,
             oversell_factor: self.config.oversell_factor,
         })
+    }
+
+    #[tracing::instrument(name = "incus_fleet.exec", skip(self, argv), err)]
+    async fn exec(
+        &self,
+        computer_id: ComputerId,
+        argv: &[&str],
+    ) -> Result<GuestProcess<IncusFleetError>, IncusFleetError> {
+        let AttachedExec {
+            stdin,
+            stdout,
+            stderr,
+            exit,
+        } = self
+            .client
+            .exec_attached(&instance_name(computer_id), exec_command(argv))
+            .await?;
+
+        // Drained on its own so a chatty stderr never blocks the program.
+        let stderr_tail = tokio::spawn(read_tail(stderr, STDERR_TAIL_BYTES));
+        let exit = async move {
+            let exit_code = exit.await?;
+            let exit_code = i32::try_from(exit_code).map_err(|_| {
+                IncusError::MalformedResponse(format!("exec return code {exit_code}"))
+            })?;
+            let tail = stderr_tail.await.map_err(|error| {
+                IncusError::WebSocket(format!("stderr reader stopped: {error}"))
+            })?;
+            log_failure(computer_id, exit_code, &tail);
+            Ok::<_, IncusFleetError>(exit_code)
+        };
+
+        Ok(GuestProcess {
+            stdin: Box::pin(stdin),
+            stdout: Box::pin(stdout),
+            exit: Box::pin(exit),
+        })
+    }
+}
+
+/// `argv` as the guest's macro user, from its home directory.
+fn exec_command(argv: &[&str]) -> ExecCommand {
+    ExecCommand {
+        command: argv.iter().map(|arg| (*arg).to_owned()).collect(),
+        environment: BTreeMap::from([
+            ("HOME".to_owned(), GUEST_USER.home.to_owned()),
+            ("PATH".to_owned(), GUEST_USER.path.to_owned()),
+        ]),
+        user: GUEST_USER.uid,
+        group: GUEST_USER.gid,
+        cwd: GUEST_USER.home.to_owned(),
     }
 }
 

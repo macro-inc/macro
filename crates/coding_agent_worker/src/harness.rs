@@ -22,12 +22,10 @@ use agent_runtime_protocol::domain::connection::{
     ConnectionError, ModelProbeHandler, RuntimeChannel,
 };
 use agent_runtime_protocol::domain::schema::v0::{
-    AcpMessage, ComputerControlResult, ModelProbeResult, SystemEvent, ToRuntimeMessage,
-    ToServerMessage,
+    AcpMessage, ModelProbeResult, SystemEvent, ToRuntimeMessage, ToServerMessage,
 };
 use tokio::sync::oneshot;
 use tokio::task::JoinSet;
-use tracing::Instrument as _;
 
 #[cfg(test)]
 mod test;
@@ -268,22 +266,6 @@ async fn relay(
                         {
                             return Ok(Relayed::Closed);
                         }
-                    }
-                    Some(ToRuntimeMessage::ComputerControl { request_id, command, meta }) => {
-                        let to_service = to_service.clone();
-                        let computer = computer.cloned();
-                        let span = tracing::info_span!("macrod.computer.execute", request_id = %request_id);
-                        genai_telemetry::propagation::set_parent(&span, Some(&meta));
-                        probe_tasks.spawn(async move {
-                            let result = match computer {
-                                Some(computer) => computer.run(command).await,
-                                None => ComputerControlResult::Failed {
-                                    message: "this runtime is not a Macro computer".to_owned(),
-                                },
-                            };
-                            let _ = to_service
-                                .send(ToServerMessage::ComputerControlResponse { request_id, result });
-                        }.instrument(span));
                     }
                     Some(ToRuntimeMessage::ModelProbeRequest) => {
                         let probes = probes.clone();

@@ -6,6 +6,6 @@
  */
 
 /**
- * When the sign-in stops refreshing, as the computer last reported it.
+ * When the credential stops working, as the computer last reported it.
  */
 export type ClaudeAccountStatusExpiresAt = string | null;

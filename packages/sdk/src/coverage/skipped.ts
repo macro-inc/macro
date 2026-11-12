@@ -437,7 +437,6 @@ export const storageExcluded = [
   'whatsappPairing',
   'whatsappPasskey',
   'whatsappStartLookup',
-  'putSelfHarnessCapabilities', // Daemon capability reports are internal runtime registration plumbing.
 ] as const satisfies readonly (keyof StorageSdk)[];
 
 export const storageBacklog = [

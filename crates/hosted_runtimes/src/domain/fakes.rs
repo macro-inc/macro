@@ -1,7 +1,5 @@
 //! In-memory fakes of the ports, for domain tests.
 
-use macro_user_id::user_id::MacroUserIdStr;
-
 use crate::domain::ids::ComputerId;
 use bot_id::BotId;
 use harness_id::HarnessId;
@@ -11,6 +9,7 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use chrono::{DateTime, TimeZone, Utc};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use uuid::Uuid;
 
 use crate::domain::lifecycle::{
@@ -20,9 +19,14 @@ use crate::domain::models::{
     Computer, ComputerDisplayMetadata, ComputerRecord, Host, HostRegistration, NewReservation,
     PurchaseKey, Reservation, Reserved, SanitizedReason,
 };
-use crate::domain::ports::{Applied, ComputerRepo, DueTimer, PendingEffect, ReserveError};
+use crate::domain::ports::{
+    Applied, ComputerRepo, DueTimer, GuestProcess, PendingEffect, ReserveError,
+};
 use crate::domain::service::Clock;
 use crate::domain::size::ComputerSize;
+
+#[cfg(test)]
+mod test;
 
 pub const TEAM: Uuid = Uuid::from_u128(0x0000_0000_0000_4000_8000_0000_0000_00aa);
 pub const HOST: HostId = HostId::new(Uuid::from_u128(0x0000_0000_0000_4000_8000_0000_0000_0001));
@@ -719,5 +723,28 @@ impl crate::domain::enrollment::DeploymentSource for FixedDeployment {
         crate::domain::enrollment::DeploymentUnavailable,
     > {
         Ok(deployment())
+    }
+}
+
+/// A guest program for a fake [`crate::domain::ports::Fleet::exec`]: it reads
+/// its stdin to the end, then writes the stdout `script` makes of it and exits
+/// with `script`'s code.
+pub fn scripted_process<Err: Send + 'static>(
+    script: impl FnOnce(Vec<u8>) -> (Vec<u8>, i32) + Send + 'static,
+) -> GuestProcess<Err> {
+    let (stdin, mut program_stdin) = tokio::io::duplex(64 * 1024);
+    let (mut program_stdout, stdout) = tokio::io::duplex(64 * 1024);
+    let program = tokio::spawn(async move {
+        let mut input = Vec::new();
+        program_stdin.read_to_end(&mut input).await.unwrap();
+        let (output, exit_code) = script(input);
+        program_stdout.write_all(&output).await.unwrap();
+        exit_code
+    });
+
+    GuestProcess {
+        stdin: Box::pin(stdin),
+        stdout: Box::pin(stdout),
+        exit: Box::pin(async move { Ok(program.await.unwrap()) }),
     }
 }

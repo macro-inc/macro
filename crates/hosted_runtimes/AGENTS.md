@@ -44,6 +44,13 @@ lifecycle, capacity, purchase/billing orchestration and the fleet ports.
   mounted by authentication_service.
 - `src/outbound/`: Postgres repo, `IncusFleet`, dev-only `DockerFleet`, and
   `ConfiguredFleet` (explicit `COMPUTERS_FLEET`, never a fallback).
+- `Fleet::exec(computer, argv)` runs a program in the guest as `GUEST_USER`
+  (uid/gid 1000, `HOME=/home/macro`, the NixOS profile `PATH`, cwd home), without
+  a TTY, as a `GuestProcess` (stdin, stdout, exit code). Stderr is never streamed:
+  adapters keep a 4 KiB tail and log it at debug on a non-zero exit. Docker runs
+  `docker exec -i -u 1000:1000`; Incus uses `IncusClient::exec_attached`. Dropping
+  the process kills it on Docker (`kill_on_drop`) and detaches it on Incus (its
+  stdin ends). Tests script one with `fakes::scripted_process`.
 
 ## Rollout
 
@@ -340,9 +347,8 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   registration after 10, 20, 40, then 60 seconds, holding fleet effects and timers
   until registration succeeds without consuming their attempts.
 - **Claude sign-in notices**: `domain::claude_sign_in::due_notice(now, sign_in)`
-  is pure: within three days of the reported expiry `ExpiresSoon`, within one
-  day `ExpiresToday`, once passed (or macrod reports Claude signed out)
-  `Expired`. Only a report newer than the recorded sign-in counts. Each
+  is pure: within three days of the expiry harnessd last reported
+  `ExpiresSoon`, within one day `ExpiresToday`, once passed `Expired`. Each
   `ClaudeSignIn` is a computer's active Claude login, and its last notice
   (stage and the expiry it warned about) is stored on that login row
   (`harness_account_logins.notice_*`), so a new sign-in starts over; one for an
@@ -391,6 +397,8 @@ agent; `NoAgentEnrollment` (the default) enrolls every computer without one.
   create → stop → start → destroy against a dev Incus host.
 - With `macro-box:latest` loaded, run the Docker isolation regression with
   `cargo test -p hosted_runtimes listing_cannot_expose_another_fleets_containers_to_reconciliation -- --ignored`.
+- With `busybox:latest` pulled, run the Docker exec regression with
+  `cargo test -p hosted_runtimes exec_streams_stdin_to_stdout_and_reports_the_exit_code -- --ignored`.
 
 ## Gotchas
 

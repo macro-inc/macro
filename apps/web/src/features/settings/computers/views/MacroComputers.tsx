@@ -151,14 +151,10 @@ function ManagedComputerRow(props: {
   const restore = useRestoreComputerMutation();
   const signOut = useClaudeSignOutMutation();
 
-  // The active login names the account; macrod's report says whether Claude
-  // is still signed in to it.
-  const account = () => {
-    const claude = props.harness?.capabilities?.claude;
-    if (claude?.status !== 'signed_in') return undefined;
-    return mode.isSuccess
-      ? (mode.data.account?.email ?? undefined)
-      : claude.account;
+  // Claude's long-lived credential names no account; it only expires.
+  const expired = () => {
+    const expiresAt = mode.isSuccess ? mode.data.account?.expiresAt : undefined;
+    return expiresAt ? new Date(expiresAt).getTime() <= Date.now() : false;
   };
   const currentMode = () =>
     mode.isSuccess ? mode.data.mode : props.harness?.claude_mode;
@@ -167,14 +163,13 @@ function ManagedComputerRow(props: {
     if (!props.computer.setupCompletedAt) return { kind: 'unset' };
     const value = currentMode();
     if (value === 'macro_credits') return { kind: 'credits' };
-    if (value === 'own_account')
-      return { kind: 'account', account: account() ?? undefined };
+    if (value === 'own_account') return { kind: 'account', expired: expired() };
     return { kind: 'loading' };
   };
   const setupIncomplete = () => !props.computer.setupCompletedAt;
   const claudeMissing = () => {
     const state = claude();
-    return state.kind === 'account' && !state.account;
+    return state.kind === 'account' && state.expired;
   };
 
   const primary = (): ComputerPrimaryAction | undefined => {
@@ -216,9 +211,7 @@ function ManagedComputerRow(props: {
     if (!harnessId) return;
     const confirmed = await confirmDialog({
       title: t('computers.switchToCreditsTitle', { name: props.computer.name }),
-      body: t('computers.switchToCreditsBody', {
-        account: account() ?? t('computers.claudeOwnChoice'),
-      }),
+      body: t('computers.switchToCreditsBody'),
       confirmLabel: t('computers.switchToCredits'),
     });
     if (!confirmed) return;

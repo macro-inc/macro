@@ -1170,38 +1170,28 @@ export type ClassifyInputResponse = {
 };
 
 /**
- * A computer's active Claude login.
+ * A computer's active Claude sign-in. Claude's long-lived credential names
+ * no account, so there is no email or plan to show.
  */
 export type ClaudeAccountStatus = {
     /**
-     * The account's email address, when Claude reports one.
-     */
-    email?: string | null;
-    /**
-     * When the sign-in stops refreshing, as the computer last reported it.
+     * When the credential stops working, as the computer last reported it.
      */
     expiresAt?: string | null;
-    /**
-     * The account's organization, when Claude reports one.
-     */
-    organization?: string | null;
-    /**
-     * The account's plan, e.g. `max`.
-     */
-    plan?: string | null;
     /**
      * When it was signed in.
      */
     signedInAt: string;
     /**
-     * Who signed it in through Macro; absent once that user is deleted.
+     * Who signed it in through Macro; absent once that user is deleted or
+     * when it was signed in on the computer itself.
      */
     signedInBy?: string | null;
 };
 
 /**
- * How Claude Code on a computer is paid for, and the Claude account it is
- * signed in to when it uses its own.
+ * How Claude Code on a computer is paid for, and its Claude sign-in when it
+ * uses its own.
  */
 export type ClaudeModeResponse = {
     account?: null | ClaudeAccountStatus;
@@ -1235,10 +1225,6 @@ export type ClaudeSignInStarted = {
  * `POST /harnesses/{harness_id}/claude-sign-in/complete` answer.
  */
 export type ClaudeSignedIn = {
-    /**
-     * The Claude account's email address, when Claude reports one.
-     */
-    account?: string | null;
     /**
      * Always `true`.
      */

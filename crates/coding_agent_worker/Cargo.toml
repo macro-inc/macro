@@ -30,7 +30,6 @@ clap = { workspace = true }
 crossterm = { workspace = true }
 eventsource-stream = { workspace = true }
 futures = { workspace = true }
-genai_telemetry = { path = "../genai_telemetry" }
 harness_id = { path = "../harness_id" }
 harnesses = { path = "../harnesses", default-features = false }
 hex = { workspace = true }

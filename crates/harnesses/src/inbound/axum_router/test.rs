@@ -20,7 +20,6 @@ fn harness(connected: bool) -> Harness {
         updated_at: Utc::now(),
         connected,
         last_connected_at: None,
-        capabilities: HarnessCapabilities::default(),
         computer_id: None,
         claude_mode: ClaudeMode::MacroCredits,
     }

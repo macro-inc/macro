@@ -7,7 +7,7 @@ version = "0.1.0"
 [dependencies]
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
-harnesses = { path = "../harnesses", default-features = false, features = ["schema"] }
+harnessd_protocol = { workspace = true, features = ["schema"] }
 html-escape = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
 mention_utils = { path = "../mention_utils" }

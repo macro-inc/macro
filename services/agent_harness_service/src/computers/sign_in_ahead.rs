@@ -1,51 +1,61 @@
 //! Starting a computer's Claude sign-in before anyone opens it, so the link
-//! is ready the moment the guided setup asks for it. macrod hands the waiting
-//! URL to the first Start; choosing Macro credits signs out, which closes it.
+//! is ready the moment the guided setup asks for it. harnessd hands the
+//! waiting URL to the first Start; choosing Macro credits signs out, which
+//! closes it.
 
 use std::sync::Arc;
 
-use super::Operator;
-use super::control::ComputerControl;
-use agent_runtime_protocol::domain::schema::v0::{ComputerCommand, ComputerControlResult};
+use chrono::{DateTime, Utc};
 use harness_id::HarnessId;
-use harnesses::domain::models::{ClaudeAccount, ClaudeMode};
-use harnesses::domain::ports::HarnessRepo;
+use harnessd_protocol::{AgentProvider, ClaudeAccount, Request, Response};
+use harnesses::domain::ports::HarnessService;
+
+use super::Operator;
+use super::harnessd::Harnessd;
 
 #[cfg(test)]
 mod test;
 
-/// Whether a computer that just connected should start a Claude sign-in.
+/// Whether a computer whose harnessd reported `status` should start a
+/// Claude sign-in now.
 ///
-/// Only while nobody chose yet (setup unfinished) or while the team's own
-/// account needs signing in again. Once the team chose Macro credits at
-/// setup, never: no one will use it. An account macrod has not reported
-/// yet counts as signed out only before setup finishes.
-pub(crate) fn wants_sign_in(
-    mode: ClaudeMode,
-    account: Option<&ClaudeAccount>,
-    setup_completed: bool,
-) -> bool {
-    let signed_in = matches!(account, Some(ClaudeAccount::SignedIn { .. }));
-    if signed_in {
-        return false;
-    }
-    match mode {
-        ClaudeMode::OwnAccount => matches!(account, Some(ClaudeAccount::SignedOut)),
-        ClaudeMode::MacroCredits => !setup_completed,
+/// While nobody chose yet (setup unfinished) and nothing is signed in, or
+/// once the computer's own credential has expired. After the team chose
+/// Macro credits at setup, never: no one will use it. A sign-in already
+/// waiting needs nothing.
+pub(crate) fn wants_sign_in(status: &Response, setup_completed: bool, now: DateTime<Utc>) -> bool {
+    match status {
+        Response::SignedOut { .. } => !setup_completed,
+        Response::SignedIn {
+            claude: Some(ClaudeAccount { expires_at, .. }),
+            ..
+        } => expires_at.is_some_and(|expires_at| expires_at <= now),
+        Response::SignedIn { claude: None, .. }
+        | Response::Pending { .. }
+        | Response::SignInStarted { .. }
+        | Response::Error { .. } => false,
     }
 }
 
-/// What starting a sign-in ahead needs; built after the command bus.
-pub struct SignInAhead<Repo> {
-    pub control: ComputerControl,
-    pub harnesses: Repo,
+/// What starting a sign-in ahead needs.
+pub struct SignInAhead<Harnesses> {
+    pub harnessd: Harnessd<Harnesses>,
     pub operator: Arc<Operator>,
 }
 
-impl<Repo: HarnessRepo> SignInAhead<Repo> {
-    /// Start the sign-in on `harness` when [`wants_sign_in`] says so.
+impl<Harnesses: HarnessService> SignInAhead<Harnesses> {
+    /// Record `harness`'s sign-in state, then start a sign-in when
+    /// [`wants_sign_in`] says so.
     #[tracing::instrument(name = "computer.claude.sign_in_ahead", skip(self))]
     pub async fn on_connected(&self, harness: HarnessId) {
+        let computer_id = match self.harnessd.harnesses().harness_computer(harness).await {
+            Ok(Some(computer_id)) => computer_id,
+            Ok(None) => return,
+            Err(error) => {
+                tracing::warn!(error = ?error, "could not read the harness's computer");
+                return;
+            }
+        };
         let setup_completed = match self.operator.setup_completed(harness).await {
             Ok(Some(completed)) => completed,
             Ok(None) => return,
@@ -54,28 +64,25 @@ impl<Repo: HarnessRepo> SignInAhead<Repo> {
                 return;
             }
         };
-        let record = match self.harnesses.get_harness(harness).await {
-            Ok(Some(record)) => record,
-            Ok(None) => return,
+        let status = match self
+            .harnessd
+            .refresh(harness, computer_id, AgentProvider::Claude)
+            .await
+        {
+            Ok(status) => status,
             Err(error) => {
-                let error: anyhow::Error = error.into();
-                tracing::warn!(error = ?error, "could not read the computer's harness");
+                tracing::warn!(error = ?error, "could not read the computer's Claude sign-in");
                 return;
             }
         };
-        if !wants_sign_in(
-            record.claude_mode,
-            record.capabilities.claude.as_ref(),
-            setup_completed,
-        ) {
+        if !wants_sign_in(&status, setup_completed, Utc::now()) {
             return;
         }
-        match self
-            .control
-            .send(harness, ComputerCommand::ClaudeSignInStart)
-            .await
-        {
-            Ok(ComputerControlResult::SignInStarted { .. }) => {
+        let start = Request::SignInStart {
+            agent: AgentProvider::Claude,
+        };
+        match self.harnessd.run(harness, computer_id, start, None).await {
+            Ok(Response::SignInStarted { .. }) => {
                 tracing::info!("Claude sign-in ready ahead of time");
             }
             Ok(other) => tracing::warn!(?other, "the computer did not start a sign-in"),

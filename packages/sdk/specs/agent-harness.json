@@ -3880,7 +3880,7 @@
     "/harnesses/{harness_id}/claude-sign-in/cancel": {
       "post": {
         "tags": ["computers"],
-        "summary": "Cancel the pending setup-token process. Its terminal completion releases\nthe original request's account lease, including on another replica.",
+        "summary": "Cancel the computer's waiting sign-in, including one a completion is\nstill finishing.",
         "operationId": "cancel_claude_sign_in",
         "parameters": [
           {
@@ -3982,7 +3982,7 @@
     "/harnesses/{harness_id}/claude-sign-out": {
       "post": {
         "tags": ["computers"],
-        "summary": "Forget the computer's Claude account and return it to Macro credits.",
+        "summary": "Forget the computer's Claude credential and return it to Macro credits.",
         "operationId": "claude_sign_out",
         "parameters": [
           {
@@ -5726,25 +5726,13 @@
       },
       "ClaudeAccountStatus": {
         "type": "object",
-        "description": "A computer's active Claude login.",
+        "description": "A computer's active Claude sign-in. Claude's long-lived credential names\nno account, so there is no email or plan to show.",
         "required": ["signedInAt"],
         "properties": {
-          "email": {
-            "type": ["string", "null"],
-            "description": "The account's email address, when Claude reports one."
-          },
           "expiresAt": {
             "type": ["string", "null"],
             "format": "date-time",
-            "description": "When the sign-in stops refreshing, as the computer last reported it."
-          },
-          "organization": {
-            "type": ["string", "null"],
-            "description": "The account's organization, when Claude reports one."
-          },
-          "plan": {
-            "type": ["string", "null"],
-            "description": "The account's plan, e.g. `max`."
+            "description": "When the credential stops working, as the computer last reported it."
           },
           "signedInAt": {
             "type": "string",
@@ -5753,13 +5741,13 @@
           },
           "signedInBy": {
             "type": ["string", "null"],
-            "description": "Who signed it in through Macro; absent once that user is deleted."
+            "description": "Who signed it in through Macro; absent once that user is deleted or\nwhen it was signed in on the computer itself."
           }
         }
       },
       "ClaudeModeResponse": {
         "type": "object",
-        "description": "How Claude Code on a computer is paid for, and the Claude account it is\nsigned in to when it uses its own.",
+        "description": "How Claude Code on a computer is paid for, and its Claude sign-in when it\nuses its own.",
         "required": ["mode"],
         "properties": {
           "account": {
@@ -5769,7 +5757,7 @@
               },
               {
                 "$ref": "#/components/schemas/ClaudeAccountStatus",
-                "description": "The active Claude login; absent on Macro credits."
+                "description": "The active Claude sign-in; absent on Macro credits."
               }
             ]
           },
@@ -5807,10 +5795,6 @@
         "description": "`POST /harnesses/{harness_id}/claude-sign-in/complete` answer.",
         "required": ["signedIn"],
         "properties": {
-          "account": {
-            "type": ["string", "null"],
-            "description": "The Claude account's email address, when Claude reports one."
-          },
           "signedIn": {
             "type": "boolean",
             "description": "Always `true`."
