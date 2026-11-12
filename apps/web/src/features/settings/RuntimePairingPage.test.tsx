@@ -76,7 +76,7 @@ describe('RuntimePairingPage', () => {
   it('looks up a typed code and shows the pairing request', () => {
     render(() => <RuntimePairingPage onClose={() => {}} />);
 
-    const dialog = screen.getByRole('region', { name: 'New runtime' });
+    const dialog = screen.getByRole('region', { name: 'New machine' });
     const codeInput = within(dialog).getByLabelText('Pairing code');
     expect(codeInput).toHaveProperty('value', '');
     expect(
@@ -87,7 +87,7 @@ describe('RuntimePairingPage', () => {
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'Look up' }));
     expect(
-      screen.queryByRole('list', { name: 'Runtime setup steps' })
+      screen.queryByRole('list', { name: 'Machine setup steps' })
     ).toBeNull();
     expect(within(dialog).getByText('KX7M-4QHD')).toBeTruthy();
     expect(
@@ -107,7 +107,7 @@ describe('RuntimePairingPage', () => {
       <RuntimePairingPage initialCode="KX7M-4QHD" onClose={() => {}} />
     ));
 
-    const dialog = screen.getByRole('region', { name: 'New runtime' });
+    const dialog = screen.getByRole('region', { name: 'New machine' });
     fireEvent.input(within(dialog).getByLabelText('Name'), {
       target: { value: 'Home desktop' },
     });
@@ -120,7 +120,7 @@ describe('RuntimePairingPage', () => {
         allowPermissionBypass: false,
         teamId: undefined,
       });
-      expect(mocks.toastSuccess).toHaveBeenCalledWith('Runtime connected');
+      expect(mocks.toastSuccess).toHaveBeenCalledWith('Machine connected');
     });
   });
 
@@ -129,7 +129,7 @@ describe('RuntimePairingPage', () => {
       <RuntimePairingPage initialCode="KX7M-4QHD" onClose={() => {}} />
     ));
 
-    const dialog = screen.getByRole('region', { name: 'New runtime' });
+    const dialog = screen.getByRole('region', { name: 'New machine' });
     fireEvent.click(within(dialog).getByLabelText('Team'));
     fireEvent.click(within(dialog).getByRole('button', { name: 'Approve' }));
 
@@ -150,13 +150,13 @@ describe('RuntimePairingPage', () => {
       <RuntimePairingPage initialCode="KX7M-4QHD" onClose={() => {}} />
     ));
 
-    const dialog = screen.getByRole('region', { name: 'New runtime' });
+    const dialog = screen.getByRole('region', { name: 'New machine' });
     expect(within(dialog).getByLabelText('Team')).toHaveProperty(
       'disabled',
       true
     );
     expect(
-      within(dialog).getByText('Create or join a team before sharing runtimes.')
+      within(dialog).getByText('Create or join a team before sharing machines.')
     ).toBeTruthy();
   });
 
@@ -167,7 +167,7 @@ describe('RuntimePairingPage', () => {
       <RuntimePairingPage initialCode="KX7M-4QHD" onClose={() => {}} />
     ));
 
-    const dialog = screen.getByRole('region', { name: 'New runtime' });
+    const dialog = screen.getByRole('region', { name: 'New machine' });
     expect(
       within(dialog).getByText(
         'This pairing code is invalid, expired, or already claimed.'
@@ -186,13 +186,13 @@ describe('RuntimePairingPage', () => {
       <RuntimePairingPage initialCode="KX7M-4QHD" onClose={onClose} />
     ));
 
-    const dialog = screen.getByRole('region', { name: 'New runtime' });
+    const dialog = screen.getByRole('region', { name: 'New machine' });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Approve' }));
 
     await waitFor(() => {
       expect(
         within(dialog).getByText(
-          'Runtime connected. macrod will finish pairing automatically.'
+          'Machine connected. macrod will finish pairing automatically.'
         )
       ).toBeTruthy();
     });
@@ -206,7 +206,7 @@ it('warns before opting a harness into permission bypass', async () => {
   render(() => (
     <RuntimePairingPage initialCode="KX7M-4QHD" onClose={() => {}} />
   ));
-  const dialog = screen.getByRole('region', { name: 'New runtime' });
+  const dialog = screen.getByRole('region', { name: 'New machine' });
   const toggle = within(dialog).getByRole('checkbox');
   expect(toggle).toHaveProperty('checked', false);
   fireEvent.click(toggle);

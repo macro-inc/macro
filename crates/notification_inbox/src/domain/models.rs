@@ -46,6 +46,9 @@ pub enum InboxRowType {
     AccessRequested,
     /// Access the viewer requested was granted.
     AccessGranted,
+    /// The viewer's access to a runtime was removed, and agents of theirs
+    /// living there stopped.
+    AccessRemoved,
 }
 
 /// A row's identity: the group it belongs to and its slot in the group,

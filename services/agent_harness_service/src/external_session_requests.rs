@@ -94,7 +94,7 @@ where
                             "no runtime created the requested session in time"
                         );
                         return Err(AgentSessionError::RuntimeUnavailable(
-                            "this agent's runtime did not open the session; make sure macrod is running and up to date",
+                            "this agent's machine did not open the session; make sure macrod is running and up to date",
                         ));
                     }
                 }

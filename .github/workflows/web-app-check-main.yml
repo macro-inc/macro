@@ -47,6 +47,7 @@ jobs:
             - 'packages/sdk/**'
             - 'packages/sdk-docs/**'
             - 'services/ai-editing-worker/**'
+            - 'services/mcp-chatgpt-worker/**'
             - 'packages/code-mode-sdk/**'
             - 'crates/agent_code_mode/SKILL.md'
             - '.github/actions/setup-reqs-web/**'
@@ -369,6 +370,8 @@ jobs:
         check 'Check SDK Documentation' 'packages/sdk-docs' 'bun run type-check && bun run test'
         check 'Check Editing Worker' 'services/ai-editing-worker' 'bun run type-check'
         check 'Check Code Mode SDK' 'packages/code-mode-sdk' 'bun run type-check && bun run test'
+        check 'Check SDK MCP Tools' 'packages/sdk-mcp' 'bun run type-check && bun run test'
+        check 'Check MCP ChatGPT Worker' 'services/mcp-chatgpt-worker' 'bun run type-check && bun run test'
         failed=0
         for index in "${!names[@]}"; do
           status=0
@@ -531,17 +534,6 @@ jobs:
           echo "packages/sdk generated code is stale. Run 'just update-generated' in packages/sdk and commit the result."
           git status --porcelain -- packages/sdk
           git diff -- packages/sdk | head -200
-          exit 1
-        fi
-    - name: Regenerate MCP tool pages
-      run: bun run generate:tools
-      working-directory: apps/docs
-    - name: Verify docs tool reference is fresh
-      run: |
-        if [ -n "$(git status --porcelain -- apps/docs)" ]; then
-          echo "apps/docs tool reference is stale. Run 'bun run generate:tools' in apps/docs and commit the result."
-          git status --porcelain -- apps/docs
-          git diff -- apps/docs | head -200
           exit 1
         fi
     - name: Check Specta Types

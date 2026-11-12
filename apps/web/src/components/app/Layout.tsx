@@ -74,7 +74,6 @@ import {
   Show,
   Suspense,
 } from 'solid-js';
-import { installIconMotion } from '../icon/system/icon-motion';
 import { BundleUpdateProgressBar } from './BundleUpdateProgressBar';
 import { DesktopTitleBar } from './DesktopTitleBar';
 import GlobalShortcuts from './GlobalHotkeys';
@@ -169,7 +168,6 @@ export function RootFrame(props: ParentProps) {
 
   onMount(() => {
     onCleanup(installGlassPress());
-    onCleanup(installIconMotion());
     if (sessionStorage.getItem('showUpgradeModal') === 'true') {
       showPaywall();
       sessionStorage.removeItem('showUpgradeModal');
@@ -257,6 +255,11 @@ function useNewOnboardingRedirect() {
  * and the mobile dock — around a page. Route shells supply the providers and
  * content; auth, booking, and meeting pages render without this chrome.
  */
+const MobileCallIsland = lazyNamed(
+  () => import('../../features/channel/Call/views/MobileCallIsland'),
+  'MobileCallIsland'
+);
+
 export function AppChrome(props: ParentProps) {
   const isAuthenticated = useIsAuthenticated();
   // A login cookie shows the rail while sign-in is confirmed; a stale one
@@ -362,6 +365,9 @@ export function AppChrome(props: ParentProps) {
       </div>
       <Show when={isTouchDevice() && isAuthenticated()}>
         <FloatRegionHost />
+        <Suspense>
+          <MobileCallIsland />
+        </Suspense>
         <Suspense>
           <UserCardDrawer />
         </Suspense>

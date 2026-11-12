@@ -32,6 +32,7 @@ import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component
 import { toast } from '@core/component/Toast/Toast';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
+import { isModality } from '@core/mobile/inputModality';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import EmptyStateInboxTrayGraphic from '@design/empty-state-inbox-tray.svg';
@@ -116,6 +117,7 @@ import {
 } from '../primitives/notification-location';
 import { createRowActions, rowButtons } from '../primitives/row-actions';
 import { rowEntity } from '../primitives/row-entity';
+import { InboxRowAvatar } from './inbox-row-avatar';
 import { NotificationsNoneSelected } from './notifications-none-selected';
 
 type ActivationMetadata = { event?: MouseEvent; newSplit?: boolean };
@@ -175,7 +177,9 @@ const decisionFailure = (decision: InboxDecision) =>
 const previewSelection = (
   entity: EntityData
 ): PreviewPanelSelection | undefined =>
-  entity.type === 'calendar_event' || entity.type === 'initiative'
+  entity.type === 'calendar_event' ||
+  entity.type === 'initiative' ||
+  entity.type === 'harness'
     ? undefined
     : entity;
 
@@ -428,12 +432,36 @@ export function NotificationsView(props: NotificationsViewProps) {
   /** Leave what the content area shows for the list. */
   const closePreview = (history: HistoryOptions = {}) =>
     selection.clear(history);
+  // A click or Enter on a conversation's row hands its composer focus, also
+  // when the preview already shows it; browsing the list keeps focus here.
+  const [composerFocus, setComposerFocus] = createSignal<{
+    blockId: string;
+    id: number;
+  }>();
+  let lastComposerFocusId = 0;
+  const previewComposerFocus = () => {
+    const request = composerFocus();
+    return request && request.blockId === previewTarget()?.blockId
+      ? request.id
+      : 0;
+  };
   const previewAfterMove = debounce(
-    (row: NotificationInboxRow, notification?: UnifiedNotification) =>
-      preview(row, notification, { replace: true }),
+    (row: NotificationInboxRow, notification?: UnifiedNotification) => {
+      setComposerFocus(undefined);
+      preview(row, notification, { replace: true });
+    },
     150
   );
   onCleanup(() => previewAfterMove.clear());
+
+  // Esc from a previewed conversation returns to its row, which stays the
+  // list's focused row while the preview shows it.
+  let listRoot: HTMLDivElement | undefined;
+  const focusList = () => {
+    if (!listRoot?.isConnected) return false;
+    listRoot.focus({ preventScroll: true });
+    return true;
+  };
 
   const list = createListController<InboxListItem, ActivationMetadata>({
     items: listItems,
@@ -456,6 +484,12 @@ export function NotificationsView(props: NotificationsViewProps) {
         props.onOpen(row, { newSplit: true, notification });
         return;
       }
+      const target = previewTargetFor(row, notification);
+      setComposerFocus(
+        target?.blockType === 'channel' && !isModality('touch')
+          ? { blockId: target.blockId, id: ++lastComposerFocusId }
+          : undefined
+      );
       preview(row, notification);
     },
   });
@@ -689,14 +723,7 @@ export function NotificationsView(props: NotificationsViewProps) {
       <SwipeToDone id={card.row().id}>
         <NotificationRow
           id={card.row().id}
-          icon={
-            <InboxSenderAvatar
-              notification={card.row().content.notifications[0]}
-              kind={inboxCardKind(card.row())}
-              entity={card.row().content.entity}
-              badged
-            />
-          }
+          icon={<InboxRowAvatar row={card.row()} />}
           who={display().who}
           what={display().what}
           body={display().body}
@@ -1053,6 +1080,7 @@ export function NotificationsView(props: NotificationsViewProps) {
                     />
                   </div>
                   <div
+                    ref={listRoot}
                     role="grid"
                     aria-label={t('nav.notifications')}
                     aria-activedescendant={list.focus.key()}
@@ -1079,6 +1107,8 @@ export function NotificationsView(props: NotificationsViewProps) {
                             <PreviewPanel
                               target={previewTarget()}
                               navigationRequest={selection.navigationRequest()}
+                              focusRequest={previewComposerFocus()}
+                              onEscapeToList={focusList}
                               orchestrator={orchestrator}
                               splitPanelContext={panel}
                             />

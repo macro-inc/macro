@@ -13,10 +13,10 @@ use super::{health, mcp_router, mount_at_root_and_prefix, oauth_router};
 use crate::domain::browser_binding::BrowserBinding;
 use crate::domain::ports::UpstreamGrantError;
 use crate::test_support::{
-    ATTACKER_CODE_VERIFIER, ATTACKER_REDIRECT_URI, EMAIL_ADDRESS, EMAIL_CODE, FakeOAuthProvider,
-    GATEWAY_REDIRECT_URI, Harness, LOOPBACK_REDIRECT_URI, SSO_EMAIL_ADDRESS, TRUSTED_REDIRECT_URI,
-    UPSTREAM_ACCESS_TOKEN, UPSTREAM_REFRESH_TOKEN, VICTIM_CODE_VERIFIER, code_challenge_for,
-    query_param,
+    ATTACKER_CODE_VERIFIER, ATTACKER_REDIRECT_URI, CHATGPT_RESOURCE, EMAIL_ADDRESS, EMAIL_CODE,
+    FakeOAuthProvider, GATEWAY_REDIRECT_URI, Harness, LOOPBACK_REDIRECT_URI, SSO_EMAIL_ADDRESS,
+    TRUSTED_REDIRECT_URI, UPSTREAM_ACCESS_TOKEN, UPSTREAM_REFRESH_TOKEN, VICTIM_CODE_VERIFIER,
+    code_challenge_for, query_param,
 };
 use axum::{Router, routing::get};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
@@ -166,6 +166,27 @@ fn consent_submission(
         .expect("request should build")
 }
 
+#[tokio::test]
+async fn registration_under_a_reserved_name_is_a_bad_request() {
+    let harness = Harness::new();
+
+    let registration = send(
+        &harness,
+        Request::builder()
+            .method("POST")
+            .uri("/register")
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(format!(
+                r#"{{"client_name":"Macro","redirect_uris":["{TRUSTED_REDIRECT_URI}"]}}"#
+            )))
+            .expect("request should build"),
+    )
+    .await;
+
+    assert_eq!(registration.status, StatusCode::BAD_REQUEST);
+    assert_eq!(registration.body, "client_name may not be Macro's own name");
+}
+
 async fn register_client(harness: &Harness, redirect_uri: &str) -> String {
     let registration = send(harness, register_request(redirect_uri)).await;
     assert_eq!(registration.status, StatusCode::OK, "{redirect_uri}");
@@ -221,7 +242,7 @@ async fn consent_screen_escapes_the_client_name() {
             .uri("/register")
             .header(header::CONTENT_TYPE, "application/json")
             .body(Body::from(format!(
-                r#"{{"client_name":"<script>alert(1)</script>","redirect_uris":["{GATEWAY_REDIRECT_URI}"]}}"#
+                r#"{{"client_name":"<script>alert(1)</script> Tom & Jerry's","redirect_uris":["{GATEWAY_REDIRECT_URI}"]}}"#
             )))
             .expect("request should build"),
     )
@@ -238,7 +259,8 @@ async fn consent_screen_escapes_the_client_name() {
     .await;
 
     assert!(!page.body.contains("<script>"));
-    assert!(page.body.contains("&#60;script&#62;") || page.body.contains("&lt;script&gt;"));
+    assert!(!page.body.contains("Tom & Jerry"));
+    assert!(page.body.contains("Tom &#38; Jerry") || page.body.contains("Tom &amp; Jerry"));
 }
 
 /// Approving on the consent screen, in the browser that was shown it, signs
@@ -1283,6 +1305,146 @@ async fn token_endpoint_names_missing_parameters_as_invalid_request() {
     assert_eq!(no_grant_type.status, StatusCode::BAD_REQUEST);
     assert_eq!(no_grant_type.json()["error"], "invalid_request");
     assert_eq!(no_grant_type.cache_control.as_deref(), Some("no-store"));
+}
+
+/// ChatGPT's flow: it names the ChatGPT MCP server as the resource at both
+/// endpoints and receives a Macro API token labelled with its name.
+#[tokio::test]
+async fn a_chatgpt_resource_flow_receives_a_macro_api_token() {
+    let harness = Harness::new();
+    let client_id = register_client(&harness, TRUSTED_REDIRECT_URI).await;
+    let resource = urlencoding::encode(CHATGPT_RESOURCE).into_owned();
+
+    let authorize = send(
+        &harness,
+        Request::builder()
+            .method("GET")
+            .uri(format!(
+                "/authorize?response_type=code&client_id={client_id}&redirect_uri={}\
+                 &state=client-state&code_challenge={}&code_challenge_method=S256\
+                 &sign_in=google&resource={resource}",
+                urlencoding::encode(TRUSTED_REDIRECT_URI),
+                code_challenge_for(VICTIM_CODE_VERIFIER),
+            ))
+            .body(Body::empty())
+            .expect("request should build"),
+    )
+    .await;
+    assert_eq!(authorize.status, StatusCode::TEMPORARY_REDIRECT);
+    let cookie = cookie_pair(
+        &authorize
+            .set_cookie
+            .expect("authorize sets the binding cookie"),
+    );
+    let session_id = harness.inflight.only_pending_session_id();
+    let callback = send(&harness, callback_request(&session_id, Some(&cookie))).await;
+    let code = query_param(
+        &callback.location.expect("callback redirects to the client"),
+        "code",
+    )
+    .expect("redirect carries a code");
+
+    let exchange = send(
+        &harness,
+        token_request(&format!(
+            "grant_type=authorization_code&code={code}&code_verifier={VICTIM_CODE_VERIFIER}\
+             &redirect_uri={}&client_id={client_id}&resource={resource}",
+            urlencoding::encode(TRUSTED_REDIRECT_URI)
+        )),
+    )
+    .await;
+    assert_eq!(exchange.status, StatusCode::OK);
+    let tokens = exchange.json();
+    let expires_in = tokens["expires_in"]
+        .as_u64()
+        .expect("expires_in is a number");
+    assert_eq!(
+        tokens["access_token"].as_str(),
+        Some(
+            format!("macro-api-token for upstream-access-token via test-client for {expires_in}s")
+                .as_str()
+        )
+    );
+}
+
+/// An unrecognized resource is today's harness flow: the FusionAuth token.
+#[tokio::test]
+async fn an_unrecognized_resource_receives_the_upstream_access_token() {
+    let harness = Harness::new();
+    let client_id = register_client(&harness, TRUSTED_REDIRECT_URI).await;
+    let resource = urlencoding::encode("https://mcp-server.macro.com").into_owned();
+
+    let authorize = send(
+        &harness,
+        Request::builder()
+            .method("GET")
+            .uri(format!(
+                "/authorize?response_type=code&client_id={client_id}&redirect_uri={}\
+                 &state=client-state&code_challenge={}&code_challenge_method=S256\
+                 &sign_in=google&resource={resource}",
+                urlencoding::encode(TRUSTED_REDIRECT_URI),
+                code_challenge_for(VICTIM_CODE_VERIFIER),
+            ))
+            .body(Body::empty())
+            .expect("request should build"),
+    )
+    .await;
+    assert_eq!(authorize.status, StatusCode::TEMPORARY_REDIRECT);
+    let cookie = cookie_pair(
+        &authorize
+            .set_cookie
+            .expect("authorize sets the binding cookie"),
+    );
+    let session_id = harness.inflight.only_pending_session_id();
+    let callback = send(&harness, callback_request(&session_id, Some(&cookie))).await;
+    let code = query_param(
+        &callback.location.expect("callback redirects to the client"),
+        "code",
+    )
+    .expect("redirect carries a code");
+
+    let exchange = send(
+        &harness,
+        token_request(&format!(
+            "grant_type=authorization_code&code={code}&code_verifier={VICTIM_CODE_VERIFIER}\
+             &redirect_uri={}&client_id={client_id}&resource={resource}",
+            urlencoding::encode(TRUSTED_REDIRECT_URI)
+        )),
+    )
+    .await;
+    assert_eq!(exchange.status, StatusCode::OK);
+    assert_eq!(
+        exchange.json()["access_token"].as_str(),
+        Some(UPSTREAM_ACCESS_TOKEN)
+    );
+}
+
+/// The consent form re-posts the authorize request, resource included.
+#[tokio::test]
+async fn the_consent_form_carries_the_resource() {
+    let harness = Harness::new();
+    let client_id = register_client(&harness, GATEWAY_REDIRECT_URI).await;
+
+    let page = send(
+        &harness,
+        Request::builder()
+            .method("GET")
+            .uri(format!(
+                "/authorize?response_type=code&client_id={client_id}&redirect_uri={}\
+                 &state=client-state&code_challenge={}&code_challenge_method=S256\
+                 &sign_in=google&resource={}",
+                urlencoding::encode(GATEWAY_REDIRECT_URI),
+                code_challenge_for(VICTIM_CODE_VERIFIER),
+                urlencoding::encode(CHATGPT_RESOURCE),
+            ))
+            .body(Body::empty())
+            .expect("request should build"),
+    )
+    .await;
+
+    assert_eq!(page.status, StatusCode::OK);
+    assert!(page.body.contains(r#"name="resource""#), "{}", page.body);
+    assert!(page.body.contains("mcp-chatgpt.macro.com"), "{}", page.body);
 }
 
 async fn callback_with_failing_code_exchange(failure: fn() -> UpstreamGrantError) -> Response {

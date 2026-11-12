@@ -1,6 +1,7 @@
 //! Strict remote evaluation through PostHog's V2 `/flags` endpoint.
 
 use crate::{FeatureFlags, FlagSnapshot, FlagValue};
+use macro_env::Environment;
 use macro_user_id::user_id::MacroUserIdStr;
 use reqwest::{Client, Url};
 use rootcause::Report;
@@ -9,6 +10,19 @@ use std::{collections::HashMap, time::Duration};
 
 #[cfg(test)]
 mod test;
+
+/// Person property every load sends; the web client sends the same key.
+const ENVIRONMENT_PROPERTY: &str = "environment";
+
+/// The `environment` value flags target. Spelled out here, not taken from
+/// `Display`, so a log-format change cannot move targeting.
+fn environment_value(environment: Environment) -> &'static str {
+    match environment {
+        Environment::Production => "prod",
+        Environment::Develop => "dev",
+        Environment::Local => "local",
+    }
+}
 
 /// Remote loader with one reusable HTTP connection pool.
 ///
@@ -20,6 +34,7 @@ pub struct PostHogFeatureFlags {
     endpoint: Url,
     project_key: String,
     timeout: Duration,
+    environment: Environment,
 }
 
 impl PostHogFeatureFlags {
@@ -31,7 +46,16 @@ impl PostHogFeatureFlags {
     /// nonzero. There is no disabled mode: missing configuration is an error.
     /// Redirects and automatic retries are disabled. The timeout bounds the
     /// entire load, including reading the response body.
-    pub fn new(host: &str, project_key: String, timeout: Duration) -> Result<Self, Report> {
+    ///
+    /// Every load sends `environment` (`prod`, `dev`, or `local`) as a person
+    /// property, so a flag can target one deployment even though the same Macro
+    /// user ID exists in each.
+    pub fn new(
+        host: &str,
+        project_key: String,
+        timeout: Duration,
+        environment: Environment,
+    ) -> Result<Self, Report> {
         let mut endpoint =
             Url::parse(host).map_err(|_| rootcause::report!("Invalid PostHog origin"))?;
         if !matches!(endpoint.scheme(), "https" | "http")
@@ -67,6 +91,7 @@ impl PostHogFeatureFlags {
             endpoint,
             project_key,
             timeout,
+            environment,
         })
     }
 
@@ -79,6 +104,7 @@ impl PostHogFeatureFlags {
                 "distinct_id": user_id.as_ref(),
                 "evaluation_runtime": "server",
                 "geoip_disable": true,
+                "person_properties": {ENVIRONMENT_PROPERTY: environment_value(self.environment)},
             }))
             .send()
             .await
