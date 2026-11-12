@@ -1,5 +1,6 @@
 use super::*;
 use crate::auth::{AgentAuth, AgentStatus, Agents};
+use std::os::unix::fs::PermissionsExt as _;
 use std::sync::Arc;
 
 struct SignedOutClaude;
@@ -29,6 +30,9 @@ impl AgentAuth for SignedOutClaude {
 #[tokio::test]
 async fn the_client_forwards_requests_to_a_running_daemon() {
     let directory = tempfile::tempdir().expect("a directory");
+    // harnessd refuses a socket directory others can enter.
+    std::fs::set_permissions(directory.path(), std::fs::Permissions::from_mode(0o700))
+        .expect("a private directory");
     let socket = directory.path().join("harnessd.sock");
     let listener = crate::socket::listen(&socket).expect("listening");
     let daemon = tokio::spawn(crate::socket::serve(

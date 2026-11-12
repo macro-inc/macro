@@ -1167,7 +1167,7 @@
     "schemas": {
       "AgentProvider": {
         "type": "string",
-        "description": "Who an agent's account belongs to: the Postgres `agent_provider` enum of\n`provider_accounts.provider` and `harness_account_logins.provider`. New\nproviders add a value there.",
+        "description": "Whose account an agent signs in to: the Postgres `agent_provider` enum of\n`provider_accounts.provider` and `harness_account_logins.provider`. New\nproviders add a value there.",
         "enum": ["claude"]
       },
       "AgentSessionMentionedMetadata": {
