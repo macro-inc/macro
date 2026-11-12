@@ -42,19 +42,34 @@ fn toolset() -> AsyncToolCollection<SessionToolContext> {
         .add_tool::<TaskPullRequestsTool, SessionToolContext>()
 }
 
+/// Admit only the explicitly configured egress origins and standard gateway hosts.
+pub(super) fn configured_hosts(urls: &[&str]) -> anyhow::Result<Vec<String>> {
+    use anyhow::Context as _;
+    urls.iter()
+        .map(|value| {
+            let url = url::Url::parse(value).context("invalid internal MCP egress URL")?;
+            Ok(url
+                .host_str()
+                .context("internal MCP egress URL needs a host")?
+                .to_owned())
+        })
+        .collect()
+}
+
 /// Build the internal endpoint with per-request session authentication.
 pub(super) fn router<A: AgentSessionRepo + 'static>(
     authority: Arc<A>,
-    host: String,
+    hosts: Vec<String>,
     tools: InternalTools,
 ) -> Router {
-    let mut config = StreamableHttpServerConfig::default().with_allowed_hosts([
-        host,
+    let mut hosts = hosts;
+    hosts.extend([
         "localhost".into(),
         "127.0.0.1".into(),
         "gateway.macro.com".into(),
         "dev-gateway.macro.com".into(),
     ]);
+    let mut config = StreamableHttpServerConfig::default().with_allowed_hosts(hosts);
     config.legacy_session_mode = false;
     config.json_response = true;
     let server = StreamableHttpService::new(

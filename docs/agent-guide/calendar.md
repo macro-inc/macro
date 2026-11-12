@@ -2,7 +2,7 @@
 
 ## Calendar — `/app/calendar/<month-or-week-or-day>`
 
-The top of the Calendar sidebar holds the Calendar `TutorialSidebarItem` (from `features/video-tutorials`) once that video is in its catalog; phones have no Calendar sidebar, so no entry.
+The top of the Calendar sidebar holds the Calendar `TutorialSidebarItem` (from `features/video-tutorials`) once that video is in its catalog; touch devices show no tutorials.
 
 Microsoft calendars use the same editor and calendar views after calendar consent.
 Conference choices follow the selected calendar's capabilities: Microsoft Teams
@@ -46,6 +46,13 @@ request's included: seen is not answered, so the row stays listed until the
 request is settled. Verify these on desktop and mobile, including a delayed read
 response and a failed write followed by another click.
 
+Opening the calendar draws the visible period alone. The two neighboring periods
+mount on later tasks once the visible period has its events, or after a moment
+when that load is slow. They start beside whatever period is on screen by then,
+and paging waits for them. On the iOS and Android apps the periods seen last and
+the calendar list are kept on the device for a week, so a cold start draws them
+before the cache answers; the fresh read then replaces them.
+
 Period selection updates its label and route immediately. The active grid redraws
 on a deferred task; hidden neighboring periods follow on separate tasks. Calendar
 grids stay mounted and undimmed while occurrences load. An uncached range never
@@ -56,8 +63,12 @@ filled bars for all-day/multi-day-style entries with single subtle text lines fo
 single-day timed-style entries, without placeholder dots or time chips. Patterns stay
 stable for each date and clear the date headers. Skeletons preserve the grid, scroll
 position, and navigation.
-Quick loads skip the skeletons. Real events lay out underneath during the brief
-minimum display, then fade in as the skeletons fade out. Changing period during a
+Quick loads skip the skeletons: the delay counts animation frames, so time the
+thread spends mounting a grid never uses it up, and events that are in memory or
+answered locally appear without skeletons on slow phones too.
+Real events lay out underneath during the brief
+minimum display, then fade in as the skeletons fade out. Phones have no minimum
+display: events fade in as soon as they arrive. Changing period during a
 load carries feedback into the new cells without restarting the appearance delay.
 Background refreshes retain current events without skeletons or a transient loading
 pill. On a cold reload, the first event paint waits for calendar metadata so events
