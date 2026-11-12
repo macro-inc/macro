@@ -129,6 +129,27 @@ threads, pins, recents, notifications, folders, activity.
 - The HTTP boundary validates agent correlation; activity consumption restores Kafka envelope attribution before materialization.
 - Compose activity ingestion with `service/activity/persistence.rs`'s `PgChannelActivityRepo` so timeline facts and their channel changes commit together; `timeline_activity` forwards the returned receipt's sequence on each activity.
 - Admit channel-timeline activity batches through the shared message-write gate before opening a transaction; acquire unique channel permits in sorted order and retain all through commit.
+
+## Passwords vault
+
+`/passwords` hosts human-only team vault routes, with policy in `passwords`.
+Provision `OPENBAO_ADDRESS`, `PASSWORDS_JWT_ISSUER` and `PASSWORDS_JWT_SIGNING_KEY`
+together. Partial configuration fails startup; absent configuration denies vault work.
+Human routes, cleanup jobs and internal team purge use `enable-passwords-v1` for
+explicit service context `passwords-v1`. Human admissions additionally evaluate the
+same key for the authenticated actor, so service authority never admits an unflagged
+account. Local explicitly enables both. Missing/error results in either fail closed.
+Postgres stores metadata; values stay in OpenBao. Admission checks current human
+account classification and membership, including session-shaped agent accounts.
+
+`src/passwords_cleanup.rs` retries explicit item deletion and TOTP generation erasure
+every minute. Jobs gate before discovery; paused/failed work retains its journal.
+The task tracker cancels and drains the worker. Membership/account deletion never
+erases vault items. Internal `/internal/passwords/teams/{team}` DELETE accepts only
+service credentials and the same global rollout/provider gate. Team cleanup skips
+RPC only on authoritative empty metadata rechecked under the existing team lease;
+the returned guard stays in the deletion proof through team-row deletion. Retained
+state requires acknowledged purge before ordinary cleanup; release the guard before RPC.
 - The Soup GraphQL request context supplies session activity subscriptions with the realtime activity consumer and a primary-backed correlation repository; GraphQL checks session visibility before streaming.
 
 - `ChannelGraphqlContext` shares the primary-backed REST messages service and access

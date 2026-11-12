@@ -25,6 +25,8 @@ export function EmailThread(props: {
   hideReply?: boolean;
   replyContent?: JSX.Element;
   participants?: JSX.Element;
+  /** The thread's header action group, before Share. */
+  actions?: JSX.Element;
   children?: JSX.Element;
 }) {
   const [details, setDetails] = createSignal(false);
@@ -49,6 +51,7 @@ export function EmailThread(props: {
             {props.email.subject}
           </span>
           <div class="ml-auto flex items-center gap-1">
+            {props.actions}
             <Button
               variant="plain"
               size="md"

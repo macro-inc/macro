@@ -113,6 +113,8 @@ pub enum Port {
     PreviewSsh = 2222,
     /// Local wildcard preview TLS listener.
     PreviewHttps = 8443,
+    /// Local Passwords vault API. Loopback-only, outside the browser proxy.
+    OpenBao = 8200,
 }
 
 impl Port {
