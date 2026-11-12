@@ -201,19 +201,24 @@ export function breakdown(
     : spans.find((span) => span.name === 'routine.draft');
   if (!draft) return undefined;
   const inside = (span: Span, outer: Span) => span.start >= outer.start && span.end <= outer.end;
+  // Work that starts inside the timed part counts up to its end: the bare
+  // arm's window ends when the routine exists, inside the call that saved it.
+  const within = (span: Span) => span.start >= draft.start && span.start < draft.end;
+  const clipped = (span: Span) => ({ ...span, end: Math.min(span.end, draft.end) });
   // The opener's side call runs beside the session's first turn, off its path.
   const openers = spans.filter((span) => span.name === 'agent.opener');
   const chats = spans
     .filter(
       (span) =>
         String(span.attrs['gen_ai.operation.name']).startsWith('chat') &&
-        inside(span, draft) &&
+        within(span) &&
         !openers.some((opener) => inside(span, opener)),
     )
+    .map(clipped)
     .sort((a, b) => a.start - b.start);
   // The session reports each call once as `execute_tool <name>`; the runner's
   // and toolset's spans for the same call are left out.
-  const toolSpans = spans.filter((span) => span.name.startsWith('execute_tool ') && inside(span, draft));
+  const toolSpans = spans.filter((span) => span.name.startsWith('execute_tool ') && within(span)).map(clipped);
   const tools: Breakdown['tools'] = {};
   for (const span of toolSpans) {
     const name = String(span.attrs['gen_ai.tool.name'] ?? span.name);
