@@ -88,6 +88,17 @@ describe('uploadProgress', () => {
     expect(uploadProgress()?.fraction).toBe(250 / 400);
   });
 
+  it('names the stage several uploads share', () => {
+    const first = track('Archive', 100);
+    const second = track('Scans', 100);
+    first.sending(100);
+    first.processing();
+    second.sending(100);
+    second.processing();
+
+    expect(uploadProgress()?.label).toBe('Processing 2 files');
+  });
+
   it('drops an upload once it is done', () => {
     const upload = track('Report', 100);
     upload.done();

@@ -6,7 +6,6 @@ import {
 import { humanFileSize } from '@core/util/humanFileSize';
 import { holdAutomaticReload } from '@core/util/reloadForNewerBuild';
 import { Telemetry } from '@macro-inc/observability';
-import shortUUID from 'short-uuid';
 import { match } from 'ts-pattern';
 import type {
   ZipWorkerRequest,
@@ -115,198 +114,46 @@ export interface FileDetail {
   path: string;
 }
 
-interface Task {
-  id: string;
-  message: ZipTaskMessage;
-  onProgress?: (data: ZipProgressData) => void;
-  resolve: (value: ZipCompleteData) => void;
-  reject: (reason: Error) => void;
-  processing: boolean;
-}
+/**
+ * Zips one folder in a worker of its own, created on first use (iOS deadlocks
+ * on module workers built at load) and ended when the folder is done. A worker
+ * that fails to load or crashes fails its folder instead of leaving it
+ * preparing forever.
+ */
+function runZipWorker(
+  message: ZipTaskMessage,
+  onProgress: (data: ZipProgressData) => void
+): Promise<ZipCompleteData> {
+  return new Promise((resolve, reject) => {
+    const worker = new ZipWorker();
+    const taskId = crypto.randomUUID();
 
-// Worker wrapper to provide type-safe communication
-class ZipWorkerWrapper {
-  worker: Worker;
-  id: number;
-  busy: boolean;
-  /** The task this worker is running, if any. */
-  taskId: string | undefined;
-
-  constructor(WorkerConstructor: new () => Worker, id: number) {
-    this.worker = new WorkerConstructor();
-    this.id = id;
-    this.busy = false;
-    this.taskId = undefined;
-  }
-
-  postMessage(message: ZipWorkerRequest): void {
-    this.worker.postMessage(message);
-  }
-
-  terminate(): void {
-    this.worker.terminate();
-  }
-}
-
-const MIN_WORKERS = 2;
-const MAX_WORKERS = 6;
-
-class ZipWorkerPool {
-  private workerConstructor: new () => Worker;
-  private size: number;
-  private workers: ZipWorkerWrapper[];
-  private taskQueue: Task[];
-  private availableWorkers: ZipWorkerWrapper[];
-  private static instance: ZipWorkerPool | null = null;
-  private static suuidTranslator = shortUUID();
-
-  public static getInstance(
-    workerConstructor: new () => Worker,
-    size?: number
-  ): ZipWorkerPool {
-    if (!ZipWorkerPool.instance) {
-      ZipWorkerPool.instance = new ZipWorkerPool(workerConstructor, size);
-    }
-    return ZipWorkerPool.instance;
-  }
-
-  private constructor(
-    workerConstructor: new () => Worker,
-    size = navigator.hardwareConcurrency || 4
-  ) {
-    this.workerConstructor = workerConstructor;
-    this.size = Math.max(MIN_WORKERS, Math.min(MAX_WORKERS, size));
-    this.workers = [];
-    this.taskQueue = [];
-    this.availableWorkers = [];
-
-    this.initialize();
-  }
-
-  private initialize(): void {
-    for (let i = 0; i < this.size; i++) {
-      const workerWrapper = this.createWorker(i);
-      this.workers.push(workerWrapper);
-      this.availableWorkers.push(workerWrapper);
-    }
-  }
-
-  private createWorker(index: number): ZipWorkerWrapper {
-    const workerWrapper = new ZipWorkerWrapper(this.workerConstructor, index);
-
-    const finish = (task: Task) => {
-      this.taskQueue = this.taskQueue.filter((t) => t.id !== task.id);
-      workerWrapper.busy = false;
-      workerWrapper.taskId = undefined;
-      this.availableWorkers.push(workerWrapper);
-      this.processNextTask();
-    };
-
-    workerWrapper.worker.onmessage = (
-      event: MessageEvent<ZipWorkerResponse>
-    ) => {
+    worker.onmessage = (event: MessageEvent<ZipWorkerResponse>) => {
       const response = event.data;
-      const task = this.taskQueue.find((task) => task.id === response.taskId);
-      if (!task) return;
-
+      if (response.taskId !== taskId) return;
       match(response)
         .with({ type: 'complete' }, ({ data }) => {
-          task.resolve(data);
-          finish(task);
+          worker.terminate();
+          resolve(data);
         })
-        .with({ type: 'progress' }, ({ data }) => task.onProgress?.(data))
+        .with({ type: 'progress' }, ({ data }) => onProgress(data))
         .with({ type: 'error' }, ({ data }) => {
-          task.reject(new Error(data.message));
-          finish(task);
+          worker.terminate();
+          reject(new Error(data.message));
         })
         .exhaustive((unknown) =>
           console.warn('zip worker: unknown response', unknown)
         );
     };
 
-    // A worker that fails to load or crashes never answers again: fail its
-    // task, so the folder's indicator and reload hold end, and replace it.
-    workerWrapper.worker.onerror = (error: ErrorEvent) => {
-      console.error(`Worker ${index} error:`, error);
-      const task = this.taskQueue.find((t) => t.id === workerWrapper.taskId);
-      if (task) {
-        task.reject(
-          new Error(error.message || 'The folder could not be zipped')
-        );
-        this.taskQueue = this.taskQueue.filter((t) => t.id !== task.id);
-      }
-
-      workerWrapper.terminate();
-      const replacement = this.createWorker(index);
-      this.workers[index] = replacement;
-      this.availableWorkers = [
-        ...this.availableWorkers.filter((w) => w !== workerWrapper),
-        replacement,
-      ];
-      this.processNextTask();
+    worker.onerror = (error: ErrorEvent) => {
+      console.error('zip worker error:', error);
+      worker.terminate();
+      reject(new Error(error.message || 'The folder could not be zipped'));
     };
 
-    return workerWrapper;
-  }
-
-  private processNextTask(): void {
-    // If there are pending tasks and available workers, assign tasks
-    if (this.taskQueue.length > 0 && this.availableWorkers.length > 0) {
-      const pendingTasks = this.taskQueue.filter((task) => !task.processing);
-
-      for (
-        let i = 0;
-        i < Math.min(pendingTasks.length, this.availableWorkers.length);
-        i++
-      ) {
-        const task = pendingTasks[i];
-        const worker = this.availableWorkers.shift();
-        if (!worker) {
-          console.error('No available workers');
-          continue;
-        }
-
-        task.processing = true;
-        worker.busy = true;
-        worker.taskId = task.id;
-
-        const message = {
-          ...task.message,
-          taskId: task.id,
-        };
-
-        worker.postMessage(message);
-      }
-    }
-  }
-
-  public addTask(
-    message: ZipTaskMessage,
-    onProgress?: (data: ZipProgressData) => void
-  ): Promise<ZipCompleteData> {
-    return new Promise((resolve, reject) => {
-      const suuid = ZipWorkerPool.suuidTranslator.generate();
-      const taskId = `zip-${suuid}`;
-
-      this.taskQueue.push({
-        id: taskId,
-        message,
-        onProgress,
-        resolve,
-        reject,
-        processing: false,
-      });
-
-      this.processNextTask();
-    });
-  }
-
-  public terminate(): void {
-    this.workers.forEach((worker) => worker.terminate());
-    this.workers = [];
-    this.availableWorkers = [];
-    ZipWorkerPool.instance = null;
-  }
+    worker.postMessage({ ...message, taskId } satisfies ZipWorkerRequest);
+  });
 }
 
 // zips up each folder entry and returns the zip files
@@ -501,8 +348,7 @@ async function writeFolderZip(
     span.setAttr('folder_upload.folders', folderPaths.length);
     span.setAttr('folder_upload.bytes', totalBytes);
 
-    const workerPool = ZipWorkerPool.getInstance(ZipWorker);
-    const result = await workerPool.addTask(
+    const result = await runZipWorker(
       { action: 'zipFiles', files, fileDetails, folderPaths },
       ({ processedBytes, totalBytes }) =>
         progress.preparing(totalBytes > 0 ? processedBytes / totalBytes : null)

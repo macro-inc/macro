@@ -77,24 +77,24 @@ function sentBytes(upload: TrackedUpload): number {
     .exhaustive();
 }
 
-function summarizeUpload(upload: TrackedUpload): UploadProgressSummary {
-  return match(upload.phase)
-    .with('preparing', () => ({
-      label: `Preparing ${upload.name}`,
-      fraction: upload.done,
-    }))
-    .with('sending', () => ({
-      label: `Uploading ${upload.name}`,
-      fraction:
-        upload.sent === null || upload.size <= 0
-          ? null
-          : Math.min(1, upload.sent / upload.size),
-    }))
-    .with('processing', () => ({
-      label: `Processing ${upload.name}`,
-      fraction: upload.done,
-    }))
+function phaseVerb(phase: UploadPhase): string {
+  return match(phase)
+    .with('preparing', () => 'Preparing')
+    .with('sending', () => 'Uploading')
+    .with('processing', () => 'Processing')
     .exhaustive();
+}
+
+function summarizeUpload(upload: TrackedUpload): UploadProgressSummary {
+  const fraction = match(upload.phase)
+    .with('preparing', 'processing', () => upload.done)
+    .with('sending', () =>
+      upload.sent === null || upload.size <= 0
+        ? null
+        : Math.min(1, upload.sent / upload.size)
+    )
+    .exhaustive();
+  return { label: `${phaseVerb(upload.phase)} ${upload.name}`, fraction };
 }
 
 function summarizeUploads(
@@ -103,7 +103,10 @@ function summarizeUploads(
   if (list.length === 0) return null;
   if (list.length === 1) return summarizeUpload(list[0]);
 
-  const label = `Uploading ${list.length} files`;
+  // Several uploads at the same stage name it; mixed stages read as uploading.
+  const phases = new Set(list.map((upload) => upload.phase));
+  const verb = phases.size === 1 ? phaseVerb(list[0].phase) : 'Uploading';
+  const label = `${verb} ${list.length} files`;
   const measurable = list.some(
     (upload) => upload.phase === 'sending' && upload.sent !== null
   );
