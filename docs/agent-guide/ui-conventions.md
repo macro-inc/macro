@@ -69,8 +69,8 @@ inside that navigation button. Header buttons are 24px with unchanged 16px glyph
 and the shared larger touch targets. Row icons still navigate. Sidebar category icons do
 not change. Drive folders, tasks, skills, and internal descriptions do not have
 appearance editing.
-Document content titles have no leading icon. Without a custom icon, **Add icon**
-appears before the other title pills for editors.
+Document content titles have no leading icon or Add icon pill; use the header
+icon or More menu to edit appearance.
 Editing requires `enable-entity-appearance`; disabled or loading flags hide all
 entry points, and disabling closes an open picker. Saved appearance remains
 visible, including public/read-only views; API/SDK access and permissions do not
