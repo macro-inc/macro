@@ -55,7 +55,7 @@ impl<B: MacroEventBroker> DssEntityLifecycleAdapter<B> {
 impl<B: MacroEventBroker> EntityLifecycleService for DssEntityLifecycleAdapter<B> {
     async fn update_thread_share_policy(
         &self,
-        _actor: &EntityMutationActor,
+        actor: &EntityMutationActor,
         entity: &Entity<'static>,
         policy: UpdateSharePermissionRequestV2,
     ) -> Result<Vec<Entity<'static>>, LifecycleError> {
@@ -77,6 +77,7 @@ impl<B: MacroEventBroker> EntityLifecycleService for DssEntityLifecycleAdapter<B
             &thread_id,
             &permission.share_permission_id,
             &policy,
+            &actor.user_id,
         )
         .await
         .map_err(|error| internal!(error))?;
@@ -150,5 +151,93 @@ impl<B: MacroEventBroker> EntityLifecycleService for DssEntityLifecycleAdapter<B
             .into_iter()
             .map(|id| EntityType::Project.with_entity_string(id))
             .collect())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use macro_event_broker::NoopMacroEventBroker;
+    use macro_user_id::user_id::MacroUserIdStr;
+    use models_permissions::share_permission::{LinkShare, access_level::AccessLevel};
+
+    async fn migrate_for_test(pool: &PgPool) {
+        let migrations = macro_db_migrator::MACRO_DB_MIGRATIONS
+            .iter()
+            .map(|migration| {
+                let mut migration = migration.clone();
+                if migration.version == 20261110150956
+                    && migration.description == "rox mailbox handles"
+                {
+                    migration.version = 20261110150959;
+                }
+                migration
+            })
+            .collect::<Vec<_>>();
+        sqlx::migrate::Migrator {
+            migrations: std::borrow::Cow::Owned(migrations),
+            ..sqlx::migrate::Migrator::DEFAULT
+        }
+        .run(pool)
+        .await
+        .unwrap();
+    }
+
+    #[sqlx::test(migrations = false)]
+    async fn update_thread_share_policy_commits_the_mutation_actor_audit(
+        pool: PgPool,
+    ) -> anyhow::Result<()> {
+        migrate_for_test(&pool).await;
+        let thread_id = uuid::Uuid::now_v7();
+        let permission_id = thread_id.to_string();
+        sqlx::query("INSERT INTO \"SharePermission\" (id) VALUES ($1)")
+            .bind(&permission_id)
+            .execute(&pool)
+            .await?;
+        sqlx::query(
+            "INSERT INTO \"EmailThreadPermission\" (\"threadId\", \"sharePermissionId\", \"userId\") VALUES ($1, $2, $3)",
+        )
+        .bind(thread_id.to_string())
+        .bind(&permission_id)
+        .bind("macro|entity-mutation@example.com")
+        .execute(&pool)
+        .await?;
+
+        let redis = Arc::new(Redis::new(redis::Client::open("redis://127.0.0.1:6379/")?));
+        let sqs_config = aws_sdk_sqs::Config::builder()
+            .behavior_version(aws_sdk_sqs::config::BehaviorVersion::latest())
+            .build();
+        let sqs = Arc::new(sqs_client::SQS::new(aws_sdk_sqs::Client::from_conf(
+            sqs_config,
+        )));
+        let adapter =
+            DssEntityLifecycleAdapter::new(pool.clone(), redis, sqs, NoopMacroEventBroker);
+        let actor = EntityMutationActor {
+            user_id: MacroUserIdStr::try_from("macro|entity-mutation@example.com")?,
+            organization_id: None,
+        };
+        let entity = EntityType::EmailThread.with_entity_string(thread_id.to_string());
+        let affected = adapter
+            .update_thread_share_policy(
+                &actor,
+                &entity,
+                UpdateSharePermissionRequestV2 {
+                    link_share: Some(Some(LinkShare::Public)),
+                    link_share_access_level: Some(Some(AccessLevel::Edit)),
+                    team_share_access_level: None,
+                    channel_share_permissions: None,
+                },
+            )
+            .await?;
+        assert!(affected.is_empty());
+
+        let audit_actor: String = sqlx::query_scalar(
+            "SELECT actor_id FROM enterprise_audit WHERE resource_id = $1 AND action = 'share_link_create'",
+        )
+        .bind(thread_id.to_string())
+        .fetch_one(&pool)
+        .await?;
+        assert_eq!(audit_actor, actor.user_id.as_ref());
+        Ok(())
     }
 }

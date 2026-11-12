@@ -221,6 +221,62 @@ async fn share_link_enable_writes_one_audit_and_repeated_enable_does_not_duplica
     assert_eq!(audits[0].get::<String, _>("result"), "success");
 }
 
+#[sqlx::test(migrations = false)]
+async fn concurrent_first_enable_writes_only_one_audit(pool: Pool<Postgres>) {
+    migrate_for_test(&pool).await;
+    sqlx::raw_sql(include_str!("../../../fixtures/projects_test_data.sql"))
+        .execute(&pool)
+        .await
+        .unwrap();
+    let repo = test_repo(pool.clone());
+    let project = repo
+        .create_project(CreateProjectArgs {
+            owner: project_owner(),
+            name: "Concurrent private project".to_owned(),
+            parent_id: None,
+            share_permission: SharePermissionV2::new_project_share_permission(None),
+            updated_at: None,
+        })
+        .await
+        .unwrap();
+    let enable_link = || EditProjectArgs {
+        actor_id: Some(MacroUserIdStr::try_from("macro|owner@test.com").unwrap()),
+        project_id: project.id.clone(),
+        name: None,
+        update_parent: false,
+        parent_id: None,
+        share_permission: Some(UpdateSharePermissionRequestV2 {
+            link_share: Some(Some(LinkShare::Public)),
+            link_share_access_level: Some(Some(AccessLevel::Edit)),
+            team_share_access_level: None,
+            channel_share_permissions: None,
+        }),
+        team_share: None,
+    };
+
+    let first_args = enable_link();
+    let second_args = enable_link();
+    let (first, second) = tokio::join!(
+        repo.edit_project(first_args),
+        repo.edit_project(second_args)
+    );
+    first.unwrap();
+    second.unwrap();
+
+    let audits = sqlx::query(
+        "SELECT actor_id, action, resource_id, result FROM enterprise_audit WHERE resource_id = $1 AND action = 'share_link_create'",
+    )
+    .bind(&project.id)
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        audits.len(),
+        1,
+        "concurrent first enable duplicated audit: {audits:?}"
+    );
+}
+
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("projects_test_data"))

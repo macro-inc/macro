@@ -2276,6 +2276,7 @@ impl CallRepository for PgCallRepo {
 
         if let Some(share_permission) = args.share_permission.as_ref() {
             let share_link_created = if matches!(share_permission.link_share, Some(Some(_))) {
+                // A waiting first enable rechecks the committed link state under READ COMMITTED.
                 let existing = sqlx::query_scalar!(
                     r#"
                     SELECT sp."linkShare"
@@ -2286,6 +2287,7 @@ impl CallRepository for PgCallRepo {
                     ) call_permission
                     JOIN "SharePermission" sp ON sp.id = call_permission.share_permission_id
                     LIMIT 1
+                    FOR UPDATE OF sp
                     "#,
                     call_record_id,
                 )

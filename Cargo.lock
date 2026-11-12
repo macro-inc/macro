@@ -12535,6 +12535,7 @@ dependencies = [
  "cached",
  "chrono",
  "document_sub_type",
+ "enterprise",
  "entity_access",
  "entity_access_db_utils",
  "entity_registry_db_utils",
