@@ -35,7 +35,8 @@ fn the_wire_speaks_snake_case() {
 #[test]
 fn an_agent_cannot_approve_a_held_call() {
     let response = refuse_program_approval(ToolApprovalAnswerDto::Approve, true, &HeaderMap::new())
-        .unwrap_err();
+        .unwrap_err()
+        .into_response();
 
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
 }
@@ -59,7 +60,9 @@ fn both_agent_run_markers_refuse_approvals_but_allow_denial_and_cancellation() {
             ToolApprovalAnswerDto::Approve,
             ToolApprovalAnswerDto::ApproveAndRemember,
         ] {
-            let response = refuse_program_approval(answer, attributed, &headers).unwrap_err();
+            let response = refuse_program_approval(answer, attributed, &headers)
+                .unwrap_err()
+                .into_response();
             assert_eq!(response.status(), StatusCode::FORBIDDEN);
         }
         for answer in [ToolApprovalAnswerDto::Deny, ToolApprovalAnswerDto::Cancel] {

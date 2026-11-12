@@ -210,7 +210,7 @@ fn refuse_program_approval(
     answer: ToolApprovalAnswerDto,
     agent_attributed: bool,
     headers: &HeaderMap,
-) -> Result<(), Response> {
+) -> Result<(), (StatusCode, &'static str)> {
     let approves = matches!(
         answer,
         ToolApprovalAnswerDto::Approve | ToolApprovalAnswerDto::ApproveAndRemember
@@ -219,8 +219,7 @@ fn refuse_program_approval(
         return Err((
             StatusCode::FORBIDDEN,
             "An agent can't approve this for you.",
-        )
-            .into_response());
+        ));
     }
     Ok(())
 }
@@ -266,7 +265,8 @@ where
         request.answer,
         caller.authorization.agent_id.is_some(),
         &headers,
-    )?;
+    )
+    .map_err(IntoResponse::into_response)?;
     // A person answers: a bot has no say over whose access is spent.
     let by = access
         .entity_access_receipt
