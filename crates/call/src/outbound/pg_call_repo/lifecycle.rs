@@ -247,9 +247,31 @@ impl PgCallRepo {
             channel_thread,
         };
 
+        if channel_thread && let Some(channel_id) = archived.channel_id {
+            channel_change_db_utils::append_in(
+                &mut tx,
+                channel_id,
+                channel_change_db_utils::Change::Message(*call_id),
+            )
+            .await?;
+        }
         tx.commit().await?;
         Ok(Some(archived))
     }
+}
+
+/// Capture the call-owned discussion identity before deletion triggers remove it.
+pub(super) async fn channel_thread_in(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    call_id: &Uuid,
+) -> Result<Option<Uuid>, sqlx::Error> {
+    sqlx::query_scalar!(
+        r#"SELECT channel_id AS "channel_id!" FROM call_entities
+           WHERE id = $1 AND discussion = 'channel_thread' AND channel_id IS NOT NULL"#,
+        call_id,
+    )
+    .fetch_optional(tx.as_mut())
+    .await
 }
 
 pub(super) async fn lock_active_call(
