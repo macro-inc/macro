@@ -42,7 +42,6 @@ export function ExternalChatHeader(props: {
     <Show when={props.pictureUrl} fallback={badge()}>
       {(url) => (
         <ProviderPicture
-          name={props.title}
           url={url()}
           size="md"
           class="size-5 shrink-0 touch:size-4"

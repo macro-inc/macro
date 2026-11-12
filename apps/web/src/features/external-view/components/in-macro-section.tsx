@@ -56,7 +56,7 @@ function ChatRow(props: {
       <ViewSidebar.Icon>
         <Show when={props.chat.pictureUrl} fallback={kindIcon()}>
           {(url) => (
-            <ProviderPicture name={name()} url={url()} size="fill">
+            <ProviderPicture url={url()} size="fill">
               {kindIcon()}
             </ProviderPicture>
           )}

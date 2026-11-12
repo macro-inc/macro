@@ -26,12 +26,7 @@ function MemberRow(props: { member: Member; own: boolean }) {
   const phone = () => phoneFromJid(props.member.id);
   return (
     <li class="flex min-h-9 items-center gap-2 px-1" data-chat-member>
-      <ProviderPicture
-        name={props.member.name}
-        url={props.member.pictureUrl}
-        size="md"
-        class="shrink-0"
-      >
+      <ProviderPicture url={props.member.pictureUrl} size="md" class="shrink-0">
         <span
           aria-hidden="true"
           class="flex size-full items-center justify-center rounded-full bg-hover text-[10px] font-medium text-ink-muted"

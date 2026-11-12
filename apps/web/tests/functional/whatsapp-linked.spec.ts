@@ -1934,7 +1934,7 @@ for (const mobile of [false, true]) {
         members
           .getByRole('listitem')
           .filter({ hasText: 'Ana Ruiz' })
-          .locator(`img[src$="${ANA_PICTURE}"]`)
+          .locator(`img[src*="${ANA_PICTURE}"]`)
       ).toBeVisible();
       await expect(
         members
@@ -1991,7 +1991,7 @@ for (const mobile of [false, true]) {
       await expect(
         nav
           .getByRole('button', { name: /design-crit/ })
-          .locator(`img[src$="${GROUP_PICTURE}"]`)
+          .locator(`img[src*="${GROUP_PICTURE}"]`)
       ).toBeVisible();
       await expect(
         nav.getByRole('button', { name: /Launch War Room/ }).locator('img')
