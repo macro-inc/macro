@@ -230,7 +230,7 @@ fn migrating_a_file_reclaims_space_and_keeps_pending_writes() {
         storage
             .put_batch(vec![(
                 key("Thing:1"),
-                record(&"review line\n".repeat(20_000)),
+                record(&"review line\n".repeat(40_000)),
             )])
             .await
             .unwrap();

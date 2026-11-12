@@ -15,6 +15,7 @@ GraphQL cache — native for tests/Tauri, OPFS-backed on wasm32.
 - `src/storage/people_sql.rs`: local relational reads over contact facts in the existing predicate index, not another database or Rust catalog. Derive facts in record transactions, delete them with records, and rebuild in bounded batches only when the profile/account stamp changes. Generic caller projections cannot override these cache-owned facts. SQL reads only needed attributes and limits final results before decoding; enforce both row and byte budgets. Pin fact joins to document/attribute primary-key seeks: the unhinted Turso plan can choose quadratic attribute scans at 100k. The owned profile's layout version 2 also derives bounded name words and epoch-scoped ranking facts. Delta updates change only differing facts; activity updates must not rewrite name-word postings. Rebuild older derived profiles in bounded batches while preserving authority, queue and generation. The indexed reader serves menu policy 5; there is no remote or old-scoring fallback.
 - `src/storage/name_search.rs`: indexed name-policy reader over existing owned facts, in one read transaction. Probe at most 129 posting IDs; broad reads bound ordered work to 4096 rank keys per default/current-epoch stream, then use a complete matching stream if needed. Eligibility and current-window DM dedup precede stopping; prior DM aliases use bounded target lookups. Overflow/incomplete records remain explicit streaming paths. Missing/stale projection stamps reject, never empty success. Core and both host families use this path for policy 5. `tests/common/name_search.rs` checks native/OPFS parity with the complete bounded-memory reference.
 - `src/storage/search.rs`: bound subsequence SQL prefilter over the covering browse index and checked borrowed-row decoding; reuse the key buffer and let core copy only winners, never collect or limit text results first.
+- `src/storage/channel_timeline.rs`: channel timeline rows (written through with every `GraphqlChannelMessage` / `GraphqlChannelTimelineActivity` record), fetched-stretch coverage and the per-channel applied change sequence. Page reads stay on `channel_timeline_scan_idx` and stop at the limit; a test pins VM steps so a page costs the same in a 200-row and a 20,000-row channel. Projection changes rebuild rows from records on reopen and keep coverage and sequences.
 - `src/key.rs`: the compound key schema (frozen — see Gotchas).
 - `src/error.rs`: `TursoStorageError` / `PhysicalResetReason`.
 - `tests/storage_conformance.rs`, `tests/shared_conformance.rs`: the shared
@@ -57,6 +58,8 @@ GraphQL cache — native for tests/Tauri, OPFS-backed on wasm32.
 - Projection 5 adds viewer-scoped contacts and removes public-profile membership; retention version 2 shares the bounded viewer-page budget with contact search/lookup snapshots. Neither changes storage schema 12 or clears durable data.
 - Quick Access projection version upgrades rebuild derived rows from retained normalized records; preserve the mutation queue and storage generation (covered by `src/storage/test/search_projection.rs`). Storage schema 12 is a separate, intentionally incompatible covering-index cutover: native reset drops queued writes; browser versioning opens a fresh file. See `../README.md#streaming-text-search`.
 
+- Storage schema 13 adds the three channel timeline tables as another incompatible cutover from schema 12 (native reset drops queued writes; browsers open a fresh file).
+
 - `#![forbid(unsafe_code)]` and `#![deny(missing_docs)]` — this crate is held to
   a stricter bar than most because it's the single physical-disk commit point.
 - The compound-key schema and payload encoding are frozen; an incompatible or
@@ -64,7 +67,8 @@ GraphQL cache — native for tests/Tauri, OPFS-backed on wasm32.
   migrated, copied, or redirected to a fallback backend.
 - The one exception is a cache format version listed in
   `MIGRATABLE_CACHE_FORMAT_VERSIONS`: `migrate_previous_format` drops the
-  refetchable records, search projections, index facts, and calendar ranges in
+  refetchable records, search projections, index facts, calendar ranges, and
+  channel timeline state in
   one transaction, keeps queued mutations, optimistic layers, and their
   projections, and rewrites the namespace. Everything else still resets.
 
