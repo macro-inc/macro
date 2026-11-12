@@ -1,0 +1,19 @@
+apps/web/src/features/routines/routine-creator.test.tsx
+  s_6d88ff8bc19b5f::t_edd10636e838f0 786-788
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "ec7c35df3e80a97f3bbae96ca0e02f0b0c38a02d",
+  "prompts": {},
+  "sessions": {
+    "s_6d88ff8bc19b5f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5071f9e5-e833-46fd-9a77-6652abeb9da8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
