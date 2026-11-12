@@ -5,6 +5,7 @@ use lexical_model::*;
 mod booking_mention_actions_test;
 
 mod agent_session_mention_actions;
+pub mod block_navigation;
 mod booking_mention_actions;
 mod checklist;
 mod clipboard;
