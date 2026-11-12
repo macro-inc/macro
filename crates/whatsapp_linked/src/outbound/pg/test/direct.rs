@@ -3,7 +3,7 @@
 
 use super::*;
 
-fn customer_chat(name: &str) -> ChatUpdate {
+pub(super) fn customer_chat(name: &str) -> ChatUpdate {
     ChatUpdate {
         jid: CUSTOMER_JID.to_owned(),
         kind: ExternalChatKind::Direct,
@@ -16,7 +16,7 @@ fn customer_chat(name: &str) -> ChatUpdate {
     }
 }
 
-fn direct_text(event: u128, sender: &str, from_me: bool, source: &str, body: &str) -> InboundEvent {
+pub(super) fn direct_text(event: u128, sender: &str, from_me: bool, source: &str, body: &str) -> InboundEvent {
     let mut event = text(event, sender, source, body);
     event.group_jid = CUSTOMER_JID.into();
     if let InboundKind::Message(message) = &mut event.kind {

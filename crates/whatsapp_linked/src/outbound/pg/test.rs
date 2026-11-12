@@ -26,6 +26,7 @@ mod media;
 mod pictures;
 mod names;
 mod pairing;
+mod picture_reads;
 mod rich;
 mod timeline;
 
