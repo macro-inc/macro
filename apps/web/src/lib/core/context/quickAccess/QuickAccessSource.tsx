@@ -59,6 +59,7 @@ import { useRecentlyViewedSoupQuery } from '@queries/soup/recently-viewed';
 import { useDatabasesQuery } from '@queries/storage/databases';
 import { useFormsQuery } from '@queries/storage/forms';
 import { subscribeToVisibleCacheChanges } from '@queries/subscribe-to-visible-cache-changes';
+import { ACCOUNT_WIDE_REFRESH_INTERVAL_MS } from '@queries/visible-refresh';
 import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
 import { getGraphqlSoupCacheHost } from '@service-storage/graphql-soup';
 import { formatDocumentName } from '@service-storage/util/filename';
@@ -425,7 +426,10 @@ export function createQuickAccessValue(): QuickAccessContextValue {
       subscribeToVisibleCacheChanges(
         host,
         () => cachedChannelsQuery.refetch({ cancelRefetch: false }),
-        { searchBuckets: () => ['channel', 'dm'] }
+        {
+          searchBuckets: () => ['channel', 'dm'],
+          intervalMs: ACCOUNT_WIDE_REFRESH_INTERVAL_MS,
+        }
       )
     );
   });
@@ -1176,6 +1180,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
           {
             searchBuckets: () =>
               projectedBuckets().filter((bucket) => bucket !== 'person'),
+            intervalMs: ACCOUNT_WIDE_REFRESH_INTERVAL_MS,
           }
         )
       );
