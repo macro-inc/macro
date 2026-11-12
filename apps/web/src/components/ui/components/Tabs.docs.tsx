@@ -15,7 +15,11 @@ function ViewDemo() {
     <Tabs
       aria-label="Project sections"
       options={[
-        { value: 'overview', label: 'Overview' },
+        {
+          value: 'overview',
+          label: 'Overview',
+          tooltip: 'Project summary and key information',
+        },
         { value: 'activity', label: 'Activity' },
         { value: 'files', label: 'Files' },
       ]}
@@ -162,7 +166,7 @@ export default defineDoc({
       id: 'view',
       title: 'View tabs',
       description:
-        'Header view tabs sit after the title, left of the controls. The choices share a flat rounded track with an inset selected pill, sized to match neighbouring controls.',
+        'Header view tabs sit after the title, left of the controls. Optional desktop pill tooltips explain a label on hover or input focus without renaming it; the explanation remains an accessible description on touch. The choices share a flat rounded track with an inset selected pill, sized to match neighbouring controls.',
       render: ViewDemo,
     },
     {

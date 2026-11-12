@@ -157,8 +157,8 @@ search remains available. Right-click any Drive view, the Drive folder overview,
 or a folder at any depth for **Open in new split**, **Open in current split**, and
 **Open fullscreen** (when multiple splits are open). Opening a location in a new
 split clears search and filters in the destination, leaving the original split
-unchanged. Folder menus also offer Favorite/Unfavorite, Snooze notifications…,
-Mute/Unmute notifications, Duplicate, Copy Link, Copy ID, Share, and
+unchanged. Folder menus also offer Favorite/Unfavorite, Mute/Unmute notifications
+with the shared timed-mute presets and custom time picker, Duplicate, Copy Link, Copy ID, Share, and
 owner-only Rename, Move to folder, and Delete, matching the folder's row menu in the Drive list.
 **Duplicate** on a folder (also in its "…" menu and row menu) makes "<name> copy"
 beside it (or at the top level without edit access to its parent), copying its

@@ -24,5 +24,6 @@
   "macro.properties",
   "macro.soup",
   "macro.teams",
+  "macro.users",
   "macro.webhooks"
 ]

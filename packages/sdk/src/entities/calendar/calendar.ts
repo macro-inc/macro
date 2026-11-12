@@ -11,7 +11,13 @@ import { MacroEntity } from '../entity';
  * handle loads its detail by listing the caller's calendars and matching on id.
  */
 export class Calendar extends MacroEntity<VisibleCalendar> {
-  /** Set whether this calendar contributes to the caller's availability. */
+  /**
+   * Set whether this calendar contributes to the caller's availability.
+   *
+   * @write
+   * @openworld
+   * @idempotent
+   */
   async setContributesToAvailability(
     contributesToAvailability: boolean,
   ): Promise<void> {
