@@ -1876,8 +1876,9 @@ way, from the view the call returns; nothing draws while the call streams.
 
 A presented view breaks tool groups before and after itself; later calls start
 a separate group. Its dashboard supports markdown, timelines, entity lists,
-channel messages, item cards, calendar agendas and tags, using the same
-full-width view as AI chat. An item card (one to four items: a document or
+channel messages, item cards, calendar agendas, tags and bot token cards
+(minted in the viewer's browser, so the secret never reaches the agent), using
+the same full-width view as AI chat. An item card (one to four items: a document or
 spreadsheet, an email thread, an event, a project, a channel, a routine, a form
 or an initiative) loads its item with the viewer's own access and opens it; a
 routine's card can pause it or run it now. An agenda loads its events live

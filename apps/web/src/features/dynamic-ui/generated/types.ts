@@ -753,12 +753,12 @@ export type Widget_Deserialize =
     })
   /**
    *  A card on which the user mints a new token for a bot they manage and
-   *  sees its secret; the secret never reaches you. Present it whenever the
-   *  user asks for a bot token or credential, instead of Bot.createToken().
+   *  sees its secret, which never reaches you. Present it whenever the user
+   *  asks for a bot token or credential.
    */
   | ({
       type: 'botCredential';
-      /**  The bot's id, from macro.bots. */
+      /**  The bot's id. */
       botId: string;
       /**  Where the token will be used, such as "github-webhook". */
       label?: string;
@@ -989,12 +989,12 @@ export type Widget_Serialize =
     })
   /**
    *  A card on which the user mints a new token for a bot they manage and
-   *  sees its secret; the secret never reaches you. Present it whenever the
-   *  user asks for a bot token or credential, instead of Bot.createToken().
+   *  sees its secret, which never reaches you. Present it whenever the user
+   *  asks for a bot token or credential.
    */
   | ({
       type: 'botCredential';
-      /**  The bot's id, from macro.bots. */
+      /**  The bot's id. */
       botId: string;
       /**  Where the token will be used, such as "github-webhook". */
       label?: string;

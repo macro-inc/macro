@@ -132,8 +132,9 @@ enforced by the ordinary backend APIs.
 - `src/entities/bots/`: `macro.bots` manages bots (`Bot`: profile, channel
   grants, webhook URLs, `BotToken`s) with user auth, and reads the
   authenticated bot (`me`, `channels`) with bot auth. Code mode hides the
-  bot-management tools in its favour; `IssueBotCredential` stays, because its
-  chat card mints a token the model never reads.
+  bot-management tools in its favour, `IssueBotCredential` too: a program
+  presents a `botCredential` view, whose card mints a token the model never
+  reads.
 - `src/entities/memory/`, `activity/`: `macro.memory.read()`/`edit()` (cognition
   `/memory/explicit`) and `macro.activity.mine()` (cognition `/activity`);
   `User.activity()` reads `/memory/activity` and `Initiative.activity()` DSS

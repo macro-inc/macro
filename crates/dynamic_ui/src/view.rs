@@ -87,11 +87,11 @@ pub enum Widget {
         tags: Vec<TagNode>,
     },
     /// A card on which the user mints a new token for a bot they manage and
-    /// sees its secret; the secret never reaches you. Present it whenever the
-    /// user asks for a bot token or credential, instead of Bot.createToken().
+    /// sees its secret, which never reaches you. Present it whenever the user
+    /// asks for a bot token or credential.
     #[serde(rename_all = "camelCase")]
     BotCredential {
-        /// The bot's id, from macro.bots.
+        /// The bot's id.
         bot_id: String,
         /// Where the token will be used, such as "github-webhook".
         #[serde(default, skip_serializing_if = "Option::is_none")]

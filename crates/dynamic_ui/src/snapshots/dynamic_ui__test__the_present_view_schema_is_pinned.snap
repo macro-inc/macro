@@ -1426,10 +1426,10 @@ expression: schema
           "type": "object"
         },
         {
-          "description": "A card on which the user mints a new token for a bot they manage and\nsees its secret; the secret never reaches you. Present it whenever the\nuser asks for a bot token or credential, instead of Bot.createToken().",
+          "description": "A card on which the user mints a new token for a bot they manage and\nsees its secret, which never reaches you. Present it whenever the user\nasks for a bot token or credential.",
           "properties": {
             "botId": {
-              "description": "The bot's id, from macro.bots.",
+              "description": "The bot's id.",
               "type": "string"
             },
             "expiresAt": {
