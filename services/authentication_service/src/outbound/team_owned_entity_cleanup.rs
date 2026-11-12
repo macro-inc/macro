@@ -28,6 +28,7 @@ pub struct TeamOwnedEntityCleanupAdapter<B, R> {
     internal_key: String,
     harness_url: String,
     scheduled_action_url: String,
+    computers: Arc<dyn crate::domain::computer_billing::TeamComputers>,
 }
 
 impl<B, R> TeamOwnedEntityCleanupAdapter<B, R> {
@@ -44,6 +45,7 @@ impl<B, R> TeamOwnedEntityCleanupAdapter<B, R> {
         internal_key: String,
         harness_url: String,
         scheduled_action_url: String,
+        computers: Arc<dyn crate::domain::computer_billing::TeamComputers>,
     ) -> Result<Self, Report> {
         Ok(Self {
             vault_metadata,
@@ -57,6 +59,7 @@ impl<B, R> TeamOwnedEntityCleanupAdapter<B, R> {
             internal_key,
             harness_url,
             scheduled_action_url,
+            computers,
         })
     }
 
@@ -194,6 +197,13 @@ where
                 .map_err(Report::into_dynamic)?,
         }
         Ok(())
+    }
+    #[tracing::instrument(skip(self), err)]
+    async fn release_computers(&self, team_id: Uuid) -> Result<(), Self::Err> {
+        self.computers
+            .release_team(team_id)
+            .await
+            .map_err(ReportAsError::from)
     }
 }
 

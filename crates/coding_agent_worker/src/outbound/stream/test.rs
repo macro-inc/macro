@@ -6,6 +6,7 @@ use webhook::domain::models::WebhookFilter;
 fn test_client(storage_url: &str) -> EventStreamClient {
     EventStreamClient::new(
         &MacroApi {
+            egress_url: None,
             api_url: "http://unused".to_owned(),
             storage_url: storage_url.to_owned(),
             web_url: "https://macro.com/app".to_owned(),
@@ -13,6 +14,7 @@ fn test_client(storage_url: &str) -> EventStreamClient {
         &HarnessCredentials {
             harness_id: HarnessId::TEST_A,
             token: "mhns_test".to_owned(),
+            pairing_id: None,
         },
     )
 }
