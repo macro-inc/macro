@@ -1,24 +1,24 @@
-import ArrowLeft from '@phosphor/arrow-left.svg';
-import BuildingOffice from '@phosphor/building-office.svg';
-import CaretDown from '@phosphor/caret-down.svg';
-import CaretRight from '@phosphor/caret-right.svg';
-import CheckSquare from '@phosphor/check-square.svg';
-import CircleDashed from '@phosphor/circle-dashed.svg';
-import Clock from '@phosphor/clock.svg';
-import Envelope from '@phosphor/envelope.svg';
-import File from '@phosphor/file.svg';
-import FilePdf from '@phosphor/file-pdf.svg';
-import Files from '@phosphor/files.svg';
-import Globe from '@phosphor/globe.svg';
-import LinkIcon from '@phosphor/link.svg';
-import ListBullets from '@phosphor/list-bullets.svg';
-import ListChecks from '@phosphor/list-checks.svg';
-import Phone from '@phosphor/phone.svg';
-import PhoneCall from '@phosphor/phone-call.svg';
-import Plus from '@phosphor/plus.svg';
-import SidebarSimple from '@phosphor/sidebar-simple.svg';
-import SquaresFour from '@phosphor/squares-four.svg';
-import Users from '@phosphor/users.svg';
+import ArrowLeft from '@icon/system/regular/arrow-left.svg';
+import BuildingOffice from '@icon/system/regular/building-office.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
+import CheckSquare from '@icon/system/regular/check-square.svg';
+import CircleDashed from '@icon/system/regular/circle-dashed.svg';
+import Clock from '@icon/system/regular/clock.svg';
+import Envelope from '@icon/system/regular/envelope.svg';
+import File from '@icon/system/regular/file.svg';
+import FilePdf from '@icon/system/regular/file-pdf.svg';
+import Files from '@icon/system/regular/files.svg';
+import Globe from '@icon/system/regular/globe.svg';
+import LinkIcon from '@icon/system/regular/link.svg';
+import ListBullets from '@icon/system/regular/list-bullets.svg';
+import ListChecks from '@icon/system/regular/list-checks.svg';
+import Phone from '@icon/system/regular/phone.svg';
+import PhoneCall from '@icon/system/regular/phone-call.svg';
+import Plus from '@icon/system/regular/plus.svg';
+import SidebarSimple from '@icon/system/regular/sidebar-simple.svg';
+import SquaresFour from '@icon/system/regular/squares-four.svg';
+import Users from '@icon/system/regular/users.svg';
 import { Button, Dropdown } from '@ui';
 import { Badge, badgeTriggerClasses } from '@ui/components/Badge';
 import { TabsInset } from '@ui/components/TabsInset';
@@ -97,13 +97,7 @@ export const STAGE_IDS: Record<Exclude<DealStage, 'No stage'>, string> = {
   Customer: PROPERTY_OPTION_IDS.STAGE.CUSTOMER,
   Churned: PROPERTY_OPTION_IDS.STAGE.CHURNED,
 };
-const COMPANY_OWNERS = [
-  'jacob',
-  'julia',
-  'teo',
-  'valentina',
-  'gabriel',
-] as const;
+const COMPANY_OWNERS = ['jacob', 'julia', 'teo', 'austin', 'gabriel'] as const;
 
 /** CrmStageIcon: the system stage dot, or the dashed circle for No stage. */
 export function StageIcon(props: { stage: DealStage; class?: string }) {

@@ -108,12 +108,14 @@ type Turn = Box<dyn Fn(&str) -> Vec<(ActionConfiguration, Vec<CreatedItem>)> + S
 
 /// The routine sessions a draft opens: preparing and prompting are
 /// recorded, and the prompt's turn checks its routines into `rows` as the
-/// check route would, then ends, unless the session `hangs`.
+/// check route would, then ends, unless the session `hangs`. Its turn
+/// can't be read while it is `unreadable`.
 struct Sessions {
     rows: Arc<Rows>,
     code: Arc<Checker>,
     turn: Turn,
     hangs: bool,
+    unreadable: bool,
     refuses: Option<RoutineSessionError>,
     prepared: Mutex<Vec<PrepareRoutineSession>>,
     prompts: Mutex<Vec<String>>,
@@ -130,6 +132,7 @@ impl Sessions {
             code: Arc::new(Checker::default()),
             turn,
             hangs: false,
+            unreadable: false,
             refuses: None,
             prepared: Mutex::new(Vec::new()),
             prompts: Mutex::new(Vec::new()),
@@ -187,6 +190,9 @@ impl RoutineSessions for Sessions {
         &self,
         _: RoutineSessionAction,
     ) -> Result<RoutineActionStatus, RoutineSessionError> {
+        if self.unreadable {
+            return Err(RoutineSessionError::OperationFailed);
+        }
         Ok(if self.hangs {
             RoutineActionStatus::Pending(RoutinePendingReason::Running)
         } else {
@@ -384,8 +390,13 @@ async fn a_draft_runs_in_a_hidden_read_only_session_and_hands_back_its_last_chec
         panic!("one session per draft");
     };
     assert_eq!(prepared.visibility, SessionVisibility::Hidden);
-    // The person's own session, never a routine's run.
+    // The person's own session, never a routine's run, billed as their
+    // agent session usage.
     assert_eq!(prepared.source, SessionSource::User);
+    assert_eq!(
+        prepared.billing,
+        agent_session::domain::model::SessionBilling::Billable
+    );
     assert_eq!(
         prepared.origin,
         trigger_context::TriggerOrigin::Requested { by: owner() }
@@ -406,6 +417,15 @@ async fn a_draft_runs_in_a_hidden_read_only_session_and_hands_back_its_last_chec
         "{prompt}"
     );
     assert!(prompt.contains("You can't ask them anything"), "{prompt}");
+    // Macro's code routines are its worked examples.
+    let inbox = routine_program::CATALOG
+        .iter()
+        .find(|routine| routine.key == "inbox")
+        .unwrap();
+    assert!(
+        prompt.contains(&format!("<request>{}</request>", inbox.request)),
+        "{prompt}"
+    );
     assert!(drafted.created.is_empty());
     // The session and its row are gone once the draft is back.
     let session = prepared.session_id;
@@ -579,10 +599,10 @@ async fn a_draft_that_runs_out_of_time_says_so_and_cleans_up() {
     assert!(rows.drafts.lock().unwrap().is_empty());
 }
 
-/// The free model now and then keeps going after a clean check; the draft
-/// waits a little for its turn to end, then takes the check.
+/// The first check that passes is the draft: the session is stopped there,
+/// without waiting for its turn to end.
 #[tokio::test(start_paused = true)]
-async fn a_draft_stops_waiting_once_a_check_passes() {
+async fn a_draft_stops_its_session_once_a_check_passes() {
     let rows = Arc::new(Rows::default());
     let mut sessions = Sessions::new(
         &rows,
@@ -601,12 +621,62 @@ async fn a_draft_stops_waiting_once_a_check_passes() {
     let drafted = drafted_routine(draft(&drafts(&rows, &sessions), routine(BUG_REPORTS)).await);
 
     assert_eq!(drafted.name, "Bug tasks");
+    // One poll, then the settle for activity.
     assert!(
-        started.elapsed() >= CHECKED_GRACE && started.elapsed() < CHECKED_GRACE * 2,
+        started.elapsed() <= POLL + ACTIVITY_SETTLE,
         "{:?}",
         started.elapsed()
     );
     assert_eq!(sessions.cancelled.lock().unwrap().len(), 1);
+}
+
+/// A turn that can't be read a few times in a row ends the draft as failed,
+/// well before its timeout, and still cleans up.
+#[tokio::test(start_paused = true)]
+async fn a_draft_whose_turn_cannot_be_read_gives_up_and_cleans_up() {
+    let rows = Arc::new(Rows::default());
+    let mut sessions = Sessions::new(&rows, Box::new(|_| Vec::new()));
+    sessions.hangs = true;
+    sessions.unreadable = true;
+    let sessions = Arc::new(sessions);
+
+    let started = tokio::time::Instant::now();
+    let draft = draft(&drafts(&rows, &sessions), routine("label mail")).await;
+
+    assert_eq!(draft, failed(ROUTINE_FAILED));
+    assert!(
+        started.elapsed() < DRAFT_TIMEOUT / 4,
+        "{:?}",
+        started.elapsed()
+    );
+    let session = sessions.prepared.lock().unwrap()[0].session_id;
+    assert_eq!(*sessions.cancelled.lock().unwrap(), [session]);
+    assert_eq!(*sessions.deleted.lock().unwrap(), [session]);
+    assert!(rows.drafts.lock().unwrap().is_empty());
+}
+
+/// A passing check is the draft even while the turn can't be read.
+#[tokio::test(start_paused = true)]
+async fn a_passing_check_is_drafted_while_the_turn_cannot_be_read() {
+    let rows = Arc::new(Rows::default());
+    let mut sessions = Sessions::new(
+        &rows,
+        Box::new(|_| {
+            vec![plain(configuration(
+                "Bug tasks",
+                message_posted(&[]),
+                json!([code_step("Make a task", "good")]),
+            ))]
+        }),
+    );
+    sessions.hangs = true;
+    sessions.unreadable = true;
+    let sessions = Arc::new(sessions);
+
+    let drafted = drafted_routine(draft(&drafts(&rows, &sessions), routine(BUG_REPORTS)).await);
+
+    assert_eq!(drafted.name, "Bug tasks");
+    assert_eq!(sessions.deleted.lock().unwrap().len(), 1);
 }
 
 /// A check that still fails isn't the end: the session goes on fixing it.
@@ -725,6 +795,43 @@ async fn refuses_a_step_it_cannot_add() {
         failed(NO_CODE)
     );
     assert!(sessions.prepared.lock().unwrap().is_empty());
+}
+
+/// Where code can't be saved, the brief shows no code to copy.
+#[tokio::test]
+async fn without_code_the_brief_has_no_code_examples() {
+    let rows = Arc::new(Rows::default());
+    let sessions = Arc::new(Sessions::new(&rows, Box::new(|_| Vec::new())));
+    let no_code = DraftContext {
+        code: false,
+        ..context()
+    };
+    drafts(&rows, &sessions)
+        .draft(owner(), routine("every morning sort my inbox"), no_code)
+        .await
+        .unwrap();
+    let prompt = sessions.prompts.lock().unwrap()[0].clone();
+    assert!(prompt.contains("Code steps can't be used"), "{prompt}");
+    assert!(!prompt.contains("<example>"), "{prompt}");
+}
+
+#[tokio::test]
+async fn without_conditions_no_example_trigger_asks_one() {
+    for (conditions, asked) in [(false, false), (true, true)] {
+        let rows = Arc::new(Rows::default());
+        let sessions = Arc::new(Sessions::new(&rows, Box::new(|_| Vec::new())));
+        let context = DraftContext {
+            conditions,
+            ..context()
+        };
+        drafts(&rows, &sessions)
+            .draft(owner(), routine("every morning sort my inbox"), context)
+            .await
+            .unwrap();
+        let prompt = sessions.prompts.lock().unwrap()[0].clone();
+        assert!(prompt.contains("<example>"), "{prompt}");
+        assert_eq!(prompt.contains("\"condition\":"), asked, "{prompt}");
+    }
 }
 
 #[tokio::test]

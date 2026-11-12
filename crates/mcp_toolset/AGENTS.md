@@ -10,7 +10,9 @@ names, and routes calls back to the right server.
 
 - `src/lib.rs`: `client_info()` and the `McpServer` session type.
 - `src/toolset.rs`: `RemoteMcpToolSet` — the `ToolSet` impl, `ConnectedServer`/`ListedServer`.
-- `src/mangle.rs`: the `mcp__<server>__<tool>` name encoding/decoding.
+- `src/mangle.rs`: the `mcp__<server>__<tool>` name encoding/decoding;
+  `unmangle` is the public split routing uses, also read by `agent_inmem`'s
+  log replay.
 - `src/call_tool_result.rs`: `CallToolResultExt` for converting MCP results.
 
 ## Scope
@@ -35,6 +37,12 @@ names, and routes calls back to the right server.
 ## Checks
 
 - `cargo test -p mcp_toolset` (`SQLX_OFFLINE` unset).
+
+## Gotchas
+
+- `dispatch_tool_call` races the call against `request_context.cancel`: the
+  agent loop waits for running tools on cancel, and a server may hold a call
+  (owner approval). Dropping the rmcp call sends `notifications/cancelled`.
 
 ## Related
 

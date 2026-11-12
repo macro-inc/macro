@@ -64,6 +64,7 @@ async fn a_withdrawn_bypass_reaches_a_live_session_before_its_next_prompt() {
                 action: permission_answer("after", "once"),
                 actor: Some(staff_sender()),
                 context: None,
+                client: None,
             },
         )
         .await
@@ -99,6 +100,7 @@ async fn bypass_turned_on_from_a_request_covers_the_rest_of_the_turn() {
                 action: permission_answer("asked", "once"),
                 actor: Some(staff_sender()),
                 context: None,
+                client: None,
             },
         )
         .await

@@ -14,6 +14,8 @@ import type { ScheduledActionClaimed } from './scheduledActionClaimed';
 import type { ScheduledActionEventActivatedAt } from './scheduledActionEventActivatedAt';
 import type { ScheduledActionId } from './scheduledActionId';
 import type { ScheduledActionNextRunAt } from './scheduledActionNextRunAt';
+import type { ScheduledActionSubRoutine } from './scheduledActionSubRoutine';
+import type { ScheduledActionSuggestionId } from './scheduledActionSuggestionId';
 import type { ScheduledActionTemplateId } from './scheduledActionTemplateId';
 
 export interface ScheduledAction {
@@ -40,6 +42,10 @@ rather than failing to parse. */
   owner: string;
   /** Whether the action's runs are listed in Home and the Agents list. */
   run_visibility: RunVisibility;
+  sub_routine?: ScheduledActionSubRoutine;
+  /** The routine suggestion it was saved from, if any: a plain pointer
+that stays after the suggestion is replaced. */
+  suggestion_id?: ScheduledActionSuggestionId;
   task: RoutineTask;
   /** The shared template this routine was activated from, if any. */
   template_id?: ScheduledActionTemplateId;

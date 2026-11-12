@@ -74,6 +74,8 @@ pub struct InMemoryAgentSessionRepo {
     log_transaction: Arc<Mutex<()>>,
     history_boundaries: Arc<Mutex<HashMap<AgentSessionId, macro_uuid::Uuid>>>,
     turn_states: Arc<Mutex<HashMap<AgentSessionId, agent_fold::domain::model::TurnState>>>,
+    /// Sessions whose turn was open when they last disconnected.
+    interrupted_turns: Arc<Mutex<std::collections::HashSet<AgentSessionId>>>,
     working_branches: Arc<Mutex<HashMap<AgentSessionId, String>>>,
     user_sizes: Arc<Mutex<HashMap<String, SandboxSize>>>,
     user_coding_preferences: Arc<Mutex<HashMap<String, CodingPreferences>>>,
@@ -95,6 +97,8 @@ pub struct InMemoryAgentSessionRepo {
     conversation_sessions: Arc<Mutex<std::collections::HashSet<AgentSessionId>>>,
     /// Sessions whose name was generated, mirroring `name_is_generated`.
     generated_names: Arc<Mutex<std::collections::HashSet<AgentSessionId>>>,
+    /// Session -> whether it is billed, mirroring `agent_session.billing`.
+    billings: Arc<Mutex<HashMap<AgentSessionId, crate::domain::model::SessionBilling>>>,
 }
 
 impl InMemoryAgentSessionRepo {
@@ -111,6 +115,19 @@ impl InMemoryAgentSessionRepo {
             .lock()
             .expect("in-memory session store is not poisoned")
             .insert(session.id, session);
+    }
+
+    /// Backdate `session`'s last user-visible activity, as if nobody had
+    /// touched it since `at`.
+    pub fn set_modified_at(&self, session: AgentSessionId, at: chrono::DateTime<chrono::Utc>) {
+        if let Some(stored) = self
+            .sessions
+            .lock()
+            .expect("in-memory session store is not poisoned")
+            .get_mut(&session)
+        {
+            stored.modified_at = at;
+        }
     }
 
     /// Who prompted `session` directly, in the order they first did.
@@ -232,6 +249,10 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
             source: params.purpose.source(),
             visibility: params.purpose.visibility(params.thread_id, false),
         };
+        self.billings
+            .lock()
+            .expect("in-memory session store is not poisoned")
+            .insert(session.id, params.billing);
         if let Some(hash) = params.egress_token_hash {
             self.egress_token_hashes
                 .lock()
@@ -294,6 +315,44 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
 
     async fn get(&self, id: AgentSessionId) -> Result<AgentSession> {
         self.find(id).await?.ok_or(AgentSessionError::NotFound(id))
+    }
+
+    async fn has_unfinished_turn(&self, id: AgentSessionId) -> Result<bool> {
+        if !self
+            .sessions
+            .lock()
+            .expect("in-memory session store is not poisoned")
+            .contains_key(&id)
+        {
+            return Err(AgentSessionError::NotFound(id));
+        }
+        Ok(match self.turn_states.lock().unwrap().get(&id) {
+            Some(agent_fold::domain::model::TurnState::Disconnected) => {
+                self.interrupted_turns.lock().unwrap().contains(&id)
+            }
+            Some(turn) => crate::domain::turn_state::moves_session_list(*turn),
+            None => false,
+        })
+    }
+
+    async fn billing(&self, id: AgentSessionId) -> Result<crate::domain::model::SessionBilling> {
+        if !self
+            .sessions
+            .lock()
+            .expect("in-memory session store is not poisoned")
+            .contains_key(&id)
+        {
+            return Err(AgentSessionError::NotFound(id));
+        }
+        // A session inserted directly, not through `create`, is billed as
+        // the column defaults.
+        Ok(self
+            .billings
+            .lock()
+            .expect("in-memory session store is not poisoned")
+            .get(&id)
+            .copied()
+            .unwrap_or_default())
     }
 
     async fn find(&self, id: AgentSessionId) -> Result<Option<AgentSession>> {
@@ -1049,7 +1108,13 @@ impl AgentSessionLogRepo for InMemoryAgentSessionRepo {
                 .insert(session, boundary.initialization_log_id);
         }
         if let Some(turn_state) = turn_state {
-            self.turn_states.lock().unwrap().insert(session, turn_state);
+            let previous = self.turn_states.lock().unwrap().insert(session, turn_state);
+            let mut interrupted = self.interrupted_turns.lock().unwrap();
+            if turn_state != agent_fold::domain::model::TurnState::Disconnected {
+                interrupted.remove(&session);
+            } else if previous.is_some_and(crate::domain::turn_state::moves_session_list) {
+                interrupted.insert(session);
+            }
         }
         Ok(stored)
     }

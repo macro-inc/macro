@@ -43,6 +43,10 @@ import type {
   UpdateSharePermissionRequestV2,
   WarmAgentSessionResponse,
 } from './generated/schemas';
+import {
+  type NO_RUNTIME_ACCESS_ERROR,
+  readNoRuntimeAccessError,
+} from './no-runtime-access';
 
 export type {
   ArchiveCause,
@@ -71,9 +75,11 @@ const sessionError: ErrorResponseHandler<never> = async (response) => {
 };
 
 const sessionAiError: ErrorResponseHandler<
-  typeof AI_USAGE_LIMIT_ERROR
+  typeof AI_USAGE_LIMIT_ERROR | typeof NO_RUNTIME_ACCESS_ERROR
 > = async (response) =>
-  (await readAiUsageLimitError(response)) ?? (await sessionError(response));
+  (await readAiUsageLimitError(response)) ??
+  (await readNoRuntimeAccessError(response)) ??
+  (await sessionError(response));
 
 /** Authenticated client for controlling live agent sessions. */
 export const agentHarnessServiceClient = {
@@ -131,7 +137,7 @@ export const agentHarnessServiceClient = {
   create(request: CreateAgentSessionRequest) {
     return fetchWithToken<
       CreateAgentSessionResponse,
-      typeof AI_USAGE_LIMIT_ERROR
+      typeof AI_USAGE_LIMIT_ERROR | typeof NO_RUNTIME_ACCESS_ERROR
     >(`${agentHarnessHost}/agent-sessions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -241,15 +247,15 @@ export const agentHarnessServiceClient = {
    * out (`sent`) or waits in the session's queue (`queued`).
    */
   control(sessionId: string, request: ControlRequest) {
-    return fetchWithToken<ControlResponse, typeof AI_USAGE_LIMIT_ERROR>(
-      `${agentHarnessHost}/agent-sessions/${sessionId}/control`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(request),
-        errorResponseHandler: sessionAiError,
-      }
-    );
+    return fetchWithToken<
+      ControlResponse,
+      typeof AI_USAGE_LIMIT_ERROR | typeof NO_RUNTIME_ACCESS_ERROR
+    >(`${agentHarnessHost}/agent-sessions/${sessionId}/control`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+      errorResponseHandler: sessionAiError,
+    });
   },
 
   /** The actions waiting to dispatch in this session, oldest first. */
@@ -531,15 +537,15 @@ export const agentHarnessServiceClient = {
    * shows no prompt. 422 when the app is not actually connected.
    */
   reportAppConnected(sessionId: string, appSlug: string) {
-    return fetchWithToken<Record<string, never>, typeof AI_USAGE_LIMIT_ERROR>(
-      `${agentHarnessHost}/agent-sessions/${sessionId}/app-connections`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ appSlug } satisfies AppConnectedRequest),
-        errorResponseHandler: sessionAiError,
-      }
-    );
+    return fetchWithToken<
+      Record<string, never>,
+      typeof AI_USAGE_LIMIT_ERROR | typeof NO_RUNTIME_ACCESS_ERROR
+    >(`${agentHarnessHost}/agent-sessions/${sessionId}/app-connections`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ appSlug } satisfies AppConnectedRequest),
+      errorResponseHandler: sessionAiError,
+    });
   },
 
   setSessionSandboxSize(sessionId: string, size: SandboxSize) {

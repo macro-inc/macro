@@ -64,11 +64,11 @@
       assetFilter =
         path: _type:
         builtins.match ".*\\.(md|html|txt|json|jsonl|canvas|sql|sh|ttf|xml|graphql|mjs|proto)$" path != null;
-      # `crates/routine_program` embeds its starter programs with `include_str!`.
+      # `crates/routine_program` embeds its catalog programs with `include_str!`.
       # Only these `.ts` files: matching every `.ts` would pull the web app into
       # the Rust source hash.
-      routineStartersFilter =
-        path: _type: builtins.match ".*/crates/routine_program/src/starters/[^/]*\\.ts$" (toString path) != null;
+      routineCatalogFilter =
+        path: _type: builtins.match ".*/crates/routine_program/src/catalog/[^/]*\\.ts$" (toString path) != null;
       # Rust templates (askama, minijinja) include their stylesheets, such as
       # `services/mcp_auth_proxy/templates/broker_page.css`. Only `templates/`
       # stylesheets under Rust crates and services: matching every `.css` would
@@ -85,7 +85,7 @@
         || (localCaFilter path type)
         || (pdfiumFilter path type)
         || (assetFilter path type)
-        || (routineStartersFilter path type)
+        || (routineCatalogFilter path type)
         || (templateCssFilter path type)
         || (binFilter path type)
         || (craneLib.filterCargoSources path type);
@@ -1122,6 +1122,7 @@
           rustToolchain
           python3
         ]
+        ++ [ (pkgs.callPackage ./_swagger2openapi.nix { }) ]
         ++ pkgs.lib.optionals isLinux [
           mold
           docker

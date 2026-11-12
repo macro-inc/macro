@@ -1,15 +1,17 @@
 use std::sync::Arc;
 
-use crate::domain::code_check::{CodeCheckError, StarterRoutine};
+use crate::domain::catalog::CatalogEntry;
+use crate::domain::code_check::CodeCheckError;
 use crate::domain::code_upgrade::CodeUpgrade;
 use crate::domain::drafts::InvalidDraft;
 use crate::domain::event_trigger::ActionTrigger;
 use crate::domain::models::{
     ActionConfiguration, ActionConfigurationUpdate, ActionExecutionRecord, ActionPolicyError,
-    AlreadyRunningError, CreatedItem, InProgressExecution, ListedAction, OwnerNotUserError,
-    RoutineCheck, Schedule, ScheduledAction,
+    AlreadyRunningError, CreatedItem, CreatedRoutine, InProgressExecution, ListScope, ListedAction,
+    ListedRun, OwnerNotUserError, RoutineCheck, RunCaller, Schedule, ScheduledAction,
+    SubRoutineKey,
 };
-use crate::domain::ports::ScheduledActionService;
+use crate::domain::ports::{SavedAction, ScheduledActionService};
 use crate::domain::target_validation::TargetValidationError;
 use crate::domain::templates::TemplateInputError;
 use agent_session::domain::routines::RoutineSessionError;
@@ -107,6 +109,34 @@ pub struct ListActionsQuery {
     /// Backend clients must opt in to event actions; defaults to false (cron-only).
     #[param(default = false)]
     pub include_events: Option<bool>,
+    /// Also list active sub-routines, the routines other routines' runs
+    /// created, without finished one-time ones; defaults to false (top-level
+    /// routines only).
+    #[param(default = false)]
+    pub include_children: Option<bool>,
+    /// List only this routine's sub-routines: the active ones and its newest
+    /// 200 finished one-time ones.
+    #[param(value_type = Option<String>, format = Uuid)]
+    pub parent: Option<Uuid>,
+}
+
+/// A finished run, with the routines it created.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ExecutionRecordResponse {
+    #[serde(flatten)]
+    pub record: ActionExecutionRecord,
+    /// The sub-routines this run created that still follow the routine.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub created: Vec<CreatedRoutine>,
+}
+
+impl From<ListedRun> for ExecutionRecordResponse {
+    fn from(run: ListedRun) -> Self {
+        Self {
+            record: run.record,
+            created: run.created,
+        }
+    }
 }
 
 pub struct ScheduledActionRouterState<S, Svc, Auth> {
@@ -182,6 +212,10 @@ where
             put(set_action_enabled::<S, Svc, Auth>),
         )
         .route(
+            "/scheduled-actions/{id}/detach",
+            post(detach_action::<S, Svc, Auth>),
+        )
+        .route(
             "/scheduled-actions/{id}/execute",
             post(execute_action::<S, Svc, Auth>),
         )
@@ -197,10 +231,7 @@ where
             "/scheduled-actions/check",
             post(check_action::<S, Svc, Auth>),
         )
-        .route(
-            "/scheduled-actions/code/starters",
-            get(code_starters::<S, Svc, Auth>),
-        )
+        .route("/scheduled-actions/catalog", get(catalog::<S, Svc, Auth>))
         .with_state(state)
 }
 
@@ -260,6 +291,19 @@ pub async fn health() -> impl IntoResponse {
     Json(EmptyResponse::default())
 }
 
+/// Where a new routine came from.
+#[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
+pub struct CreateActionQuery {
+    /// The routine suggestion it is saved from, recorded on the routine.
+    #[param(value_type = Option<String>, format = Uuid)]
+    pub suggestion_id: Option<Uuid>,
+    /// A name for a routine a routine's run creates: the same key under the
+    /// same parent updates that sub-routine instead of adding another.
+    /// Rejected outside a routine's run.
+    pub key: Option<String>,
+}
+
 #[utoipa::path(
     post,
     path = "/scheduled-actions/check",
@@ -306,18 +350,25 @@ where
     path = "/scheduled-actions",
     tag = "scheduled actions",
     operation_id = "create_scheduled_action",
+    params(CreateActionQuery),
     request_body = ActionConfiguration,
     responses(
         (status = 201, body = ScheduledActionResponse),
+        (status = 200, body = ScheduledActionResponse, description = "The sub-routine its key already named, updated"),
         (status = 400, body = String),
         (status = 401, body = String),
         (status = 403, body = String),
+        (status = 409, body = String, description = "The routine already has the most active sub-routines it can"),
         (status = 500, body = String),
     )
 )]
+/// Create a routine. A create made by a routine's run, from its code step
+/// or its Ask AI step's session, makes that routine's sub-routine: the
+/// caller's credential says so, never the body.
 pub async fn create_action<S, Svc, Auth>(
     State(state): State<ScheduledActionRouterState<S, Svc, Auth>>,
     CreationPrincipalExtractor { principal, .. }: CreationPrincipalExtractor<Auth>,
+    Query(query): Query<CreateActionQuery>,
     body: Result<Json<ActionConfiguration>, JsonRejection>,
 ) -> Result<impl IntoResponse, ScheduledActionApiError>
 where
@@ -326,7 +377,41 @@ where
     Auth: MacroAuthorizationService,
 {
     let Json(req) = body.map_err(ScheduledActionApiError::InvalidRequest)?;
-    let created = state.service.create_action(&principal, req).await?;
+    let created = match query.suggestion_id {
+        Some(suggestion_id) => {
+            state
+                .service
+                .create_action_from_suggestion(&principal, req, suggestion_id)
+                .await?
+        }
+        None => {
+            // Both come from the request's verified credential: the routine
+            // a code step's token is signed for, and the code-mode
+            // invocation of an agent session.
+            let caller = RunCaller {
+                routine: agent_correlation::context::current_routine(),
+                correlation: agent_correlation::context::current(),
+            };
+            let key = query
+                .key
+                .as_deref()
+                .map(SubRoutineKey::new)
+                .transpose()
+                .map_err(anyhow::Error::from)?;
+            let saved = state
+                .service
+                .create_action_from(&principal, req, caller, key)
+                .await?;
+            let status = match saved {
+                SavedAction::Created(_) => StatusCode::CREATED,
+                SavedAction::Updated(_) => StatusCode::OK,
+            };
+            return Ok((
+                status,
+                Json(ScheduledActionResponse::from(saved.into_action())),
+            ));
+        }
+    };
     Ok((
         StatusCode::CREATED,
         Json(ScheduledActionResponse::from(created)),
@@ -360,6 +445,11 @@ where
         .get_actions(
             user.authorization.user.macro_user_id.clone(),
             query.include_events.unwrap_or(false),
+            match (query.parent, query.include_children.unwrap_or(false)) {
+                (Some(parent), _) => ListScope::ChildrenOf(parent),
+                (None, true) => ListScope::WithChildren,
+                (None, false) => ListScope::TopLevel,
+            },
         )
         .await?;
     Ok(Json(
@@ -385,15 +475,17 @@ where
 )]
 pub async fn get_action<S, Svc, Auth>(
     State(state): State<ScheduledActionRouterState<S, Svc, Auth>>,
-    _user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
-    Path(id): Path<Uuid>,
+    ScheduledActionAccessExtractor {
+        entity_access_receipt,
+        ..
+    }: ScheduledActionAccessExtractor<ViewAccessLevel, Svc, Auth>,
 ) -> Result<Json<ScheduledActionResponse>, ScheduledActionApiError>
 where
     S: ScheduledActionService,
     Svc: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
-    let action = state.service.get_action(id).await?;
+    let action = state.service.get_action(&entity_access_receipt).await?;
     Ok(Json(action.into()))
 }
 
@@ -502,6 +594,38 @@ where
 
 #[utoipa::path(
     post,
+    path = "/scheduled-actions/{id}/detach",
+    tag = "scheduled actions",
+    operation_id = "detach_scheduled_action",
+    params(("id" = String, Path, description = "ID of the sub-routine")),
+    responses(
+        (status = 200, body = ScheduledActionResponse),
+        (status = 400, body = String, description = "Not a sub-routine"),
+        (status = 401, body = String),
+        (status = 404, body = String),
+        (status = 500, body = String),
+    )
+)]
+/// Keep a sub-routine as the owner's own routine: it moves to the main list
+/// and no longer follows the routine whose run created it.
+pub async fn detach_action<S, Svc, Auth>(
+    State(state): State<ScheduledActionRouterState<S, Svc, Auth>>,
+    ScheduledActionAccessExtractor {
+        entity_access_receipt,
+        ..
+    }: ScheduledActionAccessExtractor<EditAccessLevel, Svc, Auth>,
+) -> Result<impl IntoResponse, ScheduledActionApiError>
+where
+    S: ScheduledActionService + Send + Sync + 'static,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    let action = state.service.detach_action(entity_access_receipt).await?;
+    Ok(Json(ScheduledActionResponse::from(action)))
+}
+
+#[utoipa::path(
+    post,
     path = "/scheduled-actions/{id}/execute",
     tag = "scheduled actions",
     operation_id = "execute_scheduled_action_now",
@@ -543,7 +667,7 @@ where
     operation_id = "list_scheduled_action_history",
     params(("id" = String, Path, description = "ID of the scheduled action")),
     responses(
-        (status = 200, body = Vec<ActionExecutionRecord>),
+        (status = 200, body = Vec<ExecutionRecordResponse>),
         (status = 401, body = String),
         (status = 404, body = String),
         (status = 500, body = String),
@@ -565,7 +689,12 @@ where
         .service
         .get_execution_records(entity_access_receipt)
         .await?;
-    Ok(Json(records))
+    Ok(Json(
+        records
+            .into_iter()
+            .map(ExecutionRecordResponse::from)
+            .collect::<Vec<_>>(),
+    ))
 }
 
 #[utoipa::path(
@@ -600,26 +729,38 @@ where
     Ok(Json(upgrades))
 }
 
+/// Which zone the catalog's schedules are written in.
+#[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
+pub struct CatalogQuery {
+    /// IANA time zone, e.g. `America/New_York`.
+    #[param(value_type = String)]
+    pub timezone: Tz,
+}
+
 #[utoipa::path(
     get,
-    path = "/scheduled-actions/code/starters",
+    path = "/scheduled-actions/catalog",
     tag = "scheduled actions",
-    operation_id = "routine_code_starters",
+    operation_id = "routine_catalog",
+    params(CatalogQuery),
     responses(
-        (status = 200, body = Vec<StarterRoutine>, description = "Starter routines whose step is code; empty where code steps aren't available"),
+        (status = 200, body = Vec<CatalogEntry>, description = "Macro's routines, with schedules in the given zone; code steps only where code can be saved"),
+        (status = 400, body = String, description = "Not a time zone"),
         (status = 401, body = String),
     )
 )]
-pub async fn code_starters<S, Svc, Auth>(
+pub async fn catalog<S, Svc, Auth>(
     State(state): State<ScheduledActionRouterState<S, Svc, Auth>>,
     _user: MacroAuthorizationExtractor<Auth, UserOnly>,
-) -> Json<Vec<StarterRoutine>>
+    Query(query): Query<CatalogQuery>,
+) -> Json<Vec<CatalogEntry>>
 where
     S: ScheduledActionService + Send + Sync + 'static,
     Svc: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
-    Json(state.service.code_starters())
+    Json(state.service.catalog(query.timezone))
 }
 
 pub enum ScheduledActionApiError {
@@ -653,12 +794,18 @@ impl IntoResponse for ScheduledActionApiError {
         if let Some(policy) = error.downcast_ref::<ActionPolicyError>() {
             let status = match policy {
                 ActionPolicyError::NotFound => StatusCode::NOT_FOUND,
-                ActionPolicyError::UpdateConflict => StatusCode::CONFLICT,
+                ActionPolicyError::UpdateConflict | ActionPolicyError::TooManySubRoutines => {
+                    StatusCode::CONFLICT
+                }
+                ActionPolicyError::NotSuggesting => StatusCode::FORBIDDEN,
                 ActionPolicyError::NoFutureFirings
                 | ActionPolicyError::EventManagementDisabled
                 | ActionPolicyError::ConditionsDisabled
                 | ActionPolicyError::GithubNotLinked
-                | ActionPolicyError::DescriptionTooLong => StatusCode::BAD_REQUEST,
+                | ActionPolicyError::DescriptionTooLong
+                | ActionPolicyError::KeyOutsideRun
+                | ActionPolicyError::InvalidKey
+                | ActionPolicyError::NotSubRoutine => StatusCode::BAD_REQUEST,
             };
             return (status, policy.to_string()).into_response();
         }

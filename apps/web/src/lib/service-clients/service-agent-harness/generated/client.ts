@@ -55,6 +55,7 @@ import type {
   ListAgentRepositoryBranchesParams,
   LoadAgentModelsRequest,
   LoadAgentModelsResponse,
+  OpenInApp,
   PresentView,
   PreviewAgentSessionsRequest,
   PreviewAgentSessionsResponse,
@@ -75,6 +76,7 @@ import type {
   SharePermissionV2,
   StartFreshAgentConversationRequest,
   StoppedAskingDto,
+  UiCommandOutcome,
   UnlinkAgentSessionPullRequestParams,
   UpdateSharePermissionRequestV2,
   WarmAgentSessionRequest,
@@ -4194,6 +4196,66 @@ export const answerAgentSessionToolApproval = async (
     status: res.status,
     headers: res.headers,
   } as answerAgentSessionToolApprovalResponse;
+};
+
+/**
+ * @summary Open an item in a new pane of the app tab the person who prompted the
+running turn typed in. Only a running execution of the session's current
+turn may send, as the account it acts as.
+ */
+export type openInAppResponse200 = {
+  data: UiCommandOutcome;
+  status: 200;
+};
+
+export type openInAppResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type openInAppResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type openInAppResponseSuccess = openInAppResponse200 & {
+  headers: Headers;
+};
+export type openInAppResponseError = (
+  | openInAppResponse400
+  | openInAppResponse403
+) & {
+  headers: Headers;
+};
+
+export type openInAppResponse =
+  | openInAppResponseSuccess
+  | openInAppResponseError;
+
+export const getOpenInAppUrl = (sessionId: string) => {
+  return `/agent-sessions/${sessionId}/ui-commands`;
+};
+
+export const openInApp = async (
+  sessionId: string,
+  openInApp: OpenInApp,
+  options?: RequestInit
+): Promise<openInAppResponse> => {
+  const res = await fetch(getOpenInAppUrl(sessionId), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(openInApp),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: openInAppResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as openInAppResponse;
 };
 
 /**

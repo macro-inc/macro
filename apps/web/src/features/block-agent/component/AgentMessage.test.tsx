@@ -65,9 +65,11 @@ vi.mock('./parts/ToolCallPart', () => ({
       partIndex: number;
       inFlight: boolean;
       followedBy: (name: string) => boolean;
+      current?: boolean;
     };
   }) => (
     <div
+      data-current={String(props.context.current)}
       data-index={props.context.partIndex}
       data-followed-by-save={String(
         props.context.followedBy('SaveDatabaseQuery')
@@ -537,6 +539,38 @@ describe('Message tool grouping', () => {
       'true',
       'true',
     ]);
+  });
+});
+
+describe('Message current step', () => {
+  it('marks the newest call of an open turn, even with thinking after it', () => {
+    const view = render(() => (
+      <Message
+        message={message(
+          [
+            tool('first'),
+            text('Next.'),
+            tool('second'),
+            { kind: 'thought', text: 'Hmm' },
+          ],
+          null
+        )}
+        inFlight
+      />
+    ));
+    expect(
+      view.getAllByTestId('tool').map((row) => row.dataset.current)
+    ).toEqual(['false', 'true']);
+  });
+
+  it('marks no call once the turn has ended', () => {
+    const view = render(() => (
+      <Message
+        message={message([text('Done.'), tool('only')])}
+        inFlight={false}
+      />
+    ));
+    expect(view.getByTestId('tool').dataset.current).toBe('false');
   });
 });
 

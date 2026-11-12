@@ -31,6 +31,10 @@ export type ActivityWireRow = {
      */
     agent_correlation_id?: string | null;
     /**
+     * SDK display verb, absent on older events.
+     */
+    agent_verb?: string | null;
+    /**
      * The entity acted on.
      */
     entity_id: string;
@@ -1389,6 +1393,12 @@ export type ConnectorTool = {
 export type ControlRequest = AgentAction & {
     actionId?: null | AgentActionId;
     /**
+     * The app tab the person typed this in (a UUID the tab keeps for its
+     * lifetime), so what the turn opens in the app reaches that tab only.
+     * Only a person's own request may send it; a runtime's is refused.
+     */
+    clientId?: string | null;
+    /**
      * Why the agent is being asked. Only a runtime forwarding a triggered
      * prompt may send it; a user's request carrying it is refused.
      */
@@ -1500,6 +1510,14 @@ export type CreateAgentSessionRequest = {
      * Requires `prompt`.
      */
     promptAttachments?: Array<PromptAttachment>;
+    /**
+     * The app tab the person typed `prompt` in, as `clientId` on a control
+     * request, so what the first turn opens in the app reaches that tab
+     * only. Requires `prompt`. Only a person's own request may send it; a
+     * runtime's is refused, and a program using a person's credential has
+     * it dropped.
+     */
+    promptClientId?: string | null;
     /**
      * Starting branch for a managed coding session's selected repository.
      * Omitted, the session starts on the repository's default branch.
@@ -1801,7 +1819,7 @@ export type EmailSuggestions = {
 /**
  * The type of an entity in Macro
  */
-export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
+export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
 
 /**
  * A bounded SDK operation observed during execution; not an authorization or write receipt.
@@ -2245,6 +2263,26 @@ export type NoteSuggestions = {
      * Suggested note, task, or event title.
      */
     title?: string | null;
+};
+
+/**
+ * Open an item in the prompting person's app tab.
+ */
+export type OpenInApp = {
+    /**
+     * The running execution asking; it must belong to the session's
+     * current turn.
+     */
+    executionId: ExecutionId;
+    /**
+     * An app path, such as `/md/<id>` or `/channels/<id>?s0.channels.messageId=<id>`:
+     * what follows `/app` in a Macro link. Never an origin.
+     */
+    path: string;
+    /**
+     * Where to put it; beside the agent by default.
+     */
+    placement?: UiPlacement;
 };
 
 /**
@@ -3051,6 +3089,35 @@ export type TriggerOrigin = {
     origin: 'unknown';
 };
 
+/**
+ * What happened to a command.
+ */
+export type UiCommandOutcome = {
+    /**
+     * The command's id, as the tab sees it.
+     */
+    commandId: string;
+    status: 'sent';
+} | {
+    status: 'no_client';
+} | {
+    /**
+     * Why.
+     */
+    reason: UiDeclineReason;
+    status: 'declined';
+};
+
+/**
+ * Why a command was not sent.
+ */
+export type UiDeclineReason = 'turned_off' | 'not_allowed_route' | 'rate_limited';
+
+/**
+ * Where the opened item goes. Neither replaces what the person is reading.
+ */
+export type UiPlacement = 'beside-agent' | 'new';
+
 export type UpdateChannelSharePermission = {
     accessLevel?: null | AccessLevel;
     /**
@@ -3193,7 +3260,7 @@ export type DiscoverAgentCapabilitiesHandlerErrors = {
      */
     403: unknown;
     /**
-     * Macrod runtime or Cursor account is not connected
+     * Macrod machine or Cursor account is not connected
      */
     409: unknown;
     /**
@@ -3418,7 +3485,7 @@ export type LoadAgentModelsHandlerErrors = {
      */
     403: unknown;
     /**
-     * Macrod runtime or Cursor account is not connected
+     * Macrod machine or Cursor account is not connected
      */
     409: unknown;
     /**
@@ -4781,6 +4848,26 @@ export type AnswerAgentSessionToolApprovalResponses = {
 };
 
 export type AnswerAgentSessionToolApprovalResponse = AnswerAgentSessionToolApprovalResponses[keyof AnswerAgentSessionToolApprovalResponses];
+
+export type OpenInAppData = {
+    body: OpenInApp;
+    path: {
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/ui-commands';
+};
+
+export type OpenInAppErrors = {
+    400: unknown;
+    403: unknown;
+};
+
+export type OpenInAppResponses = {
+    200: UiCommandOutcome;
+};
+
+export type OpenInAppResponse = OpenInAppResponses[keyof OpenInAppResponses];
 
 export type PresentSessionViewData = {
     body: PresentView;

@@ -1,3 +1,4 @@
+import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import { Popover } from '@kobalte/core/popover';
 import InfoIcon from '@phosphor/info.svg';
 import {
@@ -63,15 +64,23 @@ export function SavedViewForm(
     title?: string;
     submitLabel?: string;
     summary?: JSX.Element;
+    /** A consumer's note under the name, such as another way to make the view. */
+    hint?: JSX.Element;
+    /** Consumer-owned controls for the definition itself, after the name. */
+    fields?: JSX.Element;
+    /** A consumer's reason the definition cannot be saved yet. */
+    invalid?: boolean;
     team?: { id: string; name: string };
     onSave: (name: string, team: string | null) => void;
   }
 ) {
   const [name, setName] = createSignal(props.name);
   const [shared, setShared] = createSignal(Boolean(props.sharedTeamId));
+  const [body, setBody] = createSignal<HTMLDivElement>();
   return (
+    // The body scrolls as one, the name included; the actions stay in reach.
     <form
-      class="flex flex-col gap-5 p-6"
+      class="flex max-h-[calc(100dvh-2rem)] flex-col mobile:max-h-none"
       onSubmit={(event) => {
         event.preventDefault();
         props.onSave(
@@ -80,49 +89,65 @@ export function SavedViewForm(
         );
       }}
     >
-      <Dialog.Title class="text-lg font-medium wrap-anywhere">
-        {props.title ?? 'Save view'}
-      </Dialog.Title>
-      <label class="flex flex-col gap-2 text-sm">
-        Name
-        <Input
-          value={name()}
-          onInput={(event) => setName(event.currentTarget.value)}
-          maxLength={120}
-          required
-          disabled={props.pending}
-          placeholder="e.g. Needs review"
+      {/* Scrollbars are hidden app-wide, so edge fades show there is more. */}
+      <div class="relative flex min-h-0 flex-col">
+        <ScrollIndicators
+          scrollRef={body}
+          appearance="gradient"
+          gradientColor="dialog"
+          class="h-10"
         />
-      </label>
-      <Show when={props.summary}>
-        <div class="flex flex-col gap-2 text-xs text-ink-muted">
-          {props.summary}
+        <div
+          ref={setBody}
+          class="flex min-h-0 flex-col gap-5 overflow-y-auto p-6 pb-4 mobile:overflow-visible"
+        >
+          <Dialog.Title class="text-lg font-medium wrap-anywhere">
+            {props.title ?? 'Save view'}
+          </Dialog.Title>
+          <label class="flex flex-col gap-2 text-sm">
+            Name
+            <Input
+              value={name()}
+              onInput={(event) => setName(event.currentTarget.value)}
+              maxLength={120}
+              required
+              disabled={props.pending}
+              placeholder="e.g. Needs review"
+            />
+          </label>
+          {props.hint}
+          {props.fields}
+          <Show when={props.summary}>
+            <div class="flex flex-col gap-2 text-xs text-ink-muted">
+              {props.summary}
+            </div>
+          </Show>
+          <Show when={props.team || props.sharedTeamId}>
+            <div class="flex items-center gap-1.5">
+              <Checkbox
+                checked={shared()}
+                onChange={setShared}
+                disabled={props.pending}
+              >
+                <Checkbox.Control />
+                <Checkbox.Label>
+                  Share with{' '}
+                  {props.sharedTeamId && props.sharedTeamId !== props.team?.id
+                    ? 'team'
+                    : props.team?.name}
+                </Checkbox.Label>
+              </Checkbox>
+              <SharingInfo />
+            </div>
+          </Show>
+          <Show when={props.error}>
+            <p role="alert" class="text-sm text-failure-ink">
+              {props.error}
+            </p>
+          </Show>
         </div>
-      </Show>
-      <Show when={props.team || props.sharedTeamId}>
-        <div class="flex items-center gap-1.5">
-          <Checkbox
-            checked={shared()}
-            onChange={setShared}
-            disabled={props.pending}
-          >
-            <Checkbox.Control />
-            <Checkbox.Label>
-              Share with{' '}
-              {props.sharedTeamId && props.sharedTeamId !== props.team?.id
-                ? 'team'
-                : props.team?.name}
-            </Checkbox.Label>
-          </Checkbox>
-          <SharingInfo />
-        </div>
-      </Show>
-      <Show when={props.error}>
-        <p role="alert" class="text-sm text-failure-ink">
-          {props.error}
-        </p>
-      </Show>
-      <div class="flex justify-end gap-2">
+      </div>
+      <div class="flex shrink-0 justify-end gap-2 px-6 pt-2 pb-6">
         <Button
           variant="ghost"
           disabled={props.pending}
@@ -133,7 +158,7 @@ export function SavedViewForm(
         <Button
           type="submit"
           variant="primary"
-          disabled={props.pending || !name().trim()}
+          disabled={props.pending || props.invalid || !name().trim()}
         >
           {props.pending ? 'Saving…' : (props.submitLabel ?? 'Save view')}
         </Button>
@@ -144,7 +169,12 @@ export function SavedViewForm(
 
 export function DeleteSavedViewConfirmation(
   props: ManagedDialogProps &
-    FormStatus & { name: string; onDelete: () => void }
+    FormStatus & {
+      name: string;
+      /** What deleting affects, in the consumer's terms. */
+      description?: string;
+      onDelete: () => void;
+    }
 ) {
   return (
     <ConfirmDialog
@@ -156,8 +186,8 @@ export function DeleteSavedViewConfirmation(
       body={
         <>
           <p>
-            This removes the view for you and anyone it is shared with. Items
-            are not deleted.
+            {props.description ??
+              'This removes the view for you and anyone it is shared with. Items are not deleted.'}
           </p>
           <Show when={props.error}>
             <p role="alert">{props.error}</p>

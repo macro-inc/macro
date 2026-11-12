@@ -48,7 +48,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use crate::domain::coding_preferences::CodingPreferences;
-use crate::domain::error::AgentSessionError;
+use crate::domain::error::{AgentSessionError, NO_RUNTIME_ACCESS_CODE};
 use crate::domain::model::{
     AgentSession, AgentSessionId, AgentSessionPreview, ArchiveCause, ExternalSession, Message,
     SandboxSize, SessionBot, SessionSource, SessionStatus, SessionVisibility,
@@ -385,6 +385,13 @@ impl IntoResponse for AgentSessionApiError {
             Self::Domain(AgentSessionError::Forbidden) => {
                 (StatusCode::FORBIDDEN, "forbidden").into_response()
             }
+            // Its own code, so a client can tell a stopped agent from a
+            // session it may not touch, and show why.
+            Self::Domain(AgentSessionError::NoRuntimeAccess(reason)) => (
+                StatusCode::FORBIDDEN,
+                Json(serde_json::json!({ "code": NO_RUNTIME_ACCESS_CODE, "error": reason })),
+            )
+                .into_response(),
             Self::Domain(
                 AgentSessionError::InvalidSharing(message)
                 | AgentSessionError::InvalidActivityQuery(message),
@@ -536,6 +543,11 @@ pub struct ControlRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schema(value_type = Option<Object>)]
     pub context: Option<trigger_context::TriggerContext>,
+    /// The app tab the person typed this in (a UUID the tab keeps for its
+    /// lifetime), so what the turn opens in the app reaches that tab only.
+    /// Only a person's own request may send it; a runtime's is refused.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client_id: Option<Uuid>,
     /// The operation to perform.
     #[serde(flatten)]
     pub action: AgentAction,
@@ -1024,6 +1036,31 @@ async fn ensure_harness_serves_session<R: AgentSessionNotificationRecipient>(
     Ok(())
 }
 
+/// Who is asking, as control policy tells them apart. A user's credential
+/// used by an agent's program (a code-mode run, or a token carrying an
+/// agent's attribution) is `Program`: it acts for the user but sits in no
+/// app tab. The app itself may hold a session or a bearer token.
+pub(crate) fn control_principal(
+    caller: &UserBotOrHarnessAuthorization,
+    headers: &axum::http::HeaderMap,
+) -> crate::domain::control::ControlPrincipal {
+    use crate::domain::control::ControlPrincipal;
+
+    match caller {
+        UserBotOrHarnessAuthorization::User(user)
+            if macro_authorization::is_agent_run(user.agent_id.is_some(), headers) =>
+        {
+            ControlPrincipal::Program
+        }
+        UserBotOrHarnessAuthorization::User(_) => ControlPrincipal::User,
+        authorization => ControlPrincipal::Runtime(
+            authorization
+                .acting_user()
+                .map(|user| user.macro_user_id.clone()),
+        ),
+    }
+}
+
 #[utoipa::path(
     post,
     path = "/agent-sessions/{session_id}/control",
@@ -1077,6 +1114,7 @@ pub async fn control_agent_session_handler<
     State(state): State<AgentSessionControlState<R, Access, Auth>>,
     caller: MacroAuthorizationExtractor<Auth, UserBotOrHarness>,
     Path(session_id): Path<Uuid>,
+    headers: axum::http::HeaderMap,
     Json(req): Json<ControlRequest>,
 ) -> Result<Json<ControlResponse>, AgentSessionApiError> {
     ensure_harness_serves_session(
@@ -1086,14 +1124,7 @@ pub async fn control_agent_session_handler<
     )
     .await?;
 
-    let principal = match &caller.authorization {
-        UserBotOrHarnessAuthorization::User(_) => crate::domain::control::ControlPrincipal::User,
-        authorization => crate::domain::control::ControlPrincipal::Runtime(
-            authorization
-                .acting_user()
-                .map(|user| user.macro_user_id.clone()),
-        ),
-    };
+    let principal = control_principal(&caller.authorization, &headers);
 
     let accepted = state
         .recipient
@@ -1103,6 +1134,8 @@ pub async fn control_agent_session_handler<
                 req.action,
                 req.action_id,
                 req.context,
+                req.client_id
+                    .map(crate::domain::model::UiClientId::from_uuid),
                 principal,
                 access.entity_access_receipt,
             )?,
@@ -1892,6 +1925,13 @@ pub struct CreateAgentSessionRequest {
     /// Requires `prompt`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub prompt_attachments: Vec<PromptAttachment>,
+    /// The app tab the person typed `prompt` in, as `clientId` on a control
+    /// request, so what the first turn opens in the app reaches that tab
+    /// only. Requires `prompt`. Only a person's own request may send it; a
+    /// runtime's is refused, and a program using a person's credential has
+    /// it dropped.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prompt_client_id: Option<Uuid>,
     /// Explicit GitHub repository for a managed Cursor session, as one of the
     /// urls `GET /agent-repositories` lists for the caller. Access is checked
     /// for the session owner. On a managed request that names no `botId`,
@@ -1979,6 +2019,11 @@ pub struct CreateAgentSessionResponse {
 /// routes to a session.
 const THREAD_SESSION_EXISTS_MESSAGE: &str = "this bot already has a session for this thread";
 
+/// What the 403 from `POST /agent-sessions` says when a runtime names the tab
+/// a first prompt was typed in.
+const PROMPT_CLIENT_FROM_RUNTIME_MESSAGE: &str =
+    "only a person's own request may name the tab a prompt was typed in";
+
 /// Body of the 409 answered by `POST /agent-sessions` when the request's
 /// thread already routes to one of this bot's sessions.
 ///
@@ -2020,8 +2065,10 @@ pub enum CreateSessionApiError {
     MixedSessionShape,
     /// The thread named neither a parent nor a channel.
     ThreadParentRequired,
-    /// A first prompt's id or files arrived without the prompt itself.
+    /// A first prompt's id, files or tab arrived without the prompt itself.
     PromptDetailsWithoutPrompt,
+    /// A runtime named the app tab a first prompt was typed in.
+    PromptClientFromRuntime,
     /// A field the request cannot honour for a persona whose runtime is its
     /// operator's: they configure it, or the caller sends it separately.
     ExternalPersonaUnsupported(&'static str),
@@ -2088,7 +2135,11 @@ impl IntoResponse for CreateSessionApiError {
             ),
             Self::PromptDetailsWithoutPrompt => (
                 StatusCode::UNPROCESSABLE_ENTITY,
-                "promptActionId and promptAttachments require a prompt".to_owned(),
+                "promptActionId, promptAttachments and promptClientId require a prompt".to_owned(),
+            ),
+            Self::PromptClientFromRuntime => (
+                StatusCode::FORBIDDEN,
+                PROMPT_CLIENT_FROM_RUNTIME_MESSAGE.to_owned(),
             ),
             Self::ExternalPersonaUnsupported(field) => (
                 StatusCode::UNPROCESSABLE_ENTITY,
@@ -2102,6 +2153,13 @@ impl IntoResponse for CreateSessionApiError {
                 return (StatusCode::CONFLICT, Json(body)).into_response();
             }
             Self::Domain(AgentSessionError::Admission(error)) => return error.into_response(),
+            Self::Domain(AgentSessionError::NoRuntimeAccess(reason)) => {
+                return (
+                    StatusCode::FORBIDDEN,
+                    Json(serde_json::json!({ "code": NO_RUNTIME_ACCESS_CODE, "error": reason })),
+                )
+                    .into_response();
+            }
             Self::Domain(AgentSessionError::ThreadSessionExists) => (
                 StatusCode::CONFLICT,
                 "this bot already has a session for this thread".to_owned(),
@@ -2272,6 +2330,7 @@ pub async fn create_agent_session_handler<
 >(
     State(state): State<CreateSessionState<Opener, Bots, Requests, Auth>>,
     caller: MacroAuthorizationExtractor<Auth, UserBotOrHarness>,
+    headers: axum::http::HeaderMap,
     Json(request): Json<CreateAgentSessionRequest>,
 ) -> Result<(StatusCode, Json<CreateAgentSessionResponse>), CreateSessionApiError> {
     // Blank instructions are "none" stated clumsily; normalized once here so
@@ -2279,12 +2338,30 @@ pub async fn create_agent_session_handler<
     // absence, whichever shape the request turns out to be.
     let instructions = request.instructions.filter(|text| !text.trim().is_empty());
     let first_prompt = match request.prompt {
-        Some(prompt) => Some(FirstPrompt {
-            action_id: request.prompt_action_id,
-            prompt,
-            attachments: request.prompt_attachments,
-        }),
-        None if request.prompt_action_id.is_some() || !request.prompt_attachments.is_empty() => {
+        Some(prompt) => {
+            // The same rule as a control prompt's tab, so creating with a
+            // prompt grants nothing prompting afterwards would not.
+            let client = control_principal(&caller.authorization, &headers)
+                .admit_client(
+                    request
+                        .prompt_client_id
+                        .map(crate::domain::model::UiClientId::from_uuid),
+                )
+                .map_err(|error| match error {
+                    AgentSessionError::Forbidden => CreateSessionApiError::PromptClientFromRuntime,
+                    error => CreateSessionApiError::Domain(error),
+                })?;
+            Some(FirstPrompt {
+                action_id: request.prompt_action_id,
+                prompt,
+                attachments: request.prompt_attachments,
+                client,
+            })
+        }
+        None if request.prompt_action_id.is_some()
+            || request.prompt_client_id.is_some()
+            || !request.prompt_attachments.is_empty() =>
+        {
             return Err(CreateSessionApiError::PromptDetailsWithoutPrompt);
         }
         None => None,
@@ -2382,6 +2459,7 @@ pub async fn create_agent_session_handler<
         let session = state
             .opener
             .open_managed_session(OpenManagedSession {
+                billing: Default::default(),
                 id: request.id.map(AgentSessionId::new_from_uuid),
                 repo_url: request.repo_url,
                 repo_branch: request

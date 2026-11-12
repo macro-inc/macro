@@ -240,7 +240,7 @@ it('shows the source context before the editable draft and preserves edits', () 
   vi.advanceTimersByTime(2200);
   expect(
     view.getByRole<HTMLInputElement>('textbox', { name: 'To' }).value
-  ).toBe('Valentina <valentina@coparse.com>');
+  ).toBe('Austin Barron <austin@example.com>');
   expect(
     view.getByRole<HTMLInputElement>('textbox', { name: 'Cc' }).value
   ).toBe('Julia <julia@macro.com>');

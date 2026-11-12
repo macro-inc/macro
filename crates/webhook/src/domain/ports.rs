@@ -105,6 +105,20 @@ pub trait WebhookWorkspaceResolver: Clone + Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
 }
 
+/// Exact contact-graph membership check for live streams.
+pub trait WebhookContactChecker: Clone + Send + Sync + 'static {
+    /// Checker error.
+    type Err: Into<anyhow::Error> + Send;
+
+    /// Whether `other` is a contact of `user`: one bounded point lookup, never
+    /// a contact-list read. `user == other` is the caller's concern.
+    fn is_contact(
+        &self,
+        user: MacroUserIdStr<'static>,
+        other: MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+}
+
 /// Port for enqueueing one normalized event for one matched webhook.
 pub trait WebhookEventEnqueuer: Clone + Send + Sync + 'static {
     /// Enqueuer error.
