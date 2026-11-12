@@ -6,24 +6,30 @@ import {
   SessionPort,
   selectionMessage,
 } from '@macro-inc/lexical-wasm-view/view/session-port';
-import type { JsonValue } from '@macro-inc/lexical-wasm-view/view/types';
+import type {
+  JsonValue,
+  ViewSelection,
+} from '@macro-inc/lexical-wasm-view/view/types';
 
 /** One session admission; all tree reads and policy execute in the native model. */
 function applicationInput(
   view: EditorView,
   name: string,
   payload: JsonValue,
-  event?: KeyboardEvent
+  event?: KeyboardEvent,
+  at?: ViewSelection
 ): EditorInputMsg | undefined {
   const generation = view.mirror.keyGeneration;
   if (generation === null) return undefined;
   const cached = view.selection().selection;
   // Source application updates keep a null, node or table selection; only a
-  // published range follows the browser's current DOM range.
+  // published range follows the browser's current DOM range. A caller that
+  // restores a captured Source selection passes it as `at`.
   const resolved =
-    cached.kind === 'node' || cached.kind === 'table' || cached.kind === 'none'
+    at ??
+    (cached.kind === 'node' || cached.kind === 'table' || cached.kind === 'none'
       ? ({ kind: 'keep' } as const)
-      : readSelection(view);
+      : readSelection(view));
   const selection =
     resolved.kind === 'none' ? ({ kind: 'keep' } as const) : resolved;
   return EditorInputMsg.fromEditorApplication({
@@ -112,11 +118,15 @@ export function dispatchApplicationCommandSettled(
   return view.port.inputSettled(input, event);
 }
 
-/** Check current session access before evaluating a queued application payload. */
+/**
+ * Check current session access before evaluating a queued application payload.
+ * `at` admits the command at a captured selection instead of the live one.
+ */
 export function dispatchApplicationCommandSettledIfSessionEdit(
   view: EditorView,
   name: string,
-  payload: () => JsonValue
+  payload: () => JsonValue,
+  at?: () => ViewSelection
 ): Promise<InputSettlement> {
   if (!(view.port instanceof SessionPort))
     throw new Error(
@@ -128,7 +138,7 @@ export function dispatchApplicationCommandSettledIfSessionEdit(
   return view.port.inputSettledIfSessionEdit(() => {
     if (!view.isMounted || view.mirror.keyGeneration !== generation)
       throw new Error('Native view generation changed before admission');
-    const input = applicationInput(view, name, payload());
+    const input = applicationInput(view, name, payload(), undefined, at?.());
     if (
       !view.isMounted ||
       view.mirror.keyGeneration !== generation ||
