@@ -13,7 +13,8 @@ export type BotCredentialProps = Omit<WidgetOf<'botCredential'>, 'type'>;
 export function BotCredential(props: BotCredentialProps) {
   const bot = useBotQuery(() => props.botId);
   return (
-    <Show when={bot.data}>
+    // Read data only once loaded: a pending read suspends the whole view.
+    <Show when={bot.isSuccess && bot.data}>
       {(loaded) => (
         <section
           class="flex w-full max-w-2xl min-w-0 flex-col gap-2 rounded-lg border border-edge-muted p-3"
