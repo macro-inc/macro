@@ -67,7 +67,14 @@ pub(crate) async fn setup_and_serve(state: ApiContext, port: usize) -> anyhow::R
         agent_correlation::inbound::CorrelationState::new(state.db.clone(), state.jwt_args.clone());
 
     let app = api_router(state.clone())
-        .with_state(state)
+        .with_state(state.clone())
+        .merge(enterprise::inbound::enterprise_router(
+            enterprise::inbound::EnterpriseRouterState {
+                service: state.enterprise.clone(),
+                entity_access_service: state.entity_access_service.clone(),
+                authorization_state: state.authorization_state.clone(),
+            },
+        ))
         .layer(axum::middleware::from_fn_with_state(
             correlation,
             agent_correlation::inbound::propagate,
@@ -150,13 +157,6 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
                 },
             ),
         )
-        .merge(enterprise::inbound::enterprise_router(
-            enterprise::inbound::EnterpriseRouterState {
-                service: state.enterprise.clone(),
-                entity_access_service: state.entity_access_service.clone(),
-                authorization_state: state.authorization_state.clone(),
-            },
-        ))
         .merge(
             teams::inbound::axum_router::domain_notice::domain_notice_router(
                 teams::inbound::axum_router::domain_notice::DomainNoticeRouterState {

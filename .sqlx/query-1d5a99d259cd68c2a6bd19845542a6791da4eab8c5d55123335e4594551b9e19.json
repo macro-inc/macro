@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE macro_user\n        SET username = $2,\n            mailbox_handle_claimed_at = COALESCE(mailbox_handle_claimed_at, now())\n        WHERE id = $1\n          AND (mailbox_handle_claimed_at IS NULL OR lower(username) = lower($2))\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1d5a99d259cd68c2a6bd19845542a6791da4eab8c5d55123335e4594551b9e19"
+}

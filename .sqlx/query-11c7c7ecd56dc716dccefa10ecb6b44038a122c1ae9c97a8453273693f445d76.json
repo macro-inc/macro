@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT sp.\"linkShare\"\n                FROM \"ProjectPermission\" pp\n                JOIN \"SharePermission\" sp ON sp.id = pp.\"sharePermissionId\"\n                WHERE pp.\"projectId\" = $1\n                FOR UPDATE OF sp\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "linkShare",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "11c7c7ecd56dc716dccefa10ecb6b44038a122c1ae9c97a8453273693f445d76"
+}

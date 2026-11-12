@@ -2368,6 +2368,78 @@ async fn share_link_enable_writes_one_audit_and_repeated_enable_does_not_duplica
     assert_eq!(audits[0].get::<String, _>("result"), "success");
 }
 
+#[sqlx::test(migrations = false)]
+async fn concurrent_first_enable_writes_only_one_audit(pool: Pool<Postgres>) {
+    migrate_for_test(&pool).await;
+    sqlx::raw_sql(include_str!("../../../fixtures/call_repo.sql"))
+        .execute(&pool)
+        .await
+        .unwrap();
+    let repo = repo(pool.clone());
+    let enable_link = || EditCallRecordRepoArgs {
+        actor_id: Some(USER_A.deref().copied()),
+        share_permission: Some(UpdateSharePermissionRequestV2 {
+            link_share: Some(Some(LinkShare::Public)),
+            link_share_access_level: Some(Some(AccessLevel::Edit)),
+            team_share_access_level: None,
+            channel_share_permissions: None,
+        }),
+        team_share: None,
+        live_share_with_team: None,
+        custom_name: None,
+    };
+
+    let mut call_ids = Vec::new();
+    for _ in 0..16 {
+        let call_id = Uuid::now_v7();
+        let share_permission_id = call_id.to_string();
+        sqlx::query(r#"INSERT INTO "SharePermission" (id) VALUES ($1)"#)
+            .bind(&share_permission_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query(
+            "INSERT INTO call_records (id, room_name, created_by, started_at, duration_ms, share_permission_id) VALUES ($1, 'concurrent-race', $2, now(), 0, $3)",
+        )
+        .bind(call_id)
+        .bind(USER_A.as_ref())
+        .bind(&share_permission_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+        call_ids.push(call_id);
+    }
+
+    let outcomes = futures::future::join_all(call_ids.iter().map(|call_id| async {
+        let first_args = enable_link();
+        let second_args = enable_link();
+        tokio::join!(
+            repo.patch_call_record(call_id, &first_args),
+            repo.patch_call_record(call_id, &second_args)
+        )
+    }))
+    .await;
+    for (call_id, (first, second)) in call_ids.iter().zip(outcomes) {
+        first.unwrap_or_else(|error| panic!("first enable failed for {call_id}: {error:?}"));
+        second.unwrap_or_else(|error| panic!("second enable failed for {call_id}: {error:?}"));
+    }
+
+    for call_id in call_ids {
+        let audits = sqlx::query(
+            "SELECT actor_id, action, resource_id, result FROM enterprise_audit WHERE resource_id = $1 AND action = 'share_link_create'",
+        )
+        .bind(call_id.to_string())
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+        assert_eq!(
+            audits.len(),
+            1,
+            "concurrent first enable for {call_id} did not write exactly one audit: {audits:?}"
+        );
+    }
+}
+
 #[sqlx::test(
     fixtures(path = "../../../fixtures", scripts("call_repo")),
     migrator = "MACRO_DB_MIGRATIONS"

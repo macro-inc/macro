@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_links SET is_primary = false WHERE macro_id = $1 AND provider <> 'ROX'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a9a8b7f75e2da99ffa68c35402632703b3fafe008d824c8e3d46bc827eb2713d"
+}

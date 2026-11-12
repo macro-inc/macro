@@ -428,12 +428,14 @@ impl<B: BotFacts + 'static> ProjectRepo for PgProjectRepo<B> {
             .as_ref()
             .is_some_and(|permission| matches!(permission.link_share, Some(Some(_))))
         {
+            // A waiting first enable rechecks the committed link state under READ COMMITTED.
             let existing = sqlx::query_scalar!(
                 r#"
                 SELECT sp."linkShare"
                 FROM "ProjectPermission" pp
                 JOIN "SharePermission" sp ON sp.id = pp."sharePermissionId"
                 WHERE pp."projectId" = $1
+                FOR UPDATE OF sp
                 "#,
                 args.project_id,
             )

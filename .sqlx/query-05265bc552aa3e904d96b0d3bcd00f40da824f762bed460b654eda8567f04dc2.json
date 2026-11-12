@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    SELECT sp.\"linkShare\"\n                    FROM (\n                        SELECT share_permission_id FROM calls WHERE id = $1\n                        UNION ALL\n                        SELECT share_permission_id FROM call_records WHERE id = $1\n                    ) call_permission\n                    JOIN \"SharePermission\" sp ON sp.id = call_permission.share_permission_id\n                    LIMIT 1\n                    FOR UPDATE OF sp\n                    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "linkShare",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "05265bc552aa3e904d96b0d3bcd00f40da824f762bed460b654eda8567f04dc2"
+}

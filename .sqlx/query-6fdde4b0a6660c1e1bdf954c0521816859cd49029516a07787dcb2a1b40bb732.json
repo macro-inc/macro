@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT\n            u.\"id\" as \"user_id\",\n            u.\"email\" as \"email\",\n            u.\"stripeCustomerId\" as \"stripe_customer_id?\",\n            u.\"name\" as name,\n            u.\"tutorialComplete\" as tutorial_complete,\n            u.\"isAgent\" as is_agent,\n            u.\"group\" as \"group?\",\n            u.\"hasChromeExt\" as has_chrome_ext,\n            u.\"aiDataConsent\" as ai_data_consent,\n            mu.has_trialed as has_trialed,\n            u.macro_user_id as \"macro_user_id\",\n            u.\"createdAt\" as \"created_at?\"\n        FROM \"User\" u\n        JOIN \"macro_user\" mu ON u.macro_user_id = mu.id\n        WHERE u.\"id\" = $1\n        ",
+  "query": "\n        SELECT\n            u.\"id\" as \"user_id\",\n            u.\"email\" as \"email\",\n            u.\"stripeCustomerId\" as \"stripe_customer_id?\",\n            u.\"name\" as name,\n            u.\"tutorialComplete\" as tutorial_complete,\n            u.\"isAgent\" as is_agent,\n            u.\"group\" as \"group?\",\n            u.\"hasChromeExt\" as has_chrome_ext,\n            u.\"aiDataConsent\" as ai_data_consent,\n            mu.has_trialed as has_trialed,\n            CASE WHEN mu.mailbox_handle_claimed_at IS NOT NULL THEN mu.username END as handle,\n            u.macro_user_id as \"macro_user_id\",\n            u.\"createdAt\" as \"created_at?\"\n        FROM \"User\" u\n        JOIN \"macro_user\" mu ON u.macro_user_id = mu.id\n        WHERE u.\"id\" = $1\n        ",
   "describe": {
     "columns": [
       {
@@ -55,11 +55,16 @@
       },
       {
         "ordinal": 10,
+        "name": "handle",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
         "name": "macro_user_id",
         "type_info": "Uuid"
       },
       {
-        "ordinal": 11,
+        "ordinal": 12,
         "name": "created_at?",
         "type_info": "Timestamptz"
       }
@@ -80,9 +85,10 @@
       false,
       false,
       false,
+      null,
       false,
       true
     ]
   },
-  "hash": "7fea7c108193d97c72fd70cee441f196cfc65e9320e4838a06878447a664270b"
+  "hash": "6fdde4b0a6660c1e1bdf954c0521816859cd49029516a07787dcb2a1b40bb732"
 }

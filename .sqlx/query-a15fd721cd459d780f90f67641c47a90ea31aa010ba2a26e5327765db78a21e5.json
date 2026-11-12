@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT sp.\"linkShare\"\n                FROM external_chat ec\n                JOIN \"SharePermission\" sp ON sp.id = ec.share_permission_id\n                WHERE ec.id = $1 AND ec.user_id = $2\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "linkShare",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "a15fd721cd459d780f90f67641c47a90ea31aa010ba2a26e5327765db78a21e5"
+}

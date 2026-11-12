@@ -1,3 +1,4 @@
+use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 use sqlx::{Postgres, QueryBuilder, Transaction};
@@ -87,7 +88,22 @@ pub async fn edit_thread_permission(
     thread_id: &uuid::Uuid,
     share_permission_id: &str,
     share_permission: &UpdateSharePermissionRequestV2,
+    actor: &MacroUserIdStr<'_>,
 ) -> anyhow::Result<()> {
+    let share_link_created = if matches!(share_permission.link_share, Some(Some(_))) {
+        // A waiting first-enable rechecks the committed link state under READ COMMITTED,
+        // so concurrent requests cannot both treat this as a new link.
+        let existing = sqlx::query_scalar!(
+            r#"SELECT "linkShare" FROM "SharePermission" WHERE id = $1 FOR UPDATE"#,
+            share_permission_id,
+        )
+        .fetch_one(transaction.as_mut())
+        .await?;
+        existing.is_none()
+    } else {
+        false
+    };
+
     edit_share_permission(
         transaction,
         thread_id,
@@ -95,7 +111,22 @@ pub async fn edit_thread_permission(
         share_permission_id,
         share_permission,
     )
-    .await
+    .await?;
+
+    if share_link_created {
+        enterprise::audit::append(
+            transaction,
+            &enterprise::audit::AuditRecord::new(
+                actor,
+                enterprise::audit::AuditAction::ShareLinkCreate,
+                thread_id.to_string(),
+                enterprise::audit::AuditResult::Success,
+            ),
+        )
+        .await?;
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
