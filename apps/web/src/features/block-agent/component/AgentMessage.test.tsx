@@ -2,6 +2,7 @@
  * @vitest-environment jsdom
  */
 
+import { publishSessionActivity } from '@core/agent-session/session-activity';
 import type {
   FoldedMessage,
   MessagePart,
@@ -127,9 +128,11 @@ vi.mock('../views/LiveToolGroup', () => ({
     active: boolean;
     activeIndex?: number;
     autoOpen?: boolean;
+    summary?: string;
     children: JSX.Element;
   }) => (
     <div
+      data-summary={props.summary}
       data-auto-open={String(props.autoOpen ?? true)}
       data-active={String(props.active)}
       data-count={props.count}
@@ -617,14 +620,32 @@ describe('Message tool runs', () => {
 });
 
 describe('Message working tail', () => {
-  it('names the work after the last part of an open turn', () => {
+  it('shows one working row between calls while there is no live line', () => {
     const view = render(() => (
       <Message
         message={message([text('Looking.'), tool('a')], null)}
         inFlight
       />
     ));
-    expect(view.getByTestId('working').textContent).toBe('Running tools');
+    expect(view.getByTestId('working').textContent).toBe('Working');
+  });
+
+  it('lets the live line be the only working indicator between calls', () => {
+    publishSessionActivity('session', 'Searching your workspace…');
+    try {
+      const view = render(() => (
+        <Message
+          message={message([text('Looking.'), tool('a')], null)}
+          inFlight
+        />
+      ));
+      expect(view.getByTestId('group').dataset.summary).toBe(
+        'Searching your workspace…'
+      );
+      expect(view.queryByTestId('working')).toBeNull();
+    } finally {
+      publishSessionActivity('session', null);
+    }
   });
 
   it('does not duplicate the active tool or group with a working shimmer', () => {

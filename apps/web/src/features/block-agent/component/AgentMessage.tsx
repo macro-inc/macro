@@ -313,9 +313,18 @@ function workingLabel(message: FoldedMessage): string {
   const last = message.parts.at(-1);
   if (last === undefined) return 'Working';
   return match(last)
-    .with({ kind: 'tool_use' }, () => 'Running tools')
     .with({ kind: 'plan' }, () => 'Planning')
     .otherwise(() => 'Working');
+}
+
+/**
+ * Whether the newest run of tool calls is where the turn is: no prose or
+ * request after it, only thoughts. Its group then carries the session's live
+ * line, which is the turn's one working indicator.
+ */
+function inToolRun(message: FoldedMessage): boolean {
+  const last = message.parts.findLast((part) => part.kind !== 'thought');
+  return last?.kind === 'tool_use';
 }
 
 /**
@@ -417,6 +426,13 @@ export function Message(props: {
   inFlight: boolean;
 }) {
   const inFlight = () => props.inFlight;
+  const liveLine = useSessionActivity(() => props.message.agentSessionId);
+  // One working indicator per turn: the live line on the newest run, or else
+  // a single working row.
+  const showsWorkingRow = () =>
+    inFlight() &&
+    showsWorkingLine(props.message) &&
+    !(liveLine() && inToolRun(props.message));
   const failure = () =>
     props.message.stop?.kind === 'failed' ? props.message.stop : undefined;
 
@@ -465,7 +481,7 @@ export function Message(props: {
             </Index>
             {/* The turn is open with nothing to read yet — a ripple and a label
               naming the work, so the wait reads as work rather than a stall. */}
-            <Show when={inFlight() && showsWorkingLine(props.message)}>
+            <Show when={showsWorkingRow()}>
               <WorkingLine label={workingLabel(props.message)} />
             </Show>
             {/* A turn the runtime errored is something that happened to the
