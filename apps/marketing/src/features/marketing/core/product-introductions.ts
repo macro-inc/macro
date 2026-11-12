@@ -1,4 +1,4 @@
-/** Product introductions, based on the founder's README and product guides. */
+/ Product introductions, based on the founder's README and product guides. */;
 export const productIntroductions: Partial<Record<string, readonly string[]>> =
   {
     Workspace: [
@@ -7,31 +7,31 @@ export const productIntroductions: Partial<Record<string, readonly string[]>> =
     ],
     'Company graph': [
       'A task rarely makes sense on its own. There’s a customer email behind it, a conversation about what to do, and a document with the details. We wanted those connections to stay attached to the work, so the next person or agent could follow them without asking someone to explain everything again.',
-      'In Macro, **links work both ways**. @mention a document in chat and its References panel shows that conversation. Create a task from an email and you can get back to the original request. The context builds up as your team works.',
+      'In Macro, links work both ways. @mention a document in chat and its References panel shows that conversation. Create a task from an email and you can get back to the original request. The context builds up as your team works.',
     ],
     'AI tagging': [
       'Organizing work becomes another job when every app has its own labels and folders. We wanted one set of tags across the company, with agents doing the repetitive sorting. A customer’s emails, tasks, and meeting notes should be easy to find together.',
-      'Macro tags work across your workspace. **Set up a routine** to tag incoming email or new tasks by customer, topic, or urgency, then use those same tags to find related work. Your team shares the tags, so everyone can use the same organization.',
+      'Macro tags work across your workspace. Set up a routine to tag incoming email or new tasks by customer, topic, or urgency, then use those same tags to find related work. Your team shares the tags, so everyone can use the same organization.',
     ],
     'Automatic permissions': [
       'You’ve probably run into this: you share a link to, say, a Google Doc in Slack, only to receive a ping back: “Hey, I can’t open it.” The problem is that permissions are separate from channels. But what if permissions were granted when you shared anything, just like attaching a file to an email?',
-      'In Macro, **access follows channel membership**. Share a document, email, or task in a channel and its members can open it. New members get that context too; people who leave lose the access that channel gave them. You can still manage access to an individual item from Share.',
+      'In Macro, access follows channel membership. Share a document, email, or task in a channel and its members can open it. New members get that context too; people who leave lose the access that channel gave them. You can still manage access to an individual item from Share.',
     ],
     'Workspace events': [
       'We wanted agents to help when something happens, without someone remembering to start a chat. A customer email arrives, a task gets completed, or a call ends. Those are natural moments to do the next piece of work.',
-      'Macro gives email, chat, docs, tasks, and calls **one event system**. Choose a trigger and instructions for a routine, and an agent can draft a reply, post an update, or turn a call into follow-up tasks. It works with the context already in your workspace and the permissions of the person who set it up.',
+      'Macro gives email, chat, docs, tasks, and calls one event system. Choose a trigger and instructions for a routine, and an agent can draft a reply, post an update, or turn a call into follow-up tasks. It works with the context already in your workspace and the permissions of the person who set it up.',
     ],
     'Unified search': [
       'You can remember what someone said without remembering whether it was in an email, a document, or a call. We wanted one place to look. Agents need that too: finding the right context shouldn’t depend on guessing which app to search first.',
-      'Macro searches emails, messages, documents, tasks, and calls together. **People and agents search the same workspace**, with timestamps and links back to the original work. Find the customer’s request, follow the discussion, and see what happened next.',
+      'Macro searches emails, messages, documents, tasks, and calls together. People and agents search the same workspace, with timestamps and links back to the original work. Find the customer’s request, follow the discussion, and see what happened next.',
     ],
     Email: [
       'There have been a million email clients, each doing something well, but none felt like the complete package to us. We wanted superhuman speed, all our accounts in one inbox, and agents that could help without us copying everything into ChatGPT.',
       'Macro Mail brings those pieces together. Your emails are connected to your team’s conversations, tasks, and customer records. Share a thread in chat, turn a request into a task, or ask an agent to draft a reply using the context already in your workspace.',
     ],
     Tasks: [
-      'The main problem with traditional task manager is that **they quickly get out of date** because they’re **not properly linked “to the work”** e.g. github or the real world, and because it’s **too much friction** to update them manually',
-      '**Macro Tasks are auto-created where you already work**: in your team chat, from an email, or in the background via ambient agents. No need to go to ever create or organize tasks manually. They’re also built natively for **human-agent teams**: you can assign tasks to agents and they’ll write the code, or complete the creative, or to a human.',
+      'The main problem with traditional task manager is that they quickly get out of date because they’re not properly linked “to the work” e.g. github or the real world, and because it’s too much friction to update them manually',
+      'Macro Tasks are auto-created where you already work: in your team chat, from an email, or in the background via ambient agents. No need to go to ever create or organize tasks manually. They’re also built natively for human-agent teams: you can assign tasks to agents and they’ll write the code, or complete the creative, or to a human.',
     ],
     Chat: [
       'We wanted agents to be actual participants in the team: able to follow a discussion, find the relevant context, and do the work. Moving from Slack to a separate chatbot meant explaining the conversation again, then pasting the result back for everyone else. We wanted people and agents working in the same conversation from the start.',
@@ -72,8 +72,8 @@ export const productIntroductions: Partial<Record<string, readonly string[]>> =
       'Macro Spreadsheets let agents read, calculate, and edit alongside your team. They can work on selected cells, build a sheet, or update one through a routine, using the emails, documents, and conversations in your workspace as context. You still get the spreadsheet fundamentals: formulas, charts, and Excel and CSV import and export, without the separate workflow for agentic work.',
     ],
     Databases: [
-      "We liked how easy Notion makes it to put information in a table, and we wanted the structure and flexibility you associate with a SQL database. Most teams shouldn't have to build an internal app just to track applicants, vendors, or projects. But the table should also be more than a page of loosely organized text.",
-      "Macro Databases bring structured data into the same workspace as your team and agents. Use typed fields, formulas, and related tables, with different views of the same records. Link those records to the documents and tasks behind them, so your database holds both the information and the context. The goal is the approachability of a Notion table without treating your company's data as an afterthought.",
+      'We liked how easy Notion makes it to put information in a table. We also wanted the structure of a real database, without building an internal app just to track applicants, vendors, or projects.',
+      'Macro Databases are good when you want to track and sort things by their properties. Use typed fields, formulas, and related tables, and link each record to the docs, tasks, and emails behind it.',
     ],
     Forms: [
       'Collecting a response is the easy part. We wanted the work after the form to be just as straightforward: reviewing the answers, checking whether someone qualifies, and letting them book a meeting. Moving responses from a separate form tool into a tracker is another manual handoff to maintain.',

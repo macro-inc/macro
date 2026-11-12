@@ -26,7 +26,7 @@ export type SplitBottomPanelRegistration = {
 
 export type SplitFileMenuAction = {
   label: string | JSX.Element;
-  icon: Component;
+  icon?: Component;
   action?: (e?: MouseEvent) => void;
   children?: SplitFileMenuAction[];
   muteMenu?: NotificationMuteMenuProps;

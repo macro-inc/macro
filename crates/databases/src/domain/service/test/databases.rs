@@ -491,6 +491,45 @@ async fn schema_operations_respect_receipts() {
     assert!(detail.tables[0].columns.iter().all(|c| c.writable));
 }
 
+#[tokio::test]
+async fn appearance_validates_and_emits_only_changed_metadata() {
+    let seeded = seeded().await;
+    let (world, svc, db) = (seeded.world, seeded.service, seeded.database_id);
+    world.lock().unwrap().broker_events.clear();
+    let receipt = || receipt::<EditAccessLevel>(db, OWNER, AccessLevel::Edit);
+    let invalid = model_entity::EntityAppearance {
+        icon: Some(model_entity::AppearanceIcon::Macro {
+            name: "unknown-icon".into(),
+        }),
+        color: None,
+    };
+    assert!(matches!(
+        svc.set_appearance(receipt(), invalid).await,
+        Err(DatabaseError::InvalidAppearance(_))
+    ));
+    let appearance = model_entity::EntityAppearance {
+        icon: None,
+        color: Some(model_entity::AppearanceColor::Blue),
+    };
+    assert_eq!(
+        svc.set_appearance(receipt(), appearance.clone())
+            .await
+            .unwrap(),
+        appearance
+    );
+    svc.set_appearance(receipt(), appearance.clone())
+        .await
+        .unwrap();
+    let world = world.lock().unwrap();
+    assert_eq!(world.databases[0].appearance, Some(appearance));
+    assert_eq!(world.metadata_changes, [db]);
+    assert_eq!(world.broker_events.len(), 1);
+    assert_eq!(
+        world.broker_events[0]["event_type"],
+        "database.appearance_changed"
+    );
+}
+
 #[cfg(feature = "entity_mutation")]
 #[tokio::test]
 async fn moving_a_database_files_it_and_names_both_folders() {

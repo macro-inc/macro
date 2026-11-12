@@ -81,6 +81,7 @@ async fn core_storage_supports_cells_and_versions_without_an_app_entity(pool: Pg
                 table_id: table,
                 rows: vec![vec![(definition, PropertyValue::Str("Acme".into()))]],
                 restored: Vec::new(),
+                ids: Vec::new(),
             },
         ],
     );
@@ -110,6 +111,7 @@ async fn core_storage_supports_cells_and_versions_without_an_app_entity(pool: Pg
             table_id: table,
             rows: vec![Vec::new()],
             restored: Vec::new(),
+            ids: Vec::new(),
         }],
     );
     stale.expected_versions.push((table, TableVersion(0)));
@@ -247,6 +249,11 @@ async fn schema_cutover_discards_database_content_and_allows_a_fresh_start(pool:
     .unwrap();
     assert_eq!(shared, Some(shared_definition));
     transaction.commit().await.unwrap();
+    // Current readers also require metadata added after this historical cutover.
+    sqlx::query!("ALTER TABLE database_entities ADD COLUMN appearance jsonb")
+        .execute(&pool)
+        .await
+        .unwrap();
     // The owner remains and can immediately create and write a fresh app database.
     let database = repo
         .create_database(

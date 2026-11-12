@@ -73,6 +73,8 @@ pub enum AiFeature {
     AgentRepositoryChoice,
     /// Choosing Chat or Code for a prompt sent from the agent composer's Auto mode.
     AgentModeChoice,
+    /// The live one-line status summarizing a running agent session's tool calls.
+    AgentActivitySummary,
     /// User-confirmed audio transcription.
     Dictation,
     /// Image generation and editing.
@@ -96,6 +98,15 @@ pub fn normalize_model_id(model: &str) -> &str {
     match model.rsplit_once('/') {
         Some((_, bare)) if !bare.is_empty() => bare,
         _ => model,
+    }
+}
+
+/// The provider segment of a routing id (`fireworks` in `fireworks/kimi-k3`),
+/// or `None` for a bare id, whose provider the caller did not say.
+pub fn model_provider(model: &str) -> Option<&str> {
+    match model.split_once('/') {
+        Some((provider, bare)) if !provider.is_empty() && !bare.is_empty() => Some(provider),
+        _ => None,
     }
 }
 

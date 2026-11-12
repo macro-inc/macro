@@ -115,6 +115,8 @@ impl ActivitySource for FormTopicEvent {
                 )]),
                 None => Ingest::Ignore,
             },
+            // Appearance history commits with the owning entity write.
+            FormTopicEvent::AppearanceChanged { .. } => Ingest::Ignore,
             FormTopicEvent::Purged(metadata) => {
                 Ingest::Purge(vec![(EntityType::Form, metadata.form_id.to_string())])
             }

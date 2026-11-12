@@ -183,15 +183,38 @@ await doc.setTeamShare(true);
 await doc.delete(); // soft delete; doc.restore() brings it back
 ```
 
+### Entity appearance
+
+Markdown documents, snippets, initiatives (task projects), forms, databases,
+and routines expose `appearance()` and `setAppearance()`. Appearance is shared
+with other viewers and requires edit access to change.
+
+```ts
+await doc.setAppearance({
+  icon: { kind: 'emoji', value: '🌱' },
+  color: 'green',
+});
+const appearance = await doc.appearance();
+await doc.setAppearance({}); // restore the default icon and color
+```
+
+Writes replace both overrides without changing content timestamps. Omit an
+override to restore its default. Colors use the same twelve-color palette as
+tags and only tint Macro icons; native emoji keep their own colors.
+
+### Sharing permissions
 Documents, projects, calls and chats change their link and channel sharing with
-`updateSharePermissions`; omitted fields are left as they are. A calendar event
-is shared with a channel's members through `shareWithChannel`:
+`updateSharePermissions`; omitted fields are left as they are. Any item a
+channel message can carry (a document or task, project, database, form, call,
+email thread, agent session, external chat or calendar event) is shared with a
+channel's current members, as posting it there does, through `shareWithChannel`:
 
 ```ts
 await project.updateSharePermissions({
   linkShareAccessLevel: 'view',
   channelSharePermissions: [{ channel, accessLevel: 'comment', operation: 'add' }],
 });
+await doc.shareWithChannel(channel);
 await event.shareWithChannel(channel);
 ```
 
@@ -259,6 +282,7 @@ server refuses anything but one `SELECT` that compiles, and chart columns the
 `SELECT` does not return (`POST /databases/queries`). `toBlock()` is the
 `<m-db-query>` block to put in a document's Markdown; it re-runs for whoever
 views it. `withView()` restyles the answer without saving a new question.
+`macro.databases.saveQuery()` saves a question whose tables span databases.
 
 ```ts
 const question = await database.saveQuery({
@@ -603,10 +627,18 @@ kind.
 
 ### CRM contact fields
 
-`macro.crm.contactById(id).setEmail(address)` adds an address only when absent;
-an identical retry is safe. Existing addresses cannot be replaced or cleared.
-`setCompany(company)` links or switches a known personal-provider contact to a
-Company handle in the same team. Unlinking is not supported. Both preserve
+A contact holds several addresses, one of them primary: `contact.emails()` lists
+them, primary first. `addEmail(address)` adds one, `setEmail(address)` makes one
+the primary (adding it when the contact does not hold it), and
+`removeEmail(address)` removes one; removing the primary promotes the oldest
+address left. Removing an address deletes nothing else: the contact stops
+showing that address's mail. An identical retry of any of them is safe.
+
+`setCompany(company)` links or switches a contact with a personal-provider
+primary to a Company handle in the same team, and `unlinkCompany()` removes the
+link. A contact with an address on one of its company's domains
+(`contact.companyDomain()`) can do neither, and the last of those addresses
+(`contact.companyDomainEmails()`) cannot be removed. All of them preserve
 identity and reject same-team email conflicts without merging records.
 
 ### CRM pipelines and initiatives

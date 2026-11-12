@@ -79,12 +79,16 @@
   .site-menu-trigger, .site-menu-mark > span, .site-nav-start { transition: none; }
   .site-menu-panel { animation: none; }
 }
+/* The three bars fold into a close mark while the menu is open: the outer
+   bars rotate onto the diagonals and the middle bar collapses. Each state
+   keeps nine points so the shapes interpolate. Hover and focus leave the
+   bars alone, because a touch browser keeps :hover after a tap. */
 .site-menu-mark > span:nth-child(1) { clip-path: polygon(12.500% 20.833%, 50.000% 20.833%, 87.500% 20.833%, 87.500% 25.000%, 87.500% 29.167%, 50.000% 29.167%, 12.500% 29.167%, 12.500% 25.000%, 12.500% 20.833%); }
-.site-menu-trigger:is(:hover, :focus-visible, [aria-expanded=true]) .site-menu-mark > span:nth-child(1) { clip-path: polygon(0.000% 41.725%, 8.333% 38.392%, 20.704% 50.304%, 20.704% 79.883%, 12.363% 83.217%, 0.938% 72.200%, 0.000% 70.062%, 0.000% 50.000%, 0.000% 41.725%); }
+.site-menu-trigger[aria-expanded=true] .site-menu-mark > span:nth-child(1) { clip-path: polygon(26.430% 20.540%, 52.950% 47.050%, 79.460% 73.570%, 76.520% 76.520%, 73.570% 79.460%, 47.050% 52.950%, 20.540% 26.430%, 23.480% 23.480%, 26.430% 20.540%); }
 .site-menu-mark > span:nth-child(2) { clip-path: polygon(12.500% 45.833%, 50.000% 45.833%, 87.500% 45.833%, 87.500% 50.000%, 87.500% 54.167%, 50.000% 54.167%, 12.500% 54.167%, 12.500% 50.000%, 12.500% 45.833%); }
-.site-menu-trigger:is(:hover, :focus-visible, [aria-expanded=true]) .site-menu-mark > span:nth-child(2) { clip-path: polygon(16.992% 20.000%, 25.325% 16.667%, 60.342% 50.417%, 60.346% 80.000%, 52.004% 83.333%, 22.658% 55.033%, 22.658% 49.562%, 16.992% 44.108%, 16.992% 20.000%); }
+.site-menu-trigger[aria-expanded=true] .site-menu-mark > span:nth-child(2) { clip-path: polygon(50.000% 45.833%, 50.000% 45.833%, 50.000% 45.833%, 50.000% 50.000%, 50.000% 54.167%, 50.000% 54.167%, 50.000% 54.167%, 50.000% 50.000%, 50.000% 45.833%); }
 .site-menu-mark > span:nth-child(3) { clip-path: polygon(12.500% 70.833%, 50.000% 70.833%, 87.500% 70.833%, 87.500% 75.000%, 87.500% 79.167%, 50.000% 79.167%, 12.500% 79.167%, 12.500% 75.000%, 12.500% 70.833%); }
-.site-menu-trigger:is(:hover, :focus-visible, [aria-expanded=true]) .site-menu-mark > span:nth-child(3) { clip-path: polygon(56.642% 20.000%, 64.979% 16.667%, 99.062% 49.529%, 100.000% 51.750%, 100.000% 80.000%, 91.667% 83.333%, 62.254% 54.987%, 62.308% 49.571%, 56.642% 44.108%); }
+.site-menu-trigger[aria-expanded=true] .site-menu-mark > span:nth-child(3) { clip-path: polygon(20.540% 73.570%, 47.050% 47.050%, 73.570% 20.540%, 76.520% 23.480%, 79.460% 26.430%, 52.950% 52.950%, 26.430% 79.460%, 23.480% 76.520%, 20.540% 73.570%); }
 
 .site-menu-panel[hidden] { display: none; }
 

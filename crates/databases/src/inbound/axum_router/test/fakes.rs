@@ -102,6 +102,16 @@ pub(super) fn ops_router(level: AccessLevel) -> (Router, Arc<RecordingService>) 
     (router, service)
 }
 
+pub(super) fn appearance_router(level: AccessLevel) -> (Router, Arc<RecordingService>) {
+    let service = Arc::new(RecordingService::default());
+    let state = DatabasesRouterState::new(
+        service.clone(),
+        Arc::new(GrantingAccess(level)),
+        authorization_state(),
+    );
+    (databases_router(state), service)
+}
+
 /// The conversion route alone, for a caller holding `level` on every
 /// database, and the service behind it.
 pub(super) fn conversion_router(level: AccessLevel) -> (Router, Arc<RecordingService>) {
@@ -295,7 +305,8 @@ pub(super) struct RecordingService {
     pub(super) refusal: Mutex<Option<DatabaseError>>,
     pub(super) conversions: Mutex<Vec<(TableId, ColumnId, ColumnKind)>>,
     pub(super) conversion: Mutex<Option<ColumnConversion>>,
-    /// Every duplicate asked for.
+    pub(super) appearances: Mutex<Vec<model_entity::EntityAppearance>>,
+    /// Every duplicate asked for: source, owner, acting bot, and name.
     pub(super) duplicates: Mutex<Vec<Duplicate>>,
     /// Every create asked for.
     pub(super) creates: Mutex<Vec<CreateDatabase>>,
@@ -304,6 +315,14 @@ pub(super) struct RecordingService {
 const ONLY_OPS: &str = "the routes under test call only apply_ops and column_conversion";
 
 impl DatabasesService for RecordingService {
+    async fn set_appearance(
+        &self,
+        _receipt: EntityAccessReceipt<EditAccessLevel>,
+        appearance: model_entity::EntityAppearance,
+    ) -> Result<model_entity::EntityAppearance, DatabaseError> {
+        self.appearances.lock().unwrap().push(appearance.clone());
+        Ok(appearance)
+    }
     async fn apply_ops(
         &self,
         _receipt: EntityAccessReceipt<EditAccessLevel>,
@@ -371,6 +390,7 @@ impl DatabasesService for RecordingService {
             id: DatabaseId::from_uuid(Uuid::from_u128(0xc4ea)),
             name: command.name,
             owner_id: command.owner_id.to_string(),
+            appearance: None,
             created_at: chrono::DateTime::UNIX_EPOCH,
             trashed_at: None,
             project_id: None,
@@ -500,6 +520,7 @@ impl crate::domain::duplicate::DatabaseDuplicateService for RecordingService {
         Ok(Database {
             id: DatabaseId::from_uuid(Uuid::from_u128(0xc0b1)),
             name: name.unwrap_or_else(|| "Plans copy".into()),
+            appearance: None,
             owner_id: owner.to_string(),
             created_at: chrono::DateTime::UNIX_EPOCH,
             trashed_at: None,

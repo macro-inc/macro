@@ -8,7 +8,11 @@ const mocks = vi.hoisted(() => ({
   browserPut: vi.fn(),
   ready: vi.fn(),
   createUploadZipRequest: vi.fn(),
-  bulkUploadStatus: vi.fn(),
+  waitForFolderUpload: vi.fn(),
+  folderZipSha256: vi.fn(),
+  toastSuccess: vi.fn(),
+  toastFailure: vi.fn(),
+  toastAlert: vi.fn(),
   trackUpload: vi.fn(),
   uploadSending: vi.fn(),
   uploadProcessing: vi.fn(),
@@ -22,7 +26,14 @@ vi.mock('@tauri-apps/api/core', () => ({
 }));
 vi.mock('@app/lib/analytics', () => ({ analytics: { track: vi.fn() } }));
 vi.mock('@core/component/Toast/Toast', () => ({
-  toast: { success: vi.fn(), failure: vi.fn() },
+  toast: {
+    success: mocks.toastSuccess,
+    failure: mocks.toastFailure,
+    alert: mocks.toastAlert,
+  },
+}));
+vi.mock('@core/client/zipWorkerClient', () => ({
+  getFolderZipSha256: mocks.folderZipSha256,
 }));
 vi.mock('@core/component/UploadProgress/uploadProgress', () => ({
   trackUpload: mocks.trackUpload,
@@ -38,8 +49,8 @@ vi.mock('@core/util/hash', () => ({ contentHash: mocks.contentHash }));
 vi.mock('@queries/storage/document-location', () => ({
   waitForDocumentContentReady: mocks.ready,
 }));
-vi.mock('@service-connection/bulkUpload', () => ({
-  waitBulkUploadStatus: mocks.bulkUploadStatus,
+vi.mock('./folderUploadStatus', () => ({
+  waitForFolderUpload: mocks.waitForFolderUpload,
 }));
 vi.mock('@service-storage/client', () => ({
   DOCUMENT_NAME_TOO_LONG_CODE: 'name-too-long',
@@ -87,7 +98,10 @@ beforeEach(() => {
   mocks.createUploadZipRequest.mockResolvedValue(
     ok({ presignedUrl: 'https://example.com/zip', requestId: 'zip-request' })
   );
-  mocks.bulkUploadStatus.mockResolvedValue('project');
+  mocks.waitForFolderUpload.mockResolvedValue({
+    status: 'completed',
+    projectId: 'project',
+  });
   mocks.createDocument.mockResolvedValue(
     ok({
       metadata: { documentId: 'doc', documentVersionId: 1 },
@@ -136,12 +150,12 @@ describe('native shared document upload', () => {
   });
 });
 
-describe.each(['pdf', 'zip'])('%s upload checksums', (extension) => {
+describe('pdf upload checksums', () => {
   function stagedWithoutChecksum() {
     const file = createNativeStagedUploadFile('pasteboard', {
       token: 'ios-stage-test',
-      name: `attachment.${extension}`,
-      mimeType: `application/${extension}`,
+      name: 'attachment.pdf',
+      mimeType: 'application/pdf',
       size: 3,
       previewPath: 'https://asset.localhost/attachment',
     })!;
@@ -160,15 +174,13 @@ describe.each(['pdf', 'zip'])('%s upload checksums', (extension) => {
       arrayBuffer: async () => bytes,
     });
 
-    await upload(stagedWithoutChecksum(), { unzipFolder: true });
+    await upload(stagedWithoutChecksum());
 
     expect(mocks.fetch).toHaveBeenCalledWith(
       'https://asset.localhost/attachment'
     );
     expect(mocks.contentHash).toHaveBeenCalledWith(bytes);
-    const createRequest =
-      extension === 'zip' ? mocks.createUploadZipRequest : mocks.createDocument;
-    expect(createRequest).toHaveBeenCalledWith(
+    expect(mocks.createDocument).toHaveBeenCalledWith(
       expect.objectContaining({ sha: 'cd'.repeat(32) })
     );
     expect(mocks.invoke).toHaveBeenCalledWith(
@@ -186,9 +198,9 @@ describe.each(['pdf', 'zip'])('%s upload checksums', (extension) => {
   it('clears the progress indicator and creates no upload request if staged checksum calculation fails', async () => {
     mocks.fetch.mockRejectedValue(new Error('Native bytes unavailable'));
 
-    await expect(
-      upload(stagedWithoutChecksum(), { unzipFolder: true })
-    ).rejects.toThrow('Native bytes unavailable');
+    await expect(upload(stagedWithoutChecksum())).rejects.toThrow(
+      'Native bytes unavailable'
+    );
 
     expect(mocks.uploadDone).toHaveBeenCalledOnce();
     expect(mocks.createDocument).not.toHaveBeenCalled();
@@ -234,27 +246,6 @@ describe('browser upload checksums', () => {
     expect(mocks.uploadDone).toHaveBeenCalledOnce();
   });
 
-  it('keeps the progress indicator until the server unpacks a folder', async () => {
-    let unpacked!: (projectId: string) => void;
-    mocks.bulkUploadStatus.mockReturnValue(
-      new Promise<string>((resolve) => {
-        unpacked = resolve;
-      })
-    );
-    const file = new File([], 'folder.zip', { type: 'application/zip' });
-    Object.defineProperty(file, 'arrayBuffer', {
-      value: async () => new ArrayBuffer(0),
-    });
-
-    const result = await upload(file, { unzipFolder: true });
-
-    expect(result.type).toBe('folder');
-    expect(mocks.uploadProcessing).toHaveBeenCalledOnce();
-    expect(mocks.uploadDone).not.toHaveBeenCalled();
-    unpacked('project');
-    await vi.waitFor(() => expect(mocks.uploadDone).toHaveBeenCalledOnce());
-  });
-
   it('clears the progress indicator before creating a document if hashing fails', async () => {
     const file = new File([], 'browser.pdf', { type: 'application/pdf' });
     Object.defineProperty(file, 'arrayBuffer', {
@@ -267,5 +258,103 @@ describe('browser upload checksums', () => {
     expect(mocks.uploadDone).toHaveBeenCalledOnce();
     expect(mocks.createDocument).not.toHaveBeenCalled();
     expect(mocks.browserPut).not.toHaveBeenCalled();
+  });
+});
+
+describe('folder uploads', () => {
+  function folderZip() {
+    const file = new File(['zip bytes'], 'Archive.zip', {
+      type: 'application/zip',
+    });
+    Object.defineProperty(file, 'arrayBuffer', {
+      value: () => {
+        throw new Error('Must not read a folder zip into memory');
+      },
+    });
+    return file;
+  }
+
+  it('sends the zip itself with the hash it was written with', async () => {
+    const file = folderZip();
+    mocks.folderZipSha256.mockReturnValue('ef'.repeat(32));
+
+    const result = await upload(file, { unzipFolder: true });
+
+    expect(result.type).toBe('folder');
+    expect(mocks.createUploadZipRequest).toHaveBeenCalledWith({
+      sha: 'ef'.repeat(32),
+      name: 'Archive',
+      parentId: undefined,
+    });
+    expect(mocks.browserPut).toHaveBeenCalledWith({
+      presignedUrl: 'https://example.com/zip',
+      buffer: file,
+      sha: 'ef'.repeat(32),
+      type: 'application/zip',
+      onProgress: mocks.uploadSending,
+    });
+    expect(mocks.contentHash).not.toHaveBeenCalled();
+  });
+
+  it('keeps the progress indicator until the server finishes the folder', async () => {
+    mocks.folderZipSha256.mockReturnValue('ef'.repeat(32));
+    let finish!: (outcome: unknown) => void;
+    mocks.waitForFolderUpload.mockReturnValue(
+      new Promise((resolve) => {
+        finish = resolve;
+      })
+    );
+
+    const result = await upload(folderZip(), { unzipFolder: true });
+
+    expect(mocks.uploadProcessing).toHaveBeenCalledWith(null);
+    expect(mocks.uploadDone).not.toHaveBeenCalled();
+    finish({ status: 'completed', projectId: 'project' });
+    await vi.waitFor(() => expect(mocks.uploadDone).toHaveBeenCalledOnce());
+    if (result.type !== 'folder') throw new Error('expected a folder');
+    await expect(result.projectId).resolves.toBe('project');
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('Uploaded Archive');
+  });
+
+  it('says it could not confirm a folder rather than that it failed', async () => {
+    mocks.folderZipSha256.mockReturnValue('ef'.repeat(32));
+    mocks.waitForFolderUpload.mockResolvedValue({ status: 'unknown' });
+
+    const result = await upload(folderZip(), { unzipFolder: true });
+
+    if (result.type !== 'folder') throw new Error('expected a folder');
+    await expect(result.projectId).resolves.toBeUndefined();
+    expect(mocks.toastFailure).not.toHaveBeenCalled();
+    expect(mocks.toastAlert).toHaveBeenCalledWith(
+      "Couldn't confirm that Archive finished uploading. Check Drive in a few minutes."
+    );
+  });
+
+  it('counts the files a partial upload left behind', async () => {
+    mocks.folderZipSha256.mockReturnValue('ef'.repeat(32));
+    mocks.waitForFolderUpload.mockResolvedValue({
+      status: 'partially_completed',
+      projectId: 'project',
+      progress: { filesTotal: 814, filesStored: 811, filesFailed: 3 },
+    });
+
+    const result = await upload(folderZip(), { unzipFolder: true });
+
+    if (result.type !== 'folder') throw new Error('expected a folder');
+    await expect(result.projectId).resolves.toBe('project');
+    expect(mocks.toastAlert).toHaveBeenCalledWith(
+      'Uploaded Archive, but 3 of 814 files could not be uploaded'
+    );
+  });
+
+  it('refuses a zip the app did not prepare before asking for an upload URL', async () => {
+    mocks.folderZipSha256.mockReturnValue(undefined);
+
+    await expect(upload(folderZip(), { unzipFolder: true })).rejects.toThrow(
+      'Folder was not prepared for upload'
+    );
+
+    expect(mocks.createUploadZipRequest).not.toHaveBeenCalled();
+    expect(mocks.uploadDone).toHaveBeenCalledOnce();
   });
 });

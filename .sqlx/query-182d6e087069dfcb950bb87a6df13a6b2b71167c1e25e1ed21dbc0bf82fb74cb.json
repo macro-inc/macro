@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM password_write_intents WHERE team_id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "182d6e087069dfcb950bb87a6df13a6b2b71167c1e25e1ed21dbc0bf82fb74cb"
+}
