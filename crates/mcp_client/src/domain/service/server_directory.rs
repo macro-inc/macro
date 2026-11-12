@@ -3,9 +3,9 @@
 //! The settings dialog and the `ConnectMcpServer` AI tool both add servers
 //! through here, so a server added either way is the same row.
 
-use crate::domain::models::{MacroUserIdStr, McpServerRecord};
+use crate::domain::models::{MacroUserIdStr, McpServerRecord, is_public};
 use crate::domain::ports::McpServerStore;
-use std::net::{Ipv4Addr, Ipv6Addr};
+use std::net::IpAddr;
 use std::sync::Arc;
 use url::{Host, Url};
 
@@ -150,37 +150,8 @@ fn is_public_https(url: &Url) -> bool {
                 || domain.ends_with(".local")
                 || domain.ends_with(".internal"))
         }
-        Some(Host::Ipv4(address)) => is_public_ipv4(address),
-        Some(Host::Ipv6(address)) => is_public_ipv6(address),
+        Some(Host::Ipv4(address)) => is_public(IpAddr::V4(address)),
+        Some(Host::Ipv6(address)) => is_public(IpAddr::V6(address)),
         None => false,
     }
-}
-
-fn is_public_ipv4(address: Ipv4Addr) -> bool {
-    let [first, second, ..] = address.octets();
-    !(address.is_unspecified()
-        || address.is_loopback()
-        || address.is_private()
-        || address.is_link_local()
-        || address.is_broadcast()
-        || address.is_documentation()
-        || address.is_multicast()
-        // Carrier-grade NAT, 100.64.0.0/10.
-        || (first == 100 && (second & 0b1100_0000) == 64)
-        // "This network", 0.0.0.0/8.
-        || first == 0)
-}
-
-fn is_public_ipv6(address: Ipv6Addr) -> bool {
-    if let Some(mapped) = address.to_ipv4_mapped() {
-        return is_public_ipv4(mapped);
-    }
-    let first = address.segments()[0];
-    !(address.is_unspecified()
-        || address.is_loopback()
-        || address.is_multicast()
-        // Unique local, fc00::/7.
-        || (first & 0xfe00) == 0xfc00
-        // Link-local, fe80::/10.
-        || (first & 0xffc0) == 0xfe80)
 }

@@ -9,6 +9,7 @@ import type {
   DatabaseDetail,
   DatabaseOp,
   DatabaseWebhookResponse,
+  EntityAppearance,
   EntityKind,
   ImportTable,
   InferColumnTypeOutcome,
@@ -25,6 +26,8 @@ import type {
 } from '../../../generated/storage/types.gen';
 import { MacroApiError, MacroError, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
+import type { Channel } from '../channels/channel';
+import { shareWithChannel } from '../channels/share';
 import { MacroEntity } from '../entity';
 import type { PropertyDefinition } from '../properties/property-definition';
 import { EntityAccess } from '../sharing/access';
@@ -258,6 +261,18 @@ export class Database extends MacroEntity<DatabaseDetail> {
   /** Access requests and direct user grants. */
   readonly access = new EntityAccess(this.client, 'database', this);
 
+  /**
+   * Share this database with a channel's current members, as posting it in the
+   * channel does. The caller must be in the channel and able to share the
+   * database; sharing again changes nothing.
+   *
+   * @write
+   * @idempotent
+   */
+  async shareWithChannel(channel: Channel): Promise<void> {
+    await shareWithChannel(this.client, channel, 'database', this.id);
+  }
+
   protected async fetch(): Promise<DatabaseDetail> {
     return unwrap(
       await this.client.storage.getDatabase({ path: { id: this.id } }),
@@ -384,6 +399,27 @@ export class Database extends MacroEntity<DatabaseDetail> {
 
   /** The database's display name. */
   readonly name = this.mappedField('database', (record) => record.name);
+
+  /** Shared icon and color overrides. */
+  readonly appearance = this.mappedField(
+    'database',
+    (record) => record.appearance,
+  );
+
+  /**
+   * Replace shared appearance. Pass {} to reset both overrides.
+   *
+   * @write
+   * @idempotent
+   */
+  setAppearance(appearance: EntityAppearance): Promise<EntityAppearance> {
+    return this.mutate((client) =>
+      client.storage.setDatabaseAppearance({
+        path: { id: this.id },
+        body: appearance,
+      }),
+    );
+  }
 
   /** The user who owns the database. */
   readonly owner = this.mappedField('database', (record) =>

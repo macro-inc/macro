@@ -155,7 +155,7 @@ describe('shared call lifecycle', () => {
     expect(ports.startCall).toHaveBeenCalledExactlyOnceWith(call.channelId);
     expect(ports.requestToken).not.toHaveBeenCalled();
     expect(ports.lookup).not.toHaveBeenCalled();
-    expect(ports.connect).toHaveBeenCalledExactlyOnceWith(token);
+    expect(ports.connect).toHaveBeenCalledExactlyOnceWith(token, 'user');
   });
 
   it('retries the allocated session when explicit Start fails during media setup', async () => {
@@ -278,7 +278,7 @@ describe('shared call lifecycle', () => {
     expect(ports.requestToken).toHaveBeenCalledTimes(1);
     await vi.advanceTimersByTimeAsync(300);
     await first;
-    expect(ports.connect).toHaveBeenCalledExactlyOnceWith(token);
+    expect(ports.connect).toHaveBeenCalledExactlyOnceWith(token, 'user');
     expect(lifecycle.getState()).toEqual({ t: 'active', call });
     expect(vi.getTimerCount()).toBe(0);
   });
@@ -692,6 +692,8 @@ describe('shared call lifecycle', () => {
     await vi.advanceTimersByTimeAsync(AUTO_REJOIN_DELAY_MS + 300);
     expect(ports.lookup).toHaveBeenCalledExactlyOnceWith(call.channelId);
     expect(ports.connect).toHaveBeenCalledTimes(2);
+    expect(ports.connect).toHaveBeenNthCalledWith(1, token, 'user');
+    expect(ports.connect).toHaveBeenNthCalledWith(2, token, 'auto_rejoin');
     expect(lifecycle.getState()).toEqual({ t: 'active', call });
   });
 

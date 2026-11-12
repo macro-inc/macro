@@ -26,6 +26,7 @@ import {
 } from '@app/features/soup/collection/rows';
 import { TaskGroupHeader } from '@app/features/tasks-view/components/task-list/TaskGroupHeader';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
+import { openInNewTab } from '@components/app/tab-layout/open-in-new-tab';
 import { toast } from '@core/component/Toast/Toast';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { compareDateDesc } from '@core/util/date';
@@ -94,6 +95,7 @@ export function ProjectsCollection(props: {
   canOpenInNewSplit: Accessor<boolean>;
   onCopyLink(id: string): void;
   onCopyId(id: string): void;
+  onChangeIcon?(project: ProjectRowData['project']): void;
   /** Omit where the host cannot show the project's Share menu. */
   onShare?(id: string): void;
 }) {
@@ -309,7 +311,13 @@ export function ProjectsCollection(props: {
         onOpenInNewSplit={(row) =>
           props.onOpen(row.project.id, { newSplit: true })
         }
+        onOpenInNewTab={(row) =>
+          openInNewTab(() => props.onOpen(row.project.id, { newSplit: false }))
+        }
         onRename={(row) => setRenaming(row)}
+        onChangeIcon={
+          props.onChangeIcon && ((row) => props.onChangeIcon?.(row.project))
+        }
         onSetOption={(rows, property, optionId) =>
           fireAndForget(setOption(rows, property, optionId), 'projects')
         }

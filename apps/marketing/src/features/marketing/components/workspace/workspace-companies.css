@@ -15,7 +15,7 @@ button.sample-company-row:hover { background: var(--color-list-hover, var(--colo
 .sample-company-row[data-header] > span:last-child, .sample-company-row-time { text-align: right; }
 .sample-company-row-indicator { display: grid; place-items: center; }
 .sample-company-row-content { display: flex; align-items: center; gap: 8px; min-width: 0; font-weight: 500; }
-.sample-company-row-domain { flex-shrink: 2; font-size: 12px; font-weight: 400; color: var(--color-ink-extra-muted); }
+.sample-company-row-domain { flex-shrink: 2; font-size: 12px; font-weight: 370; color: var(--color-ink-extra-muted); }
 .sample-company-row-value { display: flex; align-items: center; gap: 6px; min-width: 0; padding-left: 8px; font-size: 12px; }
 .sample-company-row-time { font-size: 12px; font-weight: 300; color: var(--color-ink-extra-muted); }
 .sample-company-row[data-unread=true] { animation: sample-company-row-in 400ms ease-out both; }
@@ -40,7 +40,7 @@ button.sample-company-row:hover { background: var(--color-list-hover, var(--colo
 .sample-company-scroll { padding: 48px 24px 0; }
 .sample-company-overview { display: flex; flex-direction: column; gap: 24px; width: 100%; max-width: 768px; min-width: 0; margin: 0 auto; }
 .sample-company-overview h1 .sample-inline-input[aria-label="Company name"] { font-size: 24px; line-height: 32px; font-weight: 600; }
-.sample-company-overview [aria-label="Company details"] [data-slot=badge] { gap: 4px; font-weight: 400; }
+.sample-company-overview [aria-label="Company details"] [data-slot=badge] { gap: 4px; font-weight: 370; }
 
 /* EntityConversation: roots and inline replies on the channel message rows. */
 .sample-company-discussion { margin-top: 12px; padding-bottom: 48px; }

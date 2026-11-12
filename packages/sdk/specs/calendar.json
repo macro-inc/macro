@@ -3800,7 +3800,7 @@
           },
           "contributesToAvailability": {
             "type": "boolean",
-            "description": "Whether this calendar counts toward the requester's busy time: their\nsetting, by default only the primary calendars of inboxes they own.\nThe nearest thing to \"this is the requester's own\": a provider's\naccess role only says what they may do, on a colleague's calendar too."
+            "description": "Whether this calendar counts toward the requester's busy time: their\nsetting in Settings → Calendar, on by default for every calendar.\nThe nearest thing to \"this is the requester's own\": a provider's\naccess role only says what they may do, on a colleague's calendar too."
           },
           "defaultReminders": {
             "type": "array",

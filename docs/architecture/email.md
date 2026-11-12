@@ -307,8 +307,15 @@ The working copy and the mutation queue are separate stores, so a discard is
 first recorded beside its copy (`deleteAttemptId`), which stays listed and
 editable. The copy becomes `deleting`, hidden and closed to edits, only when the
 queue admits the delete, and the queue admits it only for the revision it was
-requested on: an edit or a newer save drops the request, and a request that
-never reached the queue is inert. A discard on its way to the server is never
+requested on: only an edit, which makes a new revision, withdraws the request.
+A save and a discard of one draft share a queue key, so the one queued last
+replaces the other. A save that finds a discard on record for its revision is
+therefore not queued, and logs `email_draft.save_yielded_to_discard`: a composer
+that closes flushes its last edit behind any save still on the wire, and that
+flush can run after the draft was reopened and discarded. The check is not
+atomic with the enqueue, so a save already past it can still land after the
+delete. A request whose delete never reached the queue keeps saves of that
+revision out until the next edit. A discard on its way to the server is never
 shown as a failure. **Retry discard** follows a server rejection or a delete the
 queue lost (`delete-failed`); every copy that starts needing a retry logs
 `email_draft.sync_failed` with its status, cause and error code.
@@ -605,7 +612,9 @@ format to migrate. Unsupported journal records retain their contents and
 recognizable draft reservations for recovery.
 
 `email-send-dispatcher.ts` submits immediately online through the fetch-only
-GraphQL client in `service-storage/email-send.ts`. Per-attempt database leases
+GraphQL client in `service-storage/email-send.ts`. It keeps polling whatever
+`navigator.onLine` says, which native webviews can report as offline while the
+API is reachable; offline attempts back off. Per-attempt database leases
 coordinate tabs, with bounded concurrency across unrelated messages. A lost
 response triggers a status read before resubmitting the identical attempt.
 A thread shows an approved send as sent before the provider confirms it, while

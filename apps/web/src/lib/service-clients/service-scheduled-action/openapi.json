@@ -42,6 +42,26 @@
               "type": ["boolean", "null"],
               "default": false
             }
+          },
+          {
+            "name": "include_children",
+            "in": "query",
+            "description": "Also list active sub-routines, the routines other routines' runs\ncreated, without finished one-time ones; defaults to false (top-level\nroutines only).",
+            "required": false,
+            "schema": {
+              "type": ["boolean", "null"],
+              "default": false
+            }
+          },
+          {
+            "name": "parent",
+            "in": "query",
+            "description": "List only this routine's sub-routines: the active ones and its newest\n200 finished one-time ones.",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"],
+              "format": "uuid"
+            }
           }
         ],
         "responses": {
@@ -92,6 +112,7 @@
       },
       "post": {
         "tags": ["scheduled actions"],
+        "summary": "Create a routine. A create made by a routine's run, from its code step\nor its Ask AI step's session, makes that routine's sub-routine: the\ncaller's credential says so, never the body.",
         "operationId": "create_scheduled_action",
         "parameters": [
           {
@@ -102,6 +123,15 @@
             "schema": {
               "type": "string",
               "format": "uuid"
+            }
+          },
+          {
+            "name": "key",
+            "in": "query",
+            "description": "A name for a routine a routine's run creates: the same key under the\nsame parent updates that sub-routine instead of adding another.\nRejected outside a routine's run.",
+            "required": false,
+            "schema": {
+              "type": "string"
             }
           }
         ],
@@ -116,6 +146,16 @@
           "required": true
         },
         "responses": {
+          "200": {
+            "description": "The sub-routine its key already named, updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduledActionResponse"
+                }
+              }
+            }
+          },
           "201": {
             "description": "",
             "content": {
@@ -148,6 +188,16 @@
           },
           "403": {
             "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The routine already has the most active sub-routines it can",
             "content": {
               "text/plain": {
                 "schema": {
@@ -811,6 +861,54 @@
         }
       }
     },
+    "/scheduled-actions/{id}/appearance": {
+      "put": {
+        "tags": ["scheduled actions"],
+        "operationId": "set_scheduled_action_appearance",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the scheduled action",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EntityAppearance"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntityAppearance"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": ""
+          },
+          "401": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/scheduled-actions/{id}/code-upgrades": {
       "get": {
         "tags": ["scheduled actions"],
@@ -836,6 +934,76 @@
                   "items": {
                     "$ref": "#/components/schemas/CodeUpgrade"
                   }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scheduled-actions/{id}/detach": {
+      "post": {
+        "tags": ["scheduled actions"],
+        "summary": "Keep a sub-routine as the owner's own routine: it moves to the main list\nand no longer follows the routine whose run created it.",
+        "operationId": "detach_scheduled_action",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the sub-routine",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduledActionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a sub-routine",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
                 }
               }
             }
@@ -1084,7 +1252,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/ActionExecutionRecord"
+                    "$ref": "#/components/schemas/ExecutionRecordResponse"
                   }
                 }
               }
@@ -1694,6 +1862,59 @@
           }
         }
       },
+      "AppearanceColor": {
+        "type": "string",
+        "description": "Named tint keys from the shared tag color palette.",
+        "enum": [
+          "gray",
+          "red",
+          "tomato",
+          "orange",
+          "amber",
+          "yellow",
+          "green",
+          "teal",
+          "blue",
+          "indigo",
+          "purple",
+          "pink"
+        ]
+      },
+      "AppearanceIcon": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A stable name from Macro's original, distinct icon catalog.",
+            "required": ["name", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["macro"]
+              },
+              "name": {
+                "type": "string",
+                "description": "Catalog name without the SVG extension."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A single native emoji, including skin-tone and joined sequences.",
+            "required": ["value", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["emoji"]
+              },
+              "value": {
+                "type": "string",
+                "description": "Unicode emoji text, not markup or a URL."
+              }
+            }
+          }
+        ],
+        "description": "The source of an entity's custom icon."
+      },
       "CatalogEntry": {
         "type": "object",
         "description": "One of Macro's routines, ready to start a new routine from.",
@@ -2010,6 +2231,20 @@
           }
         }
       },
+      "CreatedRoutine": {
+        "type": "object",
+        "description": "A routine a run created, as that run's history names it.",
+        "required": ["id", "name"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
       "Draft": {
         "oneOf": [
           {
@@ -2304,6 +2539,35 @@
         "type": "object",
         "description": "Empty response is required due to custom fetch forcing `response.json()`"
       },
+      "EntityAppearance": {
+        "type": "object",
+        "description": "An entity's optional icon and tint overrides; absent values retain type defaults.",
+        "properties": {
+          "color": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AppearanceColor",
+                "description": "A shared tag-palette key. Native emoji retain their own colors."
+              }
+            ]
+          },
+          "icon": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AppearanceIcon",
+                "description": "A custom Macro glyph or a native emoji."
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
       "EventFilter": {
         "type": "object",
         "description": "An event name AND an entity ID must match within the same filter. A\ncondition further requires the event's content to answer it with yes.\n\n`github` comes from outside Macro and carries its payload: it stands\nalone in its filter, takes no ids, and may require\nexact payload values with `match`. A `github` filter narrows deliveries\nwith its `github` selector.",
@@ -2385,6 +2649,26 @@
           "call.ended",
           "github"
         ]
+      },
+      "ExecutionRecordResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ActionExecutionRecord"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "created": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/CreatedRoutine"
+                },
+                "description": "The sub-routines this run created that still follow the routine."
+              }
+            }
+          }
+        ],
+        "description": "A finished run, with the routines it created."
       },
       "ExecutionResource": {
         "type": "object",
@@ -2973,6 +3257,7 @@
           "trigger",
           "task",
           "variables",
+          "appearance",
           "active_count",
           "created_at",
           "updated_at"
@@ -2983,6 +3268,9 @@
             "format": "int32",
             "description": "Routines activated from this template, including stopped ones.",
             "minimum": 0
+          },
+          "appearance": {
+            "$ref": "#/components/schemas/EntityAppearance"
           },
           "author": {
             "type": "string",
@@ -3194,6 +3482,10 @@
           "run_visibility"
         ],
         "properties": {
+          "appearance": {
+            "$ref": "#/components/schemas/EntityAppearance",
+            "description": "Optional presentation overrides; absent values use routine defaults."
+          },
           "claimed": {
             "type": ["string", "null"],
             "format": "date-time"
@@ -3242,6 +3534,17 @@
           "run_visibility": {
             "$ref": "#/components/schemas/RunVisibility",
             "description": "Whether the action's runs are listed in Home and the Agents list."
+          },
+          "sub_routine": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SubRoutine",
+                "description": "Set on a routine one of another routine's runs created: the routine\nit follows and the run that created it."
+              }
+            ]
           },
           "suggestion_id": {
             "type": ["string", "null"],
@@ -3422,6 +3725,31 @@
             "items": {
               "type": "string"
             }
+          }
+        }
+      },
+      "SubRoutine": {
+        "type": "object",
+        "description": "How a routine created by a routine's run belongs to that routine.",
+        "required": ["parent_id", "created_by_run_id"],
+        "properties": {
+          "created_by_run_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The run that created it: the id of that run's history record, which\nexists once the run ends."
+          },
+          "key": {
+            "type": ["string", "null"],
+            "description": "The name its creating code gave it, when it gave one."
+          },
+          "parent_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The top-level routine it follows: pausing that routine pauses it, and\ndeleting that routine deletes it. A routine a sub-routine's run\ncreates follows the same top-level routine."
+          },
+          "paused_by_parent": {
+            "type": "boolean",
+            "description": "It is off because its parent was switched off, and resumes with it."
           }
         }
       },

@@ -1,5 +1,5 @@
-import { EntityIcon, getEntityIconType } from '@core/component/EntityIcon';
 import { Badge, Tooltip } from '@ui';
+import { EntityIcon } from '../extractors/entity-icon';
 import { EntityTitle } from '../extractors/entity-title';
 import type { EntityData } from '../types/entity';
 
@@ -9,10 +9,7 @@ export function EntitySelectionBadge(props: { entity: EntityData }) {
     <Tooltip label={props.entity.name ?? 'Untitled'} class="min-w-0 max-w-48">
       <Badge variant="outline" size="sm" class="min-w-0 max-w-full shrink">
         <span class="size-3.5 shrink-0">
-          <EntityIcon
-            targetType={getEntityIconType(props.entity)}
-            size="fill"
-          />
+          <EntityIcon entity={props.entity} />
         </span>
         <EntityTitle entity={props.entity} />
       </Badge>
