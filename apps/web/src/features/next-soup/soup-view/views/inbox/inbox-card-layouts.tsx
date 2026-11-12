@@ -287,7 +287,7 @@ const tagBubbleIcon = (tag: NotificationTag) =>
       <HardDrivesIcon class={AVATAR_GLYPH_CLASS} />
     ))
     .with('reminder', () => () => <BellSimpleIcon class={AVATAR_GLYPH_CLASS} />)
-    .with('manual', () => () => <PaperPlaneIcon class={AVATAR_GLYPH_CLASS} />)
+    .with('ping', () => () => <PaperPlaneIcon class={AVATAR_GLYPH_CLASS} />)
     .with('calendar_event_reminder', () => () => (
       <CalendarBlankIcon class={AVATAR_GLYPH_CLASS} />
     ))

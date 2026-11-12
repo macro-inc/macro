@@ -1041,22 +1041,29 @@
     },
     "/v1/user_notifications/send": {
       "post": {
-        "tags": ["manual_notification"],
-        "summary": "Send a notification the caller wrote, to themselves or to someone who can\nalready see what it links to. Delivered like any other notification and\nsubject to the recipient's notification preferences.",
-        "operationId": "send_manual_notification",
+        "tags": ["ping"],
+        "summary": "Send a notification the caller wrote about an entity, to themselves or to\npeople who can already see that entity. Recipients who cannot see it,\nwhose inbox would not list it, or who have received 60 from others this\nhour are skipped and returned. Delivered like any other notification and\nsubject to each recipient's notification preferences. The same notification\nsent again in the same ten-minute window of the clock is delivered once; a\nrepeat that falls in the next window is delivered again. A sender can\nnotify at most 1000 recipients an hour. Refused with 403 while the\n`enable-agent-notifications` flag is off for the caller.",
+        "operationId": "send_ping",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SendManualNotificationRequest"
+                "$ref": "#/components/schemas/SendPingRequest"
               }
             }
           },
           "required": true
         },
         "responses": {
-          "204": {
-            "description": "Queued for delivery"
+          "200": {
+            "description": "Queued for the recipients who can see the link",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PingOutcome"
+                }
+              }
+            }
           },
           "400": {
             "description": "",
@@ -1079,7 +1086,7 @@
             }
           },
           "403": {
-            "description": "The recipient cannot see the link",
+            "description": "Agent notifications are not enabled for the caller",
             "content": {
               "application/json": {
                 "schema": {
@@ -1099,10 +1106,27 @@
             }
           },
           "429": {
-            "description": "Too many manual notifications from this sender, or to this recipient"
+            "description": "The sender has notified too many recipients this hour; `Retry-After` says when to try again",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           },
           "500": {
             "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Whether agent notifications are enabled for the caller could not be checked; try again",
             "content": {
               "application/json": {
                 "schema": {
@@ -2744,66 +2768,6 @@
       "MacroUserIdStr": {
         "type": "string"
       },
-      "ManualMetadata": {
-        "type": "object",
-        "description": "A notification written by its sender: a title, an optional body, and the\nentity it opens. The sender is the notification's `sender_id`, or nobody\nwhen people notify themselves.",
-        "required": ["title"],
-        "properties": {
-          "agent": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/ManualNotificationAgent",
-                "description": "The agent whose code sent it, when one did."
-              }
-            ]
-          },
-          "body": {
-            "type": ["string", "null"],
-            "description": "More detail, as the sender wrote it."
-          },
-          "title": {
-            "type": "string",
-            "description": "The headline, as the sender wrote it."
-          }
-        }
-      },
-      "ManualNotificationAgent": {
-        "type": "object",
-        "description": "The agent a manual notification reads as being from, as it was when sent.",
-        "required": ["id", "name"],
-        "properties": {
-          "avatarUrl": {
-            "type": ["string", "null"],
-            "description": "The agent's avatar."
-          },
-          "id": {
-            "type": "string",
-            "description": "A string on the wire: system bots have fixed ids that are not RFC 4122\nuuids."
-          },
-          "name": {
-            "type": "string",
-            "description": "The agent's display name."
-          }
-        }
-      },
-      "ManualNotificationLink": {
-        "type": "object",
-        "description": "What a manual notification opens.",
-        "required": ["entityType", "entityId"],
-        "properties": {
-          "entityId": {
-            "type": "string",
-            "description": "The entity's id."
-          },
-          "entityType": {
-            "$ref": "#/components/schemas/EntityType",
-            "description": "One of document, chat, channel, project, email_thread or agent_session:\nthe kinds the inbox and Home list. The recipient's inbox and Home must\nboth list it: their access comes from a share the feeds read (not a\nlink share or an attachment), it is not deleted, a session is listed,\na document is not a snippet, and an email thread is the recipient's own\nSignal mail in the inbox."
-          }
-        }
-      },
       "MentionedInDocumentCommentMetadata": {
         "type": "object",
         "description": "Notification sent when a user is mentioned in a document comment.",
@@ -3433,12 +3397,12 @@
             "required": ["content", "tag"],
             "properties": {
               "content": {
-                "$ref": "#/components/schemas/ManualMetadata",
+                "$ref": "#/components/schemas/PingMetadata",
                 "description": "Someone, usually agent code through the SDK, sent the user a\nnotification they wrote."
               },
               "tag": {
                 "type": "string",
-                "enum": ["manual"]
+                "enum": ["ping"]
               }
             }
           },
@@ -3532,6 +3496,115 @@
       "NotificationTypeName": {
         "type": "string",
         "description": "newtype wrapper for the the typename of a Notification"
+      },
+      "PingAgent": {
+        "type": "object",
+        "description": "The agent a ping reads as being from, as it was when sent.",
+        "required": ["id", "name"],
+        "properties": {
+          "avatarUrl": {
+            "type": ["string", "null"],
+            "description": "The agent's avatar."
+          },
+          "id": {
+            "type": "string",
+            "description": "A string on the wire: system bots have fixed ids that are not RFC 4122\nuuids."
+          },
+          "name": {
+            "type": "string",
+            "description": "The agent's display name."
+          }
+        }
+      },
+      "PingLink": {
+        "type": "object",
+        "description": "What a ping opens.",
+        "required": ["entityType", "entityId"],
+        "properties": {
+          "entityId": {
+            "type": "string",
+            "description": "The entity's id."
+          },
+          "entityType": {
+            "$ref": "#/components/schemas/EntityType",
+            "description": "One of document, chat, channel, channel_message, project, initiative,\nemail_thread, calendar_event, crm_company, crm_contact or\nagent_session: the kinds the inbox lists. A channel message is filed\nunder its channel and opens at the message. Each recipient's inbox\nmust also list it: their access comes from a share the inbox reads\n(not a link share or an attachment), it is not deleted, a session is\nlisted, and an email thread is the recipient's own Signal mail in\ntheir inbox. Anyone else is skipped as `not_listed`."
+          }
+        }
+      },
+      "PingMessage": {
+        "type": "object",
+        "description": "The channel message a ping points at.",
+        "required": ["messageId"],
+        "properties": {
+          "messageId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The message."
+          },
+          "threadId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The top-level message it replies to; absent when it is top-level\nitself."
+          }
+        }
+      },
+      "PingMetadata": {
+        "type": "object",
+        "description": "A notification written by its sender: a title, an optional body, and the\nentity it opens. The sender is the notification's `sender_id`, or nobody\nwhen people notify themselves. One about a channel message is filed under\nthe message's channel and names the message.",
+        "required": ["title"],
+        "properties": {
+          "agent": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PingAgent",
+                "description": "The agent whose code sent it, when one did."
+              }
+            ]
+          },
+          "body": {
+            "type": ["string", "null"],
+            "description": "More detail, as the sender wrote it."
+          },
+          "message": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PingMessage",
+                "description": "The channel message it opens at, when the sender linked one."
+              }
+            ]
+          },
+          "title": {
+            "type": "string",
+            "description": "The headline, as the sender wrote it."
+          }
+        }
+      },
+      "PingOutcome": {
+        "type": "object",
+        "description": "Who a ping was sent to. A notified recipient's own\npreferences can still keep it from them; that is theirs to know.",
+        "required": ["notified", "skipped"],
+        "properties": {
+          "notified": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The recipients it was queued for, in the order they were named."
+          },
+          "skipped": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SkippedRecipient"
+            },
+            "description": "The recipients it was not sent to."
+          }
+        }
       },
       "PushNotificationData": {
         "type": "object",
@@ -3795,7 +3868,7 @@
           }
         }
       },
-      "SendManualNotificationRequest": {
+      "SendPingRequest": {
         "type": "object",
         "description": "A notification written by the caller.",
         "required": ["title", "link"],
@@ -3805,16 +3878,39 @@
             "description": "More detail, at most 1000 characters."
           },
           "link": {
-            "$ref": "#/components/schemas/ManualNotificationLink",
+            "$ref": "#/components/schemas/PingLink",
             "description": "What the notification opens; the caller must be able to see it."
           },
-          "recipientId": {
-            "type": ["string", "null"],
-            "description": "Who gets it; the caller when omitted. Anyone else must already be able\nto see `link`."
+          "recipientIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Who gets it, at most 100; the caller when omitted or empty. Anyone\nwho cannot already see `link`, or whose inbox would not list it, is\nskipped, never given access."
           },
           "title": {
             "type": "string",
             "description": "The headline, at most 120 characters."
+          }
+        }
+      },
+      "SkipReason": {
+        "type": "string",
+        "description": "Why a recipient was left out of a ping.",
+        "enum": ["no_access", "not_listed", "recipient_limit"]
+      },
+      "SkippedRecipient": {
+        "type": "object",
+        "description": "A recipient a ping was not sent to.",
+        "required": ["userId", "reason"],
+        "properties": {
+          "reason": {
+            "$ref": "#/components/schemas/SkipReason",
+            "description": "Why they were left out."
+          },
+          "userId": {
+            "type": "string",
+            "description": "The recipient."
           }
         }
       },

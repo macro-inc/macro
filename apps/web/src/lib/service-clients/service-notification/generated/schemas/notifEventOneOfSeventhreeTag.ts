@@ -10,5 +10,5 @@ export type NotifEventOneOfSeventhreeTag =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const NotifEventOneOfSeventhreeTag = {
-  runtime_access_removed: 'runtime_access_removed',
+  ping: 'ping',
 } as const;

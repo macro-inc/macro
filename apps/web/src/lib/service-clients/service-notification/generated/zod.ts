@@ -2408,7 +2408,7 @@ export const listTypedNotificationsResponse = zod
                                     .describe("The agent's display name."),
                                 })
                                 .describe(
-                                  'The agent a manual notification reads as being from, as it was when sent.'
+                                  'The agent a ping reads as being from, as it was when sent.'
                                 ),
                             ])
                             .optional(),
@@ -2416,14 +2416,34 @@ export const listTypedNotificationsResponse = zod
                             .string()
                             .nullish()
                             .describe('More detail, as the sender wrote it.'),
+                          message: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  messageId: zod
+                                    .uuid()
+                                    .describe('The message.'),
+                                  threadId: zod
+                                    .uuid()
+                                    .nullish()
+                                    .describe(
+                                      'The top-level message it replies to; absent when it is top-level\nitself.'
+                                    ),
+                                })
+                                .describe(
+                                  'The channel message a ping points at.'
+                                ),
+                            ])
+                            .optional(),
                           title: zod
                             .string()
                             .describe('The headline, as the sender wrote it.'),
                         })
                         .describe(
-                          "A notification written by its sender: a title, an optional body, and the\nentity it opens. The sender is the notification's `sender_id`, or nobody\nwhen people notify themselves."
+                          "A notification written by its sender: a title, an optional body, and the\nentity it opens. The sender is the notification's `sender_id`, or nobody\nwhen people notify themselves. One about a channel message is filed under\nthe message's channel and names the message."
                         ),
-                      tag: zod.enum(['manual']),
+                      tag: zod.enum(['ping']),
                     })
                     .describe(
                       'Someone, usually agent code through the SDK, sent the user a\nnotification they wrote.'
@@ -4718,7 +4738,7 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                                     .describe("The agent's display name."),
                                 })
                                 .describe(
-                                  'The agent a manual notification reads as being from, as it was when sent.'
+                                  'The agent a ping reads as being from, as it was when sent.'
                                 ),
                             ])
                             .optional(),
@@ -4726,14 +4746,34 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                             .string()
                             .nullish()
                             .describe('More detail, as the sender wrote it.'),
+                          message: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  messageId: zod
+                                    .uuid()
+                                    .describe('The message.'),
+                                  threadId: zod
+                                    .uuid()
+                                    .nullish()
+                                    .describe(
+                                      'The top-level message it replies to; absent when it is top-level\nitself.'
+                                    ),
+                                })
+                                .describe(
+                                  'The channel message a ping points at.'
+                                ),
+                            ])
+                            .optional(),
                           title: zod
                             .string()
                             .describe('The headline, as the sender wrote it.'),
                         })
                         .describe(
-                          "A notification written by its sender: a title, an optional body, and the\nentity it opens. The sender is the notification's `sender_id`, or nobody\nwhen people notify themselves."
+                          "A notification written by its sender: a title, an optional body, and the\nentity it opens. The sender is the notification's `sender_id`, or nobody\nwhen people notify themselves. One about a channel message is filed under\nthe message's channel and names the message."
                         ),
-                      tag: zod.enum(['manual']),
+                      tag: zod.enum(['ping']),
                     })
                     .describe(
                       'Someone, usually agent code through the SDK, sent the user a\nnotification they wrote.'
@@ -6978,7 +7018,7 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                                     .describe("The agent's display name."),
                                 })
                                 .describe(
-                                  'The agent a manual notification reads as being from, as it was when sent.'
+                                  'The agent a ping reads as being from, as it was when sent.'
                                 ),
                             ])
                             .optional(),
@@ -6986,14 +7026,34 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                             .string()
                             .nullish()
                             .describe('More detail, as the sender wrote it.'),
+                          message: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  messageId: zod
+                                    .uuid()
+                                    .describe('The message.'),
+                                  threadId: zod
+                                    .uuid()
+                                    .nullish()
+                                    .describe(
+                                      'The top-level message it replies to; absent when it is top-level\nitself.'
+                                    ),
+                                })
+                                .describe(
+                                  'The channel message a ping points at.'
+                                ),
+                            ])
+                            .optional(),
                           title: zod
                             .string()
                             .describe('The headline, as the sender wrote it.'),
                         })
                         .describe(
-                          "A notification written by its sender: a title, an optional body, and the\nentity it opens. The sender is the notification's `sender_id`, or nobody\nwhen people notify themselves."
+                          "A notification written by its sender: a title, an optional body, and the\nentity it opens. The sender is the notification's `sender_id`, or nobody\nwhen people notify themselves. One about a channel message is filed under\nthe message's channel and names the message."
                         ),
-                      tag: zod.enum(['manual']),
+                      tag: zod.enum(['ping']),
                     })
                     .describe(
                       'Someone, usually agent code through the SDK, sent the user a\nnotification they wrote.'
@@ -7099,11 +7159,17 @@ export const enableNotificationTypeParams = zod.object({
 });
 
 /**
- * @summary Send a notification the caller wrote, to themselves or to someone who can
-already see what it links to. Delivered like any other notification and
-subject to the recipient's notification preferences.
+ * @summary Send a notification the caller wrote about an entity, to themselves or to
+people who can already see that entity. Recipients who cannot see it,
+whose inbox would not list it, or who have received 60 from others this
+hour are skipped and returned. Delivered like any other notification and
+subject to each recipient's notification preferences. The same notification
+sent again in the same ten-minute window of the clock is delivered once; a
+repeat that falls in the next window is delivered again. A sender can
+notify at most 1000 recipients an hour. Refused with 403 while the
+`enable-agent-notifications` flag is off for the caller.
  */
-export const sendManualNotificationBody = zod
+export const sendPingBody = zod
   .object({
     body: zod
       .string()
@@ -7142,16 +7208,40 @@ export const sendManualNotificationBody = zod
           ])
           .describe('The type of an entity in Macro'),
       })
-      .describe('What a manual notification opens.'),
-    recipientId: zod
-      .string()
-      .nullish()
+      .describe('What a ping opens.'),
+    recipientIds: zod
+      .array(zod.string())
+      .optional()
       .describe(
-        'Who gets it; the caller when omitted. Anyone else must already be able\nto see `link`.'
+        'Who gets it, at most 100; the caller when omitted or empty. Anyone\nwho cannot already see `link`, or whose inbox would not list it, is\nskipped, never given access.'
       ),
     title: zod.string().describe('The headline, at most 120 characters.'),
   })
   .describe('A notification written by the caller.');
+
+export const sendPingResponse = zod
+  .object({
+    notified: zod
+      .array(zod.string())
+      .describe(
+        'The recipients it was queued for, in the order they were named.'
+      ),
+    skipped: zod
+      .array(
+        zod
+          .object({
+            reason: zod
+              .enum(['no_access', 'not_listed', 'recipient_limit'])
+              .describe('Why a recipient was left out of a ping.'),
+            userId: zod.string().describe('The recipient.'),
+          })
+          .describe('A recipient a ping was not sent to.')
+      )
+      .describe('The recipients it was not sent to.'),
+  })
+  .describe(
+    "Who a ping was sent to. A notified recipient's own\npreferences can still keep it from them; that is theirs to know."
+  );
 
 /**
  * @summary Typed wrapper for getting a single notification by ID.
@@ -9131,7 +9221,7 @@ export const getTypedNotificationByIdResponse = zod
                             .describe("The agent's display name."),
                         })
                         .describe(
-                          'The agent a manual notification reads as being from, as it was when sent.'
+                          'The agent a ping reads as being from, as it was when sent.'
                         ),
                     ])
                     .optional(),
@@ -9139,14 +9229,30 @@ export const getTypedNotificationByIdResponse = zod
                     .string()
                     .nullish()
                     .describe('More detail, as the sender wrote it.'),
+                  message: zod
+                    .union([
+                      zod.null(),
+                      zod
+                        .object({
+                          messageId: zod.uuid().describe('The message.'),
+                          threadId: zod
+                            .uuid()
+                            .nullish()
+                            .describe(
+                              'The top-level message it replies to; absent when it is top-level\nitself.'
+                            ),
+                        })
+                        .describe('The channel message a ping points at.'),
+                    ])
+                    .optional(),
                   title: zod
                     .string()
                     .describe('The headline, as the sender wrote it.'),
                 })
                 .describe(
-                  "A notification written by its sender: a title, an optional body, and the\nentity it opens. The sender is the notification's `sender_id`, or nobody\nwhen people notify themselves."
+                  "A notification written by its sender: a title, an optional body, and the\nentity it opens. The sender is the notification's `sender_id`, or nobody\nwhen people notify themselves. One about a channel message is filed under\nthe message's channel and names the message."
                 ),
-              tag: zod.enum(['manual']),
+              tag: zod.enum(['ping']),
             })
             .describe(
               'Someone, usually agent code through the SDK, sent the user a\nnotification they wrote.'

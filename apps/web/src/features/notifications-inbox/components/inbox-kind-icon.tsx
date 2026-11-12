@@ -12,6 +12,7 @@ import EnvelopeIcon from '@icon/system/regular/envelope.svg';
 import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
 import HashIcon from '@icon/system/regular/hash.svg';
 import LockKeyIcon from '@icon/system/regular/lock-key.svg';
+import PaperPlaneTiltIcon from '@icon/system/regular/paper-plane-tilt.svg';
 import RobotIcon from '@icon/system/regular/robot.svg';
 import SmileyIcon from '@icon/system/regular/smiley.svg';
 import UserPlusIcon from '@icon/system/regular/user-plus.svg';
@@ -31,6 +32,7 @@ const iconFor = (kind: InboxCardKind) =>
     .with('invite', () => UserPlusIcon)
     .with('access', () => LockKeyIcon)
     .with('agent', () => RobotIcon)
+    .with('ping', () => PaperPlaneTiltIcon)
     .with('task', () => CheckSquareIcon)
     .with('pull_request', () => GitPullRequestIcon)
     .with('event', () => CalendarBlankIcon)
@@ -50,6 +52,7 @@ export const inboxKindLabel = (kind: InboxCardKind) =>
     .with('invite', () => t('notificationsInbox.kindInvite'))
     .with('access', () => t('notificationsInbox.kindAccess'))
     .with('agent', () => t('notificationsInbox.kindAgent'))
+    .with('ping', () => t('notificationsInbox.kindPing'))
     .with('task', () => t('notificationsInbox.kindTask'))
     .with('pull_request', () => t('notificationsInbox.kindPullRequest'))
     .with('event', () => t('notificationsInbox.kindEvent'))

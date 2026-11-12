@@ -38,5 +38,5 @@ export const NOTIFICATION_LABEL_BY_TYPE: Record<NotificationType, string> = {
   routine_run_finished: 'ROUTINE',
   agent_sign_in_expiry: 'COMPUTER',
   computer_setup: 'COMPUTER',
-  manual: 'NOTE',
+  ping: 'PING',
 } as const;

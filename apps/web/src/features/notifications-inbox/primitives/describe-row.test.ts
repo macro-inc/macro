@@ -511,6 +511,127 @@ describe('describeInboxCard', () => {
   });
 });
 
+describe('a ping', () => {
+  const ping = (id: string, sender = 'Scout') =>
+    sent(id, 'ping', sender, {
+      title: 'Deploy finished',
+      body: 'All 3 services are live.',
+    });
+
+  const on = (
+    entity: Record<string, unknown>,
+    row: NotificationInboxRow
+  ): NotificationInboxRow => ({
+    ...row,
+    content: { ...row.content, entity: entity as never },
+  });
+
+  const task = { type: 'task', id: 'task-a', name: 'Ship the inbox' };
+
+  it('says who pinged you, what about, and what they wrote', () => {
+    expect(
+      describeInboxCard(
+        on(task, stack('discussion_messages', [ping('1')])),
+        people
+      )
+    ).toEqual({
+      who: 'Scout pinged you',
+      what: 'Ship the inbox',
+      body: 'Deploy finished — All 3 services are live.',
+    });
+  });
+
+  it('names its entity on every row it joins', () => {
+    const rows = [
+      ['email', { type: 'email', id: 'thread-a', name: 'Quarterly numbers' }],
+      ['calendar_event', { type: 'calendar_event', id: 'e', name: 'Standup' }],
+      ['agent', { type: 'agent_session', id: 's', name: 'Inbox triage' }],
+      ['channel_thread', { type: 'channel', id: 'c', name: 'Dana' }],
+    ] as const;
+    for (const [type, entity] of rows) {
+      expect(
+        describeInboxCard(on(entity, stack(type, [ping('1')])), people)
+      ).toEqual({
+        who: 'Scout pinged you',
+        what: entity.name,
+        body: 'Deploy finished — All 3 services are live.',
+      });
+    }
+  });
+
+  it('names a channel the way its messages do', () => {
+    const general = {
+      type: 'channel',
+      id: 'c',
+      name: 'launch',
+      channelType: 'public',
+    };
+    expect(
+      describeInboxCard(
+        on(general, stack('channel_messages', [ping('1')])),
+        people
+      ).what
+    ).toBe('#launch');
+  });
+
+  it('is a Ping when nobody is named as its sender', () => {
+    // A ping people send themselves from a script has no sender and no agent.
+    const own = {
+      ...ping('1'),
+      sender_id: null,
+    } as unknown as UnifiedNotification;
+    const row = on(task, stack('discussion_messages', [own]));
+    expect(describeInboxCard(row, people)).toEqual({
+      who: 'Ping',
+      what: 'Ship the inbox',
+      body: 'Deploy finished — All 3 services are live.',
+    });
+    expect(describeInboxRow(row, people).action).toBe('Ping');
+    expect(itemsOf(row)[0].by).toBe('Ping');
+  });
+
+  it('keeps its verb when a stack holds nothing but pings', () => {
+    const row = on(
+      task,
+      stack('discussion_messages', [ping('1'), ping('2', 'Builder')])
+    );
+    expect(describeInboxCard(row, people).who).toBe(
+      'Scout and Builder pinged you'
+    );
+  });
+
+  it('on top of a stack names its people and says who wrote it', () => {
+    const comment = sent('2', 'commented_on_document', 'Sam', {
+      documentName: 'Ship the inbox',
+      text: 'Looks good',
+    });
+    const row = on(task, stack('discussion_messages', [ping('1'), comment]));
+    expect(describeInboxCard(row, people)).toEqual({
+      who: 'Scout and Sam',
+      what: 'Ship the inbox',
+      body: 'Scout: Deploy finished — All 3 services are live.',
+    });
+    expect(itemsOf(row).map(({ by, text }) => ({ by, text }))).toEqual([
+      {
+        by: 'Scout pinged you',
+        text: 'Deploy finished — All 3 services are live.',
+      },
+      { by: 'Sam commented', text: 'Looks good' },
+    ]);
+  });
+
+  it('makes the row it tops a ping, but leaves a mention a mention', () => {
+    expect(inboxCardKind(stack('discussion_messages', [ping('1')]))).toBe(
+      'ping'
+    );
+    expect(inboxCardKind(stack('channel_thread', [ping('1')]))).toBe('ping');
+    expect(inboxCardKind(stack('email', [ping('1')]))).toBe('ping');
+    expect(inboxCardKind(stack('channel_mention', [ping('1')]))).toBe(
+      'mention'
+    );
+  });
+});
+
 describe('inboxCardKind', () => {
   const kindOf = (
     type: NotificationInboxRow['type'],

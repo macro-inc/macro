@@ -325,7 +325,7 @@ vi.mock('@channel/queries/prefetch-channel-target', () => ({
   prefetchChannelTarget: vi.fn(async () => {}),
 }));
 
-it('opens a manual notification linked to a document whose metadata fails to load', async () => {
+it('opens a ping linked to a document whose metadata fails to load', async () => {
   vi.mocked(fetchDocumentMetadata)
     .mockReset()
     .mockRejectedValue(new Error('500 Internal Server Error'));
@@ -335,9 +335,9 @@ it('opens a manual notification linked to a document whose metadata fails to loa
     id: 'notification',
     entity_id: 'task-doc',
     entity_type: 'document',
-    notification_event_type: 'manual',
+    notification_event_type: 'ping',
     notification_metadata: {
-      tag: 'manual',
+      tag: 'ping',
       content: { title: 'Deploy finished' },
     },
   } as UnifiedNotification;
@@ -351,4 +351,103 @@ it('opens a manual notification linked to a document whose metadata fails to loa
   expect(fetchDocumentMetadata).toHaveBeenCalledWith('task-doc');
   expect(layout.getSplitByContent).toHaveBeenCalledWith(undefined, 'task-doc');
   expect(activate).toHaveBeenCalledOnce();
+});
+
+it('opens a ping about a channel message at that message', async () => {
+  const { navigateToChannelMessage } = await import(
+    '@block-channel/utils/link'
+  );
+  const orchestrator = {};
+  const layout = { getOrchestrator: () => orchestrator };
+  const notification = {
+    id: 'notification',
+    entity_id: 'channel',
+    entity_type: 'channel',
+    notification_event_type: 'ping',
+    notification_metadata: {
+      tag: 'ping',
+      content: {
+        title: 'Needs an answer',
+        message: { messageId: 'reply', threadId: 'root' },
+      },
+    },
+  } as UnifiedNotification;
+
+  const result = await openNotification(
+    notification,
+    layout as unknown as SplitManager
+  );
+
+  expect(result.isOk()).toBe(true);
+  expect(navigateToChannelMessage).toHaveBeenCalledWith(
+    orchestrator,
+    'channel',
+    'reply',
+    'root',
+    expect.objectContaining({ splitManager: layout, preferNewSplit: false })
+  );
+});
+
+it('opens a ping on a project, an event and a contact', async () => {
+  vi.mocked(isFeatureEnabled).mockReturnValue(true);
+  const { openCalendarView } = await import(
+    '@app/features/calendar-view/calendar-navigation'
+  );
+  const open = vi.fn(() => ({ status: 'opened' }));
+  const layout = { getSplitByContent: vi.fn(), openWithSplit: open };
+  const manual = (entity_type: string, entity_id: string) =>
+    ({
+      id: 'notification',
+      entity_id,
+      entity_type,
+      notification_event_type: 'ping',
+      notification_metadata: {
+        tag: 'ping',
+        content: { title: 'Deploy finished' },
+      },
+    }) as UnifiedNotification;
+
+  const project = await openNotification(
+    manual('initiative', '11111111-1111-4111-8111-111111111111'),
+    layout as unknown as SplitManager
+  );
+  expect(project.isOk()).toBe(true);
+  expect(layout.getSplitByContent).toHaveBeenCalledWith(
+    'component',
+    expect.stringContaining('11111111-1111-4111-8111-111111111111~overview')
+  );
+
+  const event = await openNotification(
+    manual('calendar_event', 'event'),
+    layout as unknown as SplitManager
+  );
+  expect(event.isOk()).toBe(true);
+  expect(openCalendarView).toHaveBeenCalledWith(
+    { eventId: 'event' },
+    expect.objectContaining({ manager: layout, openInNewSplit: false })
+  );
+
+  open.mockClear();
+  const contact = await openNotification(
+    manual('crm_contact', 'contact'),
+    layout as unknown as SplitManager
+  );
+  expect(contact.isOk()).toBe(true);
+  expect(open).toHaveBeenCalledWith(
+    expect.objectContaining({
+      type: 'component',
+      id: 'companies',
+      entryMetadata: expect.objectContaining({
+        route: expect.objectContaining({
+          matches: expect.arrayContaining([
+            {
+              id: 'companies-record',
+              params: { recordType: 'contact', recordId: 'contact' },
+            },
+          ]),
+        }),
+      }),
+    }),
+    expect.objectContaining({ allowDuplicate: true })
+  );
 });

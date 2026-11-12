@@ -78,6 +78,7 @@ export type InboxCardKind =
   | 'invite'
   | 'access'
   | 'agent'
+  | 'ping'
   | 'task'
   | 'pull_request'
   | 'event'

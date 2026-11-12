@@ -70,7 +70,7 @@ async function resolveActorName(
   if (meta.tag === 'agent_sign_in_expiry' || meta.tag === 'computer_setup') {
     return meta.content.computerName;
   }
-  if (meta.tag === 'manual' && meta.content.agent) {
+  if (meta.tag === 'ping' && meta.content.agent) {
     return meta.content.agent.name;
   }
   if ('senderDisplayName' in meta.content && meta.content.senderDisplayName) {
@@ -132,9 +132,9 @@ export async function toPlatformNotificationData(
       }
     : undefined;
 
-  // A manual notification is the sender's own words: its title and body
+  // A ping is the sender's own words: its title and body
   // show as written, with no actor sentence built around them.
-  if (metadata.tag === 'manual') {
+  if (metadata.tag === 'ping') {
     return {
       title: metadata.content.title,
       options: {

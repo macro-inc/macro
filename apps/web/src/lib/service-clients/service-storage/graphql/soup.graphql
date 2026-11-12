@@ -668,12 +668,14 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 		computerSetupOutcome: outcome
 		computerSetupFailureReason: failureReason
 	}
-	... on GraphqlManualMetadata {
-		manualTitle: title
-		manualBody: body
-		manualAgentId: agentId
-		manualAgentName: agentName
-		manualAgentAvatarUrl: agentAvatarUrl
+	... on GraphqlPingMetadata {
+		pingTitle: title
+		pingBody: body
+		pingAgentId: agentId
+		pingAgentName: agentName
+		pingAgentAvatarUrl: agentAvatarUrl
+		pingMessageId: messageId
+		pingThreadId: threadId
 	}
 	... on GraphqlInviteToTeamMetadata {
 		inviteToTeamTeamName: teamName
