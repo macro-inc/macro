@@ -10,6 +10,7 @@ import {
   DRAG_DATA_FORMAT,
   type DraggableBlockState,
 } from '../../plugins/draggable-block/draggableBlockPlugin';
+import { FOLDABLE_HEADING_ATTRIBUTE } from '../../plugins/heading-folds';
 
 const HANDLE_SIZE = 20;
 const HANDLE_GAP = 4;
@@ -31,10 +32,12 @@ export function DraggableBlockMenu(props: {
     if (!rootRect) return null;
 
     const effectiveHeight = Math.min(rect.height, 24);
+    // A heading's fold control takes the gutter column next to the text.
+    const columns = elem.hasAttribute(FOLDABLE_HEADING_ATTRIBUTE) ? 2 : 1;
 
     return {
       top: rect.top + (effectiveHeight - HANDLE_SIZE) / 2,
-      left: rootRect.left - HANDLE_SIZE - HANDLE_GAP,
+      left: rootRect.left - columns * (HANDLE_SIZE + HANDLE_GAP),
     };
   };
 
