@@ -182,6 +182,43 @@ async fn retry_remains_available_with_flag_off() {
 }
 
 #[tokio::test]
+async fn restore_remains_available_with_flag_off() {
+    let (service, id) = existing_computer_with_flag_off().await;
+    {
+        let mut computers = service.repo.computers.lock().unwrap();
+        let state = &mut computers.get_mut(&id).unwrap().state;
+        state.phase = Phase::Stopped;
+        state.power = crate::domain::lifecycle::Power::Off;
+        state.billing = crate::domain::lifecycle::Billing::EndsAt {
+            at: now() - chrono::Duration::days(2),
+        };
+    }
+    assert_eq!(
+        service.restore(TEAM, id).await.unwrap().billing,
+        Some(crate::domain::models::BillingStatus::Active)
+    );
+}
+
+#[tokio::test]
+async fn setup_complete_remains_available_with_flag_off() {
+    let (service, id) = existing_computer_with_flag_off().await;
+    service
+        .complete_setup(
+            TEAM,
+            id,
+            MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
+            crate::domain::service::TeamMemberRole::Other,
+        )
+        .await
+        .unwrap();
+    assert!(
+        service.repo.computers.lock().unwrap()[&id]
+            .setup_completed_at
+            .is_some()
+    );
+}
+
+#[tokio::test]
 async fn release_remains_available_with_flag_off() {
     let (service, id) = existing_computer_with_flag_off().await;
     assert_eq!(
