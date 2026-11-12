@@ -126,7 +126,8 @@ live events that keep them current.
   timeline read is in flight. No page reads the latest (one request); a
   cached page catches up from its number (one request, at most two change
   pages before it reads the latest instead: three at most) and is written
-  back. A channel whose timeline is in TanStack Query is never touched. A
+  back. A server read with no answer in 15 s fails that channel and the run
+  goes on. A channel whose timeline is in TanStack Query is never touched. A
   channel is warmed once per session, again when it turns unread again.
 - "Last opened" is the later `viewed_at` of the channel list and the activity
   list (which opening a channel moves). In each page load, once both lists

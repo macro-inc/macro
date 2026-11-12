@@ -35,6 +35,8 @@ const RECENT_CHANNELS = 20;
  * channel costs three requests at most.
  */
 const PREWARM_CHANGE_PAGES = 2;
+/** A server read with no answer by now fails its channel; the run goes on. */
+const SERVER_READ_TIMEOUT_MS = 15_000;
 /** The least time between two channels: 120 channels a minute at most. */
 const CHANNEL_SPACING_MS = 500;
 /** Warming waits this long after the person last pressed, typed or scrolled. */
@@ -146,6 +148,13 @@ function idle(): Promise<void> {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** The read's answer, or a failure once it has taken too long to give one. */
+async function answered<T extends object>(read: Promise<T>): Promise<T> {
+  const answer = await Promise.race([read, sleep(SERVER_READ_TIMEOUT_MS)]);
+  if (!answer) throw new Error('Channel prewarm read timed out');
+  return answer;
 }
 
 let lastInputAt = -Infinity;
@@ -268,7 +277,9 @@ async function catchUpCachedPage(
   for (let pages = 1; pages <= PREWARM_CHANGE_PAGES; pages += 1) {
     span.setAttr('channel.prewarm.change_pages', pages);
     const since = latest.seq;
-    const changes = await span.run(() => fetchChannelChanges(channelId, since));
+    const changes = await span.run(() =>
+      answered(fetchChannelChanges(channelId, since))
+    );
     if (changes.reset) return undefined;
     latest = {
       ...latest,
@@ -313,7 +324,9 @@ async function readWarmPage(
     // An emptied page marks a refused channel: its number and cursor
     // describe rows that are gone, so it is read whole like a miss.
     if (!cached || cached.page.entries.length === 0) {
-      const latest = await span.run(() => fetchLatestChannelPage(channelId));
+      const latest = await span.run(() =>
+        answered(fetchLatestChannelPage(channelId))
+      );
       return { outcome: 'fetched', latest };
     }
     noteCachedPage(host, channelId, true);
@@ -323,7 +336,9 @@ async function readWarmPage(
         ? { outcome: 'current' }
         : { outcome: 'caught_up', latest: caughtUp };
     }
-    const latest = await span.run(() => fetchLatestChannelPage(channelId));
+    const latest = await span.run(() =>
+      answered(fetchLatestChannelPage(channelId))
+    );
     return { outcome: 'read_again', latest };
   } catch (error) {
     span.error(error);

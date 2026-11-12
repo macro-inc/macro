@@ -318,6 +318,31 @@ describe('warming a channel', () => {
     }
   );
 
+  it('gives up on a server read that never answers and warms the next channel', async () => {
+    // Every wait elapses at once, the read's deadline included.
+    const realSetTimeout = setTimeout;
+    vi.stubGlobal('setTimeout', (callback: () => void) =>
+      realSetTimeout(callback, 0)
+    );
+    knownChannels({ a: daysAgo(1), b: daysAgo(2) });
+    mocks.readCachedLatestPage.mockImplementation(
+      async (_host: unknown, channelId: string) =>
+        channelId === 'a'
+          ? { seq: 7, userId: 'user', page: page([messageEntry('m1', 1)]) }
+          : undefined
+    );
+    mocks.fetchChannelChanges.mockReturnValue(new Promise(() => {}));
+    mocks.fetchLatestChannelPage.mockResolvedValue({
+      seq: 3,
+      userId: 'user',
+      page: page([messageEntry('m2', 2)]),
+    });
+    await maintain();
+    expect(mocks.fetchChannelChanges).toHaveBeenCalledTimes(1);
+    expect(mocks.writeCachedLatestPage).toHaveBeenCalledTimes(1);
+    expect(writtenIds()).toEqual({ channelId: 'b', seq: 3, ids: ['m2'] });
+  });
+
   it('neither reads nor writes when the cache cannot read the page', async () => {
     knownChannels({ a: daysAgo(1) });
     mocks.readCachedLatestPage.mockRejectedValue(new Error('engine busy'));
