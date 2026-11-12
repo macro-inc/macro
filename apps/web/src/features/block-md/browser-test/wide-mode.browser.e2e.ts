@@ -1,11 +1,117 @@
 import { expect, type Page, test } from '@playwright/test';
 
 const FIXTURE = '/src/features/block-md/browser-test/wide-mode.html';
+const DOCUMENT_ID = 'wide-mode-fixture';
+const POSTED_AT = '2026-11-12T16:05:00.000Z';
+const ROOT_ID = '00000000-0000-7000-8000-00000000d001';
+const REPLY =
+  'Yes. The import report lists every page by team, so each owner can say what moves first and what can wait until next quarter.';
+
+function message(
+  id: string,
+  sender: string,
+  content: string,
+  threadId: null | string
+) {
+  return {
+    id,
+    parent: { type: 'document', id: DOCUMENT_ID },
+    thread_id: threadId,
+    kind: 'message',
+    sender_id: `macro|${sender}@example.com`,
+    mentions: [],
+    content,
+    created_at: POSTED_AT,
+    updated_at: POSTED_AT,
+    attachments: [],
+    reactions: [],
+  };
+}
+
+const ROOT = message(
+  ROOT_ID,
+  'ana',
+  'Should we agree on the order with each team before the import starts?',
+  null
+);
+const REPLIES = [
+  message('00000000-0000-7000-8000-00000000d002', 'sam', REPLY, ROOT_ID),
+];
+const THREAD_STATE = {
+  root_id: ROOT_ID,
+  user_id: ROOT.sender_id,
+  resolved: false,
+  anchor: null,
+  created_at: POSTED_AT,
+  updated_at: POSTED_AT,
+};
+
+/**
+ * Answers the document's Discussion with one unanchored thread and a reply.
+ * Every other request outside the dev server gets a 404, so no hosted data is
+ * read or written.
+ */
+async function answerDiscussion(page: Page) {
+  await page.route('**/*', async (route) => {
+    const url = new URL(route.request().url());
+    const messages = `/messages/document/${DOCUMENT_ID}`;
+    if (url.pathname.endsWith(`${messages}/timeline`)) {
+      const root = {
+        ...ROOT,
+        state: THREAD_STATE,
+        thread: {
+          reply_count: REPLIES.length,
+          latest_reply_at: POSTED_AT,
+          preview: REPLIES,
+        },
+      };
+      await route.fulfill({
+        json: {
+          entries: [{ type: 'message', message: root }],
+          next_cursor: null,
+          previous_cursor: null,
+        },
+      });
+    } else if (url.pathname.endsWith(`${messages}/threads/${ROOT_ID}`)) {
+      await route.fulfill({
+        json: { root: ROOT, state: THREAD_STATE, replies: REPLIES },
+      });
+    } else if (
+      url.hostname === 'localhost' &&
+      !url.pathname.startsWith('/__macro_dev/')
+    ) {
+      await route.continue();
+    } else {
+      await route.fulfill({ status: 404, json: {} });
+    }
+  });
+}
 
 async function openDocument(page: Page, query = '') {
   await page.routeWebSocket('**/*', (socket) => socket.close());
   await page.goto(FIXTURE + query);
   await expect(page.getByText('Roadmap')).toBeVisible({ timeout: 30_000 });
+}
+
+/**
+ * Where the Discussion's header, comment, reply and composer sit across the
+ * pane. The composer is measured by its frame, not its placeholder.
+ */
+async function discussionColumns(page: Page) {
+  const discussion = page.locator('[data-entity-conversation]');
+  const parts = [
+    discussion.getByRole('button', { name: 'Discussion' }),
+    discussion.getByText(ROOT.content),
+    discussion.getByText(REPLY),
+    discussion.locator('[data-input]'),
+  ];
+  return Promise.all(
+    parts.map(async (part) => {
+      const box = await part.boundingBox();
+      if (!box) throw new Error('The discussion is not rendered');
+      return { left: Math.round(box.x), right: Math.round(box.x + box.width) };
+    })
+  );
 }
 
 async function columnWidth(page: Page): Promise<number> {
@@ -96,6 +202,32 @@ test.describe('desktop', () => {
 
       await page.getByRole('button', { name: 'Turn off wide mode' }).click();
       await expect.poll(() => columnWidth(page)).toBe(standard);
+    }
+  });
+});
+
+test.describe('discussion', () => {
+  test.skip(({ isMobile }) => isMobile, 'Wide mode is desktop and tablet only');
+
+  test('wide mode leaves the discussion where it was', async ({ page }) => {
+    await answerDiscussion(page);
+    for (const width of [1000, 1600]) {
+      await page.setViewportSize({ width, height: 1000 });
+      await openDocument(page, '?discussion');
+      await expect(page.getByText(REPLY)).toBeVisible();
+      const standard = await discussionColumns(page);
+      // The composer spans the standard column, centered in the pane.
+      const composer = standard[3];
+      expect(composer.right - composer.left).toBe(768);
+      expect(composer.left + composer.right).toBe(width);
+
+      await page.getByRole('button', { name: 'Turn on wide mode' }).click();
+      await expect.poll(() => columnWidth(page)).toBe(width - 2 * 64);
+      expect(await discussionColumns(page)).toEqual(standard);
+
+      await page.getByRole('button', { name: 'Turn off wide mode' }).click();
+      await expect.poll(() => columnWidth(page)).toBe(768);
+      expect(await discussionColumns(page)).toEqual(standard);
     }
   });
 });
