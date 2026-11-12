@@ -274,7 +274,7 @@ fn up_allocated(
     let stack_up = super::bring_up(stage, mode, &mut instance, &args.run, &plan)?;
     if !args.infra_only {
         stage.print_timings("bring-up");
-        super::print_stack_summary(&stage, mode, &instance, &stack_up, &plan)?;
+        super::print_stack_summary(stage, mode, &instance, &stack_up, &plan)?;
         stage.note(&format!(
             "  headless: `just stack status`, `just stack update`, `just stack down`{}",
             instance_suffix(&instance)
