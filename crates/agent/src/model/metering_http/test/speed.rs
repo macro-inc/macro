@@ -213,3 +213,66 @@ async fn missing_delivered_tier_preserves_legacy_provider_results() {
         assert!(recorder.0.lock().unwrap().is_empty());
     }
 }
+
+#[test]
+fn model_call_span_records_the_tier_and_effort_sent() {
+    use opentelemetry::trace::TracerProvider as _;
+    use opentelemetry_sdk::trace::{InMemorySpanExporter, SdkTracerProvider};
+    use tracing_subscriber::layer::SubscriberExt as _;
+
+    let exporter = InMemorySpanExporter::default();
+    let provider = SdkTracerProvider::builder()
+        .with_simple_exporter(exporter.clone())
+        .build();
+    let layer = tracing_opentelemetry::layer().with_tracer(provider.tracer("test"));
+    let _guard = tracing::subscriber::set_default(tracing_subscriber::registry().with(layer));
+    tracing::callsite::rebuild_interest_cache();
+
+    for body in [
+        json!({"model":"gpt-6.1-sol","service_tier":"priority","reasoning":{"effort":"xhigh"}}),
+        json!({"model":"claude-opus-5-5","speed":"fast","output_config":{"effort":"low"}}),
+        json!({"model":"gpt-5.5"}),
+    ] {
+        let span = tracing::info_span!("chat_streaming");
+        record_request_settings(&span, &body);
+    }
+
+    provider.force_flush().unwrap();
+    let attributes: Vec<Vec<(String, String)>> = exporter
+        .get_finished_spans()
+        .unwrap()
+        .iter()
+        .map(|span| {
+            let mut attributes: Vec<_> = span
+                .attributes
+                .iter()
+                .filter(|kv| {
+                    [
+                        attr::OPENAI_REQUEST_SERVICE_TIER,
+                        attr::MACRO_REQUEST_REASONING_EFFORT,
+                        attr::MACRO_REQUEST_SPEED,
+                    ]
+                    .contains(&kv.key.as_str())
+                })
+                .map(|kv| (kv.key.to_string(), kv.value.to_string()))
+                .collect();
+            attributes.sort();
+            attributes
+        })
+        .collect();
+    let pair = |key: &str, value: &str| (key.to_owned(), value.to_owned());
+    assert_eq!(
+        attributes,
+        [
+            vec![
+                pair(attr::MACRO_REQUEST_REASONING_EFFORT, "xhigh"),
+                pair(attr::OPENAI_REQUEST_SERVICE_TIER, "priority"),
+            ],
+            vec![
+                pair(attr::MACRO_REQUEST_REASONING_EFFORT, "low"),
+                pair(attr::MACRO_REQUEST_SPEED, "fast"),
+            ],
+            vec![],
+        ]
+    );
+}

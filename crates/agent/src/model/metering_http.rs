@@ -42,6 +42,25 @@ pub struct MeteredHttpClient<H = http_client::ReqwestClient> {
     macro_account: bool,
 }
 
+/// Puts the tier and effort the provider actually receives on the model-call
+/// span (Rig's), so a trace shows what a session's settings turned into.
+fn record_request_settings(span: &tracing::Span, body: &Value) {
+    if let Some(tier) = body.get("service_tier").and_then(Value::as_str) {
+        span.set_str(attr::OPENAI_REQUEST_SERVICE_TIER, tier);
+    }
+    if let Some(speed) = body.get("speed").and_then(Value::as_str) {
+        span.set_str(attr::MACRO_REQUEST_SPEED, speed);
+    }
+    let effort = body
+        .pointer("/reasoning/effort")
+        .or_else(|| body.pointer("/output_config/effort"))
+        .or_else(|| body.get("reasoning_effort"))
+        .and_then(Value::as_str);
+    if let Some(effort) = effort {
+        span.set_str(attr::MACRO_REQUEST_REASONING_EFFORT, effort);
+    }
+}
+
 // Required by Rig's CompletionModel bounds, even for explicitly built clients.
 // An unconfigured default must fail closed for activated traffic.
 impl<H: Default> Default for MeteredHttpClient<H> {
@@ -89,9 +108,13 @@ impl<H> MeteredHttpClient<H> {
         &self,
         mut request: Request<Bytes>,
     ) -> http_client::Result<(Request<Bytes>, Option<Attempt>)> {
+        let sent = serde_json::from_slice::<Value>(request.body()).ok();
+        if let Some(body) = &sent {
+            record_request_settings(&tracing::Span::current(), body);
+        }
         if self.protocol == WireProtocol::Anthropic
-            && serde_json::from_slice::<Value>(request.body())
-                .ok()
+            && sent
+                .as_ref()
                 .is_some_and(|body| body.get("speed").is_some_and(|speed| speed == "fast"))
         {
             let beta = "fast-mode-2026-02-01";
