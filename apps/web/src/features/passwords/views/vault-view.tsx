@@ -13,11 +13,12 @@ import { usePending } from '@app/observability/flow';
 import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
 import { MobileCreateMenu } from '@components/app/mobile/MobileCreateMenu';
 import { type PillTabItem, PillTabs } from '@components/app/mobile/PillTabs';
+import { toast } from '@core/component/Toast/Toast';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg';
 import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
 import DotsThreeIcon from '@icon/system/regular/dots-three.svg';
-import FolderPlusIcon from '@icon/system/regular/folder-plus.svg';
 import LockIcon from '@icon/system/regular/lock.svg';
 import { Button, Dropdown } from '@ui';
 import { err } from 'neverthrow';
@@ -440,7 +441,6 @@ function ListChrome(props: { children: JSX.Element }) {
 function MobileNew(props: {
   hasSelection: boolean;
   onCreate: (kind: PasswordKind) => void;
-  onFolder: () => void;
 }) {
   const shell = useViewShell();
   return (
@@ -453,18 +453,11 @@ function MobileNew(props: {
       <div class="pointer-events-auto flex justify-end px-(--mobile-chrome-gutter)">
         <MobileCreateMenu
           label={t('passwords.new')}
-          items={[
-            ...PASSWORD_KINDS.map((kind) => ({
-              label: t(`passwords.${kind}`),
-              icon: KIND_ICONS[kind],
-              onSelect: () => props.onCreate(kind),
-            })),
-            {
-              label: t('passwords.folder'),
-              icon: FolderPlusIcon,
-              onSelect: props.onFolder,
-            },
-          ]}
+          items={PASSWORD_KINDS.map((kind) => ({
+            label: t(`passwords.${kind}`),
+            icon: KIND_ICONS[kind],
+            onSelect: () => props.onCreate(kind),
+          }))}
         />
       </div>
     </FloatRegion>
@@ -592,15 +585,30 @@ export function VaultView(props: {
   };
   const create = (kind: PasswordKind) =>
     vault.createItem(kind, destinationFolder(vault.filter()));
-  const startFolder = () => {
-    setMobileFolders(true);
-    setEditing({
-      kind: 'create',
-      parentId: destinationFolder(vault.filter()),
+  /** A failed create says so, with Retry, instead of the new row vanishing. */
+  async function createFolder(name: string, parentId: string | null) {
+    const created = await vault.createFolder(name, parentId);
+    if (created !== false) return created;
+    let retried = false;
+    const toastId = toast.failure(t('passwords.folderCreateFailed'), {
+      subtext: name.trim(),
+      actions: [
+        {
+          label: t('common.retry'),
+          icon: ArrowCounterClockwise,
+          onClick: () => {
+            if (retried) return;
+            retried = true;
+            if (toastId !== undefined) toast.dismiss(toastId);
+            fireAndForget(createFolder(name, parentId), 'passwords-folder');
+          },
+        },
+      ],
     });
-  };
+    return undefined;
+  }
   const commands: FolderCommands = {
-    create: (name, parentId) => vault.createFolder(name, parentId),
+    create: createFolder,
     rename: vault.renameFolder,
     remove: vault.deleteFolder,
     move: vault.moveFolder,
@@ -646,7 +654,6 @@ export function VaultView(props: {
     folders: vault.loadedFolders(),
     items: vault.loadedItems(),
     filter: vault.filter(),
-    editing: editing(),
     onEditing: setEditing,
     expandedIds: expandedIds(),
     onToggle: (id: string) =>
@@ -688,6 +695,7 @@ export function VaultView(props: {
         <ViewShell.Aside>
           <VaultSidebar
             {...sidebarProps()}
+            editing={isTouchDevice() && mobileFolders() ? undefined : editing()}
             search={vault.search()}
             onSearch={vault.setSearch}
             destination={destination()}
@@ -769,7 +777,6 @@ export function VaultView(props: {
                   presentation="toolbar"
                   destination={destination()}
                   onCreate={create}
-                  onFolder={startFolder}
                 />
                 <ListHeaderSearch
                   label={t('passwords.search')}
@@ -808,18 +815,17 @@ export function VaultView(props: {
                 </div>
               </ViewShell.Header>
             </ListChrome>
-            <MobileNew
-              hasSelection={!!selection()}
-              onCreate={create}
-              onFolder={startFolder}
-            />
+            <MobileNew hasSelection={!!selection()} onCreate={create} />
           </Show>
           <ViewShell.Content>
             <div class="h-full overflow-auto touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+6rem)]">
               <Switch>
                 <Match when={isTouchDevice() && mobileFolders()}>
                   <div class="flex flex-col gap-(--sidebar-section-gap) px-(--sidebar-gutter) py-2">
-                    <VaultSidebarContent {...sidebarProps()} />
+                    <VaultSidebarContent
+                      {...sidebarProps()}
+                      editing={editing()}
+                    />
                   </div>
                 </Match>
                 <Match when={vault.items.isPending}>

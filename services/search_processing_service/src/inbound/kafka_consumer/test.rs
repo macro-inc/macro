@@ -894,6 +894,7 @@ fn document_event_cases() -> Vec<(DocumentTopicEvent, DocumentEventDescription)>
         ),
         (
             DocumentTopicEvent::Updated(DocumentUpdatedMetadata {
+                appearance_change: None,
                 document_id: DOCUMENT_ID.to_string(),
                 owner: owner.clone(),
                 actor_user_id: Some(user.clone()),
@@ -913,6 +914,7 @@ fn document_event_cases() -> Vec<(DocumentTopicEvent, DocumentEventDescription)>
         ),
         (
             DocumentTopicEvent::Updated(DocumentUpdatedMetadata {
+                appearance_change: None,
                 document_id: DOCUMENT_ID.to_string(),
                 owner: owner.clone(),
                 actor_user_id: Some(user.clone()),

@@ -68,10 +68,10 @@ impl ReviewQuery {
 }
 
 impl AgentVaultService {
-    /// Human v1 admission plus the global agent-vault rollout.
+    /// Human v1 admission plus the reviewer's own agent-vault rollout.
     async fn reviewer(&self, actor: &Actor, team: TeamId) -> Result<bool, AgentError> {
         self.vault.membership(actor, team).await?;
-        if !self.availability.agent_service_enabled().await {
+        if !self.availability.agent_vault_enabled(&actor.user_id).await {
             return Err(AgentError::NotFound);
         }
         Ok(self

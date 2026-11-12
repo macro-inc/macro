@@ -12,6 +12,12 @@ export interface CalendarOccurrenceQueryRange {
  * RSVP state. */
 export const RSVP_MUTATION_KEY = ['calendar', 'rsvp'] as const;
 
+/** Saves of which calendars count as busy; a refresh waits for them to settle. */
+export const AVAILABILITY_CALENDAR_MUTATION_KEY = [
+  'calendar',
+  'set-availability-calendar',
+] as const;
+
 /**
  * Cache-backed reads nest under the REST keys, so invalidations and the
  * optimistic patches applied to `occurrences._def` reach both.
@@ -47,5 +53,8 @@ export const calendarKeys = createQueryKeys('calendar', {
   ) => ({ queryKey: [items] }),
   joinRequests: (eventId: string) => ({
     queryKey: [eventId],
+  }),
+  availabilityCalendars: (userId: string) => ({
+    queryKey: [userId],
   }),
 });

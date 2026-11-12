@@ -132,7 +132,7 @@ impl AgentVaultService {
     /// any catalog read or side effect.
     #[tracing::instrument(skip_all, err, name = "passwords.agent.admit", fields(team_id = %call.team.0, wake.id = tracing::field::Empty))]
     async fn admit(&self, call: &AgentCall) -> Result<AdmittedAgent, AgentError> {
-        if !self.availability.agent_enabled(&call.key_user).await {
+        if !self.availability.agent_vault_enabled(&call.key_user).await {
             return Err(AgentError::NotFound);
         }
         self.directory_admits(&call.key_user, call.team).await?;
@@ -861,13 +861,11 @@ impl AgentVaultService {
             .map(|(_, row)| row))
     }
 
-    /// Deliver committed request events while the agent vault is enabled.
+    /// Deliver committed request events. Like the other vault background jobs it
+    /// is not gated by rollout: events exist only for requests admitted earlier.
     /// Failures stay queued and are deferred with backoff behind due events.
     #[tracing::instrument(skip_all, err, name = "passwords.agent.events.deliver", fields(delivered = tracing::field::Empty, failed = tracing::field::Empty))]
     pub async fn deliver_access_events(&self) -> Result<usize, AgentError> {
-        if !self.availability.agent_service_enabled().await {
-            return Ok(0);
-        }
         let mut delivered = 0;
         let mut failed = 0;
         for event in self.agents.undelivered().await? {

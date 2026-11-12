@@ -1,3 +1,8 @@
+import { EntityAppearanceTrigger } from '@app/features/entity-appearance/entity-appearance';
+import {
+  markdownEntityFromMetadata,
+  useDocumentAppearance,
+} from '@app/features/entity-appearance/queries/document-appearance';
 import {
   ResponsiveBlockToolbar,
   ResponsivePermissionsBadge,
@@ -9,6 +14,9 @@ import {
 import { BlockItemSplitLabel } from '@components/app/split-layout/components/SplitLabel';
 import { useBlockAliasedName, useBlockId, useBlockName } from '@core/block';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
+import { useUserId } from '@core/context/user';
+import { blockMetadataSignal } from '@core/signal/load';
+import { useCanEdit } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { blockNameToItemType } from '@service-storage/client';
 import { type Accessor, Show } from 'solid-js';
@@ -26,11 +34,34 @@ export function TopBar(props: { name?: Accessor<string | undefined> } = {}) {
   const blockAliasedName = useBlockAliasedName();
   const isSkill = blockAliasedName === 'skill';
   const { fileOperations, menuTools, tools } = useMarkdownDocumentTools();
+  const userId = useUserId();
+  const canEdit = useCanEdit();
+  const documentEntity = () =>
+    markdownEntityFromMetadata(blockMetadataSignal(), name());
+  const appearance = useDocumentAppearance(documentEntity, () =>
+    Boolean(userId())
+  );
+  const headerEntity = () => {
+    const entity = documentEntity();
+    return entity && { ...entity, appearance: appearance() };
+  };
 
   return (
     <>
       <SplitHeaderLeft>
-        <BlockItemSplitLabel name={name} />
+        <BlockItemSplitLabel
+          name={name}
+          icon={
+            <Show when={headerEntity()}>
+              {(entity) => (
+                <EntityAppearanceTrigger
+                  entity={entity()}
+                  editable={canEdit()}
+                />
+              )}
+            </Show>
+          }
+        />
         <Show when={isSkill}>
           <span class="ml-1.5 inline-flex shrink-0 items-center self-center rounded-sm bg-hover px-1.5 py-0.5 text-[10px] font-medium leading-none text-ink-muted">
             Skill
@@ -54,6 +85,7 @@ export function TopBar(props: { name?: Accessor<string | undefined> } = {}) {
         id={blockId}
         itemType={itemType}
         name={name()}
+        entity={headerEntity()}
       />
     </>
   );

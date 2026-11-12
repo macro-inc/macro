@@ -13,8 +13,8 @@ use crate::domain::{
     },
     pipeline_workflows::{
         FieldChange, FieldInput, FieldKind, FieldValue, FoundEntries, NewField, NewFieldKind,
-        OptionCounts, PipelineEntryView, PipelineField, PipelineOverview, PipelineRecord,
-        RecordEntries, UpdatedEntry,
+        NewPipeline, OptionCounts, PipelineEntryView, PipelineField, PipelineOverview,
+        PipelineRecord, RecordEntries, UpdatedEntry,
     },
     pipelines::{AccessiblePipeline, PipelineRecordType, PipelineSharing},
 };
@@ -584,6 +584,39 @@ impl From<NewFieldType> for NewFieldKind {
             NewFieldType::MultiSelect => Self::MultiSelect,
             NewFieldType::Person => Self::Person,
             NewFieldType::People => Self::People,
+        }
+    }
+}
+
+/// A new pipeline with its stages and fields.
+#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CreatePipelineRequest {
+    /// Its name.
+    pub name: String,
+    /// Company or contact entries; omitted, a generic pipeline of free-form rows.
+    #[serde(default)]
+    pub record_type: Option<PipelineRecordType>,
+    /// Defaults to private.
+    #[serde(default)]
+    pub sharing: PipelineSharing,
+    /// Its stages, first to last, replacing the team's default stages. A
+    /// generic pipeline starts without a Stage field, so these add one.
+    #[serde(default)]
+    pub stages: Vec<String>,
+    /// Fields to add after the standard ones, or after a generic pipeline's Name.
+    #[serde(default)]
+    pub fields: Vec<NewFieldRequest>,
+}
+
+impl From<CreatePipelineRequest> for NewPipeline {
+    fn from(request: CreatePipelineRequest) -> Self {
+        Self {
+            name: request.name,
+            record_type: request.record_type,
+            sharing: request.sharing,
+            stages: request.stages,
+            fields: request.fields.iter().map(Into::into).collect(),
         }
     }
 }

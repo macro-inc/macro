@@ -12,7 +12,7 @@ pub struct PasswordService {
     pub repository: Arc<dyn Repository>,
     /// Replaceable confidential value and TOTP storage.
     pub provider: Arc<dyn SecretProvider>,
-    /// Service authority, actor targeting and explicit provider availability.
+    /// Per-user rollout and explicit provider availability.
     pub availability: Arc<dyn Availability>,
 }
 impl PasswordService {
@@ -730,7 +730,6 @@ impl PasswordService {
     /// Retired identities remain journaled for periodic erasure; cancellation and failures remain retryable.
     #[tracing::instrument(skip_all, err, name = "passwords.totp.cleanup",fields(completed=tracing::field::Empty,failed=tracing::field::Empty))]
     pub async fn cleanup_expired_totp_enrollments(&self) -> Result<usize, Error> {
-        self.availability.require_service_enabled().await?;
         let mut completed = 0;
         let mut failed = 0;
         for cleanup in self.repository.totp_cleanup_due().await? {

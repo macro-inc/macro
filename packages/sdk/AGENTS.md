@@ -75,7 +75,8 @@ enforced by the ordinary backend APIs.
 - `Contact.setEmail(address)` adds a missing address; `setCompany(company)`
   links or switches a known personal-provider contact. Neither accepts clearing.
 - `src/entities/databases/saved-query.ts`: `database.saveQuery()` / `table.saveQuery()`
-  save a checked `SELECT` server-side and return a `SavedQuery` whose `toBlock()` is the
+  (or `databases.saveQuery()` for a question that spans databases, sent with no
+  `databaseId`) save a checked `SELECT` server-side and return a `SavedQuery` whose `toBlock()` is the
   document's `<m-db-query>` block. The block format must match lexical-core's
   `parseDatabaseQueryData`; `withView()` follows the AI editor's `setDatabaseQueryView` rules.
 - `src/entities/crm/pipeline.ts`: pipeline-authorized table/row/view handles;
@@ -163,6 +164,7 @@ enforced by the ordinary backend APIs.
 - Keep `external-chat/` provider-neutral; provider-specific reads (WhatsApp community chats) branch on `provider` with an exhaustive match.
 - Use existing entity handles for reads and mutations. Follow the
   [SDK rule](../../.agents/rules/sdk.md) and `add-sdk-endpoint` skill.
+- `appearance()` / `setAppearance()` live on supported entity handles; writes replace icon/color together, carry the `edited` SDK verb and idempotent `@write` hint, and invalidate cached detail only after success.
 - `../sdk-docs/` generates the public TypeDoc reference and static docs Worker.
   Consumer application bundles belong to their consumer. The calls entry points
   are built separately from core, with LiveKit and OpenTelemetry external.

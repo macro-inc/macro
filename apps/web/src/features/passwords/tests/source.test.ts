@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   fetch: vi.fn(),
   refresh: vi.fn(),
   attributes: vi.fn(),
+  spanError: vi.fn(),
 }));
 vi.mock('@core/constant/featureFlags', () => ({
   ENABLE_BEARER_TOKEN_AUTH: false,
@@ -29,7 +30,7 @@ vi.mock('@macro-inc/observability', () => {
   const span = {
     run: <T>(operation: () => T) => operation(),
     setAttr: mocks.attributes,
-    error: vi.fn(),
+    error: mocks.spanError,
     end: vi.fn(),
     injectTraceHeaders: vi.fn(),
     traceparent: () => undefined,
@@ -462,4 +463,21 @@ it('fails instead of publishing a code when retries keep crossing a period bound
   const result = await createPasswordSource('team', CURRENT).totp('item');
   expect(result.isErr() && result.error).toBe('failed');
   expect(mocks.fetch).toHaveBeenCalledTimes(2);
+});
+
+it('marks a failed folder request in its action trace without recording its name', async () => {
+  mocks.fetch.mockResolvedValue(new Response('{}', { status: 503 }));
+  const source = createPasswordSource('fixture-team', CURRENT);
+  const result = await source.createFolder(
+    'Synthetic private folder',
+    'parent-folder'
+  );
+  expect(result.isErr()).toBe(true);
+  expect(mocks.spanError).toHaveBeenCalledWith(
+    'passwords.folder.create failed'
+  );
+  expect(mocks.attributes).toHaveBeenCalledWith('passwords.outcome', 'failed');
+  expect(JSON.stringify(mocks.attributes.mock.calls)).not.toContain(
+    'Synthetic private folder'
+  );
 });

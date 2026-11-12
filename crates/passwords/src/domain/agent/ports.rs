@@ -18,16 +18,14 @@ pub trait AgentDirectory: Send + Sync {
     ) -> Result<Option<DirectoryAgent>, Error>;
 }
 
-/// Agent rollout and provider presence; every off, missing or failed
+/// Agent vault rollout and provider presence; every off, missing or failed
 /// evaluation is reported as disabled.
 #[async_trait::async_trait]
 pub trait AgentAvailability: Send + Sync {
-    /// The global service snapshot and the agent's own snapshot both enable
-    /// the Passwords and agent-vault keys.
-    async fn agent_enabled(&self, agent: &MacroUserIdStr<'_>) -> bool;
-    /// The global service snapshot enables both keys; gates actorless and
-    /// human agent-management work.
-    async fn agent_service_enabled(&self) -> bool;
+    /// The user's own snapshot enables both the Passwords and agent-vault keys.
+    /// Evaluated for the agent on agent routes and for the reviewer on human
+    /// review routes; never inherited from another account.
+    async fn agent_vault_enabled(&self, user: &MacroUserIdStr<'_>) -> bool;
     /// Provider configuration is present. Never performs provider I/O.
     fn provider_configured(&self) -> bool;
 }

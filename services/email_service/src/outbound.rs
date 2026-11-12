@@ -31,3 +31,8 @@ pub mod forwarded_attachments;
 pub mod mailbox_settings;
 /// Provider reads of a user's newest inbox messages.
 pub mod recent_inbox;
+
+/// Atomic message-label batch persistence and undo.
+pub mod message_labels;
+/// Stored facts for the legacy message and thread read use cases.
+pub mod message_reads;

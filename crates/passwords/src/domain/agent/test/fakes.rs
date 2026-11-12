@@ -53,11 +53,8 @@ pub struct FakeAgentAvailability {
 }
 #[async_trait]
 impl AgentAvailability for FakeAgentAvailability {
-    async fn agent_enabled(&self, _: &MacroUserIdStr<'_>) -> bool {
+    async fn agent_vault_enabled(&self, _: &MacroUserIdStr<'_>) -> bool {
         self.calls.fetch_add(1, Ordering::SeqCst);
-        self.enabled.load(Ordering::SeqCst)
-    }
-    async fn agent_service_enabled(&self) -> bool {
         self.enabled.load(Ordering::SeqCst)
     }
     fn provider_configured(&self) -> bool {

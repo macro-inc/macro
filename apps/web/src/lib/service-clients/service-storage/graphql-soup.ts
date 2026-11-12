@@ -1,3 +1,4 @@
+import { readEntityAppearance } from '@app/features/entity-appearance/core/appearance';
 import {
   captureTraceParentExchange,
   traceParentExchange,
@@ -666,6 +667,13 @@ let cachedClient: Client | undefined;
 let cachedCacheHost: CacheHost | undefined;
 let cachedCacheCleanup: (() => void) | undefined;
 let browserCacheClientActivated = false;
+let externalMutationVersion = 0;
+
+/** Fence stale GraphQL responses after a confirmed write through another transport. */
+export function acknowledgeGraphqlRestWrite(host: object): void {
+  if (host === cachedCacheHost && !cachedCacheHost.disabled)
+    externalMutationVersion += 1;
+}
 
 /** An unavailable queue may still hold older writes; never bypass its ordering. */
 export function graphqlDraftQueueBlocked(): boolean {
@@ -894,6 +902,7 @@ export function getGraphqlSoupClient(): Client {
           networkRevalidationExchange(() => host?.disabled === true),
           normalizedCacheExchange(host, {
             ...localDraftQueueLifecycle(host),
+            externalMutationVersion: () => externalMutationVersion,
             deletedRecordKeys: emailCacheDeletionKeys,
             onCacheError: (error, operation) => {
               // Initialization failure already reports before retiring the host;
@@ -1981,6 +1990,7 @@ export function mapGraphqlSoupItem(
           is_favorited: entity.isFavorited,
           data: {
             id: entity.id,
+            appearance: readEntityAppearance(entity.appearance),
             name: entity.displayName ?? 'Untitled project',
             ownerId: entity.metadata.ownerId ?? '',
             createdAt: entity.metadata.createdAt ?? '',
@@ -2000,6 +2010,7 @@ export function mapGraphqlSoupItem(
           is_favorited: entity.isFavorited,
           data: {
             id: entity.id,
+            appearance: readEntityAppearance(entity.appearance),
             name: entity.documentName,
             ownerId: entity.ownerId,
             fileType: entity.fileType ?? undefined,
