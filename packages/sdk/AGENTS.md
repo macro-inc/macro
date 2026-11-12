@@ -65,9 +65,11 @@ enforced by the ordinary backend APIs.
   saving's checks and saves nothing; code mode's catalog lists it as a read.
   `created` takes handles with an `entityType` (`CreatedEntity`) and is kept
   with a routine draft for its review.
-- `users.search(nameOrEmail)` searches existing Macro contacts with batched auth
-  names and returns seeded User handles; it is not a global directory. Empty
-  contact sets are 404, but authorization/service errors must propagate.
+- `users.search(nameOrEmail)` is one `GET /contacts/search`: the server
+  ranks the caller's contacts and current team (teammates first, at most 20)
+  and the SDK seeds User handles with each name and agent flag, keeping that
+  order. It is not a global directory, and the full `GET /contacts` list stays
+  out of the SDK.
 - `src/entities/sharing/`, `messages/`: scoped access requests and message threads.
 - `src/entities/databases/query.ts`: SQL statements, typed table/row references and version guards.
 - `Contact.setEmail(address)` adds a missing address; `setCompany(company)`
