@@ -1,5 +1,7 @@
 import { formatLocale, t } from '@app/lib/i18n';
+import { ThrownResultError } from '@core/util/result';
 import type {
+  ComputerSize,
   ComputerStatus,
   Quote,
   SetupStep,
@@ -8,12 +10,12 @@ import type {
 import { match } from 'ts-pattern';
 import { formatBillingAmount } from '../../core/format-billing-amount';
 
-export function sizeLabel(size: string): string {
+export function sizeLabel(size: ComputerSize): string {
   return match(size)
     .with('standard', () => t('computers.standard'))
     .with('large', () => t('computers.large'))
     .with('xl', () => t('computers.xl'))
-    .otherwise((unknown) => String(unknown));
+    .exhaustive((unknown) => String(unknown));
 }
 
 /** "4 vCPU · 8 GB · 100 GB", for a size shown beside its name. */
@@ -179,4 +181,24 @@ export function canTogglePower(computer: ComputerStatus): boolean {
       () => false
     )
     .exhaustive(() => false);
+}
+
+/**
+ * What to tell the user about a failed computer request: the translated
+ * message for a failure the server names, else `fallback`.
+ */
+export function computerFailureMessage(
+  error: unknown,
+  fallback: string
+): string {
+  if (!(error instanceof ThrownResultError)) return fallback;
+  return match(error.errors[0]?.code)
+    .with('TEAM_ON_TRIAL', () => t('computers.trialBlocked'))
+    .with('PURCHASE_CONFLICT', () => t('computers.errorPurchaseConflict'))
+    .with('PAYMENT_FAILED', () => t('computers.errorPaymentFailed'))
+    .with('NOT_PURCHASABLE', () => t('computers.errorNotPurchasable'))
+    .with('SALES_UNAVAILABLE', () => t('computers.errorSalesUnavailable'))
+    .with('NOT_RESTORABLE', () => t('computers.errorNotRestorable'))
+    .with('NAME_MISMATCH', () => t('computers.errorNameMismatch'))
+    .otherwise(() => fallback);
 }

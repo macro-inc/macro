@@ -3,7 +3,6 @@ import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { getDisplayNameParts, tryMacroId } from '@core/user';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { ThrownResultError } from '@core/util/result';
 import {
   useComputerOffersQuery,
   usePurchaseComputerMutation,
@@ -13,6 +12,7 @@ import type { ComputerStatus, SizeOffer } from '@service-auth/computers';
 import { ActionDialogShell, Dialog } from '@ui';
 import { createEffect, createSignal, on, Show } from 'solid-js';
 import { ComputerPurchaseStep } from '../components/computer-purchase-dialog';
+import { computerFailureMessage } from '../core/computer-display';
 import { useTeamComputers } from '../primitives/team-computers';
 import {
   type ClaudeChoice,
@@ -21,10 +21,6 @@ import {
   type SetupStepId,
   StepHeader,
 } from './computer-setup-dialog';
-
-function failureMessage(error: unknown, fallback: string): string {
-  return (error instanceof ThrownResultError && error.message) || fallback;
-}
 
 /** The viewer's first name, for "Maya's Agent Box" and "Maya's Agent". */
 export function useViewerFirstName() {
@@ -162,7 +158,7 @@ export function ComputerBuyFlow(props: {
           : t('computers.purchased')
       );
     } catch (failure) {
-      setError(failureMessage(failure, t('computers.purchaseFailed')));
+      setError(computerFailureMessage(failure, t('computers.purchaseFailed')));
     }
   };
 

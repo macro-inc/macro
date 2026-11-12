@@ -224,8 +224,9 @@ it('buys the chosen size after confirming its price, and keeps sold-out sizes ou
   const buyButton = screen.getByRole('button', { name: 'Buy · $80.00/month' });
 
   fireEvent.click(buyButton);
+  // The translated message, not the server's wording.
   expect((await screen.findByRole('alert')).textContent).toBe(
-    'That size just sold out.'
+    'That size just sold out, or an earlier attempt is still being confirmed.'
   );
   expect(mocks.purchase).toHaveBeenNthCalledWith(1, {
     purchaseKey: expect.any(String),

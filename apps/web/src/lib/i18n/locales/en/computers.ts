@@ -11,13 +11,8 @@ export default {
   restoreFailed: "Couldn't restore the computer. Try again.",
   releaseFailed: "Couldn't release the computer. Try again.",
   title: 'Macro computers',
-  agents: 'Agents',
   loadFailed: "Could not load your team's computers. Try refreshing this page.",
   getComputer: 'Get a Macro computer',
-  description:
-    "A cloud machine for your team's agents, with macrod, Claude Code, a browser, and Docker ready to go. Billed on your team subscription.",
-  loadingSizes: 'Loading sizes…',
-  sizesFailed: 'Could not load computer sizes. Try refreshing this page.',
   continue: 'Continue',
   included: 'Included',
   cancelOn: '{{name}} cancels on {{date}}.',
@@ -32,13 +27,11 @@ export default {
   pastDue: 'Payment past due',
   claudeSignInConflict:
     'Another sign-in is in progress on this computer — try again shortly',
-  claudeCancelFailed: 'Could not cancel Claude sign-in. Please try again.',
   claudeStartFailed: 'Could not start Claude sign-in. Please try again.',
   claudeCompleteFailed:
     'Could not complete Claude sign-in. Check the code and try again.',
   claudeCreditsFailed: 'Could not switch to Macro credits. Please try again.',
   claudeSignIn: 'Sign in with Claude',
-  useCredits: 'Use Macro credits',
   claudeInvalidCode: "That code didn't work. Try again to get a new one.",
   claudeSignInExpired:
     'This sign-in link expired. Start over to get a new one.',
@@ -61,20 +54,9 @@ export default {
   nameOptional: 'Name (optional)',
   namePlaceholder: 'Build machine',
   buying: 'Buying',
-  purchaseTitle: 'Buy a {{size}} Macro computer?',
-  buyFor: 'Buy for {{price}}',
-  purchaseMonthly:
-    "{{price}}, added to your team's subscription today. You're charged a prorated amount now for the rest of this billing period, then {{price}} each month with your subscription.",
-  purchaseYearly:
-    "{{price}}, added to your team's subscription today. You're charged a prorated amount now for the rest of this billing period, then {{price}} each year with your subscription.",
-  purchaseInterval:
-    "{{price}}, added to your team's subscription today. You're charged a prorated amount now for the rest of this billing period, then {{price}} each {{interval}} with your subscription.",
-  screenTitle: 'Computer screen',
-  screen: 'Screen',
   standard: 'Standard',
   large: 'Large',
   xl: 'XL',
-  stepPaying: 'Confirming payment',
   stepCreating: 'Creating the computer',
   stepBooting: 'Starting up',
   stepConnecting: 'Connecting to Macro',
@@ -125,7 +107,6 @@ export default {
     one: '{{count}} agent on this computer will be deleted',
     other: '{{count}} agents on this computer will be deleted',
   },
-  options: 'Options',
   getComputerAction: 'Get a computer',
   defaultComputerName: "{{name}}'s Agent Box",
   defaultComputerNameFallback: 'Agent Box',
@@ -151,9 +132,6 @@ export default {
     'We run the real Claude Code on your computer. The code you paste here goes right into the harness on your computer.',
   almostReady: 'Almost ready',
   almostReadyBody: 'Finishing setup on {{computer}}.',
-  setupProvisioningTitle: 'Your computer is provisioning',
-  setupProvisioningBody:
-    'This takes a few minutes. You can close this and come back with Finish setup.',
   setupAgentTitle: "Let's set up an agent on it",
   setupAgentBody: 'Agents on this computer run Claude Code.',
   agentName: 'Agent name',
@@ -167,13 +145,22 @@ export default {
   setupDoneBody: 'It runs on {{computer}}. Mention it or start a chat with it.',
   tryIt: 'Try it',
   done: 'Done',
-  setupFailed: "Couldn't finish setup. Try again.",
   fromPrice: 'From {{price}}',
   fromPriceLower: 'from {{price}}',
   getComputerLine: 'Claude Code, a browser and Docker, ready to go',
   trialBlocked:
     'Computers are available on paid plans. Your team is on a trial.',
   trialBillingAction: 'Go to Billing',
+  errorPurchaseConflict:
+    'That size just sold out, or an earlier attempt is still being confirmed.',
+  errorPaymentFailed: "Your team's payment method was declined.",
+  errorNotPurchasable:
+    "Your team's subscription can't add a computer. Check Billing, or contact support.",
+  errorSalesUnavailable:
+    "Computers can't be bought right now. Try again later.",
+  errorNotRestorable: "This computer can't be restored anymore.",
+  errorNameMismatch: "The name you typed doesn't match this computer.",
+  sizeLegend: 'Computer size',
   readyInMinutes: 'ready in minutes',
   runAgentsTitle: 'Run coding agents on a Macro computer',
   newComputer: 'New Macro computer',
@@ -182,5 +169,4 @@ export default {
     'A cloud machine Macro runs for your team, with Claude Code ready to go.',
   computerKind: 'Macro computer',
   modelsWhenOn: 'Models load when the computer is turned on.',
-  poweredOffHint: 'Turn it on in Settings → Machines',
 };
