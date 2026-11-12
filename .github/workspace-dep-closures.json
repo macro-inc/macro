@@ -11809,6 +11809,7 @@
       "crates/cowlike",
       "crates/macro_user_id",
       "crates/macro_uuid",
+      "crates/model-entity",
       "crates/models_databases",
       "crates/models_forms",
       "crates/workspace-hack"

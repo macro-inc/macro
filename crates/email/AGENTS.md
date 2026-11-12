@@ -10,6 +10,8 @@ tools — hexagonal, heavily feature-gated.
 
 - `src/domain/service.rs` + `src/domain/ports.rs`: the domain service and the
   traits its adapters implement.
+- `src/domain/message_reads.rs` (feature `mailbox`): synced message/thread
+  reads, access filtering, pagination, and summary-inbox selection.
 - `src/inbound/axum.rs`: HTTP routes (feature `axum`); `src/inbound/toolset.rs`:
   the AI email tools (feature `ai_tools`).
 - `src/outbound/email_pg_repo.rs`, `src/outbound/invitation_pg.rs`: Postgres
@@ -55,6 +57,10 @@ tools — hexagonal, heavily feature-gated.
   feature's tests need a local MacroDB — `just setup_macrodb`).
 
 ## Gotchas
+
+- Keep the legacy read policies in `MessageReadService`: public reads union
+  owned and delegated inboxes, internal summaries use only the newest owned
+  inbox, and public/internal pagination have different invalid-bound behavior.
 
 - `Subject` is a message-level filter literal. With a top-level subject term,
   each owned inbox gets a bound (not `unnest`) two-step subscan: threads in
@@ -137,7 +143,9 @@ tools — hexagonal, heavily feature-gated.
 - Gmail thread label writes stage each thread's DB change, then enqueue one
   provider write per inbox holding only the messages whose labels changed
   (`stage_thread_labels` / `commit_thread_label_write` in
-  `domain/service/thread_labels.rs`); route new label actions through them.
+  `domain/service/thread_labels.rs`); route new thread label actions through them.
+  Message-label batches go through `domain/message_labels.rs`, with their atomic
+  staging and unqueued-write undo behind `MessageLabelRepository`.
 - Recompute thread metadata inside staged Gmail SPAM/TRASH writes so restored All Mail previews, ordering, and signal state do not wait for the provider worker.
 - `domain/recent_inbox.rs` merges a user's newest messages read live from
   each of their own inboxes (50 by default, at most 100); an inbox whose read
@@ -247,6 +255,11 @@ tools — hexagonal, heavily feature-gated.
   owner, then actor id, retaining one binding per link and actor; the repository
   returns each binding's kind so custody cleanup runs before an owner disconnect
   can suppress it without processing a self-custodian twice.
+- `email_mailbox_folders.total_item_count` is Graph's `totalItemCount` from the
+  latest catalog discovery (every 5 minutes, from the listing discovery already
+  makes), and the discover span sums it as `outlook.provider_item_count`. It
+  counts what the folder holds at the provider, imported or not, so an import
+  is checked against it.
 - Import counts for the health snapshot stay in memory (`ImportTally`) and are
   flushed once a minute to `email_mailbox_import_minutes`; never write per
   imported message for telemetry.

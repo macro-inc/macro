@@ -282,12 +282,18 @@ export function createPasswordSource(
       ).map(() => undefined);
     },
     async createFolder(name, parentId) {
-      return (
-        await action<FolderDto>('passwords.folder.create', '/folders', 'POST', {
+      return Telemetry.span('passwords.folder.create', async (span) => {
+        const result = await request<FolderDto>('/folders', 'POST', {
           name,
           parentId,
-        } satisfies PasswordCreateFolderBody)
-      ).map(folder);
+        } satisfies PasswordCreateFolderBody);
+        if (result.isErr()) {
+          span.setAttr('passwords.outcome', result.error);
+          // Record only the failure category, never the folder name.
+          span.error('passwords.folder.create failed');
+        }
+        return result.map(folder);
+      });
     },
     async renameFolder(id, name) {
       return (
