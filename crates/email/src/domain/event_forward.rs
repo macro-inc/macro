@@ -178,7 +178,9 @@ where
         )
         .await
         .map_err(|error| match error {
-            EmailErr::InboxNotFound | EmailErr::UnknownSendingInbox { .. } => {
+            EmailErr::InboxNotFound
+            | EmailErr::UnknownSendingInbox { .. }
+            | EmailErr::UnverifiedSendingAlias { .. } => {
                 EventForwardError::InboxUnavailable
             }
             other => EventForwardError::Email(other),
@@ -227,7 +229,7 @@ where
     let input = CreateDraftInput {
         frozen_signature_html: None,
         draft_generation: 0,
-        sender_email: None,
+        sender_email: inbox.sender_address.clone(),
         db_id: None,
         provider_id: None,
         replying_to_id: None,

@@ -4,7 +4,9 @@ use serde_json::Value as JsonValue;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::domain::models::{ContactInfo, CreateDraftInput, CreatedDraft};
+use macro_user_id::email::EmailStr;
+
+use crate::domain::models::{ContactInfo, CreateDraftInput, CreatedDraft, EmailErr};
 
 /// Preconditions captured with a draft edit, including attachment changes.
 #[derive(Debug, Deserialize, utoipa::IntoParams)]
@@ -62,6 +64,11 @@ pub struct ApiDraftInput {
     pub provider_thread_id: Option<String>,
     /// Thread DB ID.
     pub thread_db_id: Option<Uuid>,
+    /// The address to send from: the selected inbox's own address or one of
+    /// its verified Gmail send-as aliases, which sends under the alias's
+    /// display name. Omit it to send from the inbox's own address.
+    #[serde(default)]
+    pub from: Option<String>,
     /// Subject line.
     pub subject: String,
     /// To recipients.
@@ -138,15 +145,31 @@ pub struct CreateDraftResponse {
     pub draft: ApiDraftOutput,
 }
 
+impl ApiDraftInput {
+    /// The requested `from` address, refused as an invalid sender when it is
+    /// not an email address rather than dropped, so a typo never sends from
+    /// the inbox's own address instead.
+    pub(crate) fn sender_email(&self) -> Result<Option<EmailStr<'static>>, EmailErr> {
+        let Some(from) = self.from.as_deref().map(str::trim).filter(|from| !from.is_empty())
+        else {
+            return Ok(None);
+        };
+        EmailStr::try_from(from.to_owned())
+            .map(Some)
+            .map_err(|_| EmailErr::InvalidSender)
+    }
+}
+
 impl CreateDraftRequest {
     /// Convert the API request into a domain `CreateDraftInput`.
-    pub fn into_domain(self) -> CreateDraftInput {
+    pub fn into_domain(self) -> Result<CreateDraftInput, EmailErr> {
         let draft = self.draft;
+        let sender_email = draft.sender_email()?;
 
-        CreateDraftInput {
+        Ok(CreateDraftInput {
             frozen_signature_html: None,
             draft_generation: draft.draft_generation,
-            sender_email: None,
+            sender_email,
             db_id: draft.db_id,
             provider_id: draft.provider_id,
             replying_to_id: draft.replying_to_id,
@@ -182,7 +205,7 @@ impl CreateDraftRequest {
             actor: None,
             draft_client_binding: None,
             thread_client_binding: None,
-        }
+        })
     }
 }
 

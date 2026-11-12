@@ -294,3 +294,139 @@ async fn a_reply_in_the_primary_inbox_still_resolves_to_it(
 
     Ok(())
 }
+
+/// Gmail's send-as list for the fixture inboxes: the alternate inbox has a
+/// verified alias and one still awaiting verification; the primary inbox's
+/// list cannot be read.
+struct AltInboxAliases;
+
+impl crate::domain::senders::EmailSenderProvider for AltInboxAliases {
+    fn send_as<'a>(
+        &'a self,
+        link: &'a crate::domain::models::Link,
+        _refresh: bool,
+    ) -> crate::domain::senders::SendAsFuture<'a> {
+        Box::pin(async move {
+            if link.id != ALT_INBOX {
+                return Err(EmailErr::SendAsPermissionRequired);
+            }
+            let alias = |address: &str, display_name: &str, verified: bool| {
+                crate::domain::senders::SendAsAddress {
+                    email_address: EmailStr::try_from(address.to_owned()).unwrap(),
+                    display_name: Some(display_name.to_owned()),
+                    verified,
+                }
+            };
+            Ok(vec![
+                alias("support@example.com", "Support Team", true),
+                alias("pending@example.com", "Pending", false),
+            ])
+        })
+    }
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_sending_inbox"))
+)]
+async fn a_verified_alias_sends_from_its_inbox_under_the_alias(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let service = service(pool.clone()).with_sender_provider(AltInboxAliases);
+
+    let resolved = service
+        .resolve_sending_inbox_impl(
+            caller(),
+            SendingInboxRequest {
+                requested_address: Some("Support@Example.com"),
+                replying_to_id: None,
+            },
+        )
+        .await?;
+
+    assert_eq!(resolved.link.id, ALT_INBOX);
+    assert_eq!(
+        resolved.sender_address.as_ref().map(|alias| alias.0.as_ref()),
+        Some("support@example.com"),
+        "the alias as Gmail spells it, whatever case the caller used"
+    );
+
+    // What the delivery worker reads to build the MIME From header.
+    let mut input = reply_input(MESSAGE_IN_ALT);
+    input.sender_email = resolved.sender_address.clone();
+    let draft = service
+        .create_draft_impl(&resolved.link, &resolved.accessible_inboxes, input)
+        .await?;
+    let (_, sender) =
+        email_db_client::messages::get::get_message_to_send(&pool, draft.db_id, ALT_INBOX).await?;
+    assert_eq!(sender.email, "support@example.com");
+    assert_eq!(sender.name.as_deref(), Some("Support Team"));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_sending_inbox"))
+)]
+async fn an_unverified_alias_is_refused_naming_its_inbox(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let Err(error) = service(pool)
+        .with_sender_provider(AltInboxAliases)
+        .resolve_sending_inbox_impl(
+            caller(),
+            SendingInboxRequest {
+                requested_address: Some("pending@example.com"),
+                replying_to_id: None,
+            },
+        )
+        .await
+    else {
+        panic!("an alias Gmail has not verified must not be sent from")
+    };
+
+    let message = error.to_string();
+    assert!(
+        matches!(
+            &error,
+            // The fixture's alternate inbox, which owns the alias.
+            EmailErr::UnverifiedSendingAlias { inbox, .. } if inbox.starts_with("user1-alt@")
+        ),
+        "{message}"
+    );
+    assert!(message.contains("has not verified"), "{message}");
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_sending_inbox"))
+)]
+async fn an_address_that_is_no_alias_is_unknown_even_when_a_lookup_fails(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    // The primary inbox's sender list cannot be read; that inbox is skipped,
+    // and the caller still hears which addresses they can use.
+    let Err(error) = service(pool)
+        .with_sender_provider(AltInboxAliases)
+        .resolve_sending_inbox_impl(
+            caller(),
+            SendingInboxRequest {
+                requested_address: Some("someone@elsewhere.test"),
+                replying_to_id: None,
+            },
+        )
+        .await
+    else {
+        panic!("an address that is no inbox or alias must be refused")
+    };
+
+    assert!(
+        matches!(error, EmailErr::UnknownSendingInbox { .. }),
+        "{error}"
+    );
+
+    Ok(())
+}

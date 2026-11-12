@@ -9,10 +9,10 @@
 //! the wrong inbox both misrepresents the user and starts a new thread.
 
 use crate::domain::{
-    models::{EmailErr, Link, ResolvedSendingInbox, SendingInboxRequest},
+    models::{EmailErr, Link, ResolvedSendingInbox, SendingInboxRequest, UserProvider},
     ports::EmailRepo,
 };
-use macro_user_id::user_id::MacroUserIdStr;
+use macro_user_id::{email::EmailStr, user_id::MacroUserIdStr};
 
 use super::EmailServiceImpl;
 
@@ -35,36 +35,107 @@ where
             .await
             .map_err(anyhow::Error::from)?;
 
-        let chosen =
-            match requested_address(request.requested_address) {
-                // An explicit choice is honoured or refused, never quietly
-                // replaced: silently sending from a different address than the
-                // one the caller named is the bug this whole module exists for.
-                Some(address) => inbox_by_address(&accessible_inboxes, &macro_id, address)
-                    .ok_or_else(|| EmailErr::UnknownSendingInbox {
-                        requested: address.to_owned(),
-                        available: accessible_inboxes
-                            .iter()
-                            .map(|inbox| inbox.email_address.0.as_ref().to_owned())
-                            .collect(),
-                    })?,
+        let (chosen, sender_address) = match requested_address(request.requested_address) {
+            // An explicit choice is honoured or refused, never quietly
+            // replaced: silently sending from a different address than the
+            // one the caller named is the bug this whole module exists for.
+            Some(address) => match inbox_by_address(&accessible_inboxes, &macro_id, address) {
+                Some(inbox) => (inbox, None),
                 None => {
-                    let from_reply_target = match request.replying_to_id {
-                        Some(replying_to_id) => {
-                            self.inbox_holding_message(&accessible_inboxes, replying_to_id)
-                                .await?
-                        }
-                        None => None,
-                    };
-                    from_reply_target
-                        .or_else(|| default_inbox(&accessible_inboxes, &macro_id))
-                        .ok_or(EmailErr::InboxNotFound)?
+                    let (inbox, alias) = self
+                        .inbox_with_alias(&accessible_inboxes, &macro_id, address)
+                        .await?;
+                    (inbox, Some(alias))
                 }
-            };
+            },
+            None => {
+                let from_reply_target = match request.replying_to_id {
+                    Some(replying_to_id) => {
+                        self.inbox_holding_message(&accessible_inboxes, replying_to_id)
+                            .await?
+                    }
+                    None => None,
+                };
+                let inbox = from_reply_target
+                    .or_else(|| default_inbox(&accessible_inboxes, &macro_id))
+                    .ok_or(EmailErr::InboxNotFound)?;
+                (inbox, None)
+            }
+        };
 
         Ok(ResolvedSendingInbox {
             link: accessible_inboxes[chosen].clone(),
+            sender_address,
             accessible_inboxes,
+        })
+    }
+
+    /// The accessible inbox that has `address` as a verified send-as alias,
+    /// with the alias as the provider spells it.
+    ///
+    /// Only reached when `address` is none of the inboxes themselves, so a
+    /// send from an inbox's own address never asks the provider. Inboxes the
+    /// caller owns are asked before delegated ones, matching
+    /// [`inbox_by_address`]. An inbox whose sender list cannot be read (no
+    /// provider on this host, an Outlook inbox, a grant without the settings
+    /// scope) is skipped rather than failing the send: the address is then
+    /// reported as unknown, with the inboxes the caller could use.
+    #[tracing::instrument(
+        name = "email.resolve_send_as_alias",
+        skip_all,
+        fields(inbox_count = inboxes.len(), matched_link_id, lookup_failures),
+        err
+    )]
+    async fn inbox_with_alias(
+        &self,
+        inboxes: &[Link],
+        caller: &MacroUserIdStr<'_>,
+        address: &str,
+    ) -> Result<(usize, EmailStr<'static>), EmailErr> {
+        let mut owned_first: Vec<(usize, &Link)> = inboxes
+            .iter()
+            .enumerate()
+            .filter(|(_, inbox)| inbox.provider == UserProvider::Gmail)
+            .collect();
+        owned_first.sort_by_key(|(_, inbox)| inbox.macro_id.as_ref() != caller.as_ref());
+
+        let mut unverified_in = None;
+        let mut lookup_failures = 0_u32;
+        for (index, inbox) in owned_first {
+            let senders = match self.sender_provider.send_as(inbox, false).await {
+                Ok(senders) => senders,
+                Err(error) => {
+                    lookup_failures += 1;
+                    tracing::warn!(link_id = %inbox.id, error = %error, "send-as lookup failed");
+                    continue;
+                }
+            };
+            let Some(sender) = senders
+                .into_iter()
+                .find(|sender| sender.email_address.0.as_ref().eq_ignore_ascii_case(address))
+            else {
+                continue;
+            };
+            if sender.verified {
+                tracing::Span::current().record("matched_link_id", tracing::field::display(inbox.id));
+                return Ok((index, sender.email_address));
+            }
+            unverified_in.get_or_insert(inbox);
+        }
+        tracing::Span::current().record("lookup_failures", lookup_failures);
+
+        Err(match unverified_in {
+            Some(inbox) => EmailErr::UnverifiedSendingAlias {
+                requested: address.to_owned(),
+                inbox: inbox.email_address.0.as_ref().to_owned(),
+            },
+            None => EmailErr::UnknownSendingInbox {
+                requested: address.to_owned(),
+                available: inboxes
+                    .iter()
+                    .map(|inbox| inbox.email_address.0.as_ref().to_owned())
+                    .collect(),
+            },
         })
     }
 
