@@ -25,7 +25,9 @@ never numbers.
   from a different stance is dropped, so a stale opinion can't outlive the feeling.
 - **Appraiser** (`appraise.ts`, `keep.ts`): after a reply wake ends, the `postReply` hook hands
   the conversation to `people.appraise`, which returns at once. One call to a cheap model (the
-  context's `ask`: the Claude Agent SDK with no tools, no settings, no session; it wakes nobody)
+  context's `ask`, `ask.ts`: the Claude Agent SDK with no tools, no settings, no session, run
+  like a wake (the computer's `claude`, the brain's environment, the sandbox), its cost on the
+  daily ledger; it wakes nobody)
   reads the batch with the last 12 lines of history as context, so the agent's reply is there,
   and proposes events and details. A reply never waits on it. Under 20 characters of text isn't
   worth a call. After a 1:1 call, `appraiseCall` does the same from the call's event log.

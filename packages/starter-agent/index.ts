@@ -8,7 +8,7 @@
 import 'temporal-polyfill/global';
 import { spawn } from 'node:child_process';
 import { rm } from 'node:fs/promises';
-import { query } from '@anthropic-ai/claude-agent-sdk';
+import { query, type SpawnOptions } from '@anthropic-ai/claude-agent-sdk';
 import { inSubprocess } from '@macro-inc/muppet/core/code';
 import type { Scripts } from '@macro-inc/muppet/runtimes/pieces';
 import { checker, loader } from '@macro-inc/muppet/utilities/scripts';
@@ -174,21 +174,36 @@ const spend = recordSpend({
   timeZone: base.config.timeZone,
 });
 
+// Claude gets the baseline, a way back into this agent with no key, how it
+// reaches Anthropic, and its git identity: nothing else of this process.
+const claudeEnvironment = async () =>
+  childEnvironment(process.env, {
+    ...(await wiring.relayed()),
+    ...launcher,
+    ...(await wiring.claudeAccess()),
+    ...(await base.environment()),
+  });
+const claudeSandbox = {
+  argv: started.sandbox,
+  spawn: (
+    [command = '', ...args]: readonly string[],
+    { cwd, env, signal }: Omit<SpawnOptions, 'command' | 'args'>
+  ) =>
+    spawn(command, args, {
+      cwd,
+      env,
+      signal,
+      stdio: ['pipe', 'pipe', 'inherit'],
+    }),
+};
+
 const claudeAgent = agentClaude({
   query,
   claude,
   mcpServers: started.mcpServers,
   model: base.config.model,
   profile: capped(profile(base.config), base.config.budget.perRunUsd),
-  // Claude gets the baseline, a way back into this agent with no key, how it
-  // reaches Anthropic, and its git identity: nothing else of this process.
-  environment: async () =>
-    childEnvironment(process.env, {
-      ...(await wiring.relayed()),
-      ...launcher,
-      ...(await wiring.claudeAccess()),
-      ...(await base.environment()),
-    }),
+  environment: claudeEnvironment,
   after: (milliseconds, run) => {
     const timer = setTimeout(run, milliseconds);
     return () => clearTimeout(timer);
@@ -196,16 +211,7 @@ const claudeAgent = agentClaude({
   guards,
   wakeId: () => Bun.randomUUIDv7(),
   trace,
-  sandbox: {
-    argv: started.sandbox,
-    spawn: ([command = '', ...args], { cwd, env, signal }) =>
-      spawn(command, args, {
-        cwd,
-        env,
-        signal,
-        stdio: ['pipe', 'pipe', 'inherit'],
-      }),
-  },
+  sandbox: claudeSandbox,
   record: async (entry) => {
     await base.log.event(wakesLog, entry);
     await spend(entry);
@@ -225,4 +231,15 @@ export const agent = authorized({
   authority: base.authority,
 });
 
-export const assistant = makeAgent(base, agent, restart);
+// An appraisal of people runs Claude Code as a wake does, on the same ledger.
+export const assistant = makeAgent(
+  base,
+  agent,
+  {
+    executable: claude,
+    environment: claudeEnvironment,
+    sandbox: claudeSandbox,
+    spend,
+  },
+  restart
+);

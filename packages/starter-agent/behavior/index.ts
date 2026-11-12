@@ -18,6 +18,7 @@ import { heartbeatCapabilities } from './capabilities/heartbeat/index.ts';
 import { identityCapabilities } from './capabilities/identity/index.ts';
 import { laterContext } from './capabilities/later/context.ts';
 import { laterCapabilities } from './capabilities/later/index.ts';
+import type { PeopleClaude } from './capabilities/people/ask.ts';
 import { peopleContext } from './capabilities/people/context.ts';
 import { peopleCapabilities } from './capabilities/people/index.ts';
 import { secretsContext } from './capabilities/secrets/context.ts';
@@ -43,6 +44,8 @@ const schedulesFile = 'schedules.json';
 export const assistant = (
   base: Base,
   agent: Agent,
+  /** How areas other than the wake run Claude Code: as a wake does. */
+  claude: PeopleClaude,
   /** Restarts the agent onto code that landed; none outside a supervisor. */
   restart?: () => Promise<void>
 ) => {
@@ -64,7 +67,7 @@ export const assistant = (
   });
   // A task handed over from a reply or a call is a wake of its own, later.
   const later = laterContext(base, scheduled.decorations.schedules);
-  const people = peopleContext(base, chat.decorations);
+  const people = peopleContext(base, chat.decorations, claude);
   const calls = callsContext(base, {
     chat: chat.decorations.chat,
     work: later.decorations.work,

@@ -7,7 +7,7 @@ import { disk, shell } from '../../../context/index.ts';
 import { output } from '../../../context/shell.ts';
 import { fixedClock } from '../../../context/test/fakes.ts';
 import type { LandDeps } from '../land.ts';
-import type { Repository } from '../repository.ts';
+import { gitCommand, type Repository } from '../repository.ts';
 
 const identity = {
   GIT_AUTHOR_NAME: 't',
@@ -25,7 +25,7 @@ export const sandbox = async () => {
   const remote = `${root}/remote.git`;
   const env: Record<string, string | undefined> = { ...identity };
   const raw = (directory: string, args: readonly string[]) =>
-    shell.run(['git', '-C', directory, ...args], { env });
+    shell.run(gitCommand('git', directory, args), { env });
   /** Runs git, throws if it fails, and returns what it printed. */
   const git = (directory: string, ...args: readonly string[]) =>
     output(shell, ['git', '-C', directory, ...args], { env: identity });

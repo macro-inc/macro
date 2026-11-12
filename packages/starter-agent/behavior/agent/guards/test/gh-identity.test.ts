@@ -28,9 +28,10 @@ test("without its token, the agent's sessions don't use gh or push", () => {
     expect([command, bash(command)]).toEqual([command, identityReason]);
 });
 
-test('the reason names the credential to add', () => {
+test('the reason names the credential, and that the owner adds it: the agent cannot store one', () => {
   expect(identityReason).toContain('AGENT_GITHUB_TOKEN');
-  expect(identityReason).toContain('setCredential');
+  expect(identityReason).toContain('owner');
+  expect(identityReason).not.toContain('setCredential');
 });
 
 test("with its token, gh and a push are the agent's own", () => {

@@ -23,7 +23,7 @@ import {
 } from './land.ts';
 import { tickRequest } from './prompt.ts';
 import { prune, type Rule } from './prune.ts';
-import { githubRepo, type Repository } from './repository.ts';
+import { gitCommand, githubRepo, type Repository } from './repository.ts';
 import { type Misplaced, misplaced } from './state.ts';
 import { type Beat, Cursor, mentionedIds } from './tick.ts';
 
@@ -54,7 +54,7 @@ const hasGithub = ({ credentials }: Pick<Needs, 'credentials'>) =>
 /** Thrown by what can't work without GitHub, naming what to add. */
 export const needsGithub = (what: string): Error =>
   new Error(
-    `${what} needs GitHub: add the ${githubToken} credential (a token for the agent's GitHub account) with setCredential.`
+    `${what} needs GitHub: ask your owner to add the ${githubToken} credential (a token for your GitHub account) to your credentials; you can't store one yourself.`
   );
 
 export const repositoryOf = (context: Needs): Repository => {
@@ -63,7 +63,7 @@ export const repositoryOf = (context: Needs): Repository => {
   // name and email come from its settings. The remote authenticates through
   // the credential helper its supervisor set up, never a token here.
   const git: Repository['git'] = async (args, { cwd } = {}) =>
-    context.shell.run([settings.git, '-C', cwd ?? config.root, ...args], {
+    context.shell.run(gitCommand(settings.git, cwd ?? config.root, args), {
       env: {
         ...(await context.environment()),
         GIT_AUTHOR_NAME: config.identity.name,

@@ -1,4 +1,6 @@
 import { afterEach, expect, test } from 'bun:test';
+import { shell } from '../../../context/index.ts';
+import { output } from '../../../context/shell.ts';
 import { commit, concerns, selfEditMessage, wakeMessage } from '../commit.ts';
 import { conflictLine } from '../guard.ts';
 import { githubRepo } from '../repository.ts';
@@ -22,6 +24,20 @@ test('commits changes and pushes; a clean tree is a no-op', async () => {
   expect(await commit(box.repository(), 'tick: ok', wait)).toBe('pushed');
   expect(await box.subjects(box.live, 'origin/main')).toBe('tick: ok\ninit\n');
   expect(await commit(box.repository(), 'again', wait)).toBe('clean');
+});
+
+test("never runs the workspace's git hooks: they are files the agent can write", async () => {
+  const box = await setup();
+  const ran = `${box.live}/hook-ran`;
+  const hooks = ['pre-commit', 'post-commit', 'pre-push', 'post-rewrite'].map(
+    (hook) => `${box.live}/.git/hooks/${hook}`
+  );
+  for (const hook of hooks)
+    await box.write(hook, `#!/bin/sh\ntouch ${ran}\nexit 1\n`);
+  await output(shell, ['chmod', '+x', ...hooks]);
+  await box.write(`${box.live}/notes.md`, 'n\n');
+  expect(await commit(box.repository(), 'tick: ok', wait)).toBe('pushed');
+  expect(await box.exists(ran)).toBe(false);
 });
 
 test('with no remote, a commit stays local and nothing alarms', async () => {

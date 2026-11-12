@@ -15,7 +15,7 @@ import type { LeaveSignal } from '../watch.ts';
 const processDirectory = '/proc';
 const argumentsFile = 'cmdline';
 const binDirectory = 'bin';
-const agentProgram = 'assistant';
+const agentProgram = 'agent';
 const cliFile = 'cli.ts';
 
 /** The file every process of this agent runs: what a join's arguments are matched against. */
