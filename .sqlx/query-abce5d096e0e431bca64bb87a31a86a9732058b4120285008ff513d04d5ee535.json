@@ -1,0 +1,31 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT page.message AS \"message!: Json<StoredMessage>\"\n                FROM (\n                    (SELECT to_jsonb(m) AS message, m.import_order, m.created_at, m.id\n                    FROM comms_messages m\n                    WHERE m.thread_id = $3 AND m.import_order IS NOT NULL\n                        AND (m.import_order, m.created_at, m.id) < (\n                            COALESCE($4::bigint, '9223372036854775807'::bigint),\n                            COALESCE($5::timestamptz, 'infinity'::timestamptz),\n                            COALESCE($6::uuid, 'ffffffff-ffff-ffff-ffff-ffffffffffff'::uuid))\n                        AND m.deleted_at IS NULL\n                    ORDER BY m.import_order DESC, m.created_at DESC, m.id DESC\n                    LIMIT $7)\n                    UNION ALL\n                    (SELECT to_jsonb(m) AS message, m.import_order, m.created_at, m.id\n                    FROM comms_messages m\n                    WHERE m.thread_id = $3 AND m.import_order IS NULL\n                        AND (m.created_at, m.id) < (\n                            COALESCE($8::timestamptz, 'infinity'::timestamptz),\n                            COALESCE($9::uuid, 'ffffffff-ffff-ffff-ffff-ffffffffffff'::uuid))\n                        AND m.deleted_at IS NULL\n                    ORDER BY m.import_order DESC, m.created_at DESC, m.id DESC\n                    LIMIT $10)\n                ) page\n                WHERE EXISTS (\n                    SELECT 1\n                    FROM (\n                        SELECT root.parent_entity_type, root.parent_entity_id\n                        FROM comms_messages root\n                        WHERE root.id = $3\n                        OFFSET 0\n                    ) root\n                    WHERE root.parent_entity_type = $1 AND root.parent_entity_id = $2)\n                ORDER BY page.import_order DESC NULLS FIRST, page.created_at DESC, page.id DESC\n                LIMIT GREATEST($7, $10)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message!: Json<StoredMessage>",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Uuid",
+        "Int8",
+        "Timestamptz",
+        "Uuid",
+        "Int8",
+        "Timestamptz",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "abce5d096e0e431bca64bb87a31a86a9732058b4120285008ff513d04d5ee535"
+}
