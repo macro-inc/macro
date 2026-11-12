@@ -21,7 +21,7 @@ Web app ──REST──▶ DSS ──── MacroDB ◀──── slack_sessi
                          rows + NOTIFY      login steps; one websocket per leased account
 ```
 
-- **DSS** serves `/slack/*` (`crates/slack_linked/src/inbound`) and
+- **DSS** serves `/slack-linked/*` (`crates/slack_linked/src/inbound`) and
   `/external-chats/*` with `SlackProvider` as the `slack` provider. It writes
   login inputs, chats, memberships and send intents, and never calls Slack.
   It holds no Slack credential it can read (see [Secrets](#secrets)).
@@ -95,13 +95,13 @@ then AES-256-GCM with associated data account | purpose. The plaintext is
 Disconnecting calls `auth.signout` on the session (best effort) and wipes the
 sealed credentials and data key.
 
-## The `/slack` API
+## The `/slack-linked` API
 
 All routes need the person's bearer session (`UserOnly`); API credentials,
 bots and internal callers can't sign in, list or disconnect. Errors use the
 generic `ApiError` JSON (`{code, message}`). Times are RFC 3339.
 
-Error codes the web maps, for `/slack` and Slack chats on `/external-chats`:
+Error codes the web maps, for `/slack-linked` and Slack chats on `/external-chats`:
 `invalid_input` (400), `not_found` (404), `forbidden` (403: not the person's
 own session), `conflict` (409, including a sign-in input sent in the wrong
 step), `disconnected` (no active Slack account), `cannot_add_archived`,
@@ -112,19 +112,19 @@ step), `disconnected` (no active Slack account), `cannot_add_archived`,
 
 A sign-in is a `slack_login_attempt` that DSS creates and updates and a
 session replica advances. Each `POST` stores the input and signals
-`slack_login_requested`; the web polls `GET /slack/login/{id}` (every second,
+`slack_login_requested`; the web polls `GET /slack-linked/login/{id}` (every second,
 as the WhatsApp pairing dialog does) until `step` is no longer `working`.
 
 | Route | Body | Allowed when `step` is |
 | --- | --- | --- |
-| `POST /slack/login` | `{email}` | (new attempt; cancels the person's earlier open attempt) |
-| `POST /slack/login/session` | `{source: "manual" \| "desktop", cookie, cookieDs?, tokens: [{token, teamId?}]}` | (new attempt) |
-| `GET /slack/login/{id}` | | any |
-| `POST /slack/login/{id}/captcha` | `{solution}` | `captcha` |
-| `POST /slack/login/{id}/code` | `{code}` (`ABC-123` or `ABC123`) | `email_code` |
-| `POST /slack/login/{id}/workspaces` | `{teamIds: [..]}` | `pick_workspaces` |
-| `POST /slack/login/{id}/two-factor` | `{code}` (six digits) | `two_factor` |
-| `DELETE /slack/login/{id}` | | any open step |
+| `POST /slack-linked/login` | `{email}` | (new attempt; cancels the person's earlier open attempt) |
+| `POST /slack-linked/login/session` | `{source: "manual" \| "desktop", cookie, cookieDs?, tokens: [{token, teamId?}]}` | (new attempt) |
+| `GET /slack-linked/login/{id}` | | any |
+| `POST /slack-linked/login/{id}/captcha` | `{solution}` | `captcha` |
+| `POST /slack-linked/login/{id}/code` | `{code}` (`ABC-123` or `ABC123`) | `email_code` |
+| `POST /slack-linked/login/{id}/workspaces` | `{teamIds: [..]}` | `pick_workspaces` |
+| `POST /slack-linked/login/{id}/two-factor` | `{code}` (six digits) | `two_factor` |
+| `DELETE /slack-linked/login/{id}` | | any open step |
 
 Every route returns the `SlackLogin` DTO; a `POST` in the wrong step (or to
 an attempt that is over) is `409 conflict`; an attempt past `expiresAt` reads
@@ -166,7 +166,7 @@ type SlackLoginFailure =
 
 Flow:
 
-1. `POST /slack/login {email}` → `working`. The replica calls
+1. `POST /slack-linked/login {email}` → `working`. The replica calls
    `signup.checkEmail`; Slack either wants a captcha (`captcha`: render
    Slack's hCaptcha/reCAPTCHA with `siteKey` on a client that can, then
    `POST …/captcha`) or emails a code (`email_code`).
@@ -182,7 +182,7 @@ Flow:
 4. `done` lists the accounts created or reconnected, and the workspaces
    skipped (SSO).
 
-**Pasted or desktop-captured session** (`POST /slack/login/session`):
+**Pasted or desktop-captured session** (`POST /slack-linked/login/session`):
 `manual` is the "paste token and cookie" form; `desktop` is the Macro desktop
 app's Slack window, which reads the HttpOnly `d` cookie and every
 `localConfig_v2` team token after the person signs in on slack.com (SSO and
@@ -200,8 +200,8 @@ the person already had one for that team: `generation` +1, state
 
 | Route | Purpose |
 | --- | --- |
-| `GET /slack/accounts` | `{accounts: SlackAccount[]}`: the person's accounts, any state, oldest first |
-| `POST /slack/accounts/{accountId}/disconnect` | `{authorizationGeneration, signOut: boolean}`: end consent; `signOut` also signs the session out at Slack |
+| `GET /slack-linked/accounts` | `{accounts: SlackAccount[]}`: the person's accounts, any state, oldest first |
+| `POST /slack-linked/accounts/{accountId}/disconnect` | `{authorizationGeneration, signOut: boolean}`: end consent; `signOut` also signs the session out at Slack |
 
 ```ts
 type SlackAccount = {
@@ -222,7 +222,7 @@ type SlackAccount = {
 
 ### Slack Connect catalogue
 
-`GET /slack/conversations` returns the stored catalogue across the person's
+`GET /slack-linked/conversations` returns the stored catalogue across the person's
 connected accounts and signals `slack_catalogue_requested` (each account
 refreshes at most once per 30 s). Only Slack Connect conversations are listed:
 channels with `is_ext_shared` (or `is_pending_ext_shared`) and DMs or group
@@ -268,7 +268,7 @@ syncing when one of them ends.
 Adding a chat imports its recent history at once: the last 90 days or 1,000
 messages, whichever is less, with thread replies (`backfill_state`
 `running` → `done` when Slack has nothing older, else `partial`).
-`POST /slack/chats/{chatId}/history-import` (owner) imports further back from
+`POST /slack-linked/chats/{chatId}/history-import` (owner) imports further back from
 the cursor, another 1,000 messages per call, and returns
 `{state: BackfillState}`; the generic chat detail carries `backfill`.
 
@@ -371,7 +371,7 @@ reason}`).
 ## Rollout and incidents
 
 The web flag `enable-slack-linked` is the only rollout gate; DSS always serves
-`/slack`. Scaling the session service to zero stops all Slack traffic,
+`/slack-linked`. Scaling the session service to zero stops all Slack traffic,
 including sign-in; accounts stay `connected` and sends expire unsent. Config:
 `DATABASE_URL` (RDS instance endpoint for the lease connection) and the KMS
 alias chosen from `ENVIRONMENT`.
