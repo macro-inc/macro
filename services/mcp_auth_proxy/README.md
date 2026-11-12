@@ -231,7 +231,7 @@ RFC 8707 `resource` parameter (`domain/resource.rs`):
   FusionAuth token but cannot look up its client, so writes would show as the
   user's own. This resource gets a Macro API token instead, minted at `/token`
   for the same user through the `MacroApiTokenMinter` port: the Macro bot via
-  the client's registered name, the attribution public MCP's `ExecuteCode`
+  the client's registered name and product, the attribution public MCP's `ExecuteCode`
   signs. It expires with the FusionAuth token it was minted from, and the
   refresh token stays FusionAuth's, so a refresh naming this resource mints a
   fresh one.
