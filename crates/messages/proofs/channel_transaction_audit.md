@@ -1,8 +1,8 @@
 # Channel sequence admission and transaction audit
 
-The current implementation admits at most four writes per typed message parent
-per process, waiting at most two seconds **before** borrowing a write connection.
-The counter append has a separate five-second PostgreSQL lock-wait guard. The
+The current implementation allows at most four live global admissions per typed
+message parent per process, waiting at most two seconds **before** borrowing a
+write connection. The counter append has a separate five-second PostgreSQL lock-wait guard. The
 previous 50 ms statement deadline is historical and is not the current policy.
 
 ## Admission and database boundaries
@@ -16,12 +16,11 @@ removes an entry when its final waiter or permit drops
 ([`:87`](../../message_write_gate/src/lib.rs#L87)). This is a concurrency limit,
 not a requests-per-second limit or a cross-process quota.
 
-A successful permit remains in scope through COMMIT. On an error, Rust drops the
-transaction before its earlier-declared permit; SQLx queues rollback before
-reusing the connection. This does not mean dropping a future synchronously
-acknowledges rollback on the server. Four admitted operations can also hold more
-than four connections when an operation has a journal lease plus a nested
-message write.
+Normal awaited execution retains the permit through COMMIT. Dropping a write
+future can release that permit before SQLx finishes its outstanding query or
+rollback; the cap bounds live admitted futures, not all lingering database
+cleanup. Four admitted operations can also hold more than four connections when
+an operation has a journal lease plus a nested message write.
 
 All current message parents use admission, including document comments; only
 channel parents append a sequence. The non-channel SQL branch remains unchanged
@@ -37,13 +36,13 @@ borrowing a connection.
 | Delete message | `pg_message_repo.rs:799`, begin `:800`; locks, tombstone triggers and hydration first | append `:805`, commit `:806` | COMMIT. |
 | React | `pg_message_repo.rs:818`, begin `:819`; locks, reaction change and hydration first | changed-only append `:838`, commit `:842` | COMMIT. No-op reaction allocates no sequence. |
 | Patch/delete thread | `pg_message_repo/threads.rs:49`, begin `:50` | append `:105`, wrapper commit `:52` | Return prepared state and COMMIT. Channel threads have no PDF-anchor lookup. |
-| Standalone historical batch | `pg_message_repo/historical.rs:45`, begin `:46` | reset append `:120`, savepoint release `:127`, outer commit `:48` | Savepoint release and COMMIT. Empty batches append no reset. |
-| Imported historical batch | `channel_sink.rs:113`, begin `:118`; fenced target recheck `:121` | reset in `historical.rs:120`, outer commit `channel_sink.rs:230` | **Approved exception:** savepoint release, historical activity update `:225`, checkpoint/counters/search completion `:229`. |
-| Imported reference repair | `reference_reconciliation.rs:40` discovery, permit `:44`, begin `:52`, identity recheck `:59` | changed-only append `historical.rs:91`, outer commit `reference_reconciliation.rs:96` | **Approved exception:** reference/search/job completion `:95`. |
+| Standalone historical batch | `pg_message_repo/historical.rs:45`, begin `:49` | reset append `:123`, savepoint release `:130`, outer commit `:51` | Savepoint release and COMMIT. Empty batches append no reset. |
+| Imported historical batch | `channel_sink.rs:113`, begin `:118`; fenced target recheck `:121` | reset in `historical.rs:123`, outer commit `channel_sink.rs:230` | **Approved exception:** savepoint release, historical activity update `:225`, checkpoint/counters/search completion `:229`. |
+| Imported reference repair | `reference_reconciliation.rs:40` discovery, permit `:44`, begin `:53`, identity recheck `:60` | changed-only append `historical.rs:94`, outer commit `reference_reconciliation.rs:97` | **Approved exception:** reference/search/job completion `:96`. |
 | Channel timeline activities | `activity/persistence.rs:65`, begin `:72`; insert all activities `:74` | batch append `:78`, commit `:80` | COMMIT; receipt mapping follows it. |
-| Archive/end call | `pg_call_repo/lifecycle.rs:13`, begin `:14`; archive writes and discussion recheck `:229` first | append `:254`, commit `:261` | COMMIT. |
-| Delete active call | `pg_call_repo.rs:1042`, begin `:1043`, target recheck `:1045`; deletion/access cleanup first | append `:1066`, commit `:1073` | COMMIT; append only for an actual channel deletion. |
-| Delete call record | `pg_call_repo.rs:2247`, begin `:2249`, target recheck `:2251`; deletion/access cleanup first | append `:2272`, commit `:2279` | COMMIT; same no-op/non-channel rule. |
+| Archive/end call | `pg_call_repo/lifecycle.rs:13`, begin `:14`; archive writes and discussion recheck `:221` first | append `:258`, commit `:265` | COMMIT. |
+| Delete active call | `pg_call_repo.rs:1042`, begin `:1044`, target recheck `:1045`; deletion/access cleanup first | append `:1067`, commit `:1074` | COMMIT; append only for an actual channel deletion. |
+| Delete call record | `pg_call_repo.rs:2248`, begin `:2250`, target recheck `:2251`; deletion/access cleanup first | append `:2273`, commit `:2280` | COMMIT; same no-op/non-channel rule. |
 
 Message paths above are in
 [`crates/messages/src/outbound`](../src/outbound/pg_message_repo.rs#L654);
@@ -68,8 +67,8 @@ message helper's savepoint does not commit the outer import transaction.
 | Caller-owned flow | Before admission | Recheck / lifetime |
 | --- | --- | --- |
 | Imported batch | Sorted unique channel IDs come from the bounded message plan; no discovery query is needed. | Compare the authoritative fenced channel with admitted IDs before message writes (`channel_sink.rs:119`). Hold permits through checkpoint completion and commit. An empty plan acquires no channel permit. |
-| Reference repair | `references::peek_next` seeks a pending job/message/channel identity and releases its pool connection (`references.rs:94`). | Reacquire the job fence by primary key (`next_for_job_in`, `:152`); compare job, message and channel (`reference_reconciliation.rs:59`) before writing. The worker cursor is locked before any connection, advances past busy/ineligible/changed jobs, drains successful jobs, and resets only at end of keyspace (`:102`). |
-| Call status writes | Reuse the existing primary-key call-discussion query through the pool, releasing that connection before `message_write_gate::acquire` (`lifecycle.rs:281`). | Archive rechecks inside its transaction before logging; delete paths recheck immediately after begin. A changed target aborts without commit (`lifecycle.rs:300`). Non-channel discussions receive no channel permit/log. |
+| Reference repair | `references::peek_next` seeks a pending job/message/channel identity and releases its pool connection (`references.rs:94`). | Reacquire the job fence by primary key (`next_for_job_in`, `:152`); compare job, message and channel (`reference_reconciliation.rs:60`) before writing. The worker cursor is locked before any connection, advances past busy/ineligible/changed jobs, drains successful jobs, and resets only at end of keyspace (`:102`). |
+| Call status writes | Reuse the existing primary-key call-discussion query through the pool, releasing that connection before `message_write_gate::acquire` (`lifecycle.rs:285`). | Archive rechecks inside its transaction before logging; delete paths recheck immediately after begin. A changed target aborts without commit (`lifecycle.rs:309`). Non-channel discussions receive no channel permit/log. |
 | Timeline activity | The input batch supplies channel IDs; acquire sorted unique channel permits. | Hold through all activity inserts, sequence allocation and commit. Non-channel-only batches keep the existing direct activity path (`persistence.rs:53`). |
 | Document annotation deletion | The authorized document ID is known; acquire its document-parent permit before begin (`delete_anchor.rs:23`). | Existing `delete_thread_in` runs under that permit (`:39`), through commit (`:50`); it never appends a channel change. |
 | Agent conversation bootstrap | Parent comes from the incoming origin before the delivery lease (`queue.rs:354`). | Recheck durable origin (`:406`) and retain admission around the caller-owned work. |
@@ -121,12 +120,13 @@ transaction's counter. It neither locks the thread-state row nor rejects a
 message tombstone if the thread remains live. Historical reply validation also
 locks existing roots before appending its reset.
 
-The two-second limit covers admission waiting only. The five-second database
-limit covers individual lock waits, not total statement/request duration;
-successive waits may cumulatively exceed it. Earlier row locks, the approved
-historical completion work and COMMIT retain their inherited timeout settings.
-Relation locks acquired before the append's configuration CTE also retain the
-inherited setting. Separate processes have separate four-writer limits.
+The two-second limit covers admission waiting only. The five-second guard
+covers each counter lock wait after the configuration CTE, not total statement
+or request duration; successive waits may cumulatively exceed it. Earlier
+message/thread waits, relation locks acquired before that CTE, the approved
+historical completion work and COMMIT retain their inherited settings, often
+zero (unlimited). No five-second total bound is asserted. Separate processes
+have separate four-writer limits.
 
 The changes read and prune transactions retain their explicit 15-second
 statement timeouts
@@ -138,6 +138,28 @@ is 10 minimum / 50 maximum with SQLx's default 30-second acquire timeout
 Pool-acquire timeouts do not cancel queries already running on a connection.
 The pre-existing five-minute idle-transaction setting is also not an active
 statement deadline. No live production settings were inspected for this audit.
+
+## Cancellation boundary
+
+A cancelled global admission waiter has no write connection. Dropping it removes
+its waiter and registry lease; the final lease removes the parent entry
+([`message_write_gate/src/lib.rs:87`](../../message_write_gate/src/lib.rs#L87),
+[`:192`](../../message_write_gate/src/lib.rs#L192)). An already-admitted task-local
+nested wait is different: the outer journal lease can exist, but that wait does
+not add another global admission.
+
+Once a Rust write is running, cancellation can drop its permit while an SQLx
+query or rollback is still completing. This applies to ordinary repository
+writes, thread and historical wrappers, caller-owned activity/call/import
+transactions, and cancelled agent scopes
+([`scope:149`](../../message_write_gate/src/lib.rs#L149)). The limits above do
+not bound that remaining database lifetime. Normal awaited COMMIT still retains
+the permit; counter, log and message changes remain one atomic transaction.
+
+Writes execute in their caller's future. No detached task retains the permit
+until database cleanup finishes after that future is cancelled. Agent journal
+lease and nested message-write lifetimes remain tied to their caller scope.
+Cancellation during COMMIT can leave its outcome unknown to the caller.
 
 ## Caller-visible failures and retry boundaries
 
