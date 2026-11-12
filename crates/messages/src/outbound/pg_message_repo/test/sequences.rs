@@ -448,7 +448,7 @@ async fn concurrent_channel_replies_and_root_writers_finish_without_deadlocks(po
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn channel_counter_wait_timeout_rolls_back_the_entire_message(pool: PgPool) {
+async fn channel_counter_guard_rolls_back_the_entire_message(pool: PgPool) {
     setup(&pool).await;
     let channel_id = channel_fixture(&pool).await;
     let parent = MessageParent::Channel(channel_id);
@@ -471,8 +471,8 @@ async fn channel_counter_wait_timeout_rolls_back_the_entire_message(pool: PgPool
         (
             "75ms",
             "0",
-            "57014",
-            "canceling statement due to statement timeout",
+            "55P03",
+            "canceling statement due to lock timeout",
         ),
         (
             "1ms",
@@ -506,8 +506,10 @@ async fn channel_counter_wait_timeout_rolls_back_the_entire_message(pool: PgPool
                 .await
                 .expect("configured PostgreSQL timeout must stop the counter waiter")
                 .unwrap_err();
-        let MessageError::Contended(report) = failure else {
-            panic!("counter timeout must propagate as retryable contention");
+        let report = match failure {
+            MessageError::Contended(report) if expected_code == "55P03" => report,
+            MessageError::Repository(report) if expected_code == "57014" => report,
+            other => panic!("unexpected counter guard error: {other:?}"),
         };
         let error = report.downcast_current_context::<sqlx::Error>().unwrap();
         let database = error.as_database_error().unwrap();
@@ -531,7 +533,7 @@ async fn channel_counter_wait_timeout_rolls_back_the_entire_message(pool: PgPool
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn channel_counter_wait_is_bounded_with_database_timeouts_disabled(pool: PgPool) {
+async fn channel_stalled_holder_guard_applies_with_database_timeouts_disabled(pool: PgPool) {
     setup(&pool).await;
     let channel_id = channel_fixture(&pool).await;
     let parent = MessageParent::Channel(channel_id);
@@ -558,11 +560,11 @@ async fn channel_counter_wait_is_bounded_with_database_timeouts_disabled(pool: P
     let mut input = command("message-doc-a", None, "waiting for counter");
     input.parent = parent;
     let failure = tokio::time::timeout(
-        std::time::Duration::from_secs(1),
+        std::time::Duration::from_secs(7),
         waiting_repo.create(input.clone()),
     )
     .await
-    .expect("the counter statement bounds its wait even when pool timeouts are disabled")
+    .expect("the five-second stalled-holder guard applies even with pool timeouts disabled")
     .unwrap_err();
     assert!(matches!(failure, MessageError::Contended(_)));
     // Reusing the single pooled connection waits for rollback and verifies the

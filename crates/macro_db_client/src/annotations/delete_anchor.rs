@@ -17,6 +17,10 @@ pub async fn delete_document_anchor(
     access: AnnotationMutation,
     req: DeleteUnthreadedAnchorRequest,
 ) -> Result<DeletedAnnotation> {
+    let parent =
+        messages::domain::models::MessageParent::parse("document", &access.target().document_id)?;
+    let _write_permit =
+        messages::outbound::pg_message_repo::PgMessageRepository::admit_parent(&parent).await?;
     let thread_id: Option<Uuid>;
     let document_id: String;
     let mut transaction = db.begin().await?;
@@ -31,7 +35,6 @@ pub async fn delete_document_anchor(
     }
 
     let thread = if let Some(thread_id) = thread_id {
-        let parent = messages::domain::models::MessageParent::parse("document", &document_id)?;
         Some(
             messages::outbound::pg_message_repo::PgMessageRepository::delete_thread_in(
                 &mut transaction,

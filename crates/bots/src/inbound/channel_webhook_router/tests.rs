@@ -52,7 +52,7 @@ async fn contended_channel_webhook_is_retryable_without_exposing_the_database_ca
     let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(
         body,
-        serde_json::json!({"message": "channel is busy; retry the request"})
+        serde_json::json!({"message": "conversation is busy; retry the request"})
     );
 }
 

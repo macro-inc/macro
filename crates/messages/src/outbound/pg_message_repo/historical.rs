@@ -42,6 +42,10 @@ impl crate::domain::ports::HistoricalMessageReader for PgMessageRepository {
 
 impl HistoricalMessageRepository for PgMessageRepository {
     async fn insert_historical(&self, batch: &HistoricalBatch) -> Result<(), MessageError> {
+        let _write_permit = Self::admit_parent(&crate::domain::models::MessageParent::Channel(
+            batch.channel_id,
+        ))
+        .await?;
         let mut tx = self.pool.begin().await.map_err(database_error)?;
         Self::insert_historical_in(&mut tx, batch).await?;
         tx.commit().await.map_err(database_error)
@@ -52,6 +56,7 @@ impl PgMessageRepository {
     /// Patch only an unchanged, undeleted importer-written body. Live edits (even
     /// edit/revert) invalidate the timestamp guard. No timestamp, thread, reaction,
     /// author or activity is changed and no live-message effects are emitted.
+    /// The caller holds a channel write permit acquired before its transaction.
     pub async fn patch_historical_body_in(
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         patch: &crate::domain::historical::HistoricalBodyPatch,
@@ -101,7 +106,8 @@ impl PgMessageRepository {
     /// must authorize the channel and atomically persist its source mappings,
     /// fenced checkpoint, counters and dirty-search marker in the same transaction.
     ///
-    /// A savepoint makes even late reaction failures roll back the whole batch.
+    /// The caller must hold a channel write permit acquired before its outer
+    /// transaction. A savepoint makes even late reaction failures roll back the whole batch.
     /// Existing message IDs are conflicts, not permission to change old content;
     /// the caller must resolve source deduplication before invoking this helper.
     pub async fn insert_historical_in(

@@ -173,7 +173,7 @@ impl IntoResponse for MessageHttpError {
                 tracing::warn!(error=?error, "channel sequence is contended");
                 (
                     StatusCode::SERVICE_UNAVAILABLE,
-                    "channel is busy; retry the request",
+                    "conversation is busy; retry the request",
                 )
             }
             MessageError::Repository(error) => {

@@ -27,7 +27,8 @@ impl PgMessageRepository {
     }
 
     /// Delete a discussion within an existing annotation transaction.
-    /// The caller must already have authorized the enclosing annotation operation.
+    /// The caller must authorize the operation and hold its parent write permit,
+    /// acquired before opening the enclosing annotation transaction.
     pub async fn delete_thread_in(
         tx: &mut Transaction<'_, Postgres>,
         parent: &MessageParent,
@@ -45,6 +46,7 @@ impl PgMessageRepository {
         patch: ThreadPatch,
         delete: bool,
     ) -> Result<(ThreadState, Option<i64>), MessageError> {
+        let _write_permit = Self::admit_parent(parent).await?;
         let mut tx = self.pool.begin().await.map_err(database_error)?;
         let (state, seq) = Self::set_thread_in(&mut tx, parent, root_id, patch, delete).await?;
         tx.commit().await.map_err(database_error)?;

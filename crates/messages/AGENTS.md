@@ -90,13 +90,12 @@ grant users another agent invocation's edit, deletion, or reaction authority.
 
 ## Gotchas
 
-- A recognized channel append timeout is `MessageError::Contended`, with the database
-  cause retained in its report. Message HTTP returns a safe 503 with
-  `Retry-After: 1`; tools tell callers to retry. Classify it only at the channel
-  append boundary: `55P03`, or `57014` with the exact English statement-timeout
-  message. User-request and localized/unrecognized cancellations remain 500s;
-  the 50 ms statement deadline preserves stricter inherited timeouts and applies
-  regardless of server message locale. The preflight runs only for channel writes.
+- Acquire process-wide parent admission before a message write takes a database
+  connection; retain the permit through commit. The shared gate admits four
+  writes per `(entity type, id)` and rejects a two-second wait as retryable
+  `MessageError::Contended`. Caller-owned transactions acquire admission first.
+  Channel counter appends retain a five-second lock-timeout guard; ordinary
+  statement cancellation remains a repository error.
 - Channel change rows retain 30 days of history; the calendar outbox worker
   runs their bounded hourly prune even when calendar sync is disabled. Changes
   pages cover 200 rows; a pruned position, a reset row, or a lag over 1,000

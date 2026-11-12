@@ -44,16 +44,13 @@ impl DatabaseError for FakeDbError {
 
 #[test]
 fn append_timeouts_are_retryable_and_preserve_the_database_cause() {
-    for (code, message) in [
-        ("55P03", "canceling statement due to lock timeout"),
-        ("57014", "canceling statement due to statement timeout"),
-    ] {
+    for (code, message) in [("55P03", "canceling statement due to lock timeout")] {
         let error = append_error(sqlx::Error::Database(Box::new(FakeDbError {
             code,
             message,
         })));
 
-        assert_eq!(error.to_string(), "channel is busy; retry the request");
+        assert_eq!(error.to_string(), "conversation is busy; retry the request");
         let MessageError::Contended(report) = error else {
             panic!("append timeout must be retryable contention");
         };
@@ -71,6 +68,7 @@ fn append_timeouts_are_retryable_and_preserve_the_database_cause() {
 fn user_requested_and_unrecognized_cancellations_keep_the_repository_error() {
     for (code, message) in [
         ("57014", "canceling statement due to user request"),
+        ("57014", "canceling statement due to statement timeout"),
         ("57014", "localized statement timeout"),
         (
             "57014",

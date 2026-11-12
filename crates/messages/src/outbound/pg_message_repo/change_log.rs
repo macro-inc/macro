@@ -8,15 +8,13 @@ use crate::domain::{changes::ChannelChangeKind, models::MessageParent, ports::Me
 use sqlx::{Postgres, Transaction};
 use uuid::Uuid;
 
-// PostgreSQL also uses 57014 for user cancellation. Match only its English
-// statement-timeout message; other locales or cancellation causes stay generic.
+// Only the counter's lock-timeout guard is classified here. Admission failures
+// are mapped before the write transaction starts; unrelated cancellation stays
+// an ordinary repository failure.
 fn append_error(error: sqlx::Error) -> MessageError {
     if matches!(
         &error,
-        sqlx::Error::Database(database)
-            if database.code().as_deref() == Some("55P03")
-                || (database.code().as_deref() == Some("57014")
-                    && database.message() == "canceling statement due to statement timeout")
+        sqlx::Error::Database(database) if database.code().as_deref() == Some("55P03")
     ) {
         MessageError::Contended(rootcause::Report::new(error).into())
     } else {
@@ -25,6 +23,16 @@ fn append_error(error: sqlx::Error) -> MessageError {
 }
 
 impl PgMessageRepository {
+    /// Admit one parent write before acquiring its database connection.
+    /// Caller-owned transactions hold the returned permit through commit.
+    pub async fn admit_parent(
+        parent: &MessageParent,
+    ) -> Result<message_write_gate::WritePermit, MessageError> {
+        message_write_gate::acquire(parent.entity_type(), &parent.entity_id())
+            .await
+            .map_err(|error| MessageError::Contended(rootcause::Report::new(error).into()))
+    }
+
     /// Append one committed change to its channel's sequence. The caller must
     /// run this after all other database work, immediately before committing.
     /// The counter's row lock makes sequence order equal commit order.

@@ -651,6 +651,7 @@ impl MessageRepository for PgMessageRepository {
             .input
             .id
             .unwrap_or_else(macro_uuid::generate_uuid_v7);
+        let _write_permit = Self::admit_parent(&command.parent).await?;
         let mut tx = self.pool.begin().await.map_err(database_error)?;
         if let Some(root_id) = command.canonical_root_id {
             // Serialize the first writers, and coordinate with parent cleanup. A
@@ -761,6 +762,7 @@ impl MessageRepository for PgMessageRepository {
         id: Uuid,
         command: EditMessage,
     ) -> Result<(Message, Option<i64>), MessageError> {
+        let _write_permit = Self::admit_parent(parent).await?;
         let mut tx = self.pool.begin().await.map_err(database_error)?;
         let actor = Self::lock_message(&mut tx, parent, id).await?;
         // Attachment-only patches keep the message unedited, as the channel writer did.
@@ -794,6 +796,7 @@ impl MessageRepository for PgMessageRepository {
         parent: &MessageParent,
         id: Uuid,
     ) -> Result<(Message, Option<i64>), MessageError> {
+        let _write_permit = Self::admit_parent(parent).await?;
         let mut tx = self.pool.begin().await.map_err(database_error)?;
         Self::lock_message(&mut tx, parent, id).await?;
         sqlx::query!("UPDATE comms_messages SET content = '', deleted_at = now(), updated_at = now() WHERE id = $1", id)
@@ -812,6 +815,7 @@ impl MessageRepository for PgMessageRepository {
         emoji: &str,
         add: bool,
     ) -> Result<ReactionResult, MessageError> {
+        let _write_permit = Self::admit_parent(parent).await?;
         let mut tx = self.pool.begin().await.map_err(database_error)?;
         Self::lock_message(&mut tx, parent, id).await?;
         let result = if add {

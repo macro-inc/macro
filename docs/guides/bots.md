@@ -77,12 +77,12 @@ const [webhook] = await bot.webhooks();
 `secret` is shown only once. POST `{ "content": "..." }` to `webhook.url` with
 the token in `x-macro-bot-token` and `x-macro-bot-scope: user`.
 
-If a channel change cannot finish its sequence append within its short database
-deadline, the webhook and channel message API return HTTP `503`, header
-`Retry-After: 1`, and this JSON body:
+Writes to the same conversation share a per-process limit of four active
+writes. If a request waits for capacity for two seconds, the webhook and
+message API return HTTP `503`, header `Retry-After: 1`, and this JSON body:
 
 ```json
-{ "message": "channel is busy; retry the request" }
+{ "message": "conversation is busy; retry the request" }
 ```
 
 That attempt did not commit a message change. The server, web sender, and SDK do
@@ -91,6 +91,11 @@ shows a failure and restores the draft; the SDK throws `MacroApiError` with
 status `503` and the response body, without preserving the header on that error.
 Retry manually, or implement a retry policy in the calling program that waits
 at least one second for this response.
+
+Retrying this admission rejection creates one message: the rejected attempt
+never acquired a write connection. The webhook generates a new message ID on
+each accepted request, so a retry after an unknown outcome (for example, a
+lost response after commit) can still create a duplicate, as before.
 
 ## What a bot can do
 
