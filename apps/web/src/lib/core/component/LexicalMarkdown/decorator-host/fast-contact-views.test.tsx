@@ -19,7 +19,11 @@ import { createNativeContactContext } from './native-contact-host';
 beforeAll(initializeNativeSurfaceTests);
 afterEach(clearDecorators);
 
-/** Mounts stored contacts beside a sibling paragraph and records what the component received. */
+/**
+ * Mounts stored contacts beside a sibling paragraph through the real registry,
+ * with a recording component in place of ContactMention: this guards the
+ * projector and registry mount, not the component's own rendering.
+ */
 function mount(contacts: readonly object[]) {
   const received: ContactMentionUIProps[] = [];
   setDecorator<ContactMentionUIProps>(ContactMentionNode, (props) => {
@@ -32,47 +36,51 @@ function mount(contacts: readonly object[]) {
     fixture.view.registry,
     createNativeFastContactDecoratorViews(context)
   );
-  fixture.port.setState(
-    JSON.stringify({
-      root: {
-        type: 'root',
-        version: 1,
-        children: [
-          {
-            type: 'paragraph',
-            version: 1,
-            children: contacts.map((contact) => ({
-              type: 'contact-mention',
-              version: 1,
-              ...contact,
-            })),
-          },
-          {
-            type: 'paragraph',
-            version: 1,
-            children: [{ type: 'text', version: 1, text: 'sibling stays' }],
-          },
-        ],
-      },
-    })
-  );
-  return {
-    fixture,
-    received,
-    close() {
-      context.dispose();
-      fixture.close();
-    },
+  const close = () => {
+    context.dispose();
+    fixture.close();
   };
+  try {
+    fixture.port.setState(
+      JSON.stringify({
+        root: {
+          type: 'root',
+          version: 1,
+          children: [
+            {
+              type: 'paragraph',
+              version: 1,
+              children: contacts.map((contact) => ({
+                type: 'contact-mention',
+                version: 1,
+                ...contact,
+              })),
+            },
+            {
+              type: 'paragraph',
+              version: 1,
+              children: [{ type: 'text', version: 1, text: 'sibling stays' }],
+            },
+          ],
+        },
+      })
+    );
+  } catch (error) {
+    // An expected refusal must not leak the constructed session and root.
+    close();
+    throw error;
+  }
+  return { fixture, received, close };
 }
 
-test('stored contact fields Source keeps as null or missing reach the component unchanged', () => {
+test('projector hands stored null or missing contact fields to the registered component unchanged', () => {
   const mounted = mount([
     {
       contactId: 'valid-contact',
       name: 'Valid Person',
       emailOrDomain: 'valid@example.com',
       isCompany: false,
+      mentionUuid: 'valid-mention',
     },
     {
       contactId: null,
@@ -109,6 +117,13 @@ test('stored contact fields Source keeps as null or missing reach the component 
       emailOrDomain: 'empty@example.com',
       isCompany: false,
     },
+    { contactId: 'missing-email', name: 'Missing Email', isCompany: false },
+    {
+      contactId: 'null-flag',
+      name: 'Null Flag',
+      emailOrDomain: 'null-flag@example.com',
+      isCompany: null,
+    },
   ]);
   try {
     expect(
@@ -127,7 +142,7 @@ test('stored contact fields Source keeps as null or missing reach the component 
         name: 'Valid Person',
         emailOrDomain: 'valid@example.com',
         isCompany: false,
-        mentionUuid: undefined,
+        mentionUuid: 'valid-mention',
       },
       {
         contactId: null,
@@ -171,17 +186,31 @@ test('stored contact fields Source keeps as null or missing reach the component 
         isCompany: false,
         mentionUuid: undefined,
       },
+      {
+        contactId: 'missing-email',
+        name: 'Missing Email',
+        emailOrDomain: undefined,
+        isCompany: false,
+        mentionUuid: undefined,
+      },
+      {
+        contactId: 'null-flag',
+        name: 'Null Flag',
+        emailOrDomain: 'null-flag@example.com',
+        isCompany: null,
+        mentionUuid: undefined,
+      },
     ]);
     expect(
       mounted.fixture.root.querySelectorAll('[data-recorded-contact]')
-    ).toHaveLength(7);
+    ).toHaveLength(9);
     expect(mounted.fixture.root.textContent).toContain('sibling stays');
   } finally {
     mounted.close();
   }
 });
 
-test('a person without a string name stays rejected, as Source cannot render or save it', () => {
+test('projector still rejects a person without a text name, as Source cannot render or save it', () => {
   for (const contact of [
     {
       contactId: 'p',
@@ -197,7 +226,7 @@ test('a person without a string name stays rejected, as Source cannot render or 
   }
 });
 
-test('wrong value types are refused by the stored model before any projection', () => {
+test('stored model refuses wrong value types before any projection', () => {
   for (const contact of [
     {
       contactId: 5,
