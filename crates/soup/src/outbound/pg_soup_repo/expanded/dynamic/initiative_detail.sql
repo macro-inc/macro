@@ -9,6 +9,7 @@
             NULL as "branched_from_version_id",
             NULL as "document_family_id",
             NULL as "file_type",
+            i.appearance as "appearance",
             i.created_at::timestamptz as "created_at",
             i.updated_at::timestamptz as "updated_at",
             NULL::text as "project_id",
