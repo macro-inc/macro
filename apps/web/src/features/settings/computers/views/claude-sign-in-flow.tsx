@@ -5,7 +5,6 @@ import { thrownResultErrorHasCode } from '@core/util/result';
 import { openExternalUrl } from '@core/util/url';
 import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
 import {
-  useClaudeCancelMutation,
   useClaudeCompleteMutation,
   useClaudeSignInMutation,
 } from '@queries/computers/claude';
@@ -24,9 +23,24 @@ import {
 type Step = 'open' | 'code';
 
 /**
+ * Whether `url` is an https link. The sign-in link comes from the computer;
+ * the server already allows only Claude's, and this keeps any other scheme
+ * from ever being opened.
+ */
+export function isHttpsUrl(url: string): boolean {
+  try {
+    return new URL(url).protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Signs a computer's Claude Code in: open claude.ai in a new tab, then paste
- * the code it shows. The sign-in starts as soon as this mounts, so the link is
- * ready by the time the user reaches for it.
+ * the code it shows. Mounting asks for the computer's sign-in link, which is
+ * the one it started ahead of time when there is one. Closing leaves that
+ * sign-in waiting, so opening again shows the same link; harnessd ends it once
+ * it is too old.
  *
  * Rendered as a dialog's body and footer; the host owns the dialog.
  */
@@ -41,7 +55,6 @@ export function ClaudeSignInFlow(props: {
 }) {
   const start = useClaudeSignInMutation();
   const complete = useClaudeCompleteMutation();
-  const cancel = useClaudeCancelMutation();
   const codeId = createUniqueId();
   const [step, setStep] = createSignal<Step>('open');
   const [url, setUrl] = createSignal<string>();
@@ -51,7 +64,6 @@ export function ClaudeSignInFlow(props: {
   const [restart, setRestart] = createSignal<string>();
   let request: AbortController | undefined;
   let generation = 0;
-  let signedIn = false;
   // Clicked before the link arrived: the tab opened then, and is pointed at
   // claude.ai once the sign-in answers.
   let waitingTab: Window | null | undefined;
@@ -67,6 +79,7 @@ export function ClaudeSignInFlow(props: {
         signal: request.signal,
       });
       if (current !== generation) return;
+      if (!isHttpsUrl(result.url)) throw new Error('untrusted sign-in link');
       setUrl(result.url);
       if (waitingTab) waitingTab.location.href = result.url;
       waitingTab = undefined;
@@ -95,9 +108,6 @@ export function ClaudeSignInFlow(props: {
     document.title = pageTitle;
     generation++;
     request?.abort();
-    if (!signedIn) {
-      fireAndForget(cancel.mutateAsync(props.harnessId), 'computer-claude');
-    }
   });
 
   const startOver = () => {
@@ -132,7 +142,6 @@ export function ClaudeSignInFlow(props: {
         signal: request.signal,
       });
       if (current !== generation) return;
-      signedIn = true;
       props.onSignedIn();
     } catch (failure) {
       if (current !== generation) return;

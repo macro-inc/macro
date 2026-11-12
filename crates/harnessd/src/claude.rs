@@ -336,8 +336,13 @@ impl AgentAuth for ClaudeAuth {
     }
 
     async fn status(&self) -> Result<AgentStatus, ErrorKind> {
+        // A sign-in nobody finished ends here once it is too old to hand
+        // out; the control plane asks for status every minute.
         let waiting = match self.current() {
-            Some(sign_in) if sign_in.terminal.closed() => {
+            Some(sign_in)
+                if sign_in.terminal.closed()
+                    || sign_in.started_at.elapsed() >= self.config.pending_lifetime =>
+            {
                 self.finish(&sign_in);
                 false
             }

@@ -215,9 +215,9 @@ where
         )
         .await?
     {
-        harnessd_protocol::Response::SignInStarted { url, .. } => {
-            Ok(Json(ClaudeSignInStarted { url }))
-        }
+        harnessd_protocol::Response::SignInStarted { url, .. } => Ok(Json(ClaudeSignInStarted {
+            url: trusted_sign_in_url(&url)?.to_owned(),
+        })),
         other => Err(ComputerRouteError::from_answer(other)),
     }
 }
@@ -376,6 +376,30 @@ where
     Ok(Json(ClaudeModeResponse::of(login)))
 }
 
+/// Hosts `claude setup-token` sends people to; the pinned Claude Code
+/// uses `claude.com`.
+const SIGN_IN_HOSTS: &[&str] = &["claude.com", "claude.ai"];
+
+/// `url` when it is a Claude OAuth sign-in link, which the browser then
+/// opens. The link comes from the guest, which its users control, so
+/// anything else (another scheme or host) is refused.
+fn trusted_sign_in_url(url: &str) -> Result<&str, ComputerRouteError> {
+    let parsed = url::Url::parse(url).map_err(|_| ComputerRouteError::UntrustedSignInUrl)?;
+    let trusted = parsed.scheme() == "https"
+        && parsed.username().is_empty()
+        && parsed.password().is_none()
+        && parsed.port().is_none()
+        && parsed
+            .host_str()
+            .is_some_and(|host| SIGN_IN_HOSTS.contains(&host))
+        && parsed.path().ends_with("/oauth/authorize");
+    if !trusted {
+        tracing::warn!("a computer returned an untrusted Claude sign-in link");
+        return Err(ComputerRouteError::UntrustedSignInUrl);
+    }
+    Ok(url)
+}
+
 impl<Harnesses, Auth> ClaudeAccessState<Harnesses, Auth>
 where
     Harnesses: HarnessService,
@@ -468,6 +492,9 @@ pub enum ComputerRouteError {
     /// The computer did not answer in time.
     #[error("the computer did not answer in time")]
     Timeout,
+    /// The computer's sign-in link is not Claude's.
+    #[error("the computer returned a sign-in link that isn't Claude's")]
+    UntrustedSignInUrl,
     /// Anything else.
     #[error("internal error")]
     Internal(rootcause::Report),
@@ -513,7 +540,9 @@ impl From<HarnessdError> for ComputerRouteError {
             }
             HarnessdError::Timeout => Self::Timeout,
             HarnessdError::Harness(error) => error.into(),
-            error @ (HarnessdError::Unreadable(_) | HarnessdError::Lock(_)) => {
+            error @ (HarnessdError::Unreadable(_)
+            | HarnessdError::AnswerTooLarge
+            | HarnessdError::Lock(_)) => {
                 Self::Internal(rootcause::report!("{error}"))
             }
         }
@@ -542,7 +571,10 @@ impl IntoResponse for ComputerRouteError {
             Self::NotFound(_) => StatusCode::NOT_FOUND,
             Self::Unavailable(_) => StatusCode::SERVICE_UNAVAILABLE,
             Self::Conflict(_) => StatusCode::CONFLICT,
-            Self::Failed(_) | Self::InvalidCode | Self::SignInCancelled => {
+            Self::Failed(_)
+            | Self::InvalidCode
+            | Self::SignInCancelled
+            | Self::UntrustedSignInUrl => {
                 StatusCode::UNPROCESSABLE_ENTITY
             }
             Self::Timeout => StatusCode::GATEWAY_TIMEOUT,

@@ -52,11 +52,10 @@ export default {
   claudeCodeLabel: 'Paste the code Claude showed you',
   completeSignIn: 'Complete sign-in',
   claudeLoadFailed: 'Could not load Claude access.',
-  claudeOwnAccount: 'Claude: your account',
   claudeSignedIn: 'Signed in with Claude',
   claudeNotSignedIn: 'Claude: not signed in',
   claudeSharedAccount:
-    'Everyone on the team uses this Claude account on this computer.',
+    'Everyone using this computer can use this Claude sign-in. Signing out removes it from the computer; to revoke it, go to claude.ai settings.',
   claudeCredits: 'Claude: Macro credits',
   nameOptional: 'Name (optional)',
   namePlaceholder: 'Build machine',
