@@ -58,7 +58,7 @@ const text = (value: unknown) => JSON.stringify(value ?? null);
 const drafted: Expectation = {
   says: 'drafted, with no code problems',
   holds: (draft) =>
-    draft.outcome !== 'failed' && (draft.problems ?? []).length === 0,
+    (draft.outcome === 'routine' || draft.outcome === 'step') && (draft.problems ?? []).length === 0,
 };
 
 const nothingUnused: Expectation = {
@@ -75,19 +75,20 @@ const schedules = (trigger: unknown): string[][] =>
 // The scheduler's cron numbers days from 1 = Sunday.
 const DAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 
-/** The days of the week a day-of-week field names. */
+/** The days of the week a day-of-week field names, or none when it uses syntax this doesn't read (steps, `L`, `#`). */
 function days(field: string): Set<string> {
   if (field === '*' || field === '?') return new Set(DAYS);
   const named = (part: string) =>
     /^\d+$/.test(part) ? DAYS[(Number(part) - 1) % 7] : part.toUpperCase();
   const out = new Set<string>();
   for (const part of field.split(',')) {
-    const [from, to] = part.split('-').map(named);
-    if (!to) {
+    const [from, to, ...rest] = part.split('-').map(named);
+    if (rest.length || !DAYS.includes(from) || (to !== undefined && !DAYS.includes(to))) return new Set();
+    if (to === undefined) {
       out.add(from);
       continue;
     }
-    for (let i = DAYS.indexOf(from); ; i = (i + 1) % 7) {
+    for (let i = DAYS.indexOf(from), seen = 0; seen < DAYS.length; i = (i + 1) % 7, seen++) {
       out.add(DAYS[i]);
       if (DAYS[i] === to) break;
     }
@@ -95,16 +96,16 @@ function days(field: string): Set<string> {
   return out;
 }
 
-/** A schedule that runs at `hour:minute` on exactly `on` (any day if omitted). */
+/** A schedule that runs at `hour:minute` on exactly `on` (every day if omitted). */
 const at = (hour: number, minute: number, on?: string[]): Expectation => ({
   says: `runs at ${hour}:${String(minute).padStart(2, '0')}${on ? ` on ${on.join(', ')}` : ''}`,
   holds: (draft) =>
     schedules(draft.trigger).some((fields) => {
       const [, min, hr, , , dow = '*'] = fields;
       if (Number(min) !== minute || Number(hr) !== hour) return false;
-      if (!on) return true;
       const named = days(dow);
-      return named.size === on.length && on.every((day) => named.has(day));
+      const want = on ?? DAYS;
+      return named.size === want.length && want.every((day) => named.has(day));
     }),
 });
 
@@ -203,11 +204,15 @@ export const CASES: Case[] = [
       uses('Q4 Launch'),
       {
         says: 'leaves the missing #marketing channel for the person to pick',
+        // Neither another channel's id nor the name itself, in a knob or as a
+        // string in a step's code (escaped quotes: it is read from JSON).
         holds: (draft, ids) =>
           !['design-feedback', 'engineering', 'eng-announcements'].some(
             (name) =>
               text([draft.trigger, draft.steps]).includes(ids[name] ?? '-'),
-          ),
+          ) &&
+          !knobNamed(draft, 'marketing') &&
+          !/(\\"|'|`)#?marketing(\\"|'|`)/i.test(text(draft.steps)),
       },
       nothingUnused,
     ],

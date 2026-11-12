@@ -303,8 +303,9 @@ function breakdown({ spans, checks }: { spans: Span[]; checks: Span[] }): Breakd
   }
   const interval = (span: Span): Interval => [span.start, span.end];
   const busy = [...chats, ...toolSpans];
-  const firstModel = chats[0]?.start ?? draft.end;
-  const lastBusy = busy.length ? Math.max(...busy.map((span) => span.end)) : draft.start;
+  // With nothing traced, the whole span counts as setup and none as tail.
+  const firstModel = chats[0]?.start ?? (busy.length ? Math.min(...busy.map((span) => span.start)) : draft.end);
+  const lastBusy = busy.length ? Math.max(...busy.map((span) => span.end)) : draft.end;
   const serverMs = draft.end - draft.start;
   const setupMs = Math.max(0, firstModel - draft.start);
   const tailMs = Math.max(0, draft.end - lastBusy);
@@ -434,6 +435,12 @@ async function run(args: string[]) {
     values.append && existsSync(out)
       ? (JSON.parse(readFileSync(out, 'utf8')) as Results)
       : { label: values.label, model: values.model as string, startedAt: new Date().toISOString(), commit, runs: [] };
+  if (results.label !== values.label || results.model !== values.model) {
+    throw new Error(`${out} holds ${results.label} on ${results.model}; append ${values.label} on ${values.model} to another file`);
+  }
+  // A rebase or a reworded commit changes the commit but not the build, so
+  // a different one only warns.
+  if (results.commit !== commit) console.warn(`${out} was started at ${results.commit}; appending runs from ${commit}`);
   const done = Math.max(0, ...results.runs.map((result) => result.run));
   mkdirSync(dirname(out), { recursive: true });
   // Round-robin over cases, so a slow patch of the model's day spreads across
@@ -476,13 +483,13 @@ async function reread(args: string[]) {
       'quality-only': { type: 'boolean', default: false },
     },
   });
-  const at = stack(values.instance as string, values.tempo as string);
+  const at = values['quality-only'] ? undefined : stack(values.instance as string, values.tempo as string);
   for (const path of positionals) {
     const results = JSON.parse(readFileSync(path, 'utf8')) as Results;
     for (const result of results.runs) {
       const item = CASES.find((candidate) => candidate.id === result.case);
       if (item && result.draft) result.quality = judge(item, result.draft);
-      if (!values['quality-only']) result.breakdown = breakdown(await draftSpans(at, result.traceId)) ?? result.breakdown;
+      if (at) result.breakdown = breakdown(await draftSpans(at, result.traceId)) ?? result.breakdown;
     }
     writeFileSync(path, `${JSON.stringify(results, null, 2)}\n`);
     console.log(`reread ${results.runs.length} runs in ${path}`);
