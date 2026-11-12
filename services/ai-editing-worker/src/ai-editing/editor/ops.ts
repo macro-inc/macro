@@ -89,13 +89,6 @@ export type ListKind = 'bullet' | 'number' | 'check';
  *  Date/time chips are `insertDate` / `{ inline: 'date' }`, not this union. */
 export type MentionSpec =
   | { kind: 'user'; userId: string; email: string }
-  | {
-      kind: 'contact';
-      contactId: string;
-      name: string;
-      emailOrDomain: string;
-      isCompany: boolean;
-    }
   | { kind: 'group'; groupAlias: string }
   | {
       kind: 'document';

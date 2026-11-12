@@ -32,11 +32,10 @@ export function ContactMention(props: ContactMentionDecoratorProps) {
   };
 
   const openContact = (e: MouseEvent | KeyboardEvent | null) => {
-    // The contactId is the email or @domain
-    const contactId = encodeURIComponent(props.emailOrDomain);
+    // Legacy chips name the person by email; the CRM contact view resolves it.
     const inNewSplit = openInNewSplitForMention(e?.shiftKey, e != null);
     openWithSplit(
-      { type: 'contact', id: contactId },
+      { type: 'contact', id: props.emailOrDomain },
       { preferNewSplit: inNewSplit }
     );
   };

@@ -35,6 +35,11 @@ export type ContactMentionDecoratorProps = {
   theme: EditorThemeClasses;
 };
 
+/**
+ * @deprecated Legacy contact chip, keyed by email or `@domain`. Kept only to
+ * read and render existing content; mention a CRM contact with a
+ * `DocumentMentionNode` whose `blockName` is `contact`.
+ */
 export class ContactMentionNode extends DecoratorNode<
   DecoratorComponent<ContactMentionDecoratorProps> | undefined
 > {
@@ -286,6 +291,7 @@ export class ContactMentionNode extends DecoratorNode<
   }
 }
 
+/** @deprecated Restores existing legacy chips only; see `ContactMentionNode`. */
 export function $createContactMentionNode(params: {
   contactId: string;
   name: string;
