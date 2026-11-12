@@ -1334,10 +1334,13 @@ defaults to `[]` when omitted. Loops, early breaks and bounded parallel
 promises are supported. Preserve the user's source filters, source IDs, errors,
 and coverage limits; stopping a paginated iterator does not prove exhaustiveness.
 
-Code execution hides program source and raw returned JSON. Observed SDK operations
-use the same **Calling N tools** peek window as ordinary consecutive tool calls:
-each request is its own compact row (label plus status), live runs open the
-five-row scrolling window, and settled runs collapse to the count. There is no
+The transcript never shows that code mode exists: no program, source, raw
+returned JSON, or code-mode wording. An `ExecuteCode` call joins the tool group
+of its turn segment and shows only its observed SDK operations, each a compact
+row (label plus status) counted as one step; `SearchTools`, `LoadTools`,
+`DescribeCodeTools` and `ReadCodeDocs` are hidden and not counted. A group with
+a program never opens on its own, so a step that failed and was recovered from
+shows only in the expanded list. There is no
 separate API-call count wrapper or per-label aggregation once activity is
 available. Activity refreshes about once per second while a run is active,
 survives reload, and is capped at the first 128 requests. These are advisory
@@ -1835,8 +1838,9 @@ drafts, and payloads that do not fit their renderer stay as summary rows with
 no caret. Tool arguments and results never fall back to raw JSON.
 
 Tool runs keep one group from their first call. Historical runs start collapsed;
-live calls get a 150 ms buffer, so fast parallel bursts can finish as **Called N
-tools** without flashing a list. Ongoing work opens a scrollable window of at
+live calls get a 150 ms buffer, so fast parallel bursts can finish as **Used N
+tools** without flashing a list. Ongoing work (except a run with an `ExecuteCode`
+program) opens a scrollable window of at
 most five compact rows. The window follows unfinished calls first, keeping slow
 work visible even when later calls finish, until you scroll or interact with it;
 scrolling back to the bottom resumes following. An automatically opened window
@@ -1849,7 +1853,7 @@ during other tool bursts. A subagent row is titled by the call's short
 description, else the first line of its brief, and says **Running**, **Done**,
 or **Failed**; expanding it shows the **Instructions** and the **Result**. A long
 title truncates before the state, never over it, on phones too. Nested agent
-activity and code-mode SDK operations each use the same peek window.
+activity uses the same peek window.
 
 The group and thought carets sit immediately after their labels and appear on
 hover or keyboard focus, and always on touch. Expand an edit row to view its diffs. Result bodies load only when their
@@ -1903,11 +1907,10 @@ opens every group and tool result at once.
 While a turn runs tool calls, the server words them as one live status line
 ("Searching your workspace…", "Reading 12 emails…") with a cheap model and
 pushes it to every viewer (`agent_session_activity`). It replaces the
-**Calling N tools** label of the run the turn is in: one with a call in flight,
+**Using N tools** label of the run the turn is in: one with a call in flight,
 or the newest run while the agent thinks between calls. The count stays beside it,
-and the caret still opens the raw calls. An `ExecuteCode` program the turn is
-in takes it the same way: on its SDK-operation peek, or in place of **Working
-in your workspace…** before any operation is observed. It also replaces the
+and the caret still opens the raw calls; a settled run reads **Used N tools**.
+It also replaces the
 open activity line of an agent reply in a channel, and shows under a working
 session's row in the Agents list. It is
 throttled per turn (every 4s for the first 10 lines, then every 15s, at most
@@ -1922,7 +1925,7 @@ as soon as a tool or answer follows, including during long Cursor turns. A
 trailing thought at the end of a message stays outside the tool group so live
 reasoning stays visible; thoughts followed by prose stay inside the group.
 Only the newest turn can be live: once the composer stops showing the
-agent as working, every Thinking label, **Calling N tools** row, shimmering
+agent as working, every Thinking label, **Using N tools** row, shimmering
 tool title, and working row settles — earlier turns never shimmer, even ones
 the runtime cut off mid-call. Shimmer identifies current activity: an active
 tool and its containing group can shimmer together; completed rows stay still.
