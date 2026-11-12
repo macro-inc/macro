@@ -9,7 +9,7 @@ metadata:
     macro.com/job: migrate
     macro.com/tier: infra
     macro.local/managed: "true"
-  name: migrate-6dd9be5873
+  name: migrate-6d826d99db
   namespace: macro-kube-reference
 spec:
   backoffLimit: 10
@@ -31,7 +31,7 @@ spec:
           envFrom:
             - secretRef:
                 name: macro-env
-          image: localhost:32550/macro/migrate:build.qlgs2j94y4wy9cg7654y9kgabvgkjyrm
+          image: localhost:32550/macro/migrate:build.8bqjskfr9d5864237kc17brr9hzkxrjg
           imagePullPolicy: IfNotPresent
           name: migrate
           ports: []

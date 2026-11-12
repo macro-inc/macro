@@ -45,7 +45,7 @@ spec:
           envFrom:
             - secretRef:
                 name: macro-env
-          image: localhost:32550/macro/image-proxy-service:build.f37drrc5vci1wb3kwpwi3svis0mpccn8
+          image: localhost:32550/macro/image-proxy-service:build.iv34a2z259f90lqfg1drzxfx3szl2i99
           imagePullPolicy: IfNotPresent
           name: image-proxy-service
           ports:
@@ -68,11 +68,11 @@ spec:
             - /bin/sh
             - -ec
             - |
-              until kubectl get job kafka-topics-59c0df1286 >/dev/null 2>&1; do sleep 0.2; done
-              kubectl wait --for=condition=complete job/kafka-topics-59c0df1286 --timeout=600s
+              until kubectl get job kafka-topics-1cafe78ff8 >/dev/null 2>&1; do sleep 0.2; done
+              kubectl wait --for=condition=complete job/kafka-topics-1cafe78ff8 --timeout=600s
 
-              until kubectl get job migrate-6dd9be5873 >/dev/null 2>&1; do sleep 0.2; done
-              kubectl wait --for=condition=complete job/migrate-6dd9be5873 --timeout=600s
+              until kubectl get job migrate-6d826d99db >/dev/null 2>&1; do sleep 0.2; done
+              kubectl wait --for=condition=complete job/migrate-6d826d99db --timeout=600s
 
               until kubectl get job search-indices-c2bd22515d >/dev/null 2>&1; do sleep 0.2; done
               kubectl wait --for=condition=complete job/search-indices-c2bd22515d --timeout=600s

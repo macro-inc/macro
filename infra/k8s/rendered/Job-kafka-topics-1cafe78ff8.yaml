@@ -9,7 +9,7 @@ metadata:
     macro.com/job: kafka-topics
     macro.com/tier: infra
     macro.local/managed: "true"
-  name: kafka-topics-59c0df1286
+  name: kafka-topics-1cafe78ff8
   namespace: macro-kube-reference
 spec:
   backoffLimit: 10
@@ -31,7 +31,7 @@ spec:
           envFrom:
             - secretRef:
                 name: macro-env
-          image: localhost:32550/macro/kafka-topics:build.iixc70hp0ynv9w7d65qvkhh83f8g7maa
+          image: localhost:32550/macro/kafka-topics:build.l5nh2jj5gv31hxh6ij63w8zgb75xr11v
           imagePullPolicy: IfNotPresent
           name: kafka-topics
           ports: []

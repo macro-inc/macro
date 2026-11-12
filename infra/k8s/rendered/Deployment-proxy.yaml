@@ -38,7 +38,7 @@ spec:
           command: []
           env: []
           envFrom: []
-          image: localhost:32550/macro/frontend:build.17prs7ry7p6cv6lrgzrmrkf85bsw0gqg
+          image: localhost:32550/macro/frontend:build.ipvcasbxp7iq53npw100gkv9by02dkj3
           imagePullPolicy: IfNotPresent
           name: proxy
           ports:

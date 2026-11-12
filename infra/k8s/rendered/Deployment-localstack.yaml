@@ -47,7 +47,7 @@ spec:
           envFrom:
             - secretRef:
                 name: macro-env
-          image: localhost:32550/macro/localstack-ready:build.js0qxh2hnagnc624nih1v3a86iv4zj9r
+          image: localhost:32550/macro/localstack-ready:build.6mw7iy1vjj0n3v0pi039xk3xqjwr5xlj
           imagePullPolicy: IfNotPresent
           name: localstack
           ports:

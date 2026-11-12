@@ -45,7 +45,7 @@ spec:
           envFrom:
             - secretRef:
                 name: macro-env
-          image: localhost:32550/macro/agent-harness-service:build.6vg9bcnxj663iph2v1prmv9biqpq0h2v
+          image: localhost:32550/macro/agent-harness-service:build.1mjqcr05msb2za65kyhz3bca6dn05bjx
           imagePullPolicy: IfNotPresent
           name: agent-harness-service
           ports:
@@ -74,11 +74,11 @@ spec:
             - /bin/sh
             - -ec
             - |
-              until kubectl get job kafka-topics-59c0df1286 >/dev/null 2>&1; do sleep 0.2; done
-              kubectl wait --for=condition=complete job/kafka-topics-59c0df1286 --timeout=600s
+              until kubectl get job kafka-topics-1cafe78ff8 >/dev/null 2>&1; do sleep 0.2; done
+              kubectl wait --for=condition=complete job/kafka-topics-1cafe78ff8 --timeout=600s
 
-              until kubectl get job migrate-6dd9be5873 >/dev/null 2>&1; do sleep 0.2; done
-              kubectl wait --for=condition=complete job/migrate-6dd9be5873 --timeout=600s
+              until kubectl get job migrate-6d826d99db >/dev/null 2>&1; do sleep 0.2; done
+              kubectl wait --for=condition=complete job/migrate-6d826d99db --timeout=600s
 
               until kubectl get job search-indices-c2bd22515d >/dev/null 2>&1; do sleep 0.2; done
               kubectl wait --for=condition=complete job/search-indices-c2bd22515d --timeout=600s
