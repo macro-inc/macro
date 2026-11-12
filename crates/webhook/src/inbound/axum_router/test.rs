@@ -534,6 +534,47 @@ async fn bot_cannot_change_a_webhook_that_delivers_email_events() {
 }
 
 #[tokio::test]
+async fn bot_cannot_validate_a_webhook_that_delivers_email_events() {
+    let service = FakeService::default();
+    let mut stored = webhook();
+    stored.filters = vec![crate::domain::models::WebhookFilter {
+        events: vec!["email.message_received".to_string()],
+        ids: None,
+    }];
+    service.set_response(Ok(ServiceResponse::Webhook(stored)));
+
+    let response = send_bot_request(
+        service.clone(),
+        "POST",
+        "/webhooks/wh_123/validate",
+        json!({}),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert!(matches!(service.calls().as_slice(), [ServiceCall::Get(..)]));
+}
+
+#[tokio::test]
+async fn bot_can_validate_a_webhook_without_email_events() {
+    let service = FakeService::default();
+
+    let response = send_bot_request(
+        service.clone(),
+        "POST",
+        "/webhooks/wh_123/validate",
+        json!({}),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert!(matches!(
+        service.calls().as_slice(),
+        [ServiceCall::Get(..), ServiceCall::Validate(..)]
+    ));
+}
+
+#[tokio::test]
 async fn user_can_change_a_webhook_that_delivers_email_events() {
     let service = FakeService::default();
 

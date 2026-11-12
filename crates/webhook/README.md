@@ -133,9 +133,11 @@ any filter event name beginning `email.` requires a directly authenticated
 user credential or an internal service credential acting for a user. Bot and
 harness credentials, including bots acting as a user, receive HTTP 403 with
 `email events require the inbox owner's own credential`. The same credentials
-may not patch any field of a webhook whose stored filters name an `email.*`
-event, so they cannot redirect, pause, or rename a webhook that delivers mail
-events. Webhooks and streams without `email.*` event names retain their
+may not patch any field of, or revalidate, a webhook whose stored filters name
+an `email.*` event, so they cannot redirect, pause, or rename a webhook that
+delivers mail events. Revalidation is refused because a changed endpoint only
+delivers again once it is validated. Webhooks stored before this check existed
+had any `email.*` names removed from their filters by a migration. Webhooks and streams without `email.*` event names retain their
 existing credential behavior.
 
 `email.thread_backfilled` and `email.threads_reindex_requested` are internal

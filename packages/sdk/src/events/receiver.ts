@@ -31,7 +31,14 @@ const VALIDATION_EVENT = 'webhook.validation.test';
  * credential that may not subscribe), as opposed to a failure worth retrying.
  */
 function isRefusal(status: number): boolean {
-  return status >= 400 && status < 500 && status !== 408 && status !== 429;
+  // 401 stays retryable: a token source may hand out a fresh token next time.
+  return (
+    status >= 400 &&
+    status < 500 &&
+    status !== 401 &&
+    status !== 408 &&
+    status !== 429
+  );
 }
 
 /** Options for {@link MacroEvents.listen}. */
@@ -159,7 +166,8 @@ export class MacroEvents {
    * @returns A function that closes the stream.
    * @throws {MacroApiError} if the server refuses the subscription on the
    *   first connection, such as invalid filters or a credential that may not
-   *   subscribe to the requested events ({@link MacroForbiddenError}).
+   *   subscribe to the requested events ({@link MacroForbiddenError}). A 401
+   *   is retried like a network failure.
    */
   async listen(opts: ListenOptions = {}): Promise<() => void> {
     const filters = opts.filters ?? this.filtersFromHandlers();
@@ -186,11 +194,14 @@ export class MacroEvents {
     // The generated SSE client retries every failed connection, so a
     // subscription the server refuses would otherwise retry forever in
     // silence. Watch the first response and fail listen() on a refusal.
-    const opened = Promise.withResolvers<void>();
-    controller.signal.addEventListener('abort', () => opened.resolve(), {
+    let settleOpened: (refusal?: MacroApiError) => void = () => {};
+    const opened = new Promise<void>((resolve, reject) => {
+      settleOpened = (refusal) => (refusal ? reject(refusal) : resolve());
+    });
+    controller.signal.addEventListener('abort', () => settleOpened(), {
       once: true,
     });
-    if (controller.signal.aborted) opened.resolve();
+    if (controller.signal.aborted) settleOpened();
     let connected = false;
     const watchFirstResponse = async (
       input: Request | URL | string,
@@ -202,7 +213,7 @@ export class MacroEvents {
       try {
         response = await globalThis.fetch(input, init);
       } catch (error) {
-        opened.resolve();
+        settleOpened();
         throw error;
       }
       if (isRefusal(response.status)) {
@@ -210,14 +221,14 @@ export class MacroEvents {
           .clone()
           .json()
           .catch(() => undefined);
-        opened.reject(
+        settleOpened(
           response.status === 403
             ? new MacroForbiddenError(data)
             : new MacroApiError(response.status, data),
         );
         controller.abort();
       } else {
-        opened.resolve();
+        settleOpened();
       }
       return response;
     };
@@ -229,6 +240,9 @@ export class MacroEvents {
       },
       signal: controller.signal,
       fetch: watchFirstResponse as typeof fetch,
+      // A failure before any response (such as a token source that throws)
+      // is retried by the client; don't hold listen() open for it.
+      onSseError: () => settleOpened(),
     });
 
     const consume = (async () => {
@@ -247,7 +261,7 @@ export class MacroEvents {
       // rejection; the caller already has `stop`.
     });
 
-    await opened.promise;
+    await opened;
 
     return () => {
       controller.abort();

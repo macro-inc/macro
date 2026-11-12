@@ -22,8 +22,10 @@ use axum::{
 };
 use axum_extra::extract::Cached;
 use macro_authorization::{
-    ActingUser, MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+    ActingUser, MacroAuthorization, MacroAuthorizationExtractor, MacroAuthorizationService,
+    MacroAuthorizationState,
 };
+use macro_user_id::user_id::MacroUserIdStr;
 use model_error_response::ErrorResponse;
 use rate_limit::domain::models::RateLimitOk;
 use rate_limit::inbound::{RateLimitExtractable, rate_limit_middleware};
@@ -319,14 +321,7 @@ pub async fn patch_webhook<S: WebhookService, Auth: MacroAuthorizationService>(
     if let Some(filters) = &request.filters {
         authorize_email_event_filters(principal, filters)?;
     }
-    // A credential that may not subscribe to email events may not redirect,
-    // pause, or otherwise change a webhook that already delivers them.
-    if !admits_email_events(principal) {
-        let existing = service
-            .get_webhook(caller.clone(), path.webhook_id.clone())
-            .await?;
-        authorize_email_event_filters(principal, &existing.filters)?;
-    }
+    authorize_stored_email_filters(service.as_ref(), principal, &caller, &path.webhook_id).await?;
 
     Ok(Json(
         service
@@ -381,14 +376,38 @@ pub async fn validate_webhook<S: WebhookService, Auth: MacroAuthorizationService
     Cached(authorization): Cached<MacroAuthorizationExtractor<Auth, ActingUser>>,
     Path(path): Path<WebhookPath>,
 ) -> Result<Json<ValidateWebhookResponse>, WebhookHandlerError> {
+    let caller = authorization.authorization.user.macro_user_id;
+    authorize_stored_email_filters(
+        service.as_ref(),
+        &authorization.authorization.principal,
+        &caller,
+        &path.webhook_id,
+    )
+    .await?;
+
     Ok(Json(
-        service
-            .validate_webhook(
-                authorization.authorization.user.macro_user_id,
-                path.webhook_id,
-            )
-            .await?,
+        service.validate_webhook(caller, path.webhook_id).await?,
     ))
+}
+
+/// Refuse a credential that may not subscribe to email events when the stored
+/// webhook already delivers them, so it cannot redirect, pause, or revalidate
+/// that webhook. Revalidation is included because a changed endpoint only
+/// delivers again once it is validated.
+async fn authorize_stored_email_filters<S: WebhookService>(
+    service: &S,
+    principal: &MacroAuthorization,
+    caller: &MacroUserIdStr<'static>,
+    webhook_id: &WebhookId,
+) -> Result<(), WebhookHandlerError> {
+    if admits_email_events(principal) {
+        return Ok(());
+    }
+    let existing = service
+        .get_webhook(caller.clone(), webhook_id.clone())
+        .await?;
+    authorize_email_event_filters(principal, &existing.filters)?;
+    Ok(())
 }
 
 /// Webhook handler error.

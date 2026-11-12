@@ -150,6 +150,43 @@ describe('MacroEvents', () => {
     stop();
   });
 
+  test('listen() returns when the token source throws before any request', async () => {
+    let calls = 0;
+    globalThis.fetch = (async (_input) => {
+      calls += 1;
+      return new Response('', {
+        status: 200,
+        headers: { 'content-type': 'text/event-stream' },
+      });
+    }) as typeof fetch;
+
+    const macro = new Macro({
+      token: () => {
+        throw new Error('token source unavailable');
+      },
+      hosts: { storage: 'https://storage.example.test' },
+    });
+    macro.events.on('document.created', () => {});
+
+    const stop = await macro.events.listen();
+    stop();
+    expect(calls).toBe(0);
+  });
+
+  test('listen() keeps retrying after a 401', async () => {
+    globalThis.fetch = (async (_input) =>
+      Response.json({ message: 'expired' }, { status: 401 })) as typeof fetch;
+
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { storage: 'https://storage.example.test' },
+    });
+    macro.events.on('document.created', () => {});
+
+    const stop = await macro.events.listen();
+    stop();
+  });
+
   test('listen() throws when there are no filters or handlers', async () => {
     const macro = new Macro({
       token: 'user-token',

@@ -208,7 +208,7 @@ Opening a stream, creating a webhook, or patching webhook filters that name any
 credential or an internal service acting for a user). Bot and harness credentials,
 including bots acting as a user, receive HTTP 403 with
 `email events require the inbox owner's own credential`. They also may not
-patch a webhook whose stored filters name an `email.*` event. Filters without
+patch or revalidate a webhook whose stored filters name an `email.*` event. Filters without
 `email.*` events retain their existing credential behavior.
 
 - Derive `utoipa::ToSchema` on the new metadata under the crate's `schema` or

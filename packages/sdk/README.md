@@ -866,7 +866,8 @@ harness credentials receive HTTP 403 with
 `email events require the inbox owner's own credential`. `listen()`
 rejects with `MacroForbiddenError` in that case; it rejects with `MacroApiError`
 for any other subscription the server refuses on the first connection, such as
-invalid filters.
+invalid filters. A 401 is retried like a network failure, so a token source can
+supply a fresh token.
 
 ```ts
 macro.events.on('email.message_received', async ({ metadata, thread, message }) => {
