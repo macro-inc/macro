@@ -13246,6 +13246,7 @@ dependencies = [
  "macro_event_topics",
  "macro_user_id",
  "macro_uuid",
+ "mention_utils",
  "mockall",
  "model",
  "model-entity",
