@@ -170,7 +170,8 @@ Pulumi stacks; they do not host extra agent processes.
   as their agent session usage; `scheduling.rs` composes the drafter, its
   `scheduled_action_draft` store, the check's code-mode invocation lookup
   (`CorrelationSessions`), what a session created from its agent activity
-  (`ActivityCreations`) and the sweep of drafts a stopped process left.
+  and whether its programs may have written, from their code-mode execution
+  records (`ActivityCreations`), and the sweep of drafts a stopped process left.
   Routine code steps run through `src/routine_code.rs`,
   on routines' own Deno executor (own slots, CPU limit, lower priority) and
   type checker, with a token for the owner's access (`mint_for_routine`):

@@ -87,11 +87,18 @@ const DRAFT_SWEEP_INTERVAL: Duration = Duration::from_secs(60);
 const SUGGESTION_SWEEP_INTERVAL: Duration = Duration::from_secs(60);
 
 /// What a session's programs created, from the activity recorded for its
-/// code-mode invocations.
-struct ActivityCreations(activity::outbound::pg_activity_repo::PgActivityRepo);
+/// code-mode invocations, and whether they may have written, from their
+/// execution records.
+struct ActivityCreations {
+    activity: activity::outbound::pg_activity_repo::PgActivityRepo,
+    executions: agent_code_mode::outbound::postgres::PgExecutionStore,
+}
 
 /// Activity rows read per draft; a draft creates a handful of items.
 const DRAFT_ACTIVITY_PAGE: u32 = 100;
+/// Execution records read per draft; a draft runs a handful of programs, and
+/// one that ran more is taken to have written.
+const DRAFT_EXECUTIONS: u16 = 32;
 
 #[async_trait::async_trait]
 impl SessionCreations for ActivityCreations {
@@ -99,7 +106,7 @@ impl SessionCreations for ActivityCreations {
         use activity::domain::models::{Action, RecordedAction};
         use activity::domain::ports::AgentActivityReads as _;
         let page = self
-            .0
+            .activity
             .agent_activity(
                 session,
                 None,
@@ -117,6 +124,21 @@ impl SessionCreations for ActivityCreations {
                 entity_id: record.entity_id,
             })
             .collect())
+    }
+
+    async fn may_have_written(&self, session: uuid::Uuid) -> Result<bool> {
+        let records = self
+            .executions
+            .session_records(
+                agent_session::domain::model::AgentSessionId::new_from_uuid(session),
+                DRAFT_EXECUTIONS + 1,
+            )
+            .await
+            .map_err(|error| anyhow::anyhow!("could not read a session's programs: {error}"))?;
+        Ok(records.len() > usize::from(DRAFT_EXECUTIONS)
+            || records
+                .iter()
+                .any(agent_code_mode::domain::ExecutionRecord::may_have_written))
     }
 }
 
@@ -401,9 +423,10 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
                 guide: agent_code_mode::domain::entity_guide("routines").unwrap_or_default(),
             },
         )
-        .with_session_creations(Arc::new(ActivityCreations(
-            activity::outbound::pg_activity_repo::PgActivityRepo::new(db.clone()),
-        )))
+        .with_session_creations(Arc::new(ActivityCreations {
+            activity: activity::outbound::pg_activity_repo::PgActivityRepo::new(db.clone()),
+            executions: agent_code_mode::outbound::postgres::PgExecutionStore::new(db.clone()),
+        }))
         .with_conditions_enabled(conditions_enabled),
     );
     // Drafts a stopped process left behind lose their session and row.

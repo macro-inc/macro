@@ -1,7 +1,12 @@
 //! Bounded, advisory activity derived from the generated SDK operation catalog.
-use super::{ExecutionActivity, RecordedCallStatus};
+use super::{ExecutionActivity, ExecutionRecord, ExecutionStatus, RecordedCallStatus};
 use code_execution::domain::operations;
 use serde::Deserialize;
+use std::collections::HashSet;
+use std::sync::LazyLock;
+
+#[cfg(test)]
+mod test;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -58,5 +63,33 @@ pub(super) fn finish(activity: &mut [ExecutionActivity]) {
         if activity.status == RecordedCallStatus::Running {
             activity.status = RecordedCallStatus::Unknown;
         }
+    }
+}
+
+/// Labels only reads have: every catalog operation with the label is a read.
+static READ_LABELS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+    let writes: HashSet<&str> = operations()
+        .values()
+        .filter(|operation| operation.write)
+        .map(|operation| operation.label.as_str())
+        .collect();
+    operations()
+        .values()
+        .map(|operation| operation.label.as_str())
+        .filter(|label| !writes.contains(label))
+        .collect()
+});
+
+impl ExecutionRecord {
+    /// Whether the program may have changed anything: false only once it has
+    /// finished, its activity is whole and every operation it called reads.
+    pub fn may_have_written(&self) -> bool {
+        self.status == ExecutionStatus::Running
+            || self.activity_truncated
+            || !self.calls.is_empty()
+            || self
+                .activity
+                .iter()
+                .any(|activity| !READ_LABELS.contains(activity.label.as_str()))
     }
 }

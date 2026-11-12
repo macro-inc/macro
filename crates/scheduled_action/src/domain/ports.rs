@@ -458,6 +458,11 @@ pub struct StaleDraft {
 pub trait SessionCreations: Send + Sync + 'static {
     /// Items `session` created, as its activity records them so far.
     async fn created_by(&self, session: Uuid) -> Result<Vec<super::models::CreatedItem>>;
+
+    /// Whether `session`'s programs may have written anything, so its
+    /// activity may still be on its way: false only when every program has
+    /// finished and called nothing but reads.
+    async fn may_have_written(&self, session: Uuid) -> Result<bool>;
 }
 
 /// A host that records no session activity.
@@ -467,6 +472,11 @@ pub struct NoSessionCreations;
 impl SessionCreations for NoSessionCreations {
     async fn created_by(&self, _session: Uuid) -> Result<Vec<super::models::CreatedItem>> {
         Ok(Vec::new())
+    }
+
+    /// Nothing is ever recorded, so there is nothing to wait for.
+    async fn may_have_written(&self, _session: Uuid) -> Result<bool> {
+        Ok(false)
     }
 }
 

@@ -18,8 +18,8 @@ use std::time::Duration;
 use agent_runtime_protocol::domain::action::AgentActionId;
 use agent_session::domain::model::{AgentSessionId, SessionSource, SessionVisibility};
 use agent_session::domain::routines::{
-    PrepareRoutineSession, PromptRoutineSession, RoutineActionStatus, RoutineSessionAction,
-    RoutineSessionError, RoutineSessions, ValidateRoutineSession,
+    PrepareRoutineSession, PromptRoutineSession, RoutineActionStatus, RoutineActivity,
+    RoutineSessionAction, RoutineSessionError, RoutineSessions, ValidateRoutineSession,
 };
 use anyhow::Result;
 use bot_id::BotId;
@@ -53,9 +53,26 @@ const POLL: Duration = Duration::from_millis(250);
 /// turn read every 2 s, only to notice a turn that ends without a passing
 /// check.
 const ROW_READS_PER_TURN_READ: u32 = 8;
-/// How long the drafter waits, once the session has stopped, for the
-/// activity its last creations wrote, which is recorded asynchronously.
+/// How long the drafter waits, once a session that may have written has
+/// stopped, for the activity its last creations wrote, which is recorded
+/// asynchronously.
 const ACTIVITY_SETTLE: Duration = Duration::from_secs(2);
+/// The tools a draft's session calls that write nothing themselves. Its
+/// programs (`ExecuteCode`) may, which [`SessionCreations::may_have_written`]
+/// tells.
+const READ_TOOLS: [&str; 8] = [
+    "ExecuteCode",
+    "ReadCodeDocs",
+    "DescribeCodeTools",
+    "ReadToolResult",
+    "SearchTools",
+    "NameSearch",
+    "ContentSearch",
+    "ListEntities",
+];
+/// How the Macro agent names its code-mode tools when it reaches them over
+/// MCP.
+const CODE_MODE_SERVER: &str = "mcp__macro_internal__";
 /// Turn reads that may fail in a row before the draft gives up.
 const MAX_STATUS_FAILURES: u8 = 5;
 
@@ -297,6 +314,7 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDraftService
         routine.draft.tool_calls = tracing::field::Empty,
         routine.draft.turns = tracing::field::Empty,
         routine.draft.status_reads = tracing::field::Empty,
+        routine.draft.settled = tracing::field::Empty,
         routine.draft.ended = tracing::field::Empty,
         routine.draft.code_failing = tracing::field::Empty,
         routine.draft.steps = tracing::field::Empty,
@@ -395,7 +413,19 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
         // Stop the turn before reading what it made, so nothing it creates
         // afterwards goes unseen.
         cleanup.stop().await;
-        tokio::time::sleep(ACTIVITY_SETTLE).await;
+        // Counts only; a session that can't say leaves them unset.
+        let activity = self.sessions.activity(action.clone()).await.ok();
+        if let Some(activity) = &activity {
+            span.record("routine.draft.tool_calls", activity.tool_calls);
+            span.record("routine.draft.turns", activity.turns);
+        }
+        // Activity is recorded asynchronously: a session that may have
+        // written waits for its last writes' activity.
+        let wrote = self.may_have_written(session, activity.as_ref()).await;
+        span.record("routine.draft.settled", wrote);
+        if wrote {
+            tokio::time::sleep(ACTIVITY_SETTLE).await;
+        }
         let recorded = self
             .creations
             .created_by(session.as_uuid())
@@ -411,11 +441,6 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
             .inspect_err(|error| tracing::error!(error = ?error, "could not read a draft's check"))
             .unwrap_or_default();
         span.record("routine.draft.checks", handed_back.checks);
-        // Counts only; a session that can't say leaves them unset.
-        if let Ok(activity) = self.sessions.activity(action.clone()).await {
-            span.record("routine.draft.tool_calls", activity.tool_calls);
-            span.record("routine.draft.turns", activity.turns);
-        }
         cleanup.now().await;
         let ending = match ending {
             Ok(Ok(ending)) => ending,
@@ -515,6 +540,33 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
             _ => {}
         }
         ending
+    }
+
+    /// Whether a stopped draft's session may have written anything, so its
+    /// activity may still be on its way: unless every tool it called only
+    /// reads and every program it ran finished having only read. A session
+    /// that can't say may have.
+    async fn may_have_written(
+        &self,
+        session: AgentSessionId,
+        activity: Option<&RoutineActivity>,
+    ) -> bool {
+        let Some(tools) = activity.and_then(|activity| activity.tools.as_ref()) else {
+            return true;
+        };
+        let reads = |tool: &String| {
+            let tool = tool.strip_prefix(CODE_MODE_SERVER).unwrap_or(tool);
+            READ_TOOLS.contains(&tool)
+        };
+        !tools.iter().all(reads)
+            || self
+                .creations
+                .may_have_written(session.as_uuid())
+                .await
+                .inspect_err(|error| {
+                    tracing::warn!(error = ?error, "could not read whether a draft wrote");
+                })
+                .unwrap_or(true)
     }
 
     /// Whether the session has handed back a routine that passes its check.

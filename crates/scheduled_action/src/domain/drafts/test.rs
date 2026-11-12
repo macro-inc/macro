@@ -109,13 +109,15 @@ type Turn = Box<dyn Fn(&str) -> Vec<(ActionConfiguration, Vec<CreatedItem>)> + S
 /// The routine sessions a draft opens: preparing and prompting are
 /// recorded, and the prompt's turn checks its routines into `rows` as the
 /// check route would, then ends, unless the session `hangs`. Its turn
-/// can't be read while it is `unreadable`.
+/// can't be read while it is `unreadable`. It reports calling `tools`, and
+/// can't say what it did when they are unset.
 struct Sessions {
     rows: Arc<Rows>,
     code: Arc<Checker>,
     turn: Turn,
     hangs: bool,
     unreadable: bool,
+    tools: Option<Vec<String>>,
     refuses: Option<RoutineSessionError>,
     prepared: Mutex<Vec<PrepareRoutineSession>>,
     prompts: Mutex<Vec<String>>,
@@ -133,6 +135,7 @@ impl Sessions {
             turn,
             hangs: false,
             unreadable: false,
+            tools: None,
             refuses: None,
             prepared: Mutex::new(Vec::new()),
             prompts: Mutex::new(Vec::new()),
@@ -200,6 +203,18 @@ impl RoutineSessions for Sessions {
         })
     }
 
+    async fn activity(
+        &self,
+        _: RoutineSessionAction,
+    ) -> Result<RoutineActivity, RoutineSessionError> {
+        let tools = self.tools.clone().ok_or(RoutineSessionError::OperationFailed)?;
+        Ok(RoutineActivity {
+            tool_calls: u32::try_from(tools.len()).unwrap(),
+            turns: 1,
+            tools: Some(tools),
+        })
+    }
+
     async fn cancel(&self, command: RoutineSessionAction) -> Result<(), RoutineSessionError> {
         self.cancelled.lock().unwrap().push(command.session_id);
         Ok(())
@@ -252,6 +267,10 @@ struct Recorded(Mutex<Vec<CreatedItem>>);
 impl SessionCreations for Recorded {
     async fn created_by(&self, _session: Uuid) -> Result<Vec<CreatedItem>> {
         Ok(self.0.lock().unwrap().clone())
+    }
+
+    async fn may_have_written(&self, _session: Uuid) -> Result<bool> {
+        Ok(!self.0.lock().unwrap().is_empty())
     }
 }
 
@@ -628,6 +647,46 @@ async fn a_draft_stops_its_session_once_a_check_passes() {
         started.elapsed()
     );
     assert_eq!(sessions.cancelled.lock().unwrap().len(), 1);
+}
+
+/// A session whose tools and programs only read wrote no activity to wait
+/// for, so its draft answers as soon as the check passes.
+#[tokio::test(start_paused = true)]
+async fn a_draft_whose_session_only_read_does_not_wait_for_activity() {
+    let elapsed = time_to_draft(Some(&["mcp__macro_internal__ReadCodeDocs", "ExecuteCode"])).await;
+    assert!(elapsed < ACTIVITY_SETTLE, "{elapsed:?}");
+}
+
+/// A session that called a tool that writes, or can't say which it called,
+/// may have activity on its way, so its draft waits for it.
+#[tokio::test(start_paused = true)]
+async fn a_draft_whose_session_may_have_written_waits_for_activity() {
+    let elapsed = time_to_draft(Some(&["ExecuteCode", "CreateDocument"])).await;
+    assert!(elapsed >= ACTIVITY_SETTLE, "{elapsed:?}");
+    let elapsed = time_to_draft(None).await;
+    assert!(elapsed >= ACTIVITY_SETTLE, "{elapsed:?}");
+}
+
+/// How long a draft whose session reports calling `tools` takes, its check
+/// passing at once.
+async fn time_to_draft(tools: Option<&[&str]>) -> Duration {
+    let rows = Arc::new(Rows::default());
+    let mut sessions = Sessions::new(
+        &rows,
+        Box::new(|_| {
+            vec![plain(configuration(
+                "Bug tasks",
+                message_posted(&[]),
+                json!([code_step("Make a task", "good")]),
+            ))]
+        }),
+    );
+    sessions.hangs = true;
+    sessions.tools = tools.map(|tools| tools.iter().map(|tool| (*tool).to_owned()).collect());
+    let sessions = Arc::new(sessions);
+    let started = tokio::time::Instant::now();
+    drafted_routine(draft(&drafts(&rows, &sessions), routine(BUG_REPORTS)).await);
+    started.elapsed()
 }
 
 /// A turn that can't be read a few times in a row ends the draft as failed,
