@@ -216,7 +216,7 @@ impl<E: PageExecutor> Runner<E> {
             parent: &self.telemetry.span,
             "soup.sync_stream.page",
             "sync.lane" = lane.plan.id.as_str(),
-            "sync.page" = lane.pages,
+            "sync.page" = i64::from(lane.pages),
             "sync.wait_ms" = millis(waited),
             "sync.items" = Empty,
             otel.status_code = Empty,
@@ -250,7 +250,7 @@ impl<E: PageExecutor> Runner<E> {
             Ok(read) => read,
             Err(failure) => {
                 let items = lane.plan.paging.item_count(&response);
-                span.record("sync.items", items);
+                span.record("sync.items", i64::from(items));
                 self.pending.push_back(Frame::Page {
                     lane: lane.plan.id.clone(),
                     page,
@@ -262,7 +262,7 @@ impl<E: PageExecutor> Runner<E> {
                 return self.fail(&span, lane.plan.id, failure);
             }
         };
-        span.record("sync.items", items);
+        span.record("sync.items", i64::from(items));
         lane.items = lane.items.saturating_add(items);
         let next = match cursor {
             None => PageNext::Done(LaneDoneReason::Complete),
@@ -434,8 +434,14 @@ impl LanePaging {
 }
 
 /// `duration` in whole milliseconds, as a span field.
-fn millis(duration: Duration) -> u64 {
-    u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
+fn millis(duration: Duration) -> i64 {
+    span_number(duration.as_millis())
+}
+
+/// A count as a span field. The OpenTelemetry layer exports unsigned fields
+/// as strings, which cannot be summed or compared, so numbers are `i64`.
+fn span_number(value: impl TryInto<i64>) -> i64 {
+    value.try_into().unwrap_or(i64::MAX)
 }
 
 fn array_len(response: &Value, field: &ResponseField) -> Result<u32, LaneFailure> {
@@ -464,8 +470,8 @@ impl StreamTelemetry {
     fn start(plan: &SyncPlan) -> Self {
         let span = tracing::info_span!(
             "soup.sync_stream",
-            "sync.lane_count" = plan.lanes.len(),
-            "sync.max_pages" = plan.max_pages,
+            "sync.lane_count" = span_number(plan.lanes.len()),
+            "sync.max_pages" = plan.max_pages.map(i64::from),
             "sync.pages" = Empty,
             "sync.items" = Empty,
             "sync.bytes" = Empty,
@@ -520,11 +526,12 @@ impl StreamTelemetry {
 
 impl Drop for StreamTelemetry {
     fn drop(&mut self) {
-        self.span.record("sync.pages", self.pages);
-        self.span.record("sync.items", self.items);
-        self.span.record("sync.bytes", self.bytes);
+        self.span.record("sync.pages", i64::from(self.pages));
+        self.span.record("sync.items", span_number(self.items));
+        self.span.record("sync.bytes", span_number(self.bytes));
         self.span.record("sync.wait_ms", millis(self.waited));
-        self.span.record("sync.failed_lanes", self.failed_lanes);
+        self.span
+            .record("sync.failed_lanes", i64::from(self.failed_lanes));
         let end_reason: &'static str = self.end.map_or(INTERRUPTED, <&'static str>::from);
         self.span.record("sync.end_reason", end_reason);
     }
