@@ -65,7 +65,9 @@ pub fn connect_adapter(customer_key: Option<&str>) -> anyhow::Result<Option<Arc<
 
 /// Pipedream plus Macro Connect when this process has credentials for both
 /// (Connect is optional), otherwise `None`.
-pub fn connector_backends_from_env() -> anyhow::Result<Option<Arc<ConnectorBackends>>> {
+pub fn connector_backends_from_env(
+    environment: Environment,
+) -> anyhow::Result<Option<Arc<ConnectorBackends>>> {
     let Some(pipedream) = pipedream_client_from_env()? else {
         return Ok(None);
     };
@@ -79,7 +81,7 @@ pub fn connector_backends_from_env() -> anyhow::Result<Option<Arc<ConnectorBacke
     if let Some(rollout) = macro_connect_rollout(
         env.posthog_api_key.as_ref().and_then(|value| value.value()),
         env.posthog_host.as_ref().and_then(|value| value.value()),
-        Environment::new_or_prod(),
+        environment,
     )? {
         backends = backends.with_rollout(rollout);
     }
@@ -141,13 +143,14 @@ pub fn canvas_artifacts_rollout(
 }
 
 /// [`canvas_artifacts_rollout`] from this process's PostHog configuration.
-pub fn canvas_artifacts_rollout_from_env()
--> anyhow::Result<Option<documents::domain::canvas::CanvasArtifactsRollout>> {
+pub fn canvas_artifacts_rollout_from_env(
+    environment: Environment,
+) -> anyhow::Result<Option<documents::domain::canvas::CanvasArtifactsRollout>> {
     let env = PipedreamCatalogEnv::new();
     canvas_artifacts_rollout(
         env.posthog_api_key.as_ref().and_then(|value| value.value()),
         env.posthog_host.as_ref().and_then(|value| value.value()),
-        Environment::new_or_prod(),
+        environment,
     )
 }
 

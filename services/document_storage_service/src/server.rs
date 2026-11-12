@@ -1554,7 +1554,7 @@ async fn run_server() -> anyhow::Result<()> {
         admission: admission.clone(),
         recorder: document_ai_usage.clone(),
         // Off when PostHog isn't configured, as for the agents' Canvas tools.
-        artifacts: ai_tools::canvas_artifacts_rollout_from_env()?
+        artifacts: ai_tools::canvas_artifacts_rollout_from_env(config.environment)?
             .unwrap_or_else(|| Arc::new(|_| Box::pin(async { false }))),
         images: Arc::new(crate::outbound::canvas_images::StaticFileCanvasImages(
             static_file_service_client::StaticFileServiceClient::new(

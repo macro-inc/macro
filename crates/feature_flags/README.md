@@ -63,10 +63,13 @@ uses PostHog's stored properties plus one override, `environment` (`prod`,
 request-supplied can set it. Group targeting and other property overrides are
 not supported.
 
+Reads do not emit `$feature_flag_called` events, so this adapter alone does not
+provide experiment exposure tracking.
+
 Dev and prod share one PostHog project and the same Macro user IDs, so a flag
 targeted only at user IDs turns on in both. Target dev-only rollouts with
-`environment = dev`; the web client sends the same property. Reads do not emit `$feature_flag_called` events, so this adapter
-alone does not provide experiment exposure tracking.
+`environment = dev`. The web client sends the same property from its build
+mode (`dev` or `prod`).
 
 The response must contain a `flags` map and explicit boolean
 `errorsWhileComputingFlags`. Computation errors, any nonempty `quotaLimited`

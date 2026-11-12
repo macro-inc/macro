@@ -99,9 +99,10 @@ These are the mistakes past flagged launches had to fix:
   control.
 
 Dev and prod share one PostHog project and the same user IDs. To roll out to
-dev only, target the person property `environment = dev` (values `dev`,
-`prod`, `local`); a release condition on user IDs alone also matches in prod.
-Web (`analytics.ts`) and backend (`crates/feature_flags`) both send it.
+dev only, target the person property `environment = dev`; a release
+condition on user IDs alone also matches in prod. Web (`analytics.ts`) sends
+`dev` or `prod` from its build mode; backend (`crates/feature_flags`) sends the
+service's `ENVIRONMENT`: `dev`, `prod`, or `local` on local stacks.
 
 ## 5. Backend
 
