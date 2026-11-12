@@ -4,6 +4,7 @@ import type {
   ToolName,
 } from '@service-agent-fold/generated/types';
 import { describe, expect, it } from 'vitest';
+import { isCodeModeSupportCall } from './code-mode-support';
 import { rendersOwnView, segmentParts } from './tool-groups';
 
 const text = (): MessagePart => ({ kind: 'text', text: 'hi' });
@@ -440,7 +441,7 @@ describe.each(['GenerateImage', 'DispatchCodingAgent'])(
   }
 );
 
-it('keeps trusted code executions visible so their inner views stay outside collapsed groups', () => {
+it('folds code executions into the run around them, so one turn segment is one group', () => {
   const execution = tool({
     name: { kind: 'mcp', server: 'macro_internal', tool: 'ExecuteCode' },
     detail: {
@@ -452,14 +453,26 @@ it('keeps trusted code executions visible so their inner views stay outside coll
       acpKind: 'other',
     },
   });
-  expect(rendersOwnView(execution)).toBe(true);
-  expect(segmentParts([tool(), execution, tool()])).toEqual([
-    { kind: 'tools', start: 0, end: 1 },
-    { kind: 'part', start: 1, end: 2 },
-    { kind: 'tools', start: 2, end: 3 },
-  ]);
-  execution.name = { kind: 'mcp', server: 'external', tool: 'ExecuteCode' };
   expect(rendersOwnView(execution)).toBe(false);
+  expect(segmentParts([tool(), execution, tool()])).toEqual([
+    { kind: 'tools', start: 0, end: 3 },
+  ]);
+});
+
+it('hides how the agent looks up its tools', () => {
+  for (const name of [
+    'SearchTools',
+    'LoadTools',
+    'DescribeCodeTools',
+    'ReadCodeDocs',
+  ]) {
+    expect(
+      isCodeModeSupportCall(
+        tool({ name: { kind: 'mcp', server: 'macro_internal', tool: name } })
+      )
+    ).toBe(true);
+  }
+  expect(isCodeModeSupportCall(tool())).toBe(false);
 });
 
 describe('persistent review presentation', () => {
