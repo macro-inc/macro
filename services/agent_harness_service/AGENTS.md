@@ -65,8 +65,9 @@ Pulumi stacks; they do not host extra agent processes.
   from: an Incus alias such as `macro-box/2026-11-10`, or a Docker tag. Each
   computer records its own image; updates go through hosted_runtimes' image
   update routes, never by changing this value for existing computers.
-  HostedHarnesses pairing retains the buying admin as the harness owner and
-  grants the computer's team User access, so every teammate can run agents on it.
+  HostedHarnesses pairing records the buyer as the harness owner, but the
+  harness belongs to the computer's team: its owner and admins manage it
+  (Claude sign-in included) and every member can run agents on it.
   `src/computers/default_agent.rs` creates the team's `<buyer first name>'s Agent`
   (`Agent` without one, read from `macro_user_info`) coding agent through
   `BotService::create_agent` as the buyer (macrod harness, `default` model, all
@@ -354,7 +355,8 @@ bridge hostname, preserving Host validation for other origins.
 - `harness_bindings.rs` resolves runtime routing through the harness, bot assignment, and session lookup ports; each owning crate reads its own table.
 
 Hosted computer Claude account requests require the operator-derived
-`FleetAttachment` after the existing rollout and Manage authorization; no
+`FleetAttachment` after the existing rollout and Manage authorization (on a
+computer, the team's owner and admins); no
 attachment answers typed 503 before any command. macrod ingress keeps its
 existing authorization.
 Authentication checks the owning hosted host heartbeat per request, so its

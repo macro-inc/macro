@@ -218,11 +218,7 @@ export function Harness(
               canRemoveShared={isTeamOwner()}
               onRemove={setRemovingHarness}
             />
-            <MacroComputers
-              harnesses={harnesses()}
-              sharing={sharing()}
-              onSharingChange={setSharing}
-            />
+            <MacroComputers harnesses={harnesses()} />
             <LocalRuntimeCard />
             <div>
               <h2 class="mb-3 px-6 text-sm font-semibold text-ink">

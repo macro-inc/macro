@@ -680,6 +680,13 @@ fn computer_instances(
                 .get(COMPUTER_ID_KEY)
                 .map(|value| (instance, value))
         })
+        // Orphan cleanup destroys by computer id, so only the instance named
+        // for that id is the computer's; a bad id still fails the listing.
+        .filter(|(instance, value)| {
+            value.parse::<ComputerId>().map_or(true, |computer_id| {
+                instance.name == instance_name(computer_id).as_str()
+            })
+        })
         .map(|(instance, value)| {
             let computer_id =
                 value

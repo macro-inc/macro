@@ -19,7 +19,7 @@ pub struct ComputerRollout {
 
 impl ComputerRollout {
     /// Compose once with the service's bounded feature-flag provider.
-    pub fn new<F: FeatureFlags + 'static>(flags: F) -> Self {
+    pub fn new<Flags: FeatureFlags + 'static>(flags: Flags) -> Self {
         let flags = Arc::new(flags);
         Self {
             evaluate: Some(Arc::new(move |user| {

@@ -37,17 +37,17 @@ use crate::domain::service::{Clock, ComputerError, ComputerService, TeamMemberRo
 use crate::domain::size::ComputerSize;
 
 /// Router state: the computer service plus what team access checks need.
-pub struct ComputerRouterState<Repo, Bill, Time, Eas, Auth, Attachment, Policy = NoComps> {
+pub struct ComputerRouterState<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy = NoComps> {
     /// Computer use cases.
     pub service: Arc<ComputerService<Repo, Bill, Time, Attachment, Policy>>,
     /// Team access receipt provider.
-    pub entity_access_service: Arc<Eas>,
+    pub entity_access_service: Arc<EntityAccess>,
     /// Authentication services for route extractors.
     pub authorization_state: MacroAuthorizationState<Auth>,
 }
 
-impl<Repo, Bill, Time, Eas, Auth, Attachment, Policy> Clone
-    for ComputerRouterState<Repo, Bill, Time, Eas, Auth, Attachment, Policy>
+impl<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy> Clone
+    for ComputerRouterState<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>
 {
     fn clone(&self) -> Self {
         Self {
@@ -58,36 +58,37 @@ impl<Repo, Bill, Time, Eas, Auth, Attachment, Policy> Clone
     }
 }
 
-impl<Repo, Bill, Time, Eas, Auth, Attachment, Policy>
-    FromRef<ComputerRouterState<Repo, Bill, Time, Eas, Auth, Attachment, Policy>> for Arc<Eas>
+impl<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>
+    FromRef<ComputerRouterState<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>>
+    for Arc<EntityAccess>
 {
     fn from_ref(
-        state: &ComputerRouterState<Repo, Bill, Time, Eas, Auth, Attachment, Policy>,
+        state: &ComputerRouterState<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>,
     ) -> Self {
         state.entity_access_service.clone()
     }
 }
 
-impl<Repo, Bill, Time, Eas, Auth, Attachment, Policy>
-    FromRef<ComputerRouterState<Repo, Bill, Time, Eas, Auth, Attachment, Policy>>
+impl<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>
+    FromRef<ComputerRouterState<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>>
     for MacroAuthorizationState<Auth>
 {
     fn from_ref(
-        state: &ComputerRouterState<Repo, Bill, Time, Eas, Auth, Attachment, Policy>,
+        state: &ComputerRouterState<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>,
     ) -> Self {
         state.authorization_state.clone()
     }
 }
 
 /// Team routes, to merge at the service root.
-pub fn team_router<Repo, Bill, Time, Eas, Auth, Attachment, Policy, S>(
-    state: ComputerRouterState<Repo, Bill, Time, Eas, Auth, Attachment, Policy>,
+pub fn team_router<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy, S>(
+    state: ComputerRouterState<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>,
 ) -> Router<S>
 where
     Repo: ComputerRepo,
     Bill: Billing,
     Time: Clock,
-    Eas: EntityAccessService,
+    EntityAccess: EntityAccessService,
     Auth: MacroAuthorizationService,
     Attachment: FleetAttachmentSource,
     Policy: CompPolicy,
@@ -96,59 +97,59 @@ where
     Router::new()
         .route(
             "/team/computers",
-            get(list::<Repo, Bill, Time, Eas, Auth, Attachment, Policy>)
-                .post(purchase::<Repo, Bill, Time, Eas, Auth, Attachment, Policy>),
+            get(list::<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>)
+                .post(purchase::<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>),
         )
         .route(
             "/team/computers/offers",
-            get(offers::<Repo, Bill, Time, Eas, Auth, Attachment, Policy>),
+            get(offers::<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>),
         )
         .route(
             "/team/computers/quote",
-            get(quote::<Repo, Bill, Time, Eas, Auth, Attachment, Policy>),
+            get(quote::<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>),
         )
         .route(
             "/team/computers/{computer_id}",
-            get(status::<Repo, Bill, Time, Eas, Auth, Attachment, Policy>),
+            get(status::<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>),
         )
         .route(
             "/team/computers/{computer_id}/power",
-            post(power::<Repo, Bill, Time, Eas, Auth, Attachment, Policy>),
+            post(power::<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>),
         )
         .route(
             "/team/computers/{computer_id}/retry",
-            post(retry::<Repo, Bill, Time, Eas, Auth, Attachment, Policy>),
+            post(retry::<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>),
         )
         .route(
             "/team/computers/{computer_id}/cancel",
-            post(cancel::<Repo, Bill, Time, Eas, Auth, Attachment, Policy>)
-                .delete(undo_cancel::<Repo, Bill, Time, Eas, Auth, Attachment, Policy>),
+            post(cancel::<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>)
+                .delete(undo_cancel::<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>),
         )
         .route(
             "/team/computers/{computer_id}/setup-complete",
-            post(complete_setup::<Repo, Bill, Time, Eas, Auth, Attachment, Policy>),
+            post(complete_setup::<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>),
         )
         .route(
             "/team/computers/{computer_id}/restore",
-            post(restore::<Repo, Bill, Time, Eas, Auth, Attachment, Policy>),
+            post(restore::<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>),
         )
         .route(
             "/team/computers/{computer_id}/release",
-            post(release::<Repo, Bill, Time, Eas, Auth, Attachment, Policy>),
+            post(release::<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>),
         )
         .with_state(state)
 }
 
 /// Internal routes, to nest under `/internal`. Each requires the internal
 /// API key; callers have authorized the team admin themselves.
-pub fn internal_router<Repo, Bill, Time, Eas, Auth, Attachment, Policy, S>(
-    state: ComputerRouterState<Repo, Bill, Time, Eas, Auth, Attachment, Policy>,
+pub fn internal_router<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy, S>(
+    state: ComputerRouterState<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>,
 ) -> Router<S>
 where
     Repo: ComputerRepo,
     Bill: Billing,
     Time: Clock,
-    Eas: EntityAccessService,
+    EntityAccess: EntityAccessService,
     Auth: MacroAuthorizationService,
     Attachment: FleetAttachmentSource,
     Policy: CompPolicy,
@@ -157,11 +158,11 @@ where
     Router::new()
         .route(
             "/computers/quote",
-            get(internal_quote::<Repo, Bill, Time, Eas, Auth, Attachment, Policy>),
+            get(internal_quote::<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>),
         )
         .route(
             "/computers/{computer_id}",
-            get(internal_status::<Repo, Bill, Time, Eas, Auth, Attachment, Policy>),
+            get(internal_status::<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>),
         )
         .with_state(state)
 }
@@ -200,13 +201,15 @@ pub async fn list<
     Repo: ComputerRepo,
     Bill: Billing,
     Time: Clock,
-    Eas: EntityAccessService,
+    EntityAccess: EntityAccessService,
     Auth: MacroAuthorizationService,
     Attachment: FleetAttachmentSource,
     Policy: CompPolicy,
 >(
-    access: MacroUserTeamExtractorV2<MemberTeamRole, Eas, Auth>,
-    State(state): State<ComputerRouterState<Repo, Bill, Time, Eas, Auth, Attachment, Policy>>,
+    access: MacroUserTeamExtractorV2<MemberTeamRole, EntityAccess, Auth>,
+    State(state): State<
+        ComputerRouterState<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>,
+    >,
 ) -> Result<Json<Vec<ComputerStatus>>, ComputersHttpError> {
     let team_id = team_id(&access.entity_access_receipt)?;
     Ok(Json(state.service.list(team_id).await?))
@@ -228,13 +231,15 @@ pub async fn status<
     Repo: ComputerRepo,
     Bill: Billing,
     Time: Clock,
-    Eas: EntityAccessService,
+    EntityAccess: EntityAccessService,
     Auth: MacroAuthorizationService,
     Attachment: FleetAttachmentSource,
     Policy: CompPolicy,
 >(
-    access: MacroUserTeamExtractorV2<MemberTeamRole, Eas, Auth>,
-    State(state): State<ComputerRouterState<Repo, Bill, Time, Eas, Auth, Attachment, Policy>>,
+    access: MacroUserTeamExtractorV2<MemberTeamRole, EntityAccess, Auth>,
+    State(state): State<
+        ComputerRouterState<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>,
+    >,
     Path(computer_id): Path<ComputerId>,
 ) -> Result<Json<ComputerStatus>, ComputersHttpError> {
     let team_id = team_id(&access.entity_access_receipt)?;
@@ -253,13 +258,15 @@ pub async fn offers<
     Repo: ComputerRepo,
     Bill: Billing,
     Time: Clock,
-    Eas: EntityAccessService,
+    EntityAccess: EntityAccessService,
     Auth: MacroAuthorizationService,
     Attachment: FleetAttachmentSource,
     Policy: CompPolicy,
 >(
-    access: MacroUserTeamExtractorV2<MemberTeamRole, Eas, Auth>,
-    State(state): State<ComputerRouterState<Repo, Bill, Time, Eas, Auth, Attachment, Policy>>,
+    access: MacroUserTeamExtractorV2<MemberTeamRole, EntityAccess, Auth>,
+    State(state): State<
+        ComputerRouterState<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>,
+    >,
 ) -> Result<Json<Vec<SizeOffer>>, ComputersHttpError> {
     let receipt = &access.entity_access_receipt;
     Ok(Json(
@@ -290,13 +297,15 @@ pub async fn quote<
     Repo: ComputerRepo,
     Bill: Billing,
     Time: Clock,
-    Eas: EntityAccessService,
+    EntityAccess: EntityAccessService,
     Auth: MacroAuthorizationService,
     Attachment: FleetAttachmentSource,
     Policy: CompPolicy,
 >(
-    access: MacroUserTeamExtractorV2<MemberTeamRole, Eas, Auth>,
-    State(state): State<ComputerRouterState<Repo, Bill, Time, Eas, Auth, Attachment, Policy>>,
+    access: MacroUserTeamExtractorV2<MemberTeamRole, EntityAccess, Auth>,
+    State(state): State<
+        ComputerRouterState<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>,
+    >,
     Query(query): Query<QuoteQuery>,
 ) -> Result<Json<Quote>, ComputersHttpError> {
     let team_id = team_id(&access.entity_access_receipt)?;
@@ -390,13 +399,15 @@ pub async fn purchase<
     Repo: ComputerRepo,
     Bill: Billing,
     Time: Clock,
-    Eas: EntityAccessService,
+    EntityAccess: EntityAccessService,
     Auth: MacroAuthorizationService,
     Attachment: FleetAttachmentSource,
     Policy: CompPolicy,
 >(
-    access: MacroUserTeamExtractorV2<AdminTeamRole, Eas, Auth>,
-    State(state): State<ComputerRouterState<Repo, Bill, Time, Eas, Auth, Attachment, Policy>>,
+    access: MacroUserTeamExtractorV2<AdminTeamRole, EntityAccess, Auth>,
+    State(state): State<
+        ComputerRouterState<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>,
+    >,
     Json(body): Json<PurchaseBody>,
 ) -> Result<Purchased, ComputersHttpError> {
     let receipt = &access.entity_access_receipt;
@@ -437,13 +448,15 @@ pub async fn power<
     Repo: ComputerRepo,
     Bill: Billing,
     Time: Clock,
-    Eas: EntityAccessService,
+    EntityAccess: EntityAccessService,
     Auth: MacroAuthorizationService,
     Attachment: FleetAttachmentSource,
     Policy: CompPolicy,
 >(
-    access: MacroUserTeamExtractorV2<AdminTeamRole, Eas, Auth>,
-    State(state): State<ComputerRouterState<Repo, Bill, Time, Eas, Auth, Attachment, Policy>>,
+    access: MacroUserTeamExtractorV2<AdminTeamRole, EntityAccess, Auth>,
+    State(state): State<
+        ComputerRouterState<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>,
+    >,
     Path(computer_id): Path<ComputerId>,
     Json(body): Json<PowerBody>,
 ) -> Result<Json<ComputerStatus>, ComputersHttpError> {
@@ -473,13 +486,15 @@ pub async fn retry<
     Repo: ComputerRepo,
     Bill: Billing,
     Time: Clock,
-    Eas: EntityAccessService,
+    EntityAccess: EntityAccessService,
     Auth: MacroAuthorizationService,
     Attachment: FleetAttachmentSource,
     Policy: CompPolicy,
 >(
-    access: MacroUserTeamExtractorV2<AdminTeamRole, Eas, Auth>,
-    State(state): State<ComputerRouterState<Repo, Bill, Time, Eas, Auth, Attachment, Policy>>,
+    access: MacroUserTeamExtractorV2<AdminTeamRole, EntityAccess, Auth>,
+    State(state): State<
+        ComputerRouterState<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>,
+    >,
     Path(computer_id): Path<ComputerId>,
 ) -> Result<Json<ComputerStatus>, ComputersHttpError> {
     let team_id = team_id(&access.entity_access_receipt)?;
@@ -504,13 +519,15 @@ pub async fn complete_setup<
     Repo: ComputerRepo,
     Bill: Billing,
     Time: Clock,
-    Eas: EntityAccessService,
+    EntityAccess: EntityAccessService,
     Auth: MacroAuthorizationService,
     Attachment: FleetAttachmentSource,
     Policy: CompPolicy,
 >(
-    access: MacroUserTeamExtractorV2<MemberTeamRole, Eas, Auth>,
-    State(state): State<ComputerRouterState<Repo, Bill, Time, Eas, Auth, Attachment, Policy>>,
+    access: MacroUserTeamExtractorV2<MemberTeamRole, EntityAccess, Auth>,
+    State(state): State<
+        ComputerRouterState<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>,
+    >,
     Path(computer_id): Path<ComputerId>,
 ) -> Result<Json<ComputerStatus>, ComputersHttpError> {
     let receipt = access.entity_access_receipt;
@@ -542,13 +559,15 @@ pub async fn cancel<
     Repo: ComputerRepo,
     Bill: Billing,
     Time: Clock,
-    Eas: EntityAccessService,
+    EntityAccess: EntityAccessService,
     Auth: MacroAuthorizationService,
     Attachment: FleetAttachmentSource,
     Policy: CompPolicy,
 >(
-    access: MacroUserTeamExtractorV2<AdminTeamRole, Eas, Auth>,
-    State(state): State<ComputerRouterState<Repo, Bill, Time, Eas, Auth, Attachment, Policy>>,
+    access: MacroUserTeamExtractorV2<AdminTeamRole, EntityAccess, Auth>,
+    State(state): State<
+        ComputerRouterState<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>,
+    >,
     Path(computer_id): Path<ComputerId>,
 ) -> Result<Json<ComputerStatus>, ComputersHttpError> {
     let team_id = team_id(&access.entity_access_receipt)?;
@@ -568,13 +587,15 @@ pub async fn undo_cancel<
     Repo: ComputerRepo,
     Bill: Billing,
     Time: Clock,
-    Eas: EntityAccessService,
+    EntityAccess: EntityAccessService,
     Auth: MacroAuthorizationService,
     Attachment: FleetAttachmentSource,
     Policy: CompPolicy,
 >(
-    access: MacroUserTeamExtractorV2<AdminTeamRole, Eas, Auth>,
-    State(state): State<ComputerRouterState<Repo, Bill, Time, Eas, Auth, Attachment, Policy>>,
+    access: MacroUserTeamExtractorV2<AdminTeamRole, EntityAccess, Auth>,
+    State(state): State<
+        ComputerRouterState<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>,
+    >,
     Path(computer_id): Path<ComputerId>,
 ) -> Result<Json<ComputerStatus>, ComputersHttpError> {
     let team_id = team_id(&access.entity_access_receipt)?;
@@ -600,13 +621,15 @@ pub async fn restore<
     Repo: ComputerRepo,
     Bill: Billing,
     Time: Clock,
-    Eas: EntityAccessService,
+    EntityAccess: EntityAccessService,
     Auth: MacroAuthorizationService,
     Attachment: FleetAttachmentSource,
     Policy: CompPolicy,
 >(
-    access: MacroUserTeamExtractorV2<AdminTeamRole, Eas, Auth>,
-    State(state): State<ComputerRouterState<Repo, Bill, Time, Eas, Auth, Attachment, Policy>>,
+    access: MacroUserTeamExtractorV2<AdminTeamRole, EntityAccess, Auth>,
+    State(state): State<
+        ComputerRouterState<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>,
+    >,
     Path(computer_id): Path<ComputerId>,
 ) -> Result<Json<ComputerStatus>, ComputersHttpError> {
     let team_id = team_id(&access.entity_access_receipt)?;
@@ -638,13 +661,15 @@ pub async fn release<
     Repo: ComputerRepo,
     Bill: Billing,
     Time: Clock,
-    Eas: EntityAccessService,
+    EntityAccess: EntityAccessService,
     Auth: MacroAuthorizationService,
     Attachment: FleetAttachmentSource,
     Policy: CompPolicy,
 >(
-    access: MacroUserTeamExtractorV2<AdminTeamRole, Eas, Auth>,
-    State(state): State<ComputerRouterState<Repo, Bill, Time, Eas, Auth, Attachment, Policy>>,
+    access: MacroUserTeamExtractorV2<AdminTeamRole, EntityAccess, Auth>,
+    State(state): State<
+        ComputerRouterState<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>,
+    >,
     Path(computer_id): Path<ComputerId>,
     Json(body): Json<ReleaseBody>,
 ) -> Result<Json<ComputerStatus>, ComputersHttpError> {
@@ -680,13 +705,15 @@ pub async fn internal_quote<
     Repo: ComputerRepo,
     Bill: Billing,
     Time: Clock,
-    Eas: EntityAccessService,
+    EntityAccess: EntityAccessService,
     Auth: MacroAuthorizationService,
     Attachment: FleetAttachmentSource,
     Policy: CompPolicy,
 >(
     _internal: MacroAuthorizationExtractor<Auth, InternalOnly>,
-    State(state): State<ComputerRouterState<Repo, Bill, Time, Eas, Auth, Attachment, Policy>>,
+    State(state): State<
+        ComputerRouterState<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>,
+    >,
     Query(query): Query<InternalQuoteQuery>,
 ) -> Result<Json<Quote>, ComputersHttpError> {
     Ok(Json(
@@ -718,13 +745,15 @@ pub async fn internal_status<
     Repo: ComputerRepo,
     Bill: Billing,
     Time: Clock,
-    Eas: EntityAccessService,
+    EntityAccess: EntityAccessService,
     Auth: MacroAuthorizationService,
     Attachment: FleetAttachmentSource,
     Policy: CompPolicy,
 >(
     _internal: MacroAuthorizationExtractor<Auth, InternalOnly>,
-    State(state): State<ComputerRouterState<Repo, Bill, Time, Eas, Auth, Attachment, Policy>>,
+    State(state): State<
+        ComputerRouterState<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>,
+    >,
     Path(computer_id): Path<ComputerId>,
     Query(query): Query<InternalTeamQuery>,
 ) -> Result<Json<ComputerStatus>, ComputersHttpError> {
