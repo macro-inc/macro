@@ -83,6 +83,45 @@ afterEach(() => {
   Reflect.deleteProperty(HTMLElement.prototype, 'scrollTo');
 });
 
+/** Animation frames that run only when a test asks for one. */
+function controlFrames() {
+  let frameId = 0;
+  const frames = new Map<number, FrameRequestCallback>();
+  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+    frames.set(++frameId, callback);
+    return frameId;
+  });
+  vi.stubGlobal('cancelAnimationFrame', (id: number) => frames.delete(id));
+  return {
+    pending: () => frames.size,
+    run: () => {
+      const due = [...frames.values()];
+      frames.clear();
+      for (const callback of due) callback(performance.now());
+    },
+  };
+}
+
+/** Browsers report an observed element once, which measures mounted rows. */
+function reportObservedRowsOnce() {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      constructor(readonly callback: ResizeObserverCallback) {}
+      observe(target: Element) {
+        queueMicrotask(() =>
+          this.callback(
+            [{ target } as ResizeObserverEntry],
+            this as unknown as ResizeObserver
+          )
+        );
+      }
+      unobserve() {}
+      disconnect() {}
+    }
+  );
+}
+
 function setup(followOnAppend = true, preserveReflowGap = false) {
   const [keys, setKeys] = createSignal(
     Array.from({ length: 20 }, (_, index) => String(index))
@@ -208,24 +247,7 @@ describe('history loading ahead of scrolling', () => {
     'measures rows taller than the estimate ahead of a gesture (safari=%s)',
     async (safari) => {
       platform.safari = safari;
-      // Browsers report an observed element once, which is how rows mounted
-      // during a scroll get measured.
-      vi.stubGlobal(
-        'ResizeObserver',
-        class {
-          constructor(readonly callback: ResizeObserverCallback) {}
-          observe(target: Element) {
-            queueMicrotask(() =>
-              this.callback(
-                [{ target } as ResizeObserverEntry],
-                this as unknown as ResizeObserver
-              )
-            );
-          }
-          unobserve() {}
-          disconnect() {}
-        }
-      );
+      reportObservedRowsOnce();
       // Rows three times the estimate, as long agent transcripts are: a
       // fling over unmeasured rows hits the native top while history remains.
       const keys = Array.from({ length: 40 }, (_, index) => String(index));
@@ -241,12 +263,98 @@ describe('history loading ahead of scrolling', () => {
       // (4800px, rows 22-37) above them, more than one pass of six unmeasured
       // rows; others mount only the default overscan of six (rows 32-37).
       await waitFor(() => expect(mounted()).toContain(32));
-      await new Promise((resolve) => setTimeout(resolve, 50));
-      if (safari) expect(Math.min(...mounted())).toBeLessThanOrEqual(22);
-      else expect(Math.min(...mounted())).toBe(32);
+      if (safari) {
+        await waitFor(() =>
+          expect(Math.min(...mounted())).toBeLessThanOrEqual(22)
+        );
+      } else {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        expect(Math.min(...mounted())).toBe(32);
+      }
       expect(Math.max(...mounted())).toBe(39);
     }
   );
+
+  it('paints the first screen before requesting older history', async () => {
+    const frames = controlFrames();
+    const f = setup();
+    await waitFor(() => expect(f.navigation()).toBeDefined());
+    expect(f.element.scrollTop).toBe(1520);
+    expect(f.paginate).not.toHaveBeenCalled();
+
+    // The frame that paints the first screen, then the one after it.
+    frames.run();
+    expect(f.paginate).not.toHaveBeenCalled();
+    frames.run();
+    await waitFor(() => expect(f.paginate).toHaveBeenCalledOnce());
+  });
+
+  it('requests older history at the first touch when it comes before the paint', async () => {
+    controlFrames();
+    const f = setup();
+    await waitFor(() => expect(f.navigation()).toBeDefined());
+    expect(f.paginate).not.toHaveBeenCalled();
+
+    f.element.dispatchEvent(new TouchEvent('touchstart'));
+    await waitFor(() => expect(f.paginate).toHaveBeenCalledOnce());
+  });
+
+  it('measures history one pass a frame once the first screen has painted', async () => {
+    const frames = controlFrames();
+    reportObservedRowsOnce();
+    // Browsers deliver a scroll event with the next frame, not within the task
+    // that wrote the offset.
+    Object.defineProperty(HTMLElement.prototype, 'scrollTo', {
+      configurable: true,
+      value(this: HTMLElement, options: ScrollToOptions) {
+        const offset = Math.max(
+          0,
+          Math.min(options.top ?? 0, this.scrollHeight - this.clientHeight)
+        );
+        if (offset === this.scrollTop) return;
+        this.scrollTop = offset;
+        requestAnimationFrame(() => this.dispatchEvent(new Event('scroll')));
+      },
+    });
+    const keys = Array.from({ length: 40 }, (_, index) => String(index));
+    for (const key of keys) rowHeights.set(key, 300);
+    const { container } = render(() => (
+      <ThreadList keys={() => keys}>{({ id }) => <div>{id}</div>}</ThreadList>
+    ));
+    const firstMounted = () =>
+      Math.min(
+        ...[...container.querySelectorAll('[data-index]')].map((row) =>
+          Number(row.getAttribute('data-index'))
+        )
+      );
+
+    const settle = async () => {
+      // Row measurement and the range it changes run in chained microtasks.
+      for (let turn = 0; turn < 10; turn++)
+        await new Promise<void>((resolve) => queueMicrotask(resolve));
+    };
+
+    // Before the paint, only the default overscan of six rows (32-37).
+    await waitFor(() => expect(firstMounted()).toBe(32));
+
+    // The frame that paints, then the one that starts the first pass.
+    frames.run();
+    frames.run();
+    await settle();
+    const afterFirstPass = firstMounted();
+    expect(afterFirstPass).toBeLessThan(32);
+    // Twelve viewports (4800px) of 300px rows above row 38 reach row 22;
+    // one pass does not get there, and no further pass runs without a frame.
+    expect(afterFirstPass).toBeGreaterThan(22);
+    await settle();
+    expect(firstMounted()).toBe(afterFirstPass);
+
+    for (let frame = 0; frame < 10 && firstMounted() > 22; frame++) {
+      frames.run();
+      await settle();
+    }
+    expect(firstMounted()).toBeLessThanOrEqual(22);
+  });
 
   it('ends native scrolling at the latest message while a gesture shifts the rows', async () => {
     const f = setup();

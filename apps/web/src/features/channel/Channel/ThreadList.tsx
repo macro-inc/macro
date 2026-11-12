@@ -255,6 +255,7 @@ export function ThreadList(props: ThreadListProps) {
     },
     onReady: () => {
       releaseNavigation = props.onReady?.(navigation);
+      startHistoryBufferingAfterPaint();
     },
   });
 
@@ -267,18 +268,68 @@ export function ThreadList(props: ThreadListProps) {
   const [historyPass, setHistoryPass] = createSignal(0);
   let resumeHistoryAfter: number | undefined;
 
+  // WebKit needs history loaded and measured before a fling reaches it, not
+  // before the list is shown. Both wait for the first paint, or for the first
+  // gesture if that comes sooner, so opening a conversation does only the work
+  // its first screen needs.
+  let historyBuffering = false;
+  let firstPaintFrame: number | undefined;
+
+  // A frame mounts at most one pass of unmeasured history rows, whatever
+  // recomputes the range in between. Each pass mounts and measures a batch;
+  // run back to back they hold the main thread until the whole buffer is done.
+  const historyRowsThisFrame = new Set<VirtualItem['key']>();
+  let historyPassDue = false;
+  let historyFrame: number | undefined;
+  const scheduleHistoryFrame = () => {
+    if (historyFrame !== undefined) return;
+    historyFrame = requestAnimationFrame(() => {
+      historyFrame = undefined;
+      historyRowsThisFrame.clear();
+      if (!historyPassDue) return;
+      historyPassDue = false;
+      setHistoryPass((pass) => pass + 1);
+    });
+  };
+
+  function startHistoryBuffering() {
+    if (historyBuffering) return;
+    historyBuffering = true;
+    if (firstPaintFrame !== undefined) cancelAnimationFrame(firstPaintFrame);
+    firstPaintFrame = undefined;
+    setHistoryPass((pass) => pass + 1);
+    // Re-evaluate the distance to the top: older pages may now be requested.
+    scheduleScrollState();
+  }
+
+  // The second frame starts after the browser has painted the first.
+  const startHistoryBufferingAfterPaint = () => {
+    if (historyBuffering || !scrollCompensation) return;
+    firstPaintFrame = requestAnimationFrame(() => {
+      firstPaintFrame = requestAnimationFrame(() => {
+        firstPaintFrame = undefined;
+        startHistoryBuffering();
+      });
+    });
+  };
+
+  onCleanup(() => {
+    if (firstPaintFrame !== undefined) cancelAnimationFrame(firstPaintFrame);
+    if (historyFrame !== undefined) cancelAnimationFrame(historyFrame);
+  });
+
   // A WebKit gesture cannot move the native top boundary, so rows above that
   // are taller than their estimate grow only the visual adjustment, and a
   // fling stops at scrollTop 0 with history still above it. Keep the rows a
   // fling can reach mounted and measured before it starts, a few unmeasured
-  // rows per pass, so the native extent above them is the real one.
+  // rows per frame, so the native extent above them is the real one.
   function withMeasuredHistory(range: Range): number[] {
     const indexes = defaultRangeExtractor(range);
     const instance = measured?.instance;
     const first = indexes[0];
     const visibleStart = instance?.measurementsCache[range.startIndex]?.start;
     if (
-      !scrollCompensation ||
+      !historyBuffering ||
       !instance ||
       first === undefined ||
       visibleStart === undefined
@@ -286,18 +337,29 @@ export function ThreadList(props: ThreadListProps) {
       return indexes;
     const buffer = viewportSize() * WEBKIT_MEASURED_HISTORY_VIEWPORTS;
     const added: number[] = [];
-    let unmeasured = 0;
+    let reachedPassLimit = false;
     let top = instance.measurementsCache[first]?.start ?? visibleStart;
     for (let index = first - 1; index >= 0; index--) {
       const item = instance.measurementsCache[index];
-      if (!item || visibleStart - top >= buffer || unmeasured >= OVERSCAN)
-        break;
+      if (!item || visibleStart - top >= buffer) break;
+
+      // Rows already mounted this frame stay; only new ones count.
+      const unmeasured = !instance.itemSizeCache.has(item.key);
+      if (unmeasured && !historyRowsThisFrame.has(item.key)) {
+        if (historyRowsThisFrame.size >= OVERSCAN) {
+          reachedPassLimit = true;
+          break;
+        }
+        historyRowsThisFrame.add(item.key);
+        scheduleHistoryFrame();
+      }
+
       added.unshift(index);
       top = item.start;
-      if (!instance.itemSizeCache.has(item.key)) unmeasured += 1;
     }
-    resumeHistoryAfter =
-      unmeasured >= OVERSCAN ? instance.itemSizeCache.size : undefined;
+    resumeHistoryAfter = reachedPassLimit
+      ? instance.itemSizeCache.size
+      : undefined;
     return added.length === 0 ? indexes : [...added, ...indexes];
   }
 
@@ -415,6 +477,15 @@ export function ThreadList(props: ThreadListProps) {
         element?.addEventListener('touchstart', onTouchStart, {
           passive: true,
         });
+      // A gesture that begins before the first paint needs its history now.
+      if (scrollCompensation) {
+        element?.addEventListener('wheel', startHistoryBuffering, {
+          passive: true,
+        });
+        element?.addEventListener('touchstart', startHistoryBuffering, {
+          passive: true,
+        });
+      }
       const reportOffset = (offset: number, isScrolling: boolean) => {
         // An instant navigation/correction must not extend gesture compensation.
         const isOwnScroll =
@@ -458,6 +529,8 @@ export function ThreadList(props: ThreadListProps) {
         if (onWheel) element?.removeEventListener('wheel', onWheel);
         if (onTouchStart)
           element?.removeEventListener('touchstart', onTouchStart);
+        element?.removeEventListener('wheel', startHistoryBuffering);
+        element?.removeEventListener('touchstart', startHistoryBuffering);
       };
     },
     observeElementRect: (instance, callback) =>
@@ -521,7 +594,8 @@ export function ThreadList(props: ThreadListProps) {
         instance.itemSizeCache.size > resumeHistoryAfter
       ) {
         resumeHistoryAfter = undefined;
-        queueMicrotask(() => setHistoryPass((pass) => pass + 1));
+        historyPassDue = true;
+        scheduleHistoryFrame();
       }
     },
   });
@@ -687,7 +761,8 @@ export function ThreadList(props: ThreadListProps) {
     );
     // WebKit cannot move the native top boundary during a fling without a
     // scroll write. Fill a bounded history buffer ahead of the next gesture,
-    // including after initial positioning or navigation into older messages.
+    // including after initial positioning or navigation into older messages,
+    // once the first screen has painted.
     const nearTop =
       distanceFromTop <=
       Math.max(NEAR_TOP_THRESHOLD, el.clientHeight * historyBufferViewports);
@@ -736,7 +811,7 @@ export function ThreadList(props: ThreadListProps) {
     if (!lifecycle.isReady()) return;
     if (
       nearTop &&
-      (hasUserIntent || scrollCompensation) &&
+      (hasUserIntent || historyBuffering) &&
       nearTopKey !== props.keys()[0]
     ) {
       nearTopKey = props.keys()[0];
