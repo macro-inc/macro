@@ -21,6 +21,9 @@ they need.
 - `src/domain/api.rs`: `MessageServiceApi`, the boundary HTTP/agents/channel
   adapters call through; `thread_page` adds bounded reply windows while
   `get_thread` preserves the complete REST thread read.
+  `post_once` and `delete_once` are for callers that replay a write (the
+  GraphQL channel mutations): a repeated client id returns the stored message,
+  a repeated delete the tombstone.
 - `src/inbound/axum_router.rs`: the HTTP surface (feature `inbound`).
 - `src/inbound/toolset.rs`: the AI tools for any entity's Discussion
   (`ReadDiscussion`, `Comment`, `EditComment`, `DeleteComment`,

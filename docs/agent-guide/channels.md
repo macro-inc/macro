@@ -605,6 +605,13 @@ disables the entrance animation.
 The message renders immediately with avatar, email, timestamp. Composer extras: `Attach
 files` and the `Send message` button. Replies also include a close-reply control.
 
+With `enable-graphql-soup` enabled and the device cache serving channels, a
+send, edit, delete or reaction made while offline stays on screen and is
+delivered when the connection returns, including after a reload: check with the
+network off, then back on, that the message appears once and other members
+receive it. A write the server refuses is removed again with the usual failure
+toast; after a reload the row is removed without a toast.
+
 Hover a message for its action menu. `Reply` on a top-level message opens that thread. On
 an existing thread reply, it inserts a one-line reply-target reference into the composer;
 clicking the reference navigates back to that reply. References to the current
