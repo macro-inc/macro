@@ -50,7 +50,15 @@ impl SlackProvider {
 #[async_trait]
 impl ChatProvider for SlackProvider {
     fn capabilities(&self, _chat: &ChatRef) -> Capabilities {
+        // Slack keeps several reactions per person, so a reaction adds one and
+        // RemoveReaction takes one away.
         Capabilities {
+            mutations: vec![
+                Mutation::Reaction,
+                Mutation::RemoveReaction,
+                Mutation::Edit,
+                Mutation::Delete,
+            ],
             threads: true,
             ..Capabilities::default()
         }

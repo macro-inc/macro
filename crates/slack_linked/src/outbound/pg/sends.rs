@@ -590,14 +590,20 @@ pub(super) async fn record_send_outcome(
                                 ts: target,
                                 at: ts_time(ts),
                             },
-                            Mutation::Reaction => InboundChange::Reaction {
-                                conversation_id: chat.remote_id.clone(),
-                                ts: target,
-                                slack_user_id: identity,
-                                name: text.clone().unwrap_or_default(),
-                                added: true,
-                                event_ts: ts.clone(),
-                            },
+                            Mutation::Reaction | Mutation::RemoveReaction => {
+                                InboundChange::Reaction {
+                                    conversation_id: chat.remote_id.clone(),
+                                    ts: target,
+                                    slack_user_id: identity,
+                                    name: text
+                                        .as_deref()
+                                        .unwrap_or_default()
+                                        .trim_matches(':')
+                                        .to_owned(),
+                                    added: *operation == Mutation::Reaction,
+                                    event_ts: ts.clone(),
+                                }
+                            }
                         };
                         ingest::apply_in(&mut tx, &account, &chat, &change).await?;
                     }

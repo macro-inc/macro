@@ -637,15 +637,16 @@ impl<Connector: SlackConnector, Keys: Secrets> Running<'_, Connector, Keys> {
                 .map(|()| target.to_string()),
             (
                 ReplyContent::Mutation {
-                    operation: Mutation::Reaction,
+                    operation: operation @ (Mutation::Reaction | Mutation::RemoveReaction),
                     text,
                     ..
                 },
                 Some(target),
             ) => {
                 let name = text.as_deref().unwrap_or_default().trim_matches(':');
+                let add = *operation == Mutation::Reaction;
                 self.session
-                    .react(conversation, target, name, !name.is_empty())
+                    .react(conversation, target, name, add)
                     .await
                     .map(|()| now_ts())
             }

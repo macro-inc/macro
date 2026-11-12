@@ -6,7 +6,8 @@ use entity_access::domain::models::{
     RequiredPermission, ViewAccessLevel,
 };
 use external_chat::domain::models::{
-    AddChat, ExternalChatKind, ExternalChatProvider, ReplyContent, SendAuthority, SendReply,
+    AddChat, ExternalChatKind, ExternalChatProvider, Mutation, ReplyContent, SendAuthority,
+    SendReply,
 };
 use external_chat::domain::ports::ExternalChatResult;
 use external_chat::domain::ports::{ChatProviders, SendRateLimiter, UnconfiguredProvider};
@@ -300,6 +301,55 @@ async fn a_slack_connect_channel_syncs_both_ways_until_slack_ends_the_session(po
         Some("hi from Macro")
     );
     assert_eq!(posted[0].fields.get("thread_ts"), Some(&root_ts));
+
+    // The owner reacts from Macro, then takes the reaction back.
+    for operation in [Mutation::Reaction, Mutation::RemoveReaction] {
+        chats
+            .send_reply(
+                &receipt::<ViewAccessLevel>(chat.id),
+                &SendReply {
+                    idempotency_key: Uuid::now_v7(),
+                    message: ReplyContent::Mutation {
+                        message_id: root_id,
+                        operation,
+                        text: Some("rocket".to_owned()),
+                    },
+                    reply_to: None,
+                    thread: None,
+                },
+                SendAuthority::Human,
+            )
+            .await
+            .unwrap();
+        let method = match operation {
+            Mutation::RemoveReaction => "reactions.remove",
+            _ => "reactions.add",
+        };
+        assert!(
+            slack.wait_for_calls(method, 1, WAIT).await,
+            "{method} reaches Slack"
+        );
+    }
+    let mine = wait_for_rows(&pool, WAIT, || async {
+        let pending = sqlx::query_scalar!(
+            r#"SELECT count(*) AS "count!" FROM slack_send WHERE chat_id = $1 AND state <> 'accepted'"#,
+            chat.id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        (pending == 0).then_some(())
+    })
+    .await;
+    assert!(mine.is_some(), "both reaction sends are accepted");
+    let rockets = sqlx::query_scalar!(
+        r#"SELECT count(*) AS "count!" FROM external_chat_reaction WHERE message_id = $1 AND emoji = 'rocket'"#,
+        root_id
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(rockets, 0);
 
     // Reading in Macro marks Slack read; reading in Slack moves Macro's mark.
     chats
