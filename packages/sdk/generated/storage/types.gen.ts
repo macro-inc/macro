@@ -22845,6 +22845,24 @@ export type UploadFileResponse = {
     sizeBytes: number;
 };
 
+/**
+ * Files of an extracted folder moved into storage so far.
+ */
+export type UploadFolderProgress = {
+    /**
+     * Files that could not be stored.
+     */
+    filesFailed: number;
+    /**
+     * Files stored successfully.
+     */
+    filesStored: number;
+    /**
+     * Files the folder holds.
+     */
+    filesTotal: number;
+};
+
 export type UploadFolderRequest = {
     /**
      * The content of the folder
@@ -22871,6 +22889,11 @@ export type UploadFolderRequest = {
      */
     uploadRequestId: string;
 };
+
+/**
+ * The upload status of the folder
+ */
+export type UploadFolderStatus = 'pending' | 'uploaded' | 'processing' | 'partially_completed' | 'completed' | 'failed' | 'unknown';
 
 /**
  * Signed upload permission returned just before PUT; never persisted as an identity.
@@ -35169,6 +35192,48 @@ export type UploadExtractFolderHandlerResponses = {
 };
 
 export type UploadExtractFolderHandlerResponse = UploadExtractFolderHandlerResponses[keyof UploadExtractFolderHandlerResponses];
+
+export type GetUploadExtractStatusHandlerData = {
+    body?: never;
+    path: {
+        /**
+         * The upload request id
+         */
+        request_id: string;
+    };
+    query?: never;
+    url: '/projects/upload_extract/{request_id}';
+};
+
+export type GetUploadExtractStatusHandlerErrors = {
+    401: GenericErrorResponse;
+    404: GenericErrorResponse;
+    500: GenericErrorResponse;
+};
+
+export type GetUploadExtractStatusHandlerError = GetUploadExtractStatusHandlerErrors[keyof GetUploadExtractStatusHandlerErrors];
+
+export type GetUploadExtractStatusHandlerResponses = {
+    200: {
+        /**
+         * Where a folder upload stands, for the uploader to follow it to the end.
+         */
+        data: {
+            progress?: null | UploadFolderProgress;
+            /**
+             * The uploaded folder, once it exists.
+             */
+            projectId?: string | null;
+            status: UploadFolderStatus;
+        };
+        /**
+         * Indicates if an error occurred
+         */
+        error: boolean;
+    };
+};
+
+export type GetUploadExtractStatusHandlerResponse = GetUploadExtractStatusHandlerResponses[keyof GetUploadExtractStatusHandlerResponses];
 
 export type DeleteProjectHandlerData = {
     body?: never;

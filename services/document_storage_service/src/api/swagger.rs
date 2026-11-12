@@ -526,6 +526,7 @@ use utoipa::OpenApi;
         projects_hex::inbound::axum_router::delete_project::permanently_delete_project_handler,
         projects_hex::inbound::axum_router::upload_folder::upload_folder_handler,
         projects_hex::inbound::axum_router::upload_folder::upload_extract_folder_handler,
+        projects_hex::inbound::axum_router::upload_folder::get_upload_extract_status_handler,
         projects_hex::inbound::axum_router::project_permission::get_project_permissions_handler,
         projects_hex::inbound::axum_router::project_permission::get_project_access_level_handler,
         projects_hex::inbound::axum_router::get_batch_preview::get_batch_preview_handler,
