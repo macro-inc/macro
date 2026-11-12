@@ -1,7 +1,7 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { EditorView } from '@macro-inc/lexical-wasm-view';
 import {
-  dispatchApplicationCommand,
+  dispatchApplicationCommandIfSessionEdit,
   dispatchApplicationCommandSettled,
 } from '../../plugins/group-b/command';
 import type { TagsMenuHost } from './tags';
@@ -38,8 +38,13 @@ export function createNativeTagsMenuHost(
   return {
     root: () => (active() ? view.root : null),
     closeSearch() {
+      // Closing the UI writes only under current session edit access.
       if (active())
-        dispatchApplicationCommand(view, 'group-a.search-close', {});
+        dispatchApplicationCommandIfSessionEdit(
+          view,
+          'group-a.search-close',
+          {}
+        );
     },
     insertTag(tag) {
       if (!active()) return;

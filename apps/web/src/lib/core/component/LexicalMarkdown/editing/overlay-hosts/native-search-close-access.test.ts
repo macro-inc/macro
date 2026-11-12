@@ -18,6 +18,7 @@ import { NOOP_SPAN } from '@macro-inc/observability';
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 import { dispatchApplicationCommand } from '../../plugins/group-b/command';
 import { createNativeActionMenuHost } from './native-actions';
+import { createNativeTagsMenuHost } from './native-tags-menu';
 import { createNativeUserMentionMenuHost } from './native-user-mention-menu';
 
 const previousLocks = Object.getOwnPropertyDescriptor(navigator, 'locks');
@@ -40,7 +41,7 @@ afterAll(() => {
   else Reflect.deleteProperty(navigator, 'locks');
 });
 
-function mount(kind: 'mentions' | 'actions') {
+function mount(kind: 'mentions' | 'actions' | 'tags') {
   const root = document.createElement('div');
   document.body.append(root);
   const errors: unknown[] = [];
@@ -84,7 +85,7 @@ function mount(kind: 'mentions' | 'actions') {
               {
                 type: 'text',
                 version: 1,
-                text: kind === 'actions' ? ' body' : 'body',
+                text: kind === 'mentions' ? 'body' : ' body',
               },
             ],
           },
@@ -145,96 +146,100 @@ const hosts = {
     ),
   actions: (view: EditorView) =>
     createNativeActionMenuHost(view, { requestTable: () => {} }, () => true),
+  tags: (view: EditorView) => createNativeTagsMenuHost(view, () => true),
 };
 
-describe.each(['mentions', 'actions'] as const)('%s closeSearch', (kind) => {
-  for (const [label, comment, access] of [
-    ['view-only', false, Access.Read],
-    ['comment-only', true, Access.CommentOnly],
-  ] as const) {
-    test(`a ${label} reader closing with no search keeps the editor alive`, async () => {
-      const runtime = mount(kind);
-      try {
-        runtime.authorize(false, comment);
-        expect(runtime.executor.session.effectiveAccess()).toBe(access);
-        const before = runtime.view.query.serializedState();
-        hosts[kind](runtime.view).closeSearch();
-        expect(runtime.errors).toEqual([]);
-        expect(runtime.view.query.serializedState()).toBe(before);
-      } finally {
-        await runtime.close();
-      }
-    });
+describe.each(['mentions', 'actions', 'tags'] as const)(
+  '%s closeSearch',
+  (kind) => {
+    for (const [label, comment, access] of [
+      ['view-only', false, Access.Read],
+      ['comment-only', true, Access.CommentOnly],
+    ] as const) {
+      test(`a ${label} reader closing with no search keeps the editor alive`, async () => {
+        const runtime = mount(kind);
+        try {
+          runtime.authorize(false, comment);
+          expect(runtime.executor.session.effectiveAccess()).toBe(access);
+          const before = runtime.view.query.serializedState();
+          hosts[kind](runtime.view).closeSearch();
+          expect(runtime.errors).toEqual([]);
+          expect(runtime.view.query.serializedState()).toBe(before);
+        } finally {
+          await runtime.close();
+        }
+      });
 
-    test(`a search left open when ${label} access arrives is not written on close`, async () => {
+      test(`a search left open when ${label} access arrives is not written on close`, async () => {
+        const runtime = mount(kind);
+        try {
+          runtime.openSearch();
+          runtime.authorize(false, comment);
+          const before = runtime.view.query.serializedState();
+          hosts[kind](runtime.view).closeSearch();
+          expect(runtime.errors).toEqual([]);
+          expect(runtime.view.query.serializedState()).toBe(before);
+          expect(runtime.searchNodes()).toHaveLength(1);
+        } finally {
+          await runtime.close();
+        }
+      });
+    }
+
+    test('a revoke queued before the close is consumed skips the model close', async () => {
       const runtime = mount(kind);
       try {
         runtime.openSearch();
-        runtime.authorize(false, comment);
-        const before = runtime.view.query.serializedState();
-        hosts[kind](runtime.view).closeSearch();
+        const host = hosts[kind](runtime.view);
+        // Inside one executor turn: the close queues behind the running revoke.
+        runtime.executor.run(() => {
+          host.closeSearch();
+          return runtime.executor.session.authorization(
+            true,
+            false,
+            true,
+            runtime.executor.now(),
+            Date.now()
+          );
+        });
+        expect(runtime.executor.session.effectiveAccess()).toBe(
+          Access.CommentOnly
+        );
         expect(runtime.errors).toEqual([]);
-        expect(runtime.view.query.serializedState()).toBe(before);
         expect(runtime.searchNodes()).toHaveLength(1);
       } finally {
         await runtime.close();
       }
     });
+
+    test('session edit access closes the search even with UI editing off', async () => {
+      const runtime = mount(kind);
+      try {
+        runtime.openSearch();
+        // Source admits programmatic updates independently of UI editability.
+        runtime.view.setEditable(false);
+        hosts[kind](runtime.view).closeSearch();
+        expect(runtime.errors).toEqual([]);
+        expect(runtime.searchNodes()).toHaveLength(0);
+      } finally {
+        await runtime.close();
+      }
+    });
+
+    test('an editor closing an open search still closes it in the model', async () => {
+      const runtime = mount(kind);
+      try {
+        runtime.openSearch();
+        hosts[kind](runtime.view).closeSearch();
+        expect(runtime.errors).toEqual([]);
+        expect(runtime.searchNodes()).toHaveLength(0);
+        expect(runtime.root.textContent).toContain('person');
+      } finally {
+        await runtime.close();
+      }
+    });
   }
-
-  test('a revoke queued before the close is consumed skips the model close', async () => {
-    const runtime = mount(kind);
-    try {
-      runtime.openSearch();
-      const host = hosts[kind](runtime.view);
-      // Inside one executor turn: the close queues behind the running revoke.
-      runtime.executor.run(() => {
-        host.closeSearch();
-        return runtime.executor.session.authorization(
-          true,
-          false,
-          true,
-          runtime.executor.now(),
-          Date.now()
-        );
-      });
-      expect(runtime.executor.session.effectiveAccess()).toBe(
-        Access.CommentOnly
-      );
-      expect(runtime.errors).toEqual([]);
-      expect(runtime.searchNodes()).toHaveLength(1);
-    } finally {
-      await runtime.close();
-    }
-  });
-
-  test('session edit access closes the search even with UI editing off', async () => {
-    const runtime = mount(kind);
-    try {
-      runtime.openSearch();
-      // Source admits programmatic updates independently of UI editability.
-      runtime.view.setEditable(false);
-      hosts[kind](runtime.view).closeSearch();
-      expect(runtime.errors).toEqual([]);
-      expect(runtime.searchNodes()).toHaveLength(0);
-    } finally {
-      await runtime.close();
-    }
-  });
-
-  test('an editor closing an open search still closes it in the model', async () => {
-    const runtime = mount(kind);
-    try {
-      runtime.openSearch();
-      hosts[kind](runtime.view).closeSearch();
-      expect(runtime.errors).toEqual([]);
-      expect(runtime.searchNodes()).toHaveLength(0);
-      expect(runtime.root.textContent).toContain('person');
-    } finally {
-      await runtime.close();
-    }
-  });
-});
+);
 
 // Synthetic contract proxy for a view before its first projection, not a real cold mount.
 test('a host on a view with no key generation does nothing', async () => {
