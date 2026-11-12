@@ -686,8 +686,8 @@ pub struct ComputerStatus {
     pub harness_id: Option<HarnessId>,
     /// Time the computer was reserved.
     pub created_at: DateTime<Utc>,
-    /// The Macro user who bought it; with the team owner, the one who may
-    /// finish its setup and manage its Claude account.
+    /// The Macro user who bought it. The team's owner and admins, not the
+    /// buyer, finish its setup and manage its Claude account.
     pub purchased_by: String,
     /// When the team finished the guided setup; null while it is unfinished.
     pub setup_completed_at: Option<DateTime<Utc>>,

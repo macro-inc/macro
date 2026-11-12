@@ -253,9 +253,9 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   (`ComputerRepo::agent_counts`), for the release warning.
 - **Guided setup**: `POST /team/computers/{computer_id}/setup-complete` →
   `ComputerStatus`, `ComputerService::complete_setup`, records
-  `setupCompletedAt` once (idempotent). Allowed to the computer's buyer and the
-  team owner; others get 403. Claude sign-in is for the team's owner and admins
-  (owner access to the computer's harness, the web's `canManageClaude`).
+  `setupCompletedAt` once (idempotent). Allowed to the team's owner and admins
+  (`AdminTeamRole`), as Claude sign-in is (owner access to the computer's
+  harness, the web's `canManageClaude`); others get 403.
 - **Status**: `ComputerService::list(team_id)` →
   `ComputerStatus` with `setup: Option<SetupProgress>` (Creating → Booting →
   Connecting → Ready, positions 1–4) until macrod first connects. A purchase

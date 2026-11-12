@@ -12,8 +12,7 @@ use axum::{
 };
 use entity_access::{
     domain::models::{
-        AdminTeamRole, EntityAccessAuth, EntityAccessReceipt, MemberTeamRole, OwnerTeamRole,
-        RequiredPermission,
+        AdminTeamRole, EntityAccessAuth, EntityAccessReceipt, MemberTeamRole, RequiredPermission,
     },
     domain::ports::EntityAccessService,
     inbound::axum_extractors::MacroUserTeamExtractorV2,
@@ -31,7 +30,7 @@ use crate::domain::models::{
 use crate::domain::ports::{
     Billing, BillingError, CompPolicy, ComputerRepo, FleetAttachmentSource, NoComps,
 };
-use crate::domain::service::{Clock, ComputerError, ComputerService, TeamMemberRole};
+use crate::domain::service::{Clock, ComputerError, ComputerService};
 use crate::domain::size::ComputerSize;
 
 /// Router state: the computer service plus what team access checks need.
@@ -390,7 +389,7 @@ pub async fn retry<
 }
 
 /// Mark the guided setup after buying the computer finished. Idempotent;
-/// allowed to the computer's buyer and the team owner.
+/// allowed to the team's owner and admins, like Claude sign-in.
 #[utoipa::path(
     post,
     path = "/team/computers/{computer_id}/setup-complete",
@@ -412,25 +411,15 @@ pub async fn complete_setup<
     Attachment: FleetAttachmentSource,
     Policy: CompPolicy,
 >(
-    access: MacroUserTeamExtractorV2<MemberTeamRole, EntityAccess, Auth>,
+    access: MacroUserTeamExtractorV2<AdminTeamRole, EntityAccess, Auth>,
     State(state): State<
         ComputerRouterState<Repo, Bill, Time, EntityAccess, Auth, Attachment, Policy>,
     >,
     Path(computer_id): Path<ComputerId>,
 ) -> Result<Json<ComputerStatus>, ComputersHttpError> {
-    let receipt = access.entity_access_receipt;
-    let team_id = team_id(&receipt)?;
-    let caller = user_id(&receipt)?;
-    let caller_role = if receipt.try_into_requirement::<OwnerTeamRole>().is_ok() {
-        TeamMemberRole::Owner
-    } else {
-        TeamMemberRole::Other
-    };
+    let team_id = team_id(&access.entity_access_receipt)?;
     Ok(Json(
-        state
-            .service
-            .complete_setup(team_id, computer_id, caller, caller_role)
-            .await?,
+        state.service.complete_setup(team_id, computer_id).await?,
     ))
 }
 
@@ -590,7 +579,7 @@ impl IntoResponse for ComputersHttpError {
     fn into_response(self) -> Response {
         let status = match &self.0 {
             ComputerError::FleetUnavailable(_) => StatusCode::SERVICE_UNAVAILABLE,
-            ComputerError::RolloutDisabled | ComputerError::Forbidden => StatusCode::FORBIDDEN,
+            ComputerError::RolloutDisabled => StatusCode::FORBIDDEN,
             ComputerError::NotFound => StatusCode::NOT_FOUND,
             ComputerError::SoldOut
             | ComputerError::NotPurchased

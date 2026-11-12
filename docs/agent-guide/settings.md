@@ -849,7 +849,7 @@ computer is purchasing, setting up, waiting for capacity, starting or
 stopping.
 
 The row's one action is **Finish setup** while guided setup is incomplete
-(only for the buyer and the team owner), else **Sign in with Claude** when the
+(only for the team's owner and admins), else **Sign in with Claude** when the
 computer is on its own Claude account but signed out, else none. **⋯** holds,
 in order: **Don't ask before acting** (the computer's permission bypass, for
 the team's owner and admins; a computer belongs to its team, so it has no Share
