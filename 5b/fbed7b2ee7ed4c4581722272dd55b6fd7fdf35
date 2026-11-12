@@ -1,0 +1,48 @@
+tooling/xtask/crates/xtask_local/src/local/stack.rs
+  s_8bdfeaf42f53a1::t_d42e683847dc5b 26,218,220,226-232,262,291-299
+  s_8bdfeaf42f53a1::t_129dbdf0c14beb 233-238
+tooling/xtask/crates/xtask_local/src/local/telemetry.rs
+  s_8bdfeaf42f53a1::t_c92244a3f5468b 13
+  s_8bdfeaf42f53a1::t_a7f2e32a2152e7 1-4,7-10,22,25,59-64,74-76,90-92,101-102,118-119,124-126,128,133-140,145,162,175,179-203,257-259,412-416,433-441,619
+tooling/xtask/crates/xtask_local/src/local.rs
+  s_8bdfeaf42f53a1::t_d42e683847dc5b 1726-1731,1733-1747
+  s_8bdfeaf42f53a1::t_4675be3540b8fb 254
+  s_8bdfeaf42f53a1::t_25b5de5cf1472a 1732
+tooling/xtask/crates/xtask_local/src/local/supervisor.rs
+  s_8bdfeaf42f53a1::t_129dbdf0c14beb 250-255
+  s_8bdfeaf42f53a1::t_a7f2e32a2152e7 229
+tooling/xtask/crates/xtask_local/src/local/telemetry/test.rs
+  s_8bdfeaf42f53a1::t_1401090ef971e1 21,67
+  s_8bdfeaf42f53a1::t_c92244a3f5468b 72
+  s_8bdfeaf42f53a1::t_129dbdf0c14beb 41-47
+  s_8bdfeaf42f53a1::t_dd763ae00f3417 90-129
+  s_8bdfeaf42f53a1::t_ac9559e52ce25f 130-131
+tooling/xtask/crates/xtask_local/src/local/stage.rs
+  s_8bdfeaf42f53a1::t_4675be3540b8fb 23-24,117-119,136,146-161,192,362-372,375,378,431-432
+tooling/xtask/crates/xtask_local/Cargo.toml
+  s_291e5bb5901a50::t_366c8e43450a13 54
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "5bfbed7b2ee7ed4c4581722272dd55b6fd7fdf35",
+  "prompts": {},
+  "sessions": {
+    "s_291e5bb5901a50": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "099d1068-e380-41fc-96f2-2667531971e2",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_8bdfeaf42f53a1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8775cf08-de9f-420f-b28f-f92dd60e8239",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
