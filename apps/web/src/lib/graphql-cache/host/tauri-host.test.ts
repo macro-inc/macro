@@ -1558,6 +1558,130 @@ describe('createTauriCacheHost', () => {
     }
   });
 
+  describe('channel timelines', () => {
+    const pageArgs = { channelId: 'c1', limit: 50 };
+    const page = {
+      kind: 'page',
+      revision: '4',
+      covered: true,
+      keys: ['GraphqlChannelMessage:m1'],
+      olderCursor: null,
+      newerCursor: null,
+      seq: '7',
+      optimistic: false,
+    };
+    const write = {
+      revision: '5',
+      revisionAdvanced: true,
+      changed: ['GraphqlChannelMessage:m1'],
+      affectedOps: [],
+      reset: false,
+    };
+
+    it('reads pages, commits, evicts and counts through native commands', async () => {
+      invokeMock.mockImplementation(async (command: string) => {
+        if (command === 'graphql_cache_channel_timeline') return page;
+        if (command === 'graphql_cache_channel_timeline_commit')
+          return { ...write, channelSeq: '8' };
+        if (command === 'graphql_cache_channel_timeline_evict')
+          return { ...write, channelIds: ['c1'], hasMore: false };
+        if (command === 'graphql_cache_channel_timeline_stats')
+          return { channels: 2, entries: 90 };
+        return null;
+      });
+      const host = createTauriCacheHost({ scope: 'channel-native' });
+      try {
+        await expect(host.channelTimeline(pageArgs)).resolves.toEqual(page);
+        expect(invokeMock).toHaveBeenLastCalledWith(
+          'graphql_cache_channel_timeline',
+          { request: pageArgs }
+        );
+        const commit = {
+          channelId: 'c1',
+          seq: { kind: 'advance' as const, from: '7', to: '8' },
+        };
+        await expect(host.channelTimelineCommit(commit)).resolves.toEqual({
+          kind: 'committed',
+          revision: '5',
+          changed: ['GraphqlChannelMessage:m1'],
+          channelSeq: '8',
+        });
+        expect(invokeMock).toHaveBeenLastCalledWith(
+          'graphql_cache_channel_timeline_commit',
+          { commit }
+        );
+        const eviction = { touchedBeforeMs: 10, maxChannels: 5 };
+        await expect(host.channelTimelineEvict(eviction)).resolves.toEqual({
+          kind: 'evicted',
+          revision: '5',
+          changed: ['GraphqlChannelMessage:m1'],
+          channelIds: ['c1'],
+          hasMore: false,
+        });
+        expect(invokeMock).toHaveBeenLastCalledWith(
+          'graphql_cache_channel_timeline_evict',
+          { eviction }
+        );
+        await expect(host.channelTimelineStats()).resolves.toEqual({
+          kind: 'stats',
+          channels: 2,
+          entries: 90,
+        });
+      } finally {
+        host.dispose();
+      }
+    });
+
+    it('reports old native binaries as unsupported and stops probing them', async () => {
+      invokeMock.mockImplementation(async (command: string) => {
+        if (command === 'graphql_cache_channel_timeline')
+          throw 'Command graphql_cache_channel_timeline not found';
+        return null;
+      });
+      const host = createTauriCacheHost({ scope: 'old-native-channel' });
+      try {
+        const unsupported = { kind: 'unsupported' };
+        await expect(host.channelTimeline(pageArgs)).resolves.toEqual(
+          unsupported
+        );
+        await expect(
+          host.channelTimelineCommit({ channelId: 'c1', reset: true })
+        ).resolves.toEqual(unsupported);
+        await expect(
+          host.channelTimelineEvict({ touchedBeforeMs: 1, maxChannels: 1 })
+        ).resolves.toEqual(unsupported);
+        await expect(host.channelTimelineStats()).resolves.toEqual(unsupported);
+        expect(
+          invokeMock.mock.calls.filter(([command]) =>
+            String(command).startsWith('graphql_cache_channel_')
+          )
+        ).toHaveLength(1);
+      } finally {
+        host.dispose();
+      }
+    });
+
+    it('does not mistake other channel failures for a missing command', async () => {
+      invokeMock.mockImplementation(async (command: string) => {
+        if (command === 'graphql_cache_channel_timeline')
+          throw 'channel timeline window is malformed';
+        return null;
+      });
+      const host = createTauriCacheHost({ scope: 'channel-error' });
+      try {
+        await expect(host.channelTimeline(pageArgs)).rejects.toThrow(
+          'channel timeline window is malformed'
+        );
+        invokeMock.mockImplementation(async (command: string) =>
+          command === 'graphql_cache_channel_timeline' ? page : null
+        );
+        await expect(host.channelTimeline(pageArgs)).resolves.toEqual(page);
+      } finally {
+        host.dispose();
+      }
+    });
+  });
+
   describe('calendar ranges', () => {
     const rangeArgs = { startMs: 0, endMs: 10, startDay: 0, endDay: 1 };
     const range = {

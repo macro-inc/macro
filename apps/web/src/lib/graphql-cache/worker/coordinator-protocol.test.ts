@@ -357,6 +357,68 @@ describe('coordinator runtime protocol', () => {
     ).toBe(false);
   });
 
+  it('validates channel timeline page, commit, evict and stats requests', () => {
+    const page = { channelId: 'c1', limit: 50 };
+    const pageRequest = (request: unknown) =>
+      isCacheRequest({ id: 1, kind: 'channel-timeline', request });
+    expect(pageRequest(page)).toBe(true);
+    expect(pageRequest({ ...page, threadRootId: 'm1', before: 'k1' })).toBe(
+      true
+    );
+    expect(pageRequest({ ...page, around: 'GraphqlChannelMessage:m1' })).toBe(
+      true
+    );
+    expect(pageRequest({ ...page, limit: 0 })).toBe(false);
+    expect(pageRequest({ ...page, limit: 101 })).toBe(false);
+    expect(pageRequest({ ...page, before: 'k1', after: 'k2' })).toBe(false);
+    expect(pageRequest({ ...page, before: 'has space' })).toBe(false);
+    expect(pageRequest({ ...page, around: 'm1' })).toBe(false);
+    expect(pageRequest({ ...page, channelId: '' })).toBe(false);
+    expect(pageRequest({ ...page, extra: true })).toBe(false);
+
+    const commitRequest = (commit: unknown) =>
+      isCacheRequest({ id: 1, kind: 'channel-timeline-commit', commit });
+    expect(commitRequest({ channelId: 'c1' })).toBe(true);
+    expect(
+      commitRequest({
+        channelId: 'c1',
+        coverage: [
+          { start: '', end: '\u{10FFFF}' },
+          { threadRootId: 'm1', start: 'k1', end: 'k2' },
+        ],
+        removedKeys: ['GraphqlChannelMessage:m2'],
+        droppedThreadRootIds: ['m3'],
+        seq: { kind: 'advance', from: '4', to: '5' },
+        touchedAtMs: 10,
+        reset: true,
+      })
+    ).toBe(true);
+    expect(commitRequest({})).toBe(false);
+    expect(
+      commitRequest({ channelId: 'c1', seq: { kind: 'lower', seq: '-1' } })
+    ).toBe(false);
+    expect(
+      commitRequest({ channelId: 'c1', seq: { kind: 'advance', from: '1' } })
+    ).toBe(false);
+    expect(
+      commitRequest({ channelId: 'c1', coverage: [{ start: 'a b', end: 'c' }] })
+    ).toBe(false);
+    expect(commitRequest({ channelId: 'c1', removedKeys: ['m2'] })).toBe(false);
+
+    const evictRequest = (eviction: unknown) =>
+      isCacheRequest({ id: 1, kind: 'channel-timeline-evict', eviction });
+    expect(evictRequest({ touchedBeforeMs: 1, maxChannels: 200 })).toBe(true);
+    expect(evictRequest({ touchedBeforeMs: 1, maxChannels: 201 })).toBe(false);
+    expect(evictRequest({ touchedBeforeMs: 1.5, maxChannels: 1 })).toBe(false);
+
+    expect(isCacheRequest({ id: 1, kind: 'channel-timeline-stats' })).toBe(
+      true
+    );
+    expect(
+      isCacheRequest({ id: 1, kind: 'channel-timeline-stats', extra: 1 })
+    ).toBe(false);
+  });
+
   it('validates calendar range, commit, and uncertain-event requests', () => {
     const range = { startMs: 0, endMs: 10, startDay: 0, endDay: 1 };
     const rangeRequest = (request: unknown) =>

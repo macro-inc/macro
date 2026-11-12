@@ -65,6 +65,13 @@ export const entityResolverSchema = {
       targets: ['GraphqlSoupAgentSession'],
       argumentPaths: [['sessionId']],
     },
+    channelMessage: {
+      targets: ['GraphqlChannelMessage'],
+      argumentPaths: [
+        ['channelId'],
+        ['messageId'],
+      ],
+    },
     emailThread: {
       targets: ['GraphqlSoupEmailThread'],
       argumentPaths: [['input', 'threadId']],
@@ -104,6 +111,7 @@ export const entityResolverSchema = {
 export type GeneratedEntityResolverSchema = typeof entityResolverSchema;
 export type GeneratedEntityResolverTarget =
   | 'GraphqlChannelActivity'
+  | 'GraphqlChannelMessage'
   | 'GraphqlProperty'
   | 'GraphqlSavedView'
   | 'GraphqlSoupAgentSession'
@@ -123,6 +131,7 @@ export type GeneratedEntityResolverTarget =
   | 'GraphqlSoupProject'
   | 'GraphqlSoupReminder';
 export type GeneratedEntityResolverArgumentPath =
+  | readonly ['channelId']
   | readonly ['id']
   | readonly ['initiativeId']
   | readonly ['input', 'channelId']
@@ -136,4 +145,5 @@ export type GeneratedEntityResolverArgumentPath =
   | readonly ['input', 'threadId']
   | readonly ['input', 'value', 'entityReference', 'specificMessageId']
   | readonly ['input', 'value', 'selectOption']
+  | readonly ['messageId']
   | readonly ['sessionId'];

@@ -349,6 +349,18 @@ function makeFakeHost(): FakeHost {
     async calendarCommit() {
       return { kind: 'unsupported' };
     },
+    async channelTimeline() {
+      return { kind: 'unsupported' };
+    },
+    async channelTimelineCommit() {
+      return { kind: 'unsupported' };
+    },
+    async channelTimelineEvict() {
+      return { kind: 'unsupported' };
+    },
+    async channelTimelineStats() {
+      return { kind: 'unsupported' };
+    },
     async writeQuery(args): Promise<WriteResult> {
       host.writes.push({
         opKey: args.opKey,

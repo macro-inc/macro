@@ -11,6 +11,8 @@ export function isReadOnlyCacheRequest(kind: CacheRequest['kind']): boolean {
     kind === 'people-references' ||
     kind === 'entity-filter' ||
     kind === 'calendar-range' ||
+    kind === 'channel-timeline' ||
+    kind === 'channel-timeline-stats' ||
     kind === 'people-context' ||
     kind === 'people-search' ||
     kind === 'inspect-mutations' ||
