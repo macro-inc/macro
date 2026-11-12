@@ -5,6 +5,7 @@ import type { MentionItem } from '../../../utils/mentionsUtils';
 
 export type MentionBucketId =
   | 'all'
+  | 'agents'
   | 'users'
   | 'documents'
   | 'externalChats'

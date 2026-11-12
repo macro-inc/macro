@@ -1,4 +1,5 @@
 import type { InputAttachmentData } from '@channel/Input/types';
+import type { AgentMentionItem } from '@core/component/LexicalMarkdown/utils/mentionsUtils';
 import { CURSOR_BOT_ID } from '@core/constant/cursorAgent';
 import { MACRO_CODER_BOT_ID } from '@core/constant/macroCoder';
 import {
@@ -9,7 +10,7 @@ import {
   waitFor,
   within,
 } from '@solidjs/testing-library';
-import { createRoot, createSignal, type JSX } from 'solid-js';
+import { createRoot, createSignal, For, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ComposerMode } from '../core/mode';
 import {
@@ -208,6 +209,8 @@ type ComposerProps = {
   attachments: InputAttachmentData[];
   onDraftChange: (draft: string) => void;
   onSend: (prompt: string, attachments: InputAttachmentData[]) => void;
+  agentMentions: AgentMentionItem[];
+  onMentionAgent: (agentId: string) => void;
 };
 vi.mock('../components/ChatComposer', () => ({
   ChatComposer: (props: ComposerProps) => (
@@ -235,6 +238,13 @@ vi.mock('../components/ChatComposer', () => ({
       >
         Send
       </button>
+      <For each={props.agentMentions}>
+        {(agent) => (
+          <button onClick={() => props.onMentionAgent(agent.id)}>
+            Mention {agent.data.name}
+          </button>
+        )}
+      </For>
     </>
   ),
 }));
@@ -550,6 +560,58 @@ describe('agent-led new conversation', () => {
       modelOverride: 'chat-default',
     });
   });
+  it('sets the mentioned agent as active across modes and starts it', () => {
+    startInChat = false;
+    const send = page();
+    expect(screen.getByRole('radio', { name: 'Auto' })).toHaveProperty(
+      'checked',
+      true
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mention Cursor' }));
+    expect(screen.getByRole('radio', { name: 'Code' })).toHaveProperty(
+      'checked',
+      true
+    );
+    expect(screen.getByRole('button', { name: 'Agent' }).textContent).toContain(
+      'Cursor default'
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenLastCalledWith(
+      expect.objectContaining({ botId: CURSOR_BOT_ID, prompt: 'Prompt' })
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mention Macro' }));
+    expect(screen.getByRole('radio', { name: 'Chat' })).toHaveProperty(
+      'checked',
+      true
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenLastCalledWith(
+      expect.objectContaining({ botId: undefined, prompt: 'Prompt' })
+    );
+  });
+
+  it('offers a disconnected paired agent as offline but not one that needs setup', () => {
+    page(
+      false,
+      [
+        {
+          bot: { id: 'dev-box', name: 'Dev box', handle: 'dev-box' },
+          harness: 'macrod',
+          harness_id: 'runtime-1',
+          default_model: 'model',
+        },
+      ],
+      false,
+      [{ id: 'runtime-1', name: 'Dev box', connected: false }]
+    );
+    expect(
+      screen.getByRole('button', { name: 'Mention Dev box' })
+    ).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Mention Cursor' })).toBeNull();
+  });
+
   it('flags a send before the model catalog loads as a model fallback', () => {
     mocks.modelsPending = true;
     const send = page();

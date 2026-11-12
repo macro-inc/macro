@@ -41,14 +41,18 @@ import {
   effortLabel,
 } from '../../block-agent/state/session-config';
 import { ChatComposer } from '../components/ChatComposer';
-import { type AgentKind, kindForMode } from '../core/agent-kind';
+import { type AgentKind, kindForMode, modeForKind } from '../core/agent-kind';
 import {
   type AgentsMode,
   agentsModeLabel,
   type ComposerMode,
 } from '../core/mode';
 import { defaultBranchFor, sameRepository } from '../core/repository';
-import { MACRO_PERSONA_ID, type RosterAgent } from '../core/roster';
+import {
+  MACRO_PERSONA_ID,
+  type RosterAgent,
+  rosterAgentMentions,
+} from '../core/roster';
 import {
   createPersistedComposerDraft,
   NEW_CONVERSATION_ATTACHMENTS_KEY,
@@ -472,6 +476,15 @@ export function NewChatPage(props: {
     else ownMode.setMode(next);
   };
 
+  /** An `@` pick reaches every agent: its kind decides Chat or Code, even from Auto. */
+  const mentionAgent = (agentId: string) => {
+    const agent = props.roster.find((option) => option.id === agentId);
+    if (!agent) return;
+    const agentMode = modeForKind(agent.kind);
+    if (mode() !== agentMode) setMode(agentMode);
+    selectAgent(agent);
+  };
+
   const modeSwitch = () => (
     <div ref={tourTarget(AGENTS_TOUR.modeSwitch)} class="shrink-0">
       <Tabs
@@ -533,6 +546,8 @@ export function NewChatPage(props: {
       draft={draft()}
       onDraftChange={setDraft}
       blockedReason={blocked()}
+      agentMentions={rosterAgentMentions(props.roster)}
+      onMentionAgent={mentionAgent}
       selector={
         // Auto picks the agent per prompt, so it has no agent, model, or effort to choose.
         <div class="flex min-w-0 items-center gap-1" hidden={auto()}>

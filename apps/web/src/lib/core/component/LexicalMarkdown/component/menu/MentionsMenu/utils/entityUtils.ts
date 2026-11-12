@@ -45,6 +45,8 @@ export function getMentionItemName(item: MentionItem): string {
       if (name === email) return email;
       return `${name} ${email}`;
     }
+    case 'agent':
+      return item.data.name;
     case 'group':
       return `@${item.data.groupAlias}`;
     case 'date':

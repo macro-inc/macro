@@ -59,6 +59,7 @@ import { floatWithSelection } from '../../../directive/floatWithSelection';
 import { CLOSE_INLINE_SEARCH_COMMAND } from '../../../plugins';
 import type { MenuOperations } from '../../../shared/inlineMenu';
 import type {
+  AgentMentionItem,
   AgentSessionMentionItem,
   DateMentionItem,
   ExternalChatMentionItem,
@@ -105,6 +106,9 @@ type MentionsMenuProps = {
   /** Undefined delegates to personal search; an empty list stays scoped empty. */
   users?: Accessor<IUser[] | undefined>;
   transformUsers?: (users: readonly IUser[]) => IUser[];
+  /** agents the host can switch to; picking one calls `onAgentMention` */
+  agents?: Accessor<AgentMentionItem[]>;
+  onAgentMention?: (agentId: string) => void;
   /** pass in custom entity items to replace quickAccess data (e.g. sandbox data for onboarding) */
   entities?: Accessor<EntityItem[]>;
   /** whether the menu checks against block boundary in floating middleware. uses floating-ui default if false. */
@@ -429,6 +433,11 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     (usersAndGroups() ?? []).filter(
       (item) => props.includeGroups !== false || item.kind !== 'group'
     );
+  const agents = createLazyMemo(() =>
+    sourceEnabled('agents')
+      ? rankMentions(props.agents?.() ?? [], searchTerm())
+      : []
+  );
   const peopleWindowKey = () => {
     if (userMention.isLoading()) return;
     return userMention.windowKey();
@@ -448,7 +457,10 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       ...(sourceEnabled('calendarEvents') ? calendarEvents() : []),
       ...(sourceEnabled('dates') ? (dates() ?? []) : []),
     ];
-    return sortMobileMentions(combined, searchTerm(), users, true);
+    return [
+      ...agents(),
+      ...sortMobileMentions(combined, searchTerm(), users, true),
+    ];
   });
 
   const bucketConfigs = createLazyMemo((): BucketConfig[] => {
@@ -464,6 +476,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
           windowKey: peopleWindowKey,
           getData: mobileAllItems,
           getFullCount: () =>
+            agents().length +
             (sourceEnabled('bookingLinks') ? bookingLinks().length : 0) +
             (sourceEnabled('users') ? mentionUsers().length : 0) +
             (sourceEnabled('documents') ? docsMention.totalCount() : 0) +
@@ -597,6 +610,13 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       });
     }
 
+    buckets.unshift({
+      id: 'agents',
+      label: 'Agents',
+      getData: agents,
+      getFullCount: () => agents().length,
+    });
+
     const sourcesFilter = props.sources;
     const filtered = sourcesFilter
       ? buckets.filter((bucket) => sourcesFilter.includes(bucket.id))
@@ -645,6 +665,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
         onUserMention: props.onUserMention,
         onDocumentMention: props.onDocumentMention,
         onEmailMention: props.onEmailMention,
+        onAgentMention: props.onAgentMention,
         disableMentionTracking: props.disableMentionTracking,
       })
     : undefined;
@@ -656,7 +677,8 @@ function MentionsMenuInner(props: MentionsMenuProps) {
    * entry so this menu needs no view of runtimes.
    */
   const isOffline = (item: MentionItem) =>
-    item.kind === 'user' && item.data.offline === true;
+    (item.kind === 'user' || item.kind === 'agent') &&
+    item.data.offline === true;
 
   const itemAction = async (item: MentionItem) => {
     if (isOffline(item)) return;

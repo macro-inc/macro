@@ -145,6 +145,7 @@ export type HandlerDependencies = {
   onDocumentMention?: (item: Item | ChannelWithParticipants) => void;
   disableMentionTracking?: boolean;
   onEmailMention?: (item: EmailEntity) => void;
+  onAgentMention?: (agentId: string) => void;
 };
 
 /**
@@ -433,8 +434,21 @@ export type RoutineMentionItem = {
   data: { id: string; name: string };
 };
 
+/**
+ * An agent the composer can start. Picking it selects the agent and inserts
+ * nothing. `id` is the host's identity for it; `data.id` is its bot principal,
+ * which draws its avatar.
+ */
+export type AgentMentionItem = {
+  kind: 'agent';
+  id: string;
+  searchText: string;
+  data: Pick<IUser, 'id' | 'name' | 'photoUrl' | 'offline'>;
+};
+
 export type MentionItem =
   | QuickAccessItem
+  | AgentMentionItem
   | DateMentionItem
   | GroupMentionItem
   | AgentSessionMentionItem

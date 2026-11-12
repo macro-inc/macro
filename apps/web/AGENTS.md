@@ -361,6 +361,11 @@ It runs the real queries and service client over a scripted network. The warning
 opens under an owner from inside the sheet; one captured outside it closes the
 menu on the first tap.
 
+Picking an agent from `@` in the New conversation composer selects it, follows
+its mode, and leaves no mention in the draft; an offline agent cannot be picked.
+The backend-free desktop/phone regression mounts the real `NewChatPage`:
+`bunx playwright test --config src/features/agents-view/browser-test/playwright.config.ts`.
+
 Composer `/` menus list Connections between Skills and Pull requests. Keep native
 and hosted providers aligned with `mcp_select::select_connections`, prefer native
 credentials per provider, and preserve editor focus on pointer and touch selection.

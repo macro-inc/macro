@@ -61,7 +61,8 @@ function getMentionName(item: MentionItem): string {
 
 /** Entity and user search text can add emails or aliases after the name. */
 function getMentionDisplayName(item: MentionItem): string {
-  if (item.kind === 'entity' || item.kind === 'user') return item.data.name;
+  if (item.kind === 'entity' || item.kind === 'user' || item.kind === 'agent')
+    return item.data.name;
   return getMentionName(item);
 }
 
