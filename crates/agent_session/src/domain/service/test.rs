@@ -755,6 +755,10 @@ impl AgentSessionRepo for BlockingPromptLogs {
         self.repo.get(id).await
     }
 
+    async fn has_unfinished_turn(&self, id: AgentSessionId) -> Result<bool> {
+        self.repo.has_unfinished_turn(id).await
+    }
+
     async fn billing(&self, id: AgentSessionId) -> Result<crate::domain::model::SessionBilling> {
         self.repo.billing(id).await
     }

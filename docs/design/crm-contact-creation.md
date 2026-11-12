@@ -52,6 +52,14 @@ insert trigger that fills it for writers on the previous code during a rolling
 deploy), makes `crm_contacts.email` and `company_id` nullable, and adds
 `team_crm_settings.exclude_personal_emails` and `crm_blocked_domains`.
 
+A later delivery adds `crm_contact_emails`, one row per address a contact is
+known by, with `crm_contacts.email` kept as the primary. A trigger records the
+primary there, so writers from before the table keep it complete during a
+rolling deploy, and a backfill covers existing contacts. Address lookups (personal
+sync and teardown, email scope prechecks, thread access, call linking, lookup
+by email) read that table; the team-wide activity scope still reads the primary. Until an API adds further addresses
+the table mirrors the primary and behavior is unchanged.
+
 Deploy nullable-aware readers to every consuming service before enabling
 nullable writes; use a reader-only compatibility release before deploying the
 new writers. The insert trigger supports old writers against the expanded

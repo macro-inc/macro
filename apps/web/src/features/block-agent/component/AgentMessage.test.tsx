@@ -115,14 +115,22 @@ vi.mock('../ui', () => ({
     </div>
   ),
 }));
+const programSteps = vi.hoisted((): Record<string, number> => ({}));
+vi.mock('../views/code-execution-record', () => ({
+  useCodeExecutionRecord: (part: () => { id: string }) => ({
+    steps: () => programSteps[part().id] ?? 0,
+  }),
+}));
 vi.mock('../views/LiveToolGroup', () => ({
   LiveToolGroup: (props: {
     count: number;
     active: boolean;
     activeIndex?: number;
+    autoOpen?: boolean;
     children: JSX.Element;
   }) => (
     <div
+      data-auto-open={String(props.autoOpen ?? true)}
       data-active={String(props.active)}
       data-count={props.count}
       data-active-index={props.activeIndex}
@@ -537,6 +545,74 @@ describe('Message tool grouping', () => {
       'true',
       'true',
     ]);
+  });
+});
+
+describe('Message tool runs', () => {
+  const program = (id: string): MessagePart =>
+    tool(id, {
+      name: { kind: 'mcp', server: 'macro_internal', tool: 'ExecuteCode' },
+    });
+  const lookup = (id: string, name: string): MessagePart =>
+    tool(id, { name: { kind: 'mcp', server: 'macro_internal', tool: name } });
+
+  it('counts one group per segment: shown calls and program steps, never lookups or programs', () => {
+    programSteps.first = 5;
+    programSteps.second = 2;
+    const view = render(() => (
+      <Message
+        message={message(
+          [
+            lookup('search', 'SearchTools'),
+            lookup('load', 'LoadTools'),
+            program('first'),
+            tool('read'),
+            program('second'),
+          ],
+          null
+        )}
+        inFlight={false}
+      />
+    ));
+    expect(view.getAllByTestId('group')).toHaveLength(1);
+    expect(view.getByTestId('group').dataset.count).toBe('8');
+    expect(view.getAllByTestId('tool').map((row) => row.textContent)).toEqual([
+      'first',
+      'read',
+      'second',
+    ]);
+  });
+
+  it('keeps a run with programs from opening on its own', () => {
+    programSteps.only = 3;
+    const view = render(() => (
+      <Message message={message([program('only')], null)} inFlight />
+    ));
+    expect(view.getByTestId('group').dataset.autoOpen).toBe('false');
+  });
+
+  it('follows the running call among the rows shown, past hidden lookups', () => {
+    const view = render(() => (
+      <Message
+        message={message(
+          [
+            lookup('search', 'SearchTools'),
+            tool('a'),
+            tool('b', { status: 'running' }),
+          ],
+          null
+        )}
+        inFlight
+      />
+    ));
+    expect(view.getByTestId('group').dataset.activeIndex).toBe('1');
+  });
+
+  it('lets a run of ordinary calls open as before', () => {
+    const view = render(() => (
+      <Message message={message([tool('a'), tool('b')], null)} inFlight />
+    ));
+    expect(view.getByTestId('group').dataset.autoOpen).toBe('true');
   });
 });
 

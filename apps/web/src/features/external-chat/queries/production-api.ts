@@ -287,7 +287,7 @@ export const externalChatApi: ExternalChatApi = {
         replyTo: message.replyTo ?? undefined,
         reactions: message.reactions.map((reaction) => ({
           emoji: reaction.emoji,
-          count: reaction.count,
+          reactors: reaction.reactors.map(person),
           mine: reaction.mine,
         })),
         attachments: message.attachments.map((attachment) => ({

@@ -72,7 +72,8 @@ from this import's other databases into it are not linked.
 - `src/domain/service/notion_workspace.rs` (+ `plan`, `triage`, `sharing`,
   `object`, `write`, `values`, `report`): the Notion workspace import —
   planning, the decision model, who sees what, writing one object (claim,
-  link or write), cancel and the report.
+  link or write), cancel and the report. Database columns and cells come
+  from `import_notion::domain::macro_cells`.
 - `src/inbound/toolset.rs`: the AI-chat-facing import tools
   (`toolset/import_from_notion.rs` is the workspace import tool).
 - `src/inbound/axum_router.rs`: the `/import/*` routes (state, accept/decline,

@@ -695,6 +695,9 @@ pub enum CreateTeamError {
     /// The team name is invalid
     #[error("The team name is invalid: {0}")]
     InvalidTeamName(String),
+    /// The user is already on a team; a user can be on at most one.
+    #[error("the user is already on a team")]
+    AlreadyOnTeam,
     /// Storage layer error
     #[error("Storage layer error {0}")]
     StorageLayerError(#[from] anyhow::Error),

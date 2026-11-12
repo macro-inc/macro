@@ -210,12 +210,20 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
   /** Access requests and direct user grants. */
   readonly access = new EntityAccess(this.client, 'agent_session', this);
 
-  /** Construct an approval handle scoped to this session. */
+  /**
+   * Construct an approval handle scoped to this session.
+   *
+   * @readonly
+   */
   toolApprovalById(id: string): ToolApproval {
     return ToolApproval.byId(this.client, this, id);
   }
 
-  /** Sharing configuration. */
+  /**
+   * Sharing configuration.
+   *
+   * @readonly
+   */
   async sharePermissions() {
     return unwrap(
       await this.client.agentHarness.getAgentSessionPermissions({
@@ -224,7 +232,12 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     );
   }
 
-  /** Replace sharing grants. */
+  /**
+   * Replace sharing grants.
+   *
+   * @write
+   * @idempotent
+   */
   async updateSharePermissions(options: SharePermissionOptions) {
     return this.mutate((c) =>
       c.agentHarness.updateAgentSessionPermissions({
@@ -234,7 +247,11 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     );
   }
 
-  /** The session's URL in the Macro web app; hand it to users as the link. */
+  /**
+   * The session's URL in the Macro web app; hand it to users as the link.
+   *
+   * @readonly
+   */
   webUrl(): string {
     return `${this.client.webAppUrl}/app/agent/${this.id}`;
   }
@@ -342,6 +359,8 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
   /**
    * What opened the session: who or what started it, and what it is about.
    * Readable by anyone who can view the session, including other agents.
+   *
+   * @readonly
    */
   async origin(): Promise<SessionOrigin> {
     const detail = await this.detail.get();
@@ -436,6 +455,8 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
    * oldest first. Answer each with {@link ToolApproval.answer}; only the
    * owner may approve or decline. Permission requests and questions from the
    * agent itself are answered with {@link control}.
+   *
+   * @readonly
    */
   async pendingApprovals(): Promise<PendingToolApproval[]> {
     const { messages } = await this.foldedLog();
@@ -462,6 +483,8 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
    * Link this session to the task it works on, replacing any earlier link.
    * Only the session's owner can link it, to a task they can view. The
    * session's pull request, now or later, is linked to the task too.
+   *
+   * @write
    */
   async linkTask(task: Task): Promise<LinkedTask> {
     const linked = unwrap(
@@ -480,6 +503,8 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
   /**
    * The GitHub pull requests linked to this session: the one its agent
    * opened and any a person linked, oldest first.
+   *
+   * @readonly
    */
   async pullRequests(): Promise<SessionPullRequest[]> {
     const { pullRequests } = unwrap(
@@ -501,6 +526,9 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
   /**
    * Link the GitHub pull request at `url` to this session. Linking one that
    * is already linked changes nothing.
+   *
+   * @write
+   * @idempotent
    */
   async linkPullRequest(url: string): Promise<void> {
     unwrap(
@@ -514,6 +542,9 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
   /**
    * Unlink a GitHub pull request a person linked to this session. The pull
    * request the session's agent opened stays linked.
+   *
+   * @write
+   * @idempotent
    */
   async unlinkPullRequest(url: string): Promise<void> {
     unwrap(
@@ -524,7 +555,11 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     );
   }
 
-  /** This session's auto-archive settings, and when a trigger archived it. */
+  /**
+   * This session's auto-archive settings, and when a trigger archived it.
+   *
+   * @readonly
+   */
   async autoArchive(): Promise<SessionAutoArchive> {
     const { overrides, defaults, autoArchivedAt } = unwrap(
       await this.client.agentHarness.getAgentSessionAutoArchive({
@@ -544,6 +579,9 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
   /**
    * Replace this session's auto-archive choices. Owner only; a trigger left
    * `undefined` follows the owner's default.
+   *
+   * @write
+   * @idempotent
    */
   async setAutoArchive(overrides: AutoArchiveOverrides): Promise<void> {
     unwrap(
@@ -557,7 +595,12 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     );
   }
 
-  /** Rename this session. */
+  /**
+   * Rename this session.
+   *
+   * @write
+   * @idempotent
+   */
   async rename(name: string): Promise<void> {
     await this.mutate((client) =>
       client.agentHarness.renameAgentSession({
@@ -577,6 +620,9 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
    * The registration ends on its own when the session's pull requests finish,
    * when it is archived, after a day without work, or after a week blocked on
    * input. A later turn does not register it again.
+   *
+   * @write
+   * @idempotent
    */
   async registerAsWork(): Promise<RegisteredWork> {
     return AgentSession.registeredWork(
@@ -592,6 +638,9 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
   /**
    * End the caller's registration of this session as its work. Doing it again
    * changes nothing. The session itself is untouched.
+   *
+   * @write
+   * @idempotent
    */
   async unregisterAsWork(): Promise<void> {
     unwrap(
@@ -624,12 +673,22 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     };
   }
 
-  /** Archive this session, making it read-only until unarchived. */
+  /**
+   * Archive this session, making it read-only until unarchived.
+   *
+   * @write
+   * @idempotent
+   */
   async archive(): Promise<void> {
     await this.setArchived(true);
   }
 
-  /** Restore an archived session so it can be edited and prompted again. */
+  /**
+   * Restore an archived session so it can be edited and prompted again.
+   *
+   * @write
+   * @idempotent
+   */
   async unarchive(): Promise<void> {
     await this.setArchived(false);
   }
@@ -643,7 +702,12 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     );
   }
 
-  /** Resize this session's sandbox and remember the size as the owner's default. */
+  /**
+   * Resize this session's sandbox and remember the size as the owner's default.
+   *
+   * @write
+   * @idempotent
+   */
   async setSandboxSize(size: SandboxSize): Promise<SandboxSize> {
     const { size: next } = await this.mutate((client) =>
       client.agentHarness.putAgentSessionSandboxSize({
@@ -716,6 +780,9 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
    * action derives once it dispatches. A `queued` status means a turn was
    * running: the action waits in the session's queue ({@link queue}) and
    * dispatches when that turn ends.
+   *
+   * @destructive
+   * @openworld
    */
   async control(action: AgentAction): Promise<ControlResponse> {
     return this.mutate((client) =>
@@ -732,6 +799,9 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
    * `attachments` are files the prompt refers to, each by a URL the agent
    * can fetch (a static file service URL in practice); they reach the agent
    * as ACP `resource_link` blocks after the text.
+   *
+   * @destructive
+   * @openworld
    */
   prompt(
     text: string,
@@ -747,6 +817,8 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
   /**
    * The actions waiting to dispatch in this session, oldest first. Each can
    * be edited or removed until it dispatches.
+   *
+   * @readonly
    */
   async queue(): Promise<QueuedAction[]> {
     const { entries } = unwrap(
@@ -759,7 +831,11 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     );
   }
 
-  /** Read the latest captured GitHub pull request changes and capture status. */
+  /**
+   * Read the latest captured GitHub pull request changes and capture status.
+   *
+   * @readonly
+   */
   async changes(): Promise<AgentSessionChangesResponse> {
     return unwrap(
       await this.client.agentHarness.getAgentSessionChanges({
@@ -768,7 +844,11 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     );
   }
 
-  /** Read the unified diff of the latest captured changeset. */
+  /**
+   * Read the unified diff of the latest captured changeset.
+   *
+   * @readonly
+   */
   async changesPatch(): Promise<string> {
     return unwrap(
       await this.client.agentHarness.getAgentSessionChangesPatch({
@@ -777,7 +857,13 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     ).patch;
   }
 
-  /** Request a fresh capture and return the current state while it runs. */
+  /**
+   * Request a fresh capture and return the current state while it runs.
+   *
+   * @write
+   * @idempotent
+   * @openworld
+   */
   async refreshChanges(): Promise<AgentSessionChangesResponse> {
     return this.mutate((client) =>
       client.agentHarness.refreshAgentSessionChanges({
@@ -793,6 +879,8 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
    * session the caller can view, live or finished, so it is the way to read
    * what another agent session did. Prefer it to {@link log}, which returns
    * raw protocol frames.
+   *
+   * @readonly
    */
   async foldedLog(): Promise<FoldedAgentSessionLog> {
     const { bot, messages } = unwrap(
@@ -805,7 +893,11 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     return { bot, messages: messages as FoldedMessage[] };
   }
 
-  /** Read the complete raw protocol log for this session. */
+  /**
+   * Read the complete raw protocol log for this session.
+   *
+   * @readonly
+   */
   async log(): Promise<AgentSessionLogResponse> {
     return unwrap(
       await this.client.agentHarness.getAgentSessionLog({
@@ -832,7 +924,11 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
       CodeExecution.byId(this.client, this, id),
   };
 
-  /** Recorded activity caused by this session, lazily paginated newest first. */
+  /**
+   * Recorded activity caused by this session, lazily paginated newest first.
+   *
+   * @readonly
+   */
   activity(options: AgentActivityOptions = {}) {
     return sessionActivity(this.client, this, options);
   }
@@ -842,7 +938,12 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     byId: (id: string) => AgentInvocation.byId(this.client, this, id),
   };
 
-  /** Delete this session and any live resources it owns. */
+  /**
+   * Delete this session and any live resources it owns.
+   *
+   * @destructive
+   * @idempotent
+   */
   async delete(): Promise<void> {
     await this.mutate((client) =>
       client.agentHarness.deleteAgentSession({

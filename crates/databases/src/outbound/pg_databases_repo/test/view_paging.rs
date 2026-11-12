@@ -272,6 +272,7 @@ async fn formula_fixture(pool: &PgPool) -> (QueryTable, Vec<RowId>) {
             ],
             restored: vec![],
             derivation: Derivation::reading(&query_table, |_| true),
+            ids: Vec::new(),
         }],
     )
     .await;

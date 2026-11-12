@@ -20,6 +20,8 @@ use console::Style;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle, TermLike};
 
 use super::supervisor::Job;
+use super::telemetry::RunTelemetry;
+use super::{BringUp, Mode};
 
 #[cfg(test)]
 mod test;
@@ -112,6 +114,9 @@ pub struct Stage {
     /// Where steps are recorded, so another process can read what this one is
     /// doing and which step failed (see `supervisor`).
     job: Option<Arc<Job>>,
+    /// Where steps are recorded for local telemetry when there is no job (a
+    /// job records its own): `stack up`, `stack update`, `build-services`.
+    telemetry: Option<RunTelemetry>,
 }
 
 impl Stage {
@@ -128,6 +133,7 @@ impl Stage {
             quiet: false,
             timings: Arc::new(Mutex::new(Vec::new())),
             job: None,
+            telemetry: None,
         }
     }
 
@@ -135,6 +141,22 @@ impl Stage {
     pub fn with_job(mut self, job: Arc<Job>) -> Self {
         self.job = Some(job);
         self
+    }
+
+    /// Record every step of this stage, and of the stages derived from it, as
+    /// local telemetry. Only for stages without a job.
+    pub(super) fn with_telemetry(mut self, telemetry: Option<RunTelemetry>) -> Self {
+        self.telemetry = telemetry;
+        self
+    }
+
+    /// Tell whoever records this stage's steps the bring-up's shape.
+    pub(super) fn record_bring_up(&self, mode: Mode, plan: &BringUp) {
+        if let Some(job) = &self.job {
+            job.bring_up(mode, plan);
+        } else if let Some(telemetry) = &self.telemetry {
+            telemetry.bring_up(mode, plan);
+        }
     }
 
     /// Like [`Stage::from_env`], plus an explicit `--verbose` flag OR-ed with the
@@ -167,6 +189,7 @@ impl Stage {
             quiet: true,
             timings: Arc::clone(&self.timings),
             job: self.job.clone(),
+            telemetry: self.telemetry.clone(),
         }
     }
 
@@ -333,24 +356,26 @@ impl Stage {
         self.recording_job(label, || self.run_command(label, cmd))
     }
 
-    /// The job this stage records on, if any.
-    pub fn job(&self) -> Option<&Arc<Job>> {
-        self.job.as_ref()
-    }
-
     /// Run a step, telling the job it started, how long it took and whether it
     /// failed.
     fn recording_job(&self, label: &str, step: impl FnOnce() -> Result<()>) -> Result<()> {
-        let Some(job) = &self.job else {
+        if let Some(job) = &self.job {
+            job.step_started(label);
+            let start = Instant::now();
+            let result = step();
+            if result.is_err() {
+                job.step_failed(label);
+            }
+            job.step_finished(label, start.elapsed(), result.is_ok());
+            return result;
+        }
+        let Some(telemetry) = &self.telemetry else {
             return step();
         };
-        job.step_started(label);
+        telemetry.step_started(label);
         let start = Instant::now();
         let result = step();
-        if result.is_err() {
-            job.step_failed(label);
-        }
-        job.step_finished(label, start.elapsed(), result.is_ok());
+        telemetry.step_finished(label, start.elapsed(), result.is_ok());
         result
     }
 
@@ -403,6 +428,8 @@ impl Stage {
         captured.extend(err_handle.join().unwrap_or_default());
         if let Some(job) = &self.job {
             job.step_output(label, &captured);
+        } else if let Some(telemetry) = &self.telemetry {
+            telemetry.step_output(label, &captured);
         }
         if self.quiet {
             self.record(label, start.elapsed());

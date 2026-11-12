@@ -1,7 +1,9 @@
 /** Move the settled feature constellation into GitHub using native scroll only. */
 export function animateOpenSource(section: HTMLElement, scroller: HTMLElement) {
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
-  let sourceSection = scroller.querySelector('.homepage-unification');
+  let sourceSection = scroller.querySelector(
+    '.homepage-unification, .homepage-feature-links'
+  );
   const target = section.querySelector<HTMLElement>('.homepage-github-mark')!;
   const animations: {
     animation: Animation;
@@ -171,7 +173,9 @@ export function animateOpenSource(section: HTMLElement, scroller: HTMLElement) {
   const update = () => {
     // A live edit can replace the constellation without remounting this
     // section. Detached sources measure as zero-sized boxes at (0, 0).
-    const currentSource = scroller.querySelector('.homepage-unification');
+    const currentSource = scroller.querySelector(
+      '.homepage-unification, .homepage-feature-links'
+    );
     if (currentSource !== sourceSection) {
       if (sourceSection) resize.unobserve(sourceSection);
       sourceSection = currentSource;

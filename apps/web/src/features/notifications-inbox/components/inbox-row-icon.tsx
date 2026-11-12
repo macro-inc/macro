@@ -31,6 +31,7 @@ const iconFor = (type: RowType) =>
     .with('calendar_join_request', () => UserPlusIcon)
     .with('access_requested', () => LockKeyIcon)
     .with('access_granted', () => LockKeyOpenIcon)
+    .with('access_removed', () => LockKeyIcon)
     .with('other', () => BellIcon)
     .exhaustive();
 

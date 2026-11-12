@@ -46,6 +46,7 @@ async fn an_insert_of_two_rows_mints_them_in_order_with_their_cells() {
                             },
                         ],
                     ],
+                    ids: None,
                 },
             }]),
         )
@@ -318,6 +319,7 @@ async fn an_unknown_label_is_refused_without_creating_options() {
                         column: seeded.status_column.id,
                         value: CellValue::Options(vec![OptionRef::Label("Maybe".into())]),
                     }]],
+                    ids: None,
                 },
             }]),
         )
@@ -381,11 +383,17 @@ async fn an_op_on_another_databases_table_refuses_the_batch_before_anything_is_w
             OpBatch::from(vec![
                 DatabaseOp::Rows {
                     table: seeded.table_id,
-                    change: RowsChange::Insert { rows: vec![vec![]] },
+                    change: RowsChange::Insert {
+                        rows: vec![vec![]],
+                        ids: None,
+                    },
                 },
                 DatabaseOp::Rows {
                     table: other_table,
-                    change: RowsChange::Insert { rows: vec![vec![]] },
+                    change: RowsChange::Insert {
+                        rows: vec![vec![]],
+                        ids: None,
+                    },
                 },
             ]),
         )
@@ -433,6 +441,7 @@ async fn a_failing_second_op_leaves_the_first_unapplied() {
                             column: seeded.name_column.id,
                             value: CellValue::Text("Alex".into()),
                         }]],
+                        ids: None,
                     },
                 },
                 DatabaseOp::Rows {
@@ -592,7 +601,10 @@ async fn a_relation_cell_names_rows_of_its_target_table() {
             viewer(OWNER),
             OpBatch::from(vec![DatabaseOp::Rows {
                 table: sessions,
-                change: RowsChange::Insert { rows: vec![vec![]] },
+                change: RowsChange::Insert {
+                    rows: vec![vec![]],
+                    ids: None,
+                },
             }]),
         )
         .await
@@ -754,6 +766,7 @@ async fn a_batch_bumps_each_table_once_and_announces_it_once() {
                             column: seeded.name_column.id,
                             value: CellValue::Text("Alex".into()),
                         }]],
+                        ids: None,
                     },
                 },
                 DatabaseOp::Rows {

@@ -76,13 +76,13 @@ export function RuntimeSetupSteps(props: { children: JSX.Element }) {
     <>
       <Show when={isDesktopPlatform()}>
         <p class="mb-6 rounded-lg border border-edge-muted bg-ink/[0.025] px-3 py-2 text-sm text-ink-muted">
-          Setting up this computer? The desktop app bundles the runtime — use
-          the <span class="font-medium text-ink">This computer</span> card on
-          the Runtimes page instead; no download or pairing code needed. The
-          steps below connect a different machine.
+          Setting up this computer? The desktop app bundles macrod — use the{' '}
+          <span class="font-medium text-ink">This computer</span> card on the
+          Machines page instead; no download or pairing code needed. The steps
+          below connect a different machine.
         </p>
       </Show>
-      <ol aria-label="Runtime setup steps" class="list-none">
+      <ol aria-label="Machine setup steps" class="list-none">
         <SetupStep number={1} title="Install macrod">
           <p>On macOS or Linux, run in a terminal:</p>
           <SetupCommand
@@ -111,7 +111,7 @@ export function RuntimeSetupSteps(props: { children: JSX.Element }) {
         <SetupStep number={3} title="Enter your pairing code">
           <p>
             Enter the device code from your terminal to review and connect this
-            runtime.
+            machine.
           </p>
           {props.children}
         </SetupStep>

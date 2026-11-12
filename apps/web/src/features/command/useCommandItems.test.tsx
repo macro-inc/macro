@@ -32,6 +32,13 @@ const fixtures = vi.hoisted(() => {
   };
 });
 
+vi.mock('@queries/team/members', () => ({
+  useTeamMembers: () => ({
+    users: () => [],
+    isLoading: () => false,
+    isError: () => false,
+  }),
+}));
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: (flag: { key: string }) => () => ({
     enabled: flag.key === 'enable-projects' && fixtures.projectFlag() === true,

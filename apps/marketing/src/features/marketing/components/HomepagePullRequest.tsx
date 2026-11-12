@@ -1,4 +1,4 @@
-import GitMerge from '@phosphor/git-merge.svg';
+import GitMerge from '@icon/system/regular/git-merge.svg';
 import { Button } from '@ui/components/Button';
 import { createSignal, lazy, Show, Suspense } from 'solid-js';
 import { DEPLOY_RESULT, DEPLOY_SESSION_ID } from '../core/deploy-agent-demo';

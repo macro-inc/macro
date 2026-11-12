@@ -47,6 +47,7 @@ struct FakeWorld {
     registry: BTreeMap<Uuid, OwnedEntityRef>,
     /// Entities a listing returns for an owner that does not own them.
     misfiled: Vec<(TeamDeletionOwner, OwnedEntityRef)>,
+    fail_prepare: bool,
     fail_purge_of: Option<Uuid>,
     /// How many more purges register a fresh entity for the purged one's owner.
     respawns_left: usize,
@@ -143,6 +144,17 @@ impl RecordingOwnedEntityCleanup {
 
 impl OwnedEntityCleanup for RecordingOwnedEntityCleanup {
     type Err = std::io::Error;
+
+    async fn prepare_team_deletion(
+        &self,
+        _: Uuid,
+    ) -> Result<Option<Box<dyn crate::domain::owned_entity_cleanup::TeamDeletionGuard>>, Self::Err>
+    {
+        if self.world.lock().unwrap().fail_prepare {
+            return Err(std::io::Error::other("namespace cleanup unavailable"));
+        }
+        Ok(None)
+    }
 
     async fn team_bots(&self, team_id: Uuid) -> Result<Vec<BotId>, Self::Err> {
         let world = self.world.lock().unwrap();
@@ -540,8 +552,8 @@ async fn delete_team_without_a_cleanup_refuses_before_billing_or_the_row() {
 
     let error = cleanup_failure(service.delete_team(owner_receipt()).await);
 
-    let OwnedEntityCleanupError::ListBots { source } = &error else {
-        panic!("expected the bot listing to fail, got {error:?}");
+    let OwnedEntityCleanupError::Prepare { source } = &error else {
+        panic!("expected preflight to fail, got {error:?}");
     };
     assert_eq!(
         source.downcast_ref::<OwnedEntityCleanupUnwired>(),
@@ -611,5 +623,30 @@ async fn team_deleted_event_lists_the_bots_and_each_purged_entity_with_its_owner
                 "owner": "00000000-0000-0000-0000-000000000900",
             },
         ])
+    );
+}
+
+#[tokio::test]
+async fn namespace_preflight_failure_stops_before_any_team_side_effect_and_retry_resumes() {
+    let journal = Journal::default();
+    let cleanup = RecordingOwnedEntityCleanup::new(&journal)
+        .owning(TeamDeletionOwner::Team(TEAM_ID), [session(1), document(2)]);
+    cleanup.world.lock().unwrap().fail_prepare = true;
+    let (service, broker) = deleting_service(&journal, &cleanup);
+    assert!(matches!(
+        cleanup_failure(service.delete_team(owner_receipt()).await),
+        OwnedEntityCleanupError::Prepare { .. }
+    ));
+    assert!(journal.steps().is_empty());
+    assert!(broker.events().is_empty());
+    assert_eq!(cleanup.world.lock().unwrap().registry.len(), 2);
+    cleanup.world.lock().unwrap().fail_prepare = false;
+    service.delete_team(owner_receipt()).await.unwrap();
+    assert!(cleanup.world.lock().unwrap().registry.is_empty());
+    assert!(
+        journal
+            .steps()
+            .iter()
+            .any(|step| matches!(step, Step::DeleteTeam { .. }))
     );
 }

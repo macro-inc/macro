@@ -105,9 +105,11 @@ impl<B: BotFacts + 'static> WarmSessionLifecycle for PgAgentSessionRepo<B> {
         Box::pin(async move {
             // Mark under row locks before deleting: a concurrent claim cannot win
             // after this operation, and a crash leaves a retryable expired row.
+            // A ready warm row is at `acp_ready`, an event status; leaving its
+            // event name behind breaks `agent_session_status_event_name_check`.
             let rows = sqlx::query!(
                 r#"
-                UPDATE agent_session SET status = 'disconnected'
+                UPDATE agent_session SET status = 'disconnected', status_event_name = NULL
                 WHERE id IN (
                     SELECT id FROM agent_session
                     WHERE for_warming AND visibility = 'hidden' AND thread_id IS NULL

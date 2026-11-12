@@ -26,12 +26,20 @@ export class CallRecordNamespace {
     return CallRecord.byId(this.client, id);
   }
 
-  /** Search archived calls by name and transcript, not the live room roster. */
+  /**
+   * Search archived calls by name and transcript, not the live room roster.
+   *
+   * @readonly
+   */
   search(query: string, opts?: SearchOpts): AsyncGenerator<CallRecord> {
     return CallRecord.search(this.client, query, opts);
   }
 
-  /** List joinable live calls; use after an event stream reconnects. */
+  /**
+   * List joinable live calls; use after an event stream reconnects.
+   *
+   * @readonly
+   */
   async active(): Promise<CallRecord[]> {
     const response = unwrap(await this.client.storage.getLiveCalls());
     return response.calls.map((summary) =>
@@ -39,7 +47,11 @@ export class CallRecordNamespace {
     );
   }
 
-  /** Preview these calls in input order; missing records are omitted. */
+  /**
+   * Preview these calls in input order; missing records are omitted.
+   *
+   * @readonly
+   */
   async summaries(calls: CallRecord[]): Promise<CallSummary[]> {
     if (calls.length === 0) return [];
 

@@ -132,6 +132,7 @@ async fn source() -> Source {
                         column: title_column,
                         value: CellValue::Text("Keynote".into()),
                     }]],
+                    ids: None,
                 },
             }]),
         )

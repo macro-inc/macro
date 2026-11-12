@@ -86,6 +86,40 @@ fn view_access_notifications_preserve_permission_and_format_copy() {
     );
 }
 
+#[test]
+fn runtime_access_removal_names_the_owner_the_runtime_and_the_stopped_agents() {
+    let stopped = |names: &[&str]| RuntimeAccessRemovedMetadata {
+        runtime_name: "Studio Mac".into(),
+        agents: names
+            .iter()
+            .map(|name| StoppedAgent {
+                bot_id: Uuid::nil(),
+                name: (*name).to_owned(),
+            })
+            .collect(),
+    };
+    let owner = || Some(uid("macro|owner@macro.com"));
+
+    assert_eq!(
+        stopped(&["Scout"]).format_title(owner()).unwrap(),
+        "owner@macro.com removed your access to Studio Mac"
+    );
+    assert_eq!(
+        stopped(&["Scout"]).format_body(owner()).unwrap(),
+        "Scout has stopped."
+    );
+    assert_eq!(
+        stopped(&["Scout", "Ranger"]).format_body(owner()).unwrap(),
+        "Scout and Ranger have stopped."
+    );
+    assert_eq!(
+        stopped(&["Scout", "Ranger", "Pilot"])
+            .format_body(owner())
+            .unwrap(),
+        "Scout and 2 others have stopped."
+    );
+}
+
 fn channel_reaction() -> ChannelMessageReactionMetadata {
     ChannelMessageReactionMetadata {
         message_id: "message-1".to_string(),

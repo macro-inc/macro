@@ -15,7 +15,8 @@ import {
 import type { Bucket } from './types';
 
 // Only these buckets can be materialized from cache hits. Other Quick Access
-// sources (contacts, sessions) are merged locally, after the search limit.
+// sources (such as sessions) are merged locally. Personal contacts use their
+// separate bounded, context-ranked window rather than this generic projection.
 const PROJECTED_BUCKETS: ReadonlySet<Bucket> = new Set([
   'document',
   'note',

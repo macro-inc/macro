@@ -988,8 +988,8 @@ describe('agent-led new conversation', () => {
     // The row stays clickable: selecting it opens Settings → Runtimes, where
     // the runtime can be restarted (one click on desktop) or re-paired.
     expect(row.getAttribute('aria-disabled')).not.toBe('true');
-    expect(row.getAttribute('title')).toBe('Its runtime is disconnected');
-    expect(row.textContent).toContain('Reconnect runtime');
+    expect(row.getAttribute('title')).toBe('Its machine is disconnected');
+    expect(row.textContent).toContain('Reconnect machine');
   });
 
   it.each([false, true])(
@@ -1042,9 +1042,9 @@ describe('agent-led new conversation', () => {
       expect(offline.textContent).toContain('Offline agent');
       // The disconnected row stays clickable: it offers to reconnect the
       // runtime (opens Settings → Runtimes) and keeps the reason as a tooltip.
-      expect(offline.textContent).toContain('Reconnect runtime');
+      expect(offline.textContent).toContain('Reconnect machine');
       expect(
-        within(picker).queryByText('Connect the runtime to load models.')
+        within(picker).queryByText('Connect the machine to load models.')
       ).toBeNull();
       expect(within(picker).queryByText('Models')).toBeNull();
       const unavailable = within(offline).getByRole(
@@ -1054,7 +1054,7 @@ describe('agent-led new conversation', () => {
       // title attribute.
       if (!touch) {
         expect(unavailable.getAttribute('title')).toBe(
-          'Its runtime is disconnected'
+          'Its machine is disconnected'
         );
       }
       expect(

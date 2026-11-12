@@ -152,6 +152,77 @@ test('personal company link, switch and separate Go to', async ({
   await expect(page).toHaveURL(/opened=company-2/);
 });
 
+test('company picker exposes additional browse and search pages without saving', async ({
+  page,
+}, info) => {
+  await page.goto('/?personal&unlinked&pagedCompanies');
+  await page
+    .getByRole('button', { name: 'Add company', exact: true })
+    .first()
+    .click();
+  const search = page.getByPlaceholder('Search companies…');
+  const company = (index: number) =>
+    page
+      .locator('[data-entity-index]')
+      .filter({ hasText: `Company ${String(index).padStart(2, '0')}` });
+  const next = page.getByRole('button', { name: 'Next options', exact: true });
+  const loadNext = async () => {
+    if (info.project.name === 'phone') await next.tap();
+    else await search.press('PageDown');
+  };
+
+  await expect(company(0)).toBeVisible();
+  await expect(company(50)).toHaveCount(0);
+  await loadNext();
+  await expect(company(50)).toBeVisible();
+  await expect(next).toHaveCount(0);
+
+  await search.fill('company');
+  await expect(company(50)).toHaveCount(0);
+  await expect(company(20)).toHaveCount(0);
+  await loadNext();
+  await expect(company(20)).toBeVisible();
+  expect(await page.evaluate(() => window.archiveFixture.writes())).toBe(0);
+});
+
+test('company picker exposes page loading, failure, and successful retry', async ({
+  page,
+}, info) => {
+  await page.goto('/?personal&unlinked&pagedCompanies');
+  await page
+    .getByRole('button', { name: 'Add company', exact: true })
+    .first()
+    .click();
+  const search = page.getByPlaceholder('Search companies…');
+  const next = page.getByRole('button', { name: 'Next options', exact: true });
+  const loadNext = async () => {
+    if (info.project.name === 'phone') await next.tap();
+    else await search.press('PageDown');
+  };
+  await page.evaluate(() => {
+    window.companyPickerFixture.holdNext();
+    window.companyPickerFixture.failNext();
+  });
+  await loadNext();
+  await expect(
+    page.getByRole('button', { name: 'Loading options…', exact: true })
+  ).toBeDisabled();
+  await page.evaluate(() => window.companyPickerFixture.release());
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Options unavailable' })
+  ).toBeVisible();
+  await expect(next).toBeEnabled();
+  await loadNext();
+  await expect(
+    page.locator('[data-entity-index]').filter({ hasText: 'Company 50' })
+  ).toBeVisible();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Options unavailable' })
+  ).toHaveCount(0);
+  await expect(next).toHaveCount(0);
+  expect(await page.evaluate(() => window.archiveFixture.writes())).toBe(0);
+});
+
 test('company-email and blank-email contacts stay read-only with company navigation', async ({
   page,
 }, info) => {

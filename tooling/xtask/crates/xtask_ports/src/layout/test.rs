@@ -38,6 +38,8 @@ fn appended_port_offsets_stay_stable() {
     assert_eq!(Port::ScheduledAction.offset(), 28);
     assert_eq!(Port::ScheduledAction.fixed(), 8099);
     assert_eq!(Port::DocCognition.offset(), 14);
+    assert_eq!(Port::OpenBao.offset(), 33);
+    assert_eq!(Port::OpenBao.fixed(), 8200);
 }
 
 #[test]

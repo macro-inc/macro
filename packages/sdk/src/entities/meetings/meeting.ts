@@ -13,7 +13,12 @@ import type { User } from '../users/user';
 
 /** A meeting's schedule and invitation link. */
 export class Meeting extends MacroEntity<MeetingRecord> {
-  /** Join this meeting as the current account; always send a program join body. */
+  /**
+   * Join this meeting as the current account; always send a program join body.
+   *
+   * @write
+   * @mcp-exclude Returns a live call connection; MCP calls carry JSON only.
+   */
   async join(opts: JoinOptions = {}): Promise<CallConnection> {
     try {
       const response = unwrap(
@@ -28,7 +33,12 @@ export class Meeting extends MacroEntity<MeetingRecord> {
     }
   }
 
-  /** Join the link as a named guest. */
+  /**
+   * Join the link as a named guest.
+   *
+   * @write
+   * @mcp-exclude Returns a live call connection; MCP calls carry JSON only.
+   */
   async joinAsGuest(name: string): Promise<CallConnection> {
     const response = unwrap(
       await this.client.storage.meetingGuestJoin({
@@ -92,21 +102,35 @@ export class Meeting extends MacroEntity<MeetingRecord> {
     id ? CallRecord.byId(this.client, id) : undefined,
   );
 
-  /** Update schedule or title. */
+  /**
+   * Update schedule or title.
+   *
+   * @write
+   * @idempotent
+   */
   async update(options: UpdateMeetingRequest): Promise<void> {
     await this.mutate((c) =>
       c.storage.meetingUpdate({ path: { meeting_id: this.id }, body: options }),
     );
   }
 
-  /** Cancel this meeting. */
+  /**
+   * Cancel this meeting.
+   *
+   * @destructive
+   * @idempotent
+   */
   async cancel(): Promise<void> {
     await this.mutate((c) =>
       c.storage.meetingCancel({ path: { meeting_id: this.id } }),
     );
   }
 
-  /** Whether the caller can send invitations. */
+  /**
+   * Whether the caller can send invitations.
+   *
+   * @readonly
+   */
   async invitePermissions() {
     return unwrap(
       await this.client.storage.meetingInvitePermissions({
@@ -115,7 +139,12 @@ export class Meeting extends MacroEntity<MeetingRecord> {
     );
   }
 
-  /** Invite an email address. */
+  /**
+   * Invite an email address.
+   *
+   * @destructive
+   * @openworld
+   */
   async invite(email: string): Promise<void> {
     unwrap(
       await this.client.storage.meetingInvite({
@@ -125,7 +154,11 @@ export class Meeting extends MacroEntity<MeetingRecord> {
     );
   }
 
-  /** Invite Macro users. */
+  /**
+   * Invite Macro users.
+   *
+   * @write
+   */
   async inviteUsers(users: User[]): Promise<void> {
     unwrap(
       await this.client.storage.meetingInviteUsers({
@@ -135,7 +168,11 @@ export class Meeting extends MacroEntity<MeetingRecord> {
     );
   }
 
-  /** Shareable meeting link. */
+  /**
+   * Shareable meeting link.
+   *
+   * @readonly
+   */
   async webUrl(): Promise<string> {
     return `${this.client.webAppUrl}/app/meet/join/${encodeURIComponent((await this.detail.get()).shareToken)}`;
   }

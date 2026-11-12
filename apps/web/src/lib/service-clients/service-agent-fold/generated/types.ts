@@ -1016,9 +1016,10 @@ export type FoldedMessage_Deserialize = {
    */
   phase: TurnPhase | null;
   /**
-   *  When a user's prompt was posted, RFC 3339. Absent on agent and control
-   *  messages, until the log confirms a prompt, and on history a runtime
-   *  replayed on load.
+   *  When the message was sent, RFC 3339: a prompt when the log confirms it,
+   *  an agent reply when its turn ends. Absent on control messages, on a
+   *  reply still running, until the log confirms a prompt, and on history a
+   *  runtime replayed on load.
    */
   postedAt: string | null;
 };
@@ -1064,9 +1065,10 @@ export type FoldedMessage_Serialize = {
    */
   phase: TurnPhase | null;
   /**
-   *  When a user's prompt was posted, RFC 3339. Absent on agent and control
-   *  messages, until the log confirms a prompt, and on history a runtime
-   *  replayed on load.
+   *  When the message was sent, RFC 3339: a prompt when the log confirms it,
+   *  an agent reply when its turn ends. Absent on control messages, on a
+   *  reply still running, until the log confirms a prompt, and on history a
+   *  runtime replayed on load.
    */
   postedAt: string | null;
 };

@@ -61,7 +61,7 @@ it('combines account, tab and search filters and preserves them after opening a 
   fireEvent.click(accounts.getByRole('button', { name: 'All inboxes' }));
   fireEvent.click(tabs.getByRole('button', { name: 'All' }));
   fireEvent.input(view.getByLabelText('Search sample email'), {
-    target: { value: 'Valentina' },
+    target: { value: 'Austin Barron' },
   });
   expect(view.getAllByRole('button', { name: /^Read / })).toHaveLength(2);
   fireEvent.click(
@@ -166,7 +166,7 @@ it('holds the live reply for reading before replay and keeps it available after 
   expect(view.queryByText(/2 messages|Open full thread/)).toBeNull();
   expect(
     view.queryByText(
-      'Valentina replied. Your whole team is already up to date.'
+      'Austin Barron replied. Your whole team is already up to date.'
     )
   ).toBeNull();
   vi.advanceTimersByTime(3000);
@@ -261,7 +261,9 @@ it('does not send while composing text or inserting a line break', () => {
 it('keeps existing channel messages mounted while the email walkthrough advances', () => {
   const view = render(() => <EmailSharingDemo />);
   const question = () =>
-    view.getByText('What does Valentina need before Thursday?').closest('li');
+    view
+      .getByText('What does Austin Barron need before Thursday?')
+      .closest('li');
   const original = question();
   const composer = view.getByRole('textbox', { name: 'Message #launch' });
   setVisible(true);
@@ -351,7 +353,7 @@ it('keeps the same pointer while opening Share, choosing a channel, and typing t
   ).toBeNull();
 });
 
-it('leaves two seconds between Valentina’s reply and Julia’s response', () => {
+it('leaves two seconds between Austin Barron’s reply and Julia’s response', () => {
   const view = render(() => <EmailSharingDemo />);
   setVisible(true);
   advanceTo(

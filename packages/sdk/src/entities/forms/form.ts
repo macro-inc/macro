@@ -220,7 +220,11 @@ export class Form extends MacroEntity<FormDetail> {
     return forms.map((form) => new Form(client, form.id));
   }
 
-  /** The form's presentation and column facts; this never contains response rows. */
+  /**
+   * The form's presentation and column facts; this never contains response rows.
+   *
+   * @readonly
+   */
   schema(): Promise<FormDetail> {
     return this.detail.get();
   }
@@ -256,14 +260,22 @@ export class Form extends MacroEntity<FormDetail> {
   /** The caller's access level. */
   readonly access = this.field('access');
 
-  /** Sections in display order. */
+  /**
+   * Sections in display order.
+   *
+   * @readonly
+   */
   async sections(): Promise<FormSection[]> {
     return (await this.detail.get()).sections.map((section) =>
       FormSection.byId(this, section.id),
     );
   }
 
-  /** All questions in display order, skipping gates. */
+  /**
+   * All questions in display order, skipping gates.
+   *
+   * @readonly
+   */
   async questions(): Promise<FormQuestion[]> {
     return (await this.detail.get()).sections.flatMap((section) =>
       section.kind === 'questions'
@@ -274,7 +286,12 @@ export class Form extends MacroEntity<FormDetail> {
     );
   }
 
-  /** Update presentation or owner-controlled settings; null explicitly clears the closing time. */
+  /**
+   * Update presentation or owner-controlled settings; null explicitly clears the closing time.
+   *
+   * @write
+   * @idempotent
+   */
   async update(updates: UpdateForm): Promise<this> {
     await this.mutate((client) =>
       client.storage.updateForm({ path: { id: this.id }, body: updates }),
@@ -294,6 +311,9 @@ export class Form extends MacroEntity<FormDetail> {
    * omitted handles mint sections or questions. Column facts use the database API.
    * A publicationError means the draft was saved but respondents still see the last
    * valid version. Repair the reported problem or reload to retry publication.
+   *
+   * @destructive
+   * @idempotent
    */
   async replaceLayout(
     sections: FormSectionPlacement[],
@@ -477,7 +497,11 @@ export class Form extends MacroEntity<FormDetail> {
       .exhaustive();
   }
 
-  /** Submit answers. Signed-in respondents get at most one response; use editResponse afterwards. */
+  /**
+   * Submit answers. Signed-in respondents get at most one response; use editResponse afterwards.
+   *
+   * @write
+   */
   async submit(answers: FormAnswer[]): Promise<FormSubmissionOutcome> {
     const body = { answers: this.wireAnswers(answers) };
     return this.outcome(
@@ -491,7 +515,12 @@ export class Form extends MacroEntity<FormDetail> {
     );
   }
 
-  /** Replace the caller's answers while the form is open; gates are evaluated again. */
+  /**
+   * Replace the caller's answers while the form is open; gates are evaluated again.
+   *
+   * @destructive
+   * @idempotent
+   */
   async editResponse(answers: FormAnswer[]): Promise<FormSubmissionOutcome> {
     const body = { answers: this.wireAnswers(answers) };
     return this.outcome(
@@ -505,7 +534,11 @@ export class Form extends MacroEntity<FormDetail> {
     );
   }
 
-  /** Read the caller's receipt and answers without reading anyone else's responses. */
+  /**
+   * Read the caller's receipt and answers without reading anyone else's responses.
+   *
+   * @readonly
+   */
   async myResponse(): Promise<MyFormResponse> {
     const mine = unwrap(
       await this.client.storage.getMyFormResponse({ path: { id: this.id } }),
@@ -592,7 +625,11 @@ export class Form extends MacroEntity<FormDetail> {
     };
   }
 
-  /** Ledger counts and total table rows; requires edit access. */
+  /**
+   * Ledger counts and total table rows; requires edit access.
+   *
+   * @readonly
+   */
   async responseSummary(): Promise<FormResponseSummary> {
     const summary = unwrap(
       await this.client.storage.getFormResponseSummary({
@@ -608,7 +645,11 @@ export class Form extends MacroEntity<FormDetail> {
     };
   }
 
-  /** Choice and checkbox counts, available to viewers when tally visibility is enabled. */
+  /**
+   * Choice and checkbox counts, available to viewers when tally visibility is enabled.
+   *
+   * @readonly
+   */
   async tally(): Promise<FormQuestionTally[]> {
     const tally = unwrap(
       await this.client.storage.getFormTally({ path: { id: this.id } }),
@@ -641,14 +682,23 @@ export class Form extends MacroEntity<FormDetail> {
     });
   }
 
-  /** Read the form's sharing grants. Requires ownership. */
+  /**
+   * Read the form's sharing grants. Requires ownership.
+   *
+   * @readonly
+   */
   async sharePermissions(): Promise<SharePermissionV2> {
     return unwrap(
       await this.client.storage.getFormPermissions({ path: { id: this.id } }),
     );
   }
 
-  /** Update grants. Public responding is controlled by audience, not link sharing. */
+  /**
+   * Update grants. Public responding is controlled by audience, not link sharing.
+   *
+   * @write
+   * @idempotent
+   */
   updateSharePermissions(
     request: UpdateSharePermissionRequestV2,
   ): Promise<SharePermissionV2> {
@@ -660,7 +710,11 @@ export class Form extends MacroEntity<FormDetail> {
     );
   }
 
-  /** Open the form's builder in Macro. */
+  /**
+   * Open the form's builder in Macro.
+   *
+   * @readonly
+   */
   webUrl(): string {
     return `${this.client.webAppUrl}/app/form/${this.id}`;
   }
@@ -670,7 +724,11 @@ export class Form extends MacroEntity<FormDetail> {
     return { ...super.toJSON(), url: this.webUrl() };
   }
 
-  /** The respondent page, which public forms also expose without signing in. */
+  /**
+   * The respondent page, which public forms also expose without signing in.
+   *
+   * @readonly
+   */
   respondUrl(): string {
     return `${this.client.webAppUrl}/app/form/${this.id}/respond`;
   }

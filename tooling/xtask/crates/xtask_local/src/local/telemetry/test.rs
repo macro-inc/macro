@@ -18,10 +18,7 @@ fn opted_in(dir: &std::path::Path) -> Paths {
     let config = dir.join("local-telemetry.toml");
     std::fs::write(&config, format!("endpoint = \"http://127.0.0.1:{port}\"\n")).expect("write");
     std::fs::set_permissions(&config, std::fs::Permissions::from_mode(0o600)).expect("chmod");
-    Paths {
-        config,
-        buffer_dir: dir.join("buffer"),
-    }
+    Paths::at(config, dir.join("buffer"))
 }
 
 fn buffered_records(paths: &Paths) -> Vec<serde_json::Value> {
@@ -41,8 +38,13 @@ fn an_action_buffers_its_run_event_before_returning() {
     let paths = opted_in(dir.path());
     let instance = Instance::derive(Some("telemetry-test"), None).expect("instance");
 
-    let telemetry =
-        RunTelemetry::begin_in(&paths, &instance, RunKind::Stop, SystemTime::now(), false);
+    let telemetry = RunTelemetry::begin_in(
+        &paths,
+        Some(&instance),
+        RunKind::Stop,
+        SystemTime::now(),
+        false,
+    );
     assert!(telemetry.is_some());
     RunTelemetry::finish_action(telemetry, || Ok(())).expect("action");
 
@@ -51,6 +53,13 @@ fn an_action_buffers_its_run_event_before_returning() {
         .find(|line| line["event"] == json!("run"))
         .expect("a buffered run event");
     assert_eq!(run["fields"]["outcome"], json!("success"));
+    let begin = buffered_records(&paths)
+        .into_iter()
+        .find(|line| line["line"] == json!("begin"))
+        .expect("a begin line");
+    // A named instance's name is chosen by a person: only its hash is sent.
+    assert_ne!(begin["common"]["instance"], json!("telemetry-test"));
+    assert_eq!(begin["common"]["instance_kind"], json!("named"));
 }
 
 /// A rebuild can close while its build lane is still reading sccache's
@@ -62,12 +71,12 @@ fn a_rebuild_keeps_the_build_its_lane_records_after_close() {
     let instance = Instance::derive(Some("telemetry-test"), None).expect("instance");
     let telemetry = RunTelemetry::begin_in(
         &paths,
-        &instance,
+        Some(&instance),
         RunKind::Rebuild,
         SystemTime::now(),
         false,
     )
-    .expect("opted in");
+    .expect("on");
 
     let shared = Arc::clone(&telemetry.shared);
     let lane = std::thread::spawn(move || {
@@ -83,6 +92,48 @@ fn a_rebuild_keeps_the_build_its_lane_records_after_close() {
         .filter_map(|line| line["event"].as_str().map(str::to_owned))
         .collect();
     assert!(events.iter().any(|event| event == "build"), "{events:?}");
+}
+
+/// A command without a job (`build-services`) records through its stage, and
+/// its run event names the step that failed.
+#[test]
+fn a_stage_without_a_job_records_its_steps_and_failure() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let paths = opted_in(dir.path());
+    let telemetry = RunTelemetry::begin_in(
+        &paths,
+        None,
+        RunKind::BuildServices,
+        SystemTime::now(),
+        false,
+    );
+    assert!(telemetry.is_some());
+    let stage = super::super::stage::Stage::from_env().with_telemetry(telemetry.clone());
+
+    let result = stage
+        .run_step("Resolving binaries", || Ok(()))
+        .and_then(|()| stage.run_step("Linking", || anyhow::bail!("linker exploded")));
+    RunTelemetry::close(telemetry, &result);
+
+    let records = buffered_records(&paths);
+    let steps: Vec<_> = records
+        .iter()
+        .filter(|line| line["event"] == json!("step"))
+        .map(|line| line["fields"]["step"].clone())
+        .collect();
+    assert_eq!(steps, vec![json!("Resolving binaries"), json!("Linking")]);
+    let run = records
+        .iter()
+        .find(|line| line["event"] == json!("run"))
+        .expect("a buffered run event");
+    assert_eq!(run["fields"]["outcome"], json!("failure"));
+    assert_eq!(run["fields"]["failed_step"], json!("Linking"));
+    let begin = records
+        .iter()
+        .find(|line| line["line"] == json!("begin"))
+        .expect("a begin line");
+    assert_eq!(begin["common"]["kind"], json!("build_services"));
+    assert!(begin["common"].get("instance").is_none());
 }
 
 #[test]

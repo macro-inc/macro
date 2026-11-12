@@ -63,6 +63,7 @@ type CellRenderers = Pick<
   GridCellProps,
   | 'renderTextEditor'
   | 'renderTextValue'
+  | 'renderLinkValue'
   | 'renderMentionPicker'
   | 'renderMentionValue'
 >;
@@ -454,6 +455,7 @@ export function AddPipelineRecordDialog(
       canEdit={!pending()}
       renderTextEditor={props.renderTextEditor}
       renderTextValue={props.renderTextValue}
+      renderLinkValue={props.renderLinkValue}
       renderMentionPicker={props.renderMentionPicker}
       renderMentionValue={props.renderMentionValue}
       popupMount={dialog()}

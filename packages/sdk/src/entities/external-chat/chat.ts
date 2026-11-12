@@ -82,7 +82,11 @@ export class ExternalChat extends FavoritableEntity<ExternalChatDetail> {
     User.byId(this.client, id),
   );
 
-  /** The community a group belongs to, if any: the community's own provider chat, its name, and whether this is its announcement group. */
+  /**
+   * The community a group belongs to, if any: the community's own provider chat, its name, and whether this is its announcement group.
+   *
+   * @readonly
+   */
   async community(): Promise<WhatsAppCommunity | undefined> {
     const { provider, community } = await this.detail.get();
     if (!community) return undefined;
@@ -91,7 +95,11 @@ export class ExternalChat extends FavoritableEntity<ExternalChatDetail> {
       .exhaustive();
   }
 
-  /** Iterate newest-first timeline pages lazily. */
+  /**
+   * Iterate newest-first timeline pages lazily.
+   *
+   * @readonly
+   */
   async *messages(
     options: { limit?: number } = {},
   ): AsyncGenerator<ExternalChatMessage> {
@@ -111,7 +119,12 @@ export class ExternalChat extends FavoritableEntity<ExternalChatDetail> {
     });
   }
 
-  /** Advance the caller's own read cursor. */
+  /**
+   * Advance the caller's own read cursor.
+   *
+   * @write
+   * @idempotent
+   */
   async markRead(message: ExternalChatMessage): Promise<void> {
     this.assertChat(message.chat);
     await this.mutate((client) =>
@@ -122,7 +135,11 @@ export class ExternalChat extends FavoritableEntity<ExternalChatDetail> {
     );
   }
 
-  /** Read standard link/team sharing settings. */
+  /**
+   * Read standard link/team sharing settings.
+   *
+   * @readonly
+   */
   async permissions() {
     return unwrap(
       await this.client.storage.externalChatPermissions({
@@ -131,7 +148,12 @@ export class ExternalChat extends FavoritableEntity<ExternalChatDetail> {
     );
   }
 
-  /** Actual owner updates standard link/team sharing settings. */
+  /**
+   * Actual owner updates standard link/team sharing settings.
+   *
+   * @write
+   * @idempotent
+   */
   async updatePermissions(
     update: UpdateSharePermissionRequestV2,
   ): Promise<void> {
@@ -143,14 +165,24 @@ export class ExternalChat extends FavoritableEntity<ExternalChatDetail> {
     );
   }
 
-  /** Owner stops syncing the chat; history and established sharing stay. */
+  /**
+   * Owner stops syncing the chat; history and established sharing stay.
+   *
+   * @destructive
+   * @idempotent
+   */
   async remove(): Promise<void> {
     await this.mutate((client) =>
       client.storage.externalChatRemove({ path: { chat_id: this.id } }),
     );
   }
 
-  /** Stage a supported attachment for a deliberate send. */
+  /**
+   * Stage a supported attachment for a deliberate send.
+   *
+   * @write
+   * @mcp-exclude Takes file bytes; MCP calls carry JSON only.
+   */
   async upload(file: Blob | File): Promise<ExternalChatUpload> {
     const record = unwrap(
       await this.client.storage.externalChatUpload({
@@ -164,6 +196,9 @@ export class ExternalChat extends FavoritableEntity<ExternalChatDetail> {
   /** Personal sessions and owner API credentials can send. Bots never send.
    * Preserve the idempotency key; uncertain outcomes are never automatically resent.
    * The server enforces one request per second per user.
+   *
+   * @destructive
+   * @openworld
    */
   async send(
     content: ExternalChatContent,
@@ -212,7 +247,11 @@ export class ExternalChat extends FavoritableEntity<ExternalChatDetail> {
     return ExternalChatSend.from(this.client, this, record);
   }
 
-  /** Read only the caller's pending, uncertain or failed sends. */
+  /**
+   * Read only the caller's pending, uncertain or failed sends.
+   *
+   * @readonly
+   */
   async sends(): Promise<ExternalChatSend[]> {
     return unwrap(
       await this.client.storage.externalChatSends({
@@ -221,7 +260,11 @@ export class ExternalChat extends FavoritableEntity<ExternalChatDetail> {
     ).map((record) => ExternalChatSend.from(this.client, this, record));
   }
 
-  /** Read delivery for selected caller-owned intents or messages. */
+  /**
+   * Read delivery for selected caller-owned intents or messages.
+   *
+   * @readonly
+   */
   async delivery(
     sends: Array<ExternalChatSend | ExternalChatMessage>,
   ): Promise<ExternalChatSend[]> {
@@ -234,7 +277,11 @@ export class ExternalChat extends FavoritableEntity<ExternalChatDetail> {
     ).map((record) => ExternalChatSend.from(this.client, this, record));
   }
 
-  /** Read attachment states for selected messages. */
+  /**
+   * Read attachment states for selected messages.
+   *
+   * @readonly
+   */
   async messageAttachments(messages: ExternalChatMessage[]) {
     for (const message of messages) this.assertChat(message.chat);
     return unwrap(
@@ -257,7 +304,11 @@ export class ExternalChat extends FavoritableEntity<ExternalChatDetail> {
     }));
   }
 
-  /** Reload detail, permissions and caller capabilities. */
+  /**
+   * Reload detail, permissions and caller capabilities.
+   *
+   * @readonly
+   */
   async refresh(): Promise<this> {
     this.detail.clear();
     await this.detail.get();

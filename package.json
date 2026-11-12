@@ -45,6 +45,7 @@
 		"@tanstack/virtual-core@3.17.8": "apps/web/patches/@tanstack%2Fvirtual-core@3.17.8.patch",
 		"@tauri-apps/plugin-http@2.5.9": "apps/web/patches/@tauri-apps%2Fplugin-http@2.5.9.patch",
 		"@kobalte/utils@0.9.2": "apps/web/patches/@kobalte%2Futils@0.9.2.patch",
+		"@tanstack/query-core@5.90.2": "apps/web/patches/tanstack-query-core-5.90.2.patch",
 		"graphql-ws@6.2.0": "apps/web/patches/graphql-ws@6.2.0.patch"
 	},
 	"private": true,
@@ -71,6 +72,7 @@
 			"apps/marketing",
 			"packages/observability",
 			"packages/code-mode-sdk",
+			"packages/sdk-mcp",
 			"packages/email-renderer",
 			"packages/collaboration",
 			"packages/machine",
@@ -78,6 +80,7 @@
 			"packages/loro-mirror",
 			"packages/lexical-core",
 			"services/ai-editing-worker",
+			"services/mcp-chatgpt-worker",
 			"services/bots/anthropic-status-bot",
 			"services/bots/goalert-bot",
 			"services/bots/stripe-payment-bot",

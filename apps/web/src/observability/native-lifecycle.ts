@@ -2,6 +2,7 @@ import { analytics } from '@app/lib/analytics';
 import { type Attributes, Telemetry } from '@macro-inc/observability';
 import type { DesktopSnapshot } from './desktop';
 import { frontendInstanceId } from './frontend-instance';
+import type { BundleStartup } from './generated/bundle-updater';
 import {
   nativeDiagnosticsRetired,
   recoverableNativeFrontend,
@@ -57,6 +58,7 @@ export function recordNativeWebviewStart(
     ...documentLifecycle,
     ...consumeReloadIntent(),
     ...previousDocumentAttributes(snapshot, recoverableNativeFrontend()),
+    ...bundleStartupAttributes(snapshot?.bundleStartup),
   };
   analytics.track('native_webview_started', startupAttributes);
   const span = Telemetry.span('native.webview.start');
@@ -66,6 +68,18 @@ export function recordNativeWebviewStart(
   span.end();
   if (snapshot && !nativeDiagnosticsRetired())
     reportRecoveredEvents(snapshot, recoverableNativeFrontend());
+}
+
+/** How the native updater chose this launch's bundle, the same for every document in it. */
+function bundleStartupAttributes(startup: BundleStartup | null | undefined) {
+  return {
+    native_bundle_startup_selection: startup?.selection,
+    native_bundle_startup_saved_selection: startup?.savedSelection,
+    native_bundle_startup_rejection: startup?.rejection ?? undefined,
+    native_bundle_startup_read_error: startup?.readError ?? undefined,
+    native_bundle_startup_dirs_found: startup?.bundleDirsFound,
+    native_bundle_startup_dirs_removed: startup?.bundleDirsRemoved,
+  };
 }
 
 /** What the document this one replaced last opened, and its last memory warning. */

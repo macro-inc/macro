@@ -1,9 +1,12 @@
 //! The background thread that sends buffered events.
 //!
-//! It first sends files left by runs that ended without sending (killed, or the
-//! endpoint was down), then this run's new lines every flush interval and once
-//! more at the end. A file is deleted only once Loki accepted or refused it;
-//! after a timeout or a 5xx it stays and is sent again later. Nothing here
+//! Without a settings file it first provisions one (see [`super::provision`]);
+//! if that fails it stops, leaving this run's file for a later run. Then it sends
+//! files left by runs that ended without sending (killed, or the endpoint was
+//! down), then this run's new lines every flush interval and once more at the
+//! end. A file is deleted only once Loki accepted or refused it; after a
+//! timeout, a 5xx or a rejected token it stays and is sent again later. A
+//! provisioned token that is rejected is fetched again once. Nothing here
 //! prints: a failed send must not disturb a run's output.
 
 use std::collections::BTreeMap;
@@ -16,8 +19,8 @@ use flate2::Compression;
 use flate2::write::GzEncoder;
 use serde_json::{Value, json};
 
-use super::config::Config;
-use super::{Begin, Line, RUN_EVENT, Record, Shared, otlp, unix_ns};
+use super::config::{Config, Paths};
+use super::{Begin, Line, RUN_EVENT, Record, Shared, otlp, provision, unix_ns};
 
 /// Long enough for a slow link, short enough that a dead endpoint costs little.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
@@ -33,10 +36,12 @@ const LAST_SEND_FILE: &str = "last-send.json";
 /// What a send did with a batch.
 #[derive(Debug, PartialEq, Eq)]
 enum Outcome {
-    /// Stored (2xx), or refused for good (4xx): either way, don't send it again.
+    /// Stored (2xx), or refused for good (other 4xx): either way, don't send it again.
     Settled,
     /// Timed out, unreachable or 5xx: keep it for the next flush.
     Retry,
+    /// 401 or 403: keep it, and fetch a new token if provisioning wrote this one.
+    Rejected,
 }
 
 struct Client {
@@ -44,17 +49,33 @@ struct Client {
     http: reqwest::Client,
 }
 
-pub(crate) fn run(config: &Config, buffer_dir: &Path, shared: &Shared) {
+pub(crate) fn run(config: Option<Config>, paths: &Paths, shared: &Shared) {
+    let buffer_dir = paths.buffer_dir.as_path();
+    let config = config.or_else(|| {
+        let source = paths.provision.as_ref()?;
+        provision::provision(paths, source, None)
+    });
+    let Some(mut config) = config else {
+        prune_left_behind(buffer_dir, &shared.own_file);
+        return;
+    };
     let Some(client) = Client::new() else {
         return;
     };
-    send_left_behind(&client, config, buffer_dir, &shared.own_file);
+    let mut renewed = false;
+    let rejected = send_left_behind(&client, &config, buffer_dir, &shared.own_file);
+    renew_if_rejected(paths, &mut config, &mut renewed, rejected);
 
     // The begin line comes first in the file and is held in memory, so skip it.
     let mut sent_to = first_line_end(&shared.own_file);
     loop {
         let shutting_down = shared.wait(FLUSH_INTERVAL);
-        sent_to = send_own(&client, config, buffer_dir, shared, sent_to);
+        let (now_sent_to, outcome) = send_own(&client, &config, buffer_dir, shared, sent_to);
+        sent_to = now_sent_to;
+        if outcome == Outcome::Rejected && renew_if_rejected(paths, &mut config, &mut renewed, true)
+        {
+            sent_to = send_own(&client, &config, buffer_dir, shared, sent_to).0;
+        }
         if shutting_down {
             let fully_sent =
                 std::fs::metadata(&shared.own_file).is_ok_and(|meta| meta.len() == sent_to);
@@ -63,6 +84,32 @@ pub(crate) fn run(config: &Config, buffer_dir: &Path, shared: &Shared) {
             }
             return;
         }
+    }
+}
+
+/// Once per process, swap a provisioned token that the endpoint rejected for a
+/// freshly fetched one (it was rotated). A token the user wrote is left alone.
+/// Returns whether the token was replaced.
+fn renew_if_rejected(
+    paths: &Paths,
+    config: &mut Config,
+    renewed: &mut bool,
+    rejected: bool,
+) -> bool {
+    if !rejected || *renewed || !config.provisioned() {
+        return false;
+    }
+    *renewed = true;
+    let fresh = paths
+        .provision
+        .as_ref()
+        .and_then(|source| provision::provision(paths, source, Some(&*config)));
+    match fresh {
+        Some(fresh) => {
+            *config = fresh;
+            true
+        }
+        None => false,
     }
 }
 
@@ -120,6 +167,7 @@ impl Client {
         let logs = otlp::logs(begin, records, unix_ns(SystemTime::now()));
         let result = self.post(&config.logs_url(), config, &logs);
         let outcome = match result {
+            Ok(401 | 403) => Outcome::Rejected,
             Ok(status) if status == 408 || status == 429 || status >= 500 => Outcome::Retry,
             Ok(_) => Outcome::Settled,
             Err(_) => Outcome::Retry,
@@ -158,49 +206,66 @@ fn note_last_send(buffer_dir: &Path, events: usize, result: &Result<u16, String>
     let _ = std::fs::write(buffer_dir.join(LAST_SEND_FILE), note.to_string());
 }
 
-/// Send this run's lines past `sent_to`; returns how far the file is now sent.
+/// Send this run's lines past `sent_to`; returns how far the file is now sent,
+/// and what the send did.
 fn send_own(
     client: &Client,
     config: &Config,
     buffer_dir: &Path,
     shared: &Shared,
     sent_to: u64,
-) -> u64 {
+) -> (u64, Outcome) {
     let Ok((lines, end)) = read_lines(&shared.own_file, sent_to) else {
-        return sent_to;
+        return (sent_to, Outcome::Retry);
     };
     let records: Vec<Record> = records(&lines).cloned().collect();
     match client.send(config, buffer_dir, &shared.begin, &records) {
-        Outcome::Settled => end,
-        Outcome::Retry => sent_to,
+        Outcome::Settled => (end, Outcome::Settled),
+        outcome => (sent_to, outcome),
     }
 }
 
-/// Send, then delete, the files of runs that are no longer recording. A file
-/// whose lock is held belongs to a live run, which sends it itself.
-fn send_left_behind(client: &Client, config: &Config, buffer_dir: &Path, own: &Path) {
+/// The buffer files of runs that are no longer recording, each opened and
+/// locked. A file whose lock is held belongs to a live run, which sends it itself.
+fn left_behind_files(buffer_dir: &Path, own: &Path) -> Vec<(PathBuf, File)> {
     let Ok(entries) = std::fs::read_dir(buffer_dir) else {
-        return;
+        return Vec::new();
     };
-    let files: Vec<PathBuf> = entries
+    entries
         .filter_map(|entry| entry.ok().map(|entry| entry.path()))
         .filter(|path| path.extension().is_some_and(|ext| ext == "jsonl") && path != own)
         .take(MAX_FILES_PER_FLUSH)
-        .collect();
-    for path in files {
-        let Ok(file) = File::open(&path) else {
-            continue;
-        };
-        if file.try_lock().is_err() {
-            continue;
+        .filter_map(|path| {
+            let file = File::open(&path).ok()?;
+            file.try_lock().ok()?;
+            Some((path, file))
+        })
+        .collect()
+}
+
+fn too_old(file: &File) -> bool {
+    file.metadata()
+        .and_then(|meta| meta.modified())
+        .ok()
+        .and_then(|modified| modified.elapsed().ok())
+        .is_some_and(|age| age > MAX_FILE_AGE)
+}
+
+/// Without a token, only delete files too old to send, so they don't pile up.
+fn prune_left_behind(buffer_dir: &Path, own: &Path) {
+    for (path, file) in left_behind_files(buffer_dir, own) {
+        if too_old(&file) {
+            let _ = std::fs::remove_file(&path);
         }
-        let too_old = file
-            .metadata()
-            .and_then(|meta| meta.modified())
-            .ok()
-            .and_then(|modified| modified.elapsed().ok())
-            .is_some_and(|age| age > MAX_FILE_AGE);
-        if too_old {
+    }
+}
+
+/// Send, then delete, the files of runs that are no longer recording. Returns
+/// whether the endpoint rejected the token.
+fn send_left_behind(client: &Client, config: &Config, buffer_dir: &Path, own: &Path) -> bool {
+    let mut rejected = false;
+    for (path, file) in left_behind_files(buffer_dir, own) {
+        if too_old(&file) {
             let _ = std::fs::remove_file(&path);
             continue;
         }
@@ -212,10 +277,19 @@ fn send_left_behind(client: &Client, config: &Config, buffer_dir: &Path, own: &P
             // Not even a begin line: nothing to send.
             None => Outcome::Settled,
         };
-        if outcome == Outcome::Settled {
-            let _ = std::fs::remove_file(&path);
+        match outcome {
+            Outcome::Settled => {
+                let _ = std::fs::remove_file(&path);
+            }
+            Outcome::Rejected => {
+                rejected = true;
+                // The same token fails every file; try the rest after renewing.
+                break;
+            }
+            Outcome::Retry => {}
         }
     }
+    rejected
 }
 
 /// A left-behind file's records, closed with an `interrupted` run event when the

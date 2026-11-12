@@ -241,7 +241,7 @@ pub struct MacroApiTokenSigner {
 /// How long a minted token lives. Short on purpose - the cache re-mints
 /// freely - so a token that leaks out of a response somewhere is stale before
 /// anyone can do much with it.
-const MINTED_TOKEN_LIFETIME_SECONDS: usize = 900;
+pub const MINTED_TOKEN_LIFETIME_SECONDS: usize = 900;
 
 impl MacroApiTokenSigner {
     /// Build the signer over the database holding user rows, the token

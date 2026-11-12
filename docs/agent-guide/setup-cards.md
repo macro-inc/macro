@@ -76,26 +76,46 @@ card sits above **Settings**, outside the scrolling list.
 
 With `enable-routine-suggestions` and `enable-routine-code-steps` on, the
 Email, Calendar, Tasks, Drive, Customers, Chat, Calls, Reviews and Agents
-sidebars start with a **Suggested routines** card while the scheduler has
-suggestions for that area: the top one's name and `+N`. It opens **Routines
-for <area>**, a list of rows: area icon, name, what it does with AI's values
-filled in, when it runs, and a byline, **For you · <reason>** for AI's picks or
-**Template from Macro** for Macro's templates. While AI's suggestions are
-still arriving (they come one by one), the footer says **Finding more for
-you…** and the list refreshes every 2 seconds.
+sidebars start with a suggestions card while the scheduler has suggestions for
+that area; it never shows on touch devices. The card shows up to three
+different routine icons overlapping (each routine's other area besides the
+sidebar's, Agents aside, else Calendar for a scheduled one), **N routines for
+you**, the suggestions' names, and a caret, inside a border that fades from
+violet through blue. Clicking it opens **Routines for <area>**: a two-column
+grid of cards, with **For you** and **Templates** tabs (each with a count)
+when the area has both AI's picks and Macro's templates. Each card has the
+area icon, **For you** (violet), **Draft** or **Template** badges, the name,
+what it does as the routine page's knob sentence (underlined values change in
+place before turning it on; without code steps it reads as a summary), its
+trigger → first step, and below a divider AI's reason or **From Macro** beside
+**Turn on** (AI's catalog picks) or a quiet **Review →** / **Use →** label.
+The whole card is one button (hover tint, focus ring around the card, Enter
+and Space). While AI's suggestions are still arriving (they come one by one),
+the footer says **Finding more for you…** and the grid refreshes every 2
+seconds.
 
-- **Enable** (`Enable <name>`) saves a catalog routine in one click, switched
-  on and pointing back at its suggestion; the row then shows **Enabled**, which
-  opens it. A routine AI drafted shows **Review** (`Review <name>`) instead and
-  opens New routine filled in, unsaved.
-- Clicking the row's name expands it to edit **Name**, **Instructions** (Ask AI
-  routines only) and **Show each run in Home** before enabling;
-  **More options** opens New routine filled in with those edits.
-- The row's **×** (`Not interested in <name>`) dismisses it at once in every
-  area's list and the Routines page; it isn't suggested again.
+- Clicking the card opens New routine filled in, unsaved: `Review <name>` for
+  a routine AI drafted, `Start a routine from <name>` for Macro's templates,
+  `Edit <name> before turning it on` for AI's picks. Once a card is on it is
+  `Open <name>` and opens the routine.
+- **Turn on** (`Turn on <name>`, AI's catalog picks) saves the routine in one
+  click with the values on the card, switched on and pointing back at its
+  suggestion; the card then shows **Enabled**, which opens it, and its values
+  read as plain text. Turn on, the underlined values and **×** sit above the
+  card's own target, so clicking them does only that.
+- The card's **×** on hover (`Not interested in <name>`) dismisses it at once
+  in every area's list and the Routines page; it isn't suggested again.
 - **All routines** opens the Routines page.
-- Closing the card hides it for that area on every device (prompt dismissal
-  `routine-suggestions:<area>`).
+- The sidebar card's close button (`Hide suggestions in <area>`, the ghost
+  close the other sidebar cards use) replaces its caret on hover or keyboard
+  focus. It hides the card for that area and shows the toast **Routine
+  suggestions hidden in <area>**, **Find them any time in Routines ›
+  Discover.**, with **Undo**. Undo brings the card back. Only when the toast closes without Undo (or the page goes
+  away first) is the dismissal stored (`routine-suggestions:<area>`), so it
+  holds on every device.
+
+The Routines page's row above the list and its **Discover** tab are in
+[navigation](navigation.md#routines).
 
 ## Dismissing cards
 

@@ -27,8 +27,15 @@ A Shift-click that also holds Option (Alt) opens below the split it came from:
 does for Cmd-click. Moving panes (swap left/right, mobile bring-to-front)
 keeps the tiles and their sizes and changes which split shows where.
 
+Opening or closing a split changes its neighbours' widths, and their text
+rewraps under an unchanged scrollTop. WebKit (Safari, iOS) has no CSS scroll
+anchoring, so a scrolling view that holds a reading position calls
+`keepScrollAnchorOnResize` (`@core/util/scrollAnchor`) on its scroll container,
+as the markdown `Notebook` does.
+
 `browser-test/` is a backend-free Playwright regression over the real router
-and `TiledSplits`:
+and `TiledSplits`, including a document that keeps its reading position as the
+splits beside it close, with browser scroll anchoring off as in WebKit:
 `bunx playwright test --config src/components/app/split-layout/browser-test/playwright.config.ts`.
 
 ## Opt-in view restoration
@@ -122,6 +129,17 @@ TODO AFTER:
 - [ ] useBeforeLeave won't work as expected going forward, since we use the split layout as the source of truth.
       Lots of places use `isLeavingCurrentBlock` to run some side effects, we need to abstract this under the split
       Might need something like `useBeforeSplitClose` or `useBeforeBlockClose`
+
+## Panel-owned slots
+
+`withSplitPanelOwner(name, factory)` creates a resource in a root owned by the
+split panel, not by the calling component, so it outlives the component: an
+email opened from a list still pages through that list's data source after the
+list has unmounted. A slot ends when its name is claimed again, when the panel
+closes, or when the split moves to another view (`splitViewId`: the component
+it shows, or the nearest one behind its content in history). The slot's root
+closes over the view that created it, so a slot that outlived its view would
+keep that view's DOM and subscriptions in memory.
 
 ## Priority collapse
 

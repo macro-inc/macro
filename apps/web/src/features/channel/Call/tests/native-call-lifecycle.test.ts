@@ -75,6 +75,7 @@ function setup(initial: NativeCallSnapshot | null = first) {
       beginJoin: vi.fn(),
       rollbackJoin: vi.fn(),
       setError: vi.fn(),
+      microphoneBlocked: vi.fn(),
       watch: vi.fn((_call, _onDisconnect, onNativeEnd: () => void) => {
         nativeEnded = onNativeEnd;
         return unwatch;

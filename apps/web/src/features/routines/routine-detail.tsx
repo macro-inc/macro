@@ -2,6 +2,7 @@ import { openAgentsPage } from '@app/features/agents-view/primitives/open-page';
 import { openChatWithInput } from '@app/features/chat/ChatWithAgentButton';
 import { openBulkEditModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useHasPaidAccess } from '@core/auth/license';
@@ -78,13 +79,20 @@ export function RoutineDetail(props: {
       toast.success('Duplicated');
       open(id);
     },
+    onKept: () => toast.success(t('subRoutines.kept')),
   });
   const remove = () => {
     const entity = source.entity();
     if (!entity || entity.ownerId !== userId()) return;
+    // Its sub-routines are deleted with it: say how many.
+    const created = source.subRoutines().length;
     openBulkEditModal({
       view: 'delete',
       entities: [entity],
+      note:
+        created > 0
+          ? t('subRoutines.deleteNote', { count: created })
+          : undefined,
       onFinish: () => {
         toast.success('Deleted');
         back();
@@ -174,6 +182,7 @@ export function RoutineDetail(props: {
         onShare={sharing().enabled ? share : undefined}
         onCompose={compose}
         onOpenTemplate={sharing().enabled ? open : undefined}
+        onOpenRoutine={open}
         slots={{
           PromptEditor: RoutinePromptEditor,
           ExecutionPicker: RoutineExecutionPicker,

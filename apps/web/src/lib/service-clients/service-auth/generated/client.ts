@@ -4536,6 +4536,11 @@ export type createTeamResponse403 = {
   status: 403;
 };
 
+export type createTeamResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
 export type createTeamResponse500 = {
   data: ErrorResponse;
   status: 500;
@@ -4547,6 +4552,7 @@ export type createTeamResponseSuccess = createTeamResponse200 & {
 export type createTeamResponseError = (
   | createTeamResponse400
   | createTeamResponse403
+  | createTeamResponse409
   | createTeamResponse500
 ) & {
   headers: Headers;
@@ -6840,6 +6846,11 @@ export type putProfilePictureResponse401 = {
   status: 401;
 };
 
+export type putProfilePictureResponse429 = {
+  data: ErrorResponse;
+  status: 429;
+};
+
 export type putProfilePictureResponse500 = {
   data: ErrorResponse;
   status: 500;
@@ -6850,6 +6861,7 @@ export type putProfilePictureResponseSuccess = putProfilePictureResponse200 & {
 };
 export type putProfilePictureResponseError = (
   | putProfilePictureResponse401
+  | putProfilePictureResponse429
   | putProfilePictureResponse500
 ) & {
   headers: Headers;
@@ -6917,6 +6929,11 @@ export type putProfilePictureFileResponse404 = {
   status: 404;
 };
 
+export type putProfilePictureFileResponse429 = {
+  data: ErrorResponse;
+  status: 429;
+};
+
 export type putProfilePictureFileResponse500 = {
   data: ErrorResponse;
   status: 500;
@@ -6930,6 +6947,7 @@ export type putProfilePictureFileResponseError = (
   | putProfilePictureFileResponse400
   | putProfilePictureFileResponse401
   | putProfilePictureFileResponse404
+  | putProfilePictureFileResponse429
   | putProfilePictureFileResponse500
 ) & {
   headers: Headers;

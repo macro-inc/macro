@@ -699,7 +699,10 @@ where
         } else {
             let op = DatabaseOp::Rows {
                 table: overview.pipeline.pipeline.table_id,
-                change: RowsChange::Insert { rows: inserts },
+                change: RowsChange::Insert {
+                    rows: inserts,
+                    ids: None,
+                },
             };
             let (results, version) = self.apply(receipt, viewer, OpBatch::from(vec![op])).await?;
             let added = results
@@ -937,7 +940,7 @@ where
             .map_err(|error| {
                 WorkflowError::Invalid(format!(
                     "Created pipeline \"{}\" ({id}) with the default stages and fields, but \
-                     could not set its stages and fields: {error}. Change them with EditPipeline.",
+                     could not set its stages and fields: {error}. Edit the pipeline to change them.",
                     overview.pipeline.pipeline.name
                 ))
             })?;

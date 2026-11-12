@@ -623,7 +623,7 @@ impl OpsSink for Api {
                 return Err(WriteError::SchemaNotWired);
             };
             let change = match change {
-                RowsChange::Insert { rows } => {
+                RowsChange::Insert { rows, .. } => {
                     let mut inserted = Vec::new();
                     for cells in rows {
                         inserted.push(self.create(cells).await?);

@@ -233,6 +233,9 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   it does in a snapshot. Search rows apply the same rule, but a row stays on
   the hit instead of resolving to the viewer's copy, so there a snapshot does
   not count as holding the meeting.
+- `ListCalendarEvents` and `ReadCalendarEvent` return `startLocal` and `endLocal`,
+  the times spelled out with their weekdays in the user's primary calendar zone
+  (`local_time_fields`), because models misname the weekday of an ISO date.
 - Google names the calendar an event was made on as its organizer, so an
   event on a secondary calendar has that calendar's id
   (`…@group.calendar.google.com`) as `organizer_email`; Google's

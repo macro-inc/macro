@@ -29,6 +29,8 @@ mod rename_column;
 #[cfg(feature = "gateway")]
 mod reorder_tables;
 mod required;
+#[cfg(feature = "gateway")]
+mod row_ids;
 mod saved_queries;
 #[cfg(feature = "gateway")]
 mod schema_ops;
@@ -69,11 +71,14 @@ impl<Properties> PgDatabasesRepo<Properties> {
         if !rows::lock_live_database(&mut transaction, DatabaseId::from_uuid(database)).await? {
             return Ok(None);
         }
-        let rows = rows::append_rows(&mut transaction, table_id, created_by, count).await?;
-        if rows.is_some() {
-            transaction.commit().await?;
-        }
-        Ok(rows)
+        let ids: Vec<RowId> = (0..count).map(|_| RowId::new()).collect();
+        let rows::Placed::Applied(rows) =
+            rows::append_rows(&mut transaction, table_id, created_by, &ids).await?
+        else {
+            return Ok(None);
+        };
+        transaction.commit().await?;
+        Ok(Some(rows))
     }
 
     async fn delete_row(

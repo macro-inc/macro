@@ -184,6 +184,7 @@ pub fn sdk_endpoints() -> anyhow::Result<SdkEndpoints> {
 
 pub mod connected_apps;
 pub mod reviews;
+pub mod ui_commands;
 
 async fn approve_run(
     gate: &dyn NativeToolGate,

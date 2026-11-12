@@ -184,6 +184,17 @@ export type AppEvents = {
   hotkey_use: Record<string, unknown>;
   mentions_menu_use: { itemType: string };
   snippets_menu_use: Record<string, unknown>;
+  /**
+   * An agent's `macro.ui.open` reached this tab: `opened` a new pane,
+   * `shown` one already open, `no_room`, `cancelled`, or
+   * `not_allowed_route` (refused here). `route` is the route id, never the path.
+   */
+  agent_ui_command: { kind: 'open'; outcome: string; route?: string };
+  /**
+   * The person pressed Undo on a pane an agent opened: `undone`, or `kept`
+   * when a leave guard (unsaved edits) or a newer navigation kept the pane.
+   */
+  agent_ui_command_undone: { route: string; outcome: 'undone' | 'kept' };
   /** `side` is where a split opened beside another; absent, it opened at the end. */
   split_created: { from: string; side?: 'left' | 'right' | 'above' | 'below' };
 
@@ -456,16 +467,18 @@ export type AppEvents = {
     surface: string;
     suggestions: number;
   };
-  /** A sidebar's suggestions card was closed for good. */
+  /** A sidebar's suggestions card was closed on every device. */
   routine_suggestions_card_dismissed: { surface: string };
-  /** A suggestion's row was on screen in an opened list. */
+  /** Undo right after closing a sidebar's suggestions card. */
+  routine_suggestions_card_restored: { surface: string };
+  /** A suggestion's card was on screen in an opened list. */
   routine_suggestion_shown: RoutineSuggestionEvent;
-  /** Enabled in one click from its row; `edited` if changed there first. */
+  /** Turned on in one click from its card; `edited` if changed there first. */
   routine_suggestion_enabled: RoutineSuggestionEvent & {
     routineId: string;
     edited: boolean;
   };
-  /** First change to a suggestion's name, instructions or notifications. */
+  /** First change to one of a suggestion's knob values on its card. */
   routine_suggestion_edited: RoutineSuggestionEvent;
   /** Opened in the full routine editor before saving. */
   routine_suggestion_customized: RoutineSuggestionEvent & { edited: boolean };
@@ -476,6 +489,18 @@ export type AppEvents = {
     routineId: string;
     trigger: 'manual';
     targetKind?: 'agent' | 'model' | 'steps';
+  };
+
+  // --- Saved email views ---------------------------------------------------
+  /** A confirmed create, by where the definition started. */
+  email_saved_view_created: {
+    savedViewId: string;
+    source: 'builder' | 'save_filters' | 'duplicate';
+  };
+  /** Opened from the sidebar or picker; `viewCount` is how many the viewer has. */
+  email_saved_view_opened: {
+    savedViewId: string;
+    viewCount: number;
   };
 };
 

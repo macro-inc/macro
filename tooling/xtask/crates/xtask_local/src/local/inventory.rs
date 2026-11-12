@@ -11,6 +11,9 @@
 use super::Mode;
 use super::instance::Port;
 
+/// OpenBao release with namespaces, KV v2, JWT auth, and TOTP support.
+pub const OPENBAO_IMAGE: &str = "openbao/openbao:2.7.2";
+
 /// A Rust service whose binary the orchestrator builds on the host and mounts
 /// into the runtime image at `/app/out/<cargo_bin>`. Several fields document
 /// the inventory and back validation/diagnostics rather than the hot path.

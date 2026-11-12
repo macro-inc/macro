@@ -199,6 +199,7 @@ async fn ops_insert_update_and_delete_rows_bumping_the_table_once_per_request(po
                             value: CellValue::Text("Robin".into()),
                         }],
                     ],
+                    ids: None,
                 },
             }]
             .into(),
@@ -349,6 +350,7 @@ async fn an_unknown_label_is_refused_and_creates_no_option(pool: PgPool) {
                         column: guests.status,
                         value: CellValue::Options(vec![OptionRef::Label("Maybe".into())]),
                     }]],
+                    ids: None,
                 },
             }]
             .into(),
@@ -407,6 +409,7 @@ async fn a_refused_op_leaves_nothing_of_its_batch_behind(pool: PgPool) {
                             column: guests.status,
                             value: CellValue::Options(vec![OptionRef::Label("Going".into())]),
                         }]],
+                        ids: None,
                     },
                 },
                 DatabaseOp::Rows {
@@ -480,11 +483,17 @@ async fn a_refused_op_leaves_nothing_of_its_batch_behind(pool: PgPool) {
             vec![
                 DatabaseOp::Rows {
                     table: guests.table_id,
-                    change: RowsChange::Insert { rows: vec![vec![]] },
+                    change: RowsChange::Insert {
+                        rows: vec![vec![]],
+                        ids: None,
+                    },
                 },
                 DatabaseOp::Rows {
                     table: elsewhere_table,
-                    change: RowsChange::Insert { rows: vec![vec![]] },
+                    change: RowsChange::Insert {
+                        rows: vec![vec![]],
+                        ids: None,
+                    },
                 },
             ]
             .into(),
@@ -559,7 +568,10 @@ async fn a_relation_cell_holds_rows_of_its_target_table(pool: PgPool) {
             viewer(),
             vec![DatabaseOp::Rows {
                 table: sessions,
-                change: RowsChange::Insert { rows: vec![vec![]] },
+                change: RowsChange::Insert {
+                    rows: vec![vec![]],
+                    ids: None,
+                },
             }]
             .into(),
         )
@@ -587,6 +599,7 @@ async fn a_relation_cell_holds_rows_of_its_target_table(pool: PgPool) {
                         column: relation,
                         value: CellValue::Rows(vec![keynote]),
                     }]],
+                    ids: None,
                 },
             }]
             .into(),
@@ -678,6 +691,7 @@ async fn a_type_change_refuses_misfits_and_keeps_the_cells(pool: PgPool) {
                             value: CellValue::Text("TBD".into()),
                         }],
                     ],
+                    ids: None,
                 },
             }]
             .into(),
@@ -833,6 +847,7 @@ async fn a_removed_option_leaves_its_cells_empty_and_the_others_alone(pool: PgPo
                                 value: CellValue::Options(vec![OptionRef::Label("Maybe".into())]),
                             }],
                         ],
+                        ids: None,
                     },
                 },
             ]
@@ -1069,6 +1084,7 @@ async fn a_text_column_converts_into_a_new_number_column_and_keeps_its_rows(pool
                             value: CellValue::Text("soon".into()),
                         }],
                     ],
+                    ids: None,
                 },
             }]
             .into(),

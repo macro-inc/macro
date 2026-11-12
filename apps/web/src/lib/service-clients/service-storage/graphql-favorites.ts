@@ -49,6 +49,7 @@ const FAVORITE_ENTITY_TYPE_TO_GRAPHQL = {
   database_row: 'DATABASE_ROW',
   form: 'FORM',
   external_chat: 'EXTERNAL_CHAT',
+  harness: 'HARNESS',
 } satisfies Record<FavoriteEntityType, GraphqlEntityType>;
 
 const GRAPHQL_ENTITY_TYPE_TO_FAVORITE = {
@@ -76,6 +77,7 @@ const GRAPHQL_ENTITY_TYPE_TO_FAVORITE = {
   TEAM: 'team',
   USER: 'user',
   EXTERNAL_CHAT: 'external_chat',
+  HARNESS: 'harness',
 } satisfies Record<ReturnedGraphqlEntityType, FavoriteEntityType>;
 
 /** `WHATSAPP_GROUP` is a schema-only stub kept for released clients; the
@@ -163,6 +165,7 @@ function favoriteSoupEffects(
     form: undefined,
     // Standalone groups have no Soup entity.
     external_chat: undefined,
+    harness: undefined,
   } as const satisfies Record<FavoriteEntityType, string | undefined>;
   const typename = typenames[args.entityType];
   return typename

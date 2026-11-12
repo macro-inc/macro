@@ -12,7 +12,7 @@ import {
 import { enableWhatsappLinked } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
-import CaretLeftIcon from '@phosphor/caret-left.svg';
+import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
 import { Button } from '@ui';
 import { lazy, onMount, Show } from 'solid-js';
 import { ExternalViewSkeleton } from './external-view-skeleton';

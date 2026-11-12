@@ -49,6 +49,7 @@ import type {
   DatabaseColumnCastsSource,
   DatabaseColumnConversion,
   DatabaseColumnTypeChange,
+  DatabaseRelationTargets,
   DatabaseSchemaChange,
 } from '../core/column-schema';
 import type { DatabaseViewColumn } from '../core/database-view';
@@ -154,7 +155,7 @@ export type DatabaseTableProps = {
   onDuplicate?: (rowId: string) => Promise<boolean>;
   onRequestDelete?: (rowId: string) => void;
   onClearCells?: (rowIds: string[], columnIds: string[]) => Promise<boolean>;
-  relationTables?: { id: string; name: string }[];
+  relationTables?: DatabaseRelationTargets;
   columnCasts?: DatabaseColumnCastsSource;
   onChangeColumnType?: (
     columnId: string,
@@ -761,7 +762,7 @@ export function DatabaseTable(props: DatabaseTableProps) {
     if (
       !(target instanceof HTMLElement) ||
       target.closest(
-        'input:not([type="checkbox"]), textarea, [contenteditable="true"]'
+        'input:not([type="checkbox"]), textarea, [contenteditable="true"], a[href]'
       )
     )
       return false;

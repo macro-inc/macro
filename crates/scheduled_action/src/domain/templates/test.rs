@@ -2,6 +2,7 @@ use super::*;
 use crate::domain::service::test::{
     TestService, USER, configuration, service, stored_actions, user,
 };
+use entity_access::domain::models::EntityType;
 use feature_flags::{FlagSnapshot, FlagValue, outbound::fake::FakeFeatureFlags};
 use macro_user_id::user_id::MacroUserIdStr;
 use std::collections::HashMap;
@@ -310,7 +311,7 @@ async fn disabled_missing_or_failed_flags_block_templates_but_preserve_routines_
         assert_eq!(copies.len(), 1);
         assert_eq!(copies[0].id, activated.id);
         assert_eq!(copies[0].enabled, activated.enabled);
-        assert!(actions.get_action(id).await.is_ok());
+        assert!(actions.get_action(&owner_receipt(user(), id)).await.is_ok());
 
         templates
             .unshare_template(owner_receipt(user(), id))
@@ -324,7 +325,12 @@ async fn disabled_missing_or_failed_flags_block_templates_but_preserve_routines_
                 .unwrap()
                 .is_none()
         );
-        assert!(actions.get_action(activated.id.unwrap()).await.is_ok());
+        assert!(
+            actions
+                .get_action(&owner_receipt(other_user(), activated.id.unwrap()))
+                .await
+                .is_ok()
+        );
     }
 }
 

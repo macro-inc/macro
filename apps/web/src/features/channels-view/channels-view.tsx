@@ -54,6 +54,8 @@ import { ChannelsViewMain } from './components/ChannelsViewMain';
 import { ChannelThreadsView } from './components/ChannelThreadsView';
 import { PendingDirectMessageDetail } from './components/PendingDirectMessageDetail';
 import { ChannelsRail } from './components/rail/ChannelsRail';
+import { createSectionSearchSource } from './components/rail/next/channel-discovery-source';
+import { MobileSectionsView } from './components/rail/next/mobile/MobileSectionsView';
 import { createChannelDetail } from './primitives/create-channel-detail';
 import {
   type ChannelsSources,
@@ -78,8 +80,13 @@ export type ChannelsViewProps = {
 
 // Mounted inside the mobile list's Suspense boundary.
 function MobileChannelsList(props: { sources: ChannelsSources }) {
-  const { mobileLayout, selectedChannel, setSelectedChannel } =
-    useChannelsView();
+  const {
+    mobileLayout,
+    selectedChannel,
+    setSelectedChannel,
+    sectionsEnabled,
+    sectionsLoading,
+  } = useChannelsView();
   const panel = useSplitPanelOrThrow();
   const notificationSource = useGlobalNotificationSource();
   const orchestrator = useGlobalBlockOrchestrator();
@@ -151,13 +158,26 @@ function MobileChannelsList(props: { sources: ChannelsSources }) {
       .slice(0, MAX_PINNED_CHANNELS);
   });
   return (
-    <ChannelsMobileView
-      source={mobileSearchSource}
-      pinned={pinned()}
-      searchQuery={mobileSearchText()}
-      onClearSearch={() => SearchState.setQuery('')}
-      openPreview={mobileLayout() ? undefined : openPreview}
-    />
+    <Show when={!sectionsLoading()}>
+      <Show
+        when={sectionsEnabled()}
+        fallback={
+          <ChannelsMobileView
+            source={mobileSearchSource}
+            pinned={pinned()}
+            searchQuery={mobileSearchText()}
+            onClearSearch={() => SearchState.setQuery('')}
+            openPreview={mobileLayout() ? undefined : openPreview}
+          />
+        }
+      >
+        <MobileSectionsView
+          sources={props.sources}
+          pinned={pinned()}
+          openPreview={mobileLayout() ? undefined : openPreview}
+        />
+      </Show>
+    </Show>
   );
 }
 
@@ -167,17 +187,27 @@ function DesktopChannelsRail(props: {
   onSearchOpenChange: (open: boolean) => void;
 }) {
   const listChannels = useChannelListSearchPool();
+  const { sectionsEnabled } = useChannelsView();
   const [searchQuery, setSearchQuery] = createSignal('');
   const searchSource = createChannelSearchSource({
     additionalLocalChannels: listChannels,
     text: searchQuery,
-    enabled: () => props.searchOpen,
+    enabled: () => props.searchOpen && !sectionsEnabled(),
     scope: () => 'search',
     source: () => props.sources.search,
   });
+  const sectionSearch = createSectionSearchSource({
+    enabled: () => props.searchOpen && sectionsEnabled(),
+    text: searchQuery,
+    recent: () => props.sources.search,
+    localChannels: listChannels,
+  });
   return (
     <ChannelsRail
-      sources={{ ...props.sources, search: searchSource }}
+      sources={{
+        ...props.sources,
+        search: sectionsEnabled() ? sectionSearch : searchSource,
+      }}
       searchQuery={searchQuery()}
       onSearchQueryChange={setSearchQuery}
       searchOpen={props.searchOpen}
@@ -214,14 +244,27 @@ function DesktopChannelThreads(props: { sources: ChannelsSources }) {
 }
 function ChannelsViewRoot() {
   const panel = useSplitPanelOrThrow();
-  const { state, tab, mobileLayout, sectionsLoading, selectedChannel } =
-    useChannelsView();
+  const {
+    state,
+    tab,
+    mobileLayout,
+    sectionsLoading,
+    sectionsEnabled,
+    selectedChannel,
+  } = useChannelsView();
   const threadsTab = () => !isTouchDevice() && tab() === 'threads';
   const [railSearchOpen, setRailSearchOpen] = createSignal(false);
 
   const sources = useChannelsSources(
     (scope) => {
-      if (isTouchDevice()) return scope === 'recents';
+      if (isTouchDevice()) {
+        return (
+          scope === 'recents' ||
+          (!sectionsLoading() &&
+            sectionsEnabled() &&
+            scope === 'direct_messages')
+        );
+      }
       if (sectionsLoading()) return false;
       if (railSearchOpen()) return scope === 'search';
       if (scope === 'search') return false;
@@ -240,7 +283,7 @@ function ChannelsViewRoot() {
     <ListEntityMetadataQueryProvider>
       <StaticMarkdownContext>
         <Show
-          when={isTouchDevice() || !sectionsLoading()}
+          when={!sectionsLoading()}
           fallback={
             <div class="grid size-full place-items-center">
               <SpinnerIcon

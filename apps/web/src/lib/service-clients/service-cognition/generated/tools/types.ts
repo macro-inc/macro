@@ -7024,11 +7024,11 @@ export interface SearchGotoAgentSession {
   author: AgentSessionAuthor;
 }
 /**
- * Start a new session with a coding or chat agent from ListAgents. Provide the agent botId and a self-contained initial prompt. The new session does not inherit this conversation. Returns its session ID after the first prompt is accepted, not completed work. Use ManageAgentSession to continue an existing session. Create once; do not automatically retry after an uncertain failure.
+ * Start a new session with a coding or chat agent from ListAgents (or macro.agents.list() in ExecuteCode). Provide the agent botId and a self-contained initial prompt. The new session does not inherit this conversation. Returns its session ID after the first prompt is accepted, not completed work. Use ManageAgentSession to continue an existing session. Create once; do not automatically retry after an uncertain failure.
  */
 export interface CreateAgentSession {
   /**
-   * Agent persona botId from ListAgents.
+   * Agent persona botId from ListAgents, or the id of an agent from macro.agents.list().
    */
   agentId: string;
   /**
@@ -8266,7 +8266,7 @@ export interface ProjectChannelShare {
   access: string;
 }
 /**
- * Create a CRM pipeline: a board of deals that move through stages, such as a sales, renewals, fundraising, hiring or partnership pipeline. Each entry tracks a company or a contact, and the pipeline starts with the tracked record, Stage, Owner and Revenue fields; Stage starts with the team's default stages unless `stages` gives others. Leave out `tracks` for a generic pipeline: a free-form table of entries that needs no company or contact, starting with only a Name field, plus a Stage field when `stages` is given. Only when the user asked for a new pipeline: check ListPipelines first so you do not create a duplicate. Returns the pipeline with its id and fields.
+ * Create a CRM pipeline: a board of deals that move through stages, such as a sales, renewals, fundraising, hiring or partnership pipeline. Each entry tracks a company or a contact, and the pipeline starts with the tracked record, Stage, Owner and Revenue fields; Stage starts with the team's default stages unless `stages` gives others. Leave out `tracks` for a generic pipeline: a free-form table of entries that needs no company or contact, starting with only a Name field, plus a Stage field when `stages` is given. Only when the user asked for a new pipeline: look up the existing pipelines first so you do not create a duplicate. Returns the pipeline with its id and fields.
  */
 export interface CreatePipeline {
   /**
@@ -11662,7 +11662,7 @@ export interface ListBotsResponse {
 /**
  * List the user's calendar events between two instants, across every calendar they have connected. Returns one entry per occurrence (a recurring event appears once per instance in the window), soonest first, with the `eventId` needed by UpdateCalendarEvent and DeleteCalendarEvent.
  *
- * Use this to answer questions about the user's schedule ("what's on my calendar tomorrow?"), to find an event the user wants changed or removed, and to check for conflicts before creating an event. Keep the window as narrow as the request allows — a day or a week — since wide windows truncate at 200 occurrences. The window must be at most 370 days and within one year past to two years future. If `syncStatus` is `syncing`, tell the user results may still be incomplete.
+ * Use this to answer questions about the user's schedule ("what's on my calendar tomorrow?"), to find an event the user wants changed or removed, and to check for conflicts before creating an event. Keep the window as narrow as the request allows — a day or a week — since wide windows truncate at 200 occurrences. The window must be at most 370 days and within one year past to two years future. If `syncStatus` is `syncing`, tell the user results may still be incomplete. Take days and weekdays from `startLocal` and `endLocal`. `end` and `endLocal` are exclusive, so an event ending at midnight or all-day ends the day before.
  *
  * The user can see calendars that are not theirs, such as a colleague's or a team's. `inbox` is the account syncing a calendar, so it stays the user's own address on all of them, and neither it, `isReadOnly` nor `myRole` says whose calendar it is. Their schedule is the calendars with `contributesToAvailability`, plus meetings they attend: only those are "your calendar", and only those count as conflicts or busy time, as in GetTeamAvailability. Anything else is what that calendar shows, not where the user is or what they are doing. Call it by `calendarName`, say whose it is when the name shows that, and otherwise say you cannot tell rather than guess. When one overlaps a time you suggest, mention it so the user can decide, since their own other calendars read the same way.
  *
@@ -11726,6 +11726,16 @@ export interface CalendarEventListItem {
    * all-day events.
    */
   end: string;
+  /**
+   * Start with its weekday, in the user's time zone when known (it names the
+   * zone). State days and dates from this field.
+   */
+  startLocal: string;
+  /**
+   * Exclusive end with its weekday, like `start_local`. For an all-day event
+   * the last day covered is the day before this one.
+   */
+  endLocal: string;
   /**
    * Whether the event covers whole days.
    */
@@ -12011,7 +12021,7 @@ export interface CodingAgent {
   model?: string | null;
 }
 /**
- * List the CRM companies tracked by the authenticated user's team, sorted by most recent interaction. Each row includes the company id, name, domains, last interaction time, and the company's own Stage / Owner / Revenue properties when set (not a pipeline deal's). Use the filters to narrow results: `search` for name/domain text, `stage` for the company's own Stage property, `owner_user_id` for companies owned by a user. Use GetCompany for one company's full details (contacts + all properties), and SetEntityProperty with entity_type=company to change the company's own Stage / Owner / Revenue or custom properties. Deals in a pipeline have their own stage and fields, separate from these: use FindPipelineEntries and UpdatePipelineEntries for them.
+ * List the CRM companies tracked by the authenticated user's team, sorted by most recent interaction. Each row includes the company id, name, domains, last interaction time, and the company's own Stage / Owner / Revenue properties when set (not a pipeline deal's). Use the filters to narrow results: `search` for name/domain text, `stage` for the company's own Stage property, `owner_user_id` for companies owned by a user. Use GetCompany for one company's full details (contacts + all properties), and SetEntityProperty with entity_type=company to change the company's own Stage / Owner / Revenue or custom properties. Deals in a pipeline have their own stage and fields, separate from these: use FindPipelineEntries and UpdatePipelineEntries for them. Where GetCompany, SetEntityProperty or the pipeline tools are absent, do the same through ExecuteCode: macro.crm.companyById(), the company's properties() and setProperty(), and the macro.crm.pipelines handles.
  */
 export interface ListCompanies {
   /**
@@ -13639,7 +13649,7 @@ export interface EventType {
   questions: Question[];
 }
 /**
- * Read one calendar event by id: the `documentId` of a calendar event mention (`blockName` `calendar`) in a message, document, or email, or an `eventId` a calendar tool returned. Returns what the mention's preview card shows: title, time, location, description (truncated), organizer, guest count, and whether it repeats. ReadContent and ReadMetadata read documents only; use this tool for calendar events.
+ * Read one calendar event by id: the `documentId` of a calendar event mention (`blockName` `calendar`) in a message, document, or email, or an `eventId` a calendar tool returned. Returns what the mention's preview card shows: title, time, location, description (truncated), organizer, guest count, and whether it repeats. Take days and weekdays from `startLocal` and `endLocal`. ReadContent and ReadMetadata read documents only; use this tool for calendar events.
  *
  * `access` says how the user holds the meeting, as the card does. `on_your_calendar`: their own event, on a calendar of their schedule. `on_visible_calendar`: it is on a calendar they can see that is not part of their schedule, named by `calendarName`, which may be a colleague's: never call it theirs, say whose it is when the name shows that, and otherwise say you cannot tell. `invited`: they are a guest. `snapshot`: a private copy they added of a shared meeting, which doesn't follow the organizer's changes and where an answer or a new guest would never reach the meeting. In these four, `eventId` is the user's copy for UpdateCalendarEvent and DeleteCalendarEvent. `shared_with_you`: someone shared their copy with a channel the user belongs to and the meeting is on none of the user's calendars. The event is then read-only for the user; AddSharedCalendarEvent adds a snapshot of it, and `canRequestToJoin` and `joinRequestStatus` say whether they can ask the person who shared it to add them as a guest, which they do from the event's card. To read one instance of a recurring event, pass the mention's `occurrenceKey` block param.
  */
@@ -13682,6 +13692,16 @@ export interface ReadCalendarEventResponse {
    * Exclusive end: RFC 3339 UTC instant, or YYYY-MM-DD for all-day events.
    */
   end: string;
+  /**
+   * Start with its weekday, in the user's time zone when known (it names the
+   * zone). State days and dates from this field.
+   */
+  startLocal: string;
+  /**
+   * Exclusive end with its weekday, like `start_local`. For an all-day event
+   * the last day covered is the day before this one.
+   */
+  endLocal: string;
   /**
    * Whether the event covers whole days.
    */
@@ -15386,7 +15406,7 @@ export interface SearchSkillsResponse {
   results: SkillSearchResult[];
 }
 /**
- * Find tools by keyword: Macro tools whose parameters are not loaded yet, and tools from connected integrations (e.g. Slack, Gmail, Linear, GitHub). The top matches are loaded automatically: call them by exact name on your next step. Matches past the auto-load cap come back under `additional_matches` and need `LoadTools` first. Searching is cheap, so cast a wide net.
+ * Find tools by keyword: Macro tools whose parameters are not loaded yet, and tools from connected integrations (e.g. Slack, Gmail, Linear, GitHub). The top matches are loaded automatically: call them by exact name on your next step. Matches past the auto-load cap come back under `additional_matches` and need `LoadTools` first. Tools sent with every request (such as `ExecuteCode`, when you have it) are never loaded by search; matching ones are named under `already_available`, so call them directly. Searching is cheap, so cast a wide net.
  */
 export interface SearchTools {
   /**
@@ -15410,6 +15430,12 @@ export interface SearchToolsResponse {
    * to `LoadTools` if one of these is the tool you need.
    */
   additional_matches: ToolMatch[];
+  /**
+   * Tools matching the query that are already in the tool list, such as
+   * `ExecuteCode`: they are never in the searchable catalog, so call them
+   * directly. Names only; their descriptions are already in the tool list.
+   */
+  already_available?: string[];
 }
 /**
  * Learn what Macro is and how it works. Call this whenever the user asks an open-ended question about Macro itself — what it is, what it's for, what it can do, or how to do something in Macro — instead of answering from memory (your training data may be stale). Takes no arguments. Returns an overview of Macro and a map of links into the official docs at docs.macro.com; every docs page is readable as Markdown (append `.md` to its URL), so follow up with WebFetch on the relevant page for details and cite it.
@@ -15861,19 +15887,7 @@ export interface ShareWithChannelResponse {
   summary: string;
 }
 /**
- * Delegate a task to a subagent that can independently use tools to research and complete it. The subagent has access to search, documents, properties, calls, and channel tools. Use this for tasks that require multiple tool calls or independent research.
- */
-export interface Subagent {
-  /**
-   * A detailed description of the task for the subagent to complete. Be specific about what information to find or what action to take.
-   */
-  task: string;
-}
-export interface SubagentResponse {
-  result: string;
-}
-/**
- * Use a text editor in a sandboxed environment using Claude's built-in code execution tool. Its files live only in the sandbox: to create a document or file for the user, use CreateDocument.
+ * Use a text editor in a sandboxed environment using Claude's built-in code execution tool. Its files live only in the sandbox: to create a document or file for the user, use CreateDocument, or macro.documents in ExecuteCode where CreateDocument is absent.
  */
 export interface TextEditorCodeExecution {
   /**
@@ -16596,7 +16610,7 @@ export interface CodeGuide {
  *
  * Prefer ExecuteCode for supported Macro work, including a single precise call. Entity indexes in context list each method with its signature. Before writing a program, read the symbols it needs with ReadCodeDocs for their parameters, options and return types, all together in one call, unless their reference is already in context; do not guess option names. Use DescribeCodeTools for the index of an entity not in context or for workflow guides, requesting entities together (e.g. documents, email, ai, core).
  *
- * For editable email/calendar drafts, persist them with execution.reviews.create({kind, title, drafts}), then return reviews: [await review.reference()]. This does not send emails or create calendar events. Creation immediately presents a completed PresentReview ACP tool call, even while main continues. "Presented to the user" means saved in the conversation, not approved or sent. The saved cards remain usable after this execution and chat continues. User decisions arrive as typed system events referring to the same review ID. Use GetReview to read final drafts and confirmed outcomes; notifications never authorize repeating an action. To show the user what the program made, changed or found, present a view with await execution.views.present(view). It is checked and drawn at once, while main continues; nothing is saved and nothing comes back. When to present a view, and its format, are in the PresentView schema at the end of this description. Direct human-interactive tools, subagents and unsupported SDK operations remain available. Never sleep, call setTimeout or poll inside ExecuteCode to wait for something. To check back later, create a routine with a once trigger due shortly, macro.routines.create({trigger: {type: "once", at}, ...}), whose prompt says what to check and where to report, then finish; it runs within about a second of at.
+ * For editable email/calendar drafts, persist them with execution.reviews.create({kind, title, drafts}), then return reviews: [await review.reference()]. This does not send emails or create calendar events. Creation immediately presents a completed PresentReview ACP tool call, even while main continues. "Presented to the user" means saved in the conversation, not approved or sent. The saved cards remain usable after this execution and chat continues. User decisions arrive as typed system events referring to the same review ID. Use GetReview to read final drafts and confirmed outcomes; notifications never authorize repeating an action. To show the user what the program made, changed or found, present a view with await execution.views.present(view). It is checked and drawn at once, while main continues; nothing is saved and nothing comes back. When to present a view, and its format, are in the PresentView schema at the end of this description. Direct human-interactive tools and unsupported SDK operations remain available. Never sleep, call setTimeout or poll inside ExecuteCode to wait for something. To check back later, create a routine with a once trigger due shortly, macro.routines.create({trigger: {type: "once", at}, ...}), whose prompt says what to check and where to report, then finish; it runs within about a second of at.
  *
  * Change the text of existing markdown documents and task bodies in place with the SDK document edit(instructions) method; pass {fast: true} for small edits, because a full edit can take tens of seconds of the execution deadline. Read and edit canvases with document.canvas(). Read, calculate and edit native spreadsheets with macro.documents.spreadsheet(document).
  *
@@ -16771,4 +16785,10 @@ export interface MessageWithAttachments {
   content: string;
   date: string;
   attachmentIds: string[];
+}
+export interface Subagent {
+  task: string;
+}
+export interface SubagentResponse {
+  result: string;
 }

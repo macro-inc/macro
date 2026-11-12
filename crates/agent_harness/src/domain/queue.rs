@@ -28,6 +28,7 @@ use agent_session::domain::events::{InFlightTurnSummary, TurnSummary};
 use agent_session::domain::model::AgentSessionId;
 use agent_session::domain::model::PrompterKind;
 use agent_session::domain::model::StoredQueuedAction;
+use agent_session::domain::model::UiClientId;
 use agent_session::domain::ports::QueuedControl;
 use bot_id::BotId;
 use chrono::{DateTime, Utc};
@@ -61,6 +62,8 @@ pub struct QueuedEntry {
     pub announce: Option<AnnounceOrigin>,
     /// Why the agent is being asked, composed into the prompt at dispatch.
     pub context: Option<TriggerContext>,
+    /// The app tab the prompt was typed in, recorded on the turn it opens.
+    pub client: Option<UiClientId>,
     /// The chip message, once posted. Set by the dispatch that posts it and
     /// carried through a requeue, so a dispatch that fails *after*
     /// announcing retries without posting a second chip.
@@ -203,6 +206,7 @@ impl QueuedEntry {
                 .transpose()?,
             announced_message_id: self.announced,
             context: self.context.clone(),
+            client: self.client,
         })
     }
 
@@ -215,6 +219,7 @@ impl QueuedEntry {
             announce: stored.announce.map(serde_json::from_value).transpose()?,
             announced: stored.announced_message_id,
             context: stored.context,
+            client: stored.client,
             created_at: stored.created_at,
         })
     }

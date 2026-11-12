@@ -57,18 +57,17 @@ async fn optional_claim_is_validated_before_a_handler_can_use_it() {
     for bearer in [None, Some(token(None, None))] {
         let mut request = Request::builder()
             .uri("/")
-            .header("x-agent-correlation-id", Uuid::from_u128(1).to_string());
+            .header("x-agent-correlation-id", Uuid::from_u128(1).to_string())
+            .header("x-macro-sdk-verb", "edited");
         if let Some(bearer) = bearer {
             request = request.header("authorization", format!("Bearer {bearer}"));
         }
         let (mut parts, _) = request.body(()).unwrap().into_parts();
-        assert!(
-            AgentCorrelationExtractor::from_request_parts(&mut parts, &state)
-                .await
-                .unwrap()
-                .0
-                .is_none()
-        );
+        let extracted = AgentCorrelationExtractor::from_request_parts(&mut parts, &state)
+            .await
+            .unwrap();
+        assert_eq!(extracted.0, None);
+        assert_eq!(extracted.1, None);
     }
     assert_eq!(repository.calls.load(Ordering::SeqCst), 0);
     for (id, agent, expected) in [
@@ -81,18 +80,34 @@ async fn optional_claim_is_validated_before_a_handler_can_use_it() {
         let (mut parts, _) = Request::builder()
             .uri("/")
             .header("authorization", format!("Bearer {bearer}"))
+            .header("x-macro-sdk-verb", "edited")
             .body(())
             .unwrap()
             .into_parts();
         let status = match AgentCorrelationExtractor::from_request_parts(&mut parts, &state).await {
-            Ok(AgentCorrelationExtractor(found)) => {
+            Ok(AgentCorrelationExtractor(found, verb)) => {
                 assert_eq!(found, Some(Uuid::from_u128(id)));
+                assert_eq!(verb, Some(crate::AgentVerb::Edited));
                 StatusCode::OK
             }
             Err(error) => error.into_response().status(),
         };
         assert_eq!(status, expected);
     }
+
+    let bearer = token(Some(Uuid::from_u128(1)), Some(Uuid::from_u128(3)));
+    let (mut parts, _) = Request::builder()
+        .uri("/")
+        .header("authorization", format!("Bearer {bearer}"))
+        .header("x-macro-sdk-verb", "unknown")
+        .body(())
+        .unwrap()
+        .into_parts();
+    let extracted = AgentCorrelationExtractor::from_request_parts(&mut parts, &state)
+        .await
+        .unwrap();
+    assert_eq!(extracted.0, Some(Uuid::from_u128(1)));
+    assert_eq!(extracted.1, None);
 }
 
 fn routine_token(routine: Uuid, correlation: Option<Uuid>, agent: Option<Uuid>) -> String {

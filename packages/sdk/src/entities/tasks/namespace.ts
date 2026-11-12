@@ -28,6 +28,8 @@ export class TaskNamespace {
   /**
    * Create a task, with its initiative, assignees and due date in the same
    * request. The task starts Not started.
+   *
+   * @write
    */
   create(opts: {
     name: string;
@@ -50,6 +52,8 @@ export class TaskNamespace {
   /**
    * Names and state of many tasks in one request, in the order given. Tasks
    * that no longer exist are left out.
+   *
+   * @readonly
    */
   summaries(tasks: Task[]): Promise<TaskSummary[]> {
     return Task.summaries(this.client, tasks);
@@ -60,6 +64,8 @@ export class TaskNamespace {
    * task with this title and body, most similar first. Call it in the same
    * program as `create`: create only when nothing is a likely duplicate, and
    * otherwise return the matches and ask the user instead of creating.
+   *
+   * @readonly
    */
   findSimilar(opts: { title: string; body?: string }): Promise<SimilarTask[]> {
     return Task.findSimilar(this.client, opts);
@@ -67,12 +73,18 @@ export class TaskNamespace {
 
   /**
    * The tasks the GitHub pull request at `url` references, oldest link first.
+   *
+   * @readonly
    */
   forPullRequest(url: string): Promise<Task[]> {
     return Task.forPullRequest(this.client, url);
   }
 
-  /** Search tasks by name and content, most relevant first, auto-paginated. */
+  /**
+   * Search tasks by name and content, most relevant first, auto-paginated.
+   *
+   * @readonly
+   */
   search(query: string, opts?: SearchOpts): AsyncGenerator<Task> {
     return Task.search(this.client, query, opts);
   }

@@ -253,7 +253,10 @@ export function ColorPickerPopover(props: {
   const alpha = () => pickerColor().alpha;
   const oklch = () => formatOklch(pickerColor());
 
-  const color = () => new Color(oklch());
+  // Build from coordinates: a gray's near-zero chroma serializes as `5e-16`,
+  // which colorjs.io's string parser rejects.
+  const color = () =>
+    new Color('oklch', [lightness(), chroma(), hue()], alpha());
   const rgb = createMemo(() => {
     const [r, g, b] = color()
       .to('srgb')

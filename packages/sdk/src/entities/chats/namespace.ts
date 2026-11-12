@@ -21,12 +21,20 @@ export class ChatNamespace {
     return Chat.byId(this.client, id);
   }
 
-  /** Create an empty AI chat, optionally named and in a project. */
+  /**
+   * Create an empty AI chat, optionally named and in a project.
+   *
+   * @write
+   */
   create(opts?: { name?: string; project?: Project }): Promise<Chat> {
     return Chat.create(this.client, opts);
   }
 
-  /** Search AI chats by name and content, most relevant first, auto-paginated. */
+  /**
+   * Search AI chats by name and content, most relevant first, auto-paginated.
+   *
+   * @readonly
+   */
   search(query: string, opts?: SearchOpts): AsyncGenerator<Chat> {
     return Chat.search(this.client, query, opts);
   }

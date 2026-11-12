@@ -1,0 +1,112 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                h.id, h.kind, h.name, h.owner_user_id, h.created_by, h.allow_permission_bypass,\n                h.created_at, h.updated_at, h.last_connected_at, h.last_disconnected_at,\n                EXISTS (\n                    SELECT 1 FROM harness_runtime_connection c\n                    WHERE c.harness_id = h.id AND c.lease_expires_at > now()\n                ) AS \"has_live_connection!\",\n                EXISTS (\n                    SELECT 1 FROM harness_runtime_connection c\n                    WHERE c.harness_id = h.id\n                ) AS \"has_connection_record!\",\n                harness_access_level(h.id, $1) AS \"access?: AccessLevel\",\n                ARRAY(\n                    SELECT ea.source_id FROM entity_access ea\n                    WHERE ea.entity_id = h.id AND ea.entity_type = 'harness' AND ea.source_type = 'team'\n                ) AS shared_team_ids\n            FROM harnesses h\n            WHERE h.deleted_at IS NULL\n              AND harness_can_run(h.id, $1)\n              AND (\n                h.owner_user_id = $1\n                OR h.created_by = $1\n                OR h.id IN (\n                    SELECT ea.entity_id FROM entity_access ea\n                    WHERE ea.entity_type = 'harness'\n                      AND (\n                        (ea.source_type = 'user' AND ea.source_id = $1)\n                        OR (\n                            ea.source_type = 'team'\n                            AND ea.source_id IN (\n                                SELECT tu.team_id::text FROM team_user tu WHERE tu.user_id = $1\n                            )\n                        )\n                      )\n                )\n              )\n            ORDER BY h.created_at DESC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "owner_user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_by",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "allow_permission_bypass",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "last_connected_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "last_disconnected_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "has_live_connection!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 11,
+        "name": "has_connection_record!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 12,
+        "name": "access?: AccessLevel",
+        "type_info": {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 13,
+        "name": "shared_team_ids",
+        "type_info": "TextArray"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "dde02d4ca579b56c16063f4500a01902894a2f7819f75d7a5ece3eb4ae975738"
+}

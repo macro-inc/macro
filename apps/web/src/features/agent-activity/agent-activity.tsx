@@ -1,3 +1,4 @@
+import { useSessionActivity } from '@core/agent-session/session-activity';
 import {
   type AgentActivityData,
   isAgentActivityCard,
@@ -45,7 +46,8 @@ function LiveActivity(props: AgentActivityData) {
     () => props.segment,
     rows
   );
-  return <Run rows={activity()} sealed={false} />;
+  const summary = useSessionActivity(() => props.agentSessionId);
+  return <Run rows={activity()} sealed={false} summary={summary()} />;
 }
 
 /**
@@ -53,7 +55,12 @@ function LiveActivity(props: AgentActivityData) {
  * stands in for the step that presented it and never folds into the run's
  * line or summary.
  */
-function Run(props: { rows: readonly ActivityRowView[]; sealed: boolean }) {
+function Run(props: {
+  rows: readonly ActivityRowView[];
+  sealed: boolean;
+  /** The session's live status line over an open run's steps. */
+  summary?: string;
+}) {
   const steps = () =>
     props.rows.filter((row) => !isAgentActivityCard(row.card));
   const views = () =>
@@ -63,7 +70,10 @@ function Run(props: { rows: readonly ActivityRowView[]; sealed: boolean }) {
   return (
     <>
       <Show when={steps().length > 0}>
-        <Show when={props.sealed} fallback={<ActivityLine rows={steps()} />}>
+        <Show
+          when={props.sealed}
+          fallback={<ActivityLine rows={steps()} summary={props.summary} />}
+        >
           <ActivitySummary rows={steps()} />
         </Show>
       </Show>

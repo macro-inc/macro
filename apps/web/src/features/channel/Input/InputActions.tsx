@@ -1,4 +1,4 @@
-import { pickNativePhotoLibraryMedia } from '@core/mobile/nativePhotoLibrary';
+import { pickPhotoLibraryMediaOrFiles } from '@core/mobile/nativePhotoLibrary';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { isPlatform } from '@core/util/platform';
 import PaperclipIcon from '@icon/system/regular/paperclip.svg';
@@ -103,11 +103,9 @@ export function AttachNativeMediaAction() {
   };
 
   const onAttachMedia = async () => {
-    const files = await pickNativePhotoLibraryMedia();
-    if (files === null) {
-      fileInputRef?.click();
-      return;
-    }
+    const files = await pickPhotoLibraryMediaOrFiles(() =>
+      fileInputRef?.click()
+    );
     if (files.length > 0) {
       await commands.attachFiles(files);
     }

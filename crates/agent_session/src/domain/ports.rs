@@ -356,15 +356,21 @@ pub struct FirstPrompt {
     pub prompt: String,
     /// Files the prompt refers to, in the order the user attached them.
     pub attachments: Vec<PromptAttachment>,
+    /// The app tab the person typed the prompt in, already admitted by
+    /// [`super::control::ControlPrincipal::admit_client`]. Recorded on the
+    /// first turn like a control prompt's, so the turn can show them things
+    /// in that tab.
+    pub client: Option<super::model::UiClientId>,
 }
 
 impl FirstPrompt {
-    /// A plain text prompt under a minted id.
+    /// A plain text prompt under a minted id, typed in no tab.
     pub fn text(prompt: impl Into<String>) -> Self {
         Self {
             action_id: None,
             prompt: prompt.into(),
             attachments: Vec::new(),
+            client: None,
         }
     }
 
@@ -445,6 +451,12 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
 
     /// Get an agent session by id.
     fn get(&self, id: AgentSessionId) -> impl Future<Output = Result<AgentSession>> + Send;
+
+    /// Whether the session's persisted turn projection shows a turn that has
+    /// not finished: one starting, running, stopping, or blocked on an
+    /// answer, or one that was when the session disconnected. Durable, so it
+    /// holds for a turn any replica, or a process since restarted, started.
+    fn has_unfinished_turn(&self, id: AgentSessionId) -> impl Future<Output = Result<bool>> + Send;
 
     /// Whether the session's in-process turns are billed to its owner.
     fn billing(
@@ -1039,6 +1051,14 @@ pub trait AgentSessionRealtime {
         async { Ok(()) }
     }
 
+    /// Publish a running session's newest activity summary to its viewers.
+    fn publish_activity_summarized(
+        &self,
+        _event: AgentSessionActivitySummarized,
+    ) -> impl Future<Output = Result<(), rootcause::Report>> + Send {
+        async { Ok(()) }
+    }
+
     /// Publish a session's changed queue - the whole queue, every time - to
     /// its viewers.
     fn publish_queue_changed(
@@ -1292,6 +1312,9 @@ pub struct ControlEvent {
     /// Why the agent is being asked, when a runtime forwards a triggered
     /// prompt. Users driving a session directly supply none.
     pub context: Option<trigger_context::TriggerContext>,
+    /// The app tab a person typed the prompt in; see
+    /// [`UiClientId`](super::model::UiClientId).
+    pub client: Option<super::model::UiClientId>,
 }
 
 /// What accepting a control operation did with it.

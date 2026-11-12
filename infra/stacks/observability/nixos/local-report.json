@@ -1,5 +1,5 @@
 {
-  "description": "Loki queries over run_local's opt-in run, step, build and service events (service_name=local-telemetry), read by both local-dashboard.nix and scripts/ci-report.ts --spec local. $NAME expands to filters.NAME and $RANGE to the window.",
+  "description": "Loki queries over run_local's run, step, build and service events (service_name=local-telemetry), read by both local-dashboard.nix and scripts/ci-report.ts --spec local. $NAME expands to filters.NAME and $RANGE to the window.",
   "filters": {
     "RUN": "{service_name=\"local-telemetry\"} | event=\"run\" | kind=\"up\"",
     "READY": "{service_name=\"local-telemetry\"} | event=\"run\" | kind=\"up\" | outcome=\"success\"",

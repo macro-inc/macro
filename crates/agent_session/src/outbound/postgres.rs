@@ -607,6 +607,25 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
         self.find(id).await?.ok_or(AgentSessionError::NotFound(id))
     }
 
+    async fn has_unfinished_turn(&self, id: AgentSessionId) -> Result<bool> {
+        sqlx::query_scalar!(
+            r#"
+            SELECT COALESCE(
+                turn_state IN ('starting', 'running', 'stopping', 'blocked')
+                    OR (turn_state = 'disconnected' AND turn_interrupted),
+                false
+            ) AS "unfinished!"
+            FROM agent_session
+            WHERE id = $1
+            "#,
+            id.as_uuid(),
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .context("failed to read the agent session's turn state")?
+        .ok_or(AgentSessionError::NotFound(id))
+    }
+
     async fn billing(&self, id: AgentSessionId) -> Result<crate::domain::model::SessionBilling> {
         let billing = sqlx::query_scalar!(
             "SELECT billing FROM agent_session WHERE id = $1",
@@ -956,11 +975,13 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
 
     async fn set_turn_prompter(&self, id: AgentSessionId, prompter: &TurnPrompter) -> Result<()> {
         sqlx::query!(
-            "UPDATE agent_session SET turn_action_id = $2, turn_prompter = $3, turn_prompter_kind = $4 WHERE id = $1",
+            "UPDATE agent_session SET turn_action_id = $2, turn_prompter = $3, turn_prompter_kind = $4, turn_prompter_client = $5 WHERE id = $1",
             id.as_uuid(),
             prompter.action_id.as_uuid(),
             prompter.user.as_ref().filter(|_| prompter.kind != crate::domain::model::PrompterKind::System).map(|user| user.as_ref()),
             prompter.kind.as_ref(),
+            // A tab only stands beside a person who prompted from it.
+            prompter.client.filter(|_| prompter.acting_user().is_some()).map(crate::domain::model::UiClientId::as_uuid),
         )
         .execute(&self.pool)
         .await
@@ -987,7 +1008,7 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
     async fn turn_prompter(&self, id: AgentSessionId) -> Result<Option<TurnPrompter>> {
         let row = sqlx::query!(
             r#"
-            SELECT turn_action_id, turn_prompter_kind, turn_prompter AS "turn_prompter: MacroUserIdStr<'static>"
+            SELECT turn_action_id, turn_prompter_kind, turn_prompter AS "turn_prompter: MacroUserIdStr<'static>", turn_prompter_client
             FROM agent_session
             WHERE id = $1
             "#,
@@ -1007,6 +1028,9 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
                     action_id,
                 ),
                 user: row.turn_prompter,
+                client: row
+                    .turn_prompter_client
+                    .map(crate::domain::model::UiClientId::from_uuid),
             })
         }))
     }
@@ -1848,6 +1872,13 @@ impl<B: BotFacts + 'static> AgentSessionLogRepo for PgAgentSessionRepo<B> {
                 r#"
                 UPDATE agent_session
                 SET turn_state = $2,
+                    turn_interrupted = CASE
+                        WHEN $2 = 'disconnected' THEN COALESCE(
+                            turn_state IN ('starting', 'running', 'stopping', 'blocked'),
+                            false
+                        )
+                        ELSE false
+                    END,
                     modified_at = CASE WHEN $3 THEN now() ELSE modified_at END
                 WHERE id = $1 AND turn_state IS DISTINCT FROM $2
                 "#,

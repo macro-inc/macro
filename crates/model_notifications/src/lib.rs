@@ -25,7 +25,8 @@ pub use metadata::{
     InitiativeDiscussionReason, InviteToTeamMetadata, InviteePlan, ItemSharedMetadata,
     MentionedInDocumentCommentMetadata, NewEmailMetadata, NotificationDocumentSubType,
     NotificationTitle, ReminderMetadata, RepliedToDocumentCommentThreadMetadata,
-    RequestedAccessLevel, RoutineRunFinishedMetadata, RoutineRunOutcome, TaskAssignedMetadata,
+    RequestedAccessLevel, RoutineRunFinishedMetadata, RoutineRunOutcome,
+    RuntimeAccessRemovedMetadata, StoppedAgent, TaskAssignedMetadata,
 };
 pub use unsubscribe::UserUnsubscribe;
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -284,6 +285,9 @@ define_notif_event!(
         ChannelAccessRequested(ChannelAccessRequestedMetadata),
         /// One of the user's routines finished a run, successfully or not.
         RoutineRunFinished(RoutineRunFinishedMetadata),
+        /// A runtime's owner removed the user's access to it, and agents of
+        /// theirs living there stopped.
+        RuntimeAccessRemoved(RuntimeAccessRemovedMetadata),
     }
 );
 
@@ -355,6 +359,7 @@ impl NotificationTitle for NotifEvent {
             }
             NotifEvent::AgentSessionSettled(m) => m.format_title(sender_id),
             NotifEvent::RoutineRunFinished(m) => m.format_title(sender_id),
+            NotifEvent::RuntimeAccessRemoved(m) => m.format_title(sender_id),
             NotifEvent::AgentSessionWaitingForInput(m) => m.format_title(sender_id),
             NotifEvent::AgentSessionMentioned(m) => m.format_title(sender_id),
         }
@@ -425,6 +430,7 @@ impl NotificationTitle for NotifEvent {
             NotifEvent::GithubPrReview(github_pr_review) => github_pr_review.format_body(sender_id),
             NotifEvent::AgentSessionSettled(m) => m.format_body(sender_id),
             NotifEvent::RoutineRunFinished(m) => m.format_body(sender_id),
+            NotifEvent::RuntimeAccessRemoved(m) => m.format_body(sender_id),
             NotifEvent::AgentSessionWaitingForInput(m) => m.format_body(sender_id),
             NotifEvent::AgentSessionMentioned(m) => m.format_body(sender_id),
         }

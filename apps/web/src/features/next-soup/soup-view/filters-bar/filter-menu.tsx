@@ -12,6 +12,7 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
+import type { SearchableOptionSource } from './option-source';
 import {
   SearchableMultiSelectInline,
   type SearchableOption,
@@ -374,6 +375,7 @@ export function FilterSubmenu<TId extends string>(props: {
 
 /** Searchable submenu for filters with many options like assignees */
 export const SearchableFilterSubmenu = (props: {
+  source?: SearchableOptionSource;
   label: string;
   active?: boolean;
   options: Accessor<SearchableOption[]>;
@@ -385,6 +387,8 @@ export const SearchableFilterSubmenu = (props: {
   onOpenChange?: (v: boolean) => void;
   /** Keep `options` in their given order instead of pinning selected first. */
   preserveOrder?: boolean;
+  /** Offers typed text as an option, such as an address no suggestion lists. */
+  createOption?: (query: string) => SearchableOption | undefined;
   footer?: JSX.Element;
 }) => {
   const submenu = createFilterSubmenuHover({
@@ -441,6 +445,7 @@ export const SearchableFilterSubmenu = (props: {
       <Dropdown.SubContent {...submenu.contentProps} class="w-65 max-w-[90vw]">
         <Dropdown.Group class="p-0 gap-0">
           <SearchableMultiSelectInline
+            source={props.source}
             onRequestClose={() => setIsOpen(false)}
             placeholder={props.placeholder}
             activeIds={props.activeIds}
@@ -451,6 +456,7 @@ export const SearchableFilterSubmenu = (props: {
             options={props.options}
             inputRef={setInputRef}
             preserveOrder={props.preserveOrder}
+            createOption={props.createOption}
             footer={props.footer}
           />
         </Dropdown.Group>

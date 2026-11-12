@@ -1,0 +1,69 @@
+{
+  "scenario": "routine-drafting-bench",
+  "description": "The routine drafting benchmark's workspace: Riley, an individually paid user (so drafts run on the paid model), owns the design-feedback, engineering and eng-announcements channels with Sam, a Q4 Launch project with open tasks, a few tasks due soon, and unread email. There is no marketing channel, so the benchmark can check that a draft leaves an item it can't match for the person to pick.",
+  "users": {
+    "riley": {
+      "email": "riley@drafting-bench.seed.macro.local",
+      "first_name": "Riley",
+      "roles": ["professional_subscriber"]
+    },
+    "sam": {
+      "email": "sam@drafting-bench.seed.macro.local",
+      "first_name": "Sam"
+    }
+  },
+  "channels": {
+    "design-feedback": { "type": "private", "owner": "riley", "members": ["sam"] },
+    "engineering": { "type": "private", "owner": "riley", "members": ["sam"] },
+    "eng-announcements": { "type": "private", "owner": "riley", "members": ["sam"] }
+  },
+  "projects": {
+    "q4-launch": { "owner": "riley", "name": "Q4 Launch" }
+  },
+  "tasks": {
+    "launch-checklist": {
+      "owner": "riley",
+      "name": "Finish the launch checklist",
+      "project": "q4-launch",
+      "status": "in_progress",
+      "assignees": ["riley"]
+    },
+    "pricing-page": {
+      "owner": "riley",
+      "name": "Review the pricing page copy",
+      "project": "q4-launch",
+      "status": "not_started",
+      "assignees": ["riley", "sam"]
+    },
+    "onboarding-emails": {
+      "owner": "riley",
+      "name": "Draft the onboarding emails",
+      "status": "not_started",
+      "assignees": ["riley"]
+    }
+  },
+  "emails": {
+    "riley-inbox": {
+      "owner": "riley",
+      "threads": {
+        "contract": {
+          "subject": "Contract renewal",
+          "from": "legal@example.com",
+          "body": "The renewal is attached. Could you confirm the start date by end of day?",
+          "unread": true
+        },
+        "newsletter": {
+          "subject": "This week in design",
+          "from": "news@example.com",
+          "body": "Ten interfaces we liked this week.",
+          "unread": true
+        }
+      }
+    }
+  },
+  "messages": [
+    { "channel": "engineering", "from": "sam", "text": "The search index migration finished overnight." },
+    { "channel": "engineering", "from": "riley", "text": "Nice. Next up is the pagination bug on the tasks list." },
+    { "channel": "design-feedback", "from": "sam", "text": "Can we make the empty state on the inbox friendlier?" }
+  ]
+}

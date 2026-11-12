@@ -14,6 +14,20 @@ milliseconds instead of waiting on container provisioning.
 - `src/domain/engine.rs`: `TurnEngine` port — the seam `rig_engine` fills.
 - `src/outbound/manager.rs`: `InMemAgentManager` — provisions per-session
   agent tasks, implements the container-manager port the harness expects.
+  `teardown` drops a session's conversation, agent task and token; the
+  harness calls it on delete and when it releases an idle session, and the
+  next `attach` rebuilds the conversation from the log (`rebuilt_state`).
+  `rebuilds_identically` gates the idle release: the rebuilt model context
+  (history without reasoning parts and with adjacent text merged, as
+  `agent::to_rig_messages` builds it; model, effort, speed, identity,
+  instructions) must equal the live one, with no summary in flight, failed, or
+  image descriptions cached, since none of that is in the log. Cards the
+  session presents on a turn's behalf (code-mode views and reviews) never
+  reached the agent, so replay skips them: those marked
+  `_meta.macro.presented`, and older ones by their shape
+  (`agent_session::domain::model::is_presented`). A replay change that drifts
+  from the live history stops sessions from releasing; the manager tests with
+  MCP calls and a failed turn guard it.
 - `src/domain/tool_stream.rs`: throttled, bounded argument previews for pending
   calls; replay ignores previews and retains only calls that began execution.
 - `src/domain/session.rs` / `src/domain/replay.rs`: in-process session state
@@ -23,6 +37,9 @@ milliseconds instead of waiting on container provisioning.
   meter as the session's feature (`AgentState::feature`, from
   `SessionFacts::billing` via `session_feature`): `AgentSession`, or
   `NonBillableAgentSession` when the opener set `SessionBilling::NonBillable`.
+  Every usage row a turn records carries the session id
+  (`ai_usage.agent_session_id`); its tools record through
+  `ai_usage::for_agent_session`.
 - `src/domain/model_access.rs` (`SessionModels`) and `AgentState::turn_agent_key`:
   an agent with its own usable API key (`agent_api_keys`) runs every turn on
   it without admission, and its session offers only that provider's models.
@@ -61,6 +78,14 @@ retains notification ACP inputs and their replies; the transcript fold separatel
 omits system input from its message projection. PresentReview, GetReview and
 DecideReview are eager internal tools in both standard and code modes.
 
+A user's conversation turns run code mode when the turn's MCP catalog lists
+every `mcp__macro_internal__` code tool, and otherwise fall back to the direct
+tools (`tool_mode` in `src/rig_engine.rs`). The owner's
+`ai-session-code-mode-only` PostHog flag (`domain/tool_mode.rs`) removes the
+fallback: a conversation turn without the code tools fails. Summaries advertise
+no tools in either mode and never read the flag. Unset, false or unreadable
+flags keep the fallback.
+
 - Owner memory is composed by the memory domain on each read; daily generation is hosted by cognition, not agent turns.
 
 ## Checks
@@ -69,11 +94,15 @@ DecideReview are eager internal tools in both standard and code modes.
 
 ## Gotchas
 
+- A native tool call held for owner approval must watch `request_context.cancel`
+  (`check_unless_cancelled`): the agent loop waits for running tools on cancel,
+  so an unwatched hold keeps a stopped turn alive.
 - Owners with `auto-skills` (`domain::entity_routing`) route SDK entities on
   code-mode turns: the prompt is `routed_prompt` (no area guidance) and the
   entities `select_documentation` picks bring their `@agent` guide with their
   index into the turn part. Everyone else keeps `prompt`, which inlines every
-  guide.
+  guide. Like skill routing, it ranks on the latest user message and the one
+  before it, so a follow-up keeps the previous turn's entities.
 - `auto` is a picker entry, not a routable id: `RigTurnEngine` asks its
   `AutoModelSelector` (Jev through cognition's named decisions, 1 s budget) per turn and runs
   Opus 5.5 (hard), GPT-6.1 Sol (mid) or Gemini 3.8 Flash (simple, and
@@ -97,6 +126,11 @@ DecideReview are eager internal tools in both standard and code modes.
   measure with `measure_prompt_cache_turns`.
 - Replay tool calls using `_meta.macro.toolName`; ACP titles may be human-readable
   MCP labels, so only use the title for older frames without tool-name metadata.
+  An MCP tool's `mcp__<server>__<tool>` name rebuilds as the `McpToolCall` the
+  live agent recorded (split by `mcp_toolset::unmangle`, the title as its
+  display name when it differs), and its result keeps the mangled name. A
+  failed turn's last text chunk is the failure reply the live history never
+  held; replay strips it and keeps the turn.
 
 ## Related
 

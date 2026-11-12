@@ -62,7 +62,7 @@
 .review-message-body { margin-top: 2px; font-size: 15px; line-height: 24px; overflow-wrap: break-word; }
 
 /* PullRequestPreviewCard: w-80 Surface depth 3, rounded-xl, shadow-lg. */
-.review-pr-card { width: 320px; overflow: hidden; border: 0.5px solid var(--color-edge); border-radius: 12px; background: var(--color-surface-2); color: var(--color-ink); box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.45), 0 4px 6px -4px rgb(0 0 0 / 0.45); font: 400 14px/1.5 -apple-system, BlinkMacSystemFont, 'Inter Variable', Roboto, sans-serif; text-align: left; user-select: none; }
+.review-pr-card { width: 320px; overflow: hidden; border: 0.5px solid var(--color-edge); border-radius: 12px; background: var(--color-surface-2); color: var(--color-ink); box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.45), 0 4px 6px -4px rgb(0 0 0 / 0.45); font: 370 14px/1.5 -apple-system, BlinkMacSystemFont, 'Inter Variable', Roboto, sans-serif; text-align: left; user-select: none; }
 
 /* Walkthrough overlays sit over the window, measured from their targets. */
 .review-flow-frame { position: relative; }

@@ -1,0 +1,138 @@
+.calendar-story {
+  --feature-glow: #c7967c;
+  /* Event colors follow the app's calendar: a solid fill with dark ink. */
+  --calendar-blue: oklch(0.7 0.16 240);
+  --calendar-purple: oklch(0.68 0.18 295);
+  --calendar-green: oklch(0.72 0.15 155);
+  --calendar-event-ink: oklch(0.2 0 0);
+  --calendar-line: #ffffff10;
+  position: relative;
+  isolation: isolate;
+  width: min(872px, calc(100% - 48px));
+  margin: 32px auto 64px;
+  padding: 48px 24px;
+  display: grid;
+  gap: 20px;
+  color: var(--color-ink);
+  font: 370 14px/1.5 'Inter Variable', Inter, sans-serif;
+}
+.calendar-story .feature-demo-backdrop { --workspace-grain-opacity: .11; --workspace-dots-opacity: .06; }
+.calendar-story .feature-demo-backdrop::before { opacity: .5; }
+.calendar-story svg { flex: 0 0 auto; width: 16px; height: 16px; }
+.calendar-story-glass {
+  min-width: 0;
+  border-radius: 16px;
+  background: linear-gradient(150deg, #ffffff0e, #ffffff05);
+  box-shadow: inset 0 1px 0 #ffffff18, inset 0 0 0 1px #ffffff0d;
+  backdrop-filter: blur(12px);
+}
+.calendar-story [data-tone=blue] { --tone: var(--calendar-blue); }
+.calendar-story [data-tone=purple] { --tone: var(--calendar-purple); }
+.calendar-story [data-tone=green] { --tone: var(--calendar-green); }
+
+/* App window: calendar list beside the time grid. */
+.calendar-app { display: flex; }
+.calendar-app-sidebar { flex: 0 0 216px; padding: 18px 16px; border-right: 1px solid var(--calendar-line); }
+.calendar-app-label { margin-bottom: 10px; color: var(--color-ink-muted); font-size: 12px; font-weight: 500; }
+.calendar-app-account { display: flex; align-items: center; gap: 9px; padding: 7px 0; font-size: 13px; }
+.calendar-app-account > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.calendar-app-account i { flex: none; width: 9px; height: 9px; border-radius: 3px; background: var(--tone); }
+.calendar-app-check { display: grid; flex: none; place-items: center; width: 15px; height: 15px; border-radius: 4px; background: var(--color-accent); color: var(--calendar-event-ink); }
+.calendar-story .calendar-app-check svg { width: 11px; height: 11px; }
+.calendar-app-main { flex: 1; min-width: 0; padding: 14px 16px 0 8px; }
+.calendar-app-bar { display: flex; align-items: center; gap: 10px; padding: 0 0 12px 8px; color: var(--color-ink-muted); }
+.calendar-app-bar strong { margin-right: auto; color: var(--color-ink); font-size: 14px; font-weight: 600; }
+.calendar-story .calendar-app-bar svg { width: 13px; height: 13px; }
+.calendar-app-button { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 8px; background: #ffffff0c; color: var(--color-ink); font-size: 12px; white-space: nowrap; }
+
+.calendar-grid { --hour: 46px; --gutter: 44px; display: grid; grid-template-columns: var(--gutter) minmax(0, 1fr); }
+.calendar-grid-head { grid-column: 2; display: grid; grid-template-columns: repeat(var(--columns), minmax(0, 1fr)); padding-bottom: 10px; text-align: center; }
+.calendar-grid-day { display: grid; justify-items: center; gap: 2px; color: var(--color-ink-muted); font-size: 12px; }
+.calendar-grid-day b { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; color: var(--color-ink); font-size: 18px; font-weight: 400; }
+.calendar-grid-day[data-today] { color: var(--color-accent); }
+.calendar-grid-day[data-today] b { background: var(--color-accent); color: var(--calendar-event-ink); font-weight: 600; }
+.calendar-grid-person { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; }
+.calendar-grid-person i { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: #ffffff1c; font-size: 11px; font-style: normal; font-weight: 600; }
+.calendar-grid-hours { display: grid; grid-auto-rows: var(--hour); color: var(--color-ink-muted); font-size: 11px; text-align: right; }
+.calendar-grid-hours span { padding-right: 9px; transform: translateY(-8px); }
+.calendar-grid-hours span:first-child { visibility: hidden; }
+.calendar-grid-columns {
+  position: relative;
+  height: calc(var(--hours) * var(--hour));
+  /* Hour rules and column dividers, as the app's time grid draws them. */
+  background:
+    repeating-linear-gradient(to bottom, var(--calendar-line) 0 1px, transparent 1px var(--hour)),
+    repeating-linear-gradient(to right, var(--calendar-line) 0 1px, transparent 1px calc(100% / var(--columns)));
+  mask-image: linear-gradient(to bottom, #000 78%, transparent);
+}
+.calendar-grid-event {
+  position: absolute;
+  top: calc(var(--start) * var(--hour) + 1px);
+  left: calc(var(--column) * 100% / var(--columns) + 2px);
+  width: calc(var(--span) * 100% / var(--columns) - 5px);
+  height: calc(var(--length) * var(--hour) - 2px);
+  box-sizing: border-box;
+  padding: 3px 6px;
+  overflow: hidden;
+  border-radius: 5px;
+  background: var(--tone);
+  color: var(--calendar-event-ink);
+  font-size: 11px;
+  line-height: 1.35;
+}
+.calendar-grid-event strong { display: block; overflow: hidden; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.calendar-grid-event span { display: block; overflow: hidden; white-space: nowrap; }
+.calendar-grid-event[data-short=true] { display: flex; gap: 5px; align-items: center; padding-block: 0; }
+.calendar-grid-event[data-short=true] strong { flex: none; }
+/* A half-hour event in a narrow column has room for its title only. */
+.calendar-grid-event { container-type: size; }
+@container (max-width: 96px) {
+  .calendar-grid-event[data-short=true] span { display: none; }
+}
+/* A teammate who shares busy blocks shows when, not what. */
+.calendar-grid-event[data-tone=busy] {
+  background: repeating-linear-gradient(135deg, #ffffff17 0 6px, #ffffff0a 6px 12px);
+  color: var(--color-ink-muted);
+}
+.calendar-grid-event[data-tone=slot] {
+  justify-content: center;
+  background: color-mix(in srgb, var(--color-accent) 16%, transparent);
+  box-shadow: inset 0 0 0 1px var(--color-accent);
+  color: var(--color-ink);
+}
+
+.calendar-story-conversation { width: 90%; }
+.calendar-story-conversation .homepage-conversation { width: 100%; margin: 0; font-size: 16px; }
+.calendar-story-conversation .homepage-message { max-width: 94%; }
+.calendar-story-mention { color: #85b9e8; }
+.calendar-story-slot { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; color: #b8cfdf; font-size: 13px; }
+
+/* Event details, laid out like the app's event popover. */
+.calendar-event-card { width: min(420px, 100%); justify-self: center; padding: 18px 20px; }
+.calendar-event-title { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.calendar-event-title i { flex: none; width: 11px; height: 11px; border-radius: 3px; background: var(--tone); }
+.calendar-event-title strong { margin-right: auto; font-size: 18px; font-weight: 600; }
+.calendar-event-badge { padding: 3px 9px; border-radius: 999px; background: #ffffff0f; color: var(--color-ink-muted); font-size: 11px; white-space: nowrap; }
+.calendar-event-row { display: flex; gap: 12px; padding: 10px 0; border-top: 1px solid var(--calendar-line); font-size: 13px; }
+.calendar-event-row > svg { margin-top: 2px; color: var(--color-ink-muted); }
+.calendar-event-row s { display: block; color: var(--color-ink-muted); }
+.calendar-event-row span { display: block; }
+.calendar-event-guests { display: grid; gap: 4px; }
+.calendar-event-guests small { margin-left: 6px; color: var(--color-ink-muted); font-size: 11px; }
+.calendar-event-guests small[data-added] { padding: 1px 6px; border-radius: 999px; background: color-mix(in srgb, var(--color-accent) 18%, transparent); color: var(--color-accent); }
+.calendar-event-actions { display: flex; justify-content: flex-end; gap: 8px; padding-top: 14px; border-top: 1px solid var(--calendar-line); }
+.calendar-event-confirm { padding: 4px 12px; border-radius: 8px; background: #ededed; color: #181818; font-size: 12px; font-weight: 500; }
+
+@media (max-width: 699px) {
+  .calendar-story { width: 100%; padding: 28px 0; gap: 16px; margin-bottom: 36px; }
+  /* The calendar list sits above the grid, and the week narrows to three days. */
+  .calendar-app { flex-direction: column; }
+  .calendar-app-sidebar { flex: none; padding: 14px 16px 8px; border-right: 0; border-bottom: 1px solid var(--calendar-line); }
+  .calendar-app-main { padding: 12px 10px 0 4px; }
+  .calendar-app-today { display: none; }
+  .calendar-grid { --gutter: 38px; --columns: var(--phone-columns) !important; }
+  .calendar-grid [data-phone-hidden=true] { display: none; }
+  .calendar-grid-person i { display: none; }
+  .calendar-story-conversation { width: 100%; }
+  .calendar-story-conversation .homepage-conversation { font-size: 15px; }
+}

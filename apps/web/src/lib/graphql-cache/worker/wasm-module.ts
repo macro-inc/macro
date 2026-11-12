@@ -1,3 +1,17 @@
+import type {
+  ContactReconcile,
+  ContactSnapshot,
+  ContactSnapshotRequest,
+  PeopleContextState,
+  PeopleContextUpdate,
+  PeopleReferenceRequest,
+  PeopleReferenceResult,
+  PeopleScope,
+  PeopleSearch,
+  PeopleSearchResult,
+  PeopleSqlRequest,
+  PeopleSqlResult,
+} from '../people/generated';
 import type { IdentityBindingWire, MutationInspection } from '../protocol';
 /**
  * Typed surface of the generated wasm package (`cache-wasm`), loaded
@@ -25,6 +39,7 @@ import type {
   EnqueueOptimisticMutationResult,
   EntityFilterCacheArgs,
   EntityFilterCacheResult,
+  HydrationScope,
   HydrationSearchChanges,
   OptimisticLinkPatchWire,
   QueryRevalidationWire,
@@ -103,6 +118,15 @@ export interface CacheEngine {
   search(
     request: SearchCacheArgs & { nowMs: number }
   ): Promise<SearchCachePage>;
+  contactSnapshot?(request: ContactSnapshotRequest): Promise<ContactSnapshot>;
+  contactReconcile?(request: ContactReconcile): Promise<WriteResult>;
+  peopleReadSql?(request: PeopleSqlRequest): Promise<PeopleSqlResult>;
+  peopleResolveReferences?(
+    request: PeopleReferenceRequest
+  ): Promise<PeopleReferenceResult>;
+  peopleContext?(scope: PeopleScope): Promise<PeopleContextState>;
+  peopleUpdate?(update: PeopleContextUpdate): Promise<WriteResult>;
+  peopleSearch?(request: PeopleSearch): Promise<PeopleSearchResult>;
   entityFilter(
     request: EntityFilterCacheArgs
   ): Promise<EntityFilterCacheResult>;
@@ -130,7 +154,8 @@ export interface CacheEngine {
     operationName: string | undefined,
     variables: Record<string, unknown> | undefined,
     data: unknown,
-    identity: string | undefined
+    identity: string | undefined,
+    hydrationScope?: HydrationScope
   ): Promise<CacheEngineHydrationResult>;
   inspectMutations(): Promise<MutationInspection[]>;
   enqueueOptimisticMutation(

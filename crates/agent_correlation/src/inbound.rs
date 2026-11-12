@@ -41,8 +41,8 @@ impl CorrelationState {
     }
 }
 
-/// An optional signed and validated invocation ID. It grants no authorization.
-pub struct AgentCorrelationExtractor(pub Option<Uuid>);
+/// Optional signed invocation attribution. It grants no authorization.
+pub struct AgentCorrelationExtractor(pub Option<Uuid>, pub Option<crate::AgentVerb>);
 
 #[derive(Deserialize)]
 struct QueryToken {
@@ -59,7 +59,8 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let state = CorrelationState::from_ref(state);
         let token = verified_api_token(parts, &state.jwt).await;
-        accept_correlation(&state, token.as_ref()).await.map(Self)
+        let id = accept_correlation(&state, token.as_ref()).await?;
+        Ok(Self(id, id.and_then(|_| sdk_verb(parts))))
     }
 }
 
@@ -85,6 +86,16 @@ async fn verified_api_token(parts: &mut Parts, jwt: &JwtValidationArgs) -> Optio
         Ok(JwtToken::MacroApiToken(token)) => Some(token),
         _ => None,
     }
+}
+
+/// The SDK's display verb. Callers read it only after the correlation that
+/// makes it meaningful has been validated; an unknown value is absent.
+fn sdk_verb(parts: &Parts) -> Option<crate::AgentVerb> {
+    parts
+        .headers
+        .get("x-macro-sdk-verb")
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.parse().ok())
 }
 
 /// Validate the token's correlation claim against its agent session.
@@ -158,6 +169,7 @@ async fn propagate_request(
     let attribution = Attribution {
         correlation_id,
         routine_id: token.and_then(|token| token.routine_id),
+        verb: correlation_id.and_then(|_| sdk_verb(&parts)),
     };
     crate::context::scope_attribution(attribution, next.run(Request::from_parts(parts, body)))
         .instrument(tracing::info_span!(

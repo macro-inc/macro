@@ -1,5 +1,5 @@
 /* Cream palette for the public website, /start, and the sample workspace.
-   Applied when the OS or browser prefers light mode (see sitePalette.ts).
+   Retained behind WEBSITE_LIGHT_MODE_ENABLED, currently disabled (see sitePalette.ts).
    Palette sampled from the cream ad set: page #f5f1e8, with brighter, less saturated
    raised surfaces; body #54524f, labels #72706c, near-black ink.
    Everything is scoped to html[data-palette=cream]; the dark site is unchanged. */
@@ -246,12 +246,7 @@ html[data-palette='cream'] :is(
 html[data-palette='cream'] :is(
   .chat-shortcut-dock > button:hover,
   .chat-shortcut-dock > button[data-active='true'],
-  .email-keyboard-stage .email-shortcut-dock > button[data-active='true'],
-  .tasks-founder-letter h2,
-  .tasks-founder-person strong,
-  .tasks-founder-card-article,
-  .tasks-founder-card:hover .tasks-founder-card-article > span:last-child,
-  .feature-page-jump-links a:hover .email-feature-graphic
+  .email-keyboard-stage .email-shortcut-dock > button[data-active='true']
 ) { color: var(--color-ink); }
 html[data-palette='cream'] :is(
   .chat-shortcut-dock,
@@ -260,10 +255,6 @@ html[data-palette='cream'] :is(
   .email-shortcut-dock > button,
   .email-feature-prose,
   .feature-comparison-key,
-  .tasks-founder-letter,
-  .tasks-founder-letter footer,
-  .tasks-founder-person span,
-  .tasks-founder-card-article > span:last-child,
   .homepage-email-bcc,
   .homepage-email-generating,
   .homepage-email-toolbar button,
@@ -314,16 +305,14 @@ html[data-palette='cream'] .dummy-banner {
   background: var(--color-surface-1);
   color: var(--color-ink-muted);
 }
-html[data-palette='cream'] :is(.tasks-founder-card, .homepage-demo-modal) {
+html[data-palette='cream'] .homepage-demo-modal {
   background: var(--color-surface-1);
   border-color: var(--color-edge);
   color: var(--color-ink);
 }
-html[data-palette='cream'] :is(.tasks-page .tasks-founder-letter blockquote, .tasks-page .product-prose a) {
+html[data-palette='cream'] .tasks-page .product-prose a {
   color: var(--color-ink-muted);
 }
-html[data-palette='cream'] .tasks-founder-card-article { border-color: var(--color-edge); }
-html[data-palette='cream'] .tasks-founder-card:hover { border-color: var(--color-ink-muted); }
 html[data-palette='cream'] :is(.homepage-demo-titlebar, .homepage-demo-frame) {
   background: var(--color-surface-1);
   border-color: var(--color-edge);
@@ -464,8 +453,8 @@ html[data-palette='cream'] :is(
   border: 0 !important;
   background: linear-gradient(165deg, #fff 35%, #ededee 100%) !important;
   color: #000 !important;
-  box-shadow: inset 0 1px 0 #ffffffd9, inset 0 -2px 2px #0000000d,
-    0 0 0 1px #1d1c1a11, 0 10px 24px -14px #1d1c1a4c !important;
+  box-shadow: inset 0 .75px 0 #ffffffd9, inset 0 -1.5px 1.5px #0000000d,
+    0 0 0 1px #1d1c1a0d, 0 7.5px 18px -10.5px #1d1c1a4c !important;
 }
 html[data-palette='cream'] :is(
   .site-nav-start,
@@ -494,7 +483,7 @@ html[data-palette='cream'] :is(
   inset: 0;
   border-radius: inherit;
   padding: 1px;
-  background: linear-gradient(135deg, #ffffff98 0%, #ffffff2b 24%, #00000009 60%, #00000030 100%);
+  background: linear-gradient(135deg, #ffffff72 0%, #ffffff20 24%, #00000007 60%, #00000024 100%);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
@@ -586,7 +575,6 @@ html[data-palette='cream'] .feature-flow {
 /* Add weight to the existing slab styles without changing their type scale. */
 html[data-palette='cream'] { --cream-slab-weight-increase: 45; }
 html[data-palette='cream'] [class*='font-[Roboto_Slab'] { font-weight: 360; }
-html[data-palette='cream'] .tasks-founder-card h2 { font-weight: 445; }
 
 /* Product walkthroughs sit above the cream canvas, like the homepage composer. */
 html[data-palette='cream'] :is(.product-page, .feature-page) :is(
@@ -607,4 +595,70 @@ html[data-palette='cream'] :is(.product-page, .feature-page) :is(
 html[data-palette='cream'] .product-page .product-demo::before {
   background: none;
   border: 0;
+}
+
+/* Frozen syntax-highlighted diffs include both palettes inside their shadow DOM. */
+html[data-theme-light='true'] .github-diff-render,
+html[data-theme-light='true'] .demo-deploy-diff {
+  color-scheme: light;
+}
+
+/* Give full-size illustrations a visible base and keep overlapping cards close
+   to it. Never stack the dark glass drop shadow on the light cast shadow. */
+html[data-theme-light='true'] :is(.feature-page, .product-page) {
+  --feature-panel-shadow: 0 3px 10px -4px #29241d1a, 0 20px 48px -16px #29241d3b;
+  --feature-floating-shadow: 0 3px 8px -3px #29241d1a, 0 14px 32px -12px #29241d38;
+  --feature-popover-shadow: 0 2px 6px -2px #29241d14, 0 8px 22px -8px #29241d30;
+}
+html[data-theme-light='true'] :is(.feature-page, .product-page) :is(
+  .product-demo,
+  .email-desktop-window,
+  .mail-app,
+  .crm-pipeline-frame,
+  .workspace-feature-scene,
+  .booking-story-card,
+  .macro-preview-back
+) {
+  box-shadow: var(--feature-panel-shadow);
+}
+html[data-theme-light='true'] :is(.feature-page, .product-page) .feature-demo-primary .homepage-email-app-surface {
+  box-shadow: var(--feature-panel-shadow);
+}
+html[data-theme-light='true'] :is(.feature-page, .product-page) :is(
+  .feature-demo-context,
+  .macro-preview-front,
+  .doc-agent-tools,
+  .sample-task-composer,
+  .doc-share-card,
+  .mail-share-form
+) {
+  box-shadow: var(--feature-floating-shadow);
+}
+html[data-theme-light='true'] :is(.feature-page, .product-page) .mail-sharing-splits > section {
+  box-shadow: var(--feature-panel-shadow);
+}
+html[data-theme-light='true'] :is(.feature-page, .product-page) .mail-sharing-splits > .mail-sharing-chat {
+  box-shadow: var(--feature-floating-shadow);
+}
+html[data-theme-light='true'] :is(.feature-page, .product-page) :is(
+  .review-toast,
+  .review-pr-card,
+  .doc-tooltip,
+  .doc-share-suggestions,
+  .mail-filter,
+  .mail-recipient-option,
+  .task-checklist-toolbar,
+  .tasks-native-details,
+  .sample-company-panel,
+  .sample-event-panel
+) {
+  box-shadow: var(--feature-popover-shadow);
+}
+/* Nested panes are part of one window, not another floating card. */
+html[data-theme-light='true'] :is(.feature-page, .product-page) :is(
+  .email-desktop-content .product-demo,
+  .macro-preview-back .homepage-spreadsheet,
+  .mail-sharing-stage .mail-app
+) {
+  box-shadow: none;
 }

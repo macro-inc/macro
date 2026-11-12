@@ -8,6 +8,9 @@ pub mod coding_agents_client;
 /// Haiku-backed automatic session naming.
 pub mod name_generator;
 
+/// Nemotron-backed live activity summaries.
+pub mod activity_summarizer;
+
 /// Streaming a live session's log to a channel's viewers.
 pub mod connection_gateway_realtime;
 

@@ -148,7 +148,7 @@ intersections without using the production compiler or cache results.
 This suite does not claim coverage of non-Mail offline pagination or every
 possible real-world user/tag/file value.
 
-After all seven real backfill lanes finish, the fixture API and WebSockets are
+After all nine real backfill lanes finish, the fixture API and WebSockets are
 closed. The browser-side runner calls the real Tauri cache host in bounded
 read-only batches and asserts exact matching IDs against fixture truth. No
 query-specific network baselines are supplied. Mail attachment selections also

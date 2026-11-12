@@ -6,7 +6,7 @@ import MeetIcon from '@icon/onboarding-googlemeet.svg';
 import HubSpotIcon from '@icon/onboarding-hubspot.svg';
 import SuperhumanIcon from '@icon/onboarding-superhuman.svg';
 import ZoomIcon from '@icon/onboarding-zoom.svg';
-import PlayIcon from '@phosphor/play.svg';
+import PlayIcon from '@icon/system/regular/play.svg';
 import { For, type JSX } from 'solid-js';
 import { ContinueButton, SkipButton } from '../flow/shared';
 import { MODULE_LOGOS } from '../moduleLogos';
@@ -131,7 +131,10 @@ export function WelcomeStep(props: {
   description?: JSX.Element;
 }) {
   return (
-    <div class="ob-welcome relative isolate flex flex-col items-center gap-7 overflow-x-clip [overflow-clip-margin:200px] text-center md:[--welcome-scale:1.25] md:gap-[35px] md:[overflow-clip-margin:250px]">
+    // Trim the rings 200px past each side with a clip path, not `overflow-x:
+    // clip`: WebKit on iOS also clips the vertical axis for that until the
+    // first repaint, slicing the top of the scene on load.
+    <div class="ob-welcome relative isolate flex flex-col items-center gap-7 [clip-path:inset(-100vmax_-200px)] text-center md:[--welcome-scale:1.25] md:gap-[35px] md:[clip-path:inset(-100vmax_-250px)]">
       <ContextScene />
       <div class="relative mt-[15px] flex flex-col gap-4 md:mt-[18.75px] md:gap-5">
         <h1

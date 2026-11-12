@@ -44,6 +44,7 @@ import {
 import { type CallLifecycleState, createCallLifecycle } from './call-lifecycle';
 import { traceCallMedia } from './call-media-telemetry';
 import { publishCallResolution } from './call-resolution';
+import { CallVolumeProvider } from './context/call-volume';
 import { createLatestAsyncRequestQueue } from './latest-async-request-queue';
 import {
   getKrisp,
@@ -55,17 +56,21 @@ import {
   loadKrisp,
   loadLivekit,
 } from './livekit-loader';
+import { isMicrophoneAccessError } from './microphone-access';
+import { showMicrophoneBlockedToast } from './microphone-blocked-toast';
 import { bindNativeCallLifecycle } from './native-call-lifecycle';
 import {
   type NativeCallConnectionState,
   useMaybeNativeCallState,
 } from './native-call-state';
+import { createCallMediaPermissions } from './primitives/call-media-permissions';
 import { ScreenShareError } from './screen-share-error';
 import {
   isNativeCallEnabled,
   prepareNativeCallJoin,
   registerCallKitCallEndedHandler,
 } from './use-callkit';
+import { CallFullscreenProvider } from './views/call-fullscreen-host';
 
 type LivekitJsCallController = ReturnType<
   typeof import('./LivekitJsCallController')['createLivekitJsCallController']
@@ -204,6 +209,9 @@ function screenShareCaptureOptions(
       echoCancellation: false,
       noiseSuppression: false,
       autoGainControl: false,
+      // System audio otherwise includes the call itself, so everyone hears
+      // themselves echoed back through the share.
+      restrictOwnAudio: true,
     },
     // Chromium offers system audio only when asked (Windows, ChromeOS); other
     // platforms and browsers capture tab audio or none.
@@ -415,6 +423,9 @@ export type CallState = {
   isAudioMuted: () => boolean;
   /** Whether local video is muted */
   isVideoMuted: () => boolean;
+  microphonePermission: () => PermissionState;
+  cameraPermission: () => PermissionState;
+  cancelMediaPermissionRecovery: (device: 'microphone' | 'camera') => void;
   /** Whether local screen share is active */
   isScreenSharing: () => boolean;
   /** Available audio input devices (microphones) */
@@ -501,6 +512,10 @@ function createCallState() {
   const userId = useUserId();
   const leaveMutation = useLeaveCallMutation();
   const nativeCall = useMaybeNativeCallState();
+  const mediaPermissions = createCallMediaPermissions({
+    onGranted: (device) =>
+      device === 'microphone' ? toggleAudio(true) : toggleVideo(true),
+  });
   const [room, setRoom] = createSignal<Room | null>(null);
   const [store, setStore] = createStore<CallStoreState>({
     ...initialState,
@@ -1230,34 +1245,40 @@ function createCallState() {
     enableDevice: () => Promise<unknown>,
     mediaSpan?: Span
   ) {
-    const callId = store.activeCallId;
-    if (prejoinTrack?.readyState === 'live') {
-      try {
+    return mediaPermissions.capture(
+      source,
+      async () => {
+        const callId = store.activeCallId;
+        if (prejoinTrack?.readyState === 'live') {
+          try {
+            await traceCallMedia(
+              'publish_prejoin',
+              {
+                'call.id': callId ?? undefined,
+                'call.media.device': source,
+              },
+              () => publishPrejoinTrack(targetRoom, source, prejoinTrack),
+              mediaSpan
+            );
+            return;
+          } catch (e) {
+            console.error(`failed to publish prejoin ${source} track`, e);
+            if (source === 'camera' && store.backgroundEffect.type !== 'none')
+              throw e;
+          }
+        }
+        prejoinTrack?.stop();
         await traceCallMedia(
-          'publish_prejoin',
+          'enable',
           {
             'call.id': callId ?? undefined,
             'call.media.device': source,
           },
-          () => publishPrejoinTrack(targetRoom, source, prejoinTrack),
+          enableDevice,
           mediaSpan
         );
-        return;
-      } catch (e) {
-        console.error(`failed to publish prejoin ${source} track`, e);
-        if (source === 'camera' && store.backgroundEffect.type !== 'none')
-          throw e;
-      }
-    }
-    prejoinTrack?.stop();
-    await traceCallMedia(
-      'enable',
-      {
-        'call.id': callId ?? undefined,
-        'call.media.device': source,
       },
-      enableDevice,
-      mediaSpan
+      () => room() === targetRoom
     );
   }
 
@@ -1308,8 +1329,10 @@ function createCallState() {
       }
     } catch (e) {
       console.error('failed to enable microphone', e);
-      if (isCurrentMediaSetup(targetRoom, setupVersion))
+      if (isCurrentMediaSetup(targetRoom, setupVersion)) {
         setStore('isAudioMuted', true);
+        if (isMicrophoneAccessError(e)) showMicrophoneBlockedToast('join');
+      }
     }
     if (!isCurrentMediaSetup(targetRoom, setupVersion)) return;
     if (store.isAudioMuted) {
@@ -1473,12 +1496,15 @@ function createCallState() {
     },
   });
 
-  async function toggleAudio() {
+  async function toggleAudio(enabled?: boolean) {
     const r = room();
     if (!r) return;
-    const newMuted = !store.isAudioMuted;
+    let newMuted = !store.isAudioMuted;
+    if (enabled !== undefined) newMuted = !enabled;
+    else if (mediaPermissions.microphone() === 'denied') newMuted = false;
     try {
       if (newMuted) {
+        mediaPermissions.cancelRecovery('microphone');
         await traceCallMedia(
           'toggle',
           {
@@ -1502,21 +1528,32 @@ function createCallState() {
             'call.media.enabled': true,
           },
           () =>
-            r.localParticipant.setMicrophoneEnabled(
-              true,
-              currentMicrophoneCaptureOptions(deviceId)
+            mediaPermissions.capture(
+              'microphone',
+              () =>
+                r.localParticipant.setMicrophoneEnabled(
+                  true,
+                  currentMicrophoneCaptureOptions(deviceId)
+                ),
+              () => room() === r,
+              async () => {
+                await r.localParticipant.setMicrophoneEnabled(false);
+                newMuted = true;
+              }
             )
         );
         // The mic track may have changed — re-apply the selected audio processing.
         await ensureNoiseSuppressionOnMicTrack(r);
       }
-      setStore('isAudioMuted', newMuted);
+      if (room() === r) setStore('isAudioMuted', newMuted);
     } catch (e) {
       console.error('failed to toggle audio', e);
+      if (isMicrophoneAccessError(e)) showMicrophoneBlockedToast('unmute');
+      throw e;
     }
   }
 
-  async function toggleVideo() {
+  async function toggleVideo(enabled?: boolean) {
     if (currentNativeCallSnapshot()) {
       console.info(
         '[callkit] ignoring JS video toggle; native drawer controls camera'
@@ -1526,9 +1563,12 @@ function createCallState() {
 
     const r = room();
     if (!r) return;
-    const newMuted = !store.isVideoMuted;
+    let newMuted = !store.isVideoMuted;
+    if (enabled !== undefined) newMuted = !enabled;
+    else if (mediaPermissions.camera() === 'denied') newMuted = false;
     try {
       if (newMuted) {
+        mediaPermissions.cancelRecovery('camera');
         await traceCallMedia(
           'toggle',
           {
@@ -1550,9 +1590,18 @@ function createCallState() {
             'call.media.enabled': true,
           },
           () =>
-            r.localParticipant.setCameraEnabled(
-              true,
-              deviceId ? { deviceId: { exact: deviceId } } : undefined
+            mediaPermissions.capture(
+              'camera',
+              () =>
+                r.localParticipant.setCameraEnabled(
+                  true,
+                  deviceId ? { deviceId: { exact: deviceId } } : undefined
+                ),
+              () => room() === r,
+              async () => {
+                await r.localParticipant.setCameraEnabled(false);
+                newMuted = true;
+              }
             )
         );
         // Read the actual device the browser chose so the dropdown is accurate
@@ -1570,9 +1619,10 @@ function createCallState() {
         // New camera track was created — attach background effect processor if preference is on.
         await ensureBackgroundEffectOnCameraTrack(r, true);
       }
-      setStore('isVideoMuted', newMuted);
+      if (room() === r) setStore('isVideoMuted', newMuted);
     } catch (e) {
       console.error('failed to toggle video', e);
+      throw e;
     }
   }
 
@@ -1714,6 +1764,7 @@ function createCallState() {
     beginJoin: beginOptimisticJoin,
     rollbackJoin: rollbackOptimisticJoin,
     setError: setJoinError,
+    microphoneBlocked: () => showMicrophoneBlockedToast('join'),
     watch: (_call, disconnected, nativeEnded) => {
       // Capture the room: its own disconnect handler resets the store first.
       const currentRoom = room();
@@ -1828,17 +1879,19 @@ function createCallState() {
     remoteParticipants: () => store.remoteParticipants,
     trackVersion: () => store.trackVersion,
     isLocalSpeaking: () => {
-      // Intentionally read store.speakerVersion to make this reactive so room()?.localParticipant.isSpeaking updates on speakerVersion changes.
       store.speakerVersion;
-      return room()?.localParticipant.isSpeaking ?? false;
+      const identity = room()?.localParticipant.identity;
+      return identity !== undefined && livekitJs?.isSpeaking(identity) === true;
     },
     isParticipantSpeaking: (participant: RemoteParticipant) => {
-      // Intentionally read store.speakerVersion to make this reactive so participant.isSpeaking updates on speakerVersion changes.
       store.speakerVersion;
-      return participant.isSpeaking;
+      return livekitJs?.isSpeaking(participant.identity) === true;
     },
     isAudioMuted: currentIsAudioMuted,
     isVideoMuted: currentIsVideoMuted,
+    microphonePermission: mediaPermissions.microphone,
+    cameraPermission: mediaPermissions.camera,
+    cancelMediaPermissionRecovery: mediaPermissions.cancelRecovery,
     isScreenSharing: () => store.isScreenSharing,
     audioInputDevices: () => store.audioInputDevices,
     audioOutputDevices: () => store.audioOutputDevices,
@@ -1885,7 +1938,11 @@ export function CallProvider(props: ParentProps) {
 
   return (
     <CallContext.Provider value={state}>
-      {props.children}
+      <CallVolumeProvider>
+        <CallFullscreenProvider callId={state.activeCallId}>
+          {props.children}
+        </CallFullscreenProvider>
+      </CallVolumeProvider>
       <CallAudioSink />
     </CallContext.Provider>
   );

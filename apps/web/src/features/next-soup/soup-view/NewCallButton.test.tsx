@@ -57,10 +57,6 @@ vi.mock('@core/component/Toast/Toast', () => ({
   toast: { failure: vi.fn() },
 }));
 
-vi.mock('@core/signal/useCombinedRecipient', () => ({
-  useCombinedRecipients: () => ({ all: () => [] }),
-}));
-
 vi.mock('@core/util/destination', () => ({
   getDestinationFromOptions: () => ({
     type: 'channel',

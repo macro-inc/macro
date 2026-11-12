@@ -54,7 +54,7 @@ async fn deleting_required_options_is_refused_until_the_rule_is_removed(pool: Pg
     .unwrap();
     let mut addition = insert(&p, company);
     if let DatabaseOp::Rows {
-        change: RowsChange::Insert { rows },
+        change: RowsChange::Insert { rows, ids: None },
         ..
     } = &mut addition
     {
@@ -136,7 +136,7 @@ async fn stage_requirements_reject_atomically_and_allow_combined_edits(pool: PgP
     .unwrap();
     let mut addition = insert(&p, company);
     if let DatabaseOp::Rows {
-        change: RowsChange::Insert { rows },
+        change: RowsChange::Insert { rows, ids: None },
         ..
     } = &mut addition
     {
@@ -161,7 +161,7 @@ async fn stage_requirements_reject_atomically_and_allow_combined_edits(pool: PgP
             .is_empty()
     );
     if let DatabaseOp::Rows {
-        change: RowsChange::Insert { rows },
+        change: RowsChange::Insert { rows, ids: None },
         ..
     } = &mut addition
     {
@@ -294,7 +294,7 @@ async fn rejected_required_input_edits_preserve_materialized_formulas(pool: PgPo
     .unwrap();
     let mut addition = insert(&p, company);
     if let DatabaseOp::Rows {
-        change: RowsChange::Insert { rows },
+        change: RowsChange::Insert { rows, ids: None },
         ..
     } = &mut addition
     {
@@ -542,7 +542,7 @@ async fn rule_ids_survive_renames_and_cascade_on_explicit_deletion(pool: PgPool)
     );
     let mut addition = insert(&p, company);
     if let DatabaseOp::Rows {
-        change: RowsChange::Insert { rows },
+        change: RowsChange::Insert { rows, ids: None },
         ..
     } = &mut addition
     {
@@ -688,7 +688,7 @@ async fn stage_label_case_and_duplicate_option_requests_cannot_bypass_rules(pool
     .unwrap();
     let mut addition = insert(&p, company);
     if let DatabaseOp::Rows {
-        change: RowsChange::Insert { rows },
+        change: RowsChange::Insert { rows, ids: None },
         ..
     } = &mut addition
     {
@@ -744,7 +744,7 @@ async fn concurrent_stage_entry_and_required_field_clear_cannot_both_commit(pool
     .unwrap();
     let mut addition = insert(&p, company);
     if let DatabaseOp::Rows {
-        change: RowsChange::Insert { rows },
+        change: RowsChange::Insert { rows, ids: None },
         ..
     } = &mut addition
     {

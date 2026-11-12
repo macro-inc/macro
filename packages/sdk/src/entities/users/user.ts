@@ -5,6 +5,7 @@ import { MacroNotFoundError, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { Channel } from '../channels/channel';
 import { PropertiedEntity } from '../entity';
+import { type ProfilePicture, toProfilePicture } from './profile-picture';
 
 /** A privacy-reviewed summary of a user's professional work over one period. */
 export type ActivityReport = Activity;
@@ -53,6 +54,8 @@ export class User extends PropertiedEntity<UserName> implements Mentionable {
    * your email contacts when the Macro profile has none).
    *
    * @returns The full name, or `undefined` if the user has no name on record.
+   *
+   * @readonly
    */
   async name(): Promise<string | undefined> {
     const entry = await this.detail.get();
@@ -61,9 +64,35 @@ export class User extends PropertiedEntity<UserName> implements Mentionable {
   }
 
   /**
+   * This user's current profile picture. Reads the auth service every time,
+   * so it reflects a recent change.
+   *
+   * A picture set through Macro is a `StaticImage`; an older picture stored as
+   * a bare URL is an `ExternalProfilePicture`. For many users at once use
+   * `macro.users.profilePictures`.
+   *
+   * @returns The picture, or `undefined` if the user has none.
+   *
+   * @readonly
+   */
+  async profilePicture(): Promise<ProfilePicture | undefined> {
+    const { pictures } = unwrap(
+      await this.client.auth.postProfilePictures({
+        body: { user_id_list: [this.id] },
+      }),
+    );
+    return toProfilePicture(
+      this.client,
+      pictures.find((p) => p.id === this.id),
+    );
+  }
+
+  /**
    * Whether this user is an agent account rather than a person.
    *
    * @returns `true` for an agent account.
+   *
+   * @readonly
    */
   async isAgent(): Promise<boolean> {
     const entry = await this.detail.get();
@@ -76,6 +105,8 @@ export class User extends PropertiedEntity<UserName> implements Mentionable {
    * emails for arbitrary users.
    *
    * @returns The email, or `undefined` if the id is not email-derived.
+   *
+   * @readonly
    */
   email(): string | undefined {
     const email = this.id.startsWith('macro|') ? this.id.slice(6) : undefined;
@@ -87,6 +118,9 @@ export class User extends PropertiedEntity<UserName> implements Mentionable {
    * group DM, use `macro.channels.private(users)`.
    *
    * @returns The DM `Channel`.
+   *
+   * @write
+   * @idempotent
    */
   dm(): Promise<Channel> {
     return Channel.dm(this.client, this);
@@ -104,6 +138,8 @@ export class User extends PropertiedEntity<UserName> implements Mentionable {
    * const me = await macro.users.me();
    * const reports = await me.activity({ start: '2026-10-01', end: '2026-10-31' });
    * const weeks = reports.filter((report) => report.granularity === 'week');
+   *
+   * @readonly
    */
   async activity(range: {
     start: Date | string;
@@ -121,6 +157,11 @@ export class User extends PropertiedEntity<UserName> implements Mentionable {
     return reports;
   }
 
+  /**
+   * This user as an @-mention part for a message template.
+   *
+   * @readonly
+   */
   toMention(): MentionPart {
     return {
       tag: wrapXml('m-user-mention', { userId: this.id }),

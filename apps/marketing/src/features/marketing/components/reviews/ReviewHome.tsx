@@ -1,19 +1,19 @@
-import Reply from '@phosphor/arrow-bend-up-left.svg';
-import ArrowCounterClockwise from '@phosphor/arrow-counter-clockwise.svg';
-import Buildings from '@phosphor/buildings.svg';
-import Calendar from '@phosphor/calendar-blank.svg';
-import ChatTeardrop from '@phosphor/chat-teardrop.svg';
-import Chats from '@phosphor/chats-circle.svg';
-import Check from '@phosphor/check.svg';
-import Envelope from '@phosphor/envelope.svg';
-import Folder from '@phosphor/folder-simple.svg';
-import Hash from '@phosphor/hash.svg';
-import ListChecks from '@phosphor/list-checks.svg';
-import Search from '@phosphor/magnifying-glass.svg';
-import Plus from '@phosphor/plus.svg';
-import Sparkle from '@phosphor/sparkle.svg';
-import X from '@phosphor/x.svg';
-import HouseFill from '@phosphor-fill/house-fill.svg';
+import HouseFill from '@icon/system/fill/house-fill.svg';
+import Reply from '@icon/system/regular/arrow-bend-up-left.svg';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg';
+import Buildings from '@icon/system/regular/buildings.svg';
+import Calendar from '@icon/system/regular/calendar-blank.svg';
+import ChatTeardrop from '@icon/system/regular/chat-teardrop.svg';
+import Chats from '@icon/system/regular/chats-circle.svg';
+import Check from '@icon/system/regular/check.svg';
+import Envelope from '@icon/system/regular/envelope.svg';
+import Folder from '@icon/system/regular/folder-simple.svg';
+import Hash from '@icon/system/regular/hash.svg';
+import ListChecks from '@icon/system/regular/list-checks.svg';
+import Search from '@icon/system/regular/magnifying-glass.svg';
+import Plus from '@icon/system/regular/plus.svg';
+import Sparkle from '@icon/system/regular/sparkle.svg';
+import X from '@icon/system/regular/x.svg';
 import { Button } from '@ui';
 import {
   batch,
@@ -120,7 +120,7 @@ const row = {
   comment: {
     id: 'comment-plan',
     kind: 'comment',
-    label: 'Valentina commented on Website launch plan',
+    label: 'Austin Barron commented on Website launch plan',
     time: '8:52 AM',
     open: { view: 'documents', id: 'plan' },
   },
@@ -177,7 +177,7 @@ export function createHomeInbox(options: {
   w.setData('documents', (doc) => doc.id === 'plan', 'comments', [
     {
       id: 'plan-screenshots',
-      person: 'valentina',
+      person: 'austin',
       body: 'Can we add the mobile screenshots to the checklist? They’re ready.',
       time: '8:52 AM',
     },
@@ -326,7 +326,7 @@ function RowIcon(props: { row: HomeRow }) {
   );
 }
 
-/** "Julia in #launch", "Valentina commented on Website launch plan". */
+/** "Julia in #launch", "Austin Barron commented on Website launch plan". */
 function ActorTitle(props: { label: string; joiner: string }) {
   const parts = () => props.label.split(props.joiner);
   return (

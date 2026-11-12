@@ -63,6 +63,14 @@ consumer talks to.
 
 - `src/inbound/toolset/`: session reads, creation, lifecycle actions, and sharing. Mutations preserve acting-user identity and existing owner/edit receipts; internal controls accept only prompt/stop, never human approvals. `link_task` returns a `mention` chip to paste when naming the task.
 
+`release_session` stops an idle actor silently (`CloseReason::Released`): the
+actor refuses with `SessionRelease::Busy` unless its machine is live with no
+turn, permission request, elicitation or queued action; otherwise it flushes
+buffered frames and stops without the `disconnected` frame, telemetry close or
+`session_stopped` callback that every other stop has, and its claim is
+released under its fence. Use it only to free memory; a stop anyone should
+see goes through `close_session`.
+
 Internal action recovery uses `AgentSessionService::recorded_action`, which reads
 one durable log snapshot including pre-load frames. Keep this separate from the
 effective history served to transcript readers: replayed prompts lose action IDs.
@@ -85,6 +93,12 @@ private-context entries; the migration bridge preserves their review outcomes
 without restoring owner authority. Claim legacy actions with a conditional
 update of only their matching prompter; recover acting identity from that
 persisted prompter, never from an old wire actor or a newer user turn.
+`TurnPrompter.client` (`turn_prompter_client`) is the app tab a person typed
+the turn's prompt in (`ControlRequest.clientId`, or `promptClientId` on a
+create carrying the first prompt). `ControlPrincipal::admit_client` admits it
+on both paths: refused from runtimes, dropped for programs. Every
+`set_turn_prompter` overwrites it, a system turn never stores one, and it only
+addresses that person's own tab (`agent_code_mode`'s `ui_commands`).
 
 Archive state lives on `agent_session`: `archived_by`
 (`agent_session_archive_cause`: `user`, `pull_request_merged`,
@@ -131,6 +145,19 @@ conversation digest to the namer. `name_generation::ClassifiedRetitle` asks Jev
 whether the name stopped fitting (threshold 0.8) before Haiku proposes a new
 one. Only names with `agent_session.name_is_generated` are retitled; a rename
 through `set_name` clears it, so a name a person chose is never replaced.
+
+Activity summaries: `domain/activity_summary.rs` is a turn observer the
+harness binds next to the queue. For each running turn it keeps one task that
+summarizes the newest activity rows of `TurnSignal::Progressed` (labels and
+details already shown to readers, never tool input or output) with
+`outbound/activity_summarizer.rs` (Nemotron), resting 4s for the first 10 lines
+and 15s after, at most 120 per turn; calls made while it rests coalesce. Lines go
+to viewers only, through `AgentSessionRealtime::publish_activity_summarized`
+(`agent_session_activity`), and a `null` line clears it when the turn ends.
+Admission and usage are against the session's owner (`AiFeature::AgentActivitySummary`,
+non-billable); a session with no person owner gets none. The PostHog flag
+`disable-agent-activity-summary` (`KILL_SWITCH_FLAG`), when on for the owner,
+skips the turn before any model call; unset or unreadable, summaries run.
 
 ## Checks
 

@@ -1,6 +1,6 @@
 /* Layout constants from SidebarRail, ViewSidebar, TaskGridLayout, and Notebook.
    The outer frame is the website's only decorative treatment. */
-.dummy-workspace { --sidebar-gutter:.5rem; --sidebar-item-inset:.5rem; --sidebar-icon-slot:1.25rem; --sidebar-icon-size:1rem; --sidebar-control-size:1.5rem; --sidebar-row-height:2rem; --sidebar-row-gap:.125rem; --sidebar-label-gap:.375rem; --sidebar-section-gap:1.5rem; --sidebar-content-inset:1rem; --sidebar-control-overhang:-.125rem; --sidebar-action-inset:.375rem; --sidebar-header-action-inset:.875rem; --font-sans:-apple-system,BlinkMacSystemFont,'Inter Variable',Roboto,'Helvetica Neue',Arial,sans-serif; display:flex; flex-direction:column; height:100%; min-height:0; color:var(--color-ink); background:var(--color-panel); font:400 14px/1.5 var(--font-sans); text-align:left; letter-spacing:normal; }
+.dummy-workspace { --sidebar-gutter:.5rem; --sidebar-item-inset:.5rem; --sidebar-icon-slot:1.25rem; --sidebar-icon-size:1rem; --sidebar-control-size:1.5rem; --sidebar-row-height:2rem; --sidebar-row-gap:.125rem; --sidebar-label-gap:.375rem; --sidebar-section-gap:1.5rem; --sidebar-content-inset:1rem; --sidebar-control-overhang:-.125rem; --sidebar-action-inset:.375rem; --sidebar-header-action-inset:.875rem; --font-sans:-apple-system,BlinkMacSystemFont,'Inter Variable',Roboto,'Helvetica Neue',Arial,sans-serif; display:flex; flex-direction:column; height:100%; min-height:0; color:var(--color-ink); background:var(--color-panel); font:370 14px/1.5 var(--font-sans); text-align:left; letter-spacing:normal; }
 .dummy-workspace[data-embedded=true] { height:720px; border:1px solid var(--color-edge); border-radius:18px; box-shadow:inset 0 1px 0 #ffffff25,0 12px 48px #0008; overflow:hidden; }
 .dummy-banner { flex:none; min-height:36px; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:5px 14px; border-bottom:1px solid var(--color-edge-muted); font-size:11px; }
 .dummy-banner>span { display:flex; align-items:center; gap:6px; }
@@ -22,7 +22,7 @@
 .dummy-channel-log .homepage-message {max-width:85%;}
 .dummy-channel-item {max-width:760px;margin:0 auto 20px;}
 .dummy-message-task {margin-left:42px;}
-.dummy-entity-link {display:inline-flex;align-items:center;gap:8px;border:1px solid var(--color-edge-muted);border-radius:6px;padding:2px 8px;margin-top:6px;text-align:left;font-size:15px;line-height:20px;font-weight:400;background:transparent;}
+.dummy-entity-link {display:inline-flex;align-items:center;gap:8px;border:1px solid var(--color-edge-muted);border-radius:6px;padding:2px 8px;margin-top:6px;text-align:left;font-size:15px;line-height:20px;font-weight:370;background:transparent;}
 .dummy-email-actions {max-width:850px;margin:auto;}
 .dummy-workspace .mail-thread-body {padding-top:32px;padding-bottom:20px;}
 .dummy-workspace .homepage-email-demo {--homepage-email-height:480px;}
@@ -99,7 +99,7 @@
 .sample-calendar-toolbar {display:flex;justify-content:flex-end;align-items:center;gap:8px;padding:18px 20px}
 .sample-calendar-head {display:grid;min-width:720px;padding-top:16px;border-bottom:1px solid var(--color-edge-muted);height:118px}
 .sample-calendar-head>div {display:flex;flex-direction:column;align-items:center;gap:6px;color:var(--color-ink-muted);font-size:14px}
-.sample-calendar-head strong {font-size:24px;font-weight:400;padding:0 5px;border-radius:5px}
+.sample-calendar-head strong {font-size:24px;font-weight:370;padding:0 5px;border-radius:5px}
 .sample-calendar-head [data-today=true] strong {background:var(--color-accent);color:var(--color-panel)}
 .sample-calendar-grid {display:grid;min-width:720px}
 .sample-time-labels {display:flex;flex-direction:column;font-size:11px;color:var(--color-ink-muted)}
@@ -118,7 +118,7 @@
 .sample-inline-input[aria-label="Company description"] {font-size:14px;line-height:20px;color:var(--color-ink-muted)}
 
 /* Measured against the signed-in app: task-list/ListPropertyValue and TaskGridLayout. */
-.dummy-task-row .sample-list-property {display:inline-flex;width:100%;max-width:100%;min-width:0;height:auto;min-height:0;align-items:center;justify-content:flex-start;gap:4px;overflow:hidden;border:0;border-radius:999px;padding:6px 8px;background:transparent;color:var(--color-ink);font-size:12px;line-height:15px;font-weight:400}
+.dummy-task-row .sample-list-property {display:inline-flex;width:100%;max-width:100%;min-width:0;height:auto;min-height:0;align-items:center;justify-content:flex-start;gap:4px;overflow:hidden;border:0;border-radius:999px;padding:6px 8px;background:transparent;color:var(--color-ink);font-size:12px;line-height:15px;font-weight:370}
 .dummy-task-row .sample-list-property>span {flex:1;min-width:0;text-align:left}
 .dummy-task-row .sample-list-property:hover {background:color-mix(in oklch,var(--color-surface-2) 50%,transparent)}
 .dummy-task-row[role=row]:first-child {min-height:40px;font-size:12px;font-weight:500}
@@ -146,7 +146,7 @@
 .sample-email-thread h3 {font-size:24px;line-height:32px;margin-bottom:20px}
 .sample-email-reply {padding:0;background:transparent}
 .sample-reply-summary {display:flex;align-items:center;gap:8px;width:100%;padding:12px 0;margin-bottom:16px;font-size:14px;color:var(--color-ink-muted)}
-.sample-email-reply textarea {display:block;width:100%;min-height:64px;resize:none;border:0;background:transparent;outline:none;color:var(--color-ink);font:400 15px/24px var(--font-sans)}
+.sample-email-reply textarea {display:block;width:100%;min-height:64px;resize:none;border:0;background:transparent;outline:none;color:var(--color-ink);font:370 15px/24px var(--font-sans)}
 .sample-email-reply textarea::placeholder {color:var(--color-ink-placeholder)}
 .sample-email-reply-placeholder {display:flex;align-items:center;gap:8px;width:100%;padding-top:16px;font-size:14px;color:var(--color-ink-placeholder)}
 .sample-reply-fields {padding-top:8px;margin-bottom:16px;font-size:14px}

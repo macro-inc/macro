@@ -17,7 +17,7 @@
 mod test;
 
 use crate::domain::models::{NormalizedWebhookEvent, WebhookFilters, WebhookScope};
-use crate::domain::ports::WebhookWorkspaceResolver;
+use crate::domain::ports::{WebhookContactChecker, WebhookWorkspaceResolver};
 use entity_access::domain::models::{AccessError, EntityType};
 use entity_access::domain::ports::EntityAccessService;
 use futures::StreamExt as _;
@@ -50,6 +50,13 @@ pub enum StreamAudience {
     Workspace {
         /// Owning workspace id.
         workspace_id: String,
+    },
+    /// The user themself and everyone in their contact graph. Decided per
+    /// subscriber with one exact `(subscriber, user)` lookup, never by listing
+    /// the user's contacts.
+    ContactsOf {
+        /// User whose contacts (and self) may see the event.
+        user_id: String,
     },
     /// Anyone in any of these audiences. Used when an event belongs to more
     /// than one grant at once, such as a departed session whose owner keeps
@@ -100,51 +107,57 @@ pub trait WebhookEventStreamService: Clone + Send + Sync + 'static {
 }
 
 /// Webhook event stream service implementation.
-pub struct WebhookEventStreamServiceImpl<A, R> {
+pub struct WebhookEventStreamServiceImpl<A, R, C> {
     sender: broadcast::Sender<StreamCandidateEvent>,
     entity_access_service: Arc<A>,
     workspace_resolver: R,
+    contact_checker: C,
 }
 
-impl<A, R: Clone> Clone for WebhookEventStreamServiceImpl<A, R> {
+impl<A, R: Clone, C: Clone> Clone for WebhookEventStreamServiceImpl<A, R, C> {
     fn clone(&self) -> Self {
         Self {
             sender: self.sender.clone(),
             entity_access_service: self.entity_access_service.clone(),
             workspace_resolver: self.workspace_resolver.clone(),
+            contact_checker: self.contact_checker.clone(),
         }
     }
 }
 
-impl<A, R> WebhookEventStreamServiceImpl<A, R> {
+impl<A, R, C> WebhookEventStreamServiceImpl<A, R, C> {
     /// Create a webhook event stream service.
     pub fn new(
         sender: broadcast::Sender<StreamCandidateEvent>,
         entity_access_service: Arc<A>,
         workspace_resolver: R,
+        contact_checker: C,
     ) -> Self {
         Self {
             sender,
             entity_access_service,
             workspace_resolver,
+            contact_checker,
         }
     }
 }
 
 /// Owned per-stream state advanced by the unfold loop.
-struct StreamState<A, R> {
+struct StreamState<A, R, C> {
     receiver: broadcast::Receiver<StreamCandidateEvent>,
     entity_access_service: Arc<A>,
     workspace_resolver: R,
+    contact_checker: C,
     subscriber: MacroUserIdStr<'static>,
     scope: WebhookScope,
     filters: WebhookFilters,
 }
 
-impl<A, R> StreamState<A, R>
+impl<A, R, C> StreamState<A, R, C>
 where
     A: EntityAccessService,
     R: WebhookWorkspaceResolver,
+    C: WebhookContactChecker,
 {
     /// The workspace this stream currently represents for webhook.* events.
     ///
@@ -173,6 +186,25 @@ where
             StreamAudience::User { user_id } => Ok(
                 self.scope == WebhookScope::User && self.subscriber.as_ref() == user_id.as_str()
             ),
+            StreamAudience::ContactsOf { user_id } => {
+                if self.scope != WebhookScope::User {
+                    return Ok(false);
+                }
+                if self.subscriber.as_ref() == user_id.as_str() {
+                    return Ok(true);
+                }
+                // An unparseable id cannot be anyone's contact.
+                let Ok(user) = MacroUserIdStr::try_from(user_id.clone()) else {
+                    return Ok(false);
+                };
+                self.contact_checker
+                    .is_contact(user, self.subscriber.clone())
+                    .await
+                    .map_err(|error| {
+                        let error: anyhow::Error = error.into();
+                        rootcause::report!("failed to check stream contact audience: {error:?}")
+                    })
+            }
             StreamAudience::Any(audiences) => {
                 for audience in audiences {
                     if Box::pin(self.subscriber_in_audience(audience)).await? {
@@ -266,10 +298,11 @@ fn validate_filters(filters: &WebhookFilters) -> Result<(), WebhookStreamError> 
     })
 }
 
-impl<A, R> WebhookEventStreamService for WebhookEventStreamServiceImpl<A, R>
+impl<A, R, C> WebhookEventStreamService for WebhookEventStreamServiceImpl<A, R, C>
 where
     A: EntityAccessService,
     R: WebhookWorkspaceResolver,
+    C: WebhookContactChecker,
 {
     #[tracing::instrument(skip(self, filters), fields(filter_count = filters.len()))]
     async fn open_stream(
@@ -302,6 +335,7 @@ where
             receiver: self.sender.subscribe(),
             entity_access_service: self.entity_access_service.clone(),
             workspace_resolver: self.workspace_resolver.clone(),
+            contact_checker: self.contact_checker.clone(),
             subscriber,
             scope,
             filters,

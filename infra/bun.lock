@@ -198,6 +198,10 @@
       "name": "observability-stack",
       "version": "0.0.0",
     },
+    "stacks/openbao": {
+      "name": "openbao-stack",
+      "version": "0.0.0",
+    },
     "stacks/opensearch": {
       "name": "opensearch-stack",
       "version": "0.0.0",
@@ -773,6 +777,8 @@
     "observability-stack": ["observability-stack@workspace:stacks/observability"],
 
     "onetime": ["onetime@5.1.2", "", { "dependencies": { "mimic-fn": "^2.1.0" } }, "sha512-kbpaSSGJTWdAY5KPVeMOKXSrPtr8C8C7wodJbcsd51jRnmD+GZu8Y0VoU6Dm5Z4vWr0Ig/1NKuWRKf7j5aaYSg=="],
+
+    "openbao-stack": ["openbao-stack@workspace:stacks/openbao"],
 
     "opensearch-stack": ["opensearch-stack@workspace:stacks/opensearch"],
 

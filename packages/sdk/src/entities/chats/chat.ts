@@ -23,7 +23,12 @@ type ChatHistory = GetChatHistoryHandlerResponses[200]['conversation'];
 
 /** A Macro AI chat. */
 export class Chat extends PropertiedEntity<ChatDetail> implements Mentionable {
-  /** Send a message and start a background generation. Tools may perform writes. */
+  /**
+   * Send a message and start a background generation. Tools may perform writes.
+   *
+   * @write
+   * @openworld
+   */
   async send(
     options: Omit<
       HttpSendChatMessageRequest,
@@ -110,7 +115,11 @@ export class Chat extends PropertiedEntity<ChatDetail> implements Mentionable {
   /** The messages in the chat, with their attachments. */
   readonly messages = this.field('messages');
 
-  /** Sharing configuration. */
+  /**
+   * Sharing configuration.
+   *
+   * @readonly
+   */
   async sharePermissions() {
     return unwrap(
       await this.client.cognition.getChatPermissions({
@@ -122,6 +131,9 @@ export class Chat extends PropertiedEntity<ChatDetail> implements Mentionable {
   /**
    * Change who can open the chat: the link share and its access level, the
    * owner's team, and channel grants. Omitted fields are left as they are.
+   *
+   * @write
+   * @idempotent
    */
   async updateSharePermissions(options: SharePermissionOptions): Promise<void> {
     await this.mutate((c) =>
@@ -132,7 +144,12 @@ export class Chat extends PropertiedEntity<ChatDetail> implements Mentionable {
     );
   }
 
-  /** Rename the chat. */
+  /**
+   * Rename the chat.
+   *
+   * @write
+   * @idempotent
+   */
   async rename(name: string): Promise<void> {
     await this.mutate((c) =>
       c.cognition.patchChat({
@@ -145,6 +162,9 @@ export class Chat extends PropertiedEntity<ChatDetail> implements Mentionable {
   /**
    * Delete the chat. Soft by default (reversible with {@link restore});
    * pass `permanent: true` to delete irreversibly.
+   *
+   * @destructive
+   * @idempotent
    */
   async delete(opts?: { permanent?: boolean }): Promise<void> {
     await this.mutate((c) =>
@@ -154,7 +174,11 @@ export class Chat extends PropertiedEntity<ChatDetail> implements Mentionable {
     );
   }
 
-  /** Copy the chat, returning a handle to the new copy. */
+  /**
+   * Copy the chat, returning a handle to the new copy.
+   *
+   * @write
+   */
   async copy(): Promise<Chat> {
     const { id } = await this.mutate((c) =>
       c.cognition.copyChat({ path: { chat_id: this.id } }),
@@ -162,14 +186,23 @@ export class Chat extends PropertiedEntity<ChatDetail> implements Mentionable {
     return new Chat(this.client, id);
   }
 
-  /** Restore a soft-deleted chat. */
+  /**
+   * Restore a soft-deleted chat.
+   *
+   * @write
+   * @idempotent
+   */
   async restore(): Promise<void> {
     await this.mutate((c) =>
       c.cognition.revertDeleteChat({ path: { chat_id: this.id } }),
     );
   }
 
-  /** The chat's conversation history: titled records of messages with attachment ids. */
+  /**
+   * The chat's conversation history: titled records of messages with attachment ids.
+   *
+   * @readonly
+   */
   async history(): Promise<ChatHistory> {
     const { conversation } = unwrap(
       await this.client.cognition.getChatHistoryHandler({
@@ -179,7 +212,11 @@ export class Chat extends PropertiedEntity<ChatDetail> implements Mentionable {
     return conversation;
   }
 
-  /** The chat's URL in the Macro web app. */
+  /**
+   * The chat's URL in the Macro web app.
+   *
+   * @readonly
+   */
   webUrl(): string {
     return `${this.client.webAppUrl}/app/chat/${this.id}`;
   }
@@ -196,6 +233,11 @@ export class Chat extends PropertiedEntity<ChatDetail> implements Mentionable {
     make: (client, hit) => new Chat(client, hit.chat_id),
   });
 
+  /**
+   * Render this chat as a mention for a message body.
+   *
+   * @readonly
+   */
   toMention(): MentionPart {
     return {
       tag: wrapXml('m-document-mention', {

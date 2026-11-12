@@ -21,15 +21,18 @@ use super::code_upgrade::{CodeUpgrade, NoCodeUpgrades};
 use super::event_runs::ConfigurationRevision;
 use super::event_trigger::ActionTrigger;
 use super::models::{
-    ActionConfiguration, ActionConfigurationUpdate, ActionExecutionRecord, ActionPolicyError,
-    CheckedStepProblems, CreatedItem, DispatchEvent, InProgressExecution, ListedAction,
-    MAX_DESCRIPTION_CHARS, OwnerNotUserError, RoutineCheck, ScheduledAction,
+    ActionConfiguration, ActionConfigurationUpdate, ActionPolicyError, CheckedStepProblems,
+    CreatedItem, DispatchEvent, InProgressExecution, ListScope, ListedAction, ListedRun,
+    MAX_DESCRIPTION_CHARS, OwnerNotUserError, RoutineCheck, RunCaller, RunningRun, ScheduledAction,
+    SubRoutine, SubRoutineKey,
 };
 use super::ports::{
-    CodeUpgrades, DraftHandBacks, NoRoutineCode, RequestSessions, RoutineCode,
+    CodeUpgrades, DraftHandBacks, NoRoutineCode, RequestSessions, RoutineCode, SavedAction,
     ScheduledActionExecutor, ScheduledActionRepo, ScheduledActionService, StepProblems,
-    SuggestionOrigins, TaskTargetValidator,
+    SubRoutines, SuggestionOrigins, TaskTargetValidator,
 };
+
+mod sub_routines;
 use super::target_validation::{ModelOnlyTargets, require_explicit_selection};
 
 #[cfg(test)]
@@ -60,6 +63,8 @@ pub struct ScheduledActionServiceImpl<
     drafts: Option<DraftChecks>,
     /// What a suggestion a routine is saved from was, for its log.
     origins: Option<Arc<dyn SuggestionOrigins>>,
+    /// Finds the agent session behind a create, to tell a routine run's.
+    run_sessions: Option<Arc<dyn RequestSessions>>,
 }
 
 /// What keeps a draft session's check as its answer.
@@ -108,6 +113,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants> ScheduledActionServiceImpl<Rpo, Exe,
             upgrades: Arc::new(NoCodeUpgrades),
             drafts: None,
             origins: None,
+            run_sessions: None,
         }
     }
 }
@@ -132,6 +138,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades>
             upgrades: self.upgrades,
             drafts: self.drafts,
             origins: self.origins,
+            run_sessions: self.run_sessions,
         }
     }
 
@@ -153,6 +160,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades>
             upgrades: self.upgrades,
             drafts: self.drafts,
             origins: self.origins,
+            run_sessions: self.run_sessions,
         }
     }
 
@@ -176,6 +184,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades>
             upgrades,
             drafts: self.drafts,
             origins: self.origins,
+            run_sessions: self.run_sessions,
         }
     }
 
@@ -196,6 +205,13 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades>
     /// Log what suggestion a routine is saved from, found through `origins`.
     pub fn with_suggestion_origins(mut self, origins: Arc<dyn SuggestionOrigins>) -> Self {
         self.origins = Some(origins);
+        self
+    }
+
+    /// Make routines created from a routine run's agent session that
+    /// routine's sub-routines, finding the session through `sessions`.
+    pub fn with_run_sessions(mut self, sessions: Arc<dyn RequestSessions>) -> Self {
+        self.run_sessions = Some(sessions);
         self
     }
 
@@ -220,10 +236,24 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades>
     /// Delete `action` and hand its removal to the dispatcher. The permit is
     /// reserved first so a stopped dispatcher fails while the row still exists
     /// for a retry to find.
-    async fn delete_and_dispatch(&self, id: &Uuid, action: ScheduledAction) -> Result<()> {
+    async fn delete_and_dispatch(&self, id: &Uuid, action: ScheduledAction) -> Result<()>
+    where
+        Rpo: SubRoutines,
+    {
+        // A routine's sub-routines are deleted with it.
+        let children = match action.sub_routine {
+            Some(_) => Vec::new(),
+            None => self.repo.children(id).await?,
+        };
         let permit = self.dispatcher_tx.reserve().await?;
         self.repo.delete_action(id).await?;
         permit.send(DispatchEvent::Delete(action));
+        for child in children {
+            self.dispatcher_tx
+                .send(DispatchEvent::Delete(child))
+                .await
+                .map_err(|e| anyhow::anyhow!("failed to dispatch delete event: {e}"))?;
+        }
         Ok(())
     }
 
@@ -251,6 +281,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades>
         input: ActionConfiguration,
         template_id: Option<Uuid>,
         suggestion_id: Option<Uuid>,
+        sub_routine: Option<SubRoutine>,
     ) -> Result<ScheduledAction>
     where
         Targets: TaskTargetValidator,
@@ -294,6 +325,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades>
                 template_id,
                 suggestion_id,
                 description,
+                sub_routine,
             })
             .await?;
         self.dispatcher_tx
@@ -400,10 +432,34 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades>
         Ok(())
     }
 
+    /// Replace a routine's configuration, then make its sub-routines follow
+    /// a change of whether it is on.
     async fn replace_configuration(
+        &self,
+        action: ScheduledAction,
+        input: ActionConfiguration,
+    ) -> Result<ScheduledAction>
+    where
+        Rpo: SubRoutines,
+        Targets: TaskTargetValidator,
+        Github: GithubInstallationClaims,
+        Code: RoutineCode,
+    {
+        let was_enabled = action.enabled;
+        let updated = self.replace_one(action, input, false).await?;
+        if updated.sub_routine.is_none() && updated.enabled != was_enabled {
+            self.follow_parent(&updated).await;
+        }
+        Ok(updated)
+    }
+
+    /// Replace one routine's configuration. `with_parent` marks a
+    /// sub-routine switched off because its parent was.
+    async fn replace_one(
         &self,
         mut action: ScheduledAction,
         mut input: ActionConfiguration,
+        with_parent: bool,
     ) -> Result<ScheduledAction>
     where
         Targets: TaskTargetValidator,
@@ -460,7 +516,15 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades>
         };
         // Checked like any update, but with nothing to replace: a new revision
         // would only supersede event runs queued under the current one.
-        if !configuration_changed && action.enabled == input.enabled {
+        // A sub-routine its parent's pause now holds off must record that,
+        // even when nothing else about it changes.
+        let newly_held = with_parent
+            && !input.enabled
+            && action
+                .sub_routine
+                .as_ref()
+                .is_some_and(|link| !link.paused_by_parent);
+        if !configuration_changed && action.enabled == input.enabled && !newly_held {
             return Ok(action);
         }
         action.configuration_revision = action.configuration_revision.next()?;
@@ -472,6 +536,11 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades>
         action.run_visibility = input.run_visibility;
         action.description = description(&input.description)?;
         action.updated_at = now;
+        // Off with its parent until it is switched on again, by the parent
+        // or by hand; an edit while it is off keeps the mark.
+        if let Some(link) = &mut action.sub_routine {
+            link.paused_by_parent = !input.enabled && (with_parent || link.paused_by_parent);
+        }
 
         let updated = self.repo.update_action(action).await?;
         self.dispatcher_tx
@@ -589,7 +658,7 @@ pub(crate) async fn list_accessible_actions<R, G>(
     user_id: &MacroUserIdStr<'static>,
 ) -> Result<Vec<ScheduledAction>>
 where
-    R: ScheduledActionRepo,
+    R: SubRoutines,
     G: ScheduledActionGrants,
 {
     let ids = grants
@@ -599,7 +668,8 @@ where
     if ids.is_empty() {
         return Ok(Vec::new());
     }
-    let mut actions = repo.get_actions_by_ids(&ids).await?;
+    // Sub-routines are listed under the routine that created them.
+    let mut actions = repo.top_level_by_ids(&ids).await?;
     actions.retain(|action| action.owner.is_user(user_id));
     actions.sort_by(|left, right| {
         left.created_at
@@ -632,16 +702,16 @@ where
     Github: GithubInstallationClaims,
     Code: RoutineCode,
     Upgrades: CodeUpgrades,
-    Rpo: ScheduledActionRepo,
+    Rpo: ScheduledActionRepo + SubRoutines,
     Grants: ScheduledActionGrants,
     Targets: TaskTargetValidator,
     Exe: ScheduledActionExecutor + Send + Sync + 'static,
 {
-    async fn get_action(&self, id: Uuid) -> Result<ScheduledAction> {
-        self.repo
-            .get_action(&id)
-            .await?
-            .ok_or_else(|| ActionPolicyError::NotFound.into())
+    async fn get_action<T: RequiredPermission>(
+        &self,
+        receipt: &EntityAccessReceipt<T>,
+    ) -> Result<ScheduledAction> {
+        self.load_granted(receipt).await
     }
 
     async fn delete_user_actions(&self, user_id: MacroUserIdStr<'static>) -> Result<()> {
@@ -684,7 +754,56 @@ where
         principal: &CreationPrincipal,
         input: ActionConfiguration,
     ) -> Result<ScheduledAction> {
-        self.create(principal, input, None, None).await
+        self.create(principal, input, None, None, None).await
+    }
+
+    #[tracing::instrument(name = "routine.create", skip_all, fields(
+        routine.id = tracing::field::Empty,
+        routine.parent_id = tracing::field::Empty,
+        routine.created_by_run_id = tracing::field::Empty,
+        routine.creating_routine_id = tracing::field::Empty,
+        routine.keyed = key.is_some(),
+        routine.create.outcome = tracing::field::Empty,
+    ), err)]
+    async fn create_action_from(
+        &self,
+        principal: &CreationPrincipal,
+        input: ActionConfiguration,
+        caller: RunCaller,
+        key: Option<SubRoutineKey>,
+    ) -> Result<SavedAction> {
+        let span = tracing::Span::current();
+        let saved = match self.creating_run(principal, caller).await? {
+            Some(run) => self.create_sub_routine(principal, input, run, key).await,
+            None if key.is_some() => Err(ActionPolicyError::KeyOutsideRun.into()),
+            None => self
+                .create(principal, input, None, None, None)
+                .await
+                .map(SavedAction::Created),
+        };
+        let outcome = match &saved {
+            Ok(SavedAction::Created(_)) => "created",
+            Ok(SavedAction::Updated(_)) => "updated",
+            Err(error) => match error.downcast_ref::<ActionPolicyError>() {
+                Some(ActionPolicyError::TooManySubRoutines) => "refused_cap",
+                _ => "failed",
+            },
+        };
+        span.record("routine.create.outcome", outcome);
+        if let Ok(SavedAction::Created(action) | SavedAction::Updated(action)) = &saved
+            && let Some(id) = action.id
+        {
+            span.record("routine.id", tracing::field::display(id));
+        }
+        saved
+    }
+
+    async fn detach_action(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+    ) -> Result<ScheduledAction> {
+        let action = self.load_granted(&receipt).await?;
+        self.detach(action).await
     }
 
     #[tracing::instrument(name = "routine.check", skip_all, fields(
@@ -720,7 +839,8 @@ where
         input: ActionConfiguration,
         template_id: Uuid,
     ) -> Result<ScheduledAction> {
-        self.create(principal, input, Some(template_id), None).await
+        self.create(principal, input, Some(template_id), None, None)
+            .await
     }
 
     async fn create_action_from_suggestion(
@@ -730,7 +850,7 @@ where
         suggestion_id: Uuid,
     ) -> Result<ScheduledAction> {
         let created = self
-            .create(principal, input, None, Some(suggestion_id))
+            .create(principal, input, None, Some(suggestion_id), None)
             .await?;
         // Accepts by who suggested, kind and surface, for the suggestions
         // dashboard. A failed lookup only leaves those fields out.
@@ -758,15 +878,20 @@ where
         &self,
         user_id: MacroUserIdStr<'static>,
         include_events: bool,
+        scope: ListScope,
     ) -> Result<Vec<ListedAction>> {
-        let actions: Vec<ScheduledAction> =
-            list_accessible_actions(self.repo.as_ref(), self.grants.as_ref(), &user_id)
-                .await?
-                .into_iter()
-                .filter(|action| {
-                    include_events || matches!(action.trigger, ActionTrigger::Cron { .. })
-                })
-                .collect();
+        let actions: Vec<ScheduledAction> = self
+            .list_in(self.grants.as_ref(), &user_id, scope)
+            .await?
+            .into_iter()
+            // Only the plain list has clients that predate event and one-time
+            // triggers; the sub-routine scopes return every trigger type.
+            .filter(|action| {
+                include_events
+                    || scope != ListScope::TopLevel
+                    || matches!(action.trigger, ActionTrigger::Cron { .. })
+            })
+            .collect();
 
         let ids: Vec<Uuid> = actions.iter().filter_map(|action| action.id).collect();
         let mut last_runs = self.repo.last_runs(&ids).await?;
@@ -816,12 +941,7 @@ where
         let Some(id) = action.id else {
             bail!("cannot delete action without id");
         };
-        self.repo.delete_action(&id).await?;
-        self.dispatcher_tx
-            .send(DispatchEvent::Delete(action))
-            .await
-            .map_err(|e| anyhow::anyhow!("failed to dispatch delete event: {e}"))?;
-        Ok(())
+        self.delete_and_dispatch(&id, action).await
     }
 
     async fn execute_action_now(
@@ -837,12 +957,13 @@ where
     async fn get_execution_records(
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
-    ) -> Result<Vec<ActionExecutionRecord>> {
+    ) -> Result<Vec<ListedRun>> {
         let action = self.load_granted(&receipt).await?;
         let Some(id) = action.id else {
             bail!("cannot read execution history without id");
         };
-        self.repo.get_execution_records(&id).await
+        let records = self.repo.get_execution_records(&id).await?;
+        self.with_created(&action, records).await
     }
 
     fn catalog(&self, timezone: chrono_tz::Tz) -> Vec<super::catalog::CatalogEntry> {

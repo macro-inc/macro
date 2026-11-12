@@ -5,6 +5,29 @@ single Vite build that runs identically for web, desktop, iOS, and Android — t
 platform is detected at runtime via `getPlatform()` rather than baked into the
 bundle.
 
+## Scoped cache hydration
+
+Contact backfill uses the additive `graphql_cache_hydrate_scoped` command with a
+required account/storage-generation guard. Register it alongside the deployed
+unscoped command; never silently drop the guard for older binaries. JS checks
+projection 5 support, and a missing scoped command must reject without fallback.
+This requires a native rebuild; legacy unscoped callers remain compatible.
+
+Context-aware person search also needs a rebuild for `graphql_cache_people_context`,
+`graphql_cache_people_update`, `graphql_cache_people_search`, and the additive
+`graphql_cache_people_resolve_references` and `graphql_cache_people_read_sql` reads. OTA clients detect
+missing commands as unavailable, never as an empty directory or a successful write.
+These commands keep account/generation admission and ranking inside the shared
+engine lock. The leader publisher and Quick Access reader are implemented.
+Rebuild native code for person policy version 4 before relying on current before-limit
+recipient exclusions and ranked mention/property windows; older policy responses
+use bounded server pages. Reference reads return at most two witnesses per label,
+never a directory, and cannot bind an unowned cache. A missing reference command
+is independently unsupported, not a reason to disable working person search.
+SQL support is independent too: execute in the native Turso cache, return bounded
+final results, and never replace a missing command with server SQL or enumeration.
+Remaining planner/full-list migrations are tracked in the contact design plan.
+
 ## Native authentication cookies
 
 The native HTTP plugin stores its cookie jar at `$APPLOCALDATA/.cookies`, which
@@ -19,6 +42,16 @@ the plugin owns the `.cookies` filename within that directory. Its default
 the old cache file, so the first launch after this native update requires
 sign-in again. Cookie expiry, refresh, and write behavior are unchanged. This
 requires a native app release; an OTA frontend bundle cannot relocate the jar.
+
+## OTA bundle storage
+
+On iOS, the bundle updater stores downloads and their persistence markers in
+`Library/Application Support/<bundle-identifier>/bundle-updates`, not the
+purgeable `Library/Caches` directory. The directory is excluded from backup
+because the server can supply the bundles again. The updater deliberately
+ignores legacy cache contents: the first launch uses embedded assets and checks
+for a fresh download. Other platforms retain their existing cache location.
+This storage change requires a native app release.
 
 ## File saving and sharing
 
@@ -93,6 +126,25 @@ process terminated (for example, memory pressure versus a crash); device
 crash/termination reports are needed for that distinction. Native counters
 require a full app release, while the frontend remains compatible with older
 binaries.
+
+Each native launch also records how the bundle updater chose its bundle, and
+every document in the launch reports it on `native_webview_started`:
+`native_bundle_startup_selection` (`saved_ota`, `completed_download`, or
+`embedded`), `native_bundle_startup_saved_selection` (what the saved selection
+held: `none`, `unreadable`, `embedded`, or `ota`),
+`native_bundle_startup_rejection` (which check a saved OTA bundle failed),
+`native_bundle_startup_read_error` (the I/O error kind, such as `NotFound` or
+`PermissionDenied`), and `native_bundle_startup_dirs_found` /
+`native_bundle_startup_dirs_removed` (numbered bundle directories before and
+after startup cleanup). A user who was on an OTA bundle and starts a new launch
+on the embedded one without a reload dispatch lost it at startup: `none` with
+no directories means bundle storage was emptied, `unreadable` means the files
+were there but could not be read, and a rejection names the failed check. On
+iOS, the first launch of the release that moved bundles out of `Library/Caches`
+also reports `none`, because it ignores the old location. An older
+release's embedded bundle predates these fields, but the record lives for the
+whole launch, so the document an update reload brings up reports it. Missing
+fields mean an older binary or a build with automatic updates disabled.
 
 An update reload normally lands while the page is hidden, which is harmless for
 a list and fatal for anything the page is waiting on. A native auth sheet is the
@@ -472,6 +524,11 @@ The `tauri.conf.json` window size only applies to the first launch. A saved
 position that no longer lands on a connected monitor is ignored and the OS
 places the window. State is written to `.window-state.json` in the app config
 directory on quit; delete that file to reset. Mobile is unaffected.
+
+Launching Macro while it is already running exits the new process in
+`tauri-plugin-single-instance` before it creates a window. The running process
+then unhides the app and shows, unminimizes and focuses its window, rebuilding
+it from the startup config if it no longer exists (`src/desktop/main_window.rs`).
 
 ## Desktop native updates
 

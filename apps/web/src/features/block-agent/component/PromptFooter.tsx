@@ -81,3 +81,20 @@ export function PromptFooter(props: {
     </div>
   );
 }
+
+/**
+ * A quiet line under a finished agent reply: when it was sent, in the same
+ * treatment as the time under a prompt.
+ */
+export function ReplyFooter(props: {
+  /** RFC 3339. */
+  sentAt: string;
+}) {
+  return (
+    <div class="text-xs text-ink-extra-muted" data-testid="reply-footer">
+      <time class="px-1" datetime={props.sentAt}>
+        {formatDate(props.sentAt, { showTime: true })}
+      </time>
+    </div>
+  );
+}

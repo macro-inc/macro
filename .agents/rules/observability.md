@@ -56,6 +56,8 @@ through them and the per-runtime APIs.
   not one opaque span.
 - Record outcome on the span (error status, retry count, cache hit/miss), so
   slow and failed paths can be filtered without logs.
+- Start a Rust span field you record later as `tracing::field::Empty` and
+  record it once (ast-grep `rust-span-field-recorded-once`, error).
 
 ## Logs
 

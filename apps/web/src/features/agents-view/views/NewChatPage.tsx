@@ -1,5 +1,6 @@
 import { promptActionOf } from '@app/features/block-agent/component/prompt-action';
 import { createRecentAgentSelections } from '@app/features/block-agent/context/recent-agent-selections';
+import { requestRuntimeAccess } from '@app/features/runtime-sharing/core/request-access';
 import { LocalRuntimePrompt } from '@app/features/settings/components/local-runtime-prompt';
 import {
   createInputAttachmentTracker,
@@ -286,6 +287,13 @@ export function NewChatPage(props: {
   };
 
   const connect = (agent: RosterAgent) => {
+    if (agent.needsRuntimeAccess && agent.harnessId) {
+      fireAndForget(
+        requestRuntimeAccess(agent.harnessId),
+        'runtime-sharing.request'
+      );
+      return;
+    }
     // Both land on Settings → Runtimes: Cursor to save an API key, macrod to
     // restart the local runtime (one click on desktop) or re-pair it.
     if (agent.harness === 'cursor' || agent.harness === 'macrod') {

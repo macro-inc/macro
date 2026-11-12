@@ -69,7 +69,11 @@ import {
 export class DatabaseNamespace {
   constructor(private readonly client: MacroClient) {}
 
-  /** Run one SQL statement over the caller's visible databases. Writes execute once. */
+  /**
+   * Run one SQL statement over the caller's visible databases. Writes execute once.
+   *
+   * @destructive
+   */
   query(
     sql: string,
     options?: DatabaseQueryOptions,
@@ -82,12 +86,20 @@ export class DatabaseNamespace {
     return Database.byId(this.client, id);
   }
 
-  /** Create a database owned by the caller. */
+  /**
+   * Create a database owned by the caller.
+   *
+   * @write
+   */
   create(options: { name: string }): Promise<Database> {
     return Database.create(this.client, options);
   }
 
-  /** The databases the caller can see. */
+  /**
+   * The databases the caller can see.
+   *
+   * @readonly
+   */
   list(): Promise<Database[]> {
     return Database.list(this.client);
   }

@@ -19,6 +19,7 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   query logic layered onto the core service.
 - `src/outbound/pg_soup_repo.rs`: the Postgres repo, split by entity kind
   (`database_row.rs`, `calendar_event.rs`, `agent_session.rs`, `initiative.rs`,
+  `harness.rs`,
   `attention.rs`, `notified.rs`, `touched.rs`) and by shape
   (`expanded/` hydrated, `unexpanded/` id-only).
 - `src/inbound/axum_router.rs` + `src/inbound/toolset/list_entities.rs`: the
@@ -55,6 +56,10 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   (`attention/query.sql`). Channel-thread keying applies only to
   `AttentionKeying::ThreadScoped`; keep it in step with `attention_feed`'s
   `keying.rs`.
+- Give a kind with no list of its own (runtimes) inbox rows: an
+  attention-only kind like `pg_soup_repo/harness.rs`, a gate in
+  `attention/query.sql`'s attention stream only, a by-ids leg, and the type in
+  `requested_types` (as CRM records are).
 
 ## Tool contracts
 
@@ -94,8 +99,9 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   drop just the failing domains and keep the scope.
 - Agent sessions named by id (an `Id` literal in `cursor_soup`, which GraphQL
   `agentSession` and its log use, and `by_ids`) also accept a grant on the
-  document or call whose live thread the session runs in, matching
-  `entity_access`. Broad lists use session grants only, and leave out
+  document or call whose live thread the session runs in, and the session's
+  public or team link share, matching `entity_access`. Broad lists use
+  session grants only, and leave out
   `hidden` sessions (thread-started, DM contexts) except for their followers
   (`agent_session_follower`, people who prompted the session from the session
   itself), who may also read them through the thread's parent. The notified

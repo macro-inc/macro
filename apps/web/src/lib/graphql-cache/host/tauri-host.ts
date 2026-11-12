@@ -55,6 +55,7 @@ import type {
   CacheChangeOptions,
   CacheGenerationChange,
   CacheHost,
+  CacheHydrateArgs,
   CacheReadArgs,
   CacheWriteArgs,
   EnqueueOptimisticMutationArgs,
@@ -84,7 +85,15 @@ type CacheChangedPayload = {
 } & CacheChangeHints;
 
 // Older native binaries omit the advancement bit and still receive OTA JS.
+import { createPeopleCache } from '../people/host';
+import { PEOPLE_UNSUPPORTED } from '../people/protocol';
+
 type NativeHydrationResult = HydrationResult & { revisionAdvanced?: boolean };
+const PEOPLE_CONTEXT_COMMAND = 'graphql_cache_people_context';
+const PEOPLE_SEARCH_COMMAND = 'graphql_cache_people_search';
+const PEOPLE_REFERENCES_COMMAND = 'graphql_cache_people_resolve_references';
+const PEOPLE_SQL_COMMAND = 'graphql_cache_people_read_sql';
+const PEOPLE_UPDATE_COMMAND = 'graphql_cache_people_update';
 
 export interface TauriHostOptions {
   scope: string;
@@ -127,6 +136,8 @@ const TIMED_COMMANDS: ReadonlySet<string> = new Set([
   ENTITY_FILTER_COMMAND,
   ENTITY_FILTER_RESUME_COMMAND,
   CALENDAR_RANGE_COMMAND,
+  PEOPLE_CONTEXT_COMMAND,
+  PEOPLE_SEARCH_COMMAND,
   'graphql_cache_inspect_query_variants',
   'graphql_cache_inspect_query',
 ]);
@@ -174,6 +185,11 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
   let entityFilterUnavailable = false;
   // Binaries before incremental watches still serve full reads.
   let watchUnavailable = false;
+  let peopleUnavailable = false;
+  let peopleSqlUnavailable = false;
+  let contactSyncUnavailable = false;
+  let referencesUnavailable = false;
+  let scopedHydrationSupported: Promise<boolean> | undefined;
   // Native binaries before the calendar range index answer `unsupported`, so
   // the calendar keeps reading from the network until the app updates.
   let calendarUnavailable = false;
@@ -401,11 +417,136 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     'graphql-cache-host'
   );
 
+  async function publishHydration(
+    revision: CacheRevision,
+    advanced: boolean | undefined,
+    searchChangedBuckets: string[] | undefined,
+    unchangedViews?: string[]
+  ): Promise<void> {
+    const newlyObserved = observeRevision(parseCacheRevision(revision));
+    if (advanced === false || !newlyObserved) return;
+    try {
+      await emit(CACHE_HYDRATED_EVENT, {
+        revision,
+        ...(unchangedViews !== undefined ? { unchangedViews } : {}),
+        ...(searchChangedBuckets !== undefined ? { searchChangedBuckets } : {}),
+      });
+    } catch (error) {
+      // Notification failure must not turn a committed write into a retry.
+      console.warn('graphql cache hydration notification failed', error);
+    }
+  }
+
   const opId = (opKey: number) => `${clientId}:${opKey}`;
 
   return {
     clientId,
     liveQueries: true,
+    people: createPeopleCache({
+      async snapshot(args, traceparent) {
+        await ready;
+        if (contactSyncUnavailable) return { kind: 'unsupported' };
+        try {
+          return await request('graphql_cache_contact_snapshot', {
+            request: args,
+            traceparent,
+          });
+        } catch (error) {
+          if (!isMissingCommand(error, 'graphql_cache_contact_snapshot'))
+            throw error;
+          contactSyncUnavailable = true;
+          return { kind: 'unsupported' };
+        }
+      },
+      async reconcile(args, traceparent) {
+        await ready;
+        if (contactSyncUnavailable) return { kind: 'unsupported' };
+        try {
+          const result = await request<WriteResult>(
+            'graphql_cache_contact_reconcile',
+            { request: args, traceparent }
+          );
+          return result.revision;
+        } catch (error) {
+          if (!isMissingCommand(error, 'graphql_cache_contact_reconcile'))
+            throw error;
+          contactSyncUnavailable = true;
+          return { kind: 'unsupported' };
+        }
+      },
+      async readSql(args, traceparent) {
+        await ready;
+        if (peopleSqlUnavailable) return { kind: 'unsupported' };
+        try {
+          return await request(PEOPLE_SQL_COMMAND, {
+            request: args,
+            traceparent,
+          });
+        } catch (error) {
+          if (!isMissingCommand(error, PEOPLE_SQL_COMMAND)) throw error;
+          peopleSqlUnavailable = true;
+          return { kind: 'unsupported' };
+        }
+      },
+      async resolveReferences(args, traceparent) {
+        await ready;
+        if (referencesUnavailable) return { kind: 'unsupported' };
+        try {
+          return await request(PEOPLE_REFERENCES_COMMAND, {
+            request: args,
+            traceparent,
+          });
+        } catch (error) {
+          if (!isMissingCommand(error, PEOPLE_REFERENCES_COMMAND)) throw error;
+          referencesUnavailable = true;
+          return { kind: 'unsupported' };
+        }
+      },
+      async context(scope, traceparent) {
+        await ready;
+        if (peopleUnavailable) return { kind: 'unsupported' };
+        try {
+          return await request(PEOPLE_CONTEXT_COMMAND, { scope, traceparent });
+        } catch (error) {
+          if (!isMissingCommand(error, PEOPLE_CONTEXT_COMMAND)) throw error;
+          peopleUnavailable = true;
+          return { kind: 'unsupported' };
+        }
+      },
+      async search(args, traceparent) {
+        await ready;
+        if (peopleUnavailable) return { kind: 'unsupported' };
+        try {
+          return await request(PEOPLE_SEARCH_COMMAND, {
+            request: args,
+            traceparent,
+          });
+        } catch (error) {
+          if (!isMissingCommand(error, PEOPLE_SEARCH_COMMAND)) throw error;
+          peopleUnavailable = true;
+          return { kind: 'unsupported' };
+        }
+      },
+      async update(update, traceparent) {
+        await ready;
+        if (peopleUnavailable) throw new Error(PEOPLE_UNSUPPORTED);
+        let result: WriteResult;
+        try {
+          result = await request<WriteResult>(PEOPLE_UPDATE_COMMAND, {
+            update,
+            traceparent,
+          });
+        } catch (error) {
+          if (!isMissingCommand(error, PEOPLE_UPDATE_COMMAND)) throw error;
+          peopleUnavailable = true;
+          throw new Error(PEOPLE_UNSUPPORTED);
+        }
+        await publishHydration(result.revision, result.revisionAdvanced, [
+          'person',
+        ]);
+        return result.revision;
+      },
+    }),
 
     async currentRevision(): Promise<CacheRevision> {
       await ready;
@@ -619,38 +760,50 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       });
     },
 
-    async hydrateQuery(
-      args: Omit<CacheWriteArgs, 'opKey'>
-    ): Promise<HydrationResult> {
+    async hydrateQuery(args: CacheHydrateArgs): Promise<HydrationResult> {
       await ready;
-      const result = await request<NativeHydrationResult>(
-        'graphql_cache_hydrate',
-        {
-          query: args.query,
-          operationName: args.operationName,
-          variables: args.variables,
-          data: args.data,
-          identity: args.identity,
-        }
-      );
-      const newlyObserved = observeRevision(
-        parseCacheRevision(result.revision)
-      );
-      if (result.revisionAdvanced === false || !newlyObserved) return result;
-      try {
-        await emit(CACHE_HYDRATED_EVENT, {
-          ...(result.unchangedViews !== undefined
-            ? { unchangedViews: result.unchangedViews }
-            : {}),
-          revision: result.revision,
-          ...(result.searchChangedBuckets !== undefined
-            ? { searchChangedBuckets: result.searchChangedBuckets }
-            : {}),
-        });
-      } catch (error) {
-        // Notification failure must not turn a committed hydration into a retry.
-        console.warn('graphql cache hydration notification failed', error);
+      if (args.hydrationScope) {
+        scopedHydrationSupported ??= request<SearchCachePage>(
+          'graphql_cache_search',
+          {
+            request: {
+              profile: 'quick-access-v1',
+              buckets: ['person'],
+              query: '',
+              limit: 1,
+              nowMs: 0,
+            },
+          }
+        )
+          .then((page) => (page.projectionVersion ?? 0) >= 5)
+          .catch((error: unknown) => {
+            scopedHydrationSupported = undefined;
+            throw error;
+          });
+        if (!(await scopedHydrationSupported))
+          throw new Error('Scoped cache hydration is unsupported');
       }
+      const payload = {
+        query: args.query,
+        operationName: args.operationName,
+        variables: args.variables,
+        data: args.data,
+        identity: args.identity,
+      };
+      const result = args.hydrationScope
+        ? await request<NativeHydrationResult>('graphql_cache_hydrate_scoped', {
+            request: { ...payload, hydrationScope: args.hydrationScope },
+          })
+        : await request<NativeHydrationResult>(
+            'graphql_cache_hydrate',
+            payload
+          );
+      await publishHydration(
+        result.revision,
+        result.revisionAdvanced,
+        result.searchChangedBuckets,
+        result.unchangedViews
+      );
       return result;
     },
 

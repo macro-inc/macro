@@ -1228,6 +1228,27 @@ describe('createWorkerCacheHost', () => {
     host.dispose();
   });
 
+  it('notifies a resubscribing observer only once per engine replacement', async () => {
+    const host = createWorkerCacheHost({ scope: 'scope-1' });
+    await host.currentRevision();
+    let notifications = 0;
+    let unsubscribe = () => {};
+    const subscribe = () => {
+      unsubscribe = host.onCacheGenerationChanged(() => {
+        notifications += 1;
+        unsubscribe();
+        // Bound the regression so a live-Set loop fails instead of hanging.
+        if (notifications < 3) subscribe();
+      });
+    };
+    subscribe();
+
+    requireAdapter().replace(2);
+    expect(notifications).toBe(1);
+    unsubscribe();
+    host.dispose();
+  });
+
   it.each([
     ['opened-existing', 'preserved'],
     ['opened-new', 'reset'],

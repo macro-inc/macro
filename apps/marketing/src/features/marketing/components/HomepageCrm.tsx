@@ -37,8 +37,8 @@ function DemoCard(props: { company: Company }) {
       owner={
         <img
           class="ml-auto size-5 rounded-full"
-          src={homepagePeople.valentina.photo}
-          alt="Valentina"
+          src={homepagePeople.austin.photo}
+          alt="Austin Barron"
         />
       }
       domain={<span class="truncate">{props.company.domain}</span>}
@@ -47,7 +47,7 @@ function DemoCard(props: { company: Company }) {
   );
 }
 
-export default function HomepageCrm() {
+export default function HomepageCrm(props: { paused?: boolean } = {}) {
   const [time, setTime] = createSignal(0);
   const [paused, setPaused] = createSignal(false);
   const [visible, setVisible] = createSignal(false);
@@ -98,7 +98,8 @@ export default function HomepageCrm() {
     });
   });
   createEffect(() => {
-    if (!visible() || paused() || reduced() || complete()) return;
+    if (!visible() || paused() || props.paused || reduced() || complete())
+      return;
     let previous = performance.now();
     let raf = 0;
     const tick = (now: number) => {

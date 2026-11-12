@@ -1,5 +1,5 @@
-import Share from '@phosphor/share.svg';
-import Sidebar from '@phosphor/sidebar-simple.svg';
+import Share from '@icon/share.svg';
+import Sidebar from '@icon/system/regular/sidebar-simple.svg';
 import { Button } from '@ui';
 import { createSignal, type JSX, Show } from 'solid-js';
 import { ViewShell } from '../DemoWorkspaceChrome';

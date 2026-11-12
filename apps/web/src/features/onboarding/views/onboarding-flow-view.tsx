@@ -53,7 +53,12 @@ export function OnboardingFlowView(props: {
   // Read once for the completion rollup; only the tools step polls.
   const connectedTools = context.createConnectedTools({ poll: false });
   const record = context.createOnboardingRecord();
-  const teamDirectory = context.createTeamDirectory();
+  const teamDirectory = context.createTeamDirectory({
+    domain: () => undefined,
+    ownEmail: () => undefined,
+  });
+  // The work step offers Outlook beside Google; Read more then covers both.
+  const outlookAvailable = context.createOutlookAvailability();
 
   const finish = createFlowFinish(context, {
     next: () => props.next,
@@ -223,6 +228,7 @@ export function OnboardingFlowView(props: {
           step() === 'personal' ? (
           <OnboardingTrustDetails
             topic={step() === 'security' ? 'security' : 'google'}
+            microsoft={step() === 'work' && outlookAvailable()}
           />
         ) : undefined
       }
@@ -248,6 +254,9 @@ export function OnboardingFlowView(props: {
           <Match when={step() === 'work' || step() === 'personal'}>
             <EmailStep
               mode={step() === 'personal' ? 'personal' : 'work'}
+              signupProvider={
+                step() === 'work' ? flow.signupProvider() : undefined
+              }
               onContinue={() => advance()}
               onSkip={() => advance('skipped')}
             />

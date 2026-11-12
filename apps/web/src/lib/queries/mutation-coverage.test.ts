@@ -20,6 +20,8 @@ const policies = {
     'authoritative: revision and sharing need server confirmation',
   DeleteSavedView:
     'authoritative: revision-checked deletion and collection revalidation',
+  ReorderSavedViews:
+    'authoritative: per-viewer order; revalidate the ordered cursor chain',
   MarkEmailThreadSeen: 'resolver',
   MarkEmailThreadUnread: 'resolver',
   SetEmailThreadArchived: 'resolver',
@@ -71,8 +73,7 @@ const policies = {
     'authoritative: the server returns the restored inbox entries',
   MarkNotificationInboxRowsSeen:
     'custom: inbox rows read as seen until the server returns their entries',
-  MoveEntities:
-    'authoritative: destination authorization and membership refresh',
+  MoveEntities: 'resolver',
   UpdateEntitySharePolicies:
     'authoritative: permission changes require server confirmation',
   TrashEntities:

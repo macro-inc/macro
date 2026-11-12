@@ -36,6 +36,7 @@ vi.mock('@core/context/user', () => ({
 }));
 vi.mock('./queries/routine-sources', () => ({
   createRoutineListSource: (): RoutineListSource => ({
+    subRoutines: () => [],
     routines: () => [
       {
         id: 'briefing',

@@ -6,6 +6,7 @@ use crate::domain::{
         UpdateDownloadingStatus, UpdateError, UpdateFoundStatus, UpdateGranted, UpdateStatus,
     },
     ports::{AutoUpdateService, FsRepo, SystemQuery, TaskSpawner, UpdateRepo},
+    startup::{BundleRejection, BundleStartup, StartupSelection},
 };
 use rootcause::{Report, prelude::ResultExt, report};
 use std::{
@@ -570,41 +571,88 @@ impl<Fs: FsRepo> Service<Fs> {
         }
     }
 
-    /// Load persisted bundle root from the given cache directory.
+    /// Load persisted bundle root from the given cache directory and report
+    /// how startup chose the bundle it serves.
     ///
-    /// Returns `true` when a completed-but-not-applied bundle was restored and
-    /// should be applied before starting a fresh update check.
-    pub async fn load_bundle_root(&mut self, cache_dir: &Path, native_build: u64) -> bool {
-        self.bundle_root = BundleRoot::load(cache_dir, &self.fs_repo).await;
-        if !self.current_bundle_is_usable(native_build).await {
-            tracing::warn!("Clearing unusable persisted bundle root");
-            let _ = self.clear_bundle_root(cache_dir).await;
-            self.cleanup_old_bundles(cache_dir, None).await;
-        }
-        if let Some(path) = self.bundle_root.path()
-            && let Some(manifest) = self.bundle_root.manifest(&self.fs_repo).await
-        {
-            self.bundle_routes
-                .restore(BundleSource::ota(manifest.bundle_build, path.to_path_buf()))
-                .await;
-            if let Err(e) = self.clear_pending_bundle(cache_dir).await {
-                tracing::warn!(error=?e, "Failed to clear stale pending bundle marker");
-            }
-            return false;
-        }
-        self.bundle_routes
-            .restore(BundleSource::embedded(self.embedded_bundle_build))
-            .await;
+    /// A [`StartupSelection::CompletedDownload`] selection restored a
+    /// completed-but-not-applied bundle that should be applied before starting
+    /// a fresh update check.
+    pub async fn load_bundle_root(&mut self, cache_dir: &Path, native_build: u64) -> BundleStartup {
+        let bundle_dirs_found = self
+            .fs_repo
+            .list_dir_names(cache_dir)
+            .await
+            .iter()
+            .filter(|name| name.parse::<u64>().is_ok())
+            .count();
+        let (bundle_root, saved) = BundleRoot::load(cache_dir, &self.fs_repo).await;
+        self.bundle_root = bundle_root;
+        let mut rejection = saved.rejection;
+        let mut read_error = saved.read_error;
+        let mut bundle_dirs_removed = 0;
 
-        let restored_pending = self
-            .restore_pending_completed_update(cache_dir, native_build)
-            .await;
-        if matches!(self.bundle_root, BundleRoot::Embedded) && !restored_pending {
-            // No previous document is running at startup. Retired files from a
-            // rollback interrupted before acknowledgement can now be removed.
-            self.cleanup_old_bundles(cache_dir, None).await;
+        if let Err((unusable, unusable_read_error)) = self.check_current_bundle(native_build).await
+        {
+            tracing::warn!(
+                rejection = ?unusable,
+                error_kind = ?unusable_read_error,
+                "Clearing unusable persisted bundle root"
+            );
+            let _ = self.clear_bundle_root(cache_dir).await;
+            bundle_dirs_removed += self.cleanup_old_bundles(cache_dir, None).await;
+            rejection = Some(unusable);
+            read_error = unusable_read_error;
         }
-        restored_pending
+
+        let selection = if self.restore_saved_ota(cache_dir).await {
+            StartupSelection::SavedOta
+        } else {
+            self.bundle_routes
+                .restore(BundleSource::embedded(self.embedded_bundle_build))
+                .await;
+            let restored_pending = self
+                .restore_pending_completed_update(cache_dir, native_build)
+                .await;
+            if matches!(self.bundle_root, BundleRoot::Embedded) && !restored_pending {
+                // No previous document is running at startup. Retired files from a
+                // rollback interrupted before acknowledgement can now be removed.
+                bundle_dirs_removed += self.cleanup_old_bundles(cache_dir, None).await;
+            }
+            if restored_pending {
+                StartupSelection::CompletedDownload
+            } else {
+                StartupSelection::Embedded
+            }
+        };
+
+        let startup = BundleStartup {
+            selection,
+            saved_selection: saved.selection,
+            rejection,
+            read_error: read_error.map(|kind| format!("{kind:?}")),
+            bundle_dirs_found,
+            bundle_dirs_removed,
+        };
+        tracing::info!(?startup, "Selected startup bundle");
+        startup
+    }
+
+    /// Serve the saved OTA bundle, returning whether there was one to serve.
+    async fn restore_saved_ota(&self, cache_dir: &Path) -> bool {
+        let Some(path) = self.bundle_root.path() else {
+            return false;
+        };
+        let Some(manifest) = self.bundle_root.manifest(&self.fs_repo).await else {
+            return false;
+        };
+
+        self.bundle_routes
+            .restore(BundleSource::ota(manifest.bundle_build, path.to_path_buf()))
+            .await;
+        if let Err(e) = self.clear_pending_bundle(cache_dir).await {
+            tracing::warn!(error=?e, "Failed to clear stale pending bundle marker");
+        }
+        true
     }
 
     /// Bundle build embedded in this native app.
@@ -907,8 +955,10 @@ impl<Fs: FsRepo> Service<Fs> {
         (identity.source == BundleSourceKind::Ota).then_some(identity.bundle_build)
     }
 
-    /// Remove all numeric bundle subdirectories under `dir` except `keep`.
-    async fn cleanup_old_bundles(&self, dir: &Path, keep: Option<&Path>) {
+    /// Remove all numeric bundle subdirectories under `dir` except `keep`,
+    /// returning how many were removed.
+    async fn cleanup_old_bundles(&self, dir: &Path, keep: Option<&Path>) -> usize {
+        let mut removed = 0;
         for name in self.fs_repo.list_dir_names(dir).await {
             if name.parse::<u64>().is_err() {
                 continue;
@@ -917,30 +967,46 @@ impl<Fs: FsRepo> Service<Fs> {
             if keep.is_some_and(|keep| path == keep) {
                 continue;
             }
-            if let Err(e) = self.fs_repo.remove_dir_all(&path).await {
-                tracing::warn!(error=?e, "Failed to remove old bundle directory {path:?}");
+            match self.fs_repo.remove_dir_all(&path).await {
+                Ok(()) => removed += 1,
+                Err(e) => {
+                    tracing::warn!(error=?e, "Failed to remove old bundle directory {path:?}");
+                }
             }
         }
+        removed
     }
 
-    async fn current_bundle_is_usable(&self, native_build: u64) -> bool {
+    /// Check that the saved OTA bundle can still be served by this native
+    /// build, returning why not and the I/O error kind of a failed read.
+    async fn check_current_bundle(
+        &self,
+        native_build: u64,
+    ) -> Result<(), (BundleRejection, Option<std::io::ErrorKind>)> {
         let Some(path) = self.bundle_root.path() else {
-            return true;
+            return Ok(());
         };
-        if self
+        if let Err(e) = self
             .fs_repo
             .read_to_string(&path.join(ENTRYPOINT_NAME))
             .await
-            .is_err()
         {
-            return false;
+            return Err((BundleRejection::EntrypointUnreadable, Some(e.kind())));
         }
         let Some(manifest) = self.bundle_root.manifest(&self.fs_repo).await else {
-            return false;
+            return Err((BundleRejection::ManifestInvalid, None));
         };
-        extraction_is_complete(&self.fs_repo, path, manifest.bundle_build).await
-            && manifest.bundle_build >= self.embedded_bundle_build
-            && manifest.min_native_build <= native_build
+
+        if !extraction_is_complete(&self.fs_repo, path, manifest.bundle_build).await {
+            return Err((BundleRejection::ExtractionIncomplete, None));
+        }
+        if manifest.bundle_build < self.embedded_bundle_build {
+            return Err((BundleRejection::OlderThanEmbedded, None));
+        }
+        if manifest.min_native_build > native_build {
+            return Err((BundleRejection::RequiresNewerNative, None));
+        }
+        Ok(())
     }
 }
 
@@ -1040,6 +1106,7 @@ mod tests {
             DownloadBundleError, DownloadBundleRequest, NativeAppInfo, Target, UnzipError,
         },
         ports::AutoUpdateService,
+        startup::SavedSelection,
     };
     use std::{
         collections::{HashMap, HashSet},
@@ -1091,6 +1158,7 @@ mod tests {
         unzip_target: Option<PathBuf>,
         checksum_should_fail: bool,
         write_failure: Option<PathBuf>,
+        read_failures: HashMap<PathBuf, ErrorKind>,
     }
 
     impl FakeFs {
@@ -1113,6 +1181,14 @@ mod tests {
 
         pub(super) fn fail_write(&self, path: impl Into<PathBuf>) {
             self.state.lock().unwrap().write_failure = Some(path.into());
+        }
+
+        fn fail_read(&self, path: impl Into<PathBuf>, kind: ErrorKind) {
+            self.state
+                .lock()
+                .unwrap()
+                .read_failures
+                .insert(path.into(), kind);
         }
 
         pub(super) fn file_exists(&self, path: impl AsRef<Path>) -> bool {
@@ -1217,13 +1293,11 @@ mod tests {
         }
 
         async fn read_to_string(&self, path: &Path) -> Result<String, std::io::Error> {
-            self.state
-                .lock()
-                .unwrap()
-                .files
-                .get(path)
-                .cloned()
-                .ok_or_else(not_found)
+            let state = self.state.lock().unwrap();
+            if let Some(kind) = state.read_failures.get(path) {
+                return Err(std::io::Error::new(*kind, "read failed"));
+            }
+            state.files.get(path).cloned().ok_or_else(not_found)
         }
 
         async fn write(&self, path: &Path, contents: &[u8]) -> Result<(), std::io::Error> {
@@ -1521,6 +1595,51 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn cleared_cache_reports_no_saved_selection() {
+        let fs = FakeFs::default();
+        let cache_dir = cache_dir();
+        let (mut service, _start_rx) =
+            service_with_status_fs_and_embedded_build(UpdateStatus::Idle, fs, 10);
+
+        let startup = service.load_bundle_root(&cache_dir, 143).await;
+
+        assert_eq!(
+            startup,
+            BundleStartup {
+                selection: StartupSelection::Embedded,
+                saved_selection: SavedSelection::None,
+                rejection: None,
+                read_error: None,
+                bundle_dirs_found: 0,
+                bundle_dirs_removed: 0,
+            }
+        );
+    }
+
+    #[tokio::test]
+    async fn unreadable_saved_selection_is_reported_and_its_bundle_kept() {
+        let fs = FakeFs::default();
+        let cache_dir = cache_dir();
+        let bundle_dir = seed_bundle(&fs, &cache_dir, "1", 20, 0);
+        seed_persisted_bundle_root(&fs, &cache_dir, &bundle_dir);
+        fs.fail_read(cache_dir.join("bundle_root"), ErrorKind::PermissionDenied);
+        fs.fail_read(
+            bundle_dir.join(ENTRYPOINT_NAME),
+            ErrorKind::PermissionDenied,
+        );
+        let (mut service, _start_rx) =
+            service_with_status_fs_and_embedded_build(UpdateStatus::Idle, fs.clone(), 10);
+
+        let startup = service.load_bundle_root(&cache_dir, 0).await;
+
+        assert_eq!(startup.saved_selection, SavedSelection::Unreadable);
+        assert_eq!(startup.read_error.as_deref(), Some("PermissionDenied"));
+        assert_eq!(startup.bundle_dirs_found, 1);
+        assert_eq!(startup.bundle_dirs_removed, 0);
+        assert!(fs.dir_exists(bundle_dir));
+    }
+
+    #[tokio::test]
     async fn persisted_ota_older_than_embedded_bundle_is_cleared() {
         let fs = FakeFs::default();
         let cache_dir = cache_dir();
@@ -1530,7 +1649,10 @@ mod tests {
         let (mut service, _start_rx) =
             service_with_status_fs_and_embedded_build(UpdateStatus::Idle, fs.clone(), 20);
 
-        service.load_bundle_root(&cache_dir, 0).await;
+        let startup = service.load_bundle_root(&cache_dir, 0).await;
+
+        assert_eq!(startup.rejection, Some(BundleRejection::OlderThanEmbedded));
+        assert_eq!(startup.bundle_dirs_removed, 2);
 
         assert!(service.bundle_root_path().is_none());
         assert_eq!(
@@ -1553,7 +1675,10 @@ mod tests {
         seed_persisted_bundle_root(&fs, &cache_dir, &bundle_dir);
         let (mut service, _start_rx) = service_with_status_and_fs(UpdateStatus::Idle, fs.clone());
 
-        service.load_bundle_root(&cache_dir, 0).await;
+        let startup = service.load_bundle_root(&cache_dir, 0).await;
+
+        assert_eq!(startup.rejection, Some(BundleRejection::ManifestInvalid));
+        assert_eq!(startup.bundle_dirs_removed, 1);
 
         assert!(service.bundle_root_path().is_none());
         assert_eq!(
@@ -1576,7 +1701,10 @@ mod tests {
         seed_persisted_bundle_root(&fs, &cache_dir, &bundle_dir);
         let (mut service, _start_rx) = service_with_status_and_fs(UpdateStatus::Idle, fs.clone());
 
-        service.load_bundle_root(&cache_dir, 0).await;
+        let startup = service.load_bundle_root(&cache_dir, 0).await;
+
+        assert_eq!(startup.rejection, Some(BundleRejection::ManifestInvalid));
+        assert_eq!(startup.bundle_dirs_removed, 1);
 
         assert!(service.bundle_root_path().is_none());
         assert_eq!(
@@ -1596,7 +1724,13 @@ mod tests {
         seed_persisted_bundle_root(&fs, &cache_dir, &bundle_dir);
         let (mut service, _start_rx) = service_with_status_and_fs(UpdateStatus::Idle, fs.clone());
 
-        service.load_bundle_root(&cache_dir, 142).await;
+        let startup = service.load_bundle_root(&cache_dir, 142).await;
+
+        assert_eq!(
+            startup.rejection,
+            Some(BundleRejection::RequiresNewerNative)
+        );
+        assert_eq!(startup.bundle_dirs_removed, 1);
 
         assert!(service.bundle_root_path().is_none());
         assert_eq!(
@@ -1617,7 +1751,9 @@ mod tests {
         let (mut service, _start_rx) =
             service_with_status_fs_and_embedded_build(UpdateStatus::Idle, fs.clone(), 10);
 
-        service.load_bundle_root(&cache_dir, 143).await;
+        let startup = service.load_bundle_root(&cache_dir, 143).await;
+
+        assert_eq!(startup.selection, StartupSelection::SavedOta);
 
         assert_eq!(service.bundle_root_path(), Some(bundle_dir.as_path()));
         assert!(fs.file_exists(cache_dir.join("bundle_root")));
@@ -1634,9 +1770,9 @@ mod tests {
         let (mut service, _start_rx) =
             service_with_status_fs_and_embedded_build(UpdateStatus::Idle, fs.clone(), 10);
 
-        let restored_pending = service.load_bundle_root(&cache_dir, 143).await;
+        let startup = service.load_bundle_root(&cache_dir, 143).await;
 
-        assert!(restored_pending);
+        assert_eq!(startup.selection, StartupSelection::CompletedDownload);
         let status = service.status().borrow().as_ref().unwrap().clone();
         let UpdateStatus::Completed(completed) = status else {
             panic!("expected completed status");
@@ -1654,9 +1790,9 @@ mod tests {
         let (mut service, _start_rx) =
             service_with_status_fs_and_embedded_build(UpdateStatus::Idle, fs.clone(), 20);
 
-        let restored_pending = service.load_bundle_root(&cache_dir, 0).await;
+        let startup = service.load_bundle_root(&cache_dir, 0).await;
 
-        assert!(!restored_pending);
+        assert_eq!(startup.selection, StartupSelection::Embedded);
         assert!(matches!(
             service.status().borrow().as_ref().unwrap(),
             UpdateStatus::Idle
@@ -1673,9 +1809,9 @@ mod tests {
         let (mut service, _start_rx) =
             service_with_status_fs_and_embedded_build(UpdateStatus::Idle, fs.clone(), 10);
 
-        let restored_pending = service.load_bundle_root(&cache_dir, 0).await;
+        let startup = service.load_bundle_root(&cache_dir, 0).await;
 
-        assert!(restored_pending);
+        assert_eq!(startup.selection, StartupSelection::CompletedDownload);
         let status = service.status().borrow().as_ref().unwrap().clone();
         let UpdateStatus::Completed(completed) = status else {
             panic!("expected completed status");

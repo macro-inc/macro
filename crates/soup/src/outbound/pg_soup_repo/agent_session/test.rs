@@ -791,3 +791,102 @@ async fn a_hidden_thread_session_lists_only_for_its_followers(pool: PgPool) -> a
     );
     Ok(())
 }
+
+/// A link share admits whoever it names, as the session's REST read does: a
+/// public link anyone signed in, a team link the owner's teammates. Opening
+/// the session by id works; broad lists stay limited to session grants.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_link_share_opens_the_session_by_id(pool: PgPool) -> anyhow::Result<()> {
+    let fixture = seed(&pool).await?;
+    let entities = [EntityType::AgentSession.with_entity_string(fixture.private.to_string())];
+    let stranger_reads = || async {
+        let by_id = by_ids(
+            &pool,
+            AdvancedSortParams {
+                entities: &entities,
+                user_id: MacroUserIdStr::parse_from_str(STRANGER)?,
+            },
+        )
+        .await?;
+        let named = cursor_soup(
+            &pool,
+            request(
+                STRANGER,
+                Some(Expr::val(AgentSessionLiteral::Id(fixture.private))),
+            ),
+        )
+        .await?;
+        let listed = cursor_soup(
+            &pool,
+            request(STRANGER, Some(Expr::val(AgentSessionLiteral::Include))),
+        )
+        .await?;
+        anyhow::Ok((ids(&by_id), ids(&named), ids(&listed)))
+    };
+
+    sqlx::query!(
+        r#"INSERT INTO "SharePermission" (id, "linkShare", "linkShareAccessLevel")
+           VALUES ('session-link', 'TEAM', 'edit')"#,
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        "UPDATE agent_session SET share_permission_id = 'session-link' WHERE id = $1",
+        fixture.private,
+    )
+    .execute(&pool)
+    .await?;
+    assert_eq!(
+        stranger_reads().await?,
+        (vec![], vec![], vec![]),
+        "a team link admits no one outside the owner's team"
+    );
+
+    let team = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO team (id, name, owner_id) VALUES ($1, 'Owner team', $2)",
+        team,
+        OWNER,
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        "INSERT INTO team_user (team_id, user_id, team_role) VALUES ($1, $2, 'owner'), ($1, $3, 'member')",
+        team,
+        OWNER,
+        STRANGER,
+    )
+    .execute(&pool)
+    .await?;
+    assert_eq!(
+        stranger_reads().await?,
+        (vec![fixture.private], vec![fixture.private], vec![]),
+        "a team link admits the owner's teammates by id"
+    );
+
+    sqlx::query!("DELETE FROM team_user WHERE user_id = $1", STRANGER)
+        .execute(&pool)
+        .await?;
+    sqlx::query!(
+        r#"UPDATE "SharePermission" SET "linkShare" = 'PUBLIC' WHERE id = 'session-link'"#,
+    )
+    .execute(&pool)
+    .await?;
+    assert_eq!(
+        stranger_reads().await?,
+        (vec![fixture.private], vec![fixture.private], vec![]),
+        "a public link admits anyone signed in by id"
+    );
+
+    sqlx::query!(
+        r#"UPDATE "SharePermission" SET "linkShareAccessLevel" = NULL WHERE id = 'session-link'"#,
+    )
+    .execute(&pool)
+    .await?;
+    assert_eq!(
+        stranger_reads().await?,
+        (vec![], vec![], vec![]),
+        "a link with no level admits no one"
+    );
+    Ok(())
+}

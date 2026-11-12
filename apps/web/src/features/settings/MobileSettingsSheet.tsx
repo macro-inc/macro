@@ -1,4 +1,5 @@
 import { t } from '@app/lib/i18n';
+import { MachinesRequestBadge } from './components/machines-request-badge';
 import './MobileSettingsSheet.css';
 import { SearchBar } from '@app/components/view-shell';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
@@ -204,6 +205,9 @@ export function MobileSettingsSheet(props: MobileSettingsSheetProps) {
                                     <span class="min-w-0 flex-1 text-left">
                                       {item.label}
                                     </span>
+                                    <Show when={item.tab === 'Harness'}>
+                                      <MachinesRequestBadge />
+                                    </Show>
                                     <CaretRightIcon class="size-4 shrink-0 text-ink-extra-muted" />
                                   </MobileDrawer.Item>
                                 </>

@@ -5,7 +5,7 @@ use models_email::service::link::Link;
 use crate::pubsub::gmail_ops::worker::GmailOpsContext;
 
 /// Finds and removes a block filter for a sender in Gmail.
-#[tracing::instrument(skip(ctx, link), err)]
+#[tracing::instrument(skip(ctx, link, payload), err, fields(link_id = %link.id))]
 pub async fn unblock_sender(
     ctx: &GmailOpsContext,
     link: &Link,

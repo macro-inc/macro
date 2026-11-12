@@ -11,12 +11,13 @@ JWT's acting user.
 ## Start here
 
 - `src/domain.rs`: repository contract and agent-binding validation.
-- `src/context.rs`: async context (`Attribution`: correlation and routine);
-  capture before spawning, scope each message. `current_routine()` feeds
-  `macro_event_broker::Event.routine_id`, which keeps routines from starting
-  on routine writes.
+- `src/context.rs`: async context (`Attribution`: correlation, routine, and the
+  display verb sent with a correlated SDK call); capture before spawning, scope
+  each message. `current_routine()` feeds `macro_event_broker::Event.routine_id`,
+  which keeps routines from starting on routine writes.
+- `src/verb.rs`: closed SDK display-verb vocabulary.
 - `src/inbound.rs`: optional signed-claim extractor and HTTP propagation
-  (`propagate` scopes both the validated correlation and the signed routine).
+  (`propagate` scopes the validated correlation, its verb and the signed routine).
 - `src/outbound.rs`: invocation mappings and session-agent lookup on the primary.
 
 ## Boundaries
@@ -36,5 +37,8 @@ JWT's acting user.
 - `scope` sets only a correlation and clears any routine; use
   `scope_attribution` to carry both. A bare `tokio::spawn` drops both; wrap
   request work in `capture`.
+- Read `x-macro-sdk-verb` only after signed correlation validation; unknown
+  verbs are absent, a verb never outlives its correlation, and it grants no
+  authority.
 - Do not check session state: accepted work can complete after a session ends.
 - Session deletion cascades mappings; activity retains its existing entity lifecycle.

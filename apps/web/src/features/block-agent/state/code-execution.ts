@@ -21,3 +21,28 @@ export function codeExecutionInput(part: MessagePart) {
     return;
   return { executionId: input.execution_id, source: input.source };
 }
+
+/**
+ * Whether a program ended badly. The error text is written for the agent,
+ * which reads it and retries; the person only sees that the step failed.
+ */
+export function programEnded(options: {
+  error: string | null | undefined;
+  recordRunning: boolean;
+  active: boolean;
+}): boolean {
+  return Boolean(options.error && (!options.recordRunning || !options.active));
+}
+
+/**
+ * The steps a program shows: its observed operations and historical calls,
+ * or one failed row when it ended without any.
+ */
+export function programSteps(options: {
+  operations: number;
+  calls: number;
+  ended: boolean;
+}): number {
+  const steps = options.operations + options.calls;
+  return steps === 0 && options.ended ? 1 : steps;
+}

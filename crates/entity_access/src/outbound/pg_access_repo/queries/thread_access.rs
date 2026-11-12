@@ -238,7 +238,8 @@ pub async fn get_thread_access(
                   -- only block plain members.
                   SELECT 1
                   FROM participants p
-                  JOIN crm_contacts ct ON ct.email = p.email
+                  JOIN crm_contact_emails ce ON ce.email = p.email
+                  JOIN crm_contacts ct ON ct.id = ce.contact_id
                   -- Contacts without a company opt out through their own
                   -- hidden flag; email_sync is a company setting.
                   LEFT JOIN crm_companies c ON c.id = ct.company_id
@@ -484,7 +485,8 @@ async fn explain_thread_crm(
           AND NOT EXISTS (
               SELECT 1
               FROM participants p
-              JOIN crm_contacts ct ON ct.email = p.email
+              JOIN crm_contact_emails ce ON ce.email = p.email
+              JOIN crm_contacts ct ON ct.id = ce.contact_id
               LEFT JOIN crm_companies c ON c.id = ct.company_id
               WHERE ct.team_id = st.team_id
                 AND split_part(p.email, '@', 2) <> split_part(LOWER($2), '@', 2)

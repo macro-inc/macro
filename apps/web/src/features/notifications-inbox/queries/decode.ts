@@ -40,6 +40,7 @@ const toRowType = (
     .with('CALENDAR_JOIN_REQUEST', () => 'calendar_join_request' as const)
     .with('ACCESS_REQUESTED', () => 'access_requested' as const)
     .with('ACCESS_GRANTED', () => 'access_granted' as const)
+    .with('ACCESS_REMOVED', () => 'access_removed' as const)
     .exhaustive(() => 'other' as const);
 
 /** An actor kind this build doesn't know names no author. */
@@ -91,6 +92,7 @@ const toGraphqlRowType = (type: InboxRowType): NotificationInboxRowType =>
     .with('calendar_join_request', () => 'CALENDAR_JOIN_REQUEST' as const)
     .with('access_requested', () => 'ACCESS_REQUESTED' as const)
     .with('access_granted', () => 'ACCESS_GRANTED' as const)
+    .with('access_removed', () => 'ACCESS_REMOVED' as const)
     .exhaustive(() => {
       throw new Error(`Unknown inbox row type: ${type}`);
     });

@@ -83,11 +83,7 @@ fn web_settings_in_the_file_fail_naming_where_they_live_now() {
             ..
         }
     ));
-    assert!(
-        identity
-            .to_string()
-            .contains("Settings → Agents → Runtimes")
-    );
+    assert!(identity.to_string().contains("Settings → Machines"));
 
     let scope = load(&format!(
         "{EXAMPLE}\n[credentials]\nharness_id = \"{}\"\ntoken = \"mhns_secret\"\nscope = \"team\"\n",

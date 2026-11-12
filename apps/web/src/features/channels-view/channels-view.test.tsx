@@ -75,6 +75,10 @@ vi.mock('@channel/ChannelAccessDenied', () => ({
 vi.mock('./queries/channel-list-search-pool', () => ({
   useChannelListSearchPool: () => () => [],
 }));
+vi.mock('./components/rail/next/channel-discovery-source', () => ({
+  createSectionSearchSource: (options: { recent: () => ChannelsDataSource }) =>
+    options.recent(),
+}));
 vi.mock('@queries/favorites/favorites', () => ({
   useFavoritesData: () => () => ({
     favorites: mocks.favoriteIds().map((entityId) => ({
@@ -203,6 +207,28 @@ vi.mock('./components/ChannelsMobileView', () => ({
       data-pinned={props.pinned.map((channel) => channel.id).join(',')}
     >
       <For each={props.source.items()}>
+        {(channel) => (
+          <button type="button" onClick={() => props.openPreview?.(channel)}>
+            {channel.name}
+          </button>
+        )}
+      </For>
+    </div>
+  ),
+}));
+vi.mock('./components/rail/next/mobile/MobileSectionsView', () => ({
+  MobileSectionsView: (props: {
+    sources: { recents: ChannelsDataSource };
+    pinned: readonly ChannelEntity[];
+    openPreview?: (channel: ChannelEntity) => boolean;
+  }) => (
+    <div
+      data-testid="mobile-channels"
+      data-sections="true"
+      data-query=""
+      data-pinned={props.pinned.map((channel) => channel.id).join(',')}
+    >
+      <For each={props.sources.recents.items()}>
         {(channel) => (
           <button type="button" onClick={() => props.openPreview?.(channel)}>
             {channel.name}
@@ -415,18 +441,19 @@ describe('Chat rollout source activation', () => {
     expect(mocks.sourceEnabled('channels')).toBe(true);
   });
 
-  it('keeps the mobile recent feed active while the desktop rollout is unresolved', () => {
+  it('waits for the mobile rollout result without mounting the legacy feed', () => {
     mocks.mobileLayout = () => true;
     mocks.sectionsLoading = () => true;
     render(() => <ChannelsView />);
-    expect(screen.getByTestId('mobile-channels')).toBeTruthy();
+    expect(screen.queryByTestId('mobile-channels')).toBeNull();
+    expect(screen.getByLabelText('Loading channels')).toBeTruthy();
     expect(mocks.sourceEnabled('recents')).toBe(true);
     expect(mocks.sourceEnabled('channels')).toBe(false);
   });
 });
 it('opens the touch Recent feed inline at wide widths without desktop rollout sources', () => {
   mocks.touch = () => true;
-  mocks.sectionsLoading = () => true;
+  mocks.sectionsLoading = () => false;
   mocks.sectionsEnabled = () => false;
   mocks.tab = () => 'threads';
   setSelectedId(undefined);
@@ -452,56 +479,78 @@ it('opens the touch Recent feed inline at wide widths without desktop rollout so
   expect(screen.getByTestId('channel-detail').textContent).toContain('one');
 });
 
-it('refreshes read state and returns to latest when a touch preview is selected again', async () => {
-  mocks.touch = () => true;
-  setQuery({ data: { entities: [full('one', [])] } });
-  mocks.selectChannel.mockImplementation((channel) => {
-    setSelectedId(channel?.id);
-    return true;
-  });
-  mocks.hydrate.mockImplementation((channel) => ({
-    ...channel,
-    unreadNotifications: undefined,
-    notifications: () => [],
-  }));
-  render(() => <ChannelsView />);
-  mocks.markRead.mockClear();
-  fireEvent.click(screen.getByRole('button', { name: 'one' }));
-  await waitFor(() =>
-    expect(mocks.navigate).toHaveBeenCalledExactlyOnceWith(
-      { type: 'channel', id: 'one' },
-      expect.anything()
-    )
-  );
-  expect(mocks.hydrate).toHaveBeenCalledTimes(1);
-  expect(mocks.markRead).toHaveBeenCalledTimes(1);
-});
+it.each([false, true])(
+  'refreshes read state and returns to latest when a touch preview is selected again (sections: %s)',
+  async (sectionsEnabled) => {
+    mocks.touch = () => true;
+    mocks.sectionsEnabled = () => sectionsEnabled;
+    setQuery({ data: { entities: [full('one', [])] } });
+    mocks.selectChannel.mockImplementation((channel) => {
+      setSelectedId(channel?.id);
+      return true;
+    });
+    mocks.hydrate.mockImplementation((channel) => ({
+      ...channel,
+      unreadNotifications: undefined,
+      notifications: () => [],
+    }));
+    render(() => <ChannelsView />);
+    mocks.markRead.mockClear();
+    fireEvent.click(screen.getByRole('button', { name: 'one' }));
+    await waitFor(() =>
+      expect(mocks.navigate).toHaveBeenCalledExactlyOnceWith(
+        { type: 'channel', id: 'one' },
+        expect.anything()
+      )
+    );
+    expect(mocks.hydrate).toHaveBeenCalledTimes(1);
+    expect(mocks.markRead).toHaveBeenCalledTimes(1);
+  }
+);
 
-it('does not refresh or re-aim a touch preview after its pending selection is cleared', async () => {
-  mocks.touch = () => true;
-  setQuery({ data: { entities: [full('one', [])] } });
-  const pending =
-    Promise.withResolvers<
-      Awaited<ReturnType<typeof hydrateChannelNotificationSelection>>
-    >();
-  mocks.hydrate.mockReturnValue(pending.promise);
-  render(() => <ChannelsView />);
-  mocks.markRead.mockClear();
-  fireEvent.click(screen.getByRole('button', { name: 'one' }));
-  setSelectedId(undefined);
-  pending.resolve({
-    ...row('one'),
-    unreadNotifications: undefined,
-    notifications: () => [],
-  });
-  await pending.promise;
-  expect(mocks.markRead).not.toHaveBeenCalled();
-  expect(mocks.navigate).not.toHaveBeenCalled();
-});
+it.each([false, true])(
+  'does not refresh or re-aim a touch preview after its pending selection is cleared (sections: %s)',
+  async (sectionsEnabled) => {
+    mocks.touch = () => true;
+    mocks.sectionsEnabled = () => sectionsEnabled;
+    setQuery({ data: { entities: [full('one', [])] } });
+    const pending =
+      Promise.withResolvers<
+        Awaited<ReturnType<typeof hydrateChannelNotificationSelection>>
+      >();
+    mocks.hydrate.mockReturnValue(pending.promise);
+    render(() => <ChannelsView />);
+    mocks.markRead.mockClear();
+    fireEvent.click(screen.getByRole('button', { name: 'one' }));
+    setSelectedId(undefined);
+    pending.resolve({
+      ...row('one'),
+      unreadNotifications: undefined,
+      notifications: () => [],
+    });
+    await pending.promise;
+    expect(mocks.markRead).not.toHaveBeenCalled();
+    expect(mocks.navigate).not.toHaveBeenCalled();
+  }
+);
 
 describe('mobile dock search wiring', () => {
-  it('shows only recent conversations independently of the dock search session', () => {
+  it('mounts phone sections and their direct-message source only when enabled', () => {
     mocks.mobileLayout = () => true;
+    const [enabled, setEnabled] = createSignal(true);
+    mocks.sectionsEnabled = enabled;
+    render(() => <ChannelsView />);
+    expect(screen.getByTestId('mobile-channels').dataset.sections).toBe('true');
+    expect(mocks.sourceEnabled('direct_messages')).toBe(true);
+    setEnabled(false);
+    expect(
+      screen.getByTestId('mobile-channels').dataset.sections
+    ).toBeUndefined();
+    expect(mocks.sourceEnabled('direct_messages')).toBe(false);
+  });
+  it('keeps legacy recent conversations independent of the dock search session', () => {
+    mocks.mobileLayout = () => true;
+    mocks.sectionsEnabled = () => false;
     const [open, setOpen] = createSignal(true);
     const [text, setText] = createSignal('');
     const [active, setActive] = createSignal(true);

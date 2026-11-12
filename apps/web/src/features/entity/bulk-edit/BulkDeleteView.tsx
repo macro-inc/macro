@@ -18,6 +18,8 @@ export const BulkDeleteView = (props: {
   onCancel: () => void;
   onError?: (error: unknown) => void;
   onPartialDelete?: PartialDeleteHandler;
+  /** What else the deletion removes, under its description. */
+  note?: string;
 }) => {
   const mutation = createBulkDeleteDssItemsMutation();
   const [remainingEntities, setRemainingEntities] =
@@ -71,6 +73,9 @@ export const BulkDeleteView = (props: {
           </ActionDialogShell.Description>
         </ActionDialogShell.Header>
         <EntityActionSelection entities={entities()} />
+        <Show when={props.note}>
+          {(note) => <p class="text-sm text-ink-muted">{note()}</p>}
+        </Show>
         <Show when={partialMessage()}>
           {(message) => (
             <p role="status" class="text-sm text-ink-muted">

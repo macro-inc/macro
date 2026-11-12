@@ -20,8 +20,7 @@ export function BotAgentSection(props: {
           <div class="min-w-0">
             <div class="text-sm font-medium text-ink">Enable AI agent</div>
             <p class="mt-0.5 text-xs text-ink-muted">
-              Use a chat agent or connect an external runtime to handle
-              requests.
+              Use a chat agent or connect your own machine to handle requests.
             </p>
           </div>
           <ToggleSwitch

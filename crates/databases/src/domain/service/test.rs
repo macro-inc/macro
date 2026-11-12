@@ -197,6 +197,7 @@ async fn insert_names(seeded: &Seeded, names: &[&str]) -> Vec<RowId> {
                             }]
                         })
                         .collect(),
+                    ids: None,
                 },
             }]),
         )
@@ -327,6 +328,7 @@ async fn seeded() -> Seeded {
                             value: CellValue::Number(2.0),
                         },
                     ]],
+                    ids: None,
                 },
             }]),
         )

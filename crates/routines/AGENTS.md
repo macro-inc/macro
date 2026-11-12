@@ -26,6 +26,12 @@ persona/model to run later.
   name, and `blockName: "routine"` in replies.
 - `src/outbound.rs`: the HTTP client to the owning scheduled-action service.
 
+The tools reach the scheduler with the internal key, not a session's
+credential, so a routine `CreateRoutine` makes is always top-level, and
+`ListRoutines` returns top-level routines only. Sub-routines come from
+`macro.routines.create` in a routine run's code step or agent session; see
+`crates/scheduled_action/AGENTS.md`.
+
 ## Scope
 
 - Owns: routine command validation and the agent-facing tools to create/manage

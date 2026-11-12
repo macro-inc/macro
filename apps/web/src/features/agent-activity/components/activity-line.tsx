@@ -11,7 +11,11 @@ const CYCLE_MS = 2000;
  * sliding in as it moves to the next, and taking turns with any others
  * running at the same time.
  */
-export function ActivityLine(props: { rows: readonly ActivityRowView[] }) {
+export function ActivityLine(props: {
+  rows: readonly ActivityRowView[];
+  /** The session's live status line, which stands for the steps it names. */
+  summary?: string;
+}) {
   const [tick, setTick] = createSignal(0);
   onMount(() => {
     const timer = setInterval(() => setTick((count) => count + 1), CYCLE_MS);
@@ -30,7 +34,12 @@ export function ActivityLine(props: { rows: readonly ActivityRowView[] }) {
     if (active.length === 0) return props.rows.at(-1);
     return active.at(-1 - ((tick() - cycleStart()) % active.length));
   };
-  const shown = () => {
+  const shown = (): ActivityRowView[] => {
+    const summary = props.summary;
+    // Keyed by its text, so each new line slides in like a new step.
+    if (summary) {
+      return [{ id: `summary:${summary}`, label: summary, status: 'running' }];
+    }
     const step = current();
     return step ? [step] : [];
   };

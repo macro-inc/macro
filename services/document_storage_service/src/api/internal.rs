@@ -40,6 +40,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         axum::middleware::from_fn_with_state(state.clone(), ensure_document_exists::handler);
 
     Router::new()
+        .nest("/passwords", passwords::inbound::router::internal_router(state.passwords_state.clone()))
         // User routes
         .route(
             "/users/{user_id}",

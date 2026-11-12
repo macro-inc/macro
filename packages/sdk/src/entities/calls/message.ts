@@ -50,17 +50,29 @@ export class CallMessage extends MacroEntity<MessageRecord> {
   /** When the message was last updated. */
   readonly updatedAt = this.field('updated_at');
 
-  /** The call whose chat contains this message. */
+  /**
+   * The call whose chat contains this message.
+   *
+   * @readonly
+   */
   call(): CallRecord {
     return CallRecord.byId(this.client, this.callId);
   }
 
-  /** The user who sent this message. */
+  /**
+   * The user who sent this message.
+   *
+   * @readonly
+   */
   async author(): Promise<User> {
     return User.byId(this.client, (await this.detail.get()).sender_id);
   }
 
-  /** Reply in the call's canonical thread, including when this is a reply. */
+  /**
+   * Reply in the call's canonical thread, including when this is a reply.
+   *
+   * @write
+   */
   async reply(body: string | RichMessage): Promise<CallMessage> {
     const record = unwrap(
       await this.client.storage.entityMessageCreate({
@@ -71,7 +83,12 @@ export class CallMessage extends MacroEntity<MessageRecord> {
     return CallMessage.from(this.client, this.callId, record);
   }
 
-  /** Replace this message's body. */
+  /**
+   * Replace this message's body.
+   *
+   * @destructive
+   * @idempotent
+   */
   async edit(body: string | RichMessage): Promise<this> {
     const { content, mentions } = toBody(body);
     await this.mutate((client) =>
@@ -83,7 +100,12 @@ export class CallMessage extends MacroEntity<MessageRecord> {
     return this;
   }
 
-  /** Delete this message, preserving the rest of the call's chat. */
+  /**
+   * Delete this message, preserving the rest of the call's chat.
+   *
+   * @destructive
+   * @idempotent
+   */
   async delete(): Promise<void> {
     await this.mutate((client) =>
       client.storage.entityMessageDeleteMessage({ path: this.path }),

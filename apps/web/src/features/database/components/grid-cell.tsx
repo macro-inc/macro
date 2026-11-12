@@ -73,6 +73,8 @@ export type GridCellProps = GridCellEditorOptions & {
   canEdit: boolean;
   renderTextEditor?: (props: DatabaseTextEditorProps) => JSX.Element;
   renderTextValue?: (value: string) => JSX.Element;
+  /** Shows a URL cell's value as a link that opens it. */
+  renderLinkValue?: (url: string) => JSX.Element;
   renderMentionPicker?: (props: DatabaseMentionPickerProps) => JSX.Element;
   renderMentionValue?: (id: string, type: DatabaseEntityType) => JSX.Element;
   /** Where the cell's popups mount in place of the page body, such as inside a modal dialog. */
@@ -432,6 +434,7 @@ export function GridCell(props: GridCellProps) {
                 mentionPreview={mentionPreview()}
                 hasResolvedMentionLabel={hasResolvedMentionLabel()}
                 renderTextValue={props.renderTextValue}
+                renderLinkValue={props.renderLinkValue}
                 renderMentionValue={props.renderMentionValue}
                 ref={(element) => {
                   trigger = element;
@@ -491,6 +494,13 @@ function navigateOnTab(
     event.preventDefault();
     event.stopPropagation();
   }
+}
+
+/** Whether an event came from a link inside the element that handles it. */
+export function isOnLink(event: Event & { currentTarget: Element }) {
+  const link =
+    event.target instanceof Element ? event.target.closest('a[href]') : null;
+  return !!link && event.currentTarget.contains(link);
 }
 
 function isClearCellKey(event: KeyboardEvent) {
@@ -669,6 +679,7 @@ function TextCell(props: {
   mentionPreview: MentionPreview | undefined;
   hasResolvedMentionLabel: boolean;
   renderTextValue?: (value: string) => JSX.Element;
+  renderLinkValue?: (url: string) => JSX.Element;
   renderMentionValue?: (id: string, type: DatabaseEntityType) => JSX.Element;
   ref: (element: HTMLButtonElement) => void;
   onNavigate?: (direction: 1 | -1) => boolean;
@@ -679,6 +690,15 @@ function TextCell(props: {
   // Refreshes rebuild row objects; only a changed value may rerun renderers and remount previews.
   const value = createMemo(() => props.value);
   const formatted = () => formatCellValue(props.column, value());
+  const renderedValue = () => {
+    const current = value();
+    if (typeof current !== 'string') return formatted();
+    if (props.column.dataType === 'STRING' && props.renderTextValue)
+      return props.renderTextValue(current);
+    if (props.column.dataType === 'LINK' && current && props.renderLinkValue)
+      return props.renderLinkValue(current);
+    return formatted();
+  };
   const hint = () =>
     props.onOpen ? 'Click to open' : props.editable ? 'Click to edit' : '';
   return (
@@ -707,16 +727,21 @@ function TextCell(props: {
         undefined
       }
       onContextMenu={(event) => {
-        if (!props.onOpen || !props.editable) return;
+        // A link keeps the browser's own menu, with Copy link.
+        if (isOnLink(event) || !props.onOpen || !props.editable) return;
         event.preventDefault();
         event.stopPropagation();
         props.onBeginEdit(undefined, event);
       }}
       onClick={(event) => {
+        // A link in the value opens itself; the rest of the cell still edits.
+        if (isOnLink(event)) return;
         if (props.onOpen) props.onOpen();
         else if (props.editable) props.onBeginEdit(undefined, event);
       }}
       onKeyDown={(event) => {
+        // Enter on a focused link opens it, as a click does.
+        if (event.key === 'Enter' && isOnLink(event)) return;
         if (
           props.onOpen &&
           event.key === 'Enter' &&
@@ -769,11 +794,7 @@ function TextCell(props: {
       >
         <Switch
           fallback={
-            (props.column.dataType === 'STRING' &&
-            typeof value() === 'string' &&
-            props.renderTextValue
-              ? props.renderTextValue(String(value()))
-              : formatted()) || (
+            renderedValue() || (
               <span data-cell-empty class="opacity-40">
                 {props.emptyLabel ?? '—'}
               </span>

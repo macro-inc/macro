@@ -1,5 +1,5 @@
-import CalendarBlank from '@phosphor/calendar-blank.svg';
-import X from '@phosphor/x.svg';
+import CalendarBlank from '@icon/system/regular/calendar-blank.svg';
+import X from '@icon/system/regular/x.svg';
 import { Button } from '@ui';
 import { createEffect, createSignal, For, Match, Show, Switch } from 'solid-js';
 import type { DummyWorkspace } from '../../primitives/createDummyWorkspace';

@@ -7,8 +7,9 @@
 //! `macro.routines.check`, which runs saving's checks and saves nothing,
 //! naming what it created. Each check is kept on the draft's row
 //! ([`DraftHandBacks`]), so the session and this drafter may run on any
-//! replicas. The drafter waits for the session's turn to end, reads the last
-//! check, then stops and deletes the session and the row. The session's
+//! replicas. A check that passes ends the draft: the drafter stops the
+//! session there and takes the last passing check (or the last check when
+//! the turn ends first), then deletes the session and the row. The session's
 //! usage is agent session usage, admitted and metered as any session's.
 
 use std::sync::Arc;
@@ -46,12 +47,12 @@ pub const DRAFT_TIMEOUT: Duration = Duration::from_secs(120);
 pub const STALE_DRAFT: Duration = Duration::from_secs(10 * 60);
 /// Drafts the sweep cleans up at a time.
 const SWEEP_BATCH: u16 = 64;
-/// How soon, then at most how often, the drafter reads the session's turn.
-const FIRST_POLL: Duration = Duration::from_millis(500);
-const MAX_POLL: Duration = Duration::from_secs(2);
-/// How long a session that has checked a passing routine gets to finish its
-/// turn before it is stopped and its last check taken.
-const CHECKED_GRACE: Duration = Duration::from_secs(15);
+/// How often the drafter reads the draft's row for a check that passes.
+const POLL: Duration = Duration::from_millis(250);
+/// Row reads per read of the session's turn, which reads its whole log: a
+/// turn read every 2 s, only to notice a turn that ends without a passing
+/// check.
+const ROW_READS_PER_TURN_READ: u32 = 8;
 /// How long the drafter waits, once the session has stopped, for the
 /// activity its last creations wrote, which is recorded asynchronously.
 const ACTIVITY_SETTLE: Duration = Duration::from_secs(2);
@@ -272,8 +273,7 @@ impl<Code, Sessions> RoutineDrafts<Code, Sessions> {
 enum Ending {
     /// Its turn ended, well or not.
     Finished,
-    /// It handed back a routine that passes its check and then kept going
-    /// past [`CHECKED_GRACE`], so it is stopped and its last check taken.
+    /// It handed back a routine that passes its check: its answer.
     Checked,
     /// It ran past [`DRAFT_TIMEOUT`].
     TimedOut,
@@ -440,8 +440,8 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
         })
     }
 
-    /// Open the hidden session, prompt it once and wait for its turn to end,
-    /// or for [`CHECKED_GRACE`] after a check that passes.
+    /// Open the hidden session, prompt it once and wait for a check that
+    /// passes, or for its turn to end.
     async fn run(
         &self,
         action: &RoutineSessionAction,
@@ -476,43 +476,45 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
             })
             .await?;
         let span = tracing::Span::current();
-        let mut delay = FIRST_POLL;
         let mut failures = 0;
-        let mut reads = 0_u32;
-        let mut clean_since: Option<tokio::time::Instant> = None;
-        loop {
-            tokio::time::sleep(delay).await;
-            delay = (delay * 2).min(MAX_POLL);
-            reads += 1;
-            span.record("routine.draft.status_reads", reads);
+        let mut polls = 0_u32;
+        let ending = loop {
+            tokio::time::sleep(POLL).await;
+            polls += 1;
+            if self.checked_clean(action).await {
+                break Ok(Ending::Checked);
+            }
+            if !polls.is_multiple_of(ROW_READS_PER_TURN_READ) {
+                continue;
+            }
+            // Recorded as it goes, so a draft that times out keeps it.
+            span.record(
+                "routine.draft.status_reads",
+                polls / ROW_READS_PER_TURN_READ,
+            );
             match self.sessions.status(action.clone()).await {
                 Ok(RoutineActionStatus::Succeeded | RoutineActionStatus::Failed(_)) => {
-                    span.record("routine.draft.ended", "turn_ended");
-                    return Ok(Ending::Finished);
+                    break Ok(Ending::Finished);
                 }
-                Ok(RoutineActionStatus::Pending(_)) => {
-                    failures = 0;
-                    match clean_since {
-                        Some(since) if since.elapsed() >= CHECKED_GRACE => {
-                            span.record("routine.draft.ended", "checked");
-                            return Ok(Ending::Checked);
-                        }
-                        Some(_) => {}
-                        None => {
-                            if self.checked_clean(action).await {
-                                clean_since = Some(tokio::time::Instant::now());
-                            }
-                        }
-                    }
-                }
+                Ok(RoutineActionStatus::Pending(_)) => failures = 0,
                 Err(error) => {
                     failures += 1;
                     if failures >= MAX_STATUS_FAILURES {
-                        return Err(error);
+                        break Err(error);
                     }
                 }
             }
+        };
+        match &ending {
+            Ok(Ending::Checked) => {
+                span.record("routine.draft.ended", "checked");
+            }
+            Ok(Ending::Finished) => {
+                span.record("routine.draft.ended", "turn_ended");
+            }
+            _ => {}
         }
+        ending
     }
 
     /// Whether the session has handed back a routine that passes its check.
@@ -520,7 +522,7 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
         self.hand_backs
             .handed_back(action.session_id.as_uuid())
             .await
-            .is_ok_and(|handed_back| handed_back.check.is_some_and(|check| check.ok))
+            .is_ok_and(|handed_back| handed_back.passed.is_some())
     }
 
     /// Delete the sessions and rows of drafts left behind by a process that

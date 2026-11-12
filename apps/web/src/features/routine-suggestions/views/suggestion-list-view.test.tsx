@@ -1,9 +1,11 @@
+import { analytics } from '@app/lib/analytics';
 import {
   cleanup,
   fireEvent,
   render,
   screen,
   waitFor,
+  within,
 } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -11,7 +13,11 @@ import type { ScheduleDraft } from '../../routines/core/draft';
 import { type SuggestionItem, suggestionItem } from '../core/suggestions';
 import { createSuggestionActions } from '../primitives/suggestion-actions';
 import { context, drafted, forYou, TAGS, template } from '../tests/fixtures';
-import { SuggestionRows, suggestionListView } from './suggestion-list-view';
+import {
+  SuggestionDialogGrid,
+  SuggestionRow,
+  suggestionListView,
+} from './suggestion-list-view';
 
 vi.mock('@app/lib/analytics', () => ({ analytics: { track: vi.fn() } }));
 vi.mock(
@@ -39,12 +45,12 @@ afterEach(() => {
 
 const items = [forYou, template, drafted].flatMap(
   (suggestion): SuggestionItem[] => {
-    const result = suggestionItem(suggestion, [TAGS], context(false));
+    const result = suggestionItem(suggestion, [TAGS], context(true));
     return result ? [result] : [];
   }
 );
 
-function renderRows() {
+function renderCards() {
   const created: ScheduleDraft[] = [];
   const customize = vi.fn();
   const [listed, setListed] = createSignal(items);
@@ -65,13 +71,14 @@ function renderRows() {
       notify: vi.fn(),
     });
     return (
-      <SuggestionRows
+      <SuggestionDialogGrid
         view={suggestionListView({
           suggestions: actions.visible(listed()),
           generating: false,
           failed: false,
         })}
         actions={actions}
+        surface="email"
         emptyLabel="None"
         onRetry={vi.fn()}
         onOpenRoutine={onOpenRoutine}
@@ -81,70 +88,141 @@ function renderRows() {
   return { created, customize, dismiss, onOpenRoutine };
 }
 
-describe('suggestion rows', () => {
-  it('say who suggests each one', () => {
-    renderRows();
+describe('suggestion cards', () => {
+  it('say who suggests each one, and why AI picked it', () => {
+    renderCards();
+    const [pick, macro, drafts] = screen.getAllByRole('listitem');
+    expect(within(pick!).getByText('For you')).toBeTruthy();
     expect(
-      screen.getByText('For you · You answer most mail within a day.')
+      within(pick!).getByText('You answer most mail within a day.')
     ).toBeTruthy();
-    expect(screen.getByText('Template from Macro')).toBeTruthy();
+    expect(within(macro!).getByText('Template')).toBeTruthy();
+    expect(within(macro!).getByText('From Macro')).toBeTruthy();
+    expect(within(drafts!).getByText('Draft')).toBeTruthy();
     expect(
-      screen.getByText('For you · Suppliers write every week.')
+      within(drafts!).getByText('Suppliers write every week.')
     ).toBeTruthy();
   });
 
-  it('enable a catalog routine in one click, then open it', async () => {
-    const host = renderRows();
-    const [enable] = screen.getAllByRole('button', {
-      name: 'Enable Tag new email',
-    });
-    fireEvent.click(enable!);
+  it('turn on an AI pick in one click with a changed value, then open it', async () => {
+    const host = renderCards();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Reply tag: Respond. Change it' })
+    );
+    // A boolean flips in place; other knobs open their editor.
+    const field = await screen.findByRole('textbox', { name: 'Reply tag' });
+    fireEvent.input(field, { target: { value: 'Answer' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Turn on Tag new email' })
+    );
     await waitFor(() => expect(host.created).toHaveLength(1));
-    expect(host.created[0]).toMatchObject({ suggestionId: 'pick-1' });
+    expect(host.created[0]).toMatchObject({
+      suggestionId: 'pick-1',
+      description: 'Tag each new email Answer within 14 days.',
+    });
+    // What was saved no longer changes from the card.
+    expect(
+      screen.queryByRole('button', { name: 'Reply tag: Answer. Change it' })
+    ).toBeNull();
+    expect(
+      screen.getByText('Tag each new email Answer within 14 days.')
+    ).toBeTruthy();
     fireEvent.click(await screen.findByRole('button', { name: 'Enabled' }));
     expect(host.onOpenRoutine).toHaveBeenCalledWith('routine-1');
   });
 
-  it('send a drafted routine to the editor to review, never saving it from the row', () => {
-    const host = renderRows();
+  it('open an AI pick in the editor from anywhere on its card, while its values and Turn on stay their own', async () => {
+    const host = renderCards();
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Edit Tag new email before turning it on',
+      })
+    );
+    expect(host.customize).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ suggestionId: 'pick-1' })
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Reply tag: Respond. Change it' })
+    );
+    expect(
+      await screen.findByRole('textbox', { name: 'Reply tag' })
+    ).toBeTruthy();
+    expect(host.customize).toHaveBeenCalledOnce();
+    expect(host.created).toEqual([]);
+  });
+
+  it('send a drafted routine and Macro’s template to the editor, never saving them from the card', () => {
+    const host = renderCards();
     fireEvent.click(
       screen.getByRole('button', { name: 'Review Supplier digest' })
     );
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Start a routine from Tag new email',
+      })
+    );
     expect(host.created).toEqual([]);
-    expect(host.customize).toHaveBeenCalledWith(
+    expect(host.customize).toHaveBeenNthCalledWith(
+      1,
       expect.objectContaining({ suggestionId: 'drafted-1' })
+    );
+    expect(host.customize).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ suggestionId: 'template-1' })
     );
   });
 
-  it('let the person edit the instructions first, and dismiss one', async () => {
-    const host = renderRows();
-    const [, templateRow] = screen.getAllByRole('button', {
-      name: /Tag new email/,
-      expanded: false,
-    });
-    fireEvent.click(templateRow!);
-    const instructions = await screen.findByRole('textbox', {
-      name: 'Instructions',
-    });
-    fireEvent.input(instructions, { target: { value: 'Tag it my way.' } });
-    fireEvent.click(
-      screen.getAllByRole('button', { name: 'Enable Tag new email' })[1]!
-    );
-    await waitFor(() =>
-      expect(host.created[0]).toMatchObject({
-        suggestionId: 'template-1',
-        prompt: 'Tag it my way.',
-      })
-    );
+  it('dismiss one, which leaves the open dialog at once', async () => {
+    const host = renderCards();
     fireEvent.click(
       screen.getByRole('button', { name: 'Not interested in Supplier digest' })
     );
     expect(host.dismiss).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'drafted-1' })
     );
-    // It leaves the open list at once.
     await waitFor(() =>
       expect(screen.queryByText('Supplier digest')).toBeNull()
     );
+  });
+});
+
+describe('the row above the routines list', () => {
+  it('shows one row of Discover’s cards, counts each as shown, and says how many more Discover has', () => {
+    vi.mocked(analytics.track).mockClear();
+    const onOpenDiscover = vi.fn();
+    // Five cards for four columns: three, then the cell for two more.
+    const many = [
+      ...items,
+      ...items.slice(0, 2).map((item, n) => ({ ...item, id: `more-${n}` })),
+    ];
+    render(() => {
+      const actions = createSuggestionActions({
+        placement: () => ({ kind: 'routines' }),
+        create: vi.fn(async () => 'routine-1'),
+        customize: vi.fn(),
+        dismiss: vi.fn(async () => {}),
+        notify: vi.fn(),
+      });
+      return (
+        <SuggestionRow
+          items={many}
+          actions={actions}
+          onOpenDiscover={onOpenDiscover}
+          onOpenRoutine={vi.fn()}
+        />
+      );
+    });
+    const shown = vi
+      .mocked(analytics.track)
+      .mock.calls.filter(([event]) => event === 'routine_suggestion_shown')
+      .map(([, props]) => (props as { suggestionId: string }).suggestionId);
+    expect(shown).toEqual(['pick-1', 'template-1', 'drafted-1']);
+    // Discover's card: the sentence, not a one-line chain.
+    expect(
+      screen.getByRole('button', { name: 'Reply tag: Respond. Change it' })
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '2 more in Discover' }));
+    expect(onOpenDiscover).toHaveBeenCalledOnce();
   });
 });

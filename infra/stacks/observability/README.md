@@ -89,18 +89,21 @@ of an upstream limitation; do not treat it as attempt execution time.
 
 ### run_local events in Loki
 
-`just run_local` sends the same kind of events when a developer opts in
+`just run_local`, `just stack up`/`update` and `cargo x build-services` send the
+same kind of events by default, unless a developer opts out
 (`docs/development/running-locally.md`, `tooling/xtask/crates/xtask_local_telemetry`):
 one line per run, step, build and container health wait, with
 `service_name="local-telemetry"` and `deployment_environment="local"`, through
-the same OTLP route and token as CI. Fields are structured metadata; each line's
+the same OTLP route as CI. Each machine reads the ingest token from Doppler
+`observability/lcl` (`LOCAL_TELEMETRY_TOKEN`) into a 0600 per-user file; keep
+that config holding only this ingest-only token, since every engineer can read it. Fields are structured metadata; each line's
 `trace_id` opens the run's step waterfall in Tempo. Runs that ended before their
 events were sent are sent by the developer's next run, clamped to 30 minutes old
 like CI's, and a killed run arrives with `outcome="interrupted"`.
 
 | `event` | Fields |
 | --- | --- |
-| every line | `run_id`, `kind` (`up`, `rebuild`, `stop`, `restart_frontend`), `detached`, `instance`, `instance_kind`, `host` (hashed), `platform`, `cpus`, `worktree` (hashed), `git_sha`, `branch` |
+| every line | `run_id`, `kind` (`up`, `rebuild`, `stop`, `restart_frontend`, `stack_up`, `stack_update`, `build_services`), `detached`, `instance` (hashed unless `default`), `instance_kind` (both absent for `build_services`), `host` (hashed), `platform`, `cpus`, `worktree` (hashed), `git_sha`, `branch` (hashed unless `main`) |
 | `run` | `seconds` (for `up`: first step to a backend answering through the proxy with Vite started), `outcome` (`success`, `failure`, `interrupted`), `failed_step`, `mode`, `start` (`fresh`, `resume`), `vite`, `static_frontend`, `steps` |
 | `step` | `step`, `seconds`, `outcome`, plus the run's `mode` and `start` |
 | `build` | `step`, `seconds`, `outcome`, `units_compiled`, `workspace_units_compiled`, `sccache_requests`, `sccache_hits`, `sccache_misses` (server-wide during the build) |

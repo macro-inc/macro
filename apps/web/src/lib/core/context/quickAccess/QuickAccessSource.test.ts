@@ -117,8 +117,27 @@ vi.mock('@core/context/channels', () => ({
   }),
   useDmActivityByUserId: () => () => new Map(),
 }));
+vi.mock('@queries/contacts/use-directory', () => ({
+  useContactDirectoryScope: () => () => ({ userId: 'viewer' }),
+}));
+vi.mock('./person-list', () => ({
+  createPersonList: () => ({
+    items: () => [],
+    totalCount: () => 0,
+    hasMore: () => false,
+    isLoading: () => false,
+    isLoadingMore: () => false,
+    error: () => undefined,
+    loadMore: async () => {},
+  }),
+}));
+vi.mock('@core/context/emailLinks', () => ({
+  useEmailLinksContext: () => ({
+    links: () => [],
+    isConnectedSecondaryInbox: () => false,
+  }),
+}));
 vi.mock('@core/user', () => ({
-  useContacts: () => () => [],
   useIsConnectedSecondaryInbox: () => () => false,
 }));
 vi.mock('@queries/channel/channels', () => ({

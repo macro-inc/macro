@@ -103,7 +103,7 @@ export function AgentSetupStrips(props: {
         <SetupStrip
           icon={<TerminalIcon />}
           title="Bring your own agent"
-          subject="paired runtimes"
+          subject="paired machines"
           description={paired()
             .map((harness) => harness.name)
             .join(', ')}

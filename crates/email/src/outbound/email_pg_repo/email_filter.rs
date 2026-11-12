@@ -29,7 +29,7 @@ impl From<EmailFilterRow> for EmailFilter {
 
 /// Upsert an email filter by address. If a filter for this link+address already
 /// exists, update its `is_important` value.
-#[tracing::instrument(skip(conn), err)]
+#[tracing::instrument(skip(conn, email_address), err)]
 pub async fn upsert_email_filter_by_address(
     conn: &mut sqlx::PgConnection,
     link_id: Uuid,
@@ -115,7 +115,7 @@ pub async fn delete_email_filter(
 /// The recompute mirrors sync_thread_signal_flag (thread.rs) / the
 /// Importance(true) predicate in the dynamic query builder, including the
 /// unconditional exclusion of Macro's own notification sender (`$4` domain).
-#[tracing::instrument(skip(conn), err)]
+#[tracing::instrument(skip(conn, email_address), err)]
 pub async fn resync_signal_flags_for_sender(
     conn: &mut sqlx::PgConnection,
     link_id: Uuid,

@@ -983,6 +983,7 @@ async fn a_system_turn_cannot_approve_even_with_owner_credentials() {
         action_id: agent_runtime_protocol::domain::action::AgentActionId::mint(),
         user: Some(f.actions.owner.clone()),
         kind: agent_session::domain::model::PrompterKind::System,
+        client: None,
     });
     let decision = ReviewDecision::Submit {
         revision: row.revision,
@@ -1172,6 +1173,7 @@ async fn a_chat_submit_waits_until_the_review_is_approvable() {
         action_id: agent_runtime_protocol::domain::action::AgentActionId::mint(),
         user: Some(f.actions.owner.clone()),
         kind: agent_session::domain::model::PrompterKind::User,
+        client: None,
     });
     let submit = ReviewDecision::Submit {
         revision: row.revision,

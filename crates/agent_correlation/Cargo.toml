@@ -17,6 +17,7 @@ rootcause = { workspace = true }
 serde = { workspace = true }
 serde_urlencoded = { workspace = true, optional = true }
 sqlx = { workspace = true, optional = true }
+strum = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["rt", "macros"] }
 tracing = { workspace = true }

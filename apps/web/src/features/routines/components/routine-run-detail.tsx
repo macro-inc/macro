@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { formatDateAndTime } from '@entity';
 import ArrowUpRightIcon from '@icon/system/regular/arrow-up-right.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
@@ -196,6 +197,8 @@ export function RunDetail(props: {
   onOpenItem?: () => void;
   /** Opens the run's agent session, when it has one. */
   onOpenConversation?: () => void;
+  /** Opens a routine the run created. */
+  onOpenRoutine?: (id: string) => void;
 }) {
   const steps = () => props.record.steps ?? [];
   // A run can fail outside its steps, e.g. while preparing its agent.
@@ -260,6 +263,35 @@ export function RunDetail(props: {
           )}
         </For>
       </ol>
+      <Show when={props.record.created?.length ? props.record.created : false}>
+        {(created) => (
+          <section
+            aria-label={t('subRoutines.runCreated')}
+            class="grid gap-1.5"
+          >
+            <h3 class="text-xs font-medium text-ink-muted">
+              {t('subRoutines.runCreated')}
+            </h3>
+            <ul class="flex flex-wrap gap-1.5">
+              <For each={created()}>
+                {(routine) => (
+                  <li>
+                    <Button
+                      variant="secondary"
+                      size="xs"
+                      disabled={!props.onOpenRoutine}
+                      onClick={() => props.onOpenRoutine?.(routine.id)}
+                    >
+                      {routine.name}
+                      <ArrowUpRightIcon class="size-3" />
+                    </Button>
+                  </li>
+                )}
+              </For>
+            </ul>
+          </section>
+        )}
+      </Show>
       <Show when={unexplained()}>
         {(message) => (
           <p

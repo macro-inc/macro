@@ -1,3 +1,8 @@
+import IconCompany from '@icon/system/regular/buildings.svg';
+import IconMacroDocs from '@icon/system/regular/file.svg';
+import IconMacroTasks from '@icon/system/regular/list-checks.svg';
+import IconSearch from '@icon/system/regular/magnifying-glass.svg';
+import IconMacroCall from '@icon/system/regular/phone-call.svg';
 import {
   createEffect,
   createSignal,
@@ -9,11 +14,6 @@ import {
   Show,
 } from 'solid-js';
 import { isServer } from 'solid-js/web';
-import IconCompany from '../../../assets/icons/icon-company.svg';
-import IconSearch from '../../../assets/icons/icon-search.svg';
-import IconMacroCall from '../../../assets/icons/wide-call.svg';
-import IconMacroDocs from '../../../assets/icons/wide-file-md.svg';
-import IconMacroTasks from '../../../assets/icons/wide-task.svg';
 import {
   breakpoint,
   isMobileViewport,

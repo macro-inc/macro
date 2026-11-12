@@ -11,6 +11,7 @@ import type {
   DatabaseColumnCasts,
   DatabaseColumnConversion,
   DatabaseColumnTypeChange,
+  DatabaseRelationTargets,
   DatabaseSchemaChange,
 } from '../core/column-schema';
 import type { DatabaseViewColumn } from '../core/database-view';
@@ -93,7 +94,11 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function renderHeader(shownColumn = column, shownCasts = casts) {
+function renderHeader(
+  shownColumn = column,
+  shownCasts = casts,
+  relationTables?: DatabaseRelationTargets
+) {
   const changeType = vi.fn<
     (columnId: string, change: DatabaseColumnTypeChange) => DatabaseSchemaChange
   >(() => okAsync(undefined));
@@ -112,6 +117,7 @@ function renderHeader(shownColumn = column, shownCasts = casts) {
       onSort={vi.fn()}
       onChangeType={changeType}
       onConvert={convert}
+      relationTables={relationTables}
       columnCasts={(columnId, open) => () => {
         if (open()) opened.push(columnId);
         return shownCasts;
@@ -245,4 +251,80 @@ it('applies a type every value fits directly, against the version its dry run re
     })
   );
   expect(screen.queryByRole('dialog')).toBeNull();
+});
+
+it('links a column to a table in another database the viewer can reach', async () => {
+  const { changeType } = renderHeader(
+    column,
+    {
+      status: 'ready',
+      version: 4,
+      casts: [
+        {
+          target: { dataType: 'ENTITY', isMultiSelect: true, relation: true },
+          cast: { verdict: 'safe' },
+        },
+      ],
+    },
+    {
+      here: [{ databaseId: 'sales', tableId: 'deals', name: 'Deals' }],
+      elsewhere: [
+        {
+          databaseId: 'crm',
+          name: 'CRM',
+          tables: [{ databaseId: 'crm', tableId: 'clients', name: 'Clients' }],
+        },
+      ],
+    }
+  );
+  await openTypeMenu();
+
+  expect(await screen.findByRole('menuitem', { name: 'Deals' })).toBeTruthy();
+  const crm = await screen.findByRole('menuitem', { name: 'CRM' });
+  crm.focus();
+  fireEvent.keyDown(crm, { key: 'ArrowRight' });
+  choose(await screen.findByRole('menuitem', { name: 'Clients' }));
+
+  await waitFor(() =>
+    expect(changeType).toHaveBeenCalledExactlyOnceWith('price', {
+      to: { type: 'relation', database: 'crm', table: 'clients' },
+      baseVersion: 4,
+    })
+  );
+});
+
+it('marks the linked table in another database as the current type', async () => {
+  renderHeader(
+    {
+      ...column,
+      dataType: 'ENTITY',
+      isMultiSelect: true,
+      relation: { databaseId: 'crm', tableId: 'clients' },
+    },
+    { status: 'ready', version: 4, casts: [] },
+    {
+      here: [{ databaseId: 'sales', tableId: 'clients', name: 'Clients' }],
+      elsewhere: [
+        {
+          databaseId: 'crm',
+          name: 'CRM',
+          tables: [{ databaseId: 'crm', tableId: 'clients', name: 'Clients' }],
+        },
+      ],
+    }
+  );
+  await openTypeMenu();
+
+  const here = await screen.findByRole('menuitem', { name: 'Clients' });
+  expect(here.getAttribute('aria-current')).toBeNull();
+  const crm = await screen.findByRole('menuitem', { name: 'CRM' });
+  crm.focus();
+  fireEvent.keyDown(crm, { key: 'ArrowRight' });
+  await waitFor(() =>
+    expect(
+      screen
+        .getAllByRole('menuitem', { name: 'Clients' })
+        .map((item) => item.getAttribute('aria-current'))
+    ).toEqual([null, 'true'])
+  );
 });

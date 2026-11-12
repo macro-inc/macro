@@ -4,7 +4,7 @@ import { UserGroup } from '@core/component/UserGroup';
 import { useChannel } from '@core/context/channels';
 import { isMobile } from '@core/mobile/isMobile';
 import { getDisplayName, tryMacroId } from '@core/user';
-import PhoneIcon from '@icon/system/regular/phone-call.svg';
+import PhoneIcon from '@icon/system/regular/phone.svg';
 import { Telemetry } from '@macro-inc/observability';
 import { useActiveCallQuery, useLiveCallRecordQuery } from '@queries/call/call';
 import { Button } from '@ui';
@@ -16,12 +16,12 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import { ActiveCallLink } from './ActiveCallLink';
 import { CallOverlay } from './CallOverlay';
 import { getCallJoinTab, getCallLeaveTab } from './call-tabs';
 import { CallDiscussionContent } from './discussion/CallDiscussionContent';
 import { callDiscussionOf } from './discussion/call-discussion';
 import { useCall } from './use-call';
+import { ActiveCallHeader } from './views/ActiveCallHeader';
 
 function ParticipantFirstName(props: { id: string }) {
   const name = createMemo(() => {
@@ -170,11 +170,16 @@ export function ChannelCallTab(props: {
         <div class="size-full min-h-0">
           <Show when={isMobile()}>
             <SplitHeaderRight>
-              <ActiveCallLink />
+              <ActiveCallHeader channelId={props.channelId} />
             </SplitHeaderRight>
           </Show>
           <CallOverlay
             onLeave={handleLeave}
+            sharingChannelName={
+              discussion()?.kind === 'channel_thread'
+                ? (channel()?.name ?? undefined)
+                : undefined
+            }
             discussion={{
               label: () =>
                 discussion()?.kind === 'channel_thread'
@@ -192,11 +197,6 @@ export function ChannelCallTab(props: {
                 />
               ),
             }}
-            footerLeading={
-              <Show when={!isMobile()}>
-                <ActiveCallLink />
-              </Show>
-            }
           />
         </div>
       </Match>

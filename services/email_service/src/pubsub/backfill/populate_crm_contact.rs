@@ -1,4 +1,6 @@
+use crate::pubsub::backfill::write_slot;
 use crate::pubsub::context::PubSubContext;
+use crm::domain::model::CrmError;
 use crm::domain::service::CrmService;
 use models_email::email::service::backfill::PopulateCrmContactPayload;
 use models_email::email::service::link;
@@ -21,6 +23,11 @@ use models_email::email::service::pubsub::{DetailedError, FailureReason, Process
 /// message paths set both to the message's `internal_date_ts` (with
 /// `Utc::now()` fallback at the producer when Gmail returned none).
 /// The historical seed aggregates MIN/MAX per contact in SQL.
+///
+/// Each population holds one of its team's CRM population slots, so one
+/// team's consent backfill can't occupy a database connection per worker.
+/// A refused slot, or a population that timed out waiting for a CRM lock,
+/// is deferred like a busy backfill write instead of spending a delivery.
 #[tracing::instrument(skip_all, err, fields(link_id = %link.id))]
 pub async fn populate_crm_contact(
     ctx: &PubSubContext,
@@ -44,24 +51,28 @@ pub async fn populate_crm_contact(
         return Ok(());
     };
 
-    ctx.crm_service
-        .populate_contact(
-            &team_id,
-            &link.id,
-            link.email_address.0.as_ref(),
-            &p.contact_email,
-            p.contact_name.as_deref(),
-            p.first_at,
-            p.last_at,
-            p.is_sent,
-        )
-        .await
-        .map_err(|e| {
-            ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::DatabaseQueryFailed,
-                source: anyhow::Error::from(e).context("Failed to populate CRM contact"),
-            })
-        })?;
+    let slot = write_slot::acquire_crm_population(ctx, team_id).await?;
+    slot.hold(ctx.crm_service.populate_contact(
+        &team_id,
+        &link.id,
+        link.email_address.0.as_ref(),
+        &p.contact_email,
+        p.contact_name.as_deref(),
+        p.first_at,
+        p.last_at,
+        p.is_sent,
+    ))
+    .await
+    .map_err(|e| {
+        let reason = match e {
+            CrmError::Contended => FailureReason::BackfillWritesBusy,
+            _ => FailureReason::DatabaseQueryFailed,
+        };
+        ProcessingError::Retryable(DetailedError {
+            reason,
+            source: anyhow::Error::from(e).context("Failed to populate CRM contact"),
+        })
+    })?;
 
     Ok(())
 }

@@ -3,7 +3,7 @@ mod calendar_join_request;
 mod channel_push;
 pub use access_request::{
     ChannelAccessRequestedMetadata, EntityAccessGrantedMetadata, EntityAccessRequestedMetadata,
-    RequestedAccessLevel,
+    RequestedAccessLevel, RuntimeAccessRemovedMetadata, StoppedAgent,
 };
 pub use calendar_join_request::CalendarEventJoinRequestMetadata;
 use chrono::{DateTime, NaiveDate, Utc};

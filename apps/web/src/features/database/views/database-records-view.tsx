@@ -48,6 +48,7 @@ import type {
   DatabaseColumnCastsSource,
   DatabaseColumnConversion,
   DatabaseColumnTypeChange,
+  DatabaseRelationTargets,
   DatabaseSchemaChange,
 } from '../core/column-schema';
 import type {
@@ -127,6 +128,7 @@ export type DatabaseRecordsViewProps = {
   onComposeRecord?: (values: Record<string, DatabaseCellValue>) => void;
   renderTextEditor?: GridCellProps['renderTextEditor'];
   renderTextValue?: GridCellProps['renderTextValue'];
+  renderLinkValue?: GridCellProps['renderLinkValue'];
   renderMentionPicker?: GridCellProps['renderMentionPicker'];
   renderMentionValue?: GridCellProps['renderMentionValue'];
   /** Opens a record someone clicks somewhere else, in place of the record panel, as a view in a document opens its database; returns whether it did, else the panel opens. */
@@ -136,7 +138,7 @@ export type DatabaseRecordsViewProps = {
   /** Opens what a record's title mentions, such as a pipeline row's company, in place of editing it. */
   onOpenTitleMention?: (id: string, type: DatabaseEntityType) => void;
   renderRelationCell?: (props: RelationCellProps) => JSX.Element;
-  relationTables?: { id: string; name: string }[];
+  relationTables?: DatabaseRelationTargets;
   columnCasts?: DatabaseColumnCastsSource;
   onCellFocus?: (cell: DatabaseCellFocus | undefined) => void;
   remoteUsers?: DatabaseCellPresence[];
@@ -359,6 +361,7 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
             canEdit={props.canEdit}
             renderTextEditor={props.renderTextEditor}
             renderTextValue={props.renderTextValue}
+            renderLinkValue={props.renderLinkValue}
             renderMentionPicker={props.renderMentionPicker}
             renderMentionValue={props.renderMentionValue}
             onOpenMention={
@@ -554,6 +557,7 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
               }
               renderCell={renderCell}
               renderTextValue={props.renderTextValue}
+              renderLinkValue={props.renderLinkValue}
               renderMentionValue={props.renderMentionValue}
               rowPending={controller.rowPending}
               createPending={controller.createPending}

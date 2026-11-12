@@ -111,14 +111,13 @@ pub trait ChatProvider: Send + Sync + 'static {
     ) -> ExternalChatResult<Vec<Option<CommunityReference>>>;
     /// Who is in the chat; `None` when no observer has read it.
     async fn members(&self, chat: &ChatRef) -> ExternalChatResult<Option<Members>>;
-    /// Names for the provider ids (mentions, system lines) of a chat, and
-    /// for the chat's people stored without a name (`unnamed`, by person id:
-    /// senders and voters no provider name was ever seen for).
+    /// Names for the provider ids (mentions, system lines) and the stored
+    /// people (senders, reactors, voters) of a chat.
     async fn people(
         &self,
         chat: &ChatRef,
         ids: &[String],
-        unnamed: &[Uuid],
+        persons: &[Uuid],
     ) -> ExternalChatResult<People>;
     /// Ask the chat's observers and the viewer's own account to read the
     /// chat again; the provider rate limits refreshes.

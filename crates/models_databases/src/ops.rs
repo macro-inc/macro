@@ -4,8 +4,9 @@
 //! A request's ops apply in order, in one transaction, so a later op may name
 //! what an earlier one created: tables, columns, options and views carry ids
 //! the client mints (UUIDv7, `TableId::new()` and the like). An id that
-//! already names something refuses the request. Rows keep server-minted ids,
-//! which an insert's result answers.
+//! already names something refuses the request. An insert's rows take ids
+//! the client mints too, or, left out, ones the server mints, which the
+//! insert's result answers.
 
 #[cfg(test)]
 mod test;
@@ -224,6 +225,13 @@ pub enum RowsChange {
         /// One entry per new row: the cells it starts with. Columns left out
         /// start empty.
         rows: Vec<Vec<CellWrite>>,
+        /// The new rows' ids, minted by the client (UUIDv7), one per row in
+        /// order, so later ops of the request and a retry can name them;
+        /// left out, the server mints them.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[schema(nullable = false, value_type = Option<Vec<Uuid>>)]
+        #[specta(optional)]
+        ids: Option<Vec<RowId>>,
     },
     /// Write cells of existing rows. Last write wins: there is no version
     /// check.
@@ -744,6 +752,9 @@ pub enum TakenId {
     /// A view's.
     #[schema(value_type = Uuid)]
     View(ViewId),
+    /// A row's.
+    #[schema(value_type = Uuid)]
+    Row(RowId),
 }
 
 /// A table and its version.

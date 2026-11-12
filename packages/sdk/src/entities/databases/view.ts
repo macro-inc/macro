@@ -29,7 +29,11 @@ export class DatabaseView {
     return new DatabaseView(table, id);
   }
 
-  /** The view's record as the API returns it. */
+  /**
+   * The view's record as the API returns it.
+   *
+   * @readonly
+   */
   async detail(): Promise<DatabaseViewRecord> {
     const { views } = await this.table.detail();
     const found = views.find((view) => view.id === this.id);
@@ -41,22 +45,38 @@ export class DatabaseView {
     return found;
   }
 
-  /** The view's name, unique among its table's views ignoring case. */
+  /**
+   * The view's name, unique among its table's views ignoring case.
+   *
+   * @readonly
+   */
   async name(): Promise<string> {
     return (await this.detail()).name;
   }
 
-  /** The view's fractional index within its table's views. */
+  /**
+   * The view's fractional index within its table's views.
+   *
+   * @readonly
+   */
   async position(): Promise<string> {
     return (await this.detail()).position;
   }
 
-  /** How the view draws its rows: a table, or a board grouped by a column. */
+  /**
+   * How the view draws its rows: a table, or a board grouped by a column.
+   *
+   * @readonly
+   */
   async layout(): Promise<ViewLayout> {
     return (await this.detail()).layout;
   }
 
-  /** Which rows the view shows, and in what order. */
+  /**
+   * Which rows the view shows, and in what order.
+   *
+   * @readonly
+   */
   async query(): Promise<ViewQuery> {
     return (await this.detail()).query;
   }
@@ -65,6 +85,8 @@ export class DatabaseView {
    * Where a board's cards sit: each placed card's lane and its key there.
    * Cards without a place show after the placed ones of their lane, oldest
    * first.
+   *
+   * @readonly
    */
   positions(): Promise<CardPosition[]> {
     return this.table.database.viewPositions(this);

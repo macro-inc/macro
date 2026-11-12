@@ -123,6 +123,7 @@ fn an_ops_body_reads_every_op_kind() {
                         column: ColumnId::from_uuid(column),
                         value: CellValue::Text("Sam".into()),
                     }]],
+                    ids: None,
                 },
             },
             DatabaseOp::Rows {

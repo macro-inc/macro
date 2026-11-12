@@ -1,5 +1,7 @@
 /// [`LinkedGithubTokens`](crate::domain::ports::LinkedGithubTokens) over the authentication service.
 pub mod auth_service_github_tokens;
+/// Address-guarded HTTP clients for user-chosen MCP servers.
+pub mod guarded_http;
 /// RMCP-backed OAuth adapter for remote MCP servers.
 pub mod oauth;
 /// Postgres-backed repository implementing [`McpServerStore`](crate::domain::ports::McpServerStore).

@@ -19,7 +19,11 @@ type ProjectItem =
 
 /** A Macro project: a folder-like container for documents, chats, and subprojects. */
 export class Project extends PropertiedEntity<ProjectDetail> {
-  /** Read this project's sharing configuration. */
+  /**
+   * Read this project's sharing configuration.
+   *
+   * @readonly
+   */
   async sharePermissions() {
     return unwrap(
       await this.client.storage.getProjectPermissionsV2({
@@ -32,6 +36,9 @@ export class Project extends PropertiedEntity<ProjectDetail> {
    * Change who can open the project and its contents: the link share and its
    * access level, the owner's team, and channel grants. Omitted fields are
    * left as they are.
+   *
+   * @write
+   * @idempotent
    */
   async updateSharePermissions(options: SharePermissionOptions): Promise<void> {
     await this.mutate((c) =>
@@ -42,7 +49,11 @@ export class Project extends PropertiedEntity<ProjectDetail> {
     );
   }
 
-  /** Read the caller's effective access level. */
+  /**
+   * Read the caller's effective access level.
+   *
+   * @readonly
+   */
   async accessLevel() {
     return unwrap(
       await this.client.storage.getProjectUserAccessLevel({
@@ -69,7 +80,11 @@ export class Project extends PropertiedEntity<ProjectDetail> {
     return data.projectMetadata;
   }
 
-  /** The project's URL in the Macro web app; hand it to users as the link. */
+  /**
+   * The project's URL in the Macro web app; hand it to users as the link.
+   *
+   * @readonly
+   */
   webUrl(): string {
     return `${this.client.webAppUrl}/app/project/${this.id}`;
   }
@@ -115,6 +130,8 @@ export class Project extends PropertiedEntity<ProjectDetail> {
    * The items (documents, chats, subprojects) directly inside this project.
    * Agent sessions are never project items; link one from a document in the
    * project instead (see `ProjectNamespace`).
+   *
+   * @readonly
    */
   async items(): Promise<ProjectItem[]> {
     const { data } = unwrap(
@@ -125,7 +142,12 @@ export class Project extends PropertiedEntity<ProjectDetail> {
     return data.map((entry) => entry.item);
   }
 
-  /** Rename the project. */
+  /**
+   * Rename the project.
+   *
+   * @write
+   * @idempotent
+   */
   async rename(name: string): Promise<void> {
     await this.mutate((c) =>
       c.storage.editProjectV2({
@@ -138,6 +160,9 @@ export class Project extends PropertiedEntity<ProjectDetail> {
   /**
    * Delete the project and its contents. Soft by default (reversible with
    * {@link restore}); pass `permanent: true` to delete irreversibly.
+   *
+   * @destructive
+   * @idempotent
    */
   async delete(opts?: { permanent?: boolean }): Promise<void> {
     await this.mutate<unknown>((c) =>
@@ -147,7 +172,12 @@ export class Project extends PropertiedEntity<ProjectDetail> {
     );
   }
 
-  /** Restore a soft-deleted project. */
+  /**
+   * Restore a soft-deleted project.
+   *
+   * @write
+   * @idempotent
+   */
   async restore(): Promise<void> {
     await this.mutate((c) =>
       c.storage.revertDeleteProject({ path: { id: this.id } }),
