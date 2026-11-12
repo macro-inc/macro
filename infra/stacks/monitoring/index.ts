@@ -19,6 +19,7 @@ import './synthetics';
 // Declared here first.
 import './goalert';
 import './monitors/ai-editing';
+import './monitors/ai-providers';
 import './monitors/calls';
 import './monitors/computer-capacity';
 import './monitors/computers';

@@ -72,6 +72,11 @@ From `infra/`:
   It finds the Graph and token spans by `@outlook.throttle_origin` and
   `@outlook.token_cache`, not by name: Datadog renames an HTTP client span to
   `http.client.request` with its method as the resource.
+- `monitors/ai-providers.ts` reads the `ai provider account unavailable` and
+  `ai usage priced` logs (`crates/genai_telemetry/src/provider_account.rs`,
+  `crates/ai_usage/src/domain/service.rs`) and the AI editing worker's
+  `ai.provider_account_unavailable` span; its header is the field contract.
+  `MONTHLY_CAPS` must match each provider's billing console.
 - `monitors/routine-suggestions.ts` reads the `routine_suggestions.*` log
   events (`@event`) that `crates/scheduled_action` emits; its header is the
   field contract. Its failure monitor does not page while suggestions are

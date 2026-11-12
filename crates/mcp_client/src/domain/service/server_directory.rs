@@ -3,9 +3,8 @@
 //! The settings dialog and the `ConnectMcpServer` AI tool both add servers
 //! through here, so a server added either way is the same row.
 
-use crate::domain::models::{MacroUserIdStr, McpServerRecord};
+use crate::domain::models::{MacroUserIdStr, McpServerRecord, is_public};
 use crate::domain::ports::McpServerStore;
-use crate::outbound::guarded_http::is_public;
 use std::net::IpAddr;
 use std::sync::Arc;
 use url::{Host, Url};
