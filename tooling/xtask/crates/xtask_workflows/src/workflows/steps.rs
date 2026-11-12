@@ -467,11 +467,41 @@ pub fn node_script(source: &str) -> String {
     )
 }
 
-/// `sccache --show-stats` at the end of a job (never fails the job).
+/// Where [`show_sccache_stats`] writes the stats [`upload_sccache_stats`] uploads.
+const SCCACHE_STATS_DIR: &str = "${{ runner.temp }}/ci-cache-stats";
+
+/// `sccache --show-stats` at the end of a job (never fails the job), also written
+/// as JSON for [`upload_sccache_stats`].
 pub fn show_sccache_stats() -> Step<Run> {
     Step::new("show sccache stats")
-        .run("sccache --show-stats || true")
+        .run(indoc::indoc! {r#"
+            sccache --show-stats || true
+            mkdir -p "$STATS_DIR"
+            sccache --show-stats --stats-format json > "$STATS_DIR/sccache.json" \
+              || rm -f "$STATS_DIR/sccache.json"
+        "#})
+        .shell("bash")
         .if_condition(Expression::new("always()"))
+        .add_env(("STATS_DIR", SCCACHE_STATS_DIR))
+}
+
+/// Hand the job's sccache stats to the CI telemetry exporter, which matches the
+/// artifact to its job by the check run id in its name (see
+/// `scripts/ci_telemetry_collect.ts`). Follows [`show_sccache_stats`]. A day is enough:
+/// the exporter reads it once the workflow completes.
+pub fn upload_sccache_stats() -> Step<Use> {
+    Step::new("Upload sccache stats")
+        .uses(
+            "actions",
+            "upload-artifact",
+            "ea165f8d65b6e75b540449e92b4886f43607fa02",
+        ) // v4
+        .if_condition(Expression::new("always()"))
+        .continue_on_error(true)
+        .add_with(("name", "ci-cache-stats-${{ job.check_run_id }}"))
+        .add_with(("path", format!("{SCCACHE_STATS_DIR}/sccache.json")))
+        .add_with(("if-no-files-found", "ignore"))
+        .add_with(("retention-days", 1))
 }
 
 /// Base for jobs gated behind `path-check`: depends on it and runs only where

@@ -102,3 +102,68 @@ fn collector_scenarios() {
         String::from_utf8_lossy(&output.stderr)
     );
 }
+
+/// Every job that compiles through sccache reports its numbers, and the upload follows
+/// the step that writes them.
+#[test]
+fn every_sccache_job_uploads_its_stats() {
+    let workflows = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../../.github/workflows");
+    let mut missing = Vec::new();
+    for entry in std::fs::read_dir(workflows).unwrap() {
+        let path = entry.unwrap().path();
+        if !matches!(
+            path.extension().and_then(|extension| extension.to_str()),
+            Some("yml" | "yaml")
+        ) {
+            continue;
+        }
+        let workflow: serde_yaml::Value =
+            serde_yaml::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        let Some(jobs) = workflow["jobs"].as_mapping() else {
+            continue;
+        };
+        for (key, job) in jobs {
+            let names: Vec<&str> = job["steps"]
+                .as_sequence()
+                .map(|steps| {
+                    steps
+                        .iter()
+                        .filter_map(|step| step["name"].as_str())
+                        .collect()
+                })
+                .unwrap_or_default();
+            let position = |name: &str| names.iter().position(|step| *step == name);
+            let Some(configure) = position("Configure Namespace remote sccache") else {
+                continue;
+            };
+            let reported = position("show sccache stats")
+                .zip(position("Upload sccache stats"))
+                .is_some_and(|(show, upload)| configure < show && show + 1 == upload);
+            if !reported {
+                missing.push(format!("{}: {}", path.display(), key.as_str().unwrap()));
+            }
+        }
+    }
+    assert!(
+        missing.is_empty(),
+        "add steps::show_sccache_stats and upload_sccache_stats: {missing:?}"
+    );
+}
+
+/// The collector matches an artifact to its job by this name.
+#[test]
+fn sccache_stats_artifact_is_named_for_the_collector() {
+    let step = serde_json::to_value(steps::upload_sccache_stats()).unwrap();
+    let prefix = "export const CACHE_STATS_ARTIFACT = 'ci-cache-stats-';";
+    assert!(include_str!("../scripts/ci_telemetry_collect.ts").contains(prefix));
+    assert_eq!(
+        step["with"]["name"],
+        "ci-cache-stats-${{ job.check_run_id }}"
+    );
+    assert!(
+        step["with"]["path"]
+            .as_str()
+            .unwrap()
+            .ends_with("/sccache.json")
+    );
+}

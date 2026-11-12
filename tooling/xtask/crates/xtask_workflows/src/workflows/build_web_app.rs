@@ -61,6 +61,7 @@ fn build_job() -> Job {
         .add_step(steps::start_sccache_server())
         .add_step(build())
         .add_step(steps::show_sccache_stats())
+        .add_step(steps::upload_sccache_stats())
         .add_step(upload_dist())
         .add_step(steps::teardown_nix())
 }

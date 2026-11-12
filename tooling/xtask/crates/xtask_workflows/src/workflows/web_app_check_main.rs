@@ -255,6 +255,7 @@ fn generated_code() -> Job {
         // running them earlier would make the steps above recompile.
         .add_step(check_specta_types())
         .add_step(steps::show_sccache_stats())
+        .add_step(steps::upload_sccache_stats())
         .add_step(steps::teardown_nix())
 }
 
@@ -286,6 +287,8 @@ fn test() -> Job {
         .add_step(build_agent_fold_for_tests())
         .add_step(build_natural_time_for_tests())
         .add_step(run_tests())
+        .add_step(steps::show_sccache_stats())
+        .add_step(steps::upload_sccache_stats())
         .add_step(steps::teardown_nix())
 }
 
@@ -303,6 +306,7 @@ fn functional() -> Job {
         .add_step(build_wasm_for_functional_tests())
         .add_step(run_functional_tests())
         .add_step(steps::show_sccache_stats())
+        .add_step(steps::upload_sccache_stats())
         .add_step(steps::teardown_nix())
 }
 
@@ -322,6 +326,8 @@ fn browser() -> Job {
         .add_step(run_i18n_browser_tests())
         .add_step(run_database_browser_tests())
         .add_step(run_calendar_details_browser_tests())
+        .add_step(steps::show_sccache_stats())
+        .add_step(steps::upload_sccache_stats())
         .add_step(steps::teardown_nix())
 }
 
@@ -356,6 +362,7 @@ fn build() -> Job {
         .add_step(steps::start_sccache_server())
         .add_step(run_build())
         .add_step(steps::show_sccache_stats())
+        .add_step(steps::upload_sccache_stats())
         .add_step(preview_credentials);
     preview_steps
         .into_iter()

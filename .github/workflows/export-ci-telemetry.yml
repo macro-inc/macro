@@ -127,9 +127,13 @@ jobs:
         // best effort: an error becomes a warning, and the observed workflow is never
         // affected. Events carry ids, names of our own jobs and steps, and timings, never
         // branch names, actors, titles or file paths.
+        //
+        // The one thing read from what a job produced is its compiler cache stats artifact.
+        // PR code writes it, so only bounded whole numbers are taken from it.
 
         import { createHash } from 'node:crypto';
         import { readFileSync, writeFileSync } from 'node:fs';
+        import { inflateRawSync } from 'node:zlib';
 
         const API = 'https://api.github.com';
         const PR_EVENTS = new Set(['pull_request', 'pull_request_target']);
@@ -156,6 +160,12 @@ jobs:
         const WEB_SUFFIXES = ['.ts', '.tsx', '.js', '.jsx', '.css', '.html', '.svelte'];
         const RUST_ROOT_FILES = new Set(['Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml']);
         const CRATE_DIRECTORIES = new Set(['src', 'tests', 'benches', 'examples', 'migrations']);
+        // Each sccache job uploads its stats as this prefix and its job id, which is also its
+        // check run id. Keep in sync with `steps::upload_sccache_stats`.
+        export const CACHE_STATS_ARTIFACT = 'ci-cache-stats-';
+        const CACHE_STATS_FILE = 'sccache.json';
+        // sccache's stats are about 1.5 KB; anything near this was not written by it.
+        const MAX_CACHE_STATS_BYTES = 64 * 1024;
 
         export type Timed = {
           started_at?: string | null;
@@ -202,6 +212,8 @@ jobs:
 
         export interface GithubApi {
           get(path: string, params?: Record<string, string | number>): Promise<any>;
+          /** A redirecting download, such as an artifact's zip, refused past `maxBytes`. */
+          download(path: string, maxBytes: number): Promise<Uint8Array>;
           calls: number;
           rateLimit: number | null;
           rateRemaining: number | null;
@@ -260,6 +272,24 @@ jobs:
             this.rateLimit = Number(response.headers.get('x-ratelimit-limit')) || null;
             this.rateRemaining = Number(response.headers.get('x-ratelimit-remaining')) || 0;
             return response.json();
+          }
+
+          async download(path: string, maxBytes: number) {
+            if (this.rateRemaining !== null && this.rateRemaining < MIN_RATE_REMAINING) {
+              throw new Error('GitHub API budget is low');
+            }
+            this.calls += 1;
+            // The storage hop's response carries no rate headers, so count the call ourselves.
+            if (this.rateRemaining !== null) this.rateRemaining -= 1;
+            // The API redirects to signed storage; fetch drops the token on that cross-origin hop.
+            const response = await fetch(`${API}/repos/${this.repo}/${path}`, {
+              headers: { Authorization: `Bearer ${this.token}` },
+              signal: AbortSignal.timeout(20_000),
+            });
+            if (!response.ok) throw new HttpError(response.status);
+            const bytes = new Uint8Array(await response.arrayBuffer());
+            if (bytes.length > maxBytes) throw new Error('Download is over its limit');
+            return bytes;
           }
         }
 
@@ -365,8 +395,193 @@ jobs:
           return seconds(created, times[0]);
         }
 
+        /** Where sccache kept its objects: Namespace's remote cache, or the fork fallback's disk. */
+        export type CacheBackend = 'local' | 'remote';
+
+        /** A job's compiler cache numbers, as `job` event fields. */
+        export type CacheStats = {
+          sccache_backend: CacheBackend;
+          sccache_requests: number;
+          sccache_hits: number;
+          sccache_misses: number;
+          sccache_hit_percent?: number;
+          sccache_errors: number;
+          sccache_timeouts: number;
+          sccache_not_cacheable: number;
+          sccache_read_ms: number;
+          sccache_write_ms: number;
+          sccache_compile_ms: number;
+        };
+
+        class Refused extends Error {}
+
+        function record(value: unknown): Record<string, unknown> {
+          if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Refused();
+          return value as Record<string, unknown>;
+        }
+
+        function count(value: unknown): number {
+          if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
+            throw new Refused();
+          }
+          return value;
+        }
+
+        /** A per-language count map, such as `cache_hits`, summed over languages. */
+        function counts(value: unknown): number {
+          return Object.values(record(record(value).counts)).reduce<number>(
+            (sum, entry) => sum + count(entry),
+            0
+          );
+        }
+
+        function milliseconds(value: unknown): number {
+          const { secs, nanos } = record(value);
+          return count(secs) * 1000 + Math.trunc(count(nanos) / 1_000_000);
+        }
+
+        function backend(location: unknown): CacheBackend {
+          if (typeof location !== 'string') throw new Refused();
+          return location.startsWith('Local disk') ? 'local' : 'remote';
+        }
+
+        /**
+         * The numbers from `sccache --show-stats --stats-format json`. Null when the job
+         * compiled nothing, or the document isn't what sccache writes. No string is copied:
+         * the cache location names the remote endpoint.
+         */
+        export function cacheStats(document: unknown): CacheStats | null {
+          try {
+            const top = record(document);
+            const stats = record(top.stats);
+            const requests = count(stats.compile_requests);
+            const hits = counts(stats.cache_hits);
+            const misses = counts(stats.cache_misses);
+            const result: CacheStats = {
+              sccache_backend: backend(top.cache_location),
+              sccache_requests: requests,
+              sccache_hits: hits,
+              sccache_misses: misses,
+              sccache_errors:
+                counts(stats.cache_errors) +
+                count(stats.cache_read_errors) +
+                count(stats.cache_write_errors),
+              sccache_timeouts: count(stats.cache_timeouts),
+              sccache_not_cacheable: count(stats.requests_not_cacheable),
+              sccache_read_ms: milliseconds(stats.cache_read_hit_duration),
+              sccache_write_ms: milliseconds(stats.cache_write_duration),
+              sccache_compile_ms: milliseconds(stats.compiler_write_duration),
+            };
+            if (hits + misses > 0) result.sccache_hit_percent = Math.round((hits * 100) / (hits + misses));
+            return requests > 0 ? result : null;
+          } catch (error) {
+            if (error instanceof Refused) return null;
+            throw error;
+          }
+        }
+
+        /**
+         * The text of `name` in a zip, found through its central directory, because
+         * upload-artifact streams entries and leaves their sizes out of the local header.
+         * Null when it isn't there, isn't stored or deflated, or inflates past `maxBytes`.
+         */
+        export function readZipEntry(bytes: Uint8Array, name: string, maxBytes: number): string | null {
+          const view = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+          const END_SIZE = 22;
+          let end = -1;
+          // The end record sits last, before a comment of at most 64 KiB.
+          for (let at = view.length - END_SIZE; at >= Math.max(0, view.length - END_SIZE - 0xffff); at--) {
+            if (view.readUInt32LE(at) === 0x06054b50) {
+              end = at;
+              break;
+            }
+          }
+          if (end < 0) return null;
+          const entries = view.readUInt16LE(end + 10);
+          let at = view.readUInt32LE(end + 16);
+          for (let index = 0; index < entries; index++) {
+            if (at + 46 > view.length || view.readUInt32LE(at) !== 0x02014b50) return null;
+            const method = view.readUInt16LE(at + 10);
+            const compressed = view.readUInt32LE(at + 20);
+            const nameLength = view.readUInt16LE(at + 28);
+            const extraLength = view.readUInt16LE(at + 30);
+            const commentLength = view.readUInt16LE(at + 32);
+            const localAt = view.readUInt32LE(at + 42);
+            const entryName = view.toString('utf8', at + 46, at + 46 + nameLength);
+            at += 46 + nameLength + extraLength + commentLength;
+            if (entryName !== name) continue;
+            if (localAt + 30 > view.length || view.readUInt32LE(localAt) !== 0x04034b50) return null;
+            const dataAt = localAt + 30 + view.readUInt16LE(localAt + 26) + view.readUInt16LE(localAt + 28);
+            if (dataAt + compressed > view.length) return null;
+            const data = view.subarray(dataAt, dataAt + compressed);
+            try {
+              if (method === 0) return data.length <= maxBytes ? data.toString('utf8') : null;
+              if (method === 8) return inflateRawSync(data, { maxOutputLength: maxBytes }).toString('utf8');
+            } catch {
+              return null;
+            }
+            return null;
+          }
+          return null;
+        }
+
+        type Artifact = { id: number; name: string; size_in_bytes: number; expired: boolean };
+
+        /**
+         * Each job's cache stats from its artifact. A job whose download fails or whose file
+         * isn't sccache's just has none; an attempt only reads artifacts of its own jobs.
+         */
+        export async function collectCacheStats(
+          github: GithubApi,
+          run: Pick<Run, 'id'>,
+          jobs: Job[]
+        ): Promise<Map<number, CacheStats>> {
+          const ids = new Set(jobs.map((job) => job.id));
+          const { artifacts }: { artifacts: Artifact[] } = await github.get(
+            `actions/runs/${run.id}/artifacts`,
+            { per_page: 100 }
+          );
+          const wanted = new Map<number, Artifact>();
+          for (const artifact of artifacts) {
+            if (!artifact.name.startsWith(CACHE_STATS_ARTIFACT)) continue;
+            const jobId = Number(artifact.name.slice(CACHE_STATS_ARTIFACT.length));
+            if (!ids.has(jobId) || artifact.expired || artifact.size_in_bytes > MAX_CACHE_STATS_BYTES) {
+              continue;
+            }
+            wanted.set(jobId, artifact);
+          }
+          const stats = new Map<number, CacheStats>();
+          for (const [jobId, artifact] of wanted) {
+            try {
+              const zip = await github.download(
+                `actions/artifacts/${artifact.id}/zip`,
+                MAX_CACHE_STATS_BYTES
+              );
+              const text = readZipEntry(zip, CACHE_STATS_FILE, MAX_CACHE_STATS_BYTES);
+              const parsed = text === null ? null : cacheStats(parseJson(text));
+              if (parsed) stats.set(jobId, parsed);
+            } catch (error) {
+              console.log(`::warning::Cache stats of a job not collected: ${describe(error)}`);
+            }
+          }
+          return stats;
+        }
+
+        function parseJson(text: string): unknown {
+          try {
+            return JSON.parse(text);
+          } catch {
+            return null;
+          }
+        }
+
         /** One event per job that ran, and one per step long enough to matter. */
-        export function jobEvents(repo: string, run: Run, jobs: Job[]): TelemetryEvent[] {
+        export function jobEvents(
+          repo: string,
+          run: Run,
+          jobs: Job[],
+          cache: Map<number, CacheStats> = new Map()
+        ): TelemetryEvent[] {
           const base = runAttributes(run);
           const events: TelemetryEvent[] = [];
           for (const job of jobs) {
@@ -389,6 +604,7 @@ jobs:
               attributes.volume_state = volume[0];
               attributes.dev_shell_seconds = volume[1];
             }
+            Object.assign(attributes, cache.get(job.id));
             events.push({
               body: `job ${job.id} ${run.run_attempt}`,
               at: times[1],
@@ -657,7 +873,7 @@ jobs:
               `actions/runs/${run.id}/attempts/${run.run_attempt}/jobs`,
               { per_page: 100 }
             );
-            events.push(...jobEvents(repo, run, jobs));
+            events.push(...jobEvents(repo, run, jobs, await cacheStatsOrNone(github, run, jobs)));
             const push = await collectPush(github, repo, run);
             if (push) events.push(push);
           } catch (error) {
@@ -665,6 +881,16 @@ jobs:
             console.log(`::warning::CI telemetry partly collected: ${describe(error)}`);
           }
           return events;
+        }
+
+        /** Job events still go out when the artifact listing fails. */
+        async function cacheStatsOrNone(github: GithubApi, run: Run, jobs: Job[]) {
+          try {
+            return await collectCacheStats(github, run, jobs);
+          } catch (error) {
+            console.log(`::warning::Cache stats not collected: ${describe(error)}`);
+            return new Map<number, CacheStats>();
+          }
         }
 
         function describe(error: unknown): string {

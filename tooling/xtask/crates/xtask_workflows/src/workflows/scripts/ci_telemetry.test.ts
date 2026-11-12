@@ -2,7 +2,11 @@
 
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
+import { deflateRawSync } from 'node:zlib';
 import {
+  CACHE_STATS_ARTIFACT,
+  type CacheStats,
+  cacheStats,
   classifyFiles,
   clockStart,
   collect,
@@ -14,6 +18,7 @@ import {
   MAX_EVENT_AGE_SECONDS,
   type PullRequest,
   pushEvent,
+  readZipEntry,
   type Run,
   sameTriggerRuns,
   type Step,
@@ -312,6 +317,14 @@ class FakeGithub implements GithubApi {
     if (response instanceof Error) throw response;
     return response;
   }
+
+  async download(path: string) {
+    this.calls += 1;
+    const response = this.responses[path];
+    if (response instanceof Error) throw response;
+    assert.ok(response instanceof Uint8Array, path);
+    return response;
+  }
 }
 
 function responses(...runs: Run[]): Record<string, unknown> {
@@ -381,6 +394,206 @@ describe('collectPush', () => {
       events.map((event) => event.attributes.event),
       ['job']
     );
+  });
+});
+
+// sccache 0.16's `--show-stats --stats-format json`, trimmed to the fields read.
+function sccacheJson(overrides: Record<string, unknown> = {}) {
+  return {
+    stats: {
+      compile_requests: 120,
+      requests_not_cacheable: 7,
+      cache_errors: { counts: { Rust: 1 } },
+      cache_hits: { counts: { Rust: 90, 'C/C++': 4 } },
+      cache_misses: { counts: { Rust: 6 } },
+      cache_timeouts: 2,
+      cache_read_errors: 0,
+      cache_write_errors: 1,
+      cache_write_duration: { secs: 3, nanos: 250_000_000 },
+      cache_read_hit_duration: { secs: 12, nanos: 5_000_000 },
+      compiler_write_duration: { secs: 61, nanos: 999_999_999 },
+      ...overrides,
+    },
+    cache_location: 'WebDAV, endpoint: https://cache.example/secret, key_prefix: x',
+    version: '0.16.0',
+  };
+}
+
+const STATS: CacheStats = {
+  sccache_backend: 'remote',
+  sccache_requests: 120,
+  sccache_hits: 94,
+  sccache_misses: 6,
+  sccache_hit_percent: 94,
+  sccache_errors: 2,
+  sccache_timeouts: 2,
+  sccache_not_cacheable: 7,
+  sccache_read_ms: 12005,
+  sccache_write_ms: 3250,
+  sccache_compile_ms: 61999,
+};
+
+/**
+ * A one-file zip as upload-artifact writes it: deflated, with the sizes in a data
+ * descriptor after the data and only the central directory saying them up front.
+ */
+function zipOf(name: string, content: string): Uint8Array {
+  const data = deflateRawSync(Buffer.from(content));
+  const nameBytes = Buffer.from(name);
+  const local = Buffer.alloc(30);
+  local.writeUInt32LE(0x04034b50, 0);
+  local.writeUInt16LE(0x0008, 6);
+  local.writeUInt16LE(8, 8);
+  local.writeUInt16LE(nameBytes.length, 26);
+  const descriptor = Buffer.alloc(16);
+  descriptor.writeUInt32LE(0x08074b50, 0);
+  descriptor.writeUInt32LE(data.length, 8);
+  descriptor.writeUInt32LE(content.length, 12);
+  const central = Buffer.alloc(46);
+  central.writeUInt32LE(0x02014b50, 0);
+  central.writeUInt16LE(0x0008, 8);
+  central.writeUInt16LE(8, 10);
+  central.writeUInt32LE(data.length, 20);
+  central.writeUInt32LE(content.length, 24);
+  central.writeUInt16LE(nameBytes.length, 28);
+  central.writeUInt32LE(0, 42);
+  const centralOffset = local.length + nameBytes.length + data.length + descriptor.length;
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(1, 8);
+  end.writeUInt16LE(1, 10);
+  end.writeUInt32LE(central.length + nameBytes.length, 12);
+  end.writeUInt32LE(centralOffset, 16);
+  return new Uint8Array(
+    Buffer.concat([local, nameBytes, data, descriptor, central, nameBytes, end])
+  );
+}
+
+describe('cacheStats', () => {
+  test('sums every language and keeps only numbers', () => {
+    const stats = cacheStats(sccacheJson());
+    assert.deepEqual(stats, STATS);
+    assert.ok(!JSON.stringify(stats).includes('example'));
+  });
+
+  test('a local disk cache is local', () => {
+    const document = { ...sccacheJson(), cache_location: 'Local disk: "/home/runner/.cache"' };
+    assert.equal(cacheStats(document)?.sccache_backend, 'local');
+  });
+
+  test('a job that compiled nothing has no stats', () => {
+    assert.equal(cacheStats(sccacheJson({ compile_requests: 0 })), null);
+  });
+
+  test('no hits or misses has no hit percent', () => {
+    const stats = cacheStats(
+      sccacheJson({ cache_hits: { counts: {} }, cache_misses: { counts: {} } })
+    );
+    assert.ok(stats && !('sccache_hit_percent' in stats));
+  });
+
+  test('anything but whole non-negative numbers is refused', () => {
+    for (const bad of [
+      { compile_requests: '120' },
+      { compile_requests: -1 },
+      { compile_requests: 1.5 },
+      { cache_hits: { counts: { Rust: 'many' } } },
+      { cache_misses: [] },
+      { cache_write_duration: { secs: 1 } },
+    ]) {
+      assert.equal(cacheStats(sccacheJson(bad)), null, JSON.stringify(bad));
+    }
+    assert.equal(cacheStats('not an object'), null);
+    assert.equal(cacheStats({ stats: [] }), null);
+  });
+
+  test('an unknown cache location is refused', () => {
+    assert.equal(cacheStats({ ...sccacheJson(), cache_location: 7 }), null);
+  });
+});
+
+describe('readZipEntry', () => {
+  test('reads a streamed, deflated entry', () => {
+    assert.equal(readZipEntry(zipOf('sccache.json', '{"a":1}'), 'sccache.json', 1024), '{"a":1}');
+  });
+
+  test('another file name is not read', () => {
+    assert.equal(readZipEntry(zipOf('other.json', '{}'), 'sccache.json', 1024), null);
+  });
+
+  test('an entry over the limit is not read', () => {
+    assert.equal(readZipEntry(zipOf('sccache.json', 'x'.repeat(2000)), 'sccache.json', 1024), null);
+  });
+
+  test('bytes that are not a zip are not read', () => {
+    assert.equal(readZipEntry(new Uint8Array([1, 2, 3]), 'sccache.json', 1024), null);
+  });
+});
+
+describe('cache stats in job events', () => {
+  const jobs = [job(), job({ id: 12, name: 'check' }), job({ id: 13, name: 'lint' })];
+  const artifact = (id: number, jobId: number, overrides: Record<string, unknown> = {}) => ({
+    id,
+    name: `${CACHE_STATS_ARTIFACT}${jobId}`,
+    size_in_bytes: 400,
+    expired: false,
+    ...overrides,
+  });
+
+  test("each job's artifact lands on its job event", async () => {
+    const github = new FakeGithub({
+      'actions/runs/1/attempts/1/jobs': { jobs },
+      'actions/runs/1/artifacts': {
+        total_count: 5,
+        artifacts: [
+          artifact(100, 11),
+          artifact(101, 12),
+          // Another attempt's job, a build output and an oversized file.
+          artifact(102, 99),
+          { ...artifact(103, 13), name: 'web-dist' },
+          artifact(104, 13, { size_in_bytes: 10_000_000 }),
+        ],
+      },
+      'actions/artifacts/100/zip': zipOf('sccache.json', JSON.stringify(sccacheJson())),
+      'actions/artifacts/101/zip': zipOf('sccache.json', '{"stats": "tampered"}'),
+    });
+    const events = await collect(github, REPO, run({ event: 'push' }));
+    const byJob = new Map(
+      events
+        .filter((event) => event.attributes.event === 'job')
+        .map((event) => [event.attributes.job_id, event.attributes])
+    );
+    assert.deepEqual(
+      Object.fromEntries(
+        Object.entries(byJob.get(11) ?? {}).filter(([key]) => key.startsWith('sccache_'))
+      ),
+      STATS
+    );
+    assert.ok(!('sccache_requests' in (byJob.get(12) ?? {})));
+    assert.ok(!('sccache_requests' in (byJob.get(13) ?? {})));
+    // One listing and the two downloads it allowed.
+    assert.equal(github.calls, 4);
+  });
+
+  test('a failed listing keeps the job events', async () => {
+    const github = new FakeGithub({
+      'actions/runs/1/attempts/1/jobs': { jobs },
+      'actions/runs/1/artifacts': new Error('boom'),
+    });
+    const events = await collect(github, REPO, run({ event: 'push' }));
+    assert.equal(events.filter((event) => event.attributes.event === 'job').length, 3);
+  });
+
+  test('a failed download keeps the other jobs', async () => {
+    const github = new FakeGithub({
+      'actions/runs/1/attempts/1/jobs': { jobs },
+      'actions/runs/1/artifacts': { total_count: 2, artifacts: [artifact(100, 11), artifact(101, 12)] },
+      'actions/artifacts/100/zip': new Error('gone'),
+      'actions/artifacts/101/zip': zipOf('sccache.json', JSON.stringify(sccacheJson())),
+    });
+    const events = await collect(github, REPO, run({ event: 'push' }));
+    const check = events.find((event) => event.attributes.job_id === 12);
+    assert.equal(check?.attributes.sccache_hits, 94);
   });
 });
 
