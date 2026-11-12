@@ -79,8 +79,8 @@ export type Fire =
 
 /** What changed in the workspace while the routine ran. */
 export type Effects = {
-  /** The routine's runs since it fired, newest first. */
-  runs: { isSuccess: boolean; result: unknown }[];
+  /** The routine's runs since it fired, newest first, with an agent step's reply from its session. */
+  runs: { isSuccess: boolean; result: unknown; reply?: string }[];
   /** Messages posted in the owner's channels, the fired message left out. */
   messages: { channel: string; from: string; text: string }[];
   /** Tasks created, by name and text. */
@@ -277,7 +277,7 @@ const said = (effects: Effects) =>
     ...effects.messages.map((message) => message.text),
     ...effects.tasks.map((task) => `${task.name}\n${task.text}`),
     ...effects.notifications.filter(ownNotification),
-    ...effects.runs.filter(didRun).map((run) => text(run.result)),
+    ...effects.runs.filter(didRun).map((run) => `${text(run.result)}\n${run.reply ?? ''}`),
   ].join('\n');
 
 const ran = (effects: Effects) => effects.runs.some(didRun);

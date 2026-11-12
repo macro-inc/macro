@@ -138,6 +138,33 @@ async function runsSince(at: Stack, token: string, id: string, since: Date) {
     .map((record) => ({ isSuccess: record.is_success, result: record.result }));
 }
 
+/** The agent session an agent step's run started. */
+const agentOf = (run: Effects['runs'][number]) => {
+  const resource = (run.result as { resource?: { type?: string; id?: string } | null } | null)?.resource;
+  return resource?.type === 'agent' ? resource.id : undefined;
+};
+
+/** An agent step's reply: the text its session streamed, which the run's record leaves out. */
+async function agentReply(db: SQL, session: string) {
+  const rows = (await db`
+    select content #>> '{params,update,content,text}' as text
+    from agent_session_log
+    where agent_session_id = ${session}::uuid and direction = 'to_server'
+      and content #>> '{params,update,sessionUpdate}' = 'agent_message_chunk'
+    order by created_at, id`) as { text: string | null }[];
+  return rows.map((row) => row.text ?? '').join('');
+}
+
+/** `runs` with their agent steps' replies; also fills results saved before replies were read. */
+export async function withReplies(db: SQL, runs: Effects['runs']) {
+  return Promise.all(
+    runs.map(async (run) => {
+      const session = agentOf(run);
+      return session && run.reply === undefined ? { ...run, reply: await agentReply(db, session) } : run;
+    }),
+  );
+}
+
 /** How long a fired routine gets to finish its run. */
 const RUN_TIMEOUT_MS = 240_000;
 /** What a run writes can land just after its record. */
@@ -212,7 +239,7 @@ export async function runCheck(
     ms = performance.now() - started;
     if (runs.length) await Bun.sleep(SETTLE_MS);
     effects = await read(db, context, t0, firedMessage);
-    effects.runs = runs.length ? await runsSince(at, owner, routine.id, t0) : runs;
+    effects.runs = runs.length ? await withReplies(db, await runsSince(at, owner, routine.id, t0)) : runs;
   } finally {
     // Left changed, the task couldn't fire the next draft's run.
     await restore?.().catch(() => undefined);

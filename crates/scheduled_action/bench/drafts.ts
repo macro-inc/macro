@@ -23,7 +23,7 @@ import {
   verdict,
   verdictLines,
 } from './report';
-import { type SavedRoutine, type Tokens, onEvents, reset, runCheck, save } from './runcheck';
+import { type SavedRoutine, type Tokens, onEvents, reset, runCheck, save, withReplies } from './runcheck';
 import { SEEDED_IDS, savedDatabases, seed, setup } from './setup';
 import {
   type Stack,
@@ -512,6 +512,8 @@ async function reread(args: string[]) {
     options: { ...STACK_OPTIONS, traces: { type: 'boolean', default: false }, judge: { type: 'boolean', default: false } },
   });
   const session = values.traces || values.judge ? await open(values.instance, values.tempo) : undefined;
+  // Agent steps' replies, for results saved before run checks read them.
+  let db: SQL | undefined;
   for (const path of positionals) {
     const results = JSON.parse(readFileSync(path, 'utf8')) as Results;
     const databases = results.databases ?? savedDatabases(values.instance);
@@ -525,6 +527,10 @@ async function reread(args: string[]) {
         item.quality = found.expect
           .filter((expectation) => !expectation.arms || expectation.arms.includes(item.arm))
           .map((expectation) => ({ says: expectation.says, holds: expectation.holds(item.draft as DraftResult, context) }));
+      }
+      if (item.run?.effects.runs.some((run) => run.reply === undefined && JSON.stringify(run.result).includes('"type":"agent"'))) {
+        db ??= new SQL(stack(values.instance, values.tempo).postgres);
+        item.run.effects.runs = await withReplies(db, item.run.effects.runs);
       }
       if (item.run && found.run) item.run.holds = !item.run.error && found.run.holds(item.run.effects, context);
       if (session && values.traces) {
@@ -551,6 +557,7 @@ async function reread(args: string[]) {
     console.log(`reread ${results.attempts.length} attempts in ${path}`);
   }
   await session?.db.close();
+  await db?.close();
 }
 
 /**
