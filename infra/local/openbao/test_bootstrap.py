@@ -10,7 +10,8 @@ import time
 import unittest
 from uuid import uuid4
 
-from bootstrap import OpenBaoRequestError, configure_kv, LocalOpenBao, bootstrap
+from bootstrap import LocalOpenBao
+from openbao_provisioning import OpenBaoRequestError, configure_kv, provision_team as bootstrap
 
 
 def encoded(value):
@@ -208,7 +209,7 @@ class MountReadiness(unittest.TestCase):
                     raise OpenBaoRequestError(method, path, 400)
         pending = PendingMount()
         from unittest.mock import patch
-        with patch("bootstrap.time.sleep"):
+        with patch("openbao_provisioning.time.sleep"):
             configure_kv(pending, "synthetic", True)
         self.assertEqual(pending.calls, 2)
         existing = PendingMount()
