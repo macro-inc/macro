@@ -1,3 +1,5 @@
+import { ViewShell } from '@app/components/view-shell';
+import { ViewSkeleton } from '@app/components/view-shell/ViewSkeleton';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { useBeforeLeave } from '@app/lib/split-router';
@@ -19,6 +21,32 @@ import { PasswordsProvider } from './context/passwords-context';
 import { passwordRecipients } from './queries/recipients';
 import { createPasswordSource } from './queries/source';
 import { VaultView } from './views/vault-view';
+
+function PasswordsSkeleton() {
+  return (
+    <ViewShell.Root
+      class="h-full min-h-0"
+      asidePreferenceKey="passwords"
+      aside={{ preserveDuringResize: false }}
+      main={{ preferredWidth: 480 }}
+      resizable
+    >
+      <ViewSkeleton.Sidebar
+        title={t('passwords.title')}
+        createLabel={t('passwords.newItem')}
+      >
+        <ViewSkeleton.Rows label={t('passwords.loading')} class="mt-3" />
+      </ViewSkeleton.Sidebar>
+      <ViewSkeleton.Main
+        title={t('passwords.all')}
+        controls={[t('passwords.newItem'), 1]}
+        searchPlaceholder={t('passwords.search')}
+      >
+        <ViewSkeleton.Rows label={t('passwords.loading')} class="px-2" />
+      </ViewSkeleton.Main>
+    </ViewShell.Root>
+  );
+}
 
 function PasswordsTeamView() {
   const team = useCurrentTeamQuery();
@@ -61,14 +89,14 @@ function PasswordsTeamView() {
   let guard: () => Promise<boolean> = async () => true;
   useBeforeLeave(() => guard());
   return (
-    <Suspense fallback={<p class="p-4">{t('passwords.loading')}</p>}>
+    <Suspense fallback={<PasswordsSkeleton />}>
       <Show
         when={scope()}
         keyed
         fallback={
           <Switch>
             <Match when={team.isPending || !account()}>
-              <p class="p-4 text-sm text-ink-muted">{t('passwords.loading')}</p>
+              <PasswordsSkeleton />
             </Match>
             <Match when={team.isError}>
               <p role="alert" class="p-4 text-sm">
