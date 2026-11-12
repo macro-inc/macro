@@ -2,6 +2,7 @@ import { ViewShell } from '@app/components/view-shell';
 import { FloatRegionHost } from '@components/app/mobile/float-regions/FloatRegionHost';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
+import type { Property } from '@property/types';
 import { withApiValues } from '@property/utils/transforms';
 import { ImperativeDialogHost } from '@ui';
 import { batch, createMemo, createSignal } from 'solid-js';
@@ -32,6 +33,21 @@ import { savedRecords, seedUnsupported } from './saved-view-transport';
 const unavailable = (): never => {
   throw new Error('External capability unavailable in collection fixture');
 };
+const assignees: Property = {
+  propertyId: 'assignees-value',
+  propertyDefinitionId: SYSTEM_PROPERTY_IDS.ASSIGNEES,
+  displayName: 'Assignees',
+  isMultiSelect: true,
+  owner: { scope: 'system' },
+  createdAt: '',
+  updatedAt: '',
+  valueType: 'ENTITY',
+  specificEntityType: 'USER',
+  value: [
+    { entity_type: 'USER', entity_id: 'viewer' },
+    { entity_type: 'USER', entity_id: 'colleague' },
+  ],
+};
 
 export function CollectionFixture() {
   const [attachHotkeys, scopeId] = useHotkeyDOMScope('projects-browser');
@@ -47,12 +63,15 @@ export function CollectionFixture() {
         ...row.project,
         access: params.has('readOnly') ? ('view' as const) : ('owner' as const),
       },
-      properties: params.has('noPriority')
-        ? row.properties.filter(
-            (property) =>
-              property.propertyDefinitionId !== SYSTEM_PROPERTY_IDS.PRIORITY
-          )
-        : row.properties,
+      properties: [
+        ...(params.has('noPriority')
+          ? row.properties.filter(
+              (property) =>
+                property.propertyDefinitionId !== SYSTEM_PROPERTY_IDS.PRIORITY
+            )
+          : row.properties),
+        ...(row.project.id === 'alpha' ? [assignees] : []),
+      ],
     }))
   );
   const [savedProperty, setSavedProperty] = createSignal('');

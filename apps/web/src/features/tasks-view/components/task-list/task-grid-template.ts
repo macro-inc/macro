@@ -11,7 +11,6 @@ export type TaskGridColumnId =
   | 'assignees'
   | 'dueDate'
   | 'createdBy'
-  | 'progress'
   | 'timestamp';
 
 const COLUMN_WIDTHS: Record<TaskGridColumnId, string> = {
@@ -24,7 +23,6 @@ const COLUMN_WIDTHS: Record<TaskGridColumnId, string> = {
   dueDate: 'var(--task-col-due-date, 8.5rem)',
   createdBy: 'var(--task-col-created-by, 7rem)',
   timestamp: 'var(--task-col-timestamp, 5rem)',
-  progress: 'var(--task-col-progress, 7rem)',
 };
 
 export const TASK_DUE_DATE_COLUMN = {

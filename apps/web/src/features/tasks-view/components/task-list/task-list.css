@@ -6,7 +6,6 @@
   --task-col-created-by: 7rem;
   --task-col-timestamp: 5rem;
   --task-col-initiative: 8rem;
-  --task-col-progress: 7rem;
 }
 
 /* Include spacing inside visible tracks so hidden columns leave no grid gaps. */
@@ -20,8 +19,12 @@
   transition: grid-template-columns 160ms ease;
 }
 
-.task-grid-icon-creator .task-updated-cell,
-.task-grid-icon-creator .task-progress-cell {
+/* Project metadata uses task tracks but keeps Updated through 600px. */
+.task-grid-row.task-grid-icon-creator.project-grid-row {
+  --task-col-timestamp: 4.5rem;
+}
+
+.task-grid-icon-creator .task-updated-cell {
   min-width: 0;
   overflow: hidden;
   transition:
@@ -53,7 +56,6 @@
     --task-col-assignees: 3.25rem;
     --task-col-due-date: 2.5rem;
     --task-col-initiative: 2.5rem;
-    --task-col-progress: 2.5rem;
   }
 }
 
@@ -62,7 +64,6 @@
   .task-grid-row.task-grid-icon-creator {
     --task-col-timestamp: 0rem;
     --task-col-created-by: 0rem;
-    --task-col-progress: 0rem;
   }
 
   .task-grid-icon-creator .task-creator-cell {
@@ -73,8 +74,7 @@
     display: inline-flex;
   }
 
-  .task-grid-icon-creator .task-updated-cell,
-  .task-grid-icon-creator .task-progress-cell {
+  .task-grid-icon-creator .task-updated-cell {
     margin-inline-start: 0;
     opacity: 0;
     transform: translateX(4px);
@@ -82,10 +82,15 @@
   }
 }
 
+@container u-list (max-width: 600px) {
+  .task-grid-row.task-grid-icon-creator.project-grid-row {
+    --task-col-timestamp: 0rem;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .task-grid-row.task-grid-icon-creator,
-  .task-grid-icon-creator .task-updated-cell,
-  .task-grid-icon-creator .task-progress-cell {
+  .task-grid-icon-creator .task-updated-cell {
     transition: none;
   }
 }

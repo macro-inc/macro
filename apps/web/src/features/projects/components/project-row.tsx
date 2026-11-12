@@ -11,16 +11,18 @@ import { EntityIcon } from '@core/component/EntityIcon';
 import { isMobile } from '@core/mobile/isMobile';
 import { Entity, MultiSelectCheckbox } from '@entity';
 import CalendarIcon from '@icon/system/regular/calendar.svg';
+import PriorityIcon from '@icon/system/regular/chart-bar.svg';
+import StatusIcon from '@icon/system/regular/circle-dashed.svg';
 import ClockIcon from '@icon/system/regular/clock.svg';
-import ListChecksIcon from '@icon/system/regular/list-checks.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
+import { Property as PropertyControl } from '@property';
 import { ListPropertyValue } from '@property/component/ListPropertyValue';
 import { Modals } from '@property/component/modal';
 import { PropertyIconControl } from '@property/component/PropertyIconControl';
 import { PropertiesProvider } from '@property/context/PropertiesContext';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { Property, PropertyApiValues } from '@property/types';
-import { cn, ProgressPill, ProgressRing, Tooltip } from '@ui';
+import { cn, ProgressRing, Tooltip } from '@ui';
 import { For, Show, Suspense } from 'solid-js';
 import type { ProjectRow as ProjectRowData } from '../context/projects-context';
 import { canEditProject } from '../core/project';
@@ -28,12 +30,13 @@ import { canEditProject } from '../core/project';
 export const PROJECT_GRID_COLUMNS = [
   'indicator',
   'content',
-  'dueDate',
+  'status',
+  'priority',
   'assignees',
-  'progress',
+  'dueDate',
   'timestamp',
 ] as const satisfies readonly TaskGridColumnId[];
-const PROJECT_PROPERTY_COLUMNS = ['dueDate', 'assignees'].flatMap((id) =>
+const PROJECT_PROPERTY_COLUMNS = PROJECT_GRID_COLUMNS.flatMap((id) =>
   TASK_GRID_COLUMNS.filter((column) => column.id === id)
 );
 const GRID_STYLE = taskGridTemplate(PROJECT_GRID_COLUMNS);
@@ -46,7 +49,7 @@ export function ProjectListHeader(props: {
   return (
     <div
       role="row"
-      class="task-grid-row task-grid-icon-creator grid h-10 w-full shrink-0 items-center gap-2 px-3 text-xs font-medium text-ink-extra-muted"
+      class="task-grid-row task-grid-icon-creator project-grid-row grid h-10 w-full shrink-0 items-center gap-2 px-3 text-xs font-medium text-ink-extra-muted"
       style={GRID_STYLE}
     >
       <span role="columnheader" style={{ 'grid-area': 'indicator' }} />
@@ -58,26 +61,29 @@ export function ProjectListHeader(props: {
         Project
       </span>
       <ListColumnHeader
+        label="Status"
+        area="status"
+        narrowIcon={<StatusIcon class="size-4" />}
+      />
+      <ListColumnHeader
+        label="Priority"
+        area="priority"
+        narrowIcon={<PriorityIcon class="size-4" />}
+      />
+      <ListColumnHeader
+        label="Assignees"
+        area="assignees"
+        narrowIcon={<UsersIcon class="size-4" />}
+      />
+      <ListColumnHeader
         label="Due date"
         area="dueDate"
         narrowIcon={<CalendarIcon class="size-4" />}
       />
       <ListColumnHeader
-        label="Assignees"
-        area="assignees"
-        class="@max-[840px]/u-list:justify-start @max-[840px]/u-list:pl-1"
-        narrowIcon={<UsersIcon class="size-4" />}
-      />
-      <ListColumnHeader
-        label="Tasks"
-        area="progress"
-        class="task-progress-cell"
-        narrowIcon={<ListChecksIcon class="size-4" />}
-      />
-      <ListColumnHeader
         label="Updated"
         area="timestamp"
-        class="task-updated-cell"
+        class="task-updated-cell @max-[840px]/u-list:justify-center"
         align="end"
         narrowIcon={<ClockIcon class="size-4" />}
         onClick={props.onSortUpdated}
@@ -128,38 +134,37 @@ export function ProjectRow(props: {
     return total > 0 ? (props.row.project.completedTaskCount ?? 0) / total : 0;
   };
   const name = () => (
-    <div class="flex min-w-0 items-center gap-2 mobile:gap-1">
-      <Show when={propertyFor(SYSTEM_PROPERTY_IDS.PRIORITY)}>
-        {(property) => (
-          <PropertyIconControl
-            property={property()}
-            canEdit={canEdit()}
-            onSave={props.onSave}
-          />
-        )}
-      </Show>
-      <div class="-mr-1 flex shrink-0 items-center touch:-mr-2 mobile:-ml-1 mobile:-mr-1">
-        <Show when={propertyFor(SYSTEM_PROPERTY_IDS.STATUS)}>
-          {(property) => (
-            <PropertyIconControl
-              property={property()}
-              canEdit={canEdit()}
-              onSave={props.onSave}
-            />
-          )}
-        </Show>
-      </div>
-      <span class="flex min-w-0 flex-1 items-center gap-1.5">
-        <EntityIcon
-          targetType="initiative"
-          appearance={props.row.project.appearance}
-          size="xs"
-          theme="monochrome"
-          class="text-ink-muted"
-        />
+    <span class="flex min-w-0 items-center gap-1 mobile:gap-1.5">
+      <EntityIcon
+        targetType="initiative"
+        appearance={props.row.project.appearance}
+        size="xs"
+        theme="monochrome"
+        class="shrink-0 text-ink-muted"
+      />
+      <span class="flex min-w-0 items-center gap-1">
         <span class="min-w-0 truncate">{props.row.project.name}</span>
+        <Show when={hasProgress()}>
+          <Tooltip.Root>
+            <Tooltip.Trigger
+              as="span"
+              role="progressbar"
+              aria-label={progressLabel()}
+              aria-valuemin={0}
+              aria-valuemax={props.row.project.taskCount ?? 0}
+              aria-valuenow={props.row.project.completedTaskCount ?? 0}
+              tabIndex={0}
+              class="flex size-[22px] shrink-0 items-center justify-center [&_svg]:size-3.5"
+            >
+              <ProgressRing fraction={progressFraction()} />
+            </Tooltip.Trigger>
+            <Tooltip.Portal>
+              <Tooltip.Content>{progressLabel()}</Tooltip.Content>
+            </Tooltip.Portal>
+          </Tooltip.Root>
+        </Show>
       </span>
-    </div>
+    </span>
   );
   const propertyCells = () => (
     <For each={PROJECT_PROPERTY_COLUMNS}>
@@ -228,26 +233,56 @@ export function ProjectRow(props: {
                 placement="timestamp"
                 class="flex items-center gap-1"
               >
-                <For each={PROJECT_PROPERTY_COLUMNS}>
-                  {(column) => (
-                    <Show when={propertyFor(column.defId)}>
-                      {(property) => (
-                        <div class="max-w-11 @container/slot">
-                          <ListPropertyValue
-                            entityId={props.row.project.id}
-                            property={property()}
-                          />
-                        </div>
-                      )}
-                    </Show>
+                <Show when={propertyFor(SYSTEM_PROPERTY_IDS.STATUS)}>
+                  {(property) => (
+                    <PropertyIconControl
+                      property={property()}
+                      canEdit={canEdit()}
+                      onSave={props.onSave}
+                    />
                   )}
-                </For>
+                </Show>
+                <Show when={propertyFor(SYSTEM_PROPERTY_IDS.PRIORITY)}>
+                  {(property) => (
+                    <PropertyIconControl
+                      property={property()}
+                      canEdit={canEdit()}
+                      onSave={props.onSave}
+                    />
+                  )}
+                </Show>
+                <Show when={propertyFor(SYSTEM_PROPERTY_IDS.ASSIGNEES)}>
+                  {(property) => (
+                    <PropertyControl.Root
+                      property={property()}
+                      canEdit={canEdit()}
+                      onSave={props.onSave}
+                    >
+                      {(shown) => (
+                        <>
+                          <PropertyControl.Pill
+                            aria-label="Change assignees"
+                            data-blocks-navigation
+                            stopPropagation={canEdit()}
+                            class="flex size-9 items-center justify-center rounded-full border-0"
+                          >
+                            <PropertyControl.Icon
+                              property={shown()}
+                              class="size-5"
+                            />
+                          </PropertyControl.Pill>
+                          <PropertyControl.PopoverEditor />
+                        </>
+                      )}
+                    </PropertyControl.Root>
+                  )}
+                </Show>
               </Entity.Slot>
             </NarrowRowGrid>
           }
         >
           <Entity.Layout
-            class="task-grid-row task-grid-icon-creator grid min-h-[inherit] w-full grid-rows-[1fr] items-center gap-2 px-2 text-sm"
+            class="task-grid-row task-grid-icon-creator project-grid-row grid min-h-[inherit] w-full grid-rows-[1fr] items-center gap-2 px-2 text-sm"
             style={GRID_STYLE}
           >
             <Entity.Slot placement="indicator" class="size-full">
@@ -261,35 +296,8 @@ export function ProjectRow(props: {
             </Entity.Slot>
             {propertyCells()}
             <Entity.Slot
-              placement="progress"
-              class="task-progress-cell ms-2 min-w-0 text-xs text-ink-muted"
-            >
-              <Show when={hasProgress()} fallback={<span>—</span>}>
-                <span class="@max-[840px]/u-list:hidden">
-                  <ProgressPill
-                    label={progressLabel()}
-                    value={props.row.project.completedTaskCount ?? 0}
-                    max={props.row.project.taskCount ?? 0}
-                  />
-                </span>
-                <Tooltip label={progressLabel()}>
-                  <span
-                    role="progressbar"
-                    aria-label={progressLabel()}
-                    aria-valuemin={0}
-                    aria-valuemax={props.row.project.taskCount ?? 0}
-                    aria-valuenow={props.row.project.completedTaskCount ?? 0}
-                    tabIndex={0}
-                    class="hidden items-center justify-center @max-[840px]/u-list:flex"
-                  >
-                    <ProgressRing size="sm" fraction={progressFraction()} />
-                  </span>
-                </Tooltip>
-              </Show>
-            </Entity.Slot>
-            <Entity.Slot
               placement="timestamp"
-              class="task-updated-cell ms-2 whitespace-nowrap text-right text-xs font-light text-ink-extra-muted"
+              class="task-updated-cell ms-2 whitespace-nowrap text-right text-xs font-light text-ink-extra-muted @max-[840px]/u-list:text-center"
             >
               <time dateTime={props.row.project.updatedAt}>{updated()}</time>
             </Entity.Slot>
