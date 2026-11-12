@@ -4,7 +4,11 @@
 //! and sends its session's egress token as `ANTHROPIC_AUTH_TOKEN`. The request
 //! is forwarded unchanged with Macro's key; the response streams back
 //! unchanged while its `usage` is read and recorded against the session owner.
+//! Only sessions running on a Macro computer, for an owner with the computer
+//! rollout, are served.
 
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -23,7 +27,10 @@ use axum::{
     routing::{any, post},
 };
 use axum_extra::headers::{Authorization, HeaderMapExt, authorization::Bearer};
+use bot_id::BotId;
+use computer_id::ComputerId;
 use futures::StreamExt;
+use hosted_runtimes::domain::rollout::ComputerRollout;
 use tracing::{Instrument, Span, field::Empty};
 
 use usage::{SseUsage, TokenUsage};
@@ -105,9 +112,45 @@ const RETURNED_RESPONSE_HEADERS: &[&str] = &[
 const MESSAGES_PATH: &str = "/v1/messages";
 const COUNT_TOKENS_PATH: &str = "/v1/messages/count_tokens";
 
+/// Which Macro computer serves a bot right now, if any.
+pub(super) trait BotComputers: Send + Sync {
+    fn computer_for(
+        &self,
+        bot: BotId,
+    ) -> Pin<Box<dyn Future<Output = anyhow::Result<Option<ComputerId>>> + Send + '_>>;
+}
+
+/// [`BotComputers`] over the bot's harness binding.
+pub(super) struct PgBotComputers(pub(super) sqlx::PgPool);
+
+impl BotComputers for PgBotComputers {
+    fn computer_for(
+        &self,
+        bot: BotId,
+    ) -> Pin<Box<dyn Future<Output = anyhow::Result<Option<ComputerId>>> + Send + '_>> {
+        Box::pin(async move {
+            use bots::domain::ports::HarnessAssignments;
+            use harnesses::domain::ports::HarnessRepo;
+
+            let assignments = bots::outbound::pg_bots_repo::PgBotsRepo::new(self.0.clone());
+            let Some(harness) = assignments.harness_for(bot).await? else {
+                return Ok(None);
+            };
+            let harnesses =
+                harnesses::outbound::pg_harness_repo::PgHarnessRepo::new(self.0.clone());
+            Ok(harnesses
+                .get_harness(harness)
+                .await?
+                .and_then(|harness| harness.computer_id))
+        })
+    }
+}
+
 /// Everything the gateway routes share.
 pub(super) struct GatewayState<Sessions> {
     sessions: Arc<Sessions>,
+    computers: Arc<dyn BotComputers>,
+    rollout: ComputerRollout,
     admission: Arc<dyn AiAdmissionService>,
     recorder: Arc<dyn UsageRecorder>,
     client: reqwest::Client,
@@ -119,6 +162,8 @@ pub(super) struct GatewayState<Sessions> {
 impl<Sessions> GatewayState<Sessions> {
     pub(super) fn new(
         sessions: Arc<Sessions>,
+        computers: Arc<dyn BotComputers>,
+        rollout: ComputerRollout,
         admission: Arc<dyn AiAdmissionService>,
         recorder: Arc<dyn UsageRecorder>,
         upstream_url: &str,
@@ -134,6 +179,8 @@ impl<Sessions> GatewayState<Sessions> {
         };
         Ok(Self {
             sessions,
+            computers,
+            rollout,
             admission,
             recorder,
             client: reqwest::Client::builder()
@@ -272,6 +319,21 @@ async fn forward<Sessions: AgentSessionRepo>(
     span.record("agent.session.id", tracing::field::display(session.id));
     span.record("agent.bot.id", tracing::field::display(session.bot_id));
     span.record("agent.harness", session.harness.as_str());
+    let owner = session
+        .owner_user()
+        .map_err(|_| Rejection::permission("this session's owner cannot spend Macro credits"))?
+        .clone();
+    let computer = state
+        .computers
+        .computer_for(session.bot_id)
+        .await
+        .inspect_err(|error| tracing::warn!(error = ?error, "session computer lookup failed"))
+        .map_err(|_| Rejection::NOT_ON_A_COMPUTER)?
+        .ok_or(Rejection::NOT_ON_A_COMPUTER)?;
+    span.record("agent.computer.id", tracing::field::display(computer));
+    if !state.rollout.enabled(&owner).await {
+        return Err(Rejection::NOT_ON_A_COMPUTER);
+    }
 
     let body = to_bytes(body, MAX_REQUEST_BYTES)
         .await
@@ -283,10 +345,6 @@ async fn forward<Sessions: AgentSessionRepo>(
     span.record("gen_ai.request.model", model.request_id());
 
     let api_key = state.api_key.as_ref().ok_or(Rejection::NOT_CONFIGURED)?;
-    let owner = session
-        .owner_user()
-        .map_err(|_| Rejection::permission("this session's owner cannot spend Macro credits"))?
-        .clone();
     let entity = Some(session.id.as_uuid());
     if endpoint == Endpoint::Messages {
         state
@@ -484,6 +542,17 @@ impl Rejection {
         outcome: "unauthenticated",
         message: std::borrow::Cow::Borrowed(
             "send the agent session's Macro token as `Authorization: Bearer`",
+        ),
+    };
+
+    /// Fails closed: the session is not on a Macro computer, its lookup
+    /// failed, or its owner does not have the computer rollout.
+    const NOT_ON_A_COMPUTER: Self = Self {
+        status: StatusCode::FORBIDDEN,
+        kind: "permission_error",
+        outcome: "not_on_a_computer",
+        message: std::borrow::Cow::Borrowed(
+            "Macro's Anthropic gateway serves only sessions on a Macro computer",
         ),
     };
 

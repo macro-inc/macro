@@ -7,6 +7,8 @@ use agent_session::{
 use ai_billing::DisabledAiAdmissionService;
 use ai_usage::{UsageAmount, UsageEvent};
 use axum::{body::to_bytes, http::Request as HttpRequest};
+use feature_flags::{FlagSnapshot, FlagValue, outbound::fake::FakeFeatureFlags};
+use hosted_runtimes::domain::rollout::ENABLE_MACRO_COMPUTERS;
 use tower::ServiceExt;
 
 use super::*;
@@ -97,7 +99,43 @@ async fn fake_anthropic() -> (String, Arc<Mutex<Vec<SeenRequest>>>) {
     (format!("http://{address}"), seen)
 }
 
+/// The computer the fake directory says serves every bot.
+const COMPUTER: ComputerId =
+    ComputerId::new_from_uuid(uuid::uuid!("0198f1a4-7b1c-7000-8000-000000000001"));
+
+/// Answers every bot with the same computer, or none.
+struct FixedComputer(Option<ComputerId>);
+
+impl BotComputers for FixedComputer {
+    fn computer_for(
+        &self,
+        _bot: BotId,
+    ) -> Pin<Box<dyn Future<Output = anyhow::Result<Option<ComputerId>>> + Send + '_>> {
+        let computer = self.0;
+        Box::pin(async move { Ok(computer) })
+    }
+}
+
+/// Whether the session runs on a Macro computer, and whether its owner has the rollout.
+#[derive(Clone, Copy)]
+struct Access {
+    computer: Option<ComputerId>,
+    rollout: bool,
+}
+
+const COMPUTER_SESSION: Access = Access {
+    computer: Some(COMPUTER),
+    rollout: true,
+};
+
 async fn gateway(upstream_url: &str) -> (Router, AgentSession, Arc<RecordingUsage>) {
+    gateway_with(upstream_url, COMPUTER_SESSION).await
+}
+
+async fn gateway_with(
+    upstream_url: &str,
+    access: Access,
+) -> (Router, AgentSession, Arc<RecordingUsage>) {
     let repo = InMemoryAgentSessionRepo::new();
     let mut session = test_agent_session(AgentSessionId::new());
     session.harness = "macrod".into();
@@ -105,9 +143,19 @@ async fn gateway(upstream_url: &str) -> (Router, AgentSession, Arc<RecordingUsag
     repo.set_egress_token_hash(session.id, &SessionToken::new("session-secret").hash())
         .await
         .unwrap();
+    let mut flags = FakeFeatureFlags::default();
+    flags.set(
+        session.owner_user().unwrap().clone(),
+        Ok(FlagSnapshot::new([(
+            ENABLE_MACRO_COMPUTERS.into(),
+            FlagValue::Boolean(access.rollout),
+        )])),
+    );
     let usage = Arc::new(RecordingUsage::default());
     let state = GatewayState::new(
         Arc::new(repo),
+        Arc::new(FixedComputer(access.computer)),
+        ComputerRollout::new(flags),
         Arc::new(DisabledAiAdmissionService),
         usage.clone(),
         upstream_url,
@@ -115,6 +163,43 @@ async fn gateway(upstream_url: &str) -> (Router, AgentSession, Arc<RecordingUsag
     )
     .unwrap();
     (router(state), session, usage)
+}
+
+#[tokio::test]
+async fn a_session_off_a_macro_computer_is_refused_before_anthropic_is_called() {
+    for access in [
+        Access {
+            computer: None,
+            rollout: true,
+        },
+        Access {
+            computer: Some(COMPUTER),
+            rollout: false,
+        },
+    ] {
+        let (upstream_url, seen) = fake_anthropic().await;
+        let (app, _session, usage) = gateway_with(&upstream_url, access).await;
+
+        let response = app
+            .oneshot(
+                HttpRequest::post("/anthropic/v1/messages")
+                    .header("authorization", "Bearer session-secret")
+                    .body(Body::from(
+                        r#"{"model":"claude-sonnet-5","max_tokens":16,"messages":[]}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        let body: serde_json::Value =
+            serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap())
+                .unwrap();
+        assert_eq!(body["error"]["type"], "permission_error");
+        assert!(seen.lock().unwrap().is_empty());
+        assert!(usage.0.lock().unwrap().is_empty());
+    }
 }
 
 #[tokio::test]
