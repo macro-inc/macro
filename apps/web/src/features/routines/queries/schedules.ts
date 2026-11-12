@@ -63,13 +63,15 @@ function patchScheduleEnabled(scheduleId: string, enabled: boolean) {
       current ? { ...current, enabled } : undefined
   );
 
-  queryClient.setQueryData(
+  for (const key of [
     scheduledActionKeys.list.queryKey,
-    (current: ScheduledAction[] | undefined) =>
+    scheduledActionKeys.subRoutines.queryKey,
+  ])
+    queryClient.setQueryData(key, (current: ScheduledAction[] | undefined) =>
       current?.map((item) =>
         item.id === scheduleId ? { ...item, enabled } : item
       )
-  );
+    );
 }
 
 function fetchSchedules() {
@@ -142,10 +144,53 @@ export function useCodeUpgradesQuery(
   return useQuery(() => codeUpgradesQueryOptions(scheduleId(), enabled()));
 }
 
+function fetchSubRoutines() {
+  return throwOnErr(async () => await scheduledActionClient.listSubRoutines());
+}
+
+// Cached past unmount; closes over the resolved routine id only.
+function childrenQueryOptions(scheduleId: string, enabled: boolean) {
+  return queryOptions({
+    queryKey: scheduledActionKeys.children({ scheduleId }).queryKey,
+    enabled,
+    queryFn: async () =>
+      throwOnErr(
+        async () => await scheduledActionClient.listChildren({ scheduleId })
+      ),
+    ...QUERY_REFETCH_BEHAVIOR,
+  });
+}
+
+/** What one routine's runs created, finished one-time ones included. */
+export function useChildrenQuery(
+  scheduleId: Accessor<string>,
+  enabled: Accessor<boolean>
+) {
+  return useQuery(() => childrenQueryOptions(scheduleId(), enabled()));
+}
+
+/** Every active routine another routine's run created. */
+export function useSubRoutinesQuery(enabled: Accessor<boolean>) {
+  return useQuery(() => ({
+    queryKey: scheduledActionKeys.subRoutines.queryKey,
+    enabled: enabled(),
+    queryFn: fetchSubRoutines,
+    placeholderData: keepPreviousData,
+    reconcile: 'id',
+    ...QUERY_REFETCH_BEHAVIOR,
+  }));
+}
+
 export function invalidateSchedules() {
   return Promise.all([
     queryClient.invalidateQueries({
       queryKey: scheduledActionKeys.list.queryKey,
+    }),
+    queryClient.invalidateQueries({
+      queryKey: scheduledActionKeys.subRoutines.queryKey,
+    }),
+    queryClient.invalidateQueries({
+      queryKey: scheduledActionKeys.children._def,
     }),
     queryClient.invalidateQueries({
       queryKey: scheduledActionKeys.detail._def,
@@ -278,6 +323,32 @@ export function useSetScheduleEnabledMutation(
         },
         onSuccess: (schedule) => upsertSchedule(schedule),
         onSettled: () => invalidateSchedules(),
+      },
+      callbacks
+    ),
+  }));
+}
+
+/**
+ * Keep a sub-routine as the owner's own routine. It joins the main list and
+ * leaves its parent's, so both are read again.
+ */
+export function useDetachScheduleMutation(
+  callbacks?: MutationCallbacks<ScheduledAction, Error, { scheduleId: string }>
+) {
+  return useMutation(() => ({
+    mutationFn: async (args: { scheduleId: string }) =>
+      throwOnErr(async () => await scheduledActionClient.detach(args)),
+    ...withCallbacks(
+      {
+        onSuccess: async (schedule: ScheduledAction) => {
+          if (schedule.id)
+            queryClient.setQueryData(
+              scheduledActionKeys.detail({ scheduleId: schedule.id }).queryKey,
+              schedule
+            );
+          await invalidateSchedules();
+        },
       },
       callbacks
     ),

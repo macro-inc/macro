@@ -101,6 +101,7 @@ import {
   buildChannelSectionRows,
   getChannelRailPaginationScope,
 } from './next/build-channel-rail-rows';
+import { useCollapsedUnreadChannels } from './next/collapsed-unread-channels';
 import { ExpandedChannelsRail as NextChannelsRail } from './next/ExpandedChannelsRail';
 
 export { buildChannelRailRows } from './next/build-channel-rail-rows';
@@ -454,8 +455,19 @@ export function ChannelsRail(props: ChannelsRailProps) {
     return referencedChannels().filter((channel) => labelled.has(channel.id));
   });
 
+  const collapsedUnreadSource = useCollapsedUnreadChannels(
+    () =>
+      sectionsEnabled() &&
+      (['team_channels', 'channels', 'direct_messages'] as const).some(
+        (section) =>
+          !state.expandedGroups[section] &&
+          state.sectionPreferences[section]?.unreadWhenCollapsed !== false
+      )
+  );
+  const collapsedUnread = () =>
+    sectionsEnabled() ? collapsedUnreadSource() : [];
   const allChannels = createMemo(() =>
-    deduplicateChannels([channels(), labelledChannels()])
+    deduplicateChannels([channels(), labelledChannels(), collapsedUnread()])
   );
   const channelsById = createMemo(
     () => new Map(allChannels().map((channel) => [channel.id, channel]))
@@ -491,7 +503,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
         labelledChannels(),
       ]),
       channelsById: channelsById(),
-      isLabelOpen,
+      isLabelOpen: sectionsEnabled() ? () => true : isLabelOpen,
     });
   });
 
@@ -524,6 +536,19 @@ export function ChannelsRail(props: ChannelsRailProps) {
     return statuses;
   });
 
+  const unreadForCollapsedGroup = (
+    group: 'team_channels' | 'channels' | 'direct_messages'
+  ) => {
+    if (
+      state.expandedGroups[group] ||
+      state.sectionPreferences[group]?.unreadWhenCollapsed === false
+    ) {
+      return [];
+    }
+
+    return collapsedUnread();
+  };
+
   const visibleRows = createMemo(() => {
     if (props.searchOpen) {
       return searchResults().map(
@@ -539,9 +564,26 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
     const items = {
       favorites: favorites(),
-      team_channels: props.sources.team_channels.items(),
-      channels: props.sources.channels.items(),
-      direct_messages: props.sources.direct_messages.items(),
+      team_channels: deduplicateChannels([
+        props.sources.team_channels.items(),
+        unreadForCollapsedGroup('team_channels').filter(
+          (channel) => channel.channelType === 'team'
+        ),
+      ]),
+      channels: deduplicateChannels([
+        props.sources.channels.items(),
+        unreadForCollapsedGroup('channels').filter(
+          (channel) =>
+            channel.channelType === 'public' ||
+            channel.channelType === 'private'
+        ),
+      ]),
+      direct_messages: deduplicateChannels([
+        props.sources.direct_messages.items(),
+        unreadForCollapsedGroup('direct_messages').filter(
+          (channel) => channel.channelType === 'direct_message'
+        ),
+      ]),
       recents: props.sources.recents.items(),
       threads: props.sources.threads.items(),
     };
@@ -560,6 +602,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
       channelSectionRows(),
       {
         preferences: state.sectionPreferences,
+        isLabelOpen,
         order: state.sectionOrder,
         channelById,
         unreadChannelIds: channelActivity.unreadChannelIds(),
@@ -1071,13 +1114,39 @@ export function ChannelsRail(props: ChannelsRailProps) {
     }
   };
 
+  const [createdSection, setCreatedSection] = createSignal<{
+    id: string;
+    actorId: string | undefined;
+  }>();
+  createEffect(() => {
+    const request = createdSection();
+    if (!request) return;
+    if (request.actorId !== userId()) {
+      setCreatedSection(undefined);
+      return;
+    }
+    const id = request.id;
+    const handle = browseScrollHandle();
+    if (!handle || props.searchOpen || tab() !== 'browse') return;
+    const index = visibleRows().findIndex(
+      (row) => row.id === rowKeyForLabel(id)
+    );
+    if (index < 0) return;
+    list.focus.set(rowKeyForLabel(id), { reason: 'programmatic' });
+    handle.scrollToIndex(index, { align: 'nearest' });
+    setCreatedSection(undefined);
+  });
   const {
     createLabel,
+    canEditSection,
+    canChangeSectionScope,
+    updateSection,
     createSmartTag,
     renameLabel,
     deleteLabel,
     setChannelLabel,
     addChannelsToLabel,
+    addLabelChannels,
     markLabelRead,
     canLabelChannelId,
     labelChannelById,
@@ -1087,22 +1156,45 @@ export function ChannelsRail(props: ChannelsRailProps) {
     labelsAvailable,
     labelsUnavailableReason,
     sharedLabels,
+    teamId: () =>
+      !labelsQuery.isPending
+        ? (labelsQuery.data?.teamId ?? undefined)
+        : undefined,
     labels,
     channelsById,
     searchResults,
     labelDialogOwner,
     setGroupOpen,
     setLabelOpen,
+    onSectionCreated: (id) => {
+      closeSearch();
+      setTab('browse');
+      setRestoreListScroll(false);
+      const key = rowKeyForLabel(id);
+      const order = visibleRows().flatMap((row) => {
+        if (row.kind === 'section') return [row.group];
+        if (row.kind === 'label' && row.id !== key) return [row.id];
+        return [];
+      });
+      const insertion = order.indexOf('channels');
+      order.splice(insertion < 0 ? order.length : insertion, 0, key);
+      setSectionOrder(order);
+      setCreatedSection({ id, actorId: userId() });
+    },
   });
 
-  const { muteSection, snoozeSection, sectionNotificationsDisabled } =
-    useChannelSectionNotifications({
-      enabled: sectionsEnabled,
-      labelsAvailable: () => !channelTagsEnabled() || labelsAvailable(),
-      labels,
-      favorites,
-      dialogOwner: labelDialogOwner,
-    });
+  const {
+    markSectionRead,
+    muteSection,
+    snoozeSection,
+    sectionNotificationsDisabled,
+  } = useChannelSectionNotifications({
+    enabled: sectionsEnabled,
+    labelsAvailable: () => !channelTagsEnabled() || labelsAvailable(),
+    labels,
+    favorites,
+    dialogOwner: labelDialogOwner,
+  });
 
   // Drops are resolved here rather than per row so a channel dragged from
   // anywhere in the section lands the same way.
@@ -1295,15 +1387,20 @@ export function ChannelsRail(props: ChannelsRailProps) {
     channelSectionRows,
     labelUnreadCount,
     createLabel,
+    updateSection,
     createSmartTag,
     editSmartTag: renameLabel,
     canShareSections: () => sharedLabels(),
+    canEditSection,
+    canChangeSectionScope,
     addChannelsToLabel,
+    addLabelChannels,
     renameLabel,
     deleteLabel,
     setChannelLabel,
     activeDropTarget,
     markLabelRead,
+    markSectionRead,
     muteSection,
     snoozeSection,
     sectionNotificationsDisabled,

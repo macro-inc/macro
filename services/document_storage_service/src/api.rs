@@ -300,6 +300,12 @@ fn api_router(state: ApiContext) -> Router {
             ),
         )
         .nest(
+            "/channel-sections",
+            channel_labels::inbound::axum_router::channel_sections_router(
+                state.channel_sections_state.clone(),
+            ),
+        )
+        .nest(
             "/account-managers",
             account_manager::inbound::axum_router::account_manager_router(
                 state.account_manager_state.clone(),

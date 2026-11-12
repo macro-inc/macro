@@ -969,6 +969,7 @@ pub(crate) struct ApiContext {
     pub soup_router_state: DssSoupState,
     pub graphql_soup_schema: DssGraphqlSoupSchema,
     pub agent_session_log_subscriptions: complete_graph::AgentSessionLogSubscriptions,
+    pub agent_session_activity_subscriptions: complete_graph::AgentSessionActivitySubscriptions,
     pub graphql_notification_reader: Arc<ai_tools::ToolNotificationService>,
     pub activity_reader: DssActivityReader,
     pub graphql_entity_mutation_service: Arc<DssEntityMutationService>,
@@ -976,6 +977,8 @@ pub(crate) struct ApiContext {
     pub favorites_service: Arc<FavoritesServiceType>,
     pub favorites_mutation_service: Arc<FavoritesMutationServiceType>,
     pub channel_labels_state: DssChannelLabelsState,
+    #[from_ref(skip)]
+    pub channel_sections_state: DssChannelLabelsState,
     pub user_api_key_state: DssUserApiKeyState,
     pub account_manager_state: DssAccountManagerState,
     pub reminders_state: DssRemindersState,
