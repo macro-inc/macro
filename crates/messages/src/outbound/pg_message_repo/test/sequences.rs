@@ -468,7 +468,12 @@ async fn channel_counter_wait_timeout_rolls_back_the_entire_message(pool: PgPool
         Some(2)
     );
     for (lock_timeout, statement_timeout, expected_code, expected_message) in [
-        ("75ms", "0", "55P03", "canceling statement due to lock timeout"),
+        (
+            "75ms",
+            "0",
+            "55P03",
+            "canceling statement due to lock timeout",
+        ),
         (
             "0",
             "75ms",
@@ -490,13 +495,11 @@ async fn channel_counter_wait_timeout_rolls_back_the_entire_message(pool: PgPool
         let mut input = command("message-doc-a", None, "must roll back");
         input.parent = parent.clone();
         input.input.id = Some(failed_id);
-        let failure = tokio::time::timeout(
-            std::time::Duration::from_secs(5),
-            timed_repo.create(input),
-        )
-        .await
-        .expect("configured PostgreSQL timeout must stop the counter waiter")
-        .unwrap_err();
+        let failure =
+            tokio::time::timeout(std::time::Duration::from_secs(5), timed_repo.create(input))
+                .await
+                .expect("configured PostgreSQL timeout must stop the counter waiter")
+                .unwrap_err();
         let MessageError::Repository(report) = failure else {
             panic!("counter timeout must propagate as a repository failure");
         };
