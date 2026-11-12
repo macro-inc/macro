@@ -1,84 +1,127 @@
-import { createSignal, For, Match, onCleanup, onMount, Switch } from 'solid-js';
+import PriorityUrgent from '@icon/system/fill/priority-urgent-fill.svg';
+import StatusCompleted from '@icon/system/fill/task-completed-fill.svg';
+import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import GanttIcon from '@icon/system/regular/chart-gantt.svg';
+import ProjectIcon from '@icon/system/regular/cube.svg';
+import FilterIcon from '@icon/system/regular/funnel.svg';
+import BoardIcon from '@icon/system/regular/kanban.svg';
+import ListIcon from '@icon/system/regular/list-bullets.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import SortIcon from '@icon/system/regular/sort-ascending.svg';
+import GroupIcon from '@icon/system/regular/stack.svg';
+import StatusNotStarted from '@icon/system/regular/task-created.svg';
+import StatusInProgress from '@icon/system/regular/task-in-progress.svg';
+import StatusInReview from '@icon/system/regular/task-in-review.svg';
+import {
+  type Component,
+  createSignal,
+  For,
+  type JSX,
+  Match,
+  onCleanup,
+  onMount,
+  Show,
+  Switch,
+} from 'solid-js';
+import { Dynamic } from 'solid-js/web';
+import PriorityHigh from '../../../../assets/icons/wide-priority-high.svg';
+import PriorityMedium from '../../../../assets/icons/wide-priority-medium.svg';
+import gabriel from '../../../../assets/people/gabriel.webp';
+import julia from '../../../../assets/people/julia.webp';
+import teo from '../../../../assets/people/teo.webp';
 import './task-views-graphic.css';
 
-type TaskStatus = 'todo' | 'progress' | 'done';
-type TaskView = 'list' | 'board' | 'timeline';
+type Icon = Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
+type TaskStatus = 'not-started' | 'in-progress' | 'in-review' | 'completed';
+type TaskPriority = 'Urgent' | 'High' | 'Medium';
+type TaskView = 'list' | 'board' | 'gantt';
 
-const views: { id: TaskView; label: string }[] = [
-  { id: 'list', label: 'List' },
-  { id: 'board', label: 'Board' },
-  { id: 'timeline', label: 'Timeline' },
+const views: { id: TaskView; label: string; icon: Icon }[] = [
+  { id: 'list', label: 'List', icon: ListIcon },
+  { id: 'board', label: 'Board', icon: BoardIcon },
+  { id: 'gantt', label: 'Gantt', icon: GanttIcon },
 ];
 
-const statuses: { id: TaskStatus; label: string }[] = [
-  { id: 'todo', label: 'Todo' },
-  { id: 'progress', label: 'In Progress' },
-  { id: 'done', label: 'Done' },
-];
+const statusIcons: Record<TaskStatus, Icon> = {
+  'not-started': StatusNotStarted,
+  'in-progress': StatusInProgress,
+  'in-review': StatusInReview,
+  completed: StatusCompleted,
+};
 
-/** The same five tasks in every view; `start` and `days` are weekday columns. */
-const tasks: {
+const priorityIcons: Record<TaskPriority, Icon> = {
+  Urgent: PriorityUrgent,
+  High: PriorityHigh,
+  Medium: PriorityMedium,
+};
+
+type Task = {
   title: string;
   status: TaskStatus;
-  tag: string;
-  tone: 'red' | 'violet' | 'green' | 'yellow';
-  owner: string;
+  priority: TaskPriority;
+  tag?: { label: string; tone: 'red' | 'blue' | 'amber' | 'violet' };
   due: string;
+  project: string;
+  owner: string;
+  /** Where the Gantt bar starts and how long it runs, as a share of the range. */
   start: number;
-  days: number;
-}[] = [
-  { title: 'Fix checkout timeout on Safari', status: 'progress', tag: 'Bug', tone: 'red', owner: 'P', due: 'Nov 11', start: 0, days: 3 },
-  { title: 'Draft Q4 roadmap review', status: 'progress', tag: 'Planning', tone: 'violet', owner: 'M', due: 'Nov 13', start: 1, days: 4 },
-  { title: 'Update onboarding checklist', status: 'todo', tag: 'Product', tone: 'green', owner: 'T', due: 'Nov 16', start: 3, days: 3 },
-  { title: 'Invite beta customers', status: 'todo', tag: 'Launch', tone: 'yellow', owner: 'J', due: 'Nov 19', start: 4, days: 5 },
-  { title: 'Ship the pricing page', status: 'done', tag: 'Launch', tone: 'yellow', owner: 'T', due: 'Nov 10', start: 0, days: 2 },
+  length: number;
+};
+
+/** The same tasks in every view, grouped by priority as the app groups them. */
+const tasks: Task[] = [
+  { title: 'Fix calendar sync for shared inboxes', status: 'in-review', priority: 'Urgent', tag: { label: 'bug', tone: 'red' }, due: 'Nov 5', project: 'Platform', owner: gabriel, start: 0.2, length: 0.34 },
+  { title: 'Fix the checkout bug on the pricing page', status: 'in-progress', priority: 'High', tag: { label: 'bug', tone: 'red' }, due: 'Nov 6', project: 'Q4 launch', owner: teo, start: 0.34, length: 0.26 },
+  { title: 'Update pricing page copy', status: 'in-progress', priority: 'High', tag: { label: 'Q4', tone: 'amber' }, due: 'Nov 6', project: 'Q4 launch', owner: teo, start: 0.4, length: 0.22 },
+  { title: 'Press kit final review', status: 'not-started', priority: 'High', tag: { label: 'Q4', tone: 'amber' }, due: 'Nov 7', project: 'Q4 launch', owner: julia, start: 0.46, length: 0.22 },
+  { title: 'Launch video end card', status: 'in-progress', priority: 'Medium', tag: { label: 'design', tone: 'violet' }, due: 'Nov 10', project: 'Q4 launch', owner: teo, start: 0.52, length: 0.3 },
+  { title: 'Offsite agenda', status: 'not-started', priority: 'Medium', due: 'Nov 12', project: 'Offsite', owner: julia, start: 0.62, length: 0.3 },
 ];
 
-const timelineDays = [9, 10, 11, 12, 13, 16, 17, 18, 19, 20];
+const priorities: TaskPriority[] = ['Urgent', 'High', 'Medium'];
+const grouped = priorities.map((priority) => ({
+  priority,
+  tasks: tasks.filter((task) => task.priority === priority),
+}));
 
-function StatusIcon(props: { status: TaskStatus }) {
+function Status(props: { status: TaskStatus }) {
   return (
-    <svg
+    <Dynamic
+      component={statusIcons[props.status]}
       class="task-views-status"
       data-status={props.status}
-      viewBox="0 0 16 16"
       aria-hidden="true"
-    >
-      <circle cx="8" cy="8" r="6.25" />
-      <Switch>
-        <Match when={props.status === 'progress'}>
-          <path d="M8 3.5a4.5 4.5 0 0 1 0 9z" class="task-views-status-fill" />
-        </Match>
-        <Match when={props.status === 'done'}>
-          <path d="m5.25 8.25 1.9 1.9 3.6-4" class="task-views-status-check" />
-        </Match>
-      </Switch>
-    </svg>
+    />
   );
 }
 
-function ViewIcon(props: { view: TaskView }) {
+function Priority(props: { priority: TaskPriority }) {
   return (
-    <svg viewBox="0 0 16 16" aria-hidden="true">
-      <Switch>
-        <Match when={props.view === 'list'}>
-          <path d="M5.5 4h8M5.5 8h8M5.5 12h8M2.5 4h.01M2.5 8h.01M2.5 12h.01" />
-        </Match>
-        <Match when={props.view === 'board'}>
-          <path d="M2.5 2.5h3v11h-3zM6.5 2.5h3v7h-3zM10.5 2.5h3v9h-3z" />
-        </Match>
-        <Match when={props.view === 'timeline'}>
-          <path d="M2.5 4h6M5.5 8h8M3.5 12h5" />
-        </Match>
-      </Switch>
-    </svg>
+    <Dynamic
+      component={priorityIcons[props.priority]}
+      class="task-views-priority"
+      data-priority={props.priority}
+      aria-hidden="true"
+    />
+  );
+}
+
+function GroupHead(props: { priority: TaskPriority; count: number }) {
+  return (
+    <div class="task-views-group">
+      <CaretDown class="task-views-caret" aria-hidden="true" />
+      <Priority priority={props.priority} />
+      <strong>{props.priority}</strong>
+      <span>{props.count}</span>
+    </div>
   );
 }
 
 /**
- * One set of tasks shown as a list, a board, or a timeline, switched with the
- * app's three-way view control. It steps through the views by itself until
- * someone picks one.
+ * The app's task collection as a list, a board, or a Gantt chart, switched
+ * with its three-way layout control. It steps through the layouts by itself
+ * until someone picks one.
  */
 export function TaskViewsGraphic() {
   const [view, setView] = createSignal<TaskView>('list');
@@ -120,58 +163,103 @@ export function TaskViewsGraphic() {
   };
 
   return (
-    <div ref={root} class="task-views paper-feature-glass">
+    <div ref={root} class="task-views">
       <div class="task-views-bar">
-        <strong>All Tasks</strong>
-        <div class="task-views-toggle" role="group" aria-label="Task view">
+        <strong>All tasks</strong>
+        <span class="task-views-pill task-views-filter" aria-hidden="true">
+          <FilterIcon />
+          <b>3</b>
+        </span>
+        <div class="task-views-layouts" role="group" aria-label="Task layout">
           <For each={views}>
             {(item) => (
               <button
                 type="button"
+                aria-label={item.label}
                 aria-pressed={view() === item.id}
                 onClick={() => choose(item.id)}
               >
-                <ViewIcon view={item.id} />
-                {item.label}
+                <Dynamic component={item.icon} aria-hidden="true" />
               </button>
             )}
           </For>
         </div>
+        <span class="task-views-pill task-views-extra" aria-hidden="true">
+          <SortIcon />
+          <GroupIcon />
+        </span>
+        <span class="task-views-pill task-views-extra" aria-hidden="true">
+          <PlusIcon />
+          New
+          <CaretDown class="task-views-caret" />
+        </span>
       </div>
       <div class="task-views-body" data-view={view()}>
         <Switch>
           <Match when={view() === 'list'}>
-            <For each={tasks}>
-              {(task) => (
-                <div class="task-views-row">
-                  <StatusIcon status={task.status} />
-                  <span class="task-views-title">{task.title}</span>
-                  <span class="task-views-tag" data-tone={task.tone}>
-                    {task.tag}
-                  </span>
-                  <span class="task-views-owner">{task.owner}</span>
-                  <span class="task-views-due">{task.due}</span>
-                </div>
+            <For each={grouped}>
+              {(group) => (
+                <>
+                  <GroupHead
+                    priority={group.priority}
+                    count={group.tasks.length}
+                  />
+                  <For each={group.tasks}>
+                    {(task) => (
+                      <div class="task-views-row">
+                        <Priority priority={task.priority} />
+                        <Status status={task.status} />
+                        <span class="task-views-title">{task.title}</span>
+                        <Show when={task.tag}>
+                          {(tag) => (
+                            <span class="task-views-tag" data-tone={tag().tone}>
+                              {tag().label}
+                            </span>
+                          )}
+                        </Show>
+                        <span class="task-views-meta task-views-due">
+                          <CalendarIcon aria-hidden="true" />
+                          {task.due}
+                        </span>
+                        <img class="task-views-avatar" src={task.owner} alt="" />
+                      </div>
+                    )}
+                  </For>
+                </>
               )}
             </For>
           </Match>
           <Match when={view() === 'board'}>
-            <For each={statuses}>
-              {(status) => (
+            <For each={grouped}>
+              {(group) => (
                 <div class="task-views-column">
                   <div class="task-views-column-head">
-                    <StatusIcon status={status.id} />
-                    {status.label}
+                    <Priority priority={group.priority} />
+                    <strong>{group.priority}</strong>
+                    <span>{group.tasks.length}</span>
+                    <PlusIcon aria-hidden="true" />
                   </div>
-                  <For each={tasks.filter((task) => task.status === status.id)}>
+                  <For each={group.tasks}>
                     {(task) => (
                       <div class="task-views-card">
-                        <span>{task.title}</span>
                         <div>
-                          <span class="task-views-tag" data-tone={task.tone}>
-                            {task.tag}
+                          <Status status={task.status} />
+                          <span>{task.title}</span>
+                          <img
+                            class="task-views-avatar"
+                            src={task.owner}
+                            alt=""
+                          />
+                        </div>
+                        <div class="task-views-card-meta">
+                          <span class="task-views-meta">
+                            <CalendarIcon aria-hidden="true" />
+                            {task.due}
                           </span>
-                          <span class="task-views-owner">{task.owner}</span>
+                          <span class="task-views-meta">
+                            <ProjectIcon aria-hidden="true" />
+                            {task.project}
+                          </span>
                         </div>
                       </div>
                     )}
@@ -180,26 +268,47 @@ export function TaskViewsGraphic() {
               )}
             </For>
           </Match>
-          <Match when={view() === 'timeline'}>
-            <div class="task-views-days">
-              <span>Nov</span>
-              <For each={timelineDays}>{(day) => <span>{day}</span>}</For>
+          <Match when={view() === 'gantt'}>
+            <div class="task-views-months">
+              <strong>October 2026</strong>
+              <span>24</span>
+              <strong>November</strong>
+              <span>9</span>
+              <span>16</span>
             </div>
-            <For each={tasks}>
-              {(task) => (
-                <div class="task-views-lane">
-                  <span class="task-views-title">{task.title}</span>
-                  <div class="task-views-track">
-                    <span
-                      class="task-views-bar-span"
-                      data-tone={task.tone}
-                      data-status={task.status}
-                      style={{ '--start': task.start, '--days': task.days }}
-                    />
-                  </div>
-                </div>
+            <For each={grouped}>
+              {(group) => (
+                <>
+                  <GroupHead
+                    priority={group.priority}
+                    count={group.tasks.length}
+                  />
+                  <For each={group.tasks}>
+                    {(task) => (
+                      <div class="task-views-lane">
+                        <div class="task-views-lane-name">
+                          <Status status={task.status} />
+                          <span class="task-views-title">{task.title}</span>
+                        </div>
+                        <div class="task-views-track">
+                          <div
+                            class="task-views-span"
+                            style={{
+                              '--start': task.start,
+                              '--length': task.length,
+                            }}
+                          >
+                            <Status status={task.status} />
+                            <span class="task-views-title">{task.title}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </For>
+                </>
               )}
             </For>
+            <i class="task-views-today" />
           </Match>
         </Switch>
       </div>
