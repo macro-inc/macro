@@ -17,12 +17,12 @@ file never leaves the device.
 - Owns: format detection, parsing, mapping to vault kinds and fields, vault
   limits (so preview counts are honest), zip-bomb and traversal refusal.
 - Not here: writing items, ids, duplicate detection → backend import endpoint
-  in `crates/passwords`; wasm bindings → the web import adapter.
+  in `crates/passwords`; wasm bindings → `crates/password_import_wasm`.
 
 ## Boundaries
 
 - Depends on: nothing Macro-specific. Pure: no I/O, async, logging or tracing.
-- Used by: the browser import adapter (opts into the `serde` feature).
+- Used by: `password_import_wasm`, the browser adapter (opts into the `serde` feature).
 
 ## Checks
 
@@ -39,7 +39,7 @@ file never leaves the device.
 - `Debug` on every public type prints only kinds, counts and source keys; names,
   URLs, labels and folders are content too. `tests/import/redaction.rs` enforces it.
 - `Serialize` exists only under the `serde` feature and reveals secrets; only
-  the browser adapter enables it.
+  `password_import_wasm` enables it.
 - Over-limit values skip the item (`TooLarge`); never truncate. Limits mirror
   `passwords::WriteItem::validate`, `LoginUrl` and the TOTP key regex; change both together.
 - Intermediate parser buffers (CSV records, URL parsing) are not zeroized; only

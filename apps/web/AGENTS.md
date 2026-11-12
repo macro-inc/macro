@@ -1616,5 +1616,8 @@ Compose the view from `ViewShell`, `ViewSidebar` and Drive's `FolderTree`
 rather than feature-local chrome. Register its desktop composable split layout
 and wrap every route state in `SplitPanel.Root` / `SplitPanel.Body` so the
 legacy header does not reserve an empty band. The responsive vault fixture is exercised with
-`bunx playwright test --config src/features/passwords/browser-test/playwright.config.ts`.
-See the [Passwords walkthrough](../../docs/agent-guide/passwords.md).
+`bunx playwright test --config src/features/passwords/browser-test/playwright.config.ts`
+(its import case needs `just ensure-password-import-wasm`). Imports parse in a
+per-file worker (`lib/core/password-import`); the parsed export lives only in
+the import primitive's closure while the dialog is open, and sessionStorage
+holds only the import id. See the [Passwords walkthrough](../../docs/agent-guide/passwords.md).
