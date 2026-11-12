@@ -320,7 +320,7 @@ function NewTop(props: { channelId: string }) {
         {(entity) => (
           <SplitHeaderRight>
             <HeaderIsland>
-              <HeaderActionGroup label="Ask Macro">
+              <HeaderActionGroup label="Conversation actions">
                 <ChatWithAgentButton
                   grouped
                   entity={entity()}
@@ -338,7 +338,7 @@ function NewTop(props: { channelId: string }) {
         <SplitHeaderRight>
           <HeaderIsland class="px-1">
             <div class="flex items-center gap-1.5">
-              <HeaderActionGroup label="Call">
+              <HeaderActionGroup label="Call actions">
                 <ChannelCallButton grouped channelId={props.channelId} />
               </HeaderActionGroup>
             </div>

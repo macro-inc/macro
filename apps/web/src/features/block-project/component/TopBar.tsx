@@ -98,6 +98,7 @@ export function TopBar() {
       buttonComponent: (control) => (
         <ChatWithAgentButton
           grouped={control.grouped}
+          size={control.grouped ? 'md' : undefined}
           entity={{ type: 'project', id, name: name() }}
         />
       ),
