@@ -529,14 +529,16 @@ impl HarnessRepo for PgHarnessRepo {
                 h.computer_id IN (SELECT c.id FROM hosted_runtime c WHERE c.team_id IN (
                     SELECT tu.team_id FROM team_user tu WHERE tu.user_id = $1
                     UNION SELECT t.id FROM team t WHERE t.owner_id = $1
-                )) OR
-                COALESCE(h.owner_user_id, h.created_by) = $1
-                OR COALESCE(h.owner_user_id, h.created_by) IN (
-                    SELECT theirs.user_id
-                    FROM team_user mine
-                    JOIN team_user theirs ON theirs.team_id = mine.team_id
-                    WHERE mine.user_id = $1
-                )
+                )) OR (
+                h.computer_id IS NULL AND (
+                    COALESCE(h.owner_user_id, h.created_by) = $1
+                    OR COALESCE(h.owner_user_id, h.created_by) IN (
+                        SELECT theirs.user_id
+                        FROM team_user mine
+                        JOIN team_user theirs ON theirs.team_id = mine.team_id
+                        WHERE mine.user_id = $1
+                    )
+                ))
               )
             ORDER BY h.created_at DESC
             "#,

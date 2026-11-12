@@ -1425,3 +1425,121 @@ async fn bound_agents_leave_out_residents_whose_owner_lost_access(pool: PgPool) 
         [own_resident, teammate_coder]
     );
 }
+
+/// A computer's harness follows its team: admins own it, members use it,
+/// and its buyer keeps nothing once they leave.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_computer_harness_belongs_to_its_team_not_its_buyer(pool: PgPool) {
+    const ADMIN_ID: &str = "macro|admin@example.com";
+    const MEMBER_ID: &str = "macro|member@example.com";
+    let repo = PgHarnessRepo::new(pool.clone());
+    // OWNER_ID is the team's owner and buys the computer.
+    let team_id = team_of(&pool, &[OWNER_ID, ADMIN_ID, MEMBER_ID]).await;
+    sqlx::query!(
+        "UPDATE team_user SET team_role = 'admin'::team_role WHERE user_id = $1",
+        ADMIN_ID,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let computer_id = ComputerId::new_from_uuid(Uuid::new_v4());
+    let harness = hosted_harness(team_id, computer_id);
+    let harness_id = harness.id;
+    repo.upsert_hosted_pairing(
+        hosted_pairing(PairingId::new_from_uuid(Uuid::new_v4()), "secret"),
+        harness,
+    )
+    .await
+    .unwrap();
+    let host_id = Uuid::new_v4();
+    sqlx::query!(
+        r#"
+        INSERT INTO hosted_runtime_host (id, name, awake_capacity_units, sold_capacity_units)
+        VALUES ($1, 'host-1', 8, 8)
+        "#,
+        host_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO hosted_runtime (
+            id, team_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry,
+            purchase_key, host_id, state, harness_id, created_by
+        )
+        VALUES ($1, $2, 'Computer', 'standard', 2, 8, 40, 'standard-v1', 'buy-1', $3, '{}', $4, $5)
+        "#,
+        computer_id.as_uuid(),
+        team_id,
+        host_id,
+        harness_id.as_uuid(),
+        OWNER_ID,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(
+        repo.harness_access(harness_id, user(OWNER_ID))
+            .await
+            .unwrap(),
+        HarnessAccess::Owner
+    );
+    assert_eq!(
+        repo.harness_access(harness_id, user(ADMIN_ID))
+            .await
+            .unwrap(),
+        HarnessAccess::Owner
+    );
+    assert_eq!(
+        repo.harness_access(harness_id, user(MEMBER_ID))
+            .await
+            .unwrap(),
+        HarnessAccess::User
+    );
+
+    // The team changes hands and the buyer leaves.
+    sqlx::query!(
+        "UPDATE team SET owner_id = $1 WHERE id = $2",
+        ADMIN_ID,
+        team_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "DELETE FROM team_user WHERE user_id = $1 AND team_id = $2",
+        OWNER_ID,
+        team_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(
+        repo.harness_access(harness_id, user(OWNER_ID))
+            .await
+            .unwrap(),
+        HarnessAccess::None
+    );
+    assert!(
+        repo.list_usable_harnesses(user(OWNER_ID))
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        repo.list_directory_harnesses(user(OWNER_ID))
+            .await
+            .unwrap()
+            .is_empty(),
+        "a former member does not see the team's computer"
+    );
+    assert_eq!(
+        repo.harness_access(harness_id, user(ADMIN_ID))
+            .await
+            .unwrap(),
+        HarnessAccess::Owner
+    );
+}
