@@ -3,13 +3,13 @@
 
 use async_graphql::{Context, ID, InputObject, Object, OneofObject, SimpleObject};
 use messages::domain::{
-    models::{NewAttachment, PostMessage, SimpleMention},
+    models::{Message, NewAttachment, PostMessage, SimpleMention},
     ports::{AttachmentChange, MessagePatch, Sequenced},
 };
 
 use super::{
     ChannelMessagesGraphqlContext, GraphqlChannelMessage, coded, input_id, message_error,
-    writes::{Reaction, WrittenMessage},
+    writes::Reaction,
 };
 
 /// An entity a message mentions.
@@ -174,22 +174,21 @@ pub struct GraphqlChannelReactInput {
 #[derive(SimpleObject, Clone, Debug)]
 #[graphql(name = "GraphqlChannelMessageWrite")]
 pub struct GraphqlChannelMessageWrite {
-    /// The written message as the channel's reads show it: a root as a
-    /// timeline page does, with its thread, a reply as a thread page does.
-    /// A deleted root the timeline no longer shows comes without its thread.
+    /// The message as the write left it, as the REST write routes return it.
+    /// It is not read again, so `thread` and `call` are always null here,
+    /// even on a root: read them from the timeline and thread pages, and do
+    /// not select them in a write, or a normalized cache stores the nulls
+    /// over the record's values.
     pub message: GraphqlChannelMessage,
     /// The channel change sequence number the write took; null when this
     /// call wrote nothing, as when it repeated a write that already happened.
     pub seq: Option<i64>,
 }
 
-impl From<Sequenced<WrittenMessage>> for GraphqlChannelMessageWrite {
-    fn from(written: Sequenced<WrittenMessage>) -> Self {
+impl From<Sequenced<Message>> for GraphqlChannelMessageWrite {
+    fn from(written: Sequenced<Message>) -> Self {
         Self {
-            message: match written.value {
-                WrittenMessage::Root { item, call } => GraphqlChannelMessage::root(*item, call),
-                WrittenMessage::Bare(message) => GraphqlChannelMessage::reply(*message),
-            },
+            message: GraphqlChannelMessage::reply(written.value),
             seq: written.seq,
         }
     }

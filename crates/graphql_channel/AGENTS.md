@@ -96,9 +96,10 @@ sends, each returning the sequence number it took.
   `CONFLICT` (an id another sender, thread or channel holds), or
   `INTERNAL_SERVER_ERROR` with the cause only in the log. Reads share the
   mapping (`message_error`).
-- A committed write never errors: when reading the written root back as the
-  timeline shows it fails, or a deleted root is no longer shown, the payload
-  carries the message without its thread.
+- A write returns the message the `MessageService` write returned, as the
+  REST write routes do, and never reads it again: re-reading a root costs a
+  scan of its whole thread on every write. So `thread` and `call` are always
+  null in a write payload, even on a root; clients read them from the pages.
 
 ## Related
 

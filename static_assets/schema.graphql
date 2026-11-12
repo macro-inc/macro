@@ -3947,9 +3947,11 @@ it took in the channel's change log.
 """
 type GraphqlChannelMessageWrite {
 	"""
-	The written message as the channel's reads show it: a root as a
-	timeline page does, with its thread, a reply as a thread page does.
-	A deleted root the timeline no longer shows comes without its thread.
+	The message as the write left it, as the REST write routes return it.
+	It is not read again, so `thread` and `call` are always null here,
+	even on a root: read them from the timeline and thread pages, and do
+	not select them in a write, or a normalized cache stores the nulls
+	over the record's values.
 	"""
 	message: GraphqlChannelMessage!
 	"""

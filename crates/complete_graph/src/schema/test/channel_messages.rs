@@ -126,6 +126,7 @@ impl ChannelWrites {
                     id channelId threadId senderId content deletedAt
                     reactions {{ emoji users }}
                     thread {{ replyCount }}
+                    call {{ state }}
                 }}
             }} }}"
         );
@@ -196,10 +197,8 @@ async fn each_channel_message_write_returns_its_message_and_its_events_sequence_
         .await;
     assert_eq!(root["seq"], writes.events.last_seq());
     assert!(root["seq"].is_i64());
-    // A root comes back as the timeline shows it, with its thread.
     assert_eq!(root["message"]["id"], json!(root_id));
     assert_eq!(root["message"]["senderId"], AUTHOR);
-    assert_eq!(root["message"]["thread"], json!({ "replyCount": 0 }));
 
     let reply = writes
         .written(
@@ -209,10 +208,22 @@ async fn each_channel_message_write_returns_its_message_and_its_events_sequence_
         )
         .await;
     assert_eq!(reply["seq"], writes.events.last_seq());
-    // A reply comes back as a thread page shows it.
     assert_eq!(reply["message"]["threadId"], json!(root_id));
-    assert_eq!(reply["message"]["thread"], Value::Null);
     let reply_id = reply["message"]["id"].clone();
+
+    // A write returns the message it wrote, never read again: a root that
+    // now has a reply still comes back without its thread.
+    let reacted_root = writes
+        .written(
+            MEMBER,
+            "reactToChannelMessage",
+            json!({ "channelId": CHANNEL, "messageId": root_id, "emoji": "+1", "add": true }),
+        )
+        .await;
+    assert_eq!(reacted_root["seq"], writes.events.last_seq());
+    assert_eq!(reacted_root["message"]["id"], json!(root_id));
+    assert_eq!(reacted_root["message"]["thread"], Value::Null);
+    assert_eq!(reacted_root["message"]["call"], Value::Null);
 
     let edited = writes
         .written(
