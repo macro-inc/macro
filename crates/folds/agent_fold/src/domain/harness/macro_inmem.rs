@@ -6,7 +6,7 @@
 //!
 //! - `toolName` - the Macro tool's name (`ReadContent`, `SendEmail`), or
 //!   `mcp__<server>__<tool>` for a connected app's tool it reached over MCP.
-//! - `subagent: true` - on its `Subagent` delegation.
+//! - `subagent: true` - on a `Subagent` delegation (logs from before the tool was removed).
 //!
 //! Its own tools run in-process, not over MCP, so their output is the tool's
 //! own JSON with no envelope around it.

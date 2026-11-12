@@ -69,6 +69,9 @@ Remember successful announcements. After 24 hours, recover replies without a
 persisted completion at most hourly, preserving late answers after lost callbacks.
 Persisted completions bypass this backoff; direct completion handling is immediate.
 
+External runtimes pass container preflight without a managed provider; only
+managed runtimes require provider account setup.
+
 Prompts to an external runtime pass `authorize_runtime` when accepted and
 `runtime_refusal` again when they dispatch, so a prompt queued before access was
 removed never runs: `RuntimeAccessFacts::may_run` requires a coding agent's
@@ -108,7 +111,9 @@ Each session's commands run one at a time on its command worker
 (`service/queue.rs`). After `WORKER_IDLE_TIMEOUT` with nothing queued, the
 worker tries to release its session (`service/idle.rs`) and exits only when
 nothing is left to free (`IdleRelease::holds_nothing`: released, or another
-runtime's session); a session still held keeps its worker, which tries again.
+runtime's session, such as Cursor, a sandboxed coder or an external (macrod)
+runtime, whose queue copy and `hydrated` mark are forgotten too); a session
+still held keeps its worker, which tries again.
 A try that replayed the log and kept the session, or failed, pushes the next
 one out to twice, four times, then every sixteen times the timeout
 (`idle_wait`, `IdleRelease::backs_off`), because each such try replays the
@@ -148,6 +153,10 @@ wrap after its final page so those sessions cannot starve later ones.
 Reconcile active leases against terminal log evidence too: an observer can miss a
 completion during takeover. Previously bound quiet attempts reconcile before new
 wakes; interrupted quiet batches return to the next real prompt.
+
+`RuntimeRegistry::computer_control` forwards typed computer commands to the
+local live connection, returning `None` when another replica owns it. The
+service composition owns cross-replica carriage and request deadlines.
 
 Each dial costs a replica a handshake, `session/list` and a reattach, so
 `inbound/runtime_gateway.rs` gives every authenticated harness a per-replica,

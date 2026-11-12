@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# The entry point Claude Code settings run as the PreToolUse hook, for sessions outside the
+# SDK: it holds the tool call to the agent's guards (behavior/agent/guards, through `bin/agent guard`).
+# Always exits 0: only exit 2 blocks a tool, and a guard that exits 2 on its own bug refuses
+# every Bash, Write, and Edit in the session, with no way to fix it from inside. If the guard
+# can't answer (Bun or nix gone, a syntax error anywhere it imports, a checkout without the
+# command), one thing is still denied, by plain text since there's nothing left to parse with:
+# what looks like an identity or credential write from the agent's own session. Everything else
+# goes through. False denials are possible only while the guard is broken. Stays free of Bun on purpose.
+input=$(cat)
+here=$(cd "$(dirname "$0")/.." && pwd)
+if out=$(printf '%s' "$input" | "$here/bin/agent" guard 2>/dev/null); then
+  printf '%s' "$out"
+  exit 0
+fi
+
+deny() {
+  printf '%s\n' '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"'"$1"'"}}'
+  exit 0
+}
+
+# The agent's process, with or without a working identity, marks every child's environment
+# (behavior/context/identity.ts). The machine user's own sessions don't have the mark.
+if [[ -n ${AGENT_SESSION:-} ]]; then
+  config='(\.git/config|\.gitconfig|\.config/git/config)'
+  identity=
+  if [[ $input =~ \"tool_name\"[[:space:]]*:[[:space:]]*\"(Write|Edit)\" ]]; then
+    [[ $input =~ \"file_path\"[[:space:]]*:[[:space:]]*\"[^\"]*$config\" ]] && identity=1
+  elif [[ $input =~ git[[:space:]].*config.*(user|author|committer|credential) || $input =~ $config || $input =~ gh[[:space:]]+auth ]]; then
+    identity=1
+  fi
+  [[ -n $identity ]] && deny "The guards are broken (bin/agent guard did not answer), and this looks like an identity or credential write. The agent's identity comes only from the environment its runs are started with, never git config. Fix the guard; everything else still runs."
+fi
+exit 0

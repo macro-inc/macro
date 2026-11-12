@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO password_team_lifecycle(team_id) VALUES($1) ON CONFLICT(team_id) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "83378925b7d5ef029c867808f79818e0e3cd74ce45856ff6d8879488088e78a5"
+}
