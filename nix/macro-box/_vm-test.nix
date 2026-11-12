@@ -194,6 +194,13 @@ pkgs.testers.runNixOSTest {
           agent.fail("systemctl is-active --quiet macro-agent.service")
           agent.succeed("[ $(systemctl show macro-agent.service --property=ConditionResult --value) = no ]")
 
+      # As a process on the agent's desktop: in its units' view of the files
+      # (only :1 in /tmp), with macro's uid, the agent's group and environment.
+      agent.wait_for_unit("macro-agent-display.service")
+      display_pid = agent.succeed("systemctl show macro-agent-display.service --property=MainPID --value").strip()
+      sandboxed = "setpriv --reuid=macro --regid=macro-agent --clear-groups env HOME=/home/macro/agent DISPLAY=:1 XDG_RUNTIME_DIR=/run/macro-agent DBUS_SESSION_BUS_ADDRESS=unix:path=/run/macro-agent/bus PULSE_SERVER=unix:/run/macro-agent/pulse/native"
+      on_desktop = f"nsenter -t {display_pid} -m -- {sandboxed}"
+
       with subtest("the agent's browser runs on its desktop, DevTools on loopback only"):
           port = 9223
           agent.wait_for_open_port(port)
@@ -204,30 +211,30 @@ pkgs.testers.runNixOSTest {
           agent.succeed("[ $(stat -c %U /home/macro/agent/browser) = macro ]")
 
       with subtest("the agent's virtual sink and its monitor source exist"):
-          pactl = "su - macro -c 'XDG_RUNTIME_DIR=/run/user/1000 pactl list short {}'"
-          agent.wait_until_succeeds(pactl.format("sinks") + " | grep -w agent")
-          agent.succeed(pactl.format("sources") + " | grep -w agent.monitor")
+          pactl = f"{on_desktop} ${pkgs.pulseaudio}/bin/pactl list short"
+          agent.wait_until_succeeds(f"{pactl} sinks | grep -w agent")
+          agent.succeed(f"{pactl} sources | grep -w agent.monitor")
 
       with subtest("a call can capture the agent's desktop and sound"):
-          agent.succeed("su - macro -c 'DISPLAY=:1 ${pkgs.ffmpeg-full}/bin/ffmpeg -loglevel error -f x11grab -video_size 1920x1080 -i :1 -frames:v 1 /tmp/frame.png' && test -s /tmp/frame.png")
+          agent.succeed(f"{on_desktop} sh -c '${pkgs.ffmpeg-full}/bin/ffmpeg -loglevel error -f x11grab -video_size 1920x1080 -i :1 -frames:v 1 /tmp/frame.png && test -s /tmp/frame.png'")
           # parec's default fragment is about 2 s; ask for small ones.
-          sound = agent.succeed("su - macro -c 'XDG_RUNTIME_DIR=/run/user/1000 timeout 5 parec -d @DEFAULT_MONITOR@ --raw --latency-msec=50 | head -c 4096 | wc -c' || true").strip()
+          sound = agent.succeed(f"{on_desktop} sh -c 'timeout 5 ${pkgs.pulseaudio}/bin/parec -d @DEFAULT_MONITOR@ --raw --latency-msec=50 | head -c 4096 | wc -c' || true").strip()
           assert int(sound) == 4096, sound
 
       with subtest("the agent's clipboard round-trips on its desktop"):
           xclip = "${pkgs.lib.getExe pkgs.xclip}"
-          agent.succeed(f"su - macro -c 'printf clip-test | DISPLAY=:1 {xclip} -selection clipboard -loops 1' >/dev/null 2>&1 &")
-          agent.wait_until_succeeds(f"[ \"$(su - macro -c 'DISPLAY=:1 {xclip} -selection clipboard -o')\" = clip-test ]")
+          agent.succeed(f"{on_desktop} sh -c 'printf clip-test | {xclip} -selection clipboard -loops 1' >/dev/null 2>&1 &")
+          agent.wait_until_succeeds(f"[ \"$({on_desktop} {xclip} -selection clipboard -o)\" = clip-test ]")
 
       with subtest("computer use sees and captures the agent's desktop"):
           agent.wait_for_open_port(5901)
-          agent.wait_until_succeeds("systemctl --user --machine=macro@ is-active --quiet macro-agent-openbox.service")
+          agent.wait_for_unit("macro-agent-openbox.service")
           servers = "${pkgs.writeText "mcp-servers.json" (builtins.toJSON nodes.agent.macro.box.agent.mcpServers)}"
           # The AT-SPI bus says accessibility is on, so every app on the desktop
           # exposes its tree.
-          agent.wait_until_succeeds("su - macro -c 'DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus busctl --user get-property org.a11y.Bus /org/a11y/bus org.a11y.Status IsEnabled' | grep -Fx 'b true'")
+          agent.wait_until_succeeds(f"{on_desktop} ${pkgs.systemd}/bin/busctl --user get-property org.a11y.Bus /org/a11y/bus org.a11y.Status IsEnabled | grep -Fx 'b true'")
           # Chromium's AT-SPI tree appears a few seconds after its window.
-          size = agent.wait_until_succeeds(f"su - macro -c '${pkgs.python3}/bin/python3 ${./files/test-computer-use.py} {servers}'", timeout=120).strip()
+          size = agent.wait_until_succeeds(f"{on_desktop} ${pkgs.python3}/bin/python3 ${./files/test-computer-use.py} {servers}", timeout=120).strip()
           assert int(size) > 1000, size
 
       with subtest("the agent rejects a repo URL with credentials"):
@@ -277,7 +284,7 @@ pkgs.testers.runNixOSTest {
           sign_in = "${nodes.agent.macro.box.harnessd.stateDirectory}/claude"
           agent.succeed(f"tr '\\0' '\\n' < /proc/{pid}/environ | grep -Fx HARNESSD_STATE_DIRECTORY={sign_in}")
           # As the runtime starts it: as macro, in the unit's view of the files.
-          as_agent = f"nsenter -t {pid} -m -- setpriv --reuid=macro --regid=macro --init-groups"
+          as_agent = f"nsenter -t {pid} -m -- setpriv --reuid=macro --regid=macro-agent --clear-groups"
           claude = f"{as_agent} env ANTHROPIC_BASE_URL=http://gateway.invalid /run/current-system/sw/bin/claude"
           # No sign-in: the gateway environment passes through.
           env = agent.succeed(claude)
@@ -293,6 +300,34 @@ pkgs.testers.runNixOSTest {
           # Bound read-only: the agent can't replace the sign-in.
           agent.fail(f"{as_agent} touch {sign_in}/credential.json")
           agent.succeed(f"rm {sign_in}/credential.json")
+
+      with subtest("the agent and its desktop can't reach macro's session, desktop or files"):
+          # The units macro's own sessions use: its Xvnc :0 and its Chromium.
+          agent.wait_for_open_port(5900)
+          agent.wait_for_open_port(9222)
+          agent.succeed("su - macro -c 'curl --fail --silent http://127.0.0.1:9222/json/version'")
+          agent.succeed("su - macro -c 'mkdir -p ~/.macrod && echo macrod-secret > ~/.macrod/escape-probe'")
+          openbox = agent.succeed("systemctl show macro-agent-openbox.service --property=MainPID --value").strip()
+          # The agent's unit, and what Openbox's menu would start.
+          for name, target in [("agent", pid), ("openbox", openbox)]:
+              inside = f"nsenter -t {target} -m -- {sandboxed}"
+              agent.succeed(f"grep -F macro-agent.slice /proc/{target}/cgroup")
+              # macro's user manager and session bus aren't in its view.
+              agent.fail(f"{inside} ${pkgs.systemd}/bin/systemd-run --user --pipe --wait true")
+              agent.fail(f"{inside} test -e /run/user/1000/bus")
+              agent.fail(f"{inside} test -e /home/macro/.macrod/escape-probe")
+              # macro's display, by socket or VNC, and its DevTools.
+              agent.succeed(f"{inside} {xclip} -display :0 -o 2>&1 | grep -F 'open display'")
+              for port in (5900, 9222):
+                  agent.fail(f"{inside} ${pkgs.bash}/bin/bash -c 'exec 3<>/dev/tcp/127.0.0.1/{port}'")
+              # Its own desktop and browser.
+              for port in (5901, 9223):
+                  agent.succeed(f"{inside} ${pkgs.bash}/bin/bash -c 'exec 3<>/dev/tcp/127.0.0.1/{port}'")
+          # Its browser can't open macro's files or DevTools either.
+          browse = "${pkgs.bun}/bin/bun ${./files/test-browser-escape.ts}"
+          assert "macrod-secret" not in agent.succeed(f"{browse} file:///home/macro/.macrod/escape-probe")
+          assert "webSocketDebuggerUrl" not in agent.succeed(f"{browse} http://127.0.0.1:9222/json/list")
+          assert "Browser" in agent.succeed(f"{browse} http://127.0.0.1:9223/json/version")
 
       with subtest("repeated failed boots roll the workspace back to last-good"):
           good = agent.succeed(f"{git} rev-parse HEAD").strip()
