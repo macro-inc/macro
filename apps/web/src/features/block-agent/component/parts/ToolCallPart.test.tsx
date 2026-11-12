@@ -1654,3 +1654,34 @@ describe('ACP review presentations', () => {
     expect(view.queryByTestId('persisted-review')).toBeNull();
   });
 });
+
+describe('code-mode lookups', () => {
+  const lookup = (name: ToolUsePart['name']): ToolUsePart => ({
+    kind: 'tool_use',
+    id: 'lookup-1',
+    status: 'completed',
+    name,
+    detail: {
+      kind: 'other',
+      acpKind: 'other',
+      input: { query: 'documents' },
+      output: null,
+      result: { tools: [] },
+      error: null,
+    },
+  });
+  it('renders nothing for the agent finding its way around its own tools', () => {
+    for (const name of [
+      { kind: 'mcp', server: 'macro_internal', tool: 'DescribeCodeTools' },
+      { kind: 'mcp', server: 'macro_internal', tool: 'ReadCodeDocs' },
+      { kind: 'mcp', server: 'macro', tool: 'SearchTools' },
+      { kind: 'native', name: 'LoadTools' },
+    ] as const) {
+      const view = render(() => (
+        <ToolCallPart part={lookup(name)} context={context(false)} />
+      ));
+      expect(view.container.textContent).toBe('');
+      view.unmount();
+    }
+  });
+});

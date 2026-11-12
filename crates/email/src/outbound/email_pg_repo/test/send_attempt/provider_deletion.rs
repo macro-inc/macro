@@ -1,8 +1,8 @@
 use super::*;
-use email_db_client::messages::{
-    delete::{MessageDeletion, delete_message_with_tx, reconcile_deferred_deletion},
-    get_simple_messages::get_simple_message_by_provider_and_link_for_update,
+use crate::domain::scheduled_delivery::deletion::{
+    MessageDeletion, delete_message_with_tx, reconcile_deferred_deletion,
 };
+use email_db_client::messages::get_simple_messages::get_simple_message_by_provider_and_link_for_update;
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
@@ -48,7 +48,7 @@ async fn provider_delete_lookup_locks_the_snapshot_until_deletion_is_deferred(
         Some("55P03")
     );
     assert_eq!(
-        delete_message_with_tx(&mut deletion, &snapshot).await?,
+        delete_message_with_tx(&mut *deletion, &snapshot).await?,
         MessageDeletion::Deferred
     );
     deletion.commit().await?;

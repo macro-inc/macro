@@ -77,7 +77,8 @@ enforced by the ordinary backend APIs.
   personal-provider primary and `unlinkCompany()` removes the link. The server
   refuses to unlink or move a company-domain contact (`companyDomain`).
 - `src/entities/databases/saved-query.ts`: `database.saveQuery()` / `table.saveQuery()`
-  save a checked `SELECT` server-side and return a `SavedQuery` whose `toBlock()` is the
+  (or `databases.saveQuery()` for a question that spans databases, sent with no
+  `databaseId`) save a checked `SELECT` server-side and return a `SavedQuery` whose `toBlock()` is the
   document's `<m-db-query>` block. The block format must match lexical-core's
   `parseDatabaseQueryData`; `withView()` follows the AI editor's `setDatabaseQueryView` rules.
 - `src/entities/crm/pipeline.ts`: pipeline-authorized table/row/view handles;

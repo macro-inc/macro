@@ -1505,7 +1505,7 @@ Keep entity-picker navigation on its search input, before the enclosing menu han
 
 ### Sidebar tag dragging
 
-Email and Calls sidebar tags can be dragged onto taggable desktop list rows.
+The shared sidebar-tag fixture covers dragging tags onto taggable desktop rows.
 Keep existing tags and apply to the selected rows when the drop row is selected.
 Use the shared scoped drag helpers and overlayIcon for the tag chip.
 The backend-free browser regression is
@@ -1613,6 +1613,8 @@ sign-in session and team: a scope change remounts it and aborts its requests,
 so drafts and late responses never cross viewers. Load and copy usernames
 through their field-scoped endpoints, and derive sharing counts from metadata.
 Compose the view from `ViewShell`, `ViewSidebar` and Drive's `FolderTree`
-rather than feature-local chrome. The responsive vault fixture is exercised with
+rather than feature-local chrome. Register its desktop composable split layout
+and wrap every route state in `SplitPanel.Root` / `SplitPanel.Body` so the
+legacy header does not reserve an empty band. The responsive vault fixture is exercised with
 `bunx playwright test --config src/features/passwords/browser-test/playwright.config.ts`.
 See the [Passwords walkthrough](../../docs/agent-guide/passwords.md).
