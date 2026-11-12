@@ -3,8 +3,9 @@ use super::event_runs::{AuthorizedEventRun, ClaimToken, ConfigurationRevision};
 use super::event_trigger::{EventName, EventReference};
 use super::execution::ExecutionHandle;
 use super::models::{
-    ActionConfiguration, ActionConfigurationUpdate, ActionExecutionRecord, DispatchEvent,
-    InProgressExecution, ListedAction, RunHistory, ScheduledAction, ScheduledActionUpdate,
+    ActionConfiguration, ActionConfigurationUpdate, ActionExecutionRecord, CreatedRoutine,
+    DispatchEvent, InProgressExecution, ListScope, ListedAction, ListedRun, RunCaller, RunHistory,
+    RunningRun, ScheduledAction, ScheduledActionUpdate, SubRoutineKey,
 };
 use super::templates::{RoutineTemplate, ShareRoutineTemplate, TemplateSnapshot};
 use anyhow::Result;
@@ -133,6 +134,58 @@ pub trait ScheduledActionRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<()>> + Send;
 }
 
+/// Sub-routines: the routines a routine's runs created, and the run in
+/// progress a new one would belong to.
+pub trait SubRoutines: Send + Sync + 'static {
+    /// `routine`'s run in progress, if it has one.
+    fn running_run(
+        &self,
+        routine: &Uuid,
+    ) -> impl Future<Output = Result<Option<RunningRun>>> + Send;
+
+    /// The run in progress whose Ask AI step opened agent session `session`:
+    /// a run's id is also the id of the session it opens.
+    fn running_run_of_session(
+        &self,
+        session: &Uuid,
+    ) -> impl Future<Output = Result<Option<RunningRun>>> + Send;
+
+    /// `parent`'s sub-routines, oldest first: every active one, and the
+    /// newest finished one-time ones, which accumulate without bound.
+    fn children(&self, parent: &Uuid) -> impl Future<Output = Result<Vec<ScheduledAction>>> + Send;
+
+    /// The active sub-routines of `parents`, oldest first: every one except
+    /// finished one-time ones.
+    fn active_children(
+        &self,
+        parents: &[Uuid],
+    ) -> impl Future<Output = Result<Vec<ScheduledAction>>> + Send;
+
+    /// The rows among `ids` that are top-level routines. Missing ids omitted.
+    fn top_level_by_ids(
+        &self,
+        ids: &[Uuid],
+    ) -> impl Future<Output = Result<Vec<ScheduledAction>>> + Send;
+
+    /// `parent`'s sub-routine created under `key`, if there is one.
+    fn child_by_key(
+        &self,
+        parent: &Uuid,
+        key: &SubRoutineKey,
+    ) -> impl Future<Output = Result<Option<ScheduledAction>>> + Send;
+
+    /// Make a sub-routine a top-level routine: it forgets its parent, the run
+    /// that created it and its key. `None` when it has no parent.
+    fn detach(&self, id: &Uuid) -> impl Future<Output = Result<Option<ScheduledAction>>> + Send;
+
+    /// The sub-routines of `parent` that `runs` created, each with its run.
+    fn created_by_runs(
+        &self,
+        parent: &Uuid,
+        runs: &[Uuid],
+    ) -> impl Future<Output = Result<Vec<(Uuid, CreatedRoutine)>>> + Send;
+}
+
 /// Lists routines a caller can access for read-only clients.
 ///
 /// The list includes cron and event triggers and orders them by `(created_at, id)`.
@@ -170,10 +223,32 @@ pub trait ScheduledActionService: Send + Sync + 'static {
 
     /// Records `principal.owner()`. A non-user owner is `OwnerNotUserError`
     /// before validation and before any write. `BotForUser` records the user.
+    /// Always a top-level routine.
     fn create_action(
         &self,
         principal: &CreationPrincipal,
         input: ActionConfiguration,
+    ) -> impl Future<Output = Result<ScheduledAction>> + Send;
+
+    /// [`Self::create_action`] for a request whose credential may come from
+    /// a routine's run. A create that `caller` proves comes from a run in
+    /// progress makes a sub-routine of that routine (of its parent, when it
+    /// is a sub-routine itself), refused with `TooManySubRoutines` at the
+    /// cap. With `key`, the parent's sub-routine already created under that
+    /// key is updated instead; a key outside a run is `KeyOutsideRun`.
+    fn create_action_from(
+        &self,
+        principal: &CreationPrincipal,
+        input: ActionConfiguration,
+        caller: RunCaller,
+        key: Option<SubRoutineKey>,
+    ) -> impl Future<Output = Result<SavedAction>> + Send;
+
+    /// Make the receipt's sub-routine a top-level routine that no longer
+    /// follows its parent. `NotSubRoutine` when it has no parent.
+    fn detach_action(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 
     /// What saving `input` as `principal`'s routine would find wrong, and the
@@ -209,13 +284,14 @@ pub trait ScheduledActionService: Send + Sync + 'static {
         suggestion_id: Uuid,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 
-    /// Actions `user_id` can access. Legacy clients see cron actions only;
-    /// backend clients opt into events. ID-based operations and workers must
-    /// never authorize through this list.
+    /// Actions `user_id` can access, within `scope`. Legacy clients see cron
+    /// actions only; backend clients opt into events. ID-based operations and
+    /// workers must never authorize through this list.
     fn get_actions(
         &self,
         user_id: MacroUserIdStr<'static>,
         include_events: bool,
+        scope: ListScope,
     ) -> impl Future<Output = Result<Vec<ListedAction>>> + Send;
 
     fn update_action(
@@ -249,10 +325,12 @@ pub trait ScheduledActionService: Send + Sync + 'static {
         receipt: EntityAccessReceipt<OwnerAccessLevel>,
     ) -> impl Future<Output = Result<InProgressExecution>> + Send;
 
+    /// The routine's finished runs, newest first, each with the routines it
+    /// created that still follow it.
     fn get_execution_records(
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
-    ) -> impl Future<Output = Result<Vec<ActionExecutionRecord>>> + Send;
+    ) -> impl Future<Output = Result<Vec<ListedRun>>> + Send;
 
     /// Macro's catalog routines with schedules in `timezone`, without code
     /// steps on hosts where code can't be saved.
@@ -263,6 +341,22 @@ pub trait ScheduledActionService: Send + Sync + 'static {
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<Vec<super::code_upgrade::CodeUpgrade>>> + Send;
+}
+
+/// A create's result: a new routine, or the sub-routine its key already named.
+#[derive(Debug, Clone)]
+pub enum SavedAction {
+    Created(ScheduledAction),
+    /// The parent's sub-routine under the same key, updated in place.
+    Updated(ScheduledAction),
+}
+
+impl SavedAction {
+    pub fn into_action(self) -> ScheduledAction {
+        match self {
+            Self::Created(action) | Self::Updated(action) => action,
+        }
+    }
 }
 
 /// AI that drafts routines and their steps from people's words.
@@ -898,6 +992,8 @@ pub struct FinishedRoutineRun {
     pub owner: MacroUserIdStr<'static>,
     pub routine_id: Uuid,
     pub routine_name: String,
+    /// The name of the routine it follows, when it is a sub-routine.
+    pub parent_name: Option<String>,
     pub trigger: RunTrigger,
     pub target: RunTarget,
     pub end: RunEnd,

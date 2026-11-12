@@ -58,6 +58,7 @@ import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { EntityData } from '@entity';
 import { isEmailEntity, isGithubPrEntity, isTaskEntity } from '@entity';
+import type { NotificationMuteMenuProps } from '@notifications/components/NotificationMuteMenu';
 import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { useIsTeamAdmin } from '@queries/team/teams';
@@ -66,7 +67,7 @@ import { supportsEntityAppearance } from '../entity-appearance/core/appearance';
 import { useChangeEntityIcon } from '../entity-appearance/entity-appearance';
 import { useAppearanceEditAccess } from '../entity-appearance/queries/access';
 
-type SoupEntityActionItem = {
+export type SoupEntityActionItem = {
   id: string;
   label: string;
   icon?: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
@@ -75,6 +76,7 @@ type SoupEntityActionItem = {
   onClick: () => void | Promise<void>;
   destructive?: boolean;
   disabled?: boolean;
+  muteMenu?: NotificationMuteMenuProps;
 };
 
 type SoupEntityActionGroup = {
@@ -277,13 +279,10 @@ export function createSoupEntityActions(
       });
     }
 
-    /**
-     * The single entity these open actions apply to, if any.
-     *
-     * Content already mounted in another split is skipped — reopening it would
-     * duplicate it.
-     */
-    const openableEntity = (): EntityData | undefined => {
+    /** Same-tab split deduplication must not prevent opening another tab. */
+    const openableEntity = (
+      destination: 'split' | 'tab'
+    ): EntityData | undefined => {
       if (isMobile()) return undefined;
       if (entities.length !== 1) return undefined;
       const entity = entities[0];
@@ -293,22 +292,24 @@ export function createSoupEntityActions(
         return undefined;
       const splitManager = globalSplitManager();
       if (!splitManager) return undefined;
-      // Reminder route claims perform identity reuse when the action runs.
-      const contentId =
-        entity.type === 'channel_message' || entity.type === 'channel_thread'
-          ? entity.channelId
-          : entity.id;
-      const contentType = itemToBlockName(entity);
-      const existing = splitManager.getSplitByContent(contentType, contentId);
-      if (existing) return undefined;
+      if (destination === 'split') {
+        // Reminder route claims perform identity reuse when the action runs.
+        const contentId =
+          entity.type === 'channel_message' || entity.type === 'channel_thread'
+            ? entity.channelId
+            : entity.id;
+        const contentType = itemToBlockName(entity);
+        if (splitManager.getSplitByContent(contentType, contentId))
+          return undefined;
+      }
       return entity;
     };
 
-    const openEntity = (options: { openInNewSplit?: boolean }) => async () => {
-      const entity = openableEntity();
+    const openEntity = (destination: 'split' | 'tab') => async () => {
+      const entity = openableEntity(destination);
       if (!entity) return;
 
-      if (options.openInNewSplit) {
+      if (destination === 'split') {
         analytics.track('split_created', {
           from: 'soup_view_entity_actions_menu',
         });
@@ -318,7 +319,7 @@ export function createSoupEntityActions(
 
       // Match row navigation, including a thread row's driving message.
       await openEntityInSplitFromUnifiedList(entity, {
-        ...options,
+        openInNewSplit: destination === 'split',
         splitHandle,
         referredFrom: 'entity-actions-menu',
         notificationSource,
@@ -327,18 +328,20 @@ export function createSoupEntityActions(
       });
     };
 
-    if (viewContext.supportsOpenInNewSplit && openableEntity()) {
-      topItems.push({
-        id: 'open-in-split',
-        label: t('entityActions.openInNewSplit'),
-        shortcut: 'shift+enter',
-        // A layout with no room for another split cannot honor this: the open
-        // would fall back to replacing a split instead of adding one.
-        disabled: !globalSplitManager()?.canAppendSplit(),
-        onClick: openEntity({ openInNewSplit: true }),
-      });
-      if (canOpenInNewTab()) {
-        const open = openEntity({ openInNewSplit: false });
+    if (viewContext.supportsOpenInNewSplit) {
+      if (openableEntity('split')) {
+        topItems.push({
+          id: 'open-in-split',
+          label: t('entityActions.openInNewSplit'),
+          shortcut: 'shift+enter',
+          // A layout with no room for another split cannot honor this: the open
+          // would fall back to replacing a split instead of adding one.
+          disabled: !globalSplitManager()?.canAppendSplit(),
+          onClick: openEntity('split'),
+        });
+      }
+      if (canOpenInNewTab() && openableEntity('tab')) {
+        const open = openEntity('tab');
         topItems.push({
           id: 'open-in-tab',
           label: t('entityActions.openInNewTab'),
@@ -419,11 +422,6 @@ export function createSoupEntityActions(
     }
 
     if (canExecuteAll(muteAction.canExecute)) {
-      middleItems.push({
-        id: 'snooze',
-        label: t('entityActions.snoozeNotifications'),
-        onClick: () => muteAction.snooze(entities),
-      });
       const allMuted = entities.every((entity) => muteAction.isMuted(entity));
       middleItems.push({
         id: 'mute',
@@ -431,6 +429,7 @@ export function createSoupEntityActions(
           ? t('entityActions.unmuteNotifications')
           : t('entityActions.muteNotifications'),
         onClick: handle(muteAction.executeWithSoup),
+        muteMenu: muteAction.menu(entities),
       });
     }
 
@@ -588,14 +587,14 @@ export function createSoupEntityActions(
           }
         );
       }
+    }
 
-      if (shareAction.canExecute(entities[0])) {
-        middleItems.push({
-          id: 'share',
-          label: t('entityActions.share'),
-          onClick: handle(shareAction.executeWithSoup),
-        });
-      }
+    if (canExecuteAll(shareAction.canExecute)) {
+      middleItems.push({
+        id: 'share',
+        label: t('entityActions.share'),
+        onClick: handle(shareAction.executeWithSoup),
+      });
     }
 
     // Sender group: Sender → Signal, Sender → Noise, Block Sender

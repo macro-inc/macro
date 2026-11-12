@@ -222,6 +222,7 @@ export const connectionBacklog =
 
 export const contactsExcluded = [
   'addContact',
+  'getContacts',
 ] as const satisfies readonly (keyof ContactsSdk)[];
 
 export const contactsBacklog =
@@ -304,6 +305,13 @@ export const staticFilesBacklog =
   [] as const satisfies readonly (keyof StaticFilesSdk)[];
 
 export const storageExcluded = [
+  // Chat sidebar section editing and discovery remain app-only navigation.
+  'createChannelSection',
+  'deleteChannelSection',
+  'listChannelSections',
+  'previewChannelSection',
+  'setChannelSection',
+  'updateChannelSection',
   // Opening a host to a team takes its owner's own session: an agent can ask for
   // access but never grant it.
   'setHarnessTeamAccess',
@@ -384,6 +392,31 @@ export const storageExcluded = [
   'meetingLeave',
   'meetingParticipants',
   'mentionPreviews',
+  // The v1 vault requires a normal human session and item access.
+  // Agent SDK credentials cannot access it.
+  'passwordsActivity',
+  'passwordsCopy',
+  'passwordsCopyUsername',
+  'passwordsCreate',
+  'passwordsCreateFolder',
+  'passwordsDetail',
+  'passwordsFolders',
+  'passwordsGrants',
+  'passwordsHistory',
+  'passwordsList',
+  'passwordsMoveFolder',
+  'passwordsPatch',
+  'passwordsRemove',
+  'passwordsRemoveFolder',
+  'passwordsRemoveTotp',
+  'passwordsRenameFolder',
+  'passwordsReveal',
+  'passwordsSetTotp',
+  'passwordsShare',
+  'passwordsTeams',
+  'passwordsTotp',
+  'passwordsUpdate',
+  'passwordsUsername',
   'patchViewHandler',
   'postItemsSoup',
   'postItemsSoupAstGrouped',

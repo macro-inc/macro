@@ -61,6 +61,10 @@ event contract (schema, sanitization, delivery semantics).
 
 ## Gotchas
 
+- A user is on at most one team, enforced only by the `team_owner_id_unique`
+  and `team_user_user_id_unique` constraints. `create_team` maps either
+  violation to `CreateTeamError::AlreadyOnTeam` (409); a new insert path into
+  `team` or `team_user` must map them too, or it answers 500.
 - A trialing subscription that gains its first Max seat ends the trial and
   starts a new billing cycle immediately. Every other seat change keeps the
   trial, including on a subscription already trialing on Max, so its scheduled
@@ -97,3 +101,11 @@ event contract (schema, sanitization, delivery semantics).
 ## Related
 
 - Docs: `crates/teams/README.md` · Rules: `.agents/rules/rust/db.md`
+
+## Team vault cleanup
+
+- Run `OwnedEntityCleanup::prepare_team_deletion` before census and ordinary cleanup;
+  namespace failures stop before entity, session, subscription or team deletion.
+  Retain its optional opaque guard in `ClearedTeam` through billing and row deletion.
+- Keep membership removal and rollback unchanged: vault items belong to the team,
+  retain their creator, and lose departing members through current membership checks.

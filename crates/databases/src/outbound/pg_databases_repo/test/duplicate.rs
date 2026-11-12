@@ -155,6 +155,7 @@ async fn a_duplicate_copies_tables_columns_rows_relations_and_boards(pool: PgPoo
                             column: title,
                             value: CellValue::Text("Keynote".into()),
                         }]],
+                        ids: None,
                     },
                 }]
                 .into(),
@@ -184,6 +185,7 @@ async fn a_duplicate_copies_tables_columns_rows_relations_and_boards(pool: PgPoo
                                 value: CellValue::Rows(vec![keynote]),
                             },
                         ]],
+                        ids: None,
                     },
                 }]
                 .into(),

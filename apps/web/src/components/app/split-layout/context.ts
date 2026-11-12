@@ -1,4 +1,5 @@
 import type { HotkeyToken } from '@core/hotkey/tokens';
+import type { NotificationMuteMenuProps } from '@notifications/components/NotificationMuteMenu';
 import type { NullableSize } from '@solid-primitives/resize-observer';
 import {
   type Accessor,
@@ -28,6 +29,7 @@ export type SplitFileMenuAction = {
   icon?: Component;
   action?: (e?: MouseEvent) => void;
   children?: SplitFileMenuAction[];
+  muteMenu?: NotificationMuteMenuProps;
   /** Only set when the token's shortcut is executable from the split. */
   hotkeyToken?: HotkeyToken;
   group?: SplitFileMenuActionGroup;

@@ -286,6 +286,7 @@ fn action_owned_by(owner: Owner) -> ScheduledAction {
         appearance: model_entity::EntityAppearance::default(),
         suggestion_id: None,
         description: String::new(),
+        sub_routine: None,
     }
 }
 

@@ -4,6 +4,8 @@ resolver = "2"
 exclude = ["vendor"]
 
 members = [
+  "crates/passwords",
+  "crates/openbao_client",
   "crates/access_requests",
   "crates/agent_api_keys",
   "crates/routines",
@@ -219,6 +221,7 @@ members = [
 ]
 
 [workspace.dependencies]
+openbao_client = { path = "crates/openbao_client" }
 macro_user_id = { path = "crates/macro_user_id" }
 aes = "0.8.4"
 aes-gcm = { version = "0.10.3", features = ["zeroize"] }

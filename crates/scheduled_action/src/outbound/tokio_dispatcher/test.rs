@@ -31,6 +31,7 @@ fn only_enabled_cron_actions_get_a_timer() {
         appearance: model_entity::EntityAppearance::default(),
         suggestion_id: None,
         description: String::new(),
+        sub_routine: None,
     };
     assert!(action_sleep(id, &action, 0).is_some());
     action.trigger = serde_json::from_value(json!({"type":"multiple", "triggers":[

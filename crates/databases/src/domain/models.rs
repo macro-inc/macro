@@ -481,6 +481,9 @@ pub enum Write {
         table_id: TableId,
         /// One entry per new row.
         rows: Vec<Vec<(PropertyDefinitionId, PropertyValue)>>,
+        /// The ids the client minted for the new rows, one per row; empty
+        /// to mint them here, and when `restored` gives them.
+        ids: Vec<RowId>,
         /// The ids and positions the rows come back under, one per row,
         /// when the insert puts back rows a removal took; empty to mint
         /// new ones after the table's last row.

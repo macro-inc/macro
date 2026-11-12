@@ -111,7 +111,7 @@ fn typescript() -> Job {
 /// installed tree and write nothing, so they run at once: in sequence they took
 /// about 106 s of a 179 s job. `packages/sdk` isn't a workspace member, so the
 /// SDK documentation's dependencies install first, as they did before.
-const TYPECHECKS: [(&str, &str, &str); 11] = [
+const TYPECHECKS: [(&str, &str, &str); 12] = [
     // `type-check` runs the native TypeScript 7 compiler.
     ("Check Types", "apps/web", "bun run type-check"),
     // Type-aware oxlint over all of `apps/web`; `no-floating-promises` is an
@@ -130,6 +130,11 @@ const TYPECHECKS: [(&str, &str, &str); 11] = [
         "Check Collaboration Package Types",
         "packages/collaboration",
         "bun run type-check",
+    ),
+    (
+        "Check Observability Package",
+        "packages/observability",
+        "bun run type-check && bun run test",
     ),
     (
         "Check Lexical Service Types",
@@ -212,7 +217,7 @@ fn typecheck_script(checks: &[(&str, &str, &str)]) -> String {
 
 /// Everything generated from Rust binaries: the OpenAPI clients in `apps/web`
 /// (`gen-api`), the specta wasm wire types, the SDK's specs and generated
-/// layer, and the MCP tool reference in `apps/docs`. They used to be checked by
+/// layer. These used to be checked by
 /// three jobs in three workflows, each compiling the workspace again; one job
 /// on one target dir builds the binaries once. The SDK regeneration reuses the
 /// specs `gen-api` just wrote rather than rerunning it.
@@ -251,12 +256,6 @@ fn generated_code() -> Job {
             "Verify SDK generated code is fresh",
             "packages/sdk",
             "packages/sdk generated code is stale. Run 'just update-generated' in packages/sdk and commit the result.",
-        ))
-        .add_step(regenerate_tool_pages())
-        .add_step(verify_fresh(
-            "Verify docs tool reference is fresh",
-            "apps/docs",
-            "apps/docs tool reference is stale. Run 'bun run generate:tools' in apps/docs and commit the result.",
         ))
         // Last: its `cargo run -p` builds resolve features per package, so
         // running them earlier would make the steps above recompile.
@@ -562,14 +561,6 @@ fn regenerate_sdk() -> Step<Run> {
             bun run generate
         "#})
         .working_directory(xtask_paths::repo_dir!("packages/sdk"))
-}
-
-/// Renders `apps/docs/AI/mcp/tools/` from the `gen_tool_schemas` binary, so a
-/// tool's schema or description change cannot leave the docs site behind.
-fn regenerate_tool_pages() -> Step<Run> {
-    Step::new("Regenerate MCP tool pages")
-        .run("bun run generate:tools")
-        .working_directory(xtask_paths::repo_dir!("apps/docs"))
 }
 
 fn verify_fresh(name: &str, dir: &str, stale_message: &str) -> Step<Run> {

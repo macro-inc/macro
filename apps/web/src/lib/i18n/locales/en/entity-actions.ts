@@ -37,7 +37,7 @@ export default {
   viewItemsWithTag: 'View all items with tag',
   editTag: 'Edit tag',
   removeTag: 'Remove tag',
-  snoozeNotifications: 'Snooze notifications…',
+  snoozeNotifications: 'Snooze notifications',
   muteNotifications: 'Mute notifications',
   unmuteNotifications: 'Unmute notifications',
   remindMe: 'Remind me',
@@ -47,6 +47,11 @@ export default {
   changeProject: 'Change project',
   openSourceNamed: 'Open source {{name}}',
   changeSource: 'Change source',
+  openEntityNamed: 'Open {{name}}',
+  changeEntity: 'Change {{property}}',
+  unlinkValue: 'Unlink',
+  unlinking: 'Unlinking…',
+  unpinProperty: 'Unpin property',
   moveToFolder: 'Move to folder',
   removeFromFolder: 'Remove from folder',
   duplicate: 'Duplicate',
@@ -64,6 +69,10 @@ export default {
   copyBranchNameCommand: 'Copy branch name',
   copyId: 'Copy ID',
   share: 'Share',
+  shareCommand: {
+    one: 'Share',
+    other: 'Share items',
+  },
   downloadDocx: 'Download',
   downloadEml: 'Download .eml',
   downloadEmlFailed: 'Failed to download email. Please try again.',
@@ -276,6 +285,7 @@ export default {
   folderDuplicateLimitHint:
     'Folders with more than 100 files, chats, and subfolders can’t be duplicated.',
   toastGithubLinkCopied: 'GitHub link copied to clipboard',
+  toastGithubLinkCopyFailed: 'Could not copy GitHub link',
   toastBranchNameCopied: 'Branch name copied to clipboard',
   download: 'Download',
   copyGithubLink: 'Copy GitHub Link',
@@ -296,4 +306,7 @@ export default {
   toastPrConvertToDraftFailed: 'Failed to convert pull request to a draft',
   toastPrClosed: 'Closed {{name}}',
   toastPrCloseFailed: 'Failed to close pull request',
+  // Markdown document layout.
+  turnOnWideMode: 'Turn on wide mode',
+  turnOffWideMode: 'Turn off wide mode',
 };

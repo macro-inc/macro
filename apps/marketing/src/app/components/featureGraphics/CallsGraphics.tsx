@@ -1,3 +1,4 @@
+import IconCallRow from '@icon/system/regular/phone-call.svg';
 import {
   createSignal,
   For,
@@ -9,7 +10,6 @@ import {
 import callMainFeedUrl from '../../../assets/calls/call-main-feed.webp?url';
 import callPipFeedUrl from '../../../assets/calls/call-pip-feed.webp?url';
 import IconGithub from '../../../assets/icons/icon-github.svg';
-import IconCallRow from '../../../assets/icons/wide-call.svg';
 import { breakpoint, viewportWidth } from '../../utils/utilBreakpoint';
 import {
   CtaIcon,
@@ -826,7 +826,7 @@ export function HeroCallsWindow() {
       mask="linear-gradient(to bottom, rgb(0 0 0 / 1) 0%, rgb(0 0 0 / 1) 66%, rgb(0 0 0 / 0.18) 100%)"
       interactive={{
         ariaLabel:
-          'Interactive Macro calls demo. Use J and K to navigate, E to archive.',
+          'Interactive Macro Calls demo. Use J and K to navigate, E to archive.',
         onKeyDown,
       }}
     >

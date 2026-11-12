@@ -18,10 +18,13 @@ use std::str::FromStr;
 use crate::domain::event_runs::{ClaimToken, ConfigurationRevision};
 use crate::domain::event_trigger::ActionTrigger;
 use crate::domain::models::{
-    ActionExecutionRecord, ActionKind, ActionPolicyError, AlreadyRunningError, MAX_ACTION_TIME,
-    RunHistory, Schedule, ScheduledAction,
+    ActionExecutionRecord, ActionKind, ActionPolicyError, AlreadyRunningError, CreatedRoutine,
+    MAX_ACTION_TIME, MAX_ACTIVE_SUB_ROUTINES, RunHistory, RunningRun, Schedule, ScheduledAction,
+    SubRoutine, SubRoutineKey,
 };
-use crate::domain::ports::ScheduledActionRepo;
+use crate::domain::ports::{ScheduledActionRepo, SubRoutines};
+
+mod sub_routines;
 
 #[cfg(test)]
 pub(crate) mod test;
@@ -84,12 +87,30 @@ struct ActionRow {
     appearance: Option<sqlx::types::Json<EntityAppearance>>,
     suggestion_id: Option<Uuid>,
     description: String,
+    parent_id: Option<Uuid>,
+    created_by_run_id: Option<Uuid>,
+    child_key: Option<String>,
+    paused_by_parent: bool,
 }
 
 impl TryFrom<ActionRow> for ScheduledAction {
     type Error = anyhow::Error;
 
     fn try_from(row: ActionRow) -> Result<Self> {
+        let sub_routine = match (row.parent_id, row.created_by_run_id) {
+            (Some(parent_id), Some(created_by_run_id)) => Some(SubRoutine {
+                parent_id,
+                created_by_run_id,
+                key: row
+                    .child_key
+                    .as_deref()
+                    .map(SubRoutineKey::new)
+                    .transpose()?,
+                paused_by_parent: row.paused_by_parent,
+            }),
+            (None, _) => None,
+            (Some(_), None) => bail!("sub-routine without the run that created it"),
+        };
         let trigger = match row.trigger_type.as_str() {
             "cron" => ActionTrigger::Cron {
                 schedule: Schedule::from_cron(row.schedule.context("cron schedule missing")?)?,
@@ -129,6 +150,7 @@ impl TryFrom<ActionRow> for ScheduledAction {
             appearance: row.appearance.map(|value| value.0).unwrap_or_default(),
             suggestion_id: row.suggestion_id,
             description: row.description,
+            sub_routine,
         })
     }
 }
@@ -189,18 +211,25 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
         let kind = kind_to_str(&action.kind);
 
         let mut tx = self.pool.begin().await?;
+        if let Some(link) = &action.sub_routine {
+            sub_routines::admit_child(&mut tx, link.parent_id).await?;
+        }
+        let link = action.sub_routine.as_ref();
         let row = sqlx::query_as!(
             ActionRow,
             r#"
             INSERT INTO scheduled_action
                 (id, owner, name, schedule, kind, timezone, task, next_run_at, enabled,
                  trigger_type, event_filters, configuration_revision, event_activated_at, trigger_config,
-                 run_visibility, template_id, appearance, suggestion_id, description)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+                 run_visibility, template_id, appearance, suggestion_id, description,
+                 parent_id, created_by_run_id, child_key, paused_by_parent)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
+                    $19, $20, $21, $22, $23)
             RETURNING id, owner, name, schedule, kind, timezone, task, claimed, created_at,
                       updated_at, next_run_at, enabled, trigger_type, event_filters,
                       configuration_revision, event_activated_at, trigger_config, run_visibility, template_id,
-                      appearance AS "appearance: _", suggestion_id, description
+                      appearance AS "appearance: _", suggestion_id, description,
+                      parent_id, created_by_run_id, child_key, paused_by_parent
             "#,
             id,
             owner,
@@ -221,9 +250,14 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
             sqlx::types::Json(&action.appearance) as _,
             action.suggestion_id,
             action.description,
+            link.map(|link| link.parent_id),
+            link.map(|link| link.created_by_run_id),
+            link.and_then(|link| link.key.as_ref()).map(SubRoutineKey::as_str),
+            link.is_some_and(|link| link.paused_by_parent),
         )
         .fetch_one(&mut *tx)
-        .await?;
+        .await
+        .map_err(sub_routines::key_taken)?;
 
         let created = ScheduledAction::try_from(row)?;
         match self
@@ -256,7 +290,8 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
             r#"
             SELECT id, owner, name, schedule, kind, timezone, task, claimed, created_at,
                    updated_at, next_run_at, enabled, trigger_type, event_filters,
-                   configuration_revision, event_activated_at, trigger_config, run_visibility, template_id, appearance AS "appearance: _", suggestion_id, description
+                   configuration_revision, event_activated_at, trigger_config, run_visibility, template_id, appearance AS "appearance: _", suggestion_id,
+                   description, parent_id, created_by_run_id, child_key, paused_by_parent
             FROM scheduled_action
             WHERE owner = $1
             "#,
@@ -273,7 +308,8 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
             r#"
             SELECT id, owner, name, schedule, kind, timezone, task, claimed, created_at,
                    updated_at, next_run_at, enabled, trigger_type, event_filters, trigger_config,
-                   configuration_revision, event_activated_at, run_visibility, template_id, appearance AS "appearance: _", suggestion_id, description
+                   configuration_revision, event_activated_at, run_visibility, template_id, appearance AS "appearance: _", suggestion_id,
+                   description, parent_id, created_by_run_id, child_key, paused_by_parent
             FROM scheduled_action
             WHERE id = ANY($1)
             "#,
@@ -290,7 +326,8 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
             r#"
             SELECT id, owner, name, schedule, kind, timezone, task, claimed, created_at,
                    updated_at, next_run_at, enabled, trigger_type, event_filters,
-                   configuration_revision, event_activated_at, trigger_config, run_visibility, template_id, appearance AS "appearance: _", suggestion_id, description
+                   configuration_revision, event_activated_at, trigger_config, run_visibility, template_id, appearance AS "appearance: _", suggestion_id,
+                   description, parent_id, created_by_run_id, child_key, paused_by_parent
             FROM scheduled_action
             WHERE id = $1
             "#,
@@ -309,7 +346,8 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
             r#"
             SELECT id, owner, name, schedule, kind, timezone, task, claimed, created_at,
                    updated_at, next_run_at, enabled, trigger_type, event_filters,
-                   configuration_revision, event_activated_at, trigger_config, run_visibility, template_id, appearance AS "appearance: _", suggestion_id, description
+                   configuration_revision, event_activated_at, trigger_config, run_visibility, template_id, appearance AS "appearance: _", suggestion_id,
+                   description, parent_id, created_by_run_id, child_key, paused_by_parent
             FROM scheduled_action
             WHERE enabled AND trigger_type IN ('cron', 'once', 'multiple') AND next_run_at IS NOT NULL
               AND (claimed IS NULL OR claimed < $1)
@@ -348,6 +386,7 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
                 trigger_config = $14,
                 run_visibility = $15,
                 description = $16,
+                paused_by_parent = $17,
                 updated_at = now()
             WHERE id = $12
               AND configuration_revision = $10::bigint - 1
@@ -366,7 +405,8 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
               )
             RETURNING id, owner, name, schedule, kind, timezone, task, claimed, created_at,
                       updated_at, next_run_at, enabled, trigger_type, event_filters,
-                      configuration_revision, event_activated_at, trigger_config, run_visibility, template_id, appearance AS "appearance: _", suggestion_id, description
+                      configuration_revision, event_activated_at, trigger_config, run_visibility, template_id, appearance AS "appearance: _", suggestion_id,
+                   description, parent_id, created_by_run_id, child_key, paused_by_parent
             "#,
             action.name,
             trigger.schedule,
@@ -384,6 +424,10 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
             trigger.trigger_config,
             <&str>::from(action.run_visibility),
             action.description,
+            action
+                .sub_routine
+                .as_ref()
+                .is_some_and(|link| link.paused_by_parent),
         )
         .fetch_optional(&self.pool)
         .await?
@@ -424,26 +468,40 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
 
     async fn delete_action(&self, id: &Uuid) -> Result<()> {
         let mut tx = self.pool.begin().await?;
-        entity_access_db_utils::delete_entity_access_rows(&mut tx, id, EntityType::ScheduledAction)
-            .await
-            .context("failed to delete scheduled action grants")?;
-        let deleted = sqlx::query!(
+        // A routine's sub-routines go with it. The foreign key would cascade
+        // their rows, but not their grants or registry entries.
+        let deleted = sqlx::query_scalar!(
             r#"
             DELETE FROM scheduled_action
-            WHERE id = $1
+            WHERE id = $1 OR parent_id = $1
+            RETURNING id
             "#,
             *id,
         )
-        .execute(&mut *tx)
+        .fetch_all(&mut *tx)
         .await?;
+        entity_access_db_utils::delete_entity_access_rows(&mut tx, id, EntityType::ScheduledAction)
+            .await
+            .context("failed to delete scheduled action grants")?;
 
-        if deleted.rows_affected() != 0 {
-            activity::outbound::pg_activity_repo::purge_entities(
-                &mut *tx,
-                &[(model_entity::EntityType::ScheduledAction, id.to_string())],
-            )
-            .await?;
-            match delete_entity(&mut tx, *id).await? {
+        if !deleted.is_empty() {
+            let entities: Vec<_> = deleted
+                .iter()
+                .map(|deleted| (EntityType::ScheduledAction, deleted.to_string()))
+                .collect();
+            activity::outbound::pg_activity_repo::purge_entities(&mut *tx, &entities).await?;
+        }
+        for deleted in deleted {
+            if deleted != *id {
+                entity_access_db_utils::delete_entity_access_rows(
+                    &mut tx,
+                    &deleted,
+                    EntityType::ScheduledAction,
+                )
+                .await
+                .context("failed to delete sub-routine grants")?;
+            }
+            match delete_entity(&mut tx, deleted).await? {
                 WriteOutcome::Applied | WriteOutcome::NotFound => {}
             }
         }
@@ -506,9 +564,10 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
     async fn create_execution_record(&self, record: ActionExecutionRecord) -> Result<()> {
         sqlx::query!(
             r#"
-            INSERT INTO action_execution_record (action_id, resource_id, start_time, end_time, is_success, result)
-            VALUES ($1, $2, $3, $4, $5, $6)
+            INSERT INTO action_execution_record (id, action_id, resource_id, start_time, end_time, is_success, result)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             "#,
+            record.id.unwrap_or_else(generate_uuid_v7),
             record.action_id,
             record.resource_id,
             record.start_time,

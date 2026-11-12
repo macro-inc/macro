@@ -81,6 +81,7 @@ async fn core_storage_supports_cells_and_versions_without_an_app_entity(pool: Pg
                 table_id: table,
                 rows: vec![vec![(definition, PropertyValue::Str("Acme".into()))]],
                 restored: Vec::new(),
+                ids: Vec::new(),
             },
         ],
     );
@@ -110,6 +111,7 @@ async fn core_storage_supports_cells_and_versions_without_an_app_entity(pool: Pg
             table_id: table,
             rows: vec![Vec::new()],
             restored: Vec::new(),
+            ids: Vec::new(),
         }],
     );
     stale.expected_versions.push((table, TableVersion(0)));

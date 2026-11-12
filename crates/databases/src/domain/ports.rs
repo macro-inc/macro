@@ -282,6 +282,20 @@ pub trait AccessDirectory: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<AccessLevel>, Self::Error>> + Send;
 }
 
+/// Whether the user who set up something that writes a database on their
+/// behalf (a webhook, a sync) can still edit it, asked on every write.
+pub trait CreatorAccess: Send + Sync + 'static {
+    /// The creator's edit receipt for the database; `None` when they can no
+    /// longer edit it.
+    fn edit_receipt(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        database_id: DatabaseId,
+    ) -> impl Future<
+        Output = Result<Option<EntityAccessReceipt<EditAccessLevel>>, rootcause::Report>,
+    > + Send;
+}
+
 /// The definitions behind columns: creating database-owned ones, binding
 /// existing ones, and reading them back with their options.
 pub trait ColumnDefinitionStore: Send + Sync + 'static {

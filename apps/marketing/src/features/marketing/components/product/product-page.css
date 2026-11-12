@@ -5,9 +5,7 @@
 .product-page .homepage-section-break > span { display: none; }
 .product-page .homepage-section-break p { max-width: 100%; margin-inline: 0; white-space: pre-line; text-wrap: wrap; }
 .product-page .feature-page-visual { width: min(872px, calc(100% - 48px)); }
-.product-page .feature-page-jump-links { width: min(872px, calc(100% - 48px)); margin-inline: auto; border: 0; padding-block: 12px 32px; }
-.product-page .email-feature-graphic { width: 180px; height: 112px; color: var(--color-ink-muted); }
-.product-prose { width: min(var(--product-measure), 100%); margin: 28px auto 0; padding-inline: 24px; color: var(--color-ink-muted); font: 400 15px/1.85 'Inter Variable', Inter, sans-serif; }
+.product-prose { width: min(var(--product-measure), 100%); margin: 28px auto 0; padding-inline: 24px; color: var(--color-ink-muted); font: 370 15px/1.85 'Inter Variable', Inter, sans-serif; }
 .product-prose p + p { margin-top: 18px; }
 .product-page .feature-page-reading { width: min(var(--product-measure), 100%); }
 .product-page .feature-page-reading-rule { display: none; }
@@ -28,8 +26,7 @@
  .product-page { padding-inline: 18px; }
  .product-page .homepage-feature-heading, .product-prose { padding-inline: 0; }
  .product-page .homepage-section-break p { white-space: normal; text-wrap: pretty; }
- .product-page .feature-page-visual, .product-page .feature-page-jump-links, .product-page .feature-page-comparison, .product-page > .homepage-feature-end { width: 100%; }
- .product-page .email-feature-graphic { width: 130px; height: 94px; }
+ .product-page .feature-page-visual, .product-page .feature-page-comparison, .product-page > .homepage-feature-end { width: 100%; }
  .product-page .email-desktop-demo { --desktop-stage-width: calc(100vw - 24px); }
  .product-prose { font-size: 14px; }
  .product-page .product-demo { height: var(--demo-h-mobile, 620px); border-radius: 12px; }
@@ -48,5 +45,3 @@
 @media(max-width:699px) { .product-sidebared-scene { position:relative; } .product-sidebared-scene > [data-view-sidebar] { position:absolute; inset:0 auto 0 0; width:min(248px, 85%); z-index:3; background:var(--color-panel); box-shadow:16px 0 32px #0006; } }
 .product-page .email-desktop-content .product-demo-stage { height:100%; }
 .product-page .email-desktop-content .product-demo { height:100%; border-radius:0; box-shadow:none; }
-
-

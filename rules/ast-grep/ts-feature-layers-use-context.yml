@@ -20,6 +20,11 @@ files:
   - apps/web/src/features/entity-appearance/components/**
   - apps/web/src/features/entity-appearance/views/**
   - apps/web/src/features/entity-appearance/context/**
+  - apps/web/src/features/passwords/queries/**
+  - apps/web/src/features/passwords/primitives/**
+  - apps/web/src/features/passwords/components/**
+  - apps/web/src/features/passwords/views/**
+  - apps/web/src/features/passwords/context/**
   - apps/web/src/features/notifications-inbox/queries/**
   - apps/web/src/features/notifications-inbox/primitives/**
   - apps/web/src/features/notifications-inbox/components/**
@@ -87,6 +92,11 @@ files:
   - apps/web/src/features/tasks-view/components/task-board*
   - apps/web/src/features/tasks-view/views/task-board*
   - apps/web/src/features/tasks-view/context/task-board*
+  - apps/web/src/features/sharing/share-delivery/queries/**
+  - apps/web/src/features/sharing/share-delivery/primitives/**
+  - apps/web/src/features/sharing/share-delivery/components/**
+  - apps/web/src/features/sharing/share-delivery/views/**
+  - apps/web/src/features/sharing/share-delivery/context/**
   - apps/web/src/features/routines/queries/**
   - apps/web/src/features/routines/primitives/**
   - apps/web/src/features/routines/components/**

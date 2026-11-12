@@ -138,6 +138,7 @@ fn routine(
         appearance: Default::default(),
         suggestion_id: None,
         description: String::new(),
+        sub_routine: None,
     }
 }
 

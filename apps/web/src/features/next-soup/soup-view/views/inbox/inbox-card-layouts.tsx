@@ -1,5 +1,6 @@
 import { ListPropertyValue } from '@app/features/next-soup/soup-view/views/tasks/list-property-value';
 import { formatCallDuration } from '@block-call/utils';
+import { channelListName } from '@channel/group-chat-name';
 import { BotIcon } from '@channel/Message/BotIcon';
 import { MACRO_AI_BOT_ID, MACRO_AI_NAME } from '@channel/macroAi';
 import { EntityIcon, getEntityIconType } from '@core/component/EntityIcon';
@@ -456,7 +457,8 @@ const channelLocation = (entity: EntityData): string | undefined => {
     return undefined;
   }
   if (entity.channelType === 'direct_message') return undefined;
-  return entity.name.startsWith('#') ? entity.name.slice(1) : entity.name;
+  const name = entity.name.startsWith('#') ? entity.name.slice(1) : entity.name;
+  return channelListName({ name, channelType: entity.channelType });
 };
 
 const entityLocation = (entity: EntityData): string | undefined => {

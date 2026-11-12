@@ -1,4 +1,5 @@
 import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
+import { t } from '@app/lib/i18n';
 import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
 import ClockIcon from '@icon/system/regular/clock.svg';
 import ClockCounterIcon from '@icon/system/regular/clock-counter-clockwise.svg';
@@ -140,6 +141,8 @@ export function RoutineEditor(props: {
   actions?: JSX.Element;
   identityIcon?: JSX.Element;
   feedback?: JSX.Element;
+  /** The routines this routine's runs created; absent when it created none. */
+  created?: JSX.Element;
   /** Above the sections, for what the owner has to act on first. */
   notice?: JSX.Element;
 }) {
@@ -364,6 +367,16 @@ export function RoutineEditor(props: {
                 {(settings) => (
                   <RoutineSection label="Runs & notifications">
                     <RoutineSurface>{settings()}</RoutineSurface>
+                  </RoutineSection>
+                )}
+              </Show>
+              <Show when={props.created}>
+                {(created) => (
+                  <RoutineSection
+                    label={t('subRoutines.sectionTitle')}
+                    aside={t('subRoutines.sectionAside')}
+                  >
+                    {created()}
                   </RoutineSection>
                 )}
               </Show>

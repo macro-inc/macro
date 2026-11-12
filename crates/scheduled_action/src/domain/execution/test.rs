@@ -432,6 +432,7 @@ fn action() -> ScheduledAction {
         appearance: model_entity::EntityAppearance::default(),
         suggestion_id: None,
         description: String::new(),
+        sub_routine: None,
     }
 }
 fn executor(repo: Repo, runner: Runner) -> InProcessExecutor<Repo, Live, Runner> {

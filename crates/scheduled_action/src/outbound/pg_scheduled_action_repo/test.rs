@@ -121,6 +121,7 @@ pub(crate) fn sample_action(owner: Owner, name: &str) -> ScheduledAction {
         appearance: model_entity::EntityAppearance::default(),
         suggestion_id: None,
         description: String::new(),
+        sub_routine: None,
     }
 }
 

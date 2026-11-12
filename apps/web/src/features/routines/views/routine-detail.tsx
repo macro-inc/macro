@@ -22,15 +22,22 @@ import {
 import { CodeReviewNotice } from '../components/routine-code-review';
 import { RoutineEditor } from '../components/routine-editor';
 import { RoutineRunButton } from '../components/routine-run-button';
+import {
+  RoutineSubRoutines,
+  type SubRoutineItem,
+} from '../components/routine-sub-routines';
 import type { RoutineDetailSlots } from '../context/routine-slots';
 import type { RoutineDetailSource } from '../context/routine-sources';
+import { isClaimActive } from '../core/claim';
 import type { HistoryRecord, HistoryResource } from '../core/history';
+import { isFinished, type RoutineSnapshot } from '../core/routine';
 import {
   createEmptyDraft,
   draftPrompt,
   getErrorMessage,
   withDraftSteps,
 } from '../core/routine-draft';
+import { describeTrigger } from '../core/routine-triggers';
 import { type RunItem, runStartLine } from '../core/run-start';
 import { describeHistoryStep, stepsForRun } from '../core/step-history';
 import {
@@ -89,6 +96,27 @@ function SaveState(props: {
   );
 }
 
+/** What a routine's runs created, as its page lists them, newest first. */
+function subRoutineItems(
+  children: readonly RoutineSnapshot[],
+  finished: boolean
+): SubRoutineItem[] {
+  const state = (child: RoutineSnapshot): SubRoutineItem['state'] => {
+    if (finished) return 'finished';
+    if (isClaimActive(child.claimedAt)) return 'running';
+    return child.enabled ? 'active' : 'paused';
+  };
+  return children
+    .filter((child) => isFinished(child) === finished)
+    .toSorted((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+    .map((child) => ({
+      id: child.id,
+      name: child.name,
+      when: (child.draft?.triggers ?? []).map(describeTrigger).join(' · '),
+      state: state(child),
+    }));
+}
+
 export function RoutineDetailView(props: {
   source: RoutineDetailSource;
   userId: Accessor<string | undefined>;
@@ -107,6 +135,8 @@ export function RoutineDetailView(props: {
   /** Opens an agent conversation about this routine. */
   onCompose?(): void;
   onOpenTemplate?(templateId: string): void;
+  /** Opens another routine: one this routine created, or its creator. */
+  onOpenRoutine(id: string): void;
   onOpenRun(resource: HistoryResource, newSplit: boolean): void;
   /** Opens the item an event run was about. */
   onOpenItem?(item: RunItem, newSplit: boolean): void;
@@ -149,7 +179,6 @@ export function RoutineDetailView(props: {
       return 'Update the schedule before turning it on';
     return 'Fix the routine before turning it on';
   };
-  /** Manual runs have no triggering item for steps to read. */
   return (
     <Show
       when={schedule()}
@@ -258,6 +287,15 @@ export function RoutineDetailView(props: {
                         Share
                       </Dropdown.Item>
                     </Show>
+                    <Show when={routine().parent}>
+                      <Dropdown.Item
+                        disabled={props.source.keepAsOwnPending()}
+                        onSelect={() => props.source.keepAsOwn()}
+                      >
+                        <ArrowUpRightIcon class="size-4" />
+                        {t('subRoutines.keep')}
+                      </Dropdown.Item>
+                    </Show>
                   </Dropdown.Group>
                   <Dropdown.Separator />
                   <Dropdown.Group>
@@ -332,6 +370,37 @@ export function RoutineDetailView(props: {
                   </span>
                 )}
               </Show>
+              <Show when={routine().parent}>
+                {(link) => (
+                  <>
+                    <span aria-hidden="true" class="text-ink-extra-muted">
+                      ·
+                    </span>
+                    <Show
+                      when={props.source.parent()}
+                      fallback={<span>{t('subRoutines.createdByGone')}</span>}
+                    >
+                      {(parent) => (
+                        <Button
+                          variant="ghost"
+                          size="xs"
+                          onClick={() => props.onOpenRoutine(link().id)}
+                        >
+                          {t('subRoutines.createdBy', {
+                            name: parent().name,
+                          })}
+                          <ArrowUpRightIcon class="size-3" />
+                        </Button>
+                      )}
+                    </Show>
+                    <Show when={link().pausedByParent && !routine().enabled}>
+                      <span class="text-xs text-ink-muted">
+                        {t('subRoutines.pausedWithParent')}
+                      </span>
+                    </Show>
+                  </>
+                )}
+              </Show>
               <Show when={props.onOpenTemplate && routine().templateId}>
                 {(templateId) => (
                   <>
@@ -350,6 +419,16 @@ export function RoutineDetailView(props: {
                 )}
               </Show>
             </>
+          }
+          created={
+            isOwned() &&
+            props.source.subRoutines().length > 0 && (
+              <RoutineSubRoutines
+                active={subRoutineItems(props.source.subRoutines(), false)}
+                finished={subRoutineItems(props.source.subRoutines(), true)}
+                onOpen={props.onOpenRoutine}
+              />
+            )
           }
           notice={
             <Show when={isOwned() && props.source.codeReview()}>
@@ -429,6 +508,7 @@ export function RoutineDetailView(props: {
                   )
                 }
                 onOpenItem={props.onOpenItem}
+                onOpenRoutine={props.onOpenRoutine}
                 describeStep={(step, record) =>
                   describeHistoryStep(step, stepsForRun(record, routine()))
                 }

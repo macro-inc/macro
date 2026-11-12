@@ -329,6 +329,7 @@ impl EventRunRepository for Repo {
                 appearance: model_entity::EntityAppearance::default(),
                 suggestion_id: None,
                 description: String::new(),
+                sub_routine: None,
             },
         }))
     }

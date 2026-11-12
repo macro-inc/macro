@@ -65,7 +65,8 @@ Module layout, layering, and TypeScript conventions.
   and review. Register adopting feature paths in both language variants of every
   feature rule. Enforced by ast-grep `ts-/tsx-feature-core-pure`,
   `ts-/tsx-feature-components-presentational`, `ts-/tsx-feature-data-no-ui`,
-  `ts-/tsx-feature-layers-use-context`, warning; currently scoped to activity.
+  `ts-/tsx-feature-layers-use-context`, warning; each covers only the feature
+  paths in its `files` list.
   Separate production composition and source-contract inversion still require
   explicit review; the existing rules do not enforce them.
 - **FE-71** A primitive owns real logic or is shared; one component's local UI state stays in that component.
