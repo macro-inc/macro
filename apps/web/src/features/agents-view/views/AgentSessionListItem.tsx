@@ -1,6 +1,8 @@
+import { TextShimmer } from '@app/features/block-agent/ui';
 import { parseGithubPrUrl, prHtmlUrl } from '@app/features/block-pr/util/prKey';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { prefetchOnIntent } from '@core/agent-session/prefetch';
+import { useSessionActivity } from '@core/agent-session/session-activity';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import type { AgentSessionEntity } from '@entity';
 import FilledSparkleIcon from '@icon/system/fill/sparkle-fill.svg?component-solid';
@@ -44,6 +46,8 @@ export function AgentSessionListItem(props: Props) {
   const state = () =>
     conversationState(props.entity.status, props.entity.turnState);
   const failed = () => props.entity.turnState === 'failed';
+  const activity = useSessionActivity(() => props.entity.id);
+  const summary = () => (state() === 'working' ? activity() : undefined);
   const details = (): SessionCodeDetails | undefined => {
     if (mode() !== 'code') return undefined;
     const pr = parseGithubPrUrl(props.entity.pullRequestUrl ?? '');
@@ -132,6 +136,13 @@ export function AgentSessionListItem(props: Props) {
         </>
       }
     >
+      <Show when={summary()}>
+        {(summary) => (
+          <span class="block min-w-0 truncate text-xs text-ink-extra-muted">
+            <TextShimmer text={summary()} active />
+          </span>
+        )}
+      </Show>
       <Show when={details()}>
         {(details) => (
           <AgentSessionCodeDetails

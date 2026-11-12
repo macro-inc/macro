@@ -100,4 +100,6 @@ topics! {
     MacroDatabasesTopic => "macro.databases",
     /// Form lifecycle (created, renamed, trashed, restored, purged), sharing and response events.
     MacroFormsTopic => "macro.forms",
+    /// User profile changes, such as a new profile picture.
+    MacroUsersTopic => "macro.users",
 }

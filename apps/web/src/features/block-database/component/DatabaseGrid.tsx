@@ -8,6 +8,7 @@ import {
   onDatabaseBatchCommitted,
   onDatabaseTableAdvanced,
   useDatabaseDetailQuery,
+  useDatabasesQuery,
 } from '@queries/storage/databases';
 import {
   useDatabaseAwareness,
@@ -46,6 +47,7 @@ import type { ViewChange } from '../../database/core/view-state';
 import { DatabaseRecords } from '../../database/views/database-records';
 import type { DatabaseRecordsActions } from '../../database/views/database-records-view';
 import {
+  DatabaseLinkValue,
   DatabaseMentionPicker,
   DatabaseMentionValue,
   DatabaseTextEditor,
@@ -64,10 +66,14 @@ import {
 } from '../queries/columns';
 import { createDatabaseRelations } from '../queries/database-relations';
 import { useRelatedDatabaseSync } from '../queries/database-relations-sync';
-import { useDatabaseSubscription } from '../queries/database-subscription';
+import {
+  type DatabaseSchemaSource,
+  useDatabaseSubscription,
+} from '../queries/database-subscription';
 import { createMacroDatabaseApi, editorTable } from '../queries/editor-api';
 import { useFormsAskingColumns } from '../queries/forms-usage';
 import { deleteDatabaseOption, updateDatabaseOption } from '../queries/options';
+import { relationTargets } from '../queries/relation-targets';
 import { tableChangesOf } from '../queries/table-changes';
 import { createDatabaseRowsSource, toViewColumn } from '../queries/table-rows';
 import { refreshCardPositions } from '../queries/views';
@@ -76,6 +82,8 @@ export type DatabaseGridProps = {
   /** Host framing for the records area, below the toolbar. */
   contentClass?: string;
   databaseId: string;
+  /** Whether the host read this database's schema as it opened. */
+  schema: DatabaseSchemaSource;
   /** Where the grid is shown, for analytics. */
   host: DatabaseGridHost;
   table: TableDetail;
@@ -110,6 +118,7 @@ const renderTextEditor = (editor: DatabaseTextEditorProps) => (
   <DatabaseTextEditor {...editor} />
 );
 const renderTextValue = (value: string) => <DatabaseTextValue value={value} />;
+const renderLinkValue = (url: string) => <DatabaseLinkValue url={url} />;
 const renderMentionPicker = (picker: DatabaseMentionPickerProps) => (
   <DatabaseMentionPicker {...picker} />
 );
@@ -259,7 +268,11 @@ function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
   usePending('database.rows', source.loading);
   // Embedded grids have no database BlockContainer to subscribe for them.
   // Tracking is reference-counted across grids and full database blocks.
-  useDatabaseSubscription(databaseId, () => refreshInBackground(source));
+  useDatabaseSubscription(
+    databaseId,
+    () => refreshInBackground(source),
+    props.schema
+  );
   const boardPositions = useDatabaseBoardPositions(
     databaseId,
     () => props.view,
@@ -286,13 +299,12 @@ function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
   );
   const remoteUsers = () =>
     awareness.remote().filter((user) => user.tableId === props.tableId);
+  const viewerDatabases = useDatabasesQuery();
   const relationTables = () =>
-    detail.isSuccess
-      ? detail.data.tables.map(({ table }) => ({
-          id: table.id,
-          name: table.name,
-        }))
-      : [];
+    relationTargets(
+      detail.isSuccess ? detail.data : undefined,
+      viewerDatabases.isSuccess ? viewerDatabases.data : []
+    );
   const formsAsking = useFormsAskingColumns(() => databaseId);
   const columnCasts = createColumnCasts({
     databaseId,
@@ -341,6 +353,7 @@ function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
                 remoteUsers={remoteUsers()}
                 renderTextEditor={renderTextEditor}
                 renderTextValue={renderTextValue}
+                renderLinkValue={renderLinkValue}
                 renderMentionPicker={renderMentionPicker}
                 renderMentionValue={renderMentionValue}
                 onOpenDocumentMention={openDocumentMention}

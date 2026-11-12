@@ -37,6 +37,15 @@ afterEach(() => {
 });
 
 describe('routine composer storage', () => {
+  it('keeps what AI created while drafting', () => {
+    const created = [
+      { entityType: 'database', entityId: 'bug-log', used: true },
+      { entityType: 'document', entityId: 'todays-task', used: false },
+    ];
+    saveRoutineComposerDraft({ ...draft, created });
+    expect(loadRoutineComposerDraft()?.created).toEqual(created);
+  });
+
   it('returns null for empty storage and clears saved drafts', () => {
     expect(loadRoutineComposerDraft()).toBeNull();
     saveRoutineComposerDraft(draft);

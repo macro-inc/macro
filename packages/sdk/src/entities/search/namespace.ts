@@ -96,7 +96,7 @@ const searchTypes: readonly SearchType[] = [
  * ```
  * Preserve useful evidence from each query. A short sample cannot establish corpus-wide completeness or absence. Use precise terms, metadata and relevant reads before expanding breadth. Do not swallow rejected branches. Normal for/while/for-await with break and sequential dependent calls are supported.
  *
- * Skills are documents. When a request names a skill that is not attached, find it by name with macro.documents.search(name, {searchOn:'name'}), read its instructions with content() before doing the task, and follow them for that request only. Built-in system skills (macro.documents.systemSkills()) have no document; read them with the ReadSkill tool.
+ * Skills are instructions to follow. When a request names a skill that is not attached, find it by name with macro.documents.skills({query}), which includes built-in skills, read its instructions with skill.content() before doing the task, and follow them for that request only.
  *
  * @example Find a contract across email and documents, in one inbox
  * ```js
@@ -113,6 +113,8 @@ export class SearchNamespace {
   /**
    * One bounded page of matches across every kind of item, most relevant
    * first; resume with `nextCursor` and the same options.
+   *
+   * @readonly
    */
   async page(
     query: string,
@@ -130,6 +132,8 @@ export class SearchNamespace {
   /**
    * Every match across every kind of item, most relevant first, auto-paginated.
    * Break a `for await` loop to stop; no further page is fetched.
+   *
+   * @readonly
    */
   async *all(
     query: string,

@@ -39,5 +39,6 @@ uuid = { workspace = true, features = ["serde", "v7"] }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+serde_json = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

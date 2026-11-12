@@ -1,0 +1,62 @@
+.forms-story {
+  --feature-glow: #e98276;
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  gap: 22px;
+  width: 100%;
+  padding: 42px 0 24px;
+  font: 370 15px/1.6 'Inter Variable', Inter, sans-serif;
+  color: var(--color-ink);
+}
+.forms-story .feature-demo-backdrop { --workspace-dots-opacity: .06; --workspace-grain-opacity: .11; inset: -40px; }
+.forms-story .feature-demo-backdrop::before { opacity: .5; }
+.forms-card { min-width: 0; padding: 30px; border-radius: 26px; background: linear-gradient(140deg, #ffffff0d, #ffffff04); box-shadow: inset 0 1px 0 #ffffff20, inset 0 0 0 1px #ffffff0d; backdrop-filter: blur(12px); }
+.forms-card-label { display: flex; align-items: center; gap: 10px; color: var(--color-ink-muted); font-size: 13px; margin-bottom: 24px; }
+.forms-card-label > span { margin-left: auto; }
+.forms-story svg { width: 18px; height: 18px; flex: none; }
+.forms-card h3 { font: 500 23px/1.35 'Inter Variable', Inter, sans-serif; margin: 0 0 24px; }
+.forms-question-card { width: 66%; }
+.forms-question { margin: 18px 0; }
+.forms-answer { border-radius: 10px; padding: 10px 14px; margin-top: 8px; color: var(--color-ink-muted); background: #ffffff06; border: 1px solid #ffffff0f; }
+.forms-submit { display: block; width: fit-content; margin-top: 24px; border-radius: 22px; padding: 8px 18px; background: #e98276; color: #1e1514; font-size: 13px; }
+.forms-response-card { width: 78%; justify-self: end; margin-top: -54px; z-index: 1; background-color: #0b0b0bdb; }
+.forms-response-card table { width: 100%; border-collapse: collapse; text-align: left; font-size: 13px; }
+.forms-response-card :is(th, td) { padding: 12px 8px; border-bottom: 1px solid #ffffff0c; }
+.forms-response-card th { font-weight: 370; color: var(--color-ink-muted); }
+.forms-response-card tr:last-child td { border-bottom: 0; }
+.forms-gate-card { width: 78%; }
+.forms-rule { display: flex; flex-wrap: wrap; gap: 12px; }
+.forms-rule > * { border-radius: 8px; padding: 6px 12px; background: #ffffff09; font-weight: 370; }
+.forms-gate-card p, .forms-agent-card p { margin: 18px 0 0; color: var(--color-ink-muted); font-size: 13px; }
+.forms-booking-card { width: 66%; justify-self: end; }
+.forms-booking-card p { display: flex; align-items: center; gap: 8px; color: var(--color-ink-muted); }
+.forms-times { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 24px; }
+.forms-times span { border-radius: 8px; border: 1px solid #e9827644; padding: 8px 12px; font-size: 13px; }
+.forms-conversation { width: 85%; }
+.forms-conversation .homepage-conversation { margin: 0; width: 100%; }
+.forms-conversation .homepage-message { max-width: 100%; }
+.forms-mention { color: #85b9e8; }
+.forms-agent-card { width: 72%; justify-self: center; }
+.forms-draft-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid #ffffff0c; }
+.forms-draft-row svg { color: #b6c7ba; width: 16px; }
+.forms-settings-card { width: 82%; margin: auto; }
+.forms-branding { display: flex; align-items: center; gap: 12px; padding-bottom: 26px; border-bottom: 1px solid #ffffff0c; }
+.forms-branding small { display: block; color: var(--color-ink-muted); font-size: 12px; }
+.forms-example-logo { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 12px; background: #e98276; color: #1e1514; font-weight: 500; }
+.forms-color-chip { width: 20px; height: 20px; border-radius: 50%; background: #e98276; margin-left: auto; }
+.forms-audience { display: grid; gap: 10px; padding-top: 22px; }
+.forms-audience > span:first-child { margin-bottom: 8px; color: var(--color-ink-muted); font-size: 13px; }
+.forms-audience > span:not(:first-child) { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 10px; }
+.forms-selected { background: #ffffff09; }
+@media (max-width: 699px) {
+  .forms-story { padding-top: 24px; font-size: 14px; }
+  .forms-story .feature-demo-backdrop { inset: -12px; }
+  .forms-card { padding: 22px 18px; border-radius: 22px; }
+  .forms-question-card, .forms-response-card, .forms-gate-card, .forms-booking-card, .forms-conversation, .forms-agent-card, .forms-settings-card { width: 100%; }
+  .forms-response-card { margin-top: 0; }
+  .forms-card-label { font-size: 12px; gap: 6px; }
+  .forms-response-card :is(th, td) { padding: 10px 6px; font-size: 12px; }
+  .forms-branding { gap: 8px; font-size: 12px; }
+  .forms-example-logo { width: 34px; height: 34px; }
+}

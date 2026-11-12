@@ -124,3 +124,21 @@ fn code_steps_and_the_sdk_fingerprint_round_trip() {
     assert_eq!(serde_json::to_value(&program).unwrap(), task);
     assert!(RoutineProgram::from_task(&json!({ "steps": [], "sdk": " " })).is_err());
 }
+
+#[test]
+fn code_steps_act_as_the_agent_unless_the_task_says_to_operate_as_the_owner() {
+    let steps = json!([
+        { "type": "code", "id": "post", "title": "Post", "source": "export async function main() {}" }
+    ]);
+    let program = RoutineProgram::from_task(&json!({ "steps": steps })).unwrap();
+    assert_eq!(program.code_identity(), CodeIdentity::Agent);
+    assert_eq!(
+        serde_json::to_value(&program).unwrap(),
+        json!({ "steps": steps })
+    );
+
+    let task = json!({ "steps": steps, "dangerously_operate_as_user": true });
+    let program = RoutineProgram::from_task(&task).unwrap();
+    assert_eq!(program.code_identity(), CodeIdentity::Owner);
+    assert_eq!(serde_json::to_value(&program).unwrap(), task);
+}

@@ -222,7 +222,9 @@ fn action() -> ScheduledAction {
         updated_at: Utc::now(),
         run_visibility: RunVisibility::Unlisted,
         template_id: None,
+        suggestion_id: None,
         description: String::new(),
+        sub_routine: None,
     }
 }
 

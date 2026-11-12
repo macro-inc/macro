@@ -80,6 +80,7 @@ export const LK_TRACK_SOURCE = {
 
 export const LK_ROOM_EVENT = {
   Disconnected: 'disconnected' as RoomEvent.Disconnected,
+  DataReceived: 'dataReceived' as RoomEvent.DataReceived,
 } as const;
 
 // DisconnectReason is a protobuf enum; the numeric values are wire-stable.
