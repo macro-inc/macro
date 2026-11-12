@@ -2010,10 +2010,11 @@ export const storageServiceClient = {
   async getForeignEntity({
     id,
   }: {
-    id: string;
+    id: string | null | undefined;
   }): Promise<Result<ForeignEntity, ResultError<FetchWithTokenErrorCode>[]>> {
+    // String() is the conversion encodeURIComponent applies to a stored null id.
     return await dssFetch<ForeignEntity>(
-      `/foreign_entity/${encodeURIComponent(id)}`,
+      `/foreign_entity/${encodeURIComponent(String(id))}`,
       {
         method: 'GET',
       }

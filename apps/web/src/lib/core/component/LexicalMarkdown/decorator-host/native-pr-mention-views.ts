@@ -27,7 +27,7 @@ export function createNativePullRequestMentionContext(
     mentionHost(
       snapshot: ViewNode,
       expected: {
-        id: string;
+        id?: string | null;
         label?: string | null;
         mentionUuid?: string | null;
         url?: string;
@@ -58,7 +58,8 @@ export function createNativePullRequestMentionContext(
             {
               key: snapshot.key,
               expected: {
-                id: expected.id,
+                // The stored model keeps a missing id apart from a null one.
+                ...(expected.id === undefined ? {} : { id: expected.id }),
                 ...(expected.label === undefined
                   ? {}
                   : { label: expected.label }),
@@ -87,7 +88,7 @@ export function createNativePullRequestMentionViews(
       (node) => {
         const { id, label, url, mentionUuid } = node.props();
         if (
-          typeof id !== 'string' ||
+          (id != null && typeof id !== 'string') ||
           (label != null && typeof label !== 'string') ||
           (url !== undefined && typeof url !== 'string') ||
           (mentionUuid != null && typeof mentionUuid !== 'string')

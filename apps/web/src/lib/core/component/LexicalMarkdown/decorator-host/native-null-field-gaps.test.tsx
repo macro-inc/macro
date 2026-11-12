@@ -250,8 +250,19 @@ test('known gap: a stored null snapshot document id is refused', () => {
   ).toThrow('Invalid native Snapshot payload');
 });
 
-test('known gap: a stored pull request mention without an id is refused', () => {
-  expect(() => open(PULL_REQUEST, without(PR, 'id'), true)).toThrow(
-    'Invalid native PR mention payload'
+test('pull request: projector hands a stored null or missing id to the registered component unchanged', () => {
+  const received: unknown[] = [];
+  for (const node of [PR, { ...PR, id: null }, without(PR, 'id')])
+    open(PULL_REQUEST, node, true, { row: PullRequestMentionNode, received });
+  expect(received.map((props) => Reflect.get(Object(props), 'id'))).toEqual([
+    'probe-pr',
+    null,
+    undefined,
+  ]);
+});
+
+test('pull request: stored model refuses a wrong id type', () => {
+  expect(() => open(PULL_REQUEST, { ...PR, id: 5 }, true)).toThrow(
+    'JSON error: invalid type'
   );
 });

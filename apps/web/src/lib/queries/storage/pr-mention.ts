@@ -15,9 +15,11 @@ function readEnabled(enabled: EnabledInput | undefined): boolean {
   return typeof enabled === 'function' ? enabled() : enabled;
 }
 
-function prMentionQueryOptions(id: string) {
+function prMentionQueryOptions(id: string | null | undefined) {
   return {
-    queryKey: pullRequestMentionKeys.foreignEntity(id).queryKey,
+    // The same key as foreignEntity(id), built from its prefix so a stored
+    // null or omitted id keeps its own entry, as Source keys it.
+    queryKey: [...pullRequestMentionKeys.foreignEntity._def, id],
     queryFn: async (): Promise<ForeignEntity> =>
       await throwOnErr(() => storageServiceClient.getForeignEntity({ id })),
     staleTime: PR_MENTION_STALE_TIME,
@@ -112,7 +114,7 @@ export function usePullRequestByGithubKeyQuery(
 }
 
 export function usePrMentionQuery(
-  id: Accessor<string>,
+  id: Accessor<string | null | undefined>,
   enabled?: EnabledInput
 ) {
   return useQuery(() => ({

@@ -49,8 +49,10 @@ import { MentionTooltip } from './MentionTooltip';
 
 export type PullRequestMentionUIProps = Omit<
   PullRequestMentionDecoratorProps,
-  'label' | 'mentionUuid'
+  'id' | 'label' | 'mentionUuid'
 > & {
+  /** Source keeps a stored null or omitted id; the mention then resolves from its URL. */
+  id?: string | null;
   label?: string | null;
   mentionUuid?: string | null;
 } & PullRequestMentionHostProp;
@@ -434,7 +436,7 @@ function mentionFallbackLabel(
  * Macro has not synced the PR, without suspending.
  */
 function useGithubUrlMentionEntity(
-  props: Pick<PullRequestMentionDecoratorProps, 'id' | 'url'>,
+  props: Pick<PullRequestMentionUIProps, 'id' | 'url'>,
   enabled: Accessor<boolean>
 ): Accessor<ForeignEntity | undefined> {
   const query = usePullRequestByGithubKeyQuery(
