@@ -16,6 +16,7 @@ Graph and token spans, so find them by their fields:
 | --- | --- |
 | A mailbox's snapshots | Logs: `"outlook mailbox health" @link_id:<id>` |
 | Its sync work | Spans: `resource_name:outlook.sync.* @mailbox.link_id:<id>` |
+| What Graph holds | Spans: `resource_name:outlook.sync.discover @mailbox.link_id:<id>`, field `@outlook.provider_item_count` (per folder: `email_mailbox_folders.total_item_count`) |
 | Its Graph requests | Spans: `@outlook.throttle_origin:* @mailbox.link_id:<id>` |
 | Token lookups | Spans: `@outlook.token_cache:*` |
 | Deferral logs | Logs: `"mailbox sync work deferred"`, grouped by `@defer_reason` |

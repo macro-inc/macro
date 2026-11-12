@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT f.provider_id,f.parent_id,f.display_name,f.role FROM email_mailbox_folders f\n            JOIN email_links l ON l.id = f.link_id\n            WHERE f.link_id = $1 AND l.sync_generation = $2 AND l.is_sync_active AND f.deleted_at IS NULL\n        ",
+  "query": "\n            SELECT f.provider_id,f.parent_id,f.display_name,f.role,f.total_item_count FROM email_mailbox_folders f\n            JOIN email_links l ON l.id = f.link_id\n            WHERE f.link_id = $1 AND l.sync_generation = $2 AND l.is_sync_active AND f.deleted_at IS NULL\n        ",
   "describe": {
     "columns": [
       {
@@ -22,6 +22,11 @@
         "ordinal": 3,
         "name": "role",
         "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "total_item_count",
+        "type_info": "Int8"
       }
     ],
     "parameters": {
@@ -34,8 +39,9 @@
       false,
       true,
       false,
-      false
+      false,
+      true
     ]
   },
-  "hash": "d1ee4977f6890dd4943344f5e710c3d8ce9f822ef31c27d22a6e2e4bd1d5e4ff"
+  "hash": "a961509acfb66ca4878935becf46b1742345ee2350689ff4b2f48aeba391d149"
 }
