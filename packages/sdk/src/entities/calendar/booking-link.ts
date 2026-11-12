@@ -56,7 +56,11 @@ export class BookingLink extends MacroEntity<BookingLinkRecord> {
   /** The profile revision this link was read at; {@link edit} saves against it. */
   readonly revision = this.field('revision');
 
-  /** The shareable URL guests book through. */
+  /**
+   * The shareable URL guests book through.
+   *
+   * @readonly
+   */
   async webUrl(): Promise<string> {
     return linkUrl(this.client, await this.detail.get());
   }
@@ -70,6 +74,8 @@ export class BookingLink extends MacroEntity<BookingLinkRecord> {
    * against {@link revision}; when someone saved in between it is refused
    * (409): read the link again and confirm the updated proposal instead of
    * overwriting their change. Returns the saved link.
+   *
+   * @write
    */
   async edit(
     draft: BookingLinkDraft,
