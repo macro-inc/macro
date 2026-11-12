@@ -84,11 +84,13 @@ async function indexed(at: Stack, token: string): Promise<boolean> {
  * to the database, which the search indexer never hears about, so without
  * this name search finds none of the seeded documents, projects, channels or
  * mail and every draft that looks one up fails, as it wouldn't for a real
- * person. Backfills are upserts, so indexing again is harmless.
+ * person. Backfills are upserts, so indexing again is harmless. Without
+ * `force` it indexes only when name search misses the probes, which see
+ * documents and projects but not channels or mail: seeding forces it.
  */
-export async function index(at: Stack) {
+export async function index(at: Stack, force = false) {
   const token = await login(at, email(OWNER));
-  if (await indexed(at, token)) return;
+  if (!force && (await indexed(at, token))) return;
   const indexer = searchIndexer(at);
   const headers = { 'x-internal-auth-key': indexer.key };
   for (const kind of INDEXED) {

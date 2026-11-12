@@ -596,7 +596,7 @@ async function seedCommand(args: string[]) {
   // Seeding resets the workspace under any draft running on it.
   const ids = await exclusive(values.instance, 'seed', async () => {
     seed(values.instance);
-    await index(at);
+    await index(at, true);
     return setup(at, TIMEZONE, true);
   });
   console.log(`seeded ${Object.keys(ids).length} named items on ${values.instance}`);
@@ -612,7 +612,7 @@ async function harness(args: string[]) {
 
 const USAGE = `usage:
   drafts.ts seed [--instance drafting]
-      seed the workspace (again resets it) and set due dates and databases
+      seed the workspace (again resets it), index it for search, set due dates and databases
   drafts.ts run --label <build> --out <file.json> [--arm draft|bare] [--rounds 3]
       [--cases a,b] [--model m] [--no-run-checks] [--no-judge] [--append]
   drafts.ts ab --a <label> --a-bin <dir> --b <label> --b-bin <dir> --dir <out>
