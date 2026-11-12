@@ -5,10 +5,11 @@ use documents::outbound::pg_document_repo::PgDocumentRepo;
 use entity_registry::OwnerGrantPolicy;
 use entity_registry_db_utils::OwnedEntityRegistrar;
 use lexical_client::LexicalClient;
+use lexical_service_url::LexicalServiceUrl;
 use macro_env_var::env_vars;
-use macro_service_urls::{LexicalServiceUrl, SyncServiceUrl};
 use sqlx::postgres::PgPoolOptions;
 use sync_service_client::SyncServiceClient;
+use sync_service_url::SyncServiceUrl;
 
 use crate::app::{DocumentUploadFinalizer, ObjectCreated};
 use crate::outbound::{PgDocumentUploadPort, S3DocumentObjectReader, S3LegacyOfficeUpgradeStorage};

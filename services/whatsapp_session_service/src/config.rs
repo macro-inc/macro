@@ -2,7 +2,7 @@
 //! in ECS); the KMS key follows `ENVIRONMENT`; `main.rs` reads the test-only
 //! overrides from the process environment.
 
-use database_env_vars::DatabaseUrl;
+use datastore_env_vars::DatabaseUrl;
 use macro_env::Environment;
 
 #[cfg(test)]

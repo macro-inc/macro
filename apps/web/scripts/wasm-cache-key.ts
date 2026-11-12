@@ -8,8 +8,9 @@
 // - Its slice of Cargo.lock: every locked package reachable from the closure's
 //   crates. Lockfile edges cover every target and dependency kind, so the slice
 //   holds at least what the build compiles.
-// - The root Cargo.toml without its `members` list. Dependencies, profiles,
-//   patches and lints stay in.
+// - The root Cargo.toml without its `members` list or the
+//   `[workspace.dependencies]` entries of workspace crates outside the closure.
+//   Other dependencies, profiles, patches and lints stay in.
 // - The `CARGO_PROFILE_*` variables of the profile the build uses, and the
 //   build command, with the checkout's own path taken out.
 //
@@ -105,8 +106,13 @@ export function lockSlice(lockText: string, roots: string[]): string[] {
   return [...reached].map((lockPackage) => lockPackage.lines.join('\n')).sort();
 }
 
-/** The root manifest without the `[workspace]` table's `members` array. */
-export function manifestWithoutMembers(manifestText: string): string {
+/**
+ * The root manifest without the `[workspace]` table's `members` array, or the
+ * one-line `[workspace.dependencies]` path entries (`cargo x deps` writes one
+ * per workspace crate) for crates outside `directories`.
+ */
+export function manifestForClosure(manifestText: string, directories: string[]): string {
+  const closure = new Set(directories);
   const kept: string[] = [];
   let section = '';
   let inMembers = false;
@@ -122,6 +128,11 @@ export function manifestWithoutMembers(manifestText: string): string {
 
     if (section === 'workspace' && /^members\s*=/.test(line)) {
       inMembers = !line.includes(']');
+      continue;
+    }
+
+    const crateEntry = /^\S+\s*=\s*\{.*\bpath\s*=\s*"([^"]+)".*\}\s*$/.exec(line);
+    if (section === 'workspace.dependencies' && crateEntry !== null && !closure.has(crateEntry[1])) {
       continue;
     }
 
@@ -209,8 +220,9 @@ export function wasmCacheKey(
   );
   hash.update(`lock\0${lock.join('\0')}\0`);
 
-  const manifest = manifestWithoutMembers(
-    readFileSync(join(root, 'Cargo.toml'), 'utf8')
+  const manifest = manifestForClosure(
+    readFileSync(join(root, 'Cargo.toml'), 'utf8'),
+    directories
   );
   hash.update(`manifest\0${manifest}\0`);
 

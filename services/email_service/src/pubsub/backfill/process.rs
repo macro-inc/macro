@@ -5,11 +5,11 @@ use crate::pubsub::backfill::{
 };
 use crate::pubsub::context::PubSubContext;
 use anyhow::Context;
-use models_email::email::service::backfill::{
+use email_types::email::service::backfill::{
     BackfillJob, BackfillJobStatus, BackfillOperation, BackfillPubsubMessage, JobScopedPayload,
 };
-use models_email::email::service::link;
-use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
+use email_types::email::service::link;
+use email_types::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use sqs_worker::cleanup_message;
 use std::time::Duration;
 use uuid::Uuid;

@@ -1,0 +1,75 @@
+mod decrement_count;
+mod exists;
+mod increment_count;
+#[cfg(test)]
+mod test;
+
+use std::{collections::BTreeMap, time::Duration};
+
+use shared_types::document::SaveBomPart;
+
+#[derive(Clone)]
+pub struct Redis {
+    inner: redis::Client,
+}
+
+// Key prefixes
+static SHA_COUNT_KEY_PREFIX: &str = "sha:";
+static SHA_DELETE_BUCKET: &str = "bucket:sha-delete";
+
+/// How long a `sha:` counter lives after the last save that referenced it.
+/// The counter only lets an upload skip parts that are already in S3, so an
+/// expired one costs a re-upload; `sha_cleanup_worker` recounts `"BomPart"`
+/// before deleting anything. The expiry also lets volatile-lru evict counters
+/// when the shared cache is full.
+pub const SHA_REFERENCE_TTL: Duration = Duration::from_secs(30 * 24 * 60 * 60);
+
+impl Redis {
+    pub fn new(inner: redis::Client) -> Self {
+        Self { inner }
+    }
+
+    pub async fn increment_counts(&self, shas: Vec<String>) -> anyhow::Result<()> {
+        increment_count::increment_counts(&self.inner, shas).await
+    }
+
+    pub async fn decrement_counts(&self, shas: &Vec<(String, i64)>) -> anyhow::Result<()> {
+        decrement_count::decrement_counts(&self.inner, SHA_DELETE_BUCKET, shas).await
+    }
+
+    /// Release one reference per entry in `shas`, such as the BOM of a deleted
+    /// docx. A SHA listed twice loses two references.
+    pub async fn release_shas(&self, shas: Vec<String>) -> anyhow::Result<()> {
+        self.decrement_counts(&reference_counts(shas)).await
+    }
+
+    pub async fn find_non_existing_shas(
+        &self,
+        bom_parts: &Vec<SaveBomPart>,
+    ) -> anyhow::Result<Vec<SaveBomPart>> {
+        exists::find_non_existing_shas(&self.inner, bom_parts).await
+    }
+
+    pub async fn find_non_existing_shas_string(
+        &self,
+        shas: Vec<String>,
+    ) -> anyhow::Result<Vec<String>> {
+        exists::find_non_existing_shas_string(&self.inner, shas).await
+    }
+
+    pub async fn sha_exists(&self, sha: &str) -> anyhow::Result<bool> {
+        exists::exists(
+            &self.inner,
+            format!("{}{}", SHA_COUNT_KEY_PREFIX, sha).as_str(),
+        )
+        .await
+    }
+}
+
+fn reference_counts(shas: Vec<String>) -> Vec<(String, i64)> {
+    let mut counts = BTreeMap::<String, i64>::new();
+    for sha in shas {
+        *counts.entry(sha).or_default() += 1;
+    }
+    counts.into_iter().collect()
+}

@@ -15,7 +15,7 @@ use bots::{
     inbound::{axum_router::BotsRouterState, channel_webhook_router::ChannelBotWebhookRouterState},
     outbound::pg_bots_repo::PgBotsRepo,
 };
-use cal::{
+use calcom_webhooks::{
     domain::service::CalWebhookServiceImpl, inbound::cal_webhook_router::CalWebhookRouterState,
     outbound::analytics_client::AnalyticsClientSink,
 };
@@ -33,21 +33,19 @@ use channel_labels::{
     domain::service::ChannelLabelsServiceImpl, inbound::axum_router::ChannelLabelsRouterState,
     outbound::pg_channel_labels_repo::PgChannelLabelsRepo,
 };
-use channels::{
-    domain::{
-        list_service::ChannelListServiceImpl,
-        service::ChannelServiceImpl,
-        side_effects::{ChannelSideEffectService, SpawnedChannelEventDispatcher},
-    },
-    inbound::{axum_router::ChannelsRouterState, list_router::ChannelListRouterState},
-    outbound::{
-        connection_gateway_realtime::ConnectionGatewayChannelRealtimePublisher,
-        contacts_dispatcher::ContactsChannelDispatcher,
-        notification_sender::{NotificationChannelSender, NotificationReaderCompletion},
-        pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions,
-        pg_channels_repo::PgChannelsRepo,
-        pg_side_effect_context::PgChannelSideEffectContext,
-    },
+use channels::domain::{
+    list_service::ChannelListServiceImpl,
+    service::ChannelServiceImpl,
+    side_effects::{ChannelSideEffectService, SpawnedChannelEventDispatcher},
+};
+use channels_inbound::{axum_router::ChannelsRouterState, list_router::ChannelListRouterState};
+use channels_outbound::{
+    connection_gateway_realtime::ConnectionGatewayChannelRealtimePublisher,
+    contacts_dispatcher::ContactsChannelDispatcher,
+    notification_sender::{NotificationChannelSender, NotificationReaderCompletion},
+    pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions,
+    pg_channels_repo::PgChannelsRepo,
+    pg_side_effect_context::PgChannelSideEffectContext,
 };
 use connection::{
     domain::service::ConnectionServiceImpl,
@@ -70,13 +68,11 @@ use email::{
     domain::{ports::ReadonlyEmailPreviewAdapter, service::EmailServiceImpl},
     outbound::EmailPgRepo,
 };
-use entity_access::{
-    domain::{
-        models::{EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, ViewAccessLevel},
-        service::EntityAccessServiceImpl,
-    },
-    outbound::PgAccessRepository,
+use entity_access::domain::{
+    models::{EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, ViewAccessLevel},
+    service::EntityAccessServiceImpl,
 };
+use entity_access_outbound::PgAccessRepository;
 use favorites::{
     domain::{mutation_service::FavoritesMutationServiceImpl, service::FavoritesServiceImpl},
     inbound::axum_router::FavoritesRouterState,
@@ -92,6 +88,8 @@ use agent_session::{
     domain::search::{AgentSessionSearchMetadataService, AgentSessionSearchMetadataServiceImpl},
     outbound::postgres::PgAgentSessionRepo,
 };
+use channels::domain::channel_names::ChannelNames;
+use channels_outbound::channel_name::PgChannelNames;
 use collab_surface::inbound::axum_router::CollabSurfaceRouterState;
 use databases::{
     inbound::axum_router::DatabasesRouterState,
@@ -124,21 +122,19 @@ use github_pull_requests::{
         s3_patch_store::S3GithubPullRequestPatchStore,
     },
 };
-use initiative::{
-    domain::service::InitiativeServiceImpl, inbound::axum_router::InitiativeRouterState,
-    outbound::PgInitiativeRepo,
-};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_authorization::{
     MacroAuthJwtValidator, MacroAuthorizationServiceImpl, MacroAuthorizationState,
 };
 use macro_env_var::env_var;
 use macro_sha_count_client::Redis;
-use models_properties::service::property_change_source::PropertyChangeSource;
-use models_properties::service::property_value::PropertyValue;
 use notification::domain::service::SqsNotificationIngress;
-use notification::outbound::queue::SqsQueue;
+use notification_outbound::queue::SqsQueue;
 use opensearch_client::OpensearchClient;
+use project::{
+    domain::service::InitiativeServiceImpl, inbound::axum_router::InitiativeRouterState,
+    outbound::PgInitiativeRepo,
+};
 use projects_hex::{
     domain::service::ProjectServiceImpl,
     inbound::axum_router::ProjectRouterState,
@@ -149,8 +145,10 @@ use projects_hex::{
 };
 use properties::{
     NotificationServiceImpl, PermissionServiceImpl, PropertiesPgRepo, PropertiesServiceImpl,
-    inbound::axum_router::PropertiesRouterState,
 };
+use properties_inbound::axum_router::PropertiesRouterState;
+use properties_types::service::property_change_source::PropertyChangeSource;
+use properties_types::service::property_value::PropertyValue;
 use readonly_pool::ReadOnlyPool;
 use reminders::{
     inbound::axum_router::RemindersRouterState, outbound::pg_reminders_repo::PgRemindersRepo,
@@ -160,9 +158,8 @@ use soup::{
     domain::service::SoupImpl, inbound::axum_router::SoupRouterState,
     outbound::pg_soup_repo::PgSoupRepo,
 };
-use soup_realtime::{
-    domain::service::SoupRealtimeConsumerService, outbound::soup_consumer::SoupTopicConsumer,
-};
+use soup_realtime_core::service::SoupRealtimeConsumerService;
+use soup_realtime_outbound::soup_consumer::SoupTopicConsumer;
 use sqlx::PgPool;
 use std::sync::Arc;
 use sync_service_client::SyncServiceClient;
@@ -222,8 +219,8 @@ pub(crate) type DssPipelineState = crm::inbound::pipelines::PipelineRouterState<
 
 pub(crate) type DssPipelineWorkflowState =
     crm::inbound::pipeline_workflows::PipelineWorkflowRouterState<
-        ai_tools::ToolPipelineWorkflows,
-        ai_tools::ToolCrmTransferService,
+        agent_tools::ToolPipelineWorkflows,
+        agent_tools::ToolCrmTransferService,
         AuthorizationService,
     >;
 
@@ -256,7 +253,7 @@ pub(crate) type DssSoupRealtimeService = SoupRealtimeConsumerService<SoupTopicCo
 /// Realtime notification consumer service used by GraphQL subscriptions.
 pub(crate) type DssNotificationRealtimeService =
     notification::domain::service::WebSocketNotificationConsumerService<
-        notification::outbound::notification_consumer::NotificationTopicConsumer<
+        notification_outbound::notification_consumer::NotificationTopicConsumer<
             model_notifications::NotifEvent,
         >,
         model_notifications::NotifEvent,
@@ -282,8 +279,8 @@ pub(crate) type DssGraphqlSoupSchema = complete_graph::SharedSoupSchema<
     DssEntityMutationService,
     FavoritesMutationServiceType,
     DssChannelService,
-    ai_tools::ToolNotificationService,
-    Arc<ai_tools::ToolNotificationService>,
+    agent_tools::ToolNotificationService,
+    Arc<agent_tools::ToolNotificationService>,
     complete_graph::PropertiesEntityPropertyReader<PropertiesService, EntityAccessService>,
     complete_graph::EmailServiceEmailContentReader<DssEmailService, EntityAccessService>,
     Arc<FavoritesServiceType>,
@@ -293,7 +290,7 @@ pub(crate) type DssGraphqlSoupSchema = complete_graph::SharedSoupSchema<
 
 /// GraphQL activity reader over the Postgres activity log (readonly pool).
 pub(crate) type DssActivityReader = complete_graph::ActivityPortReader<
-    initiative::domain::personal_activity::ProjectVisibleActivityReads<
+    project::domain::personal_activity::ProjectVisibleActivityReads<
         activity::outbound::pg_activity_repo::PgActivityRepo,
         EntityAccessService,
     >,
@@ -397,7 +394,7 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
                 &access,
                 SystemPropertyKey::STATUS_UUID,
                 Some(
-                    models_properties::api::requests::SetPropertyValue::SelectOption {
+                    properties_types::api::requests::SetPropertyValue::SelectOption {
                         option_id: status_option.uuid(),
                     },
                 ),
@@ -413,7 +410,7 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
         principal: &model_owner::CreationPrincipal,
         entity_id: &str,
         property_definition_id: uuid::Uuid,
-        value: Option<models_properties::api::requests::SetPropertyValue>,
+        value: Option<properties_types::api::requests::SetPropertyValue>,
     ) -> anyhow::Result<()> {
         use properties::PropertiesService as _;
 
@@ -514,8 +511,8 @@ pub(crate) type DssChannelService = ChannelServiceImpl<
             NotificationChannelSender<
                 NotificationIngressType,
                 NotificationReaderCompletion<
-                    ai_tools::ToolNotificationService,
-                    notification::outbound::withdrawal::PgNotificationWithdrawal,
+                    agent_tools::ToolNotificationService,
+                    notification_outbound::withdrawal::PgNotificationWithdrawal,
                 >,
             >,
             ContactsChannelDispatcher<SqsContactsIngress<SqsContactsQueue>>,
@@ -523,7 +520,7 @@ pub(crate) type DssChannelService = ChannelServiceImpl<
         >,
     >,
     PgChannelReferenceSharePermissions<EntityAccessService>,
-    channels::outbound::static_file_pictures::StaticFileChannelPictures,
+    channels_outbound::static_file_pictures::StaticFileChannelPictures,
 >;
 
 /// Type alias for the channels router state.
@@ -532,7 +529,7 @@ pub(crate) type DssChannelsState =
 
 /// Type alias for the bots service wired into DSS.
 pub(crate) type DssBotService =
-    BotServiceImpl<PgBotsRepo, DssEventBroker, ai_tools::PipedreamMcpAppCatalog>;
+    BotServiceImpl<PgBotsRepo, DssEventBroker, agent_tools::PipedreamMcpAppCatalog>;
 
 /// Type alias for the bots router state.
 pub(crate) type DssBotsState =
@@ -558,7 +555,7 @@ pub(crate) type DssMessagesState =
 /// Document discussion delivery shared by the message service and PDF annotation edits.
 pub(crate) type DssDiscussionDelivery = messages::domain::delivery::DiscussionDelivery<
     messages::outbound::pg_discussion_context::ParentDiscussionContext<
-        initiative::domain::lookup::InitiativeLookup<initiative::outbound::PgInitiativeRepo>,
+        project::domain::lookup::InitiativeLookup<project::outbound::PgInitiativeRepo>,
         PropertiesService,
     >,
     messages::outbound::entity_access_audience::EntityAccessMessageAudience<EntityAccessService>,
@@ -569,7 +566,7 @@ pub(crate) type DssDiscussionDelivery = messages::domain::delivery::DiscussionDe
 
 /// PDF annotation geometry edits and deletes authorized through document access.
 pub(crate) type DssAnnotationService = messages::domain::annotations::AnnotationService<
-    macro_db_client::annotations::repository::PgAnnotationRepository,
+    messages::outbound::pg_annotation_repo::PgAnnotationRepository,
     EntityAccessService,
     DssDiscussionDelivery,
 >;
@@ -581,8 +578,8 @@ pub(crate) type CallConnectionService =
 /// Type alias for the VoIP push sender (optional at runtime via `Option`).
 pub(crate) type DssVoipPushSender = Option<
     notification::domain::service::VoipPushServiceImpl<
-        notification::outbound::repository::DbNotificationRepository<sqlx::PgPool>,
-        notification::outbound::mobile::MobilePushAdapter<aws_sdk_sns::Client>,
+        notification_outbound::repository::DbNotificationRepository<sqlx::PgPool>,
+        notification_outbound::mobile::MobilePushAdapter<aws_sdk_sns::Client>,
     >,
 >;
 
@@ -611,8 +608,8 @@ pub(crate) type DssCallWebhookState = WebhookRouterState<DssCallService>;
 pub(crate) type DssCallInternalState = InternalCallRouterState<DssCallService>;
 
 /// Chat service used by the unified entity mutation adapter.
-pub(crate) type DssChatMutationService = chat::domain::service::ChatServiceImpl<
-    chat::outbound::postgres::PgChatRepo<PgBotsRepo>,
+pub(crate) type DssChatMutationService = ai_chat::domain::service::ChatServiceImpl<
+    ai_chat::outbound::postgres::PgChatRepo<PgBotsRepo>,
     (),
     EntityAccessManagementService,
 >;
@@ -620,8 +617,8 @@ pub(crate) type DssChatMutationService = chat::domain::service::ChatServiceImpl<
 /// Chat service for owner-checked permanent deletes. Unlike
 /// [`DssChatMutationService`] it publishes chat events, which is how search
 /// and activity learn a chat is gone.
-pub(crate) type DssChatPurgeService = chat::domain::service::ChatServiceImpl<
-    chat::outbound::postgres::PgChatRepo<PgBotsRepo>,
+pub(crate) type DssChatPurgeService = ai_chat::domain::service::ChatServiceImpl<
+    ai_chat::outbound::postgres::PgChatRepo<PgBotsRepo>,
     (),
     EntityAccessManagementService,
     DssEventBroker,
@@ -686,7 +683,7 @@ pub(crate) type DatabasesServiceType =
     PgDatabasesService<GatewayTableEventPublisher, DssEventBroker, EntityAccessService>;
 
 /// HTTP SQL queries over the same database, access and Soup services.
-pub(crate) type DssSqlState = databases_sql::inbound::axum_router::SqlRouterState<
+pub(crate) type DssSqlState = database_sql_runner::inbound::axum_router::SqlRouterState<
     DatabasesServiceType,
     EntityAccessService,
     DssSoupService,
@@ -745,7 +742,7 @@ pub(crate) type DssDatabaseStarterState =
 /// never authorizes worker targets; that capability fails closed here.
 pub(crate) struct SlackAdminAuthorizer(
     pub Arc<EntityAccessService>,
-    pub entity_access::outbound::PgAccessRepository,
+    pub entity_access_outbound::PgAccessRepository,
 );
 
 impl slack_integration::domain::ports::ImportProgressAccess for SlackAdminAuthorizer {
@@ -842,7 +839,7 @@ pub(crate) type DssInitiativeState =
 
 /// Type alias for the initiative history router state.
 pub(crate) type DssInitiativeActivityState =
-    initiative::inbound::axum_router::InitiativeActivityRouterState<
+    project::inbound::axum_router::InitiativeActivityRouterState<
         activity::outbound::pg_activity_repo::PgActivityRepo,
         EntityAccessService,
         AuthorizationService,
@@ -971,7 +968,7 @@ pub(crate) struct ApiContext {
     pub graphql_soup_schema: DssGraphqlSoupSchema,
     pub agent_session_log_subscriptions: complete_graph::AgentSessionLogSubscriptions,
     pub agent_session_activity_subscriptions: complete_graph::AgentSessionActivitySubscriptions,
-    pub graphql_notification_reader: Arc<ai_tools::ToolNotificationService>,
+    pub graphql_notification_reader: Arc<agent_tools::ToolNotificationService>,
     pub activity_reader: DssActivityReader,
     pub graphql_entity_mutation_service: Arc<DssEntityMutationService>,
     pub favorites_state: DssFavoritesState,
@@ -1021,7 +1018,7 @@ pub(crate) struct ApiContext {
     /// the legacy `/saved_views` routes.
     pub saved_views: Arc<crate::service::saved_views::DssSavedViewService>,
     pub sync_service_client: Arc<SyncServiceClient>,
-    pub sync_sessions: sync_router::session::SyncSessionFactory,
+    pub sync_sessions: document_sync_router::session::SyncSessionFactory,
     pub system_properties_service: Arc<SystemPropertiesService>,
     pub properties_service: Arc<PropertiesService>,
     pub opensearch_client: Arc<OpensearchClient>,
@@ -1090,6 +1087,8 @@ impl From<&ApiContext> for SearchHandlerState {
     fn from(ctx: &ApiContext) -> Self {
         SearchHandlerState {
             db: ctx.readonly_db.clone(),
+            channel_names: Arc::new(PgChannelNames::new(ctx.readonly_db.0.clone()))
+                as Arc<dyn ChannelNames<Err = sqlx::Error>>,
             opensearch_client: ctx.opensearch_client.clone(),
             entity_access_service: ctx.entity_access_service.clone(),
             authorization_state: ctx.authorization_state.clone(),

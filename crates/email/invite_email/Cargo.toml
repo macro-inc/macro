@@ -1,0 +1,22 @@
+[package]
+edition = "2024"
+name = "invite_email"
+publish = false
+version = "0.1.0"
+
+
+[dependencies]
+askama = { workspace = true }
+macro_env = { workspace = true }
+macro_user_id = { workspace = true }
+entity_kind = { workspace = true }
+notification = { workspace = true }
+rootcause = { workspace = true }
+serde = { workspace = true }
+url = { workspace = true, features = ["serde"] }
+utoipa = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+
+[dev-dependencies]
+serde_json = { workspace = true }

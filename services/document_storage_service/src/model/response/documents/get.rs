@@ -1,7 +1,7 @@
 use utoipa::ToSchema;
 
-use model::document::{DocumentMetadata, response::GetDocumentListResult};
-use models_permissions::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::access_level::AccessLevel;
+use shared_types::document::{DocumentMetadata, response::GetDocumentListResult};
 
 #[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, ToSchema)]
 pub struct UserDocumentsResponse {
@@ -55,7 +55,7 @@ pub struct GetDocumentSearchResponse {
 #[derive(serde::Serialize, serde::Deserialize, Debug, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct GetDocumentPermissionsResponseDataV2 {
-    pub document_permissions: models_permissions::share_permission::SharePermissionV2,
+    pub document_permissions: permissions_types::share_permission::SharePermissionV2,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, ToSchema)]

@@ -48,7 +48,7 @@ fn upload_args(sender: &str, recipients: &[&str]) -> AttachmentUploadArgs {
         },
         recipient_emails: recipients.iter().map(|r| r.to_string()).collect(),
         backfill: false,
-        upload_destination: models_email::service::attachment::AttachmentUploadDestination::Dss,
+        upload_destination: email_types::service::attachment::AttachmentUploadDestination::Dss,
     }
 }
 

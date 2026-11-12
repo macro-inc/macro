@@ -19,35 +19,35 @@ anyhow = { workspace = true }
 aws-sdk-lambda = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true }
-database_env_vars = { path = "../../crates/database_env_vars" }
+datastore_env_vars = { workspace = true }
 doppler-config = { workspace = true }
 futures = { workspace = true }
 http-body-util = { workspace = true }
-lambda_client = { path = "../../crates/lambda_client" }
-macro_auth = { path = "../../crates/macro_auth" }
-macro_authorization = { path = "../../crates/macro_authorization", features = [
+lambda_client = { workspace = true }
+macro_auth = { workspace = true }
+macro_authorization = { workspace = true, default-features = true, features = [
   "postgres",
 ] }
-macro_aws_config = { path = "../../crates/macro_aws_config", features = ["s3"] }
-macro_cors = { path = "../../crates/macro_cors" }
-macro_config = { path = "../../crates/macro_config" }
-macro_db_client = { path = "../../crates/macro_db_client" }
-macro_entrypoint = { path = "../../crates/macro_entrypoint" }
-macro_env = { path = "../../crates/macro_env" }
-macro_env_var = { path = "../../crates/macro_env_var" }
-macro_middleware = { path = "../../crates/macro_middleware", default-features = false }
-macro_queues = { path = "../../crates/macro_queues" }
-macro_uuid = { path = "../../crates/macro_uuid" }
-model = { path = "../../crates/model" }
-s3_key = { path = "../../crates/s3_key" }
+macro_aws_config = { workspace = true, features = ["s3"] }
+macro_cors = { workspace = true }
+macro_config = { workspace = true }
+macro_db_client = { workspace = true, default-features = true }
+macro_entrypoint = { workspace = true }
+macro_env = { workspace = true }
+macro_env_var = { workspace = true }
+macro_middleware = { workspace = true }
+macro_queues = { workspace = true }
+macro_uuid = { workspace = true }
+shared_types = { workspace = true }
+s3_key = { workspace = true }
 nix = { version = "0.29.0", features = ["process", "signal"] }
 rs-libreoffice-bindings = { git = "https://github.com/macro-inc/rs-libreoffice-bindings", rev = "056a40ddfac1d9650be30b9f0b4b934e9266c7dc" }
-s3_client = { path = "../../crates/s3_client" }
+s3_client = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }
-sqs_client = { path = "../../crates/sqs_client" }
-sqs_worker = { path = "../../crates/sqs_worker" }
+sqs_client = { workspace = true, default-features = true }
+sqs_worker = { workspace = true }
 tokio = { workspace = true }
 tower = { workspace = true }
 tower-http = { workspace = true }
@@ -59,10 +59,10 @@ workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 [dev-dependencies]
 aws-sdk-s3 = { workspace = true }
-docx_engine = { path = "../../crates/docx_engine" }
+docx_engine = { workspace = true }
 opentelemetry = { workspace = true, features = ["trace"] }
 opentelemetry_sdk = { workspace = true, features = ["testing", "trace"] }
-pptx_engine = { path = "../../crates/pptx_engine" }
+pptx_engine = { workspace = true, default-features = true }
 tempfile = { workspace = true }
 tracing-opentelemetry = { workspace = true }
 tracing-subscriber = { workspace = true }

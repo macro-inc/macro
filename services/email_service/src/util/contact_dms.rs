@@ -5,15 +5,13 @@
 //! colleagues at their work domain and to the people they email most. Creation
 //! is idempotent and best-effort: a failure never fails the sync that triggered it.
 
-use channels::{
-    domain::{
-        dm::ensure_dms_for_joining_member, ports::ChannelService, service::ChannelServiceImpl,
-    },
-    outbound::pg_channels_repo::PgChannelsRepo,
+use channels::domain::{
+    dm::ensure_dms_for_joining_member, ports::ChannelService, service::ChannelServiceImpl,
 };
+use channels_outbound::pg_channels_repo::PgChannelsRepo;
+use email_types::service::link::Link;
 use generic_email_domains::is_generic_email_domain;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_email::service::link::Link;
 use sqlx::PgPool;
 
 #[cfg(test)]

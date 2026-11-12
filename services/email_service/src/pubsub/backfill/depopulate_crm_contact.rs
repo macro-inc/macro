@@ -1,8 +1,8 @@
 use crate::pubsub::context::PubSubContext;
 use crm::domain::service::CrmService;
-use models_email::email::service::backfill::DepopulateCrmContactPayload;
-use models_email::email::service::link;
-use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
+use email_types::email::service::backfill::DepopulateCrmContactPayload;
+use email_types::email::service::link;
+use email_types::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 
 /// Removes a contact from the CRM tables for one `(link, contact_email)`
 /// when a sent message is deleted.

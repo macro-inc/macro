@@ -5,7 +5,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use calendar_events::domain::ports::{CalendarMutationError, CalendarMutationService};
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model::response::{EmptyResponse, ErrorResponse};
+use shared_types::response::{EmptyResponse, ErrorResponse};
 use uuid::Uuid;
 
 /// Turns calendar off for a connected inbox.

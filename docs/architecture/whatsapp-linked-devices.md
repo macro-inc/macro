@@ -17,9 +17,9 @@ Web app ──REST──▶ DSS ──── MacroDB ◀──── whatsapp_se
 ```
 
 - **DSS** serves `/whatsapp/*` (account, pairing, chat list;
-  `crates/whatsapp_linked/src/inbound`) and `/external-chats/*`
-  (`crates/external_chat/src/inbound`, with `WhatsAppProvider` from
-  `crates/whatsapp_linked/src/domain/provider.rs` as its `ChatProvider`),
+  `crates/whatsapp/whatsapp_linked/src/inbound`) and `/external-chats/*`
+  (`crates/comms/external_chat/src/inbound`, with `WhatsAppProvider` from
+  `crates/whatsapp/whatsapp_linked/src/domain/provider.rs` as its `ChatProvider`),
   authorizes people, writes chats and send intents, and publishes
   notifications.
 - **Session service** holds each account's advisory lock, runs the WhatsApp

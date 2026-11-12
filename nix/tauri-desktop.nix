@@ -172,6 +172,7 @@
             buildPhaseCargoCommand = ''
               wasm-pack build ${crate} \
                 --target web \
+                --out-name ${name} \
                 ${if profile == null then "--release" else "--profile ${profile}"} \
                 --mode no-install \
                 --out-dir "$PWD/${outDir}" ${cargoArgs}
@@ -194,49 +195,49 @@
       coreWasmPackages = map mkCoreWasmPackage [
         {
           name = "agent_fold";
-          crate = "crates/folds/agent_fold";
+          crate = "crates/agents/agent_fold_wasm";
           dir = "agent-fold";
           cargoArgs = "-- --no-default-features";
         }
         {
           name = "database_sql";
-          crate = "crates/database_sql";
+          crate = "crates/databases/databases/database_sql_wasm";
           dir = "database-sql";
         }
         {
           name = "natural_time";
-          crate = "crates/natural_time";
+          crate = "crates/types/natural_time";
           dir = "natural-time";
         }
         {
           name = "pptx_engine";
-          crate = "crates/pptx_engine";
+          crate = "crates/engines/pptx_engine_wasm";
           dir = "pptx-engine";
           simd = true;
         }
         {
           name = "docx_engine";
-          crate = "crates/docx_engine";
+          crate = "crates/engines/docx_engine_wasm";
           dir = "docx-engine";
           simd = true;
         }
         {
           name = "fig_engine";
-          crate = "crates/fig_engine";
+          crate = "crates/engines/fig_engine_wasm";
           dir = "fig-engine";
           simd = true;
           profile = "fig-engine-wasm";
         }
         {
           name = "psd_engine";
-          crate = "crates/psd_engine";
+          crate = "crates/engines/psd_engine_wasm";
           dir = "psd-engine";
           simd = true;
           profile = "psd-engine-wasm";
         }
         {
           name = "ai_engine";
-          crate = "crates/ai_engine";
+          crate = "crates/engines/ai_engine_wasm";
           dir = "ai-engine";
           simd = true;
           profile = "ai-engine-wasm";
@@ -294,7 +295,7 @@
       # build_agent_daemon_on_tag.yml.
       macrodBinary = workspaceBinary {
         pname = "macrod";
-        package = "coding_agent_worker";
+        package = "macrod";
       };
 
       # The agent sign-in daemon baked into the Macro computer image

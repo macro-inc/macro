@@ -1,10 +1,10 @@
 use super::*;
-use macro_user_id::email::EmailStr;
-use macro_user_id::user_id::MacroUserIdStr;
-use models_email::gmail::inbox_sync::{
+use email_types::gmail::inbox_sync::{
     DeleteMessagePayload, GmailMessagePayload, UpdateLabelsPayload, UpsertMessagePayload,
 };
-use models_email::service::link::UserProvider;
+use email_types::service::link::UserProvider;
+use macro_user_id::email::EmailStr;
+use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 fn link(is_sync_active: bool, needs_reauth: bool) -> Link {

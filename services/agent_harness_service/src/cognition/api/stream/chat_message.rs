@@ -13,9 +13,11 @@ use crate::cognition::service::ai_stream_registry::CancellationSubscription;
 use crate::cognition::service::chat_renamer::spawn_initial_chat_rename;
 use crate::cognition::service::get_chat::get_chat;
 use crate::cognition::service::notification::notify;
-use agent::types::{AssistantMessagePart, ChatMessage, ChatMessageContent};
-use agent::{AgentLoop, ModelSpeed, StreamAccumulator};
+use agent_loop::types::{AssistantMessagePart, ChatMessage, ChatMessageContent};
+use agent_loop::{AgentLoop, ModelSpeed, StreamAccumulator};
 use ai_billing::inbound::admission::admission_status;
+use ai_chat::domain::events::{ChatCreatedMetadata, ChatMacroEvent};
+use ai_chat::domain::ports::MessageService;
 use async_stream::stream;
 use attachment::FormattedParts;
 use axum::Json;
@@ -23,8 +25,8 @@ use axum::extract::{Extension, Request, State};
 use axum::http::StatusCode;
 use axum::middleware::Next;
 use axum::response::IntoResponse;
-use chat::domain::events::{ChatCreatedMetadata, ChatMacroEvent};
-use chat::domain::ports::MessageService;
+use chat_id::ChatId;
+use entity_kind::{Entity, EntityType};
 use futures::StreamExt;
 use macro_auth::headers::AccessTokenExtractor;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
@@ -32,9 +34,8 @@ use macro_db_client::dcs::create_chat;
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
 use memory::domain::MemoryService;
-use model_entity::{Entity, EntityType};
-use models_permissions::share_permission::SharePermissionV2;
-use models_permissions::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::SharePermissionV2;
+use permissions_types::share_permission::access_level::AccessLevel;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::sync::Arc;
@@ -307,7 +308,7 @@ async fn send_chat_message_inner(
     // Fetch all resolved attachment content for the chat (current + prior messages)
     let all_resolved_parts: Vec<FormattedParts> = ctx
         .message_service
-        .get_resolved_message_chain(&actual_chat_id)
+        .get_resolved_message_chain(&ChatId::from(actual_chat_id.as_str()))
         .await
         .inspect_err(|e| tracing::error!(error=?e, "failed to fetch resolved message chain"))
         .unwrap_or_default()
@@ -589,7 +590,7 @@ fn stream_and_save_message(
             .expect("chat speed was validated before starting the stream");
 
 
-        let rig_messages = agent::to_rig_messages(&request);
+        let rig_messages = agent_loop::to_rig_messages(&request);
         let usage_ctx = ai_usage::UsageContext::new(ai_usage::AiFeature::Chat, user_id.clone())
             .with_entity(macro_uuid::string_to_uuid(&chat_id).ok());
         // Carry the feature on the context so AI calls made by tools are attributed to it.
@@ -714,8 +715,8 @@ fn stream_and_save_message(
             if resolved_parts.is_empty() {
                 vec![]
             } else {
-                vec![agent::types::ChatMessage {
-                    role: agent::types::Role::Assistant,
+                vec![agent_loop::types::ChatMessage {
+                    role: agent_loop::types::Role::Assistant,
                     content: ChatMessageContent::AssistantMessageParts(resolved_parts),
                     attachments: None,
                 }]
@@ -725,7 +726,7 @@ fn stream_and_save_message(
         // Extract assistant response text before moving new_messages into store
         let assistant_text = new_messages
             .iter()
-            .find(|m| m.role == agent::types::Role::Assistant)
+            .find(|m| m.role == agent_loop::types::Role::Assistant)
             .and_then(|m| m.content.assistant_message_text());
 
         if let Err(err) = store_conversation_messages(

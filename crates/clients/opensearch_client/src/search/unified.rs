@@ -1,0 +1,1021 @@
+use std::collections::HashSet;
+
+use crate::{
+    Result,
+    error::{OpensearchClientError, OpensearchOperation, ResponseExt, error_chain},
+    search::{
+        builder::{SearchQueryConfig, updated_at_sort},
+        calendar_events::{
+            CalendarEventIndex, CalendarEventQueryBuilder, CalendarEventSearchArgs,
+            CalendarEventSearchConfig,
+        },
+        call_records::{
+            CallRecordIndex, CallRecordQueryBuilder, CallRecordSearchArgs, CallRecordSearchConfig,
+            CallRecordSearchMode,
+        },
+        channels::{
+            ChannelMessageIndex, ChannelMessageQueryBuilder, ChannelMessageSearchArgs,
+            ChannelMessageSearchConfig,
+        },
+        chats::{ChatIndex, ChatQueryBuilder, ChatSearchArgs, ChatSearchConfig},
+        documents::{
+            DocumentIndex, DocumentQueryBuilder, DocumentSearchArgs, DocumentSearchConfig,
+            DocumentSearchMode, PropertyFilterArg,
+        },
+        emails::{EmailIndex, EmailQueryBuilder, EmailSearchArgs, EmailSearchConfig},
+        model::{
+            DefaultSearchResponse, Hit, MacroEm, SearchGotoCallRecord, SearchGotoChannel,
+            SearchGotoContent, SearchGotoEmail, SearchHit, exclude_source_content,
+            inject_fragment_size, parse_highlight_hit,
+        },
+        projects::{ProjectIndex, ProjectQueryBuilder, ProjectSearchArgs, ProjectSearchConfig},
+        query::Keys,
+        utils::millis_to_datetime,
+    },
+};
+use chrono::Utc;
+use search_cursor_types::{SearchCursorOption, SearchMethodCursor};
+
+use opensearch_query_builder::*;
+use opensearch_types::{OpenSearchEntityType, SearchEntityType};
+
+impl UnifiedSearchArgs {
+    /// Builds the OpenSearch query JSON for this set of search args.
+    pub fn to_query_json(&self) -> Result<serde_json::Value> {
+        let mut json = build_unified_search_request(self)?.to_json();
+        inject_fragment_size(&mut json, 1000);
+        exclude_source_content(&mut json);
+        Ok(json)
+    }
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct UnifiedSearchArgs {
+    /// Authorized folded-agent-session search.
+    pub agent_session_search_args: super::agent_sessions::AgentSessionSearchArgs,
+    pub user_id: String,
+    pub page: u32,
+    pub page_size: u32,
+    pub match_type: String,
+    pub collapse: bool,
+    /// The cursor to use
+    pub cursor: SearchCursorOption,
+    /// The indices to search over
+    pub search_indices: HashSet<OpenSearchEntityType>,
+    /// The document search args
+    pub document_search_args: UnifiedDocumentSearchArgs,
+    /// The email search args. If None, we do not search emails
+    pub email_search_args: UnifiedEmailSearchArgs,
+    /// The channel message search args. If None, we do not search channel messages
+    pub channel_message_search_args: UnifiedChannelMessageSearchArgs,
+    /// The chat search args. If None, we do not search chats
+    pub chat_search_args: UnifiedChatSearchArgs,
+    /// The call record search args. If None, we do not search call records
+    pub call_record_search_args: UnifiedCallRecordSearchArgs,
+    /// The project search args. If None, we do not search projects
+    pub project_search_args: UnifiedProjectSearchArgs,
+    /// The calendar event search args. If None, we do not search calendar events
+    pub calendar_event_search_args: UnifiedCalendarEventSearchArgs,
+}
+
+impl From<UnifiedSearchArgs> for DocumentSearchArgs {
+    fn from(args: UnifiedSearchArgs) -> Self {
+        DocumentSearchArgs {
+            terms: args.document_search_args.terms,
+            user_id: args.user_id,
+            page: args.page,
+            page_size: args.page_size,
+            match_type: args.match_type,
+            collapse: args.collapse,
+            ids_only: args.document_search_args.ids_only,
+            document_ids: args.document_search_args.document_ids,
+            sub_types: args.document_search_args.sub_types,
+            mode: args.document_search_args.mode,
+            property_filters: args.document_search_args.property_filters,
+            tag_option_ids: args.document_search_args.tag_option_ids,
+            match_all_tags: args.document_search_args.match_all_tags,
+        }
+    }
+}
+
+impl From<UnifiedSearchArgs> for EmailSearchArgs {
+    fn from(args: UnifiedSearchArgs) -> Self {
+        EmailSearchArgs {
+            terms: args.email_search_args.terms,
+            user_id: args.user_id,
+            user_ids: args.email_search_args.user_ids,
+            page: args.page,
+            page_size: args.page_size,
+            match_type: args.match_type,
+            collapse: args.collapse,
+            ids_only: false, // Email is never ids only at the moment
+            thread_ids: args.email_search_args.thread_ids,
+            link_ids: args.email_search_args.link_ids,
+            sender: args.email_search_args.sender,
+            cc: args.email_search_args.cc,
+            bcc: args.email_search_args.bcc,
+            recipients: args.email_search_args.recipients,
+            include_labels: args.email_search_args.include_labels,
+            exclude_labels: args.email_search_args.exclude_labels,
+            importance: args.email_search_args.importance,
+            subject_only: args.email_search_args.subject_only,
+            tag_option_ids: args.email_search_args.tag_option_ids,
+            match_all_tags: args.email_search_args.match_all_tags,
+        }
+    }
+}
+
+impl From<UnifiedSearchArgs> for ChannelMessageSearchArgs {
+    fn from(args: UnifiedSearchArgs) -> Self {
+        ChannelMessageSearchArgs {
+            terms: args.channel_message_search_args.terms,
+            user_id: args.user_id,
+            page: args.page,
+            page_size: args.page_size,
+            match_type: args.match_type,
+            collapse: args.collapse,
+            ids_only: true, // channel messages are always ids only
+            channel_ids: args.channel_message_search_args.channel_ids,
+            thread_ids: args.channel_message_search_args.thread_ids,
+            mentions: args.channel_message_search_args.mentions,
+            sender_ids: args.channel_message_search_args.sender_ids,
+        }
+    }
+}
+
+impl From<UnifiedSearchArgs> for ChatSearchArgs {
+    fn from(args: UnifiedSearchArgs) -> Self {
+        ChatSearchArgs {
+            terms: args.chat_search_args.terms,
+            user_id: args.user_id,
+            page: args.page,
+            page_size: args.page_size,
+            match_type: args.match_type,
+            collapse: args.collapse,
+            ids_only: args.chat_search_args.ids_only,
+            chat_ids: args.chat_search_args.chat_ids,
+            role: args.chat_search_args.role,
+            tag_option_ids: args.chat_search_args.tag_option_ids,
+            match_all_tags: args.chat_search_args.match_all_tags,
+        }
+    }
+}
+
+impl From<UnifiedSearchArgs> for CallRecordSearchArgs {
+    fn from(args: UnifiedSearchArgs) -> Self {
+        CallRecordSearchArgs {
+            terms: args.call_record_search_args.terms,
+            user_id: args.user_id,
+            page: args.page,
+            page_size: args.page_size,
+            match_type: args.match_type,
+            collapse: args.collapse,
+            ids_only: args.call_record_search_args.ids_only,
+            call_ids: args.call_record_search_args.call_ids,
+            channel_ids: args.call_record_search_args.channel_ids,
+            speaker_ids: args.call_record_search_args.speaker_ids,
+            tag_option_ids: args.call_record_search_args.tag_option_ids,
+            match_all_tags: args.call_record_search_args.match_all_tags,
+            mode: args.call_record_search_args.mode,
+        }
+    }
+}
+
+impl From<UnifiedSearchArgs> for ProjectSearchArgs {
+    fn from(args: UnifiedSearchArgs) -> Self {
+        ProjectSearchArgs {
+            terms: args.project_search_args.terms,
+            user_id: args.user_id,
+            page: args.page,
+            page_size: args.page_size,
+            match_type: args.match_type,
+            collapse: args.collapse,
+            ids_only: args.project_search_args.ids_only,
+            project_ids: args.project_search_args.project_ids,
+            tag_option_ids: args.project_search_args.tag_option_ids,
+            match_all_tags: args.project_search_args.match_all_tags,
+        }
+    }
+}
+
+impl From<UnifiedSearchArgs> for CalendarEventSearchArgs {
+    fn from(args: UnifiedSearchArgs) -> Self {
+        CalendarEventSearchArgs {
+            terms: args.calendar_event_search_args.terms,
+            user_id: args.user_id,
+            page: args.page,
+            page_size: args.page_size,
+            match_type: args.match_type,
+            collapse: args.collapse,
+            ids_only: args.calendar_event_search_args.ids_only,
+            calendar_event_ids: args.calendar_event_search_args.calendar_event_ids,
+            link_ids: args.calendar_event_search_args.link_ids,
+            statuses: args.calendar_event_search_args.statuses,
+            organizer_emails: args.calendar_event_search_args.organizer_emails,
+            attendee_emails: args.calendar_event_search_args.attendee_emails,
+            tag_option_ids: args.calendar_event_search_args.tag_option_ids,
+            match_all_tags: args.calendar_event_search_args.match_all_tags,
+        }
+    }
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct UnifiedChatSearchArgs {
+    pub terms: Vec<String>,
+    pub chat_ids: Vec<String>,
+    pub role: Vec<String>,
+    pub ids_only: bool,
+    pub tag_option_ids: Vec<String>,
+    pub match_all_tags: bool,
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct UnifiedDocumentSearchArgs {
+    pub terms: Vec<String>,
+    pub document_ids: Vec<String>,
+    pub ids_only: bool,
+    pub sub_types: Vec<String>,
+    pub mode: DocumentSearchMode,
+    pub property_filters: Vec<PropertyFilterArg>,
+    pub tag_option_ids: Vec<String>,
+    pub match_all_tags: bool,
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct UnifiedEmailSearchArgs {
+    pub terms: Vec<String>,
+    pub user_ids: Vec<String>,
+    pub thread_ids: Vec<String>,
+    pub link_ids: Vec<String>,
+    pub sender: Vec<String>,
+    pub cc: Vec<String>,
+    pub bcc: Vec<String>,
+    pub recipients: Vec<String>,
+    pub include_labels: Vec<String>,
+    pub exclude_labels: Vec<String>,
+    pub importance: Option<bool>,
+    pub subject_only: bool,
+    pub tag_option_ids: Vec<String>,
+    pub match_all_tags: bool,
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct UnifiedChannelMessageSearchArgs {
+    pub terms: Vec<String>,
+    pub channel_ids: Vec<String>,
+    pub thread_ids: Vec<String>,
+    pub mentions: Vec<String>,
+    pub sender_ids: Vec<String>,
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct UnifiedCallRecordSearchArgs {
+    pub terms: Vec<String>,
+    pub call_ids: Vec<String>,
+    pub channel_ids: Vec<String>,
+    pub speaker_ids: Vec<String>,
+    pub ids_only: bool,
+    pub tag_option_ids: Vec<String>,
+    pub match_all_tags: bool,
+    pub mode: CallRecordSearchMode,
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct UnifiedCalendarEventSearchArgs {
+    pub terms: Vec<String>,
+    pub calendar_event_ids: Vec<String>,
+    /// Inbox links the caller reads through delegation.
+    pub link_ids: Vec<String>,
+    pub statuses: Vec<String>,
+    pub organizer_emails: Vec<String>,
+    pub attendee_emails: Vec<String>,
+    pub ids_only: bool,
+    pub tag_option_ids: Vec<String>,
+    pub match_all_tags: bool,
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct UnifiedProjectSearchArgs {
+    pub terms: Vec<String>,
+    pub project_ids: Vec<String>,
+    pub ids_only: bool,
+    pub tag_option_ids: Vec<String>,
+    pub match_all_tags: bool,
+}
+
+/// Possible search result indices for unified search.
+///
+/// Deliberately **not** `#[serde(untagged)]`. `_source` carries no type
+/// discriminator, so an untagged enum had to guess the entity from whichever
+/// fields happened to be present — first matching variant wins, silently — and
+/// several shapes are subsets of others: a calendar doc carries exactly the
+/// `entity_id`, `name`, and `owner_id` that a project doc requires.
+///
+/// Instead every entity's clause in the unified query is named after its
+/// entity, and OpenSearch reports the names a hit matched in its
+/// `matched_queries`. The discriminator therefore comes from the query this
+/// module wrote, not from the shape of the document or the name of the
+/// physical index it happened to live in.
+#[derive(Debug)]
+pub(crate) enum UnifiedSearchIndex {
+    AgentSession(super::agent_sessions::AgentSessionIndex),
+    ChannelMessage(ChannelMessageIndex),
+    Document(DocumentIndex),
+    Chat(ChatIndex),
+    Email(Box<EmailIndex>),
+    CallRecord(CallRecordIndex),
+    CalendarEvent(CalendarEventIndex),
+    Project(ProjectIndex),
+}
+
+impl UnifiedSearchIndex {
+    /// Deserialize a hit's `_source` into the variant its matched clause names.
+    ///
+    /// Each entity's clause filters `_index` to its own alias, so exactly one
+    /// can match a hit. Zero matches, several, or a `_source` that fails to
+    /// parse as the shape its own clause promises are all errors — never a
+    /// guess at which entity was meant.
+    fn from_matched(matched_queries: &[String], source: serde_json::Value) -> Result<Self> {
+        let entity =
+            OpenSearchEntityType::from_matched_queries(matched_queries.iter().map(String::as_str))
+                .ok_or_else(|| crate::error::OpensearchClientError::Unknown {
+                    details: format!(
+                        "hit matched no single known entity clause: {matched_queries:?}"
+                    ),
+                    operation: OpensearchOperation::SearchUnified,
+                })?;
+
+        fn parse<T: serde::de::DeserializeOwned>(
+            entity: &OpenSearchEntityType,
+            source: serde_json::Value,
+        ) -> Result<T> {
+            serde_json::from_value(source).map_err(|error| {
+                crate::error::OpensearchClientError::DeserializationFailed {
+                    details: format!(
+                        "`{}` hit did not match its own shape: {error}",
+                        entity.query_name()
+                    ),
+                    operation: OpensearchOperation::SearchUnified,
+                }
+            })
+        }
+
+        Ok(match entity {
+            OpenSearchEntityType::AgentSessions => Self::AgentSession(parse(&entity, source)?),
+            OpenSearchEntityType::Channels => Self::ChannelMessage(parse(&entity, source)?),
+            OpenSearchEntityType::Documents => Self::Document(parse(&entity, source)?),
+            OpenSearchEntityType::Chats => Self::Chat(parse(&entity, source)?),
+            OpenSearchEntityType::Emails => Self::Email(Box::new(parse(&entity, source)?)),
+            OpenSearchEntityType::CallRecords => Self::CallRecord(parse(&entity, source)?),
+            OpenSearchEntityType::CalendarEvents => Self::CalendarEvent(parse(&entity, source)?),
+            OpenSearchEntityType::Projects => Self::Project(parse(&entity, source)?),
+        })
+    }
+}
+
+#[derive(Default)]
+pub struct SplitUnifiedSearchResponseValues {
+    pub agent_session: Vec<SearchHit>,
+    pub channel_message: Vec<SearchHit>,
+    pub chat: Vec<SearchHit>,
+    pub document: Vec<SearchHit>,
+    pub email: Vec<SearchHit>,
+    pub project: Vec<SearchHit>,
+    pub call_record: Vec<SearchHit>,
+    pub crm_company: Vec<SearchHit>,
+    pub calendar_event: Vec<SearchHit>,
+}
+
+pub trait SplitUnifiedSearchResponse: Iterator<Item = SearchHit> {
+    fn split_search_response(self) -> SplitUnifiedSearchResponseValues;
+}
+
+impl<T> SplitUnifiedSearchResponse for T
+where
+    T: Iterator<Item = SearchHit>,
+{
+    fn split_search_response(self) -> SplitUnifiedSearchResponseValues {
+        let mut split = SplitUnifiedSearchResponseValues::default();
+        for item in self {
+            match item.entity_type {
+                SearchEntityType::AgentSessions => split.agent_session.push(item),
+                SearchEntityType::Channels => split.channel_message.push(item),
+                SearchEntityType::Chats => split.chat.push(item),
+                SearchEntityType::Documents => split.document.push(item),
+                SearchEntityType::Emails => split.email.push(item),
+                SearchEntityType::Projects => split.project.push(item),
+                SearchEntityType::CallRecords => split.call_record.push(item),
+                SearchEntityType::CrmCompanies => split.crm_company.push(item),
+                SearchEntityType::CalendarEvents => split.calendar_event.push(item),
+            }
+        }
+        split
+    }
+}
+
+/// Expand one OpenSearch hit into one or more `SearchHit`s.
+///
+/// For join-shape parents (documents, chats, call records), OpenSearch
+/// returns one parent hit per matching root with the matching children
+/// nested under `inner_hits`. Each entity's search module knows how to
+/// unpack those into child-level hits; everything else (channels,
+/// emails) takes the 1:1 conversion.
+fn expand_hit_into_search_hits(hit: Hit<UnifiedSearchIndex>) -> Vec<SearchHit> {
+    if let UnifiedSearchIndex::AgentSession(source) = hit.source {
+        return super::agent_sessions::expand(Hit {
+            source,
+            index: hit.index,
+            matched_queries: hit.matched_queries,
+            score: hit.score,
+            highlight: hit.highlight,
+            inner_hits: hit.inner_hits,
+        });
+    }
+    match &hit.source {
+        UnifiedSearchIndex::Document(parent) => {
+            let entity_id = parent.entity_id;
+            let updated_at = millis_to_datetime(parent.updated_at_millis);
+
+            let mut out: Vec<SearchHit> = Vec::new();
+
+            // A name match surfaces as a parent-level hit. The content branch
+            // lives in inner_hits and never highlights `document_name`, so a
+            // top-level highlight on that field means the name matched. `goto`
+            // is None (no chunk to navigate to) so downstream grouping treats
+            // it as a name match, not an empty content result.
+            if let Some(highlight) = hit.highlight.as_ref()
+                && highlight.contains_key(DocumentSearchConfig::TITLE_KEY)
+            {
+                out.push(SearchHit {
+                    entity_id,
+                    entity_type: SearchEntityType::Documents,
+                    score: hit.score,
+                    highlight: parse_highlight_hit(
+                        highlight.clone(),
+                        Keys {
+                            title_key: DocumentSearchConfig::TITLE_KEY,
+                            content_key: DocumentSearchConfig::CONTENT_KEY,
+                        },
+                    ),
+                    goto: None,
+                    updated_at,
+                });
+            }
+
+            // Content matches surface as one hit per matching chunk.
+            if let Some(inner) = hit.inner_hits.as_ref() {
+                out.extend(crate::search::documents::expand_inner_hits_to_search_hits(
+                    entity_id, updated_at, inner,
+                ));
+            }
+
+            if out.is_empty() {
+                return vec![hit.into()];
+            }
+            out
+        }
+        UnifiedSearchIndex::Chat(parent) => {
+            let Some(inner) = hit.inner_hits.as_ref() else {
+                return vec![hit.into()];
+            };
+            let entity_id = parent.entity_id;
+            let updated_at = millis_to_datetime(parent.updated_at_millis);
+            let expanded = crate::search::chats::expand_inner_hits_to_search_hits(
+                entity_id, updated_at, inner,
+            );
+            if expanded.is_empty() {
+                return vec![hit.into()];
+            }
+            expanded
+        }
+        UnifiedSearchIndex::CallRecord(parent) => {
+            let updated_at = millis_to_datetime(parent.started_at_millis);
+            let mut out: Vec<SearchHit> = Vec::new();
+
+            // A name match surfaces as a parent-level hit. Segment content lives
+            // in inner_hits and never highlights `name`, so a top-level highlight
+            // on that field means the call name matched. `goto` points at the
+            // call itself (no segment) so downstream grouping treats it as a name
+            // match rather than an empty content result.
+            if let Some(highlight) = hit.highlight.as_ref()
+                && highlight.contains_key(CallRecordSearchConfig::TITLE_KEY)
+            {
+                out.push(SearchHit {
+                    entity_id: parent.entity_id,
+                    entity_type: SearchEntityType::CallRecords,
+                    score: hit.score,
+                    highlight: parse_highlight_hit(
+                        highlight.clone(),
+                        Keys {
+                            title_key: CallRecordSearchConfig::TITLE_KEY,
+                            content_key: CallRecordSearchConfig::CONTENT_KEY,
+                        },
+                    ),
+                    goto: Some(SearchGotoContent::CallRecords(SearchGotoCallRecord {
+                        channel_id: parent.channel_id,
+                        transcript_id: uuid::Uuid::nil(),
+                        speaker_id: String::new(),
+                        sequence_num: 0,
+                        started_at: updated_at.unwrap_or_default(),
+                        ended_at: millis_to_datetime(parent.ended_at_millis),
+                        participant_ids: parent.participant_ids.clone(),
+                    })),
+                    updated_at,
+                });
+            }
+
+            // Content matches surface as one hit per matching segment.
+            if let Some(inner) = hit.inner_hits.as_ref() {
+                out.extend(
+                    crate::search::call_records::expand_inner_hits_to_search_hits(parent, inner),
+                );
+            }
+
+            if out.is_empty() {
+                return vec![hit.into()];
+            }
+            out
+        }
+        _ => vec![hit.into()],
+    }
+}
+
+impl From<Hit<UnifiedSearchIndex>> for SearchHit {
+    fn from(index: Hit<UnifiedSearchIndex>) -> Self {
+        match index.source {
+            UnifiedSearchIndex::AgentSession(a) => SearchHit {
+                entity_id: a.agent_session_id,
+                entity_type: SearchEntityType::AgentSessions,
+                score: index.score,
+                highlight: index
+                    .highlight
+                    .map(|h| {
+                        parse_highlight_hit(
+                            h,
+                            Keys {
+                                title_key: "name",
+                                content_key: "content",
+                            },
+                        )
+                    })
+                    .unwrap_or_default(),
+                goto: None,
+                updated_at: millis_to_datetime(Some(a.updated_at_millis)),
+            },
+            UnifiedSearchIndex::ChannelMessage(a) => SearchHit {
+                entity_id: a.entity_id,
+                entity_type: SearchEntityType::Channels,
+                score: index.score,
+                highlight: index
+                    .highlight
+                    .map(|h| {
+                        parse_highlight_hit(
+                            h,
+                            Keys {
+                                title_key: ChannelMessageSearchConfig::TITLE_KEY,
+                                content_key: ChannelMessageSearchConfig::CONTENT_KEY,
+                            },
+                        )
+                    })
+                    .unwrap_or_default(),
+                goto: Some(SearchGotoContent::Channels(SearchGotoChannel {
+                    channel_message_id: a.message_id,
+                    thread_id: (a.thread_id != a.message_id).then_some(a.thread_id),
+                    sender_id: a.sender_id,
+                    created_at: millis_to_datetime(a.created_at_millis).unwrap_or_default(),
+                    updated_at: millis_to_datetime(a.updated_at_millis).unwrap_or_default(),
+                })),
+                updated_at: millis_to_datetime(a.updated_at_millis),
+            },
+            UnifiedSearchIndex::Document(a) => SearchHit {
+                entity_id: a.entity_id,
+                entity_type: SearchEntityType::Documents,
+                score: index.score,
+                highlight: index
+                    .highlight
+                    .map(|h| {
+                        parse_highlight_hit(
+                            h,
+                            Keys {
+                                title_key: DocumentSearchConfig::TITLE_KEY,
+                                content_key: DocumentSearchConfig::CONTENT_KEY,
+                            },
+                        )
+                    })
+                    .unwrap_or_default(),
+                goto: None,
+                updated_at: millis_to_datetime(a.updated_at_millis),
+            },
+            UnifiedSearchIndex::Email(a) => {
+                let a = *a;
+                SearchHit {
+                    entity_id: a.entity_id,
+                    entity_type: SearchEntityType::Emails,
+                    score: index.score,
+                    highlight: index
+                        .highlight
+                        .map(|h| {
+                            parse_highlight_hit(
+                                h,
+                                Keys {
+                                    title_key: EmailSearchConfig::TITLE_KEY,
+                                    content_key: EmailSearchConfig::CONTENT_KEY,
+                                },
+                            )
+                        })
+                        .unwrap_or_default(),
+                    goto: Some(SearchGotoContent::Emails(SearchGotoEmail {
+                        email_message_id: a.message_id,
+                        bcc: a.bcc,
+                        cc: a.cc,
+                        labels: a.labels,
+                        sent_at: millis_to_datetime(a.sent_at_millis),
+                        sender: a.sender,
+                        recipients: a.recipients,
+                    })),
+                    updated_at: millis_to_datetime(a.sent_at_millis),
+                }
+            }
+            UnifiedSearchIndex::Chat(a) => SearchHit {
+                entity_id: a.entity_id,
+                entity_type: SearchEntityType::Chats,
+                score: index.score,
+                highlight: index
+                    .highlight
+                    .map(|h| {
+                        parse_highlight_hit(
+                            h,
+                            Keys {
+                                title_key: ChatSearchConfig::TITLE_KEY,
+                                content_key: ChatSearchConfig::CONTENT_KEY,
+                            },
+                        )
+                    })
+                    .unwrap_or_default(),
+                goto: None,
+                updated_at: millis_to_datetime(a.updated_at_millis),
+            },
+            UnifiedSearchIndex::CalendarEvent(a) => SearchHit {
+                entity_id: a.entity_id,
+                entity_type: SearchEntityType::CalendarEvents,
+                score: index.score,
+                highlight: index
+                    .highlight
+                    .map(|h| {
+                        parse_highlight_hit(
+                            h,
+                            Keys {
+                                title_key: CalendarEventSearchConfig::TITLE_KEY,
+                                content_key: CalendarEventSearchConfig::CONTENT_KEY,
+                            },
+                        )
+                    })
+                    .unwrap_or_default(),
+                goto: None,
+                updated_at: millis_to_datetime(a.updated_at_millis),
+            },
+            UnifiedSearchIndex::Project(a) => SearchHit {
+                entity_id: a.entity_id,
+                entity_type: SearchEntityType::Projects,
+                score: index.score,
+                highlight: index
+                    .highlight
+                    .map(|h| {
+                        parse_highlight_hit(
+                            h,
+                            Keys {
+                                title_key: ProjectSearchConfig::TITLE_KEY,
+                                content_key: ProjectSearchConfig::CONTENT_KEY,
+                            },
+                        )
+                    })
+                    .unwrap_or_default(),
+                goto: None,
+                updated_at: millis_to_datetime(a.updated_at_millis),
+            },
+            UnifiedSearchIndex::CallRecord(a) => SearchHit {
+                entity_id: a.entity_id,
+                entity_type: SearchEntityType::CallRecords,
+                score: index.score,
+                highlight: index
+                    .highlight
+                    .map(|h| {
+                        parse_highlight_hit(
+                            h,
+                            Keys {
+                                title_key: CallRecordSearchConfig::TITLE_KEY,
+                                content_key: CallRecordSearchConfig::CONTENT_KEY,
+                            },
+                        )
+                    })
+                    .unwrap_or_default(),
+                goto: Some(SearchGotoContent::CallRecords(SearchGotoCallRecord {
+                    channel_id: a.channel_id,
+                    // Reached only on the defensive parent fallback when a
+                    // matched parent carried no inner_hits. transcript_id,
+                    // speaker_id, and sequence_num are child-only fields, so
+                    // there is no segment-level identifier to navigate to here.
+                    transcript_id: uuid::Uuid::nil(),
+                    speaker_id: String::new(),
+                    sequence_num: 0,
+                    started_at: millis_to_datetime(a.started_at_millis).unwrap_or_default(),
+                    ended_at: millis_to_datetime(a.ended_at_millis),
+                    participant_ids: a.participant_ids,
+                })),
+                updated_at: millis_to_datetime(a.started_at_millis),
+            },
+        }
+    }
+}
+
+#[tracing::instrument(skip(args), err)]
+fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchRequest<'static>> {
+    // We don't support searching over an exhausted (done) cursor
+    let cursor = match args.cursor.clone() {
+        SearchCursorOption::NotDone(search_method_cursor) => search_method_cursor.clone(),
+        SearchCursorOption::Done => return Err(OpensearchClientError::SearchWithExhaustedCursor),
+    };
+
+    if args.search_indices.is_empty() {
+        return Err(OpensearchClientError::EmptySearchIndices);
+    }
+
+    let mut bool_query = BoolQueryBuilder::new();
+
+    // There will always be 1 query as the indices are never empty
+    bool_query.minimum_should_match(1);
+    if args
+        .search_indices
+        .contains(&OpenSearchEntityType::AgentSessions)
+    {
+        let mut query =
+            super::agent_sessions::build_query(&args.agent_session_search_args, &args.match_type)?;
+        query.name(OpenSearchEntityType::AgentSessions.query_name());
+        bool_query.should(query.build().into());
+    }
+
+    if args
+        .search_indices
+        .contains(&OpenSearchEntityType::Documents)
+    {
+        let document_search_args: DocumentSearchArgs = args.clone().into();
+        let document_query_builder: DocumentQueryBuilder = document_search_args.into();
+        let mut document_bool_query = document_query_builder.build_bool_query()?;
+        document_bool_query.name(OpenSearchEntityType::Documents.query_name());
+        let query_type: QueryType = document_bool_query.build().into();
+        bool_query.should(query_type.to_owned());
+    }
+
+    if args.search_indices.contains(&OpenSearchEntityType::Emails) {
+        let email_search_args: EmailSearchArgs = args.clone().into();
+        let email_query_builder: EmailQueryBuilder = email_search_args.into();
+        let mut email_bool_query = email_query_builder.build_bool_query()?;
+        email_bool_query.name(OpenSearchEntityType::Emails.query_name());
+        let query_type: QueryType = email_bool_query.build().into();
+        bool_query.should(query_type.to_owned());
+    }
+
+    if args
+        .search_indices
+        .contains(&OpenSearchEntityType::Channels)
+    {
+        let channel_message_search_args: ChannelMessageSearchArgs = args.clone().into();
+        let channel_message_query_builder: ChannelMessageQueryBuilder =
+            channel_message_search_args.into();
+        let mut channel_message_bool_query = channel_message_query_builder.build_bool_query()?;
+        channel_message_bool_query.name(OpenSearchEntityType::Channels.query_name());
+        let query_type: QueryType = channel_message_bool_query.build().into();
+        bool_query.should(query_type.to_owned());
+    }
+
+    if args.search_indices.contains(&OpenSearchEntityType::Chats) {
+        let chat_search_args: ChatSearchArgs = args.clone().into();
+        let chat_query_builder: ChatQueryBuilder = chat_search_args.into();
+        let mut chat_bool_query = chat_query_builder.build_bool_query()?;
+        chat_bool_query.name(OpenSearchEntityType::Chats.query_name());
+        let query_type: QueryType = chat_bool_query.build().into();
+        bool_query.should(query_type.to_owned());
+    }
+
+    if args
+        .search_indices
+        .contains(&OpenSearchEntityType::CallRecords)
+    {
+        let call_record_search_args: CallRecordSearchArgs = args.clone().into();
+        let call_record_query_builder: CallRecordQueryBuilder = call_record_search_args.into();
+        let mut call_record_bool_query = call_record_query_builder.build_bool_query()?;
+        call_record_bool_query.name(OpenSearchEntityType::CallRecords.query_name());
+        let query_type: QueryType = call_record_bool_query.build().into();
+        bool_query.should(query_type.to_owned());
+    }
+
+    if args
+        .search_indices
+        .contains(&OpenSearchEntityType::Projects)
+    {
+        let project_search_args: ProjectSearchArgs = args.clone().into();
+        let project_query_builder: ProjectQueryBuilder = project_search_args.into();
+        let mut project_bool_query = project_query_builder.build_bool_query()?;
+        project_bool_query.name(OpenSearchEntityType::Projects.query_name());
+        let query_type: QueryType = project_bool_query.build().into();
+        bool_query.should(query_type.to_owned());
+    }
+
+    if args
+        .search_indices
+        .contains(&OpenSearchEntityType::CalendarEvents)
+    {
+        let calendar_event_search_args: CalendarEventSearchArgs = args.clone().into();
+        let calendar_event_query_builder: CalendarEventQueryBuilder =
+            calendar_event_search_args.into();
+        let mut calendar_event_bool_query = calendar_event_query_builder.build_bool_query()?;
+        calendar_event_bool_query.name(OpenSearchEntityType::CalendarEvents.query_name());
+        let query_type: QueryType = calendar_event_bool_query.build().into();
+        bool_query.should(query_type.to_owned());
+    }
+
+    // create the search request
+    let mut search_request_builder = SearchRequestBuilder::new();
+
+    if let Some(cursor) = cursor {
+        search_request_builder.set_search_after(cursor.search_after());
+    }
+
+    search_request_builder.size(args.page_size + 1);
+
+    if args.collapse {
+        search_request_builder.collapse(Collapse::new("entity_id"));
+    }
+
+    for sort in updated_at_sort() {
+        search_request_builder.add_sort(sort);
+    }
+
+    let em_field = || {
+        HighlightField::new()
+            .highlight_type("plain")
+            .pre_tags(vec![MacroEm::Open.to_string()])
+            .post_tags(vec![MacroEm::Close.to_string()])
+    };
+    let highlight = Highlight::new()
+        .require_field_match(true)
+        .max_analyzer_offset(super::HIGHLIGHT_MAX_ANALYZER_OFFSET)
+        .field("content", em_field().number_of_fragments(1))
+        .field("document_name", em_field().number_of_fragments(0))
+        .field("name", em_field().number_of_fragments(0))
+        .field("source_names", em_field().number_of_fragments(0))
+        .field("subject", em_field().number_of_fragments(0))
+        .field("sender", em_field().number_of_fragments(0))
+        .field("sender_name", em_field().number_of_fragments(0))
+        .field("recipients", em_field().number_of_fragments(0))
+        .field("recipient_names", em_field().number_of_fragments(0))
+        .field("cc", em_field().number_of_fragments(0))
+        .field("cc_names", em_field().number_of_fragments(0))
+        .field("bcc", em_field().number_of_fragments(0))
+        .field("bcc_names", em_field().number_of_fragments(0));
+
+    search_request_builder.highlight(highlight);
+
+    let query_object = bool_query.build();
+
+    let built_query: QueryType = query_object.into();
+
+    search_request_builder.query(built_query);
+
+    Ok(search_request_builder.build())
+}
+
+/// Trim a page of top-level OpenSearch hits and derive the next cursor.
+///
+/// The query fetches `page_size + 1` *top-level* hits — one per parent entity
+/// for the join-shape indices (documents, chats, call records), one per message
+/// for the flat indices. Pagination is measured in those top-level hits, never
+/// in the child inner-hits a single parent expands into: a document matched on
+/// many content chunks is still one entity against the page budget. Counting the
+/// expanded children instead lets a couple of chunk-heavy documents exhaust the
+/// budget and short the page while minting a spurious "more results" cursor.
+///
+/// The extra (`page_size + 1`th) hit only signals "more exist"; it is dropped
+/// before expansion. The cursor anchors on the last *included* entity — every
+/// child a parent expands into carries that parent's `entity_id`/`updated_at`,
+/// so the last expanded hit yields the correct `search_after` for the next page.
+fn paginate_unified_hits(
+    hits: Vec<Hit<serde_json::Value>>,
+    page_size: usize,
+) -> (Vec<SearchHit>, SearchCursorOption) {
+    let has_more = hits.len() > page_size;
+
+    let results: Vec<SearchHit> = hits
+        .into_iter()
+        .take(page_size)
+        .filter_map(|hit| {
+            // A hit we cannot place is dropped rather than failing the whole
+            // page — but loudly, because it means an index is in the response
+            // that the caller never asked for, or a doc no longer matches the
+            // shape its index promises.
+            let Hit {
+                index,
+                matched_queries,
+                score,
+                source,
+                highlight,
+                inner_hits,
+            } = hit;
+            match UnifiedSearchIndex::from_matched(&matched_queries, source) {
+                Ok(source) => Some(Hit {
+                    index,
+                    matched_queries,
+                    score,
+                    source,
+                    highlight,
+                    inner_hits,
+                }),
+                Err(error) => {
+                    tracing::error!(
+                        error=?error,
+                        index=%index,
+                        matched_queries=?matched_queries,
+                        "dropping unplaceable search hit"
+                    );
+                    None
+                }
+            }
+        })
+        .flat_map(expand_hit_into_search_hits)
+        .collect();
+
+    // Continue only with a real anchor to resume from. A page_size of 0 yields
+    // an empty page (nothing to anchor on), so emitting NotDone there would loop
+    // the caller on identical empty pages. Return a terminal cursor instead.
+    let cursor = match results.last() {
+        Some(last) if has_more && page_size > 0 => {
+            SearchCursorOption::NotDone(Some(SearchMethodCursor::UpdatedAt {
+                entity_id: last.entity_id,
+                updated_at: last.updated_at.unwrap_or_else(Utc::now),
+            }))
+        }
+        _ => SearchCursorOption::Done,
+    };
+
+    (results, cursor)
+}
+
+#[tracing::instrument(skip(client, args))]
+pub(crate) async fn search_unified(
+    client: &opensearch::OpenSearch,
+    args: UnifiedSearchArgs,
+) -> Result<(Vec<SearchHit>, SearchCursorOption)> {
+    let mut search_request = build_unified_search_request(&args)?.to_json();
+    inject_fragment_size(&mut search_request, 1000);
+    exclude_source_content(&mut search_request);
+
+    tracing::trace!("search request {:?}", search_request);
+
+    let search_indices: Vec<&str> = args.search_indices.iter().map(|i| i.index_name()).collect();
+
+    let response = client
+        .search(opensearch::SearchParts::Index(&search_indices))
+        // An index that does not exist yet — a newly added entity type before
+        // its create-index run, or an alias mid-reindex — otherwise fails the
+        // whole request with `index_not_found_exception`, taking down search
+        // for every entity rather than just that one. Degrade to the indices
+        // that are present; `warn_on_shard_failures` still reports partial
+        // results from indices that do exist.
+        .ignore_unavailable(true)
+        .body(search_request)
+        .send()
+        .await
+        .map_client_error(OpensearchOperation::SearchUnified)
+        .await?;
+
+    let bytes = response
+        .bytes()
+        .await
+        .map_err(|e| OpensearchClientError::HttpBytesError {
+            details: error_chain(&e),
+        })?;
+
+    let result: DefaultSearchResponse<serde_json::Value> =
+        serde_json::from_slice(&bytes).map_err(|e| {
+            OpensearchClientError::SearchDeserializationFailed {
+                details: e.to_string(),
+                raw_body: String::from_utf8_lossy(&bytes).to_string(),
+            }
+        })?;
+
+    result.warn_on_shard_failures(OpensearchOperation::SearchUnified);
+
+    tracing::info!(
+        response_body_bytes = bytes.len(),
+        opensearch_took_ms = result.took,
+        hit_count = result.hits.hits.len(),
+        "opensearch response"
+    );
+
+    let (results, cursor) = paginate_unified_hits(result.hits.hits, args.page_size as usize);
+
+    Ok((results, cursor))
+}
+
+#[cfg(test)]
+mod test;

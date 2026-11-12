@@ -60,7 +60,7 @@ pub struct Config {
     pub internal_api_key: InternalApiKey,
     /// TypeSafe credential for the Jev classifier behind trigger conditions.
     /// Optional: routines cannot save conditions while it is unset.
-    pub typesafe_api_key: jev::outbound::TypesafeApiKey,
+    pub typesafe_api_key: jev_classifier::outbound::TypesafeApiKey,
     /// PostHog project token for routine run analytics. When unset, runs are
     /// not recorded.
     pub posthog_api_key: agent_harness_service::cognition::config::PosthogApiKey,
@@ -87,7 +87,7 @@ impl Config {
     pub fn settlement_route(&self) -> anyhow::Result<ai_billing::composition::SettlementRoute> {
         let client = std::sync::Arc::new(authentication_service_client::AuthServiceClient::new(
             self.authentication_service_secret_key.as_ref().to_owned(),
-            macro_service_urls::AuthServiceUrl::new()?.to_string(),
+            auth_service_url::AuthServiceUrl::new()?.to_string(),
         ));
         Ok(ai_billing::composition::SettlementRoute::from_policy(
             self.enable_ai_usage_billing,

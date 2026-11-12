@@ -1,6 +1,6 @@
 use anyhow::Error;
 use chrono::{DateTime, Utc};
-use model::chat::{ChatHistory, ConversationRecord, MessageWithAttachments};
+use shared_types::chat::{ChatHistory, ConversationRecord, MessageWithAttachments};
 use sqlx::{Executor, FromRow, Postgres};
 use std::collections::HashMap;
 

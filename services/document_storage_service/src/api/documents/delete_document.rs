@@ -7,11 +7,11 @@ use axum::{extract::Path, http::StatusCode, response::IntoResponse};
 use documents_hex::domain::purge::DocumentPurgeService as _;
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model::response::{
+use permissions_types::share_permission::access_level::OwnerAccessLevel;
+use serde::Deserialize;
+use shared_types::response::{
     ErrorResponse, GenericErrorResponse, GenericResponse, GenericSuccessResponse, SuccessResponse,
 };
-use models_permissions::share_permission::access_level::OwnerAccessLevel;
-use serde::Deserialize;
 
 #[derive(Deserialize)]
 pub struct Params {

@@ -57,7 +57,7 @@ const DEFAULT_MCP_ALLOWED_REDIRECT_HOSTS: [&str; 5] = [
 pub async fn router(
     config: &Config,
     secrets: &secretsmanager_client::SecretsManager,
-    tool_context: ai_tools::ToolServiceContext,
+    tool_context: agent_tools::ToolServiceContext,
     db: sqlx::PgPool,
     kms: aws_sdk_kms::Client,
     jwt_args: JwtValidationArgs,
@@ -65,7 +65,7 @@ pub async fn router(
     cancellation: tokio_util::sync::CancellationToken,
     code_mode: Option<PublicCodeMode>,
 ) -> anyhow::Result<axum::Router> {
-    let public_url = macro_service_urls::McpPublicUrl::new()?;
+    let public_url = mcp_public_url::McpPublicUrl::new()?;
     let (auth_proxy, backfill) = build_auth_proxy(
         config,
         secrets,
@@ -76,21 +76,21 @@ pub async fn router(
     )
     .await?;
     let analytics = build_analytics(config, db);
-    let item_base_url = macro_service_urls::AppServiceUrl::new()?.to_string();
+    let item_base_url = app_service_url::AppServiceUrl::new()?.to_string();
     let static_file_base_url =
-        url::Url::parse(macro_service_urls::StaticFileServiceUrl::new()?.as_ref())?;
+        url::Url::parse(static_file_service_url::StaticFileServiceUrl::new()?.as_ref())?;
     let mcp_public_host = public_url
         .parse_url()?
         .host_str()
         .context("public MCP URL has no host")?
         .to_owned();
-    let service_host = macro_service_urls::McpServiceUrl::new()?
+    let service_host = mcp_service_url::McpServiceUrl::new()?
         .parse_url()?
         .host_str()
         .context("MCP service URL has no host")?
         .to_owned();
     // Built once: the factory runs per request in stateless mode.
-    let tools = ai_tools::tools_for(ai_tools::AiHost::Mcp).toolset;
+    let tools = agent_tools::tools_for(agent_tools::AiHost::Mcp).toolset;
     let code_mode = code_mode.map(|code_mode| {
         Arc::new(CodeModeSurface {
             tools: Arc::new(agent_code_mode::inbound::toolset::user_toolset()),
@@ -157,7 +157,7 @@ pub async fn router(
 async fn build_auth_proxy(
     config: &Config,
     secretsmanager_client: &secretsmanager_client::SecretsManager,
-    public_url: &macro_service_urls::McpPublicUrl,
+    public_url: &mcp_public_url::McpPublicUrl,
     db: sqlx::PgPool,
     kms: aws_sdk_kms::Client,
     jwt_args: JwtValidationArgs,
@@ -168,7 +168,7 @@ async fn build_auth_proxy(
     let mcp_public_url = public_url.to_string();
     let mcp_oauth_redirect_uri = format!("{mcp_public_url}/oauth/callback");
     let email_codes = AuthServiceEmailCodes::new(
-        &macro_service_urls::AuthServiceUrl::new()?,
+        &auth_service_url::AuthServiceUrl::new()?,
         mcp_oauth_redirect_uri.clone(),
     )
     .context("failed to initialize MCP email sign-in")?;
@@ -253,7 +253,10 @@ async fn build_auth_proxy(
     // The ChatGPT MCP server is its own Worker that the broker signs in for.
     let resources = McpResources::new(
         format!("{mcp_public_url}/mcp"),
-        format!("{}/mcp", macro_service_urls::McpChatgptServiceUrl::new()?),
+        format!(
+            "{}/mcp",
+            mcp_chatgpt_service_url::McpChatgptServiceUrl::new()?
+        ),
     );
     let auth_proxy = McpAuthProxyServiceImpl::new(McpAuthProxyServiceDeps {
         public_url: mcp_public_url,
@@ -288,7 +291,7 @@ fn build_analytics(config: &Config, db: sqlx::PgPool) -> McpAnalytics {
     });
     McpAnalytics::posthog(
         client,
-        entity_access::outbound::PgAccessRepository::new(db),
+        entity_access_outbound::PgAccessRepository::new(db),
         config.environment,
     )
 }

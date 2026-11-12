@@ -24,7 +24,7 @@ patterns in older code.
 | `apps/web/` | Web frontend; its own agent guide covers Bun, UI patterns, and browser verification. |
 | `apps/`, `packages/` | Other apps and shared frontend packages. |
 | `services/` | Deployable services and workers; Rust package names come from each `Cargo.toml`. |
-| `crates/` | Reusable backend libraries, domain services, and adapters. |
+| `crates/` | Reusable backend libraries, domain services, and adapters, grouped by feature (`crates/<group>/<crate>`); [the index](crates/AGENTS.md) lists the groups. |
 | `crates/macro_db_client/migrations/` | MacroDB PostgreSQL migrations. |
 | `infra/` | Deployment definitions and local infrastructure. |
 | `agent-teammates/` | Agents that work in Macro as their own users: the `muppet` library and a `starter-agent` template. Outside the root workspace and its checks. |

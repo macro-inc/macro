@@ -1,8 +1,8 @@
 use std::ops::Deref;
 
 use ego_tree::NodeRef;
-use models_email::service::message::Message;
-use models_email::service::thread::Thread;
+use email_types::service::message::Message;
+use email_types::service::thread::Thread;
 use scraper::{ElementRef, Html, Node};
 
 pub fn remove_trailing_br_tags_threads(threads: &mut [Thread]) {
@@ -104,7 +104,7 @@ fn serialize_node(node: NodeRef<Node>) -> String {
 #[cfg(test)]
 mod tests {
     use crate::util::process_pre_insert::clean_message::clean_message;
-    use models_email::email::service;
+    use email_types::email::service;
 
     #[test]
     fn test_clean_html_test_1() {

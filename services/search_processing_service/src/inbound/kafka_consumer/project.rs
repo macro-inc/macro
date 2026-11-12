@@ -2,9 +2,9 @@
 
 use std::collections::HashSet;
 
+use folder::domain::events::{ProjectMacroEvent, ProjectTopicEvent};
 use macro_event_broker::MacroEvent as _;
 use opensearch_client::OpensearchClient;
-use projects::domain::events::{ProjectMacroEvent, ProjectTopicEvent};
 use sqlx::PgPool;
 use sqs_client::search::project::UpsertProject;
 

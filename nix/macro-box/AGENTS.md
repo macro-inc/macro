@@ -74,7 +74,7 @@ PID 1 (for the dev-only DockerFleet).
   client, on PATH) through the fleet. Its state, the Claude credential
   `<state>/claude/credential.json`, is `/home/.system/harnessd` with a data
   disk, else `/var/lib/harnessd` (tmpfiles, macro, 0700). See
-  `crates/harnessd/AGENTS.md`.
+  `crates/agents/harnessd/AGENTS.md`.
 - `claude` on PATH (and so macrod's `CLAUDE_CODE_EXECUTABLE`) is
   `_claude-wrapper.nix` over `files/claude-wrapper`: when the credential file
   has a token it unsets `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`,
@@ -175,7 +175,7 @@ The control plane, per computer:
   an unreadable one and one without a token.
 - `nix build .#checks.x86_64-linux.macro-box-claude-agent-acp` runs ACP
   `initialize` against the adapter. Evaluation fails when its version differs
-  from macrod's pin in `crates/coding_agent_worker/src/tui/agent_catalog/claude_code.rs`;
+  from macrod's pin in `crates/agents/macrod/src/tui/agent_catalog/claude_code.rs`;
   run `claude-agent-acp/lock.sh` after changing the pin.
 - `nix build .#macro-box-claude-code`: keeps nixpkgs' binary patching, wrapper
   and version check. `_claude-code.nix` pins the minimum version required by

@@ -15,8 +15,8 @@ const QUERY_TIMEOUT: Duration = Duration::from_secs(90);
 #[cfg(test)]
 mod test;
 
-fn discovery_tools() -> ai_toolset::AsyncToolCollection<ai_tools::ToolServiceContext> {
-    ai_toolset::AsyncToolCollection::new().add_subtoolset::<ai_tools::ToolDatabasesToolContext>(
+fn discovery_tools() -> ai_toolset::AsyncToolCollection<agent_tools::ToolServiceContext> {
+    ai_toolset::AsyncToolCollection::new().add_subtoolset::<agent_tools::ToolDatabasesToolContext>(
         databases::inbound::toolset::databases_read_only_toolset(),
     )
 }
@@ -56,7 +56,7 @@ pub async fn generate_database_query(
             code: Some(error.code().to_string()),
         })?;
     // The adapter wires only view-capped database tools; no connector discovery.
-    let reference = databases_sql::toolset::SQL_READ_GUIDE.to_owned();
+    let reference = database_sql_runner::toolset::SQL_READ_GUIDE.to_owned();
     let tools = Arc::new(discovery_tools());
     let result = tokio::time::timeout(
         QUERY_TIMEOUT,

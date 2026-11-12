@@ -1,9 +1,9 @@
 use crate::pubsub::crm_cleanup::worker::CrmCleanupContext;
 use email_db_client::crm_cleanup::{candidates, job};
-use models_email::email::service::crm_cleanup::{
+use email_types::email::service::crm_cleanup::{
     CrmCleanupJob, CrmCleanupJobStatus, CrmCleanupOperation, CrmCleanupPubsubMessage,
 };
-use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
+use email_types::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 
 /// An active job whose `updated_at` hasn't moved for this long is considered
 /// stranded (e.g. its lister exhausted retries into the DLQ) and gets failed

@@ -15,8 +15,8 @@
 #[cfg(test)]
 mod test;
 
+use ai_projection_types::AiProjectionQueueMessage;
 use futures::StreamExt;
-use models_ai_projection::AiProjectionQueueMessage;
 use sqlx::{Pool, Postgres};
 
 use crate::cognition::refresh::context::Context;

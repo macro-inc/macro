@@ -2,22 +2,19 @@ use std::sync::Arc;
 
 use analytics_client::AnalyticsClient;
 use axum::extract::FromRef;
-use channels::{
-    domain::{
-        service::ChannelServiceImpl,
-        side_effects::{ChannelSideEffectService, SpawnedChannelEventDispatcher},
-    },
-    outbound::{
-        connection_gateway_realtime::ConnectionGatewayChannelRealtimePublisher,
-        contacts_dispatcher::ContactsChannelDispatcher,
-        notification_sender::NotificationChannelSender,
-        pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions,
-        pg_channels_repo::PgChannelsRepo, pg_side_effect_context::PgChannelSideEffectContext,
-    },
+use channels::domain::{
+    service::ChannelServiceImpl,
+    side_effects::{ChannelSideEffectService, SpawnedChannelEventDispatcher},
+};
+use channels_outbound::{
+    connection_gateway_realtime::ConnectionGatewayChannelRealtimePublisher,
+    contacts_dispatcher::ContactsChannelDispatcher, notification_sender::NotificationChannelSender,
+    pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions,
+    pg_channels_repo::PgChannelsRepo, pg_side_effect_context::PgChannelSideEffectContext,
 };
 use contacts::{domain::service::SqsContactsIngress, outbound::ingress::SqsContactsQueue};
 use entity_access::domain::service::EntityAccessServiceImpl;
-use entity_access::outbound::PgAccessRepository;
+use entity_access_outbound::PgAccessRepository;
 use foreign_entity::domain::service::ForeignEntityServiceImpl;
 use foreign_entity::outbound::pg_foreign_entity_repo::PgForeignEntityRepo;
 use github::domain::service::GithubLinkServiceImpl;
@@ -41,10 +38,9 @@ use macro_env::Environment;
 use macro_env_var::env_var;
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 use native_app_service::{domain::service::NativeAppServiceImpl, outbound::DefaultBundleFetcher};
-use notification::outbound::queue::SqsQueue;
-use notification::{
-    domain::service::SqsNotificationIngress, outbound::rate_limit::RedisRateLimitAdapter,
-};
+use notification::domain::service::SqsNotificationIngress;
+use notification_outbound::queue::SqsQueue;
+use notification_outbound::rate_limit::RedisRateLimitAdapter;
 use rate_limit::domain::service::RateLimitServiceImpl;
 use referral::{domain::service::ReferralServiceImpl, outbound::pg_referral_repo::PgReferralRepo};
 use remote_env_var::LocalOrRemoteSecret;
@@ -127,7 +123,7 @@ pub(crate) type DomainNoticeServiceType = teams::domain::domain_notice::DomainNo
 pub(crate) type TeamsServiceType = teams::domain::team_service::TeamServiceImpl<
     teams::outbound::team_repo::TeamRepositoryImpl,
     teams::outbound::customer_repo::CustomerRepositoryImpl,
-    ChannelServiceType,
+    crate::outbound::team_channels::ChannelServiceTeamChannels<ChannelServiceType>,
     UserRolesAndPermissionsServiceImpl<MacroDB, MacroDB>,
     NotificationIngressType,
     teams::outbound::crm_enqueuer::SqsCrmEnqueuer,

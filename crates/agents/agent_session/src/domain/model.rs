@@ -1,0 +1,996 @@
+use agent_client_protocol::schema::v1::SessionId;
+use agent_runtime_protocol::domain::schema::v0::{AcpMessage, SystemEvent, ToServerMessage};
+use bots::domain::models::BotId;
+use chrono::{DateTime, Utc};
+use macro_user_id::user_id::MacroUserIdStr;
+use macro_uuid::Uuid;
+use model_owner::Owner;
+
+use super::error::AgentSessionError;
+
+// The log vocabulary - the session id, the log entry, and the frame it
+// carries - is owned by `agent_fold`, the bottom of the agent session stack,
+// so that this crate can depend on the fold (see `agent_fold::domain::log`).
+// Re-exported here because this is where callers expect session types.
+pub use super::sandbox_size::SandboxSize;
+pub use agent_fold::domain::log::{AgentSessionId, AgentSessionLog, Message};
+pub use agent_fold::domain::model::{
+    Author, AuthorKind, FoldEvent, MessageId, OwnedFoldEvent, TurnId,
+};
+pub use agent_session_id::{ManagerFence, ReplicaId};
+
+/// The `_meta` key on `session/new`, `session/load` and `session/resume`
+/// whose string value is the [`AgentSessionId`] the ACP session serves.
+pub const MACRO_AGENT_SESSION_META_KEY: &str = "macro.com/agentSessionId";
+
+/// The `_meta` key on `session/new`, `session/load` and `session/resume`
+/// whose string value is how the session answers permission requests
+/// (`autoAccept` or `prompt`), so a runtime can tell its agent.
+pub const MACRO_PERMISSION_POLICY_META_KEY: &str = "macro.com/permissionPolicy";
+
+/// A replica's own base URL, as peers should dial it for command forwarding.
+///
+/// Private-network address discovered by the replica itself at boot (the ECS
+/// task metadata endpoint in deployments), published with its heartbeat.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReplicaAddress(String);
+
+impl ReplicaAddress {
+    /// Wrap a base URL, e.g. `http://10.0.1.7:8100`.
+    #[must_use]
+    pub fn new(address: impl Into<String>) -> Self {
+        Self(address.into())
+    }
+
+    /// The base URL as a string.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for ReplicaAddress {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+/// The live manager of a session, as read from the lease.
+#[derive(Debug, Clone)]
+pub struct SessionManager {
+    /// The replica holding the claim.
+    pub replica: ReplicaId,
+    /// Where to forward its commands, when the replica has published one.
+    /// `None` means the manager is live but unreachable - hold the error
+    /// rather than execute somewhere the actor is not.
+    pub address: Option<ReplicaAddress>,
+    /// Whether the holder has published that it is shutting down. Still
+    /// heartbeating, so still "live" by the lease's own liveness rule, but
+    /// no longer somewhere to send work.
+    pub draining: bool,
+}
+
+/// What the lease says about a session, seen from one replica.
+#[derive(Debug, Clone)]
+pub struct LeaseView {
+    /// The replica holding the lease, when a live one holds it - draining
+    /// or not, because who may take over from a draining holder is the
+    /// reader's decision, not the store's.
+    pub holder: Option<SessionManager>,
+    /// Whether the replica that asked has published that it is draining.
+    /// Asked in the same statement as the holder: a command's routing turns
+    /// on both, and two round trips could straddle the drain.
+    pub asking_replica_draining: bool,
+}
+
+/// What asking a session's actor to release itself silently did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SessionRelease {
+    /// The actor stopped without writing or announcing anything.
+    Released,
+    /// The actor has work open (a turn, a permission request, a queued
+    /// command, or an unfinished handshake) and keeps running.
+    Busy,
+    /// No live actor for the session here.
+    NotAttached,
+}
+
+/// Where a session's live actor runs, from one service instance's viewpoint.
+#[derive(Debug, Clone)]
+pub enum SessionManagement {
+    /// No live replica manages the session; this instance may claim it by
+    /// attaching, so commands execute locally.
+    Unmanaged,
+    /// This instance's replica manages it; commands execute locally.
+    Ours,
+    /// A live peer manages it; commands belong at its address.
+    Peer(SessionManager),
+    /// This instance is draining: it is about to stop, so work sent here
+    /// would die with it. Commands belong on a replica that is staying.
+    Draining,
+}
+
+/// Proof that this replica claimed a session's live management.
+///
+/// Obtained only from [`SessionOwnership::claim`](super::ports::SessionOwnership::claim);
+/// holding one is what entitles an actor to attach and write the session's
+/// log under its fence.
+#[derive(Debug, Clone, Copy)]
+pub struct SessionClaim {
+    /// The claimed session.
+    pub session: AgentSessionId,
+    /// The replica holding the claim.
+    pub replica: ReplicaId,
+    /// The fence this claim writes under.
+    pub fence: ManagerFence,
+}
+
+/// What claiming a session yielded.
+#[derive(Debug, Clone, Copy)]
+pub enum ClaimOutcome {
+    /// This replica now manages the session.
+    Claimed(SessionClaim),
+    /// A replica with a fresh heartbeat already manages it. Until command
+    /// forwarding exists this surfaces as an error; with it, commands are
+    /// routed to the named replica instead.
+    ManagedElsewhere(ReplicaId),
+}
+
+/// Display name assigned to a newly created agent session.
+pub const DEFAULT_AGENT_SESSION_NAME: &str = "Agent Session";
+
+/// Maximum number of Unicode scalar values in a session name.
+pub const MAX_AGENT_SESSION_NAME_CHARS: usize = 100;
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, strum::AsRefStr)]
+#[strum(serialize_all = "snake_case")]
+pub enum SessionStatus {
+    /// No status updates received.
+    #[default]
+    NoMessages,
+    /// The latest status received from the container.
+    Event(SystemEvent),
+    /// The session disconnected without sending a closed event.
+    Disconnected,
+}
+
+/// Which Pipedream MCP servers a session is handed: the agent's own choice,
+/// plus any apps a routine requires, snapshotted onto the session at creation
+/// like `instructions`. The servers
+/// it resolves to are re-listed before each prompt, so an app the owner
+/// connects mid-session reaches a live agent that can `session/resume`;
+/// editing the agent's selection applies to its next session.
+pub use bots::domain::models::{AgentMcpServer, AgentMcpServers};
+
+/// Why a session is created, which decides where it is shown.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SessionPurpose {
+    /// A regular session opened directly or from a thread mention.
+    Standalone,
+    /// An unprompted speculative runtime, eligible for warm claim and expiry.
+    Warm,
+    /// Context backing an agent DM; accessed through its conversation.
+    AgentDm,
+    /// A session another agent dispatched on its owner's behalf. Listed, and
+    /// it notifies like the owner's own sessions.
+    Dispatched,
+    /// A routine's unattended run. Its successful turns notify nobody, and
+    /// the routine's setting decides whether it is listed.
+    Routine {
+        /// Listed or unlisted, from the routine's setting.
+        visibility: SessionVisibility,
+    },
+    /// Work a person asked for that runs out of sight, its result read
+    /// elsewhere: a routine draft. Hidden, started by the person, and it
+    /// notifies nobody (see [`AgentSession::is_background`]).
+    Background,
+}
+
+impl SessionPurpose {
+    /// Validate speculative creation against durable conversation provenance.
+    /// A legacy standalone caller naming a reserved context adopts DM policy.
+    pub fn for_creation(
+        self,
+        conversation: bool,
+        has_message: bool,
+    ) -> Result<Self, AgentSessionError> {
+        if self == Self::Warm && (conversation || has_message) {
+            return Err(AgentSessionError::InvalidSessionPurpose);
+        }
+        Ok(if conversation { Self::AgentDm } else { self })
+    }
+
+    /// Where a session created for this purpose is shown. Speculative,
+    /// DM-backing and thread sessions (any agent started by a mention or an
+    /// assignment in a thread) are reached through what they back, so they
+    /// are hidden until someone prompts them directly (see
+    /// [`AgentSessionRepo::add_follower`](super::ports::AgentSessionRepo::add_follower));
+    /// a routine's run follows its routine.
+    pub fn visibility(self, thread_id: Option<Uuid>, hide_agent_dms: bool) -> SessionVisibility {
+        let hidden = match self {
+            Self::Warm => true,
+            Self::AgentDm => hide_agent_dms,
+            Self::Standalone => thread_id.is_some(),
+            Self::Dispatched => false,
+            Self::Background => true,
+            Self::Routine { visibility } => return visibility,
+        };
+        if hidden {
+            SessionVisibility::Hidden
+        } else {
+            SessionVisibility::Listed
+        }
+    }
+
+    /// Who starts a session created for this purpose.
+    pub fn source(self) -> SessionSource {
+        match self {
+            Self::Dispatched => SessionSource::Agent,
+            Self::Routine { .. } => SessionSource::Routine,
+            Self::Standalone | Self::Warm | Self::AgentDm | Self::Background => SessionSource::User,
+        }
+    }
+}
+
+/// Who started a session. Stored on the session and carried by its lifecycle
+/// events, so lists and notifications can treat unattended runs differently.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Default,
+    PartialEq,
+    Eq,
+    serde::Serialize,
+    serde::Deserialize,
+    strum::EnumString,
+    strum::IntoStaticStr,
+)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum SessionSource {
+    /// A person, directly or through something they did: a prompt, a
+    /// mention, an assignment, or asking for a routine draft.
+    #[default]
+    User,
+    /// Another agent, which dispatched the session on its owner's behalf.
+    Agent,
+    /// A routine's unattended run.
+    Routine,
+}
+
+/// Where a session is shown. Stored as `agent_session.visibility`, which
+/// replaces `list_hidden` (`Hidden`); a trigger keeps that column in step until
+/// it is dropped.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Default,
+    PartialEq,
+    Eq,
+    serde::Serialize,
+    serde::Deserialize,
+    strum::EnumString,
+    strum::IntoStaticStr,
+)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum SessionVisibility {
+    /// Shown wherever the owner's sessions are.
+    #[default]
+    Listed,
+    /// Left out of Home and the default Agents list, but a filter can still
+    /// ask for it: a routine's run, unless the routine lists its runs.
+    Unlisted,
+    /// Out of every list and search; reachable only by id, through what it
+    /// backs (a thread, a DM) or once a warm claim lists it.
+    Hidden,
+}
+
+/// Whether an in-process session's turns are billed to its owner. Stored as
+/// `agent_session.billing`, set by whoever opens the session and fixed for
+/// its life. Either way the turns are admitted and their usage recorded.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Default,
+    PartialEq,
+    Eq,
+    serde::Serialize,
+    serde::Deserialize,
+    strum::EnumString,
+    strum::IntoStaticStr,
+)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum SessionBilling {
+    /// Billed as the owner's agent session usage: every session unless its
+    /// opener chose otherwise.
+    #[default]
+    Billable,
+    /// Recorded but never billed: background work the owner didn't ask for
+    /// turn by turn.
+    NonBillable,
+}
+
+impl SessionBilling {
+    /// Whether this is the default, billed to the owner.
+    #[must_use]
+    pub fn is_billable(&self) -> bool {
+        *self == Self::Billable
+    }
+}
+
+/// Caller-provided values required to create an agent session.
+#[derive(Debug, Clone)]
+pub struct CreateAgentSessionParams {
+    /// Creation policy for visibility and speculative runtime lifecycle.
+    pub purpose: SessionPurpose,
+    /// Caller-minted session id, available before persistence.
+    pub id: AgentSessionId,
+    /// Who created and owns the session.
+    pub owner_id: Owner,
+    /// Bot running the agent.
+    pub bot_id: BotId,
+    /// Root message identifying the originating thread, if any.
+    pub thread_id: Option<Uuid>,
+    /// Exact message that invoked the bot, if any.
+    pub originating_message_id: Option<Uuid>,
+    /// Model slug.
+    pub model: String,
+    /// Harness slug.
+    pub harness: String,
+    /// Repository the agent works with, when one was stated.
+    pub repo_url: Option<String>,
+    /// Starting branch explicitly selected for this session.
+    pub repo_branch: Option<super::repository_branch::RepositoryBranch>,
+    /// Absolute directory the harness runs in on its runtime.
+    pub workspace: String,
+    /// Compute tier the managed sandbox was spawned with.
+    pub sandbox_size: SandboxSize,
+    /// Instructions the session's runtime works under, when any were stated.
+    ///
+    /// Snapshotted here rather than resolved per turn because they are the
+    /// runtime's system prompt: how a harness is handed them differs by
+    /// provider, but every provider needs the same answer for the session's
+    /// whole life.
+    pub instructions: Option<String>,
+    /// Which MCP servers the session is handed; see [`AgentMcpServers`].
+    pub mcp_servers: AgentMcpServers,
+    /// SHA-256 hex of the opaque token the session's sandbox presents to the
+    /// egress proxy, or `None` for a session that never gets one.
+    ///
+    /// The hash and never the token: this row is the only durable record of
+    /// the credential, and a database dump must not yield a live one. A session
+    /// replayed from a recording, or created without a sandbox, has nothing to
+    /// store here.
+    pub egress_token_hash: Option<String>,
+    /// What opened the session, written with the session's row. `Unknown`
+    /// writes nothing: an unclaimed warm session has no cause yet.
+    pub origin: trigger_context::TriggerOrigin,
+    /// Whether the session's in-process turns are billed to its owner.
+    pub billing: SessionBilling,
+}
+
+/// Who or what archived a session.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    strum::AsRefStr,
+    strum::EnumString,
+    serde::Serialize,
+    serde::Deserialize,
+)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum ArchiveCause {
+    /// A person archived it.
+    User,
+    /// Every pull request linked to it closed, with at least one merged.
+    PullRequestMerged,
+    /// The runtime session backing it was deliberately closed.
+    RuntimeClosed,
+}
+
+/// A session's archive.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SessionArchive {
+    /// Who or what archived it.
+    pub by: ArchiveCause,
+    /// When it was archived.
+    pub at: DateTime<Utc>,
+}
+
+/// A running or historical agent coding session.
+#[derive(Debug, Clone)]
+pub struct AgentSession {
+    /// id of the agent session
+    pub id: AgentSessionId,
+    /// User-facing session name.
+    pub name: String,
+    /// Who archived the session and when, or `None` while it is active. An archived session
+    /// is read-only.
+    pub archived: Option<SessionArchive>,
+    /// Who created and owns the session. Immutable for its life.
+    pub owner_id: Owner,
+    /// The root message where the bot was originally invoked, if any.
+    pub thread_id: Option<Uuid>,
+    /// Entity owning the originating thread, derived from its root message.
+    /// The persisted message parent is authoritative for routing and access.
+    pub thread_parent: Option<messages::domain::models::MessageParent>,
+    /// The exact message that originally invoked the bot, if any.
+    pub originating_message_id: Option<Uuid>,
+    /// the bot id of the bot running the agent
+    pub bot_id: BotId,
+    /// model slug - TODO: probably a better type here
+    pub model: String,
+    /// harness slug - TODO: probably a better type here
+    pub harness: String,
+    /// repo we are working with, when one was stated
+    pub repo_url: Option<String>,
+    /// Starting branch explicitly selected for this session.
+    pub repo_branch: Option<super::repository_branch::RepositoryBranch>,
+    /// The pull request associated with this session, independent of conversation history.
+    pub pull_request_url: Option<String>,
+    /// The Macro task the session was explicitly linked to.
+    pub task_id: Option<String>,
+    /// Who started the session.
+    pub source: SessionSource,
+    /// What opened the session. `Unknown` when nothing recorded it.
+    pub origin: trigger_context::TriggerOrigin,
+    /// Where the session is shown.
+    pub visibility: SessionVisibility,
+    /// Directory the harness runs in, snapshotted at creation. The session
+    /// actor sends it as the working directory of `session/new`, and resume
+    /// and load re-enter it - the directory the session actually ran in,
+    /// not whatever the runtime is configured with today.
+    pub workspace: String,
+    /// Compute tier of the managed sandbox, snapshotted at spawn.
+    pub sandbox_size: SandboxSize,
+    /// Instructions the session's runtime works under, snapshotted at
+    /// creation. Immutable for the session's life; `None` when none were
+    /// stated.
+    pub instructions: Option<String>,
+    /// Which MCP servers the session is handed, snapshotted at creation.
+    pub mcp_servers: AgentMcpServers,
+    /// ACP session if we have one
+    pub acp_session_id: Option<SessionId>,
+    /// The provider-side identity, when an external provider serves this
+    /// session. `None` for sandboxed sessions and for external sessions
+    /// whose agent has not been minted yet.
+    pub external: Option<ExternalSession>,
+    pub status: SessionStatus,
+    pub created_at: DateTime<Utc>,
+    pub modified_at: DateTime<Utc>,
+}
+
+impl AgentSession {
+    /// Whether the session is archived and therefore read-only.
+    pub fn is_archived(&self) -> bool {
+        self.archived.is_some()
+    }
+
+    /// Whether the session is work its owner asked for that runs out of
+    /// sight (a routine draft): started by them at their request, hidden, and
+    /// opened from no message, so no list, search or thread leads to it.
+    /// Nobody is told about its turns, and the routine scheduler that opened
+    /// it may delete it.
+    pub fn is_background(&self) -> bool {
+        self.source == SessionSource::User
+            && self.visibility == SessionVisibility::Hidden
+            && self.thread_id.is_none()
+            && self.originating_message_id.is_none()
+            && matches!(
+                &self.origin,
+                trigger_context::TriggerOrigin::Requested { by }
+                    if self.owner_id.as_user() == Some(by)
+            )
+    }
+
+    /// The user this session runs as; see [`session_owner_user`].
+    pub fn owner_user(&self) -> Result<&MacroUserIdStr<'static>, AgentSessionError> {
+        self.owner_id
+            .as_user()
+            .ok_or_else(|| AgentSessionError::OwnerNotUser(self.owner_id.owner_type()))
+    }
+}
+
+/// The user a session runs as.
+///
+/// A session spends its owner's credentials and bills them, so only a user
+/// can own one until the runtime has a bot execution context.
+// TODO(ownership-v2): T5.4 admits bot owners once the runtime has a bot execution context.
+pub fn session_owner_user(owner: &Owner) -> Result<MacroUserIdStr<'static>, AgentSessionError> {
+    owner
+        .as_user()
+        .cloned()
+        .ok_or_else(|| AgentSessionError::OwnerNotUser(owner.owner_type()))
+}
+
+/// A persisted agent-session name changed and should be shown to live viewers.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AgentSessionRenamed {
+    /// Renamed session.
+    pub agent_session_id: AgentSessionId,
+    /// New user-facing name.
+    pub name: String,
+}
+
+/// A running session's newest one-line status, summarizing its tool calls
+/// for live viewers. Never stored: it describes the turn in flight and means
+/// nothing once that turn ends.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AgentSessionActivitySummarized {
+    /// The running session.
+    pub agent_session_id: AgentSessionId,
+    /// The status line, such as "Reading 12 emails…"; `None` once the turn
+    /// that had one has ended.
+    pub text: Option<String>,
+}
+
+/// The provider-side identity of a session served by an external provider.
+///
+/// For a Cursor-backed session this is the cloud agent: its `bc-…` id, the
+/// display name Cursor derived from the prompt, and its page on cursor.com.
+/// The stored row is the only durable record of the mapping — Cursor's API
+/// has no labels to recover it from — which is why this exists as data
+/// rather than being re-derived.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExternalSession {
+    /// Which provider serves the session, e.g. `cursor`.
+    pub provider: String,
+    /// The provider's id for the agent, e.g. `bc-…`.
+    pub external_id: String,
+    /// The provider's display name for the agent, when it reported one.
+    pub external_name: Option<String>,
+    /// The agent's page on the provider's site, for opening it there.
+    pub external_url: Option<String>,
+    /// The last provider run whose output was delivered to this session.
+    pub last_run_id: Option<String>,
+}
+
+/// The agent behind a session, as much of it as rendering a message needs.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct SessionBot {
+    /// The bot's id. A message it sent has `"bot|{id}"` as its sender.
+    pub id: BotId,
+    /// Display name.
+    pub name: String,
+    /// Stable `@` handle, without a leading `@`.
+    pub handle: String,
+    /// Avatar, when it has one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub avatar_url: Option<String>,
+}
+
+/// The authority behind an invocation. System events never borrow owner access.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, strum::AsRefStr)]
+#[strum(serialize_all = "snake_case")]
+pub enum PrompterKind {
+    /// A human or runtime prompt; user identifies any acting human.
+    #[default]
+    User,
+    /// An internal event with no user authority.
+    System,
+}
+
+/// Who prompted the turn a session is running, or last ran.
+///
+/// Written at dispatch, before the runtime can act on the prompt, so the
+/// egress proxy - which may be on any replica - can tell a turn the owner
+/// prompted from one somebody else did.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TurnPrompter {
+    /// Source of the turn's authority.
+    pub kind: PrompterKind,
+    /// The action that opened the turn.
+    pub action_id: agent_runtime_protocol::domain::action::AgentActionId,
+    /// The user who prompted it, absent when a bot acted on nobody's behalf.
+    pub user: Option<MacroUserIdStr<'static>>,
+    /// The app tab the person typed the prompt in, when they typed it in one.
+    pub client: Option<UiClientId>,
+}
+
+/// One open Macro app tab, minted by the tab and kept for its lifetime.
+///
+/// Sent with a prompt typed in that tab, so what the turn shows the person
+/// reaches that tab and no other. It names a tab, not a person: it grants
+/// nothing, and is only ever read beside the prompter it came with.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(transparent)]
+pub struct UiClientId(Uuid);
+
+impl UiClientId {
+    /// Wrap a tab's id.
+    #[must_use]
+    pub fn from_uuid(id: Uuid) -> Self {
+        Self(id)
+    }
+
+    /// The id, for storage.
+    #[must_use]
+    pub fn as_uuid(self) -> Uuid {
+        self.0
+    }
+}
+
+impl std::fmt::Display for UiClientId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl TurnPrompter {
+    /// Effective human authority. System turns never act as a user even if
+    /// malformed or old storage includes a user alongside the system kind.
+    pub fn acting_user(&self) -> Option<&MacroUserIdStr<'static>> {
+        (self.kind == PrompterKind::User)
+            .then_some(self.user.as_ref())
+            .flatten()
+    }
+}
+
+/// One waiting action as the session store records it.
+///
+/// The harness keeps an in-memory working copy beside the live actor; this
+/// is the durable form a restart or a reader on another replica consults.
+/// `announce` is the harness's channel/document origin, stored as JSON so
+/// this crate does not depend on harness types.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StoredQueuedAction {
+    /// The id the action was accepted under.
+    pub action_id: agent_runtime_protocol::domain::action::AgentActionId,
+    /// What will be delivered - a prompt's text is the raw user text.
+    pub action: agent_runtime_protocol::domain::action::AgentAction,
+    /// The user who queued it, absent when a bot acted on nobody's behalf.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub actor: Option<MacroUserIdStr<'static>>,
+    /// When it was accepted.
+    pub created_at: DateTime<Utc>,
+    /// Harness announce origin, opaque to this crate.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub announce: Option<serde_json::Value>,
+    /// Chip message id, once posted, so a retry does not announce twice.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub announced_message_id: Option<Uuid>,
+    /// Why the agent is being asked, composed into the prompt at dispatch.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context: Option<trigger_context::TriggerContext>,
+    /// The app tab the prompt was typed in.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client: Option<UiClientId>,
+}
+
+impl From<&StoredQueuedAction> for super::ports::QueuedControl {
+    fn from(stored: &StoredQueuedAction) -> Self {
+        Self {
+            action_id: stored.action_id,
+            action: stored.action.clone(),
+            actor: stored.actor.clone(),
+            created_at: stored.created_at,
+        }
+    }
+}
+
+/// One action waiting in a session's queue.
+///
+/// Clients deserialize this, so both derives are used.
+// Domain-owned because the queue GET endpoint and the realtime snapshot
+// serialize this type byte-identically; that identity is the client contract.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct QueuedActionDto {
+    /// The id the action was accepted under.
+    pub action_id: agent_runtime_protocol::domain::action::AgentActionId,
+    /// What kind of action waits - `prompt` or `compact`; only
+    /// turn-occupying actions are ever queued.
+    pub kind: String,
+    /// The prompt's raw text, present for prompts only. What an edit
+    /// replaces.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prompt: Option<String>,
+    /// Files the prompt refers to, for prompts only. Kept through an edit,
+    /// which replaces the text alone.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub attachments: Vec<agent_runtime_protocol::domain::action::PromptAttachment>,
+    /// The user who queued it, absent when a bot acted on nobody's behalf.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub actor_user_id: Option<String>,
+    /// When it was accepted.
+    pub created_at: DateTime<Utc>,
+}
+
+impl From<super::ports::QueuedControl> for QueuedActionDto {
+    fn from(queued: super::ports::QueuedControl) -> Self {
+        use agent_runtime_protocol::domain::action::AgentAction;
+        let (prompt, attachments) = match &queued.action {
+            AgentAction::Prompt(action) => {
+                (Some(action.prompt.clone()), action.attachments.clone())
+            }
+            _ => (None, Vec::new()),
+        };
+        Self {
+            action_id: queued.action_id,
+            kind: queued.action.as_ref().to_owned(),
+            prompt,
+            attachments,
+            actor_user_id: queued.actor.map(|actor| actor.to_string()),
+            created_at: queued.created_at,
+        }
+    }
+}
+
+/// The Cursor run a frame checkpoints, if it is the adapter's empty
+/// `agent_message_chunk` carrying `_meta.macroCursorRunCheckpoint`.
+///
+/// A domain fact rather than a persistence detail: the store projects it
+/// onto `external_agent_session.last_run_id`, and the live writer must know
+/// it to keep such a frame out of a plain batch, so both read one function.
+#[must_use]
+pub fn cursor_run_checkpoint(message: &Message) -> Option<String> {
+    let Message::ToServer(ToServerMessage::Acp(AcpMessage(frame))) = message else {
+        return None;
+    };
+    let value = serde_json::to_value(frame).ok()?;
+    if value.get("method")?.as_str()? != "session/update" {
+        return None;
+    }
+    let params = value.get("params")?;
+    let update = params.get("update")?;
+    if update.get("sessionUpdate")?.as_str()? != "agent_message_chunk"
+        || !update.get("content")?.get("text")?.as_str()?.is_empty()
+    {
+        return None;
+    }
+    params
+        .get("_meta")?
+        .get("macroCursorRunCheckpoint")?
+        .as_str()
+        .map(str::to_owned)
+}
+
+/// A run of frames appended to a live session's log, for anyone watching.
+///
+/// The streaming counterpart of [`SessionLog`]: that is the selected history window
+/// for a reader arriving late, this is the frames a reader already here has
+/// not seen yet. Both carry the same entry shape, so a client folds them the
+/// same way - catching up on the log and then following it is one fold, not
+/// two.
+///
+/// A batch rather than a frame because the writer flushes frames in runs
+/// (see `LiveSessionLogWriter`), and every run costs one publish however
+/// many frames it holds. `entries` are in log order and never empty.
+///
+/// Addressed by session: it is the only thing a frame belongs to now that a
+/// session does not own a channel.
+#[derive(Debug, Clone)]
+pub struct LogAppended {
+    /// The durable turn projection after these frames, for list viewers that
+    /// have not loaded the conversation's history.
+    pub turn_state: Option<agent_fold::domain::model::TurnState>,
+    /// The session the entries belong to. The fold keys its messages on this,
+    /// so a client must pass it through unchanged.
+    pub agent_session_id: AgentSessionId,
+    /// The frames and the timestamps assigned when they were stored, in the
+    /// order the log holds them.
+    pub entries: Vec<StoredAgentSessionLog>,
+}
+
+/// One entry of a session's log as it was stored, with the time the log
+/// recorded it.
+///
+/// [`AgentSessionLog`] is the frame a writer hands in, and a frame carries no
+/// time of its own - `created_at` only exists once the row does. It is kept
+/// beside the frame rather than folded into it so the fold's vocabulary stays
+/// exactly what a client can replay, while a reader that has to order or merge
+/// a session's messages against anything else still has something to order by.
+#[derive(Debug, Clone)]
+pub struct StoredAgentSessionLog {
+    /// Durable row identity, used to select a replay history boundary.
+    pub id: Uuid,
+    /// When the entry was appended to the log.
+    pub created_at: DateTime<Utc>,
+    /// The frame, exactly as the log stored it.
+    pub entry: AgentSessionLog,
+}
+
+/// A session's effective ACP history, from its latest successful load initialization.
+/// With no successful load, history starts at the beginning. Failed attempts
+/// remain in the stream and must be staged/discarded by fold consumers.
+///
+/// The web client folds it itself with the same fold compiled to WASM, so a
+/// streamed session and a reloaded one are rendered by one implementation.
+/// Readers without the fold get [`FoldedSessionLog`] instead.
+#[derive(Debug, Clone)]
+pub struct SessionLog {
+    /// The agent whose messages the log derives.
+    ///
+    /// Sent because a reader has to render those messages and cannot work out
+    /// who sent them: the sender of an agent message is this session's bot,
+    /// and nothing else names it.
+    pub bot: SessionBot,
+    /// Every logged frame, oldest first. Folding depends on this order.
+    pub entries: Vec<StoredAgentSessionLog>,
+}
+
+/// A session's effective history folded into the messages a reader renders,
+/// oldest first: the same fold the web client runs over [`SessionLog`].
+#[derive(Debug, Clone)]
+pub struct FoldedSessionLog {
+    /// The agent whose messages these are; see [`SessionLog::bot`].
+    pub bot: SessionBot,
+    /// Every message, oldest first.
+    pub messages: Vec<agent_fold::domain::model::FoldedMessage>,
+}
+
+/// How an incoming channel context relates to an agent session.
+///
+/// Only the originating thread can match: sessions no longer own a dedicated
+/// channel, so there is no channel that is itself a session. Messages sent
+/// directly to a session arrive through their own topic, not as channel
+/// events, and never pass through this lookup.
+#[derive(Debug, Clone)]
+#[allow(
+    clippy::large_enum_variant,
+    reason = "one data variant against None; boxing would only move the size"
+)]
+pub enum ThreadSession {
+    /// No session matched the thread context.
+    None,
+    /// The bot's session was created from the incoming thread.
+    CreatedFromThread(AgentSession),
+}
+
+/// Maximum number of session ids one preview request may ask about.
+///
+/// Bounds the work and the response per call; a mention menu never renders
+/// anywhere near this many chips at once.
+pub const MAX_PREVIEW_SESSION_IDS: usize = 100;
+
+/// What one requested id resolved to in a batch preview.
+///
+/// Previews exist so a client can render a chip for a session it was handed a
+/// reference to - a mention, a link - without first knowing whether it can
+/// open it. Each id is therefore answered with one of three facts rather than
+/// an error: the viewer can see it (with the fields a chip renders), the
+/// session exists but the viewer holds no grant on it, or nothing by that id
+/// exists at all. Only the first carries data, so a viewer without access
+/// learns nothing beyond the session's existence - the same fact a `403`
+/// from `GET /agent-sessions/{id}` already gives away.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AgentSessionPreview {
+    /// The viewer holds at least view access; here is what a chip needs.
+    Access(Box<AgentSessionPreviewData>),
+    /// The session exists, but the viewer holds no grant on it.
+    NoAccess(AgentSessionId),
+    /// No session with this id exists.
+    DoesNotExist(AgentSessionId),
+}
+
+impl AgentSessionPreview {
+    /// The id this preview answers for, whichever way it resolved.
+    #[must_use]
+    pub fn id(&self) -> AgentSessionId {
+        match self {
+            Self::Access(data) => data.id,
+            Self::NoAccess(id) | Self::DoesNotExist(id) => *id,
+        }
+    }
+}
+
+/// One session found by [`AgentSessionRepo::preview`](super::ports::AgentSessionRepo::preview),
+/// before access policy: what a chip would show, whether an access row grants
+/// the viewer at least view access, and where the session came from, so the
+/// service can resolve inherited access that no row materializes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionPreviewCandidate {
+    /// What a chip renders once access is settled.
+    pub data: AgentSessionPreviewData,
+    /// Whether a materialized grant - the viewer, a channel they are in, or a
+    /// team they belong to - gives them at least view access.
+    pub has_grant: bool,
+    /// Parent of the thread the session was opened from, when it was.
+    pub thread_parent: Option<messages::domain::models::MessageParent>,
+}
+
+/// The subset of an [`AgentSession`] a chip or mention renders.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AgentSessionPreviewData {
+    /// The session id.
+    pub id: AgentSessionId,
+    /// User-facing session name.
+    pub name: String,
+    /// Who owns the session.
+    pub owner_id: Owner,
+    /// The bot running the agent, for its avatar.
+    pub bot_id: BotId,
+    /// Minimal bot identity, hydrated by the service after checking session access.
+    pub bot: Option<SessionBot>,
+    /// The session's last known status, for a live status indicator.
+    pub status: SessionStatus,
+    /// When the session was created.
+    pub created_at: DateTime<Utc>,
+    /// When the session was last modified.
+    pub modified_at: DateTime<Utc>,
+}
+
+/// Initialization selected by a matching successful load in the session machine.
+/// Persistence must append the response and select this row in one fenced transaction.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HistoryBoundary {
+    /// Initialization row in this session's log.
+    pub initialization_log_id: Uuid,
+}
+
+/// The `_meta` namespace Macro writes its own keys under on ACP frames.
+pub const META_NAMESPACE: &str = "macro";
+
+/// The key under [`META_NAMESPACE`] that marks a `tool_call` frame as a card
+/// the service presented ([`SessionToolPresentation`]), not a call the agent
+/// made. The agent never saw it, so a rebuild of the agent's conversation
+/// from the log leaves it out.
+const PRESENTED_KEY: &str = "presented";
+
+/// The tool name a code-mode view card is presented under.
+pub const PRESENT_VIEW_TITLE: &str = "mcp__macro_internal__PresentView";
+
+/// The tool name a code-mode review card is presented under.
+pub const PRESENT_REVIEW_TITLE: &str = "mcp__macro_internal__PresentReview";
+
+/// The `_meta` a presented card's `tool_call` frame carries.
+#[must_use]
+pub fn presented_meta() -> agent_client_protocol::schema::v1::Meta {
+    let mut meta = agent_client_protocol::schema::v1::Meta::new();
+    meta.insert(
+        META_NAMESPACE.to_owned(),
+        serde_json::json!({ PRESENTED_KEY: true }),
+    );
+    meta
+}
+
+/// Whether a `tool_call` frame is a card the service presented.
+///
+/// Cards logged before the marker are recognized by the shape only
+/// presentation writes: a view or review title, the matching `view_` or
+/// `review_` id (a model's call ids never take it), opened `in_progress`.
+#[must_use]
+pub fn is_presented(call: &agent_client_protocol::schema::v1::ToolCall) -> bool {
+    let marked = call
+        .meta
+        .as_ref()
+        .and_then(|meta| meta.get(META_NAMESPACE))
+        .and_then(|ours| ours.get(PRESENTED_KEY))
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false);
+    let id = &*call.tool_call_id.0;
+    let legacy = call.status == agent_client_protocol::schema::v1::ToolCallStatus::InProgress
+        && ((call.title == PRESENT_VIEW_TITLE && id.starts_with("view_"))
+            || (call.title == PRESENT_REVIEW_TITLE && id.starts_with("review_")));
+    marked || legacy
+}
+
+/// A durable, nonblocking tool card supplied by a trusted session capability.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct SessionToolPresentation {
+    /// Stable identity used to complete interrupted presentations without duplicates.
+    pub tool_call_id: String,
+    /// Tool name rendered by the ordinary ACP component router.
+    pub title: String,
+    /// Component input; never a request for the runtime to execute a tool.
+    pub raw_input: serde_json::Value,
+    /// Immediate presentation receipt, independent of any later user decision.
+    pub raw_output: serde_json::Value,
+}

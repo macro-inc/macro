@@ -41,7 +41,7 @@ fn display_is_the_cli_seam() {
 #[test]
 fn crate_change_maps_to_rdeps_of_that_crate() {
     let graph = build_graph(false).expect("cargo metadata");
-    let selection = select_in_repo(&graph, &["crates/email_validator/src/lib.rs"]);
+    let selection = select_in_repo(&graph, &["crates/email/email_validator/src/lib.rs"]);
     assert_ne!(selection, PackageSelection::None);
     assert_ne!(selection, PackageSelection::All);
     assert!(
@@ -67,7 +67,7 @@ fn unmapped_files_alone_yield_none() {
 #[test]
 fn package_readme_selects_its_package() {
     let graph = build_graph(false).expect("cargo metadata");
-    let selection = select_in_repo(&graph, &["crates/webhook/README.md"]);
+    let selection = select_in_repo(&graph, &["crates/integrations/webhook/README.md"]);
     assert!(
         selected_packages(&selection).contains("webhook"),
         "package README must select its owner: {selection:?}"
@@ -99,7 +99,7 @@ fn embedded_assets_select_their_consumers() {
     let mixed = select_in_repo(
         &graph,
         &[
-            "crates/email_validator/src/lib.rs",
+            "crates/email/email_validator/src/lib.rs",
             "static_assets/markdown-golden.1.bin",
         ],
     );
@@ -119,7 +119,8 @@ fn sdk_sources_select_code_mode_asset_consumers() {
     let set = selected_packages(&selection);
     for expected in [
         "code_mode_assets",
-        "code_execution",
+        "code_execution_core",
+        "code_execution_outbound",
         "agent_code_mode",
         "agent_harness_service",
     ] {
@@ -451,12 +452,12 @@ fn only_manifests_and_lockfiles_need_the_graph_diff() {
     for path in [
         "Cargo.toml",
         "Cargo.lock",
-        "crates/email_validator/Cargo.toml",
+        "crates/email/email_validator/Cargo.toml",
     ] {
         assert!(changes_cargo_graph(Path::new(path)), "{path}");
     }
     for path in [
-        "crates/email_validator/src/lib.rs",
+        "crates/email/email_validator/src/lib.rs",
         "Cargo.toml.orig",
         "docs/Cargo.md",
         "static_assets/schema.graphql",
@@ -493,7 +494,7 @@ fn saved_metadata_selects_what_live_metadata_selects() {
     let dir = tempfile::tempdir().unwrap();
     let file = dir.path().join("metadata.json");
     let root = xtask_paths::workspace_root();
-    let changed = [PathBuf::from("crates/macro_user_id/src/lib.rs")];
+    let changed = [PathBuf::from("crates/types/macro_user_id/src/lib.rs")];
     let rules = repository_rules().unwrap();
     let live = build_graph(true).expect("cargo metadata");
     let expected = select_by_paths(&live, &changed, &rules).unwrap();

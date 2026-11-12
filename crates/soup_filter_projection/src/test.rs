@@ -1,7 +1,7 @@
 use base64::{Engine as _, engine::general_purpose::STANDARD_NO_PAD};
 use chrono::{TimeZone, Utc};
 use model_owner::Owner;
-use models_soup::{
+use soup_types::{
     chat::SoupChat,
     document::{SoupDocument, SoupDocumentSubType},
     project::SoupProject,

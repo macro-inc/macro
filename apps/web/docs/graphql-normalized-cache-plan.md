@@ -480,7 +480,7 @@ projections. Native storage then compacts the migrated file with `VACUUM INTO`, 
 the upgrade reclaims the space instead of leaving freed pages behind.
 Both hosts use the same `Storage` implementation and compound entity keys.
 Wasm futures are not `Send`, so the `Storage` trait's futures are bound by
-`MaybeSend` (`crates/maybe_send`): `Send` on native targets, where Tauri drives
+`MaybeSend` (`crates/types/maybe_send`): `Send` on native targets, where Tauri drives
 the engine directly from its multi-threaded runtime, and unbounded on wasm.
 
 ### 4.4 Data model

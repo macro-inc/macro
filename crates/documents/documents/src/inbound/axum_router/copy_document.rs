@@ -1,0 +1,76 @@
+//! Handler for `POST /documents/{document_id}/copy`.
+
+use axum::{
+    Extension, Json,
+    extract::{Path, Query, State},
+};
+use entity_access::domain::ports::EntityAccessService;
+use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
+use entity_registry::CreationPrincipalExtractor;
+use macro_authorization::MacroAuthorizationService;
+use permissions_types::share_permission::access_level::ViewAccessLevel;
+use shared_types::document::{DocumentBasic, FileTypeExt};
+
+use super::{DocumentRouterState, Params};
+use crate::domain::models::{
+    CopyDocumentQueryParams, CopyDocumentRequest, CopyDocumentResponse, DocumentError,
+};
+use crate::domain::ports::DocumentService;
+
+/// Handler for `POST /documents/{document_id}/copy`.
+///
+/// Copies an existing document, creating a new document with the same content.
+/// Does not require re-uploading the document file.
+#[utoipa::path(
+    tag = "document",
+    post,
+    path = "/documents/{document_id}/copy",
+    operation_id = "copy_document",
+    params(
+        ("document_id" = String, Path, description = "Document ID"),
+        ("version_id" = Option<i64>, Query, description = "The version id of the document to copy. Defaults to copying the latest version of the document.")
+    ),
+    request_body = CopyDocumentRequest,
+    responses(
+        (status = 200, body = CopyDocumentResponse),
+        (status = 400, body = model_error_response::ErrorResponse),
+        (status = 401, body = model_error_response::ErrorResponse),
+        (status = 404, body = model_error_response::ErrorResponse),
+        (status = 500, body = model_error_response::ErrorResponse),
+    )
+)]
+#[tracing::instrument(skip(state, access, document_context, req), fields(document_version_id=?params.version_id))]
+pub async fn copy_document_handler<
+    T: DocumentService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    CreationPrincipalExtractor { principal, .. }: CreationPrincipalExtractor<Auth>,
+    access: DocumentAccessExtractor<ViewAccessLevel, Svc, Auth>,
+    State(state): State<DocumentRouterState<T, Svc, Auth>>,
+    document_context: Extension<DocumentBasic>,
+    Path(Params { document_id }): Path<Params>,
+    Query(params): Query<CopyDocumentQueryParams>,
+    Json(mut req): Json<CopyDocumentRequest>,
+) -> Result<Json<CopyDocumentResponse>, DocumentError> {
+    // Clean the document name (remove file extension if present)
+    req.document_name = shared_types::document::FileType::clean_document_name(&req.document_name)
+        .unwrap_or(req.document_name);
+
+    let response = state
+        .service
+        .copy_document(
+            access.entity_access_receipt,
+            document_context.0,
+            &principal,
+            req.document_name,
+            params.version_id,
+            req.version_id,
+        )
+        .await?;
+
+    Ok(Json(CopyDocumentResponse {
+        error: false,
+        data: response,
+    }))
+}

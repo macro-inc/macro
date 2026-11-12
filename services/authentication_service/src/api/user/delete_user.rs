@@ -13,7 +13,7 @@ use crate::api::{
     utils::{create_access_token_cookie, create_refresh_token_cookie},
 };
 
-use model::response::{ErrorResponse, GenericSuccessResponse};
+use shared_types::response::{ErrorResponse, GenericSuccessResponse};
 
 /// Deletes the user who calls this endpoint
 #[utoipa::path(

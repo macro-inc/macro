@@ -1,0 +1,28 @@
+[package]
+edition = "2024"
+name = "document_storage_service_client"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+macro_tower_layers = { workspace = true }
+anyhow = { workspace = true }
+shared_types = { workspace = true }
+model_owner = { workspace = true }
+bulk_upload_types = { workspace = true }
+permissions_types = { workspace = true }
+reqwest = { workspace = true, features = ["query"] }
+rootcause = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+shared_entity_registry = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+model_error_response = { workspace = true, features = ["anyhow"] }
+
+[dev-dependencies]
+bot_id = { workspace = true }
+tokio = { workspace = true }
+wiremock = { workspace = true }

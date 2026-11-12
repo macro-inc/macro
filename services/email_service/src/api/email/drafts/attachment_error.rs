@@ -4,7 +4,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use email::domain::draft_attachments::AttachmentError;
-use model::response::ErrorResponse;
+use shared_types::response::ErrorResponse;
 
 #[derive(Debug, thiserror::Error)]
 #[error(transparent)]

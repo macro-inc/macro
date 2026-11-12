@@ -2,10 +2,10 @@ use crate::{
     document::v2::create::{CreateDocumentArgs, create_document_txn},
     instructions::get::get_instructions_document,
 };
+use dcs_types::constants::INSTRUCTIONS_FILE_NAME;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
-use model::document::FileType;
-use models_dcs::constants::INSTRUCTIONS_FILE_NAME;
-use models_permissions::share_permission::SharePermissionV2;
+use permissions_types::share_permission::SharePermissionV2;
+use shared_types::document::FileType;
 use tracing::instrument;
 
 #[derive(Debug, thiserror::Error)]

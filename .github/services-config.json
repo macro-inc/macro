@@ -3,14 +3,14 @@
     "agent-harness-service": {
       "source_paths": [
         "services/agent_harness_service/**",
-        "crates/agent_harness/**",
-        "crates/folds/agent_fold/**",
-        "crates/agent_session/**",
-        "crates/agent_trigger/**",
-        "crates/agent_runtime_protocol/**",
-        "crates/agent_preview/**",
-        "crates/agent_egress/**",
-        "crates/scheduled_action/**"
+        "crates/agents/agent_harness/**",
+        "crates/agents/agent_fold/**",
+        "crates/agents/agent_session/**",
+        "crates/agents/agent_trigger/**",
+        "crates/agents/agent_runtime_protocol/**",
+        "crates/agents/agent_preview/**",
+        "crates/agents/agent_egress/**",
+        "crates/agents/scheduled_action/**"
       ],
       "stack_path": "infra/stacks/agent-harness-service/**",
       "deploy_binaries": [
@@ -20,8 +20,8 @@
     "authentication-service": {
       "source_paths": [
         "services/authentication_service/**",
-        "crates/referral/**",
-        "crates/teams/**",
+        "crates/billing/referral/**",
+        "crates/accounts/teams/**",
         "services/user_link_cleanup_handler/**"
       ],
       "stack_path": "infra/stacks/authentication-service/**",
@@ -106,20 +106,24 @@
       "source_paths": [
         "services/document_storage_service/**",
         "services/slack_import_worker/**",
-        "crates/slack_integration/**",
-        "crates/channels/**",
-        "crates/messages/**",
-        "crates/import/**",
-        "crates/macro_queues/**",
-        "crates/macro_service_urls/**",
-        "crates/teams/**",
-        "crates/invite_email/**",
-        "crates/notification/**",
-        "crates/model_notifications/**",
-        "crates/call/**",
-        "crates/github/**",
-        "crates/initiative/**",
-        "crates/reminders/**",
+        "crates/comms/slack_integration/**",
+        "crates/comms/channels/**",
+        "crates/comms/channels_inbound/**",
+        "crates/comms/channels_outbound/**",
+        "crates/comms/messages/**",
+        "crates/integrations/import/**",
+        "crates/platform/macro_queues/**",
+        "crates/platform/service_urls/**",
+        "crates/accounts/teams/**",
+        "crates/email/invite_email/**",
+        "crates/notifications/notification/**",
+        "crates/notifications/notification_inbound/**",
+        "crates/notifications/notification_outbound/**",
+        "crates/notifications/model_notifications/**",
+        "crates/comms/call/**",
+        "crates/integrations/github/**",
+        "crates/projects/project/**",
+        "crates/email/reminders/**",
         "services/delete_chat_handler/**",
         "services/docx_unzip_handler/**",
         "services/document_upload_finalizer_handler/**"
@@ -195,10 +199,10 @@
     "search-processing-service": {
       "source_paths": [
         "services/search_processing_service/**",
-        "crates/models_search/**",
-        "crates/models_opensearch/**",
-        "crates/opensearch_client/**",
-        "crates/comms_db_client/**"
+        "crates/search/search_types/**",
+        "crates/types/opensearch_types/**",
+        "crates/clients/opensearch_client/**",
+        "crates/comms/comms_db_client/**"
       ],
       "stack_path": "infra/stacks/search-processing-service/**",
       "deploy_binaries": [
@@ -297,7 +301,7 @@
     },
     "kafka-cluster": {
       "source_paths": [
-        "crates/macro_event_topics/**"
+        "crates/platform/macro_event_topics/**"
       ],
       "stack_path": "infra/stacks/kafka-cluster/**"
     },
@@ -308,11 +312,11 @@
     "whatsapp-session-service": {
       "source_paths": [
         "services/whatsapp_session_service/**",
-        "crates/whatsapp_linked/**",
-        "crates/whatsapp_store_pg/**",
-        "crates/whatsmeow/**",
-        "crates/whatsmeow_proto/**",
-        "crates/whatsmeow_signal/**"
+        "crates/whatsapp/whatsapp_linked/**",
+        "crates/whatsapp/whatsapp_store_pg/**",
+        "crates/whatsapp/whatsmeow/**",
+        "crates/whatsapp/whatsmeow_proto/**",
+        "crates/whatsapp/whatsmeow_signal/**"
       ],
       "stack_path": "infra/stacks/whatsapp-session-service/**",
       "deploy_binaries": [

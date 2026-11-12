@@ -23,7 +23,7 @@ impl ToolFreeCompletion for OneShot {
         owner: MacroUserIdStr<'static>,
         request: ToolFreeRequest,
     ) -> Result<serde_json::Value, ToolFreeCompletionError> {
-        assert_eq!(request.model, chat::domain::models::FREE_MODEL);
+        assert_eq!(request.model, ai_chat::domain::models::FREE_MODEL);
         assert_eq!(request.schema.name, "Answer");
         assert!(request.system_prompt.ends_with("Be brief."));
         self.0
@@ -193,7 +193,7 @@ fn completed_answers_carry_the_caller_schema_result() {
 fn request_body() -> serde_json::Value {
     serde_json::json!({
         "prompt": "hello",
-        "model": chat::domain::models::FREE_MODEL,
+        "model": ai_chat::domain::models::FREE_MODEL,
         "toolset": { "type": "none" },
         "output_schema": {
             "name": "Answer",

@@ -1,4 +1,4 @@
-use models_opensearch::SearchEntityType;
+use opensearch_types::SearchEntityType;
 
 /// Gets the entity name and macro user id of the owner for the provided
 /// entity id and entity type

@@ -1,9 +1,9 @@
 use anyhow::Context;
-use models_properties::EntityType;
 use opensearch_client::{
     OpensearchClient, date_format::EpochMillis, upsert::call_record::UpsertCallRecordSegmentArgs,
 };
 use properties::outbound::entity_properties_get_query::get_entity_properties_for_index;
+use properties_types::EntityType;
 use sqlx::PgPool;
 use uuid::Uuid;
 

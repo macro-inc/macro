@@ -1,7 +1,7 @@
-use agent::types::Role;
 use anyhow::Context;
-use model::chat::{AttachmentType, NewChatMessage};
-use model_entity::EntityType;
+use chat_message::Role;
+use entity_kind::EntityType;
+use shared_types::chat::{AttachmentType, NewChatMessage};
 use sqlx::PgPool;
 
 fn attachment_type_to_entity_type(at: &AttachmentType) -> EntityType {

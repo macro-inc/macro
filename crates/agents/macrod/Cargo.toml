@@ -1,0 +1,111 @@
+[package]
+edition = "2024"
+name = "macrod"
+publish = false
+version = "0.1.0"
+
+[[bin]]
+name = "macrod"
+path = "src/main.rs"
+
+[dependencies]
+agent_fold = { workspace = true }
+claude_fold = { workspace = true }
+codex_fold = { workspace = true }
+messages = { workspace = true, features = ["broker"] }
+pairing_id = { workspace = true }
+# Direct crate imports are the whole typegen story: the protocol envelope,
+# the trigger event vocabulary, and the delivery signature all come from the
+# owning crates, compiler-checked.
+agent-client-protocol = { workspace = true }
+agent_runtime_protocol = { workspace = true, default-features = true }
+agent_session = { workspace = true, default-features = true }
+agent_trigger = { workspace = true }
+arboard = { workspace = true }
+base64 = { workspace = true }
+bot_id = { workspace = true }
+trigger_context = { workspace = true }
+chrono = { workspace = true }
+clap = { workspace = true }
+crossterm = { workspace = true }
+eventsource-stream = { workspace = true }
+futures = { workspace = true }
+harness_id = { workspace = true }
+harnesses = { workspace = true }
+hex = { workspace = true }
+hosted_runtimes = { workspace = true }
+lazy-regex = { workspace = true }
+macro_event_broker = { workspace = true }
+macro_env_var = { workspace = true }
+macro_user_id = { workspace = true }
+macro_uuid = { workspace = true }
+service_url = { workspace = true }
+macro_tower_layers = { workspace = true }
+opentelemetry = { workspace = true, features = ["trace"] }
+opentelemetry_sdk = { workspace = true, features = ["trace", "rt-tokio"] }
+opentelemetry-otlp = { workspace = true }
+tracing-opentelemetry = { workspace = true }
+ratatui = { workspace = true }
+reqwest = { workspace = true, features = ["stream"] }
+rootcause = { workspace = true }
+# The gateway dial is `wss` on every deployment but a local stack, and
+# tokio-tungstenite's rustls feature selects no crypto provider.
+rustls = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+shell-words = { workspace = true }
+strum = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["io-util", "macros", "net", "process", "rt-multi-thread", "signal", "time"] }
+tokio-retry = { workspace = true }
+tokio-util = { workspace = true, features = ["compat", "rt"] }
+tokio-tungstenite = { workspace = true }
+toml = { workspace = true }
+toml_edit = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+tui-input = { workspace = true }
+uuid = { workspace = true }
+webbrowser = { workspace = true }
+webhook = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+zeroize = { workspace = true }
+
+[target.'cfg(unix)'.dependencies]
+rustix = { workspace = true }
+
+# Release archives: tar.gz everywhere but Windows, which gets a zip.
+[target.'cfg(not(windows))'.dependencies]
+flate2 = { workspace = true }
+tar = { workspace = true }
+
+# Stripe (agent_session -> ai_billing) reaches native-tls, which is OpenSSL on
+# Linux, and a musl build has no system OpenSSL to link: compile it in.
+# mimalloc is the musl release's allocator (see `src/main.rs`).
+[target.'cfg(target_env = "musl")'.dependencies]
+mimalloc = { workspace = true }
+openssl-sys = { workspace = true, features = ["vendored"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = [
+  "Win32_Foundation",
+  "Win32_Security",
+  "Win32_System_Console",
+  "Win32_System_JobObjects",
+] }
+zip = { workspace = true }
+
+[dev-dependencies]
+bot_id = { workspace = true, features = ["test-utils"] }
+channel_sender = { workspace = true }
+channels = { workspace = true }
+chrono = { workspace = true }
+harness_id = { workspace = true, features = ["test-utils"] }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["io-util", "net", "test-util"] }
+wiremock = { workspace = true }
+
+[package.metadata.cargo-shear]
+# Linked for its `vendored` feature on musl, never named in code.
+ignored = ["openssl-sys"]

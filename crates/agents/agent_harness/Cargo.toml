@@ -1,0 +1,119 @@
+[package]
+edition = "2024"
+name = "agent_harness"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+genai_telemetry = { workspace = true }
+ai_billing = { workspace = true }
+async-trait = { workspace = true }
+codex_cloud_agents = { workspace = true, features = ["postgres"] }
+codex_connection = { workspace = true }
+agent_loop = { workspace = true }
+agent_api_keys = { workspace = true }
+agent-client-protocol = { workspace = true }
+# The session-token claim shape and its signing, so the harness and the proxy
+# cannot disagree about what a token says.
+agent_egress = { workspace = true }
+agent_fold = { workspace = true, default-features = true }
+agent_runtime_protocol = { workspace = true, default-features = true }
+agent_session = { workspace = true, default-features = true }
+agent_trigger = { workspace = true }
+ai_usage = { workspace = true }
+cursor_api_key = { workspace = true }
+cursor_cloud_agents = { workspace = true }
+# Task documents a session links to, read as the session owner.
+documents = { workspace = true, features = [
+  "ports",
+] }
+entity_access = { workspace = true, default-features = true }
+entity_access_outbound = { workspace = true }
+entity_access_db_utils = { workspace = true }
+anyhow = { workspace = true }
+axum = { workspace = true, features = ["ws"] }
+base64 = { workspace = true }
+bot_id = { workspace = true }
+bots = { workspace = true, features = ["ports"] }
+channels = { workspace = true, features = ["ports"] }
+trigger_context = { workspace = true }
+harness_id = { workspace = true }
+channel_sender = { workspace = true }
+chrono = { workspace = true }
+chrono-tz = { workspace = true }
+lexical_client = { workspace = true }
+calendar_events = { workspace = true }
+dashmap = { workspace = true }
+futures = { workspace = true }
+# The installation records that say which repositories a user can reach, so a
+# Cursor session's first prompt has a list to choose from.
+github = { workspace = true, features = [
+  "outbound",
+  "ports",
+  "sync",
+] }
+feature_flags = { workspace = true }
+jev_classifier = { workspace = true }
+macro_env_var = { workspace = true }
+# The owner's custom MCP server rows, listed so a sandbox can be told they exist.
+mcp_client = { workspace = true }
+mcp_select = { workspace = true }
+pipedream_mcp = { workspace = true }
+macro_event_broker = { workspace = true, default-features = true, features = ["outbound"] }
+macro_authorization = { workspace = true, default-features = true, features = ["axum"] }
+macro_tower_layers = { workspace = true }
+macro_user_id = { workspace = true }
+macro_uuid = { workspace = true }
+shared_types = { workspace = true }
+entity_kind = { workspace = true }
+model_notifications = { workspace = true }
+model_owner = { workspace = true }
+notification = { workspace = true, default-features = true }
+shared_entity_registry = { workspace = true }
+messages = { workspace = true, features = ["broker", "ports"] }
+opentelemetry = { workspace = true, features = ["trace"] }
+reqwest = { workspace = true }
+redis = { workspace = true, features = ["aio", "tokio-comp"] }
+rand = { workspace = true }
+rootcause = { workspace = true }
+rustls = { workspace = true }
+serde = { workspace = true }
+sqlx = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = [
+  "macros",
+  "process",
+  "rt-multi-thread",
+  "sync",
+  "time",
+] }
+tokio-util = { workspace = true, features = ["rt"] }
+tokio-tungstenite = { workspace = true }
+tracing = { workspace = true }
+tracing-opentelemetry = { workspace = true }
+url = { workspace = true }
+utoipa = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+strum = { workspace = true }
+
+[dev-dependencies]
+entity_registry = { workspace = true }
+entity_registry_db_utils = { workspace = true }
+macro_db_migrator = { workspace = true }
+bots = { workspace = true, features = ["test-utils"] }
+channels = { workspace = true }
+channels_outbound = { workspace = true }
+messages = { workspace = true, features = ["test-utils"] }
+uuid = { workspace = true }
+agent_fold = { workspace = true, default-features = true, features = ["test-utils"] }
+dynamic_ui = { workspace = true }
+agent_session = { workspace = true, default-features = true, features = ["test-utils"] }
+bot_id = { workspace = true, features = ["test-utils"] }
+harness_id = { workspace = true, features = ["test-utils"] }
+model_user = { workspace = true }
+opentelemetry_sdk = { workspace = true, features = ["testing", "trace"] }
+tower = { workspace = true }
+tracing-subscriber = { workspace = true }
+wiremock = { workspace = true }
+macro_env = { workspace = true }

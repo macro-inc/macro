@@ -1,0 +1,35 @@
+[package]
+edition = "2024"
+name = "user_language"
+publish = false
+version = "0.1.0"
+
+[features]
+default = []
+inbound = [
+  "dep:axum",
+  "dep:macro_authorization",
+  "dep:model_error_response",
+  "dep:utoipa",
+  "ports",
+]
+outbound = ["ports"]
+ports = ["dep:tracing"]
+postgres = ["dep:sqlx", "model_user/sqlx", "outbound"]
+
+[dependencies]
+axum = { workspace = true, optional = true }
+macro_authorization = { workspace = true, optional = true, features = ["axum"] }
+macro_user_id = { workspace = true }
+model_error_response = { workspace = true, optional = true }
+model_user = { workspace = true }
+rootcause = { workspace = true }
+sqlx = { workspace = true, optional = true }
+thiserror = { workspace = true }
+tracing = { workspace = true, optional = true }
+utoipa = { workspace = true, optional = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+
+[dev-dependencies]
+macro_db_migrator = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

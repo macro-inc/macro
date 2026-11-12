@@ -5,19 +5,19 @@ description: Build a new AI tool end-to-end — Rust implementation, toolset wir
 
 # Create AI Tool
 
-This skill walks through building a new AI tool from scratch. Before writing any code, read the design guide at `crates/ai_toolset/TOOL_DESIGN.md` and the framework docs/examples in `crates/ai_toolset/src/lib.rs`.
+This skill walks through building a new AI tool from scratch. Before writing any code, read the design guide at `crates/ai/ai_toolset/TOOL_DESIGN.md` and the framework docs/examples in `crates/ai/ai_toolset/src/lib.rs`.
 
-**IMPORTANT:** Never modify the `crates/ai_toolset/` crate. It is the framework — you build tools that use it.
+**IMPORTANT:** Never modify the `crates/ai/ai_toolset/` crate. It is the framework — you build tools that use it.
 
 ## Step 1: Write the tool
 
 Decide which domain crate the tool belongs in. Tools live at `crates/<crate>/src/inbound/toolset/`.
 
 Study an existing tool for patterns:
-- `crates/documents/src/inbound/toolset/` — tools: `read_content.rs`, `read_metadata.rs`, `create_document.rs`
-- `crates/email/src/inbound/toolset/` — tools: `send_email.rs`, `get_thread.rs`, `update_thread_labels.rs`
-- `crates/soup/src/inbound/toolset/` — tool: `list_entities.rs`
-- `crates/call/src/inbound/toolset/` — call-related tools
+- `crates/documents/documents/src/inbound/toolset/` — tools: `read_content.rs`, `read_metadata.rs`, `create_document.rs`
+- `crates/email/email/src/inbound/toolset/` — tools: `send_email.rs`, `get_thread.rs`, `update_thread_labels.rs`
+- `crates/search/soup/src/inbound/toolset/` — tool: `list_entities.rs`
+- `crates/comms/call/src/inbound/toolset/` — call-related tools
 
 Each tool is a struct that derives `JsonSchema` and `Deserialize`, with `#[schemars(title = "...", description = "...")]` on the struct and `#[schemars(description = "...")]` on each field. The struct implements `AsyncTool<Context>` from the `ai_toolset` crate.
 
@@ -25,28 +25,28 @@ Create a new file for your tool (e.g. `my_tool.rs`), add it as a `mod` in the to
 
 ## Step 2: Create the tool context
 
-If your tool needs dependencies (DB connections, service clients) that aren't already in an existing context, define a new context struct in the toolset's `mod.rs`. See `crates/documents/src/inbound/toolset/mod.rs` for the `DocumentToolContext` pattern.
+If your tool needs dependencies (DB connections, service clients) that aren't already in an existing context, define a new context struct in the toolset's `mod.rs`. See `crates/documents/documents/src/inbound/toolset/mod.rs` for the `DocumentToolContext` pattern.
 
 The context must be `Clone` and derivable from the parent `ToolServiceContext` via `FromRef`.
 
 If the tool's dependencies are already available in an existing context (e.g. it only needs `Arc<ToolScribe>`), you can use that context directly — no new struct needed.
 
-## Step 3: Add the toolset to `all_tools` in the ai_tools crate
+## Step 3: Add the toolset to `all_tools` in the agent_tools crate
 
-Edit `crates/ai_tools/src/lib.rs`:
+Edit `crates/ai/agent_tools/src/lib.rs`:
 - Import your toolset function and context type
 - Add `.add_tool::<YourTool, YourContext>()` or `.add_subtoolset::<YourToolContext>(your_toolset())` to the `all_tools()` function
 
 ## Step 4: Add the context to ToolServiceContext
 
-Edit `crates/ai_tools/src/tool_context.rs`:
+Edit `crates/ai/agent_tools/src/tool_context.rs`:
 - Add any new type aliases for your service implementations (follow the `Tool*` naming pattern)
 - Add your tool context field to the `ToolServiceContext` struct
 - Implement `FromRef<ToolServiceContext>` for your context if needed (or derive it — the struct uses `#[derive(FromRef)]`)
 
 ## Step 5: Wire up env vars and service construction
 
-Edit `crates/ai_tools/src/build_context.rs`:
+Edit `crates/ai/agent_tools/src/build_context.rs`:
 - Add any new env vars to the `env_var!` or `maybe_env_var!` blocks
 - Construct your service/context in `build_tool_service_context_from_env`
 - Add it to the returned `ToolServiceContext`
@@ -63,7 +63,7 @@ Edit `infra/packages/shared/src/ai_tools.ts`:
 Run from the repository root:
 ```bash
 cargo fmt
-cargo clippy -p ai_tools
+cargo clippy -p agent_tools
 cargo test -p <your_domain_crate>
 ```
 
@@ -76,7 +76,7 @@ Run from `apps/web/`:
 bun gen-tools
 ```
 
-This builds `crates/ai_tools/src/bin/gen_tool_schemas.rs`, generates `crates/ai_tools/schemas/tools.json`, and transpiles the schemas into TypeScript at `apps/web/src/lib/service-clients/service-cognition/generated/tools/`.
+This builds `crates/ai/agent_tools/src/bin/gen_tool_schemas.rs`, generates `crates/ai/agent_tools/schemas/tools.json`, and transpiles the schemas into TypeScript at `apps/web/src/lib/service-clients/service-cognition/generated/tools/`.
 
 ## Step 9: Check what frontend UI is needed
 

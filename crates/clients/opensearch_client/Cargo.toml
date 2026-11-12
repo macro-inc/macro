@@ -1,0 +1,36 @@
+[package]
+edition = "2024"
+exclude = ["examples/"]
+name = "opensearch_client"
+publish = false
+version = "0.1.0"
+
+[dev-dependencies]
+bytes = { workspace = true }
+hyper = { workspace = true, features = ["http2", "server"] }
+hyper-util = { workspace = true, features = ["http2", "server"] }
+rustls = { workspace = true }
+tokio = { workspace = true, features = ["net"] }
+tokio-rustls = { workspace = true }
+uuid = { workspace = true }
+
+
+[dependencies]
+anyhow = { workspace = true }
+chrono = { workspace = true }
+h2 = { workspace = true }
+hyper = { workspace = true }
+opensearch_types = { workspace = true }
+search_cursor_types = { workspace = true }
+opensearch = { version = "2.3.0", default-features = false, features = ["rustls-tls"] }
+opensearch_query_builder = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+strum = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["time"] }
+tokio-retry = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }

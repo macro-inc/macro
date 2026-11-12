@@ -3,17 +3,17 @@
 
 use email::domain::mailbox::{MailboxError, MailboxKey};
 use email::domain::recent_inbox::{RecentInboxMailbox, RecentInboxMailboxes, RecentInboxReader};
-use email_api_client::domain::{
+use email_api_client_core::{
     models::{EmailApiError, MailboxAccess},
     ports::{
         MailboxContentReader, MailboxTokenSource, ProviderRateLimiter, ScopedMailboxRepository,
     },
     service::mailbox::MailboxApiService,
 };
+use email_types::email::service::message::{Message, RecentInboxMessage};
+use email_types::service::link::UserProvider;
 use futures::StreamExt;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_email::email::service::message::{Message, RecentInboxMessage};
-use models_email::service::link::UserProvider;
 use uuid::Uuid;
 
 use super::email_api::GmailApi;

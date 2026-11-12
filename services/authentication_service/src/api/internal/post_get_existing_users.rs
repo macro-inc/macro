@@ -8,7 +8,7 @@ use axum::{
 };
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
 use macro_user_id::{cowlike::CowLike, lowercased::Lowercase, user_id::MacroUserId};
-use model::response::ErrorResponse;
+use shared_types::response::ErrorResponse;
 use utoipa::ToSchema;
 
 #[derive(serde::Deserialize, Debug, ToSchema)]

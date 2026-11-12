@@ -6,7 +6,7 @@ Their alerts link the **Agent harness runtimes** dashboard. None of them page.
 
 A runtime (macrod or another harness daemon) dials agent-harness-service and
 lists the ACP sessions it still serves. The replica it reached reattaches them
-in `reattach_live_sessions` (`crates/agent_harness/src/domain/service.rs`),
+in `reattach_live_sessions` (`crates/agents/agent_harness/src/domain/service.rs`),
 under one `agent.runtime.reattach` span per dial:
 
 | What | Search |

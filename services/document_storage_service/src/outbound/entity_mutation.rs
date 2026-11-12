@@ -10,11 +10,11 @@ use crate::{
         entity_mutation::{EntityLifecycleService, LifecycleError},
     },
 };
+use entity_kind::{Entity, EntityType};
 use entity_mutation::EntityMutationActor;
 use macro_event_broker::MacroEventBroker;
 use macro_sha_count_client::Redis;
-use model_entity::{Entity, EntityType};
-use models_permissions::share_permission::UpdateSharePermissionRequestV2;
+use permissions_types::share_permission::UpdateSharePermissionRequestV2;
 use sqlx::PgPool;
 
 /// Wrap a legacy client failure as an internal lifecycle error.

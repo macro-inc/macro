@@ -427,7 +427,7 @@ in
     };
 
     # Owns each agent's sign-in; the control plane runs `harnessd` (the
-    # client) through the fleet's exec. See crates/harnessd/AGENTS.md.
+    # client) through the fleet's exec. See crates/agents/harnessd/AGENTS.md.
     systemd.services.harnessd = {
       description = "Agent sign-ins on this computer";
       wantedBy = [ "multi-user.target" ];

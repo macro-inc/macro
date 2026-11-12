@@ -1,7 +1,7 @@
 //! Environment-backed service configuration.
 
 use anyhow::Context as _;
-use database_env_vars::DatabaseUrl;
+use datastore_env_vars::DatabaseUrl;
 use macro_env_var::env_vars;
 
 env_vars! {
@@ -39,7 +39,7 @@ pub struct Config {
     /// TypeSafe credential for the Jev classifier that routes unmentioned
     /// thread replies to agents. Optional: while unset, only mentions and
     /// explicit replies reach agents.
-    pub typesafe_api_key: jev::outbound::TypesafeApiKey,
+    pub typesafe_api_key: jev_classifier::outbound::TypesafeApiKey,
 }
 
 impl Config {

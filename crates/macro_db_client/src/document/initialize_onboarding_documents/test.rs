@@ -1,8 +1,8 @@
 use super::*;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
-use model::document::SaveBomPart;
-use models_permissions::share_permission::SharePermissionV2;
+use permissions_types::share_permission::SharePermissionV2;
+use shared_types::document::SaveBomPart;
 use sqlx::{Pool, Postgres, Row};
 
 const USER_ID: &str = "macro|user@user.com";

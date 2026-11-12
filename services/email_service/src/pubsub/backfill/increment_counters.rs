@@ -1,7 +1,5 @@
 use crate::{backfill_completion_service, pubsub::context::PubSubContext};
-use models_email::service::{
-    backfill::BackfillMessagePayload, link::Link, pubsub::ProcessingError,
-};
+use email_types::service::{backfill::BackfillMessagePayload, link::Link, pubsub::ProcessingError};
 use uuid::Uuid;
 
 /// Map a completed thread delivery into the backfill application service.

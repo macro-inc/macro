@@ -1,0 +1,1034 @@
+use super::*;
+
+use std::sync::{Arc, Mutex};
+
+use crate::domain::content::DocumentContent;
+use crate::domain::events::InteractionReason;
+use crate::domain::models::{
+    CreateTaskRequest, DocumentError, DocumentTeamShareResponse, EditDocumentServiceArgs,
+    GithubPullRequestsResponse, ImportEmailAttachmentRepoArgs, LocationQueryParams, NewDocument,
+    TaskBranchName,
+};
+use crate::domain::permission_token::decode_permission_token;
+use crate::domain::ports::editing::{
+    CommentMarkPlacement, EditMode, EditResult, EditingWorkerService, EditorName,
+};
+use crate::domain::response::{
+    CreateDocumentResponseData, DocumentResponse, GetDocumentResponseData, LocationResponseV3,
+};
+use entity_access::domain::models::{
+    AccessError, BotAccessScope, BotId, CallChannelInfo, EntityAccessReceipt, EntityPermission,
+    MemberTeamRole, OwnerAccessLevel, RequiredPermission, TeamRole, UserTeamInfo, ViewAccessLevel,
+};
+use entity_kind::Entity;
+use lexical_client::LexicalClient;
+use macro_sync_service_jwt::DocumentPermissionToken;
+use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr};
+use model_owner::{CreationPrincipal, Owner};
+use shared_types::{document::DocumentBasic, sync_service::SyncServiceVersionID};
+use sync_service_client::SyncServiceClient;
+use uuid::Uuid;
+
+use ai_billing::domain::{
+    DenyReason,
+    admission::{AdmissionFuture, AiAdmissionError, AiAdmissionService},
+};
+
+struct Refuse(AiAdmissionError);
+impl AiAdmissionService for Refuse {
+    fn admit<'a>(
+        &'a self,
+        user: &'a MacroUserIdStr<'_>,
+        feature: ai_usage::AiFeature,
+    ) -> AdmissionFuture<'a> {
+        Box::pin(async move {
+            assert_eq!(user.as_ref(), TEST_USER_ID);
+            assert_eq!(feature, ai_usage::AiFeature::AiEditing);
+            Err(self.0)
+        })
+    }
+}
+
+#[tokio::test]
+async fn direct_edit_tool_surfaces_admission_failure_without_worker_calls() {
+    for error in [
+        AiAdmissionError::Denied(DenyReason::AllowanceExhausted),
+        AiAdmissionError::Unavailable,
+    ] {
+        let (result, worker) = call_edit_document_in("md", false, |context| {
+            context.with_admission(Arc::new(Refuse(error)))
+        })
+        .await;
+        assert_eq!(
+            result.unwrap_err().description,
+            format!("{}: {error}", error.code())
+        );
+        assert!(worker.edit_calls.lock().unwrap().is_empty());
+    }
+}
+
+#[tokio::test]
+async fn permission_errors_still_precede_quota_errors() {
+    let (result, worker) = call_edit_document_in("md", false, |mut context| {
+        context.entity_access_service = Arc::new(FakeEntityAccessService {
+            access_level: AccessLevel::View,
+        });
+        context.with_admission(Arc::new(Refuse(AiAdmissionError::Unavailable)))
+    })
+    .await;
+    assert_eq!(
+        result.unwrap_err().description,
+        "you do not have edit access to this document"
+    );
+    assert!(worker.edit_calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn cancelled_tool_does_not_start_worker() {
+    let worker = FakeEditingWorker::default();
+    let context = tool_context(FakeDocumentService::new("md"), worker.clone());
+    let request = request_context();
+    request.cancel.cancel();
+    let tool = EditDocument {
+        document_id: TEST_DOCUMENT_ID.into(),
+        instructions: "edit".into(),
+        fast: false,
+    };
+    assert_eq!(
+        tool.call(context, request).await.unwrap_err().description,
+        "cancelled"
+    );
+    assert!(worker.edit_calls.lock().unwrap().is_empty());
+}
+
+const TEST_USER_ID: &str = "macro|editor@example.com";
+const TEST_DOCUMENT_ID: &str = "019fd3b9-3c6c-7c05-89c2-a27f0121813b";
+
+fn document_with_file_type(file_type: Option<&str>) -> DocumentBasic {
+    DocumentBasic {
+        document_id: TEST_DOCUMENT_ID.to_string(),
+        document_name: "Test document".to_string(),
+        owner: Owner::from_principal_str(TEST_USER_ID).expect("test user id should be valid"),
+        file_type: file_type.map(str::to_string),
+        sub_type: None,
+        branched_from_id: None,
+        branched_from_version_id: None,
+        document_family_id: None,
+        project_id: None,
+        deleted_at: None,
+    }
+}
+
+pub(in crate::inbound::toolset) struct FakeDocumentService {
+    file_type: Option<String>,
+}
+
+impl FakeDocumentService {
+    pub(in crate::inbound::toolset) fn new(file_type: &str) -> Self {
+        Self {
+            file_type: Some(file_type.to_string()),
+        }
+    }
+}
+
+impl DocumentService for FakeDocumentService {
+    async fn internal_get_basic_document(
+        &self,
+        _document_id: &str,
+    ) -> Result<DocumentBasic, DocumentError> {
+        Ok(document_with_file_type(self.file_type.as_deref()))
+    }
+
+    async fn internal_get_user_display_name(
+        &self,
+        _user_id: &str,
+    ) -> Result<Option<String>, DocumentError> {
+        Ok(None)
+    }
+
+    // The guard reads the file type, which the basic document already carries.
+    // Resolving the content location would be a second read of the same row --
+    // and a racy one while an upload is still being finalized into sync-service.
+    async fn get_document_content(
+        &self,
+        _document_context: &DocumentBasic,
+    ) -> Result<DocumentContent, DocumentError> {
+        panic!("unexpected get_document_content call")
+    }
+
+    async fn get_document_by_team_slug(
+        &self,
+        _team_receipt: EntityAccessReceipt<MemberTeamRole>,
+        _slug: &str,
+    ) -> Result<String, DocumentError> {
+        panic!("unexpected get_document_by_team_slug call")
+    }
+
+    async fn get_document(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<GetDocumentResponseData, DocumentError> {
+        panic!("unexpected get_document call")
+    }
+
+    async fn get_document_location(
+        &self,
+        _document_context: &DocumentBasic,
+        _entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+        _params: LocationQueryParams,
+    ) -> Result<LocationResponseV3, DocumentError> {
+        panic!("unexpected get_document_location call")
+    }
+
+    async fn delete_document(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
+        _project_id: Option<String>,
+    ) -> Result<(), DocumentError> {
+        panic!("unexpected delete_document call")
+    }
+
+    async fn get_document_text(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<String, DocumentError> {
+        panic!("unexpected get_document_text call")
+    }
+
+    async fn create_document(
+        &self,
+        _principal: &CreationPrincipal,
+        _document: NewDocument,
+        _job_id: Option<String>,
+    ) -> Result<CreateDocumentResponseData, DocumentError> {
+        panic!("unexpected create_document call")
+    }
+
+    async fn import_email_attachment(
+        &self,
+        _args: ImportEmailAttachmentRepoArgs,
+    ) -> Result<CreateDocumentResponseData, DocumentError> {
+        panic!("unexpected import_email_attachment call")
+    }
+
+    async fn get_short_id(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<String, DocumentError> {
+        panic!("unexpected get_short_id call")
+    }
+
+    async fn get_task_branch_name(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+        _document_name: String,
+    ) -> Result<TaskBranchName, DocumentError> {
+        panic!("unexpected get_task_branch_name call")
+    }
+
+    async fn get_task_identity(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+        _document_context: &DocumentBasic,
+    ) -> Result<crate::domain::models::TaskIdentity, DocumentError> {
+        panic!("unexpected get_task_identity call")
+    }
+
+    async fn get_task_github_pull_requests(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+        _document_context: &DocumentBasic,
+    ) -> Result<GithubPullRequestsResponse, DocumentError> {
+        panic!("unexpected get_task_github_pull_requests call")
+    }
+    async fn get_github_pull_request_tasks(
+        &self,
+        _user_id: &str,
+        _github_keys: Vec<String>,
+    ) -> Result<crate::domain::models::GithubPullRequestTasksResponse, DocumentError> {
+        panic!("unexpected get_github_pull_request_tasks call")
+    }
+
+    async fn edit_document(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<EditAccessLevel>,
+        _document_context: DocumentBasic,
+        _args: EditDocumentServiceArgs,
+    ) -> Result<(), DocumentError> {
+        panic!("unexpected edit_document call")
+    }
+
+    async fn update_task_status(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<EditAccessLevel>,
+        _credited_user: Option<MacroUserIdStr<'static>>,
+        _source: Option<properties_types::service::property_change_source::PropertyChangeSource>,
+        _status: &str,
+    ) -> Result<(), DocumentError> {
+        panic!("unexpected update_task_status call")
+    }
+
+    async fn copy_document(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+        _document_context: DocumentBasic,
+        _principal: &CreationPrincipal,
+        _document_name: String,
+        _query_version_id: Option<i64>,
+        _sync_version_id: Option<SyncServiceVersionID>,
+    ) -> Result<DocumentResponse, DocumentError> {
+        panic!("unexpected copy_document call")
+    }
+
+    async fn get_project_name(&self, _project_id: &str) -> Result<String, DocumentError> {
+        panic!("unexpected get_project_name call")
+    }
+
+    async fn get_project_children(
+        &self,
+        _project_id: &str,
+    ) -> Result<Vec<Entity<'static>>, DocumentError> {
+        panic!("unexpected get_project_children call")
+    }
+
+    async fn handle_task_properties(
+        &self,
+        _principal: &CreationPrincipal,
+        _document_id: &str,
+        _request: &CreateTaskRequest,
+    ) -> Result<(), DocumentError> {
+        panic!("unexpected handle_task_properties call")
+    }
+
+    async fn get_snapshot(&self, _document_id: &str) -> anyhow::Result<Option<Vec<u8>>> {
+        panic!("unexpected get_snapshot call")
+    }
+
+    async fn upload_snapshot(&self, _document_id: &str, _bytes: Vec<u8>) -> anyhow::Result<()> {
+        panic!("unexpected upload_snapshot call")
+    }
+
+    async fn record_interaction(
+        &self,
+        _document_id: &str,
+        _reason: InteractionReason,
+    ) -> anyhow::Result<()> {
+        panic!("unexpected record_interaction call")
+    }
+
+    async fn get_team_share(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<DocumentTeamShareResponse, DocumentError> {
+        panic!("unexpected get_team_share call")
+    }
+
+    async fn set_team_share(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<EditAccessLevel>,
+        _share: bool,
+    ) -> Result<DocumentTeamShareResponse, DocumentError> {
+        panic!("unexpected set_team_share call")
+    }
+
+    async fn set_skill_description(
+        &self,
+        _entity_access_receipt: entity_access::domain::models::EntityAccessReceipt<
+            permissions_types::share_permission::access_level::EditAccessLevel,
+        >,
+        _description: crate::domain::skill_description::SkillDescription,
+    ) -> Result<(), DocumentError> {
+        panic!("unexpected set_skill_description call")
+    }
+
+    async fn describe_new_skill(
+        &self,
+        _document_id: &str,
+        _description: crate::domain::skill_description::SkillDescription,
+    ) -> Result<(), DocumentError> {
+        Ok(())
+    }
+
+    async fn skill_descriptions(
+        &self,
+        _document_ids: &[String],
+    ) -> Result<
+        std::collections::HashMap<String, crate::domain::skill_description::SkillDescription>,
+        DocumentError,
+    > {
+        Ok(std::collections::HashMap::new())
+    }
+}
+
+impl DocumentCreationService for FakeDocumentService {
+    async fn create_document(
+        &self,
+        _principal: &CreationPrincipal,
+        _document: NewDocument,
+        _job_id: Option<String>,
+    ) -> Result<CreateDocumentResponseData, DocumentError> {
+        panic!("unexpected create_document call")
+    }
+
+    async fn initialize_canvas(&self, _document_id: &str) -> Result<(), DocumentError> {
+        panic!("unexpected Canvas initialization")
+    }
+
+    async fn handle_task_properties(
+        &self,
+        _principal: &CreationPrincipal,
+        _document_id: &str,
+        _request: &CreateTaskRequest,
+    ) -> Result<(), DocumentError> {
+        panic!("unexpected handle_task_properties call")
+    }
+
+    async fn mark_document_uploaded(&self, _document_id: &str) -> Result<(), DocumentError> {
+        panic!("unexpected mark_document_uploaded call")
+    }
+
+    async fn set_document_content(
+        &self,
+        _document_id: &str,
+        _content: DocumentContent,
+    ) -> Result<(), DocumentError> {
+        panic!("unexpected set_document_content call")
+    }
+
+    async fn cleanup_created_document(&self, _document_id: &str) {
+        panic!("unexpected cleanup_created_document call")
+    }
+}
+
+/// Grants the user, and bots acting for them, `access_level` on every entity.
+#[derive(Clone)]
+pub(in crate::inbound::toolset) struct FakeEntityAccessService {
+    pub(in crate::inbound::toolset) access_level: AccessLevel,
+}
+
+impl Default for FakeEntityAccessService {
+    fn default() -> Self {
+        Self {
+            access_level: AccessLevel::Owner,
+        }
+    }
+}
+
+impl EntityAccessService for FakeEntityAccessService {
+    async fn generate_entity_access_receipt<T: RequiredPermission>(
+        &self,
+        user_id: &MacroUserId<Lowercase<'_>>,
+        _user_org_id: Option<i64>,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> Result<EntityAccessReceipt<T>, AccessError> {
+        EntityAccessReceipt::try_new_authenticated_user(
+            MacroUserIdStr::try_from(user_id.as_ref().to_string())
+                .expect("test user id should be valid"),
+            entity_access::domain::models::Entity {
+                entity_id: entity_id.to_string(),
+                entity_type,
+            },
+            EntityPermission::AccessLevel {
+                access_level: self.access_level,
+            },
+        )
+    }
+
+    async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
+        &self,
+        bot_id: BotId,
+        scope: BotAccessScope,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> Result<EntityAccessReceipt<T>, AccessError> {
+        EntityAccessReceipt::try_new_bot(
+            bot_id.into_storage_id(),
+            (&scope).into(),
+            entity_access::domain::models::Entity {
+                entity_id: entity_id.to_string(),
+                entity_type,
+            },
+            EntityPermission::AccessLevel {
+                access_level: self.access_level,
+            },
+        )
+    }
+
+    async fn get_access_level(
+        &self,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+        _entity_id: &str,
+        _entity_type: EntityType,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        panic!("unexpected get_access_level call")
+    }
+
+    async fn check_access(
+        &self,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+        _entity_id: &str,
+        _entity_type: EntityType,
+        _required_level: AccessLevel,
+    ) -> Result<AccessLevel, AccessError> {
+        panic!("unexpected check_access call")
+    }
+
+    async fn check_public_access(
+        &self,
+        _entity_id: &str,
+        _entity_type: EntityType,
+        _required_level: AccessLevel,
+    ) -> Result<AccessLevel, AccessError> {
+        panic!("unexpected check_public_access call")
+    }
+
+    async fn get_entity_permission(
+        &self,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+        _entity_id: &str,
+        _entity_type: EntityType,
+        _user_org_id: Option<i64>,
+    ) -> Result<EntityPermission, AccessError> {
+        panic!("unexpected get_entity_permission call")
+    }
+
+    async fn get_crm_entity_permission_with_team(
+        &self,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+        _entity_id: &str,
+        _entity_type: EntityType,
+    ) -> Result<(EntityPermission, Uuid, TeamRole), AccessError> {
+        panic!("unexpected get_crm_entity_permission_with_team call")
+    }
+
+    async fn get_users_by_entity(
+        &self,
+        _entity_id: &str,
+        _entity_type: EntityType,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        panic!("unexpected get_users_by_entity call")
+    }
+
+    async fn get_call_channel(
+        &self,
+        _call_id: &Uuid,
+    ) -> Result<Option<CallChannelInfo>, AccessError> {
+        panic!("unexpected get_call_channel call")
+    }
+
+    async fn get_call_channel_by_channel_id(
+        &self,
+        _channel_id: &Uuid,
+    ) -> Result<Option<CallChannelInfo>, AccessError> {
+        panic!("unexpected get_call_channel_by_channel_id call")
+    }
+
+    async fn get_user_team(
+        &self,
+        _user_id: &MacroUserId<Lowercase<'_>>,
+    ) -> Result<Option<UserTeamInfo>, AccessError> {
+        panic!("unexpected get_user_team call")
+    }
+}
+
+#[derive(Clone, Default)]
+pub(in crate::inbound::toolset) struct FakeEditingWorker {
+    edit_calls: Arc<Mutex<Vec<String>>>,
+    modes: Arc<Mutex<Vec<EditMode>>>,
+    tokens: Arc<Mutex<Vec<DocumentPermissionToken>>>,
+    /// The editor name each edit was presented as.
+    editors: Arc<Mutex<Vec<Option<EditorName>>>>,
+    /// Answer every comment mark placement with this refusal.
+    comment_mark_refusal: Option<String>,
+    /// Fail every comment mark placement as a worker whose push was never acked.
+    comment_mark_fails: bool,
+    pub(in crate::inbound::toolset) added_comment_marks: Arc<Mutex<Vec<AddedCommentMark>>>,
+    pub(in crate::inbound::toolset) removed_comment_marks: Arc<Mutex<Vec<Uuid>>>,
+}
+
+impl FakeEditingWorker {
+    pub(in crate::inbound::toolset) fn failing_comment_marks() -> Self {
+        Self {
+            comment_mark_fails: true,
+            ..Self::default()
+        }
+    }
+
+    pub(in crate::inbound::toolset) fn refusing_comment_marks(reason: &str) -> Self {
+        Self {
+            comment_mark_refusal: Some(reason.to_owned()),
+            ..Self::default()
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub(in crate::inbound::toolset) struct AddedCommentMark {
+    pub document_id: String,
+    pub token: DocumentPermissionToken,
+    pub mark_id: Uuid,
+    pub text: String,
+    pub occurrence: Option<u32>,
+}
+
+impl EditingWorkerService for FakeEditingWorker {
+    async fn canvas(
+        &self,
+        _: &str,
+        _: &DocumentPermissionToken,
+        _: &crate::domain::canvas::CanvasRequest,
+        _: bool,
+    ) -> Result<crate::domain::canvas::CanvasResult, crate::domain::canvas::CanvasError> {
+        panic!("unexpected canvas call")
+    }
+
+    async fn spreadsheet(
+        &self,
+        _document_id: &str,
+        _document_token: &DocumentPermissionToken,
+        _request: &crate::domain::spreadsheet::SpreadsheetRequest,
+    ) -> Result<
+        crate::domain::spreadsheet::SpreadsheetResponse,
+        crate::domain::spreadsheet::SpreadsheetError,
+    > {
+        panic!("unexpected spreadsheet call")
+    }
+
+    async fn spreadsheet_instructions(
+        &self,
+        _document_id: &str,
+        _document_token: &DocumentPermissionToken,
+        _instructions: &str,
+    ) -> Result<
+        crate::domain::spreadsheet::SpreadsheetWriterResult,
+        crate::domain::spreadsheet::SpreadsheetError,
+    > {
+        panic!("unexpected spreadsheet instructions call")
+    }
+
+    async fn word_document(
+        &self,
+        _document_id: &str,
+        _document_token: &DocumentPermissionToken,
+        _request: &crate::domain::word_document::WordDocumentRequest,
+    ) -> anyhow::Result<crate::domain::word_document::WordDocumentResponse> {
+        panic!("unexpected word document call")
+    }
+
+    async fn read_markdown(
+        &self,
+        _document_id: &str,
+        _document_token: &DocumentPermissionToken,
+    ) -> anyhow::Result<crate::domain::markdown_body::DocumentMarkdown> {
+        panic!("unexpected read_markdown call")
+    }
+
+    async fn write_markdown(
+        &self,
+        _document_id: &str,
+        _document_token: &DocumentPermissionToken,
+        _expected_revision: &str,
+        _markdown: &str,
+    ) -> anyhow::Result<crate::domain::ports::editing::MarkdownWrite> {
+        panic!("unexpected write_markdown call")
+    }
+
+    async fn add_comment_mark(
+        &self,
+        document_id: &str,
+        document_token: &DocumentPermissionToken,
+        mark_id: Uuid,
+        text: &str,
+        occurrence: Option<u32>,
+    ) -> anyhow::Result<CommentMarkPlacement> {
+        self.added_comment_marks
+            .lock()
+            .expect("comment marks lock poisoned")
+            .push(AddedCommentMark {
+                document_id: document_id.to_owned(),
+                token: document_token.clone(),
+                mark_id,
+                text: text.to_owned(),
+                occurrence,
+            });
+        if self.comment_mark_fails {
+            anyhow::bail!("sync service did not acknowledge 1 comment mark update(s)");
+        }
+        Ok(match &self.comment_mark_refusal {
+            Some(reason) => CommentMarkPlacement::Refused(reason.clone()),
+            None => CommentMarkPlacement::Placed {
+                marked_text: text.trim().to_owned(),
+            },
+        })
+    }
+
+    async fn remove_comment_mark(
+        &self,
+        _document_id: &str,
+        _document_token: &DocumentPermissionToken,
+        mark_id: Uuid,
+    ) -> anyhow::Result<()> {
+        self.removed_comment_marks
+            .lock()
+            .expect("comment marks lock poisoned")
+            .push(mark_id);
+        Ok(())
+    }
+
+    async fn edit(
+        &self,
+        document_id: &str,
+        document_token: &DocumentPermissionToken,
+        _instructions: &str,
+        mode: EditMode,
+        editor: Option<EditorName>,
+    ) -> anyhow::Result<EditResult> {
+        self.edit_calls
+            .lock()
+            .expect("edit calls lock poisoned")
+            .push(document_id.to_string());
+        self.modes
+            .lock()
+            .expect("edit modes lock poisoned")
+            .push(mode);
+        self.tokens
+            .lock()
+            .expect("edit tokens lock poisoned")
+            .push(document_token.clone());
+        self.editors
+            .lock()
+            .expect("edit editors lock poisoned")
+            .push(editor);
+
+        Ok(EditResult {
+            edits_applied: 1,
+            usage: Vec::new(),
+            clarification: None,
+            revision: None,
+        })
+    }
+
+    async fn delete_traces(&self, _document_id: &str) -> anyhow::Result<()> {
+        panic!("unexpected delete_traces call")
+    }
+}
+
+type TestToolContext =
+    DocumentToolContext<FakeDocumentService, FakeEntityAccessService, FakeEditingWorker>;
+
+pub(in crate::inbound::toolset) fn tool_context(
+    service: FakeDocumentService,
+    editing: FakeEditingWorker,
+) -> ServiceContext<TestToolContext> {
+    ServiceContext(DocumentToolContext::new(
+        service,
+        FakeEntityAccessService::default(),
+        LexicalClient::new(
+            "unused-internal-key".to_string(),
+            "http://localhost/lexical".to_string(),
+        ),
+        SyncServiceClient::new(
+            "unused-internal-key".to_string(),
+            "http://localhost/sync".to_string(),
+        ),
+        editing,
+        "unused-jwt-secret".to_string(),
+        std::sync::Arc::new(crate::inbound::toolset::comment_test::FakeMessages::default()),
+    ))
+}
+
+pub(in crate::inbound::toolset) fn request_context() -> RequestContext {
+    RequestContext::new(
+        MacroUserIdStr::try_from(TEST_USER_ID.to_string()).expect("test user id should be valid"),
+    )
+}
+
+async fn call_edit_document(
+    file_type: &str,
+) -> (ToolResult<EditDocumentResponse>, FakeEditingWorker) {
+    call_edit_document_as(file_type, None).await
+}
+
+async fn call_edit_document_as(
+    file_type: &str,
+    actor: Option<BotId>,
+) -> (ToolResult<EditDocumentResponse>, FakeEditingWorker) {
+    call_edit_document_with(file_type, actor, false).await
+}
+
+async fn call_edit_document_with(
+    file_type: &str,
+    actor: Option<BotId>,
+    fast: bool,
+) -> (ToolResult<EditDocumentResponse>, FakeEditingWorker) {
+    call_edit_document_in(file_type, fast, |context| match actor {
+        Some(actor) => context.with_actor(actor),
+        None => context,
+    })
+    .await
+}
+
+async fn call_edit_document_in(
+    file_type: &str,
+    fast: bool,
+    configure: impl FnOnce(TestToolContext) -> TestToolContext,
+) -> (ToolResult<EditDocumentResponse>, FakeEditingWorker) {
+    let editing = FakeEditingWorker::default();
+    let tool = EditDocument {
+        document_id: TEST_DOCUMENT_ID.to_string(),
+        instructions: "tidy up the imports".to_string(),
+        fast,
+    };
+
+    let mut context = tool_context(FakeDocumentService::new(file_type), editing.clone());
+    context.0 = configure(context.0);
+    let result = tool.call(context, request_context()).await;
+
+    (result, editing)
+}
+
+fn presented_editor(editing: &FakeEditingWorker) -> Option<String> {
+    editing
+        .editors
+        .lock()
+        .expect("edit editors lock poisoned")
+        .first()
+        .expect("edit reached the worker")
+        .as_ref()
+        .map(|editor| editor.as_str().to_owned())
+}
+
+fn editor_name(name: &str) -> Option<String> {
+    EditorName::new(name).map(|editor| editor.as_str().to_owned())
+}
+
+fn minted_token_actor(editing: &FakeEditingWorker) -> Option<String> {
+    let token = editing
+        .tokens
+        .lock()
+        .expect("edit tokens lock poisoned")
+        .first()
+        .expect("edit minted a document token")
+        .clone();
+    decode_permission_token(&token, "unused-jwt-secret")
+        .expect("edit token should decode")
+        .actor
+}
+
+#[tokio::test]
+async fn rejects_non_markdown_document_without_calling_the_worker() {
+    let (result, editing) = call_edit_document("py").await;
+
+    let error = result.expect_err("a source file should be rejected");
+    assert!(
+        error.description.contains("`py`"),
+        "description should name the file type: {}",
+        error.description
+    );
+    assert!(
+        error.description.contains("cannot be edited"),
+        "description should state the constraint: {}",
+        error.description
+    );
+    assert!(
+        editing
+            .edit_calls
+            .lock()
+            .expect("edit calls lock poisoned")
+            .is_empty(),
+        "the editing worker must not be called for a rejected document"
+    );
+}
+
+/// Also pins the mid-finalization case: the fake panics on
+/// `get_document_content`, so reaching the worker proves the guard never
+/// consulted the content location. Markdown uploaded to S3 is only initialized
+/// into sync-service when its upload finalizes, and a location check during
+/// that window would reject an edit the sync handshake is designed to serve.
+#[tokio::test]
+async fn fast_flag_selects_the_fast_pipeline() {
+    let (_, editing) = call_edit_document_with("md", None, true).await;
+    assert_eq!(
+        *editing.modes.lock().expect("edit modes lock poisoned"),
+        vec![EditMode::Fast]
+    );
+
+    let (_, editing) = call_edit_document("md").await;
+    assert_eq!(
+        *editing.modes.lock().expect("edit modes lock poisoned"),
+        vec![EditMode::Supervised]
+    );
+}
+
+/// `fast` is optional on the wire so existing callers keep working.
+#[test]
+fn fast_defaults_to_false() {
+    let tool: EditDocument = serde_json::from_value(serde_json::json!({
+        "document_id": TEST_DOCUMENT_ID,
+        "instructions": "x",
+    }))
+    .expect("fast should be optional");
+    assert!(!tool.fast);
+}
+
+#[tokio::test]
+async fn allows_markdown_document() {
+    let (result, editing) = call_edit_document("md").await;
+
+    let response = result.expect("a markdown document should be editable");
+    assert_eq!(response.summary, "Applied 1 edit(s) to the document.");
+    assert_eq!(
+        *editing.edit_calls.lock().expect("edit calls lock poisoned"),
+        vec![TEST_DOCUMENT_ID.to_string()]
+    );
+
+    let token = editing
+        .tokens
+        .lock()
+        .expect("edit tokens lock poisoned")
+        .first()
+        .expect("edit minted a document token")
+        .clone();
+    let claims =
+        decode_permission_token(&token, "unused-jwt-secret").expect("edit token should decode");
+    assert_eq!(
+        claims.user_id.as_ref().map(|user| user.as_ref()),
+        Some(TEST_USER_ID)
+    );
+    assert_eq!(
+        claims.actor.as_deref(),
+        Some(bot_id::MACRO_AI_BOT_ID.into_storage_id().as_ref())
+    );
+}
+
+#[tokio::test]
+async fn edit_token_carries_the_context_actor() {
+    let (result, editing) = call_edit_document_as("md", Some(BotId::TEST_A)).await;
+    result.expect("a markdown document should be editable");
+
+    assert_eq!(
+        minted_token_actor(&editing).as_deref(),
+        Some(BotId::TEST_A.into_storage_id().as_ref())
+    );
+}
+
+/// The default actor is Macro AI, a first-party bot whose name is a constant,
+/// so the cursor readers watch is labelled `Macro` without any host wiring.
+#[tokio::test]
+async fn edit_is_presented_as_the_default_actor_by_name() {
+    let (result, editing) = call_edit_document("md").await;
+    result.expect("a markdown document should be editable");
+
+    assert_eq!(
+        presented_editor(&editing).as_deref(),
+        Some(bot_id::MACRO_AI_NAME)
+    );
+}
+
+/// A host running a named agent hands its name over with the actor, and that
+/// is the name the edit is presented under - not Macro's, not a pooled one.
+#[tokio::test]
+async fn edit_is_presented_as_the_named_actor() {
+    let (result, editing) = call_edit_document_in("md", false, |context| {
+        context.with_actor(BotId::TEST_A).with_actor_name("Grunk")
+    })
+    .await;
+    result.expect("a markdown document should be editable");
+
+    assert_eq!(presented_editor(&editing).as_deref(), Some("Grunk"));
+    assert_eq!(
+        minted_token_actor(&editing).as_deref(),
+        Some(BotId::TEST_A.into_storage_id().as_ref())
+    );
+}
+
+/// A user-owned bot the host never named has no name to present; the worker
+/// then falls back to its own labels rather than mislabelling the edit.
+#[tokio::test]
+async fn edit_by_an_unnamed_custom_bot_presents_no_editor() {
+    let (result, editing) = call_edit_document_as("md", Some(BotId::TEST_A)).await;
+    result.expect("a markdown document should be editable");
+
+    assert_eq!(presented_editor(&editing), None);
+}
+
+#[test]
+fn a_blank_actor_name_is_no_name() {
+    let context = tool_context(FakeDocumentService::new("md"), FakeEditingWorker::default());
+
+    let named = context.0.clone().with_actor_name("   ");
+    assert_eq!(
+        named.actor_editor_name(),
+        EditorName::new(bot_id::MACRO_AI_NAME)
+    );
+
+    let named = context.0.with_actor(BotId::TEST_A).with_actor_name("");
+    assert_eq!(named.actor_editor_name(), None);
+}
+
+/// The host's name wins over the first-party constant, and every first-party
+/// bot presents under its own name.
+#[test]
+fn actor_editor_name_prefers_the_host_name_then_the_first_party_name() {
+    let context = tool_context(FakeDocumentService::new("md"), FakeEditingWorker::default());
+
+    let cursor = context.0.clone().with_actor(bot_id::CURSOR_BOT_ID);
+    assert_eq!(
+        cursor.actor_editor_name(),
+        EditorName::new(bot_id::CURSOR_NAME)
+    );
+
+    let renamed = cursor.with_actor_name("  Cursor (dev) ");
+    assert_eq!(renamed.actor_editor_name(), EditorName::new("Cursor (dev)"));
+}
+
+#[test]
+fn editor_name_is_trimmed_and_never_blank() {
+    assert_eq!(editor_name("  Grunk "), Some("Grunk".to_owned()));
+    assert_eq!(editor_name("   "), None);
+    assert_eq!(editor_name(""), None);
+}
+
+#[test]
+fn tool_creations_are_made_by_the_context_actor_for_the_requesting_user() {
+    let user = MacroUserIdStr::try_from(TEST_USER_ID.to_string()).expect("valid user");
+    let default_context =
+        tool_context(FakeDocumentService::new("md"), FakeEditingWorker::default());
+    assert_eq!(default_context.actor, bot_id::MACRO_AI_BOT_ID);
+
+    let principal = default_context
+        .0
+        .with_actor(BotId::TEST_A)
+        .creation_principal(user.clone());
+    assert_eq!(
+        principal,
+        CreationPrincipal::BotForUser {
+            bot: BotId::TEST_A,
+            user,
+        }
+    );
+}
+
+#[test]
+fn only_markdown_is_editable() {
+    assert!(ensure_markdown(&document_with_file_type(Some("md"))).is_ok());
+
+    for file_type in ["py", "pdf", "docx", "png", "csv", "not-a-file-type"] {
+        assert!(
+            ensure_markdown(&document_with_file_type(Some(file_type))).is_err(),
+            "{file_type} never gets a Loro doc and must be rejected"
+        );
+    }
+
+    assert!(
+        ensure_markdown(&document_with_file_type(None)).is_err(),
+        "a document with no file type must be rejected"
+    );
+}
+
+#[test]
+fn word_documents_are_pointed_at_the_word_tools() {
+    let error = ensure_markdown(&document_with_file_type(Some("docx"))).unwrap_err();
+    assert!(error.description.contains("EditWordDocument"));
+}

@@ -14,20 +14,20 @@ use chrono::{DateTime, Duration, Utc};
 use comms_db_client::channels::seed_channel::SeedChannelOptions;
 use comms_db_client::messages::seed_message::SeedMessageOptions;
 use comms_db_client::model::SimpleMention;
+use email_types::email::service::address::ContactInfo;
+use email_types::email::service::label::{
+    Label, LabelListVisibility, LabelType, MessageListVisibility,
+};
+use email_types::email::service::link::{Link, UserProvider};
+use email_types::email::service::message::Message;
+use email_types::email::service::thread::Thread;
 use entity_access_db_utils::{AccessLevel, EntityAccessSourceType, EntityType};
 use macro_db_client::document::v2::create::CreateDocumentArgs;
 use macro_user_id::user_id::MacroUserIdStr;
-use model::document::FileType;
-use model::item::ShareableItemType;
-use models_email::email::service::address::ContactInfo;
-use models_email::email::service::label::{
-    Label, LabelListVisibility, LabelType, MessageListVisibility,
-};
-use models_email::email::service::link::{Link, UserProvider};
-use models_email::email::service::message::Message;
-use models_email::email::service::thread::Thread;
-use models_permissions::share_permission::{LinkShare, SharePermissionV2};
-use models_properties::service::property_value::PropertyValue;
+use permissions_types::share_permission::{LinkShare, SharePermissionV2};
+use properties_types::service::property_value::PropertyValue;
+use shared_types::document::FileType;
+use shared_types::item::ShareableItemType;
 use uuid::Uuid;
 
 use super::reset::{reset_contacts_outbox_statement, reset_statements};
@@ -502,13 +502,13 @@ async fn seed_projects(ctx: &SeedCliContext, spec: &ScenarioSpec) -> anyhow::Res
 
 fn permission_access_level(
     level: ShareLevel,
-) -> models_permissions::share_permission::access_level::AccessLevel {
+) -> permissions_types::share_permission::access_level::AccessLevel {
     match level {
-        ShareLevel::View => models_permissions::share_permission::access_level::AccessLevel::View,
+        ShareLevel::View => permissions_types::share_permission::access_level::AccessLevel::View,
         ShareLevel::Comment => {
-            models_permissions::share_permission::access_level::AccessLevel::Comment
+            permissions_types::share_permission::access_level::AccessLevel::Comment
         }
-        ShareLevel::Edit => models_permissions::share_permission::access_level::AccessLevel::Edit,
+        ShareLevel::Edit => permissions_types::share_permission::access_level::AccessLevel::Edit,
     }
 }
 
@@ -778,7 +778,7 @@ async fn seed_tasks(ctx: &SeedCliContext, spec: &ScenarioSpec) -> anyhow::Result
         properties::outbound::entity_property_queries::upsert_entity_property(
             &ctx.db.pool(),
             &document_id,
-            models_properties::EntityType::Task,
+            properties_types::EntityType::Task,
             system_properties::SystemPropertyKey::STATUS_UUID,
             Some(PropertyValue::SelectOption(vec![status.uuid()])),
         )
@@ -791,16 +791,16 @@ async fn seed_tasks(ctx: &SeedCliContext, spec: &ScenarioSpec) -> anyhow::Result
         };
         let references = assignees
             .iter()
-            .map(|assignee| models_properties::EntityReference {
+            .map(|assignee| properties_types::EntityReference {
                 entity_id: spec.user_id(assignee),
-                entity_type: models_properties::EntityType::User,
+                entity_type: properties_types::EntityType::User,
                 specific_message_id: None,
             })
             .collect();
         properties::outbound::entity_property_queries::upsert_entity_property(
             &ctx.db.pool(),
             &document_id,
-            models_properties::EntityType::Task,
+            properties_types::EntityType::Task,
             system_properties::SystemPropertyKey::ASSIGNEES_UUID,
             Some(PropertyValue::EntityRef(references)),
         )

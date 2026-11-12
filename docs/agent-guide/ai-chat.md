@@ -833,7 +833,7 @@ the shimmer.
   This works in herdr 0.9 and in the herdr app (herdr-core, with `hc` on `PATH`),
   where session tabs open in macrod's space. Under herdr-core, Codex reports no
   status, so its permission prompts must be answered in Herdr; see "Herdr
-  versions" in `crates/coding_agent_worker/README.md`.
+  versions" in `crates/agents/macrod/README.md`.
   Native Herdr sessions offer `/compact`, `/init`, and `/fast` in the slash menu;
   Codex also offers `/ultrafast`. Macro confirms delivery of speed commands;
   check their result and any confirmation in Herdr. For Claude, use `/fast on`
@@ -2277,7 +2277,7 @@ must stay hidden; subsequent live messages must still appear.
   shows the agent's rule text as its tooltip. `More options` holds any further
   remembered choices with their full rule text. Native Herdr sessions (Claude
   Code or Codex in herdr) offer `Always allow` for recognized approval
-  dialogs; see `crates/coding_agent_worker/README.md`. Channel Magic Chips expose the same
+  dialogs; see `crates/agents/macrod/README.md`. Channel Magic Chips expose the same
   approval card in place of their loading state, alongside existing questions.
   Only authenticated users with **Edit** or **Owner** session access may answer;
   bot, harness, and internal-service credentials cannot approve on their behalf.

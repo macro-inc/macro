@@ -24,7 +24,7 @@ export function systemSkillsQueryOptions() {
 
 /**
  * Built-in system skills served by the storage service. System skills are
- * static, code-defined AI instructions (crates/system_skills) with well-known
+ * static, code-defined AI instructions (crates/agents/system_skills) with well-known
  * ids: they surface in the skills menu and skill mentions like user skills,
  * but have no document behind them and must never be opened as documents.
  *

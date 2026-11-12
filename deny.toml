@@ -218,7 +218,7 @@ deny = [
     "workspace-hack",          # cargo-hakari generated crate
   ], reason = "Use macro_aws_config for AWS configuration in workspace crates" },
   { crate = "tracing-subscriber", wrappers = [
-    "agent",                     # GenAI span tests
+    "agent_loop",                # GenAI span tests
     "agent_harness",             # Warm-claim and handshake span tests
     "agent_inmem",               # GenAI trace propagation tests
     "agent_session",             # GenAI span tests
@@ -227,14 +227,14 @@ deny = [
     "authentication_service",    # Session-code and token redaction span tests only (dev-dependency)
     "calendar_service",          # HTTP server span export tests only (dev-dependency)
     "channels",                  # Dev logging only
-    "coding_agent_worker",       # Standalone daemon logging setup
+    "macrod",                    # Standalone daemon logging setup
     "convert_service",           # process_message span status tests only (dev-dependency)
     "cursor_cloud_agents",       # Standalone ACP binary logging; stdout is the protocol, so macro_entrypoint cannot own it
     "dictation",                 # Metadata tracing and content-redaction tests only
     "document_storage_service",  # GraphQL telemetry span and log tests only (dev-dependency)
     "documents",                 # Dev logging only
     "email",                     # Dev logging only
-    "email_api_client",          # Outlook transport span tests only
+    "email_api_client_outbound", # Outlook transport span tests only
     "email_db_client",           # Purge phase span tests only
     "email_service",             # CRM backfill trace propagation and HTTP server span tests only (dev-dependency)
     "email_suppression_handler", # Notification TRACE field test only (dev-dependency)
@@ -251,11 +251,11 @@ deny = [
     "macro_authorization",      # Credential-redaction span tests only
     "macro_tower_layers",        # OpenTelemetry layer tests
     "native_app_server",         # Dev tooling only
-    "notification",              # Call-push trace propagation and baggage-redaction tests only
+    "notification_outbound",     # Call-push trace propagation and baggage-redaction tests only
     "notification_sandbox",      # This is not production code its just tooling
     "opentelemetry-appender-tracing", # OpenTelemetry tracing-to-OTLP log bridge requires tracing-subscriber
+    "folder",                    # Dev logging only
     "passwords",                 # Provider credential-redaction tests only (dev-dependency)
-    "projects",                  # Dev logging only
     "rootcause-tracing",         # External rootcause integration requires tracing-subscriber
     "sync_service",              # Cloudflare/WASM tracing setup uses tracing-web
     "tracing-opentelemetry",     # OpenTelemetry integration requires tracing-subscriber
@@ -265,7 +265,7 @@ deny = [
     "turso_core",                # External Turso crate requires tracing-subscriber directly
     "whatsapp_session_service",  # Notification span propagation test only
     "whatsmeow",                 # Span hierarchy and JID-redaction tests only
-    "worker-rs-otel",             # Cloudflare/WASM OpenTelemetry integration
+    "worker_rs_otel",             # Cloudflare/WASM OpenTelemetry integration
     "workspace-hack",             # cargo-hakari generated crate
   ], reason = "Use macro_entrypoint for tracing setup in workspace crates" },
 ]

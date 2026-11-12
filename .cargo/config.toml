@@ -16,7 +16,7 @@
 [alias]
 x = "run -p xtask --"
 
-# worker-rs-otel (wasm32-unknown-unknown) pulls getrandom 0.3 via OTLP types;
+# worker_rs_otel (wasm32-unknown-unknown) pulls getrandom 0.3 via OTLP types;
 # getrandom 0.3 needs its backend selected at
 # build time. Harmless for wasm crates that don't use getrandom 0.3.
 [target.wasm32-unknown-unknown]

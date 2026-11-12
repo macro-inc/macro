@@ -1,4 +1,4 @@
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use sqlx::{Postgres, Transaction};
 
 /// Deletes all user access records for a specific item

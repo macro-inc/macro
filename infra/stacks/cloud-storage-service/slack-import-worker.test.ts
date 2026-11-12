@@ -106,12 +106,12 @@ describe('Slack import Fargate worker', () => {
     expect(service.deploy_binaries).toContain('slack_import_worker');
     for (const path of [
       'services/slack_import_worker/**',
-      'crates/slack_integration/**',
-      'crates/channels/**',
-      'crates/messages/**',
-      'crates/import/**',
-      'crates/macro_queues/**',
-      'crates/macro_service_urls/**',
+      'crates/comms/slack_integration/**',
+      'crates/comms/channels/**',
+      'crates/comms/messages/**',
+      'crates/integrations/import/**',
+      'crates/platform/macro_queues/**',
+      'crates/platform/service_urls/**',
     ]) {
       expect(service.source_paths).toContain(path);
     }

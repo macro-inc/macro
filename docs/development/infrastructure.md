@@ -124,7 +124,7 @@ Deployment builds use the filtered source in `nix/cloud-storage.nix`, rather tha
 an entire checkout. Include any new `include_str!` or `include_bytes!` assets in
 its source filter. Assets generated from JavaScript are built in their own
 derivation instead: the `code-mode-assets` package bundles the SDK from the Nix
-`node_modules`, and every crane build of `crates/code_mode_assets` reads it
+`node_modules`, and every crane build of `crates/agents/code_mode_assets` reads it
 through `CODE_MODE_ASSETS_DIR`; Rust CI exports the same variable before cargo,
 restoring the output from Namespace's remote cache when another job already built it. On a miss, node_modules comes from the same cache, keyed by its own store path.
 Run it locally with `nix build --no-link .#code-mode-assets`.
@@ -134,7 +134,7 @@ Run it locally with `nix build --no-link .#code-mode-assets`.
 | Need | Use | Example |
 | --- | --- | --- |
 | SQS queue + DLQ + alarms | `Queue` (`packages/resources`) named to match the `macro_queues` constant | `calendar-service/index.ts` |
-| Kafka topic | Add to `crates/macro_event_topics`, run `cargo x kafka-topics`; never hand-edit `.github/kafka-cluster-topics.json` | `kafka-cluster/topics.ts` |
+| Kafka topic | Add to `crates/platform/macro_event_topics`, run `cargo x kafka-topics`; never hand-edit `.github/kafka-cluster-topics.json` | `kafka-cluster/topics.ts` |
 | Kafka access | `getKafkaClusterPolicy()` on the task role, brokers from `bootstrapBrokersSaslIam` | `calendar-service/service.ts` |
 | Lambda | `Lambda` (`packages/lambda`), binary listed under `deploy_lambdas` | `deleted-item-poller/lambda.ts` |
 | Redis | `Redis` (`packages/resources`) | `calendar-service/index.ts` |

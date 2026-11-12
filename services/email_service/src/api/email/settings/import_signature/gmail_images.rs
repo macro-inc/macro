@@ -1,12 +1,12 @@
 use crate::util::process_pre_insert::sfs_map::{ImageSource, MAX_IMAGE_SIZE_BYTES, PublicImages};
 use bytes::Bytes;
-use email_api_client::domain::models::EmailApiError;
-use email_api_client::domain::ports::{
+use email_api_client_core::models::EmailApiError;
+use email_api_client_core::ports::{
     MailboxAttachmentClient, MailboxMessageClient, ProviderRequestGate, ProviderTokenSource,
 };
-use email_api_client::domain::service::EmailApiClientServiceImpl;
-use models_email::email::service::attachment::Attachment;
-use models_email::email::service::message::Message;
+use email_api_client_core::service::EmailApiClientServiceImpl;
+use email_types::email::service::attachment::Attachment;
+use email_types::email::service::message::Message;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use tokio::sync::Mutex;

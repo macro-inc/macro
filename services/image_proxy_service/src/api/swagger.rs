@@ -1,4 +1,4 @@
-use model::response::{EmptyResponse, ErrorResponse};
+use shared_types::response::{EmptyResponse, ErrorResponse};
 use utoipa::OpenApi;
 
 use super::health;

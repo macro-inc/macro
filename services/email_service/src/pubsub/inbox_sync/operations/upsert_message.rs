@@ -18,29 +18,30 @@ use email::domain::events::{
 use email::domain::models::{PreviewCursorQuery, PreviewView, PreviewViewStandardLabel};
 use email::domain::ports::EmailRepo;
 use email::outbound::EmailPgRepo;
-use email_api_client::domain::models::{EmailApiError, MessageWithCalendarParts};
+use email_api_client_core::models::{EmailApiError, MessageWithCalendarParts};
 use email_db_client::attachments::provider::upload_filters::{
     attachment_is_document, attachment_is_media,
 };
 use email_db_client::messages::insert::ResyncSnapshot;
 use email_db_client::threads;
+use email_types::api::refresh::RefreshEmailEvent;
+use email_types::db::address::EmailRecipientType;
+use email_types::email::service::link;
+use email_types::email::service::message::SimpleMessage;
+use email_types::gmail::inbox_sync::{InboxSyncOperation, UpsertMessagePayload};
+use email_types::service::attachment::{
+    Attachment, AttachmentUploadArgs, AttachmentUploadDestination, AttachmentUploadMetadata,
+};
+use email_types::service::message::{Message, is_inbound, is_outbound, is_spam_or_trash};
+use email_types::service::pubsub::{DetailedError, FailureReason, ProcessingError};
+use email_types::service::thread::Thread;
 use email_utils::{dedupe_emails, is_macro_notification_sender};
+use entity_access_outbound::PgAccessRepository;
+use entity_kind::EntityType;
 use filter_ast::Expr;
 use item_filters::{SharedEmailFilter, ast::email::EmailLiteral};
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
 use model_notifications::NewEmailMetadata;
-use models_email::api::refresh::RefreshEmailEvent;
-use models_email::db::address::EmailRecipientType;
-use models_email::email::service::link;
-use models_email::email::service::message::SimpleMessage;
-use models_email::gmail::inbox_sync::{InboxSyncOperation, UpsertMessagePayload};
-use models_email::service::attachment::{
-    Attachment, AttachmentUploadArgs, AttachmentUploadDestination, AttachmentUploadMetadata,
-};
-use models_email::service::message::{Message, is_inbound, is_outbound, is_spam_or_trash};
-use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
-use models_email::service::thread::Thread;
 use notification::domain::models::{SendNotificationRequest, SendNotificationRequestBuilder};
 use notification::domain::service::NotificationIngress;
 use sqlx::PgPool;
@@ -684,7 +685,7 @@ fn thread_from_normalized_messages(
     messages.sort_by_key(|message| message.internal_date_ts);
     let inbox_visible = messages.iter().any(|message| {
         message.labels.iter().any(|label| {
-            label.provider_label_id == models_email::service::label::system_labels::INBOX
+            label.provider_label_id == email_types::service::label::system_labels::INBOX
         })
     });
     let is_read = messages.iter().all(|message| message.is_read);
@@ -943,22 +944,25 @@ async fn thread_in_inbox(
         view: PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox),
         link_ids: vec![link.id],
         limit: 1,
-        query: models_pagination::Query::Sort(
-            models_pagination::SimpleSortMethod::UpdatedAt,
+        query: pagination_types::Query::Sort(
+            pagination_types::SimpleSortMethod::UpdatedAt,
             Some(Arc::new(filter)),
         ),
         team_id: None,
     };
 
-    let previews = EmailPgRepo::new(ctx.db.clone())
-        .previews_for_view_cursor(query, link.macro_id.clone())
-        .await
-        .map_err(|e| {
-            ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::DatabaseQueryFailed,
-                source: anyhow::Error::new(e).context("Failed to evaluate inbox membership"),
-            })
-        })?;
+    let previews = EmailPgRepo::new(
+        ctx.db.clone(),
+        Arc::new(PgAccessRepository::new(ctx.db.clone())),
+    )
+    .previews_for_view_cursor(query, link.macro_id.clone())
+    .await
+    .map_err(|e| {
+        ProcessingError::Retryable(DetailedError {
+            reason: FailureReason::DatabaseQueryFailed,
+            source: anyhow::Error::new(e).context("Failed to evaluate inbox membership"),
+        })
+    })?;
 
     Ok(!previews.is_empty())
 }

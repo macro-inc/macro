@@ -1,0 +1,23 @@
+[package]
+edition = "2024"
+name = "graphql_properties"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+futures = { workspace = true }
+async-graphql = { workspace = true, features = ["dataloader"] }
+chrono = { workspace = true }
+entity_access = { workspace = true }
+graphql_common = { workspace = true }
+macro_user_id = { workspace = true }
+entity_kind = { workspace = true }
+properties_types = { workspace = true }
+properties = { workspace = true, features = [
+  "ports",
+] }
+rootcause = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }

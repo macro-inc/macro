@@ -2,10 +2,11 @@
 mod test;
 
 use crate::context::{self};
+use ai_chat::domain::events::{ChatMacroEvent, ChatPermanentlyDeletedMetadata};
 use anyhow::Context;
 use aws_lambda_events::eventbridge::EventBridgeEvent;
-use chat::domain::events::{ChatMacroEvent, ChatPermanentlyDeletedMetadata};
 use documents::domain::events::{DocumentMacroEvent, DocumentPurgedMetadata};
+use folder::domain::events::{ProjectMacroEvent, ProjectPermanentlyDeletedMetadata};
 use futures::future::join_all;
 use lambda_runtime::{
     Error, LambdaEvent,
@@ -14,7 +15,6 @@ use lambda_runtime::{
 use macro_db_client::projects::ProjectToDelete;
 use macro_event_broker::MacroEventBroker;
 use model_owner::Owner;
-use projects::domain::events::{ProjectMacroEvent, ProjectPermanentlyDeletedMetadata};
 
 #[tracing::instrument(skip(ctx, _event), err)]
 pub async fn handler(

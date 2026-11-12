@@ -193,7 +193,7 @@ fn link_for(macro_id: &str, email: &str) -> Link {
         macro_id,
         fusionauth_user_id: "fa".to_string(),
         email_address,
-        provider: models_email::service::link::UserProvider::Gmail,
+        provider: email_types::service::link::UserProvider::Gmail,
         is_sync_active: true,
         needs_reauth: false,
         last_sync_error_at: None,

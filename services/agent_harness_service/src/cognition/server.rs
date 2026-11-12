@@ -9,17 +9,21 @@ use crate::cognition::{
         integration_analytics::{IntegrationAnalytics, IntegrationChange, IntegrationEvent},
     },
 };
-use ai_tools::{NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress};
+use agent_tools::{NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress};
 use anyhow::Context;
+use app_service_url::AppServiceUrl;
+use auth_service_url::AuthServiceUrl;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
+use calendar_service_url::CalendarServiceUrl;
 use call::domain::service::{CallRecordQueryServiceImpl, CallServiceImpl};
 use call::inbound::toolset::CallToolContext;
 use call::outbound::pg_call_repo::PgCallRepo;
 use call::outbound::s3_recording_storage::S3RecordingStorage;
-use channels::{
-    domain::list_service::ChannelListServiceImpl, outbound::pg_channels_repo::PgChannelsRepo,
-};
+use channels::domain::list_service::ChannelListServiceImpl;
+use channels_outbound::pg_channels_repo::PgChannelsRepo;
+use connection_gateway_url::ConnectionGatewayUrl;
 use document_storage_service_client::DocumentStorageServiceClient;
+use document_storage_service_url::DocumentStorageServiceUrl;
 use documents::{
     domain::{models::CloudFrontConfig, service::DocumentServiceImpl},
     inbound::toolset::DocumentToolContext,
@@ -29,7 +33,9 @@ use email::domain::ports::ReadonlyEmailPreviewAdapter;
 use email::domain::service::EmailServiceImpl;
 use email::outbound::EmailPgRepo;
 use email_service_client::{EmailServiceClient, EmailServiceClientExternal};
-use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
+use email_service_url::EmailServiceUrl;
+use entity_access::domain::service::EntityAccessServiceImpl;
+use entity_access_outbound::PgAccessRepository;
 use entity_registry::OwnerGrantPolicy;
 use entity_registry_db_utils::OwnedEntityRegistrar;
 use foreign_entity::{
@@ -42,24 +48,22 @@ use github_pull_requests::{
     domain::service::GithubPullRequestServiceImpl,
     outbound::pg_github_pull_request_repo::PgGithubPullRequestRepo,
 };
+use lexical_service_url::LexicalServiceUrl;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_authorization::{
     InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationServiceImpl,
     MacroAuthorizationState, PgUserApiKeyAuthorizationRepo, PgUserApiKeyAuthorizer,
 };
-use macro_service_urls::{
-    AppServiceUrl, AuthServiceUrl, CalendarServiceUrl, ConnectionGatewayUrl,
-    DocumentStorageServiceUrl, EmailServiceUrl, LexicalServiceUrl, StaticFileServiceUrl,
-    SyncServiceUrl,
-};
 use notification::domain::service::{
     NotificationReaderService, PlatformArnConfig, SqsNotificationIngress,
 };
-use notification::outbound::queue::SqsQueue;
-use notification::outbound::repository::DbNotificationRepository;
-use notification::outbound::websocket::ConnectionGatewayClient;
+use notification_outbound::queue::SqsQueue;
+use notification_outbound::repository::DbNotificationRepository;
+use notification_outbound::websocket::ConnectionGatewayClient;
 use readonly_pool::ReadOnlyPool;
 use search_service_client::SearchServiceClient;
+use static_file_service_url::StaticFileServiceUrl;
+use sync_service_url::SyncServiceUrl;
 
 use std::sync::Arc;
 use stream::outbound::redis_pg::RedisPostgresStreamRepo;
@@ -102,10 +106,10 @@ pub async fn build(
     config: Config,
     db: sqlx::PgPool,
     event_broker_tracker: TaskTracker,
-    import_jobs: ai_tools::ImportJobs,
+    import_jobs: agent_tools::ImportJobs,
     mcp_http: mcp_client::outbound::guarded_http::McpHttp,
 ) -> anyhow::Result<CognitionRuntime> {
-    let public_url = macro_service_urls::CognitionPublicUrl::new()?;
+    let public_url = cognition_public_url::CognitionPublicUrl::new()?;
     let aws_config = macro_aws_config::get_macro_aws_config().await;
     let secretsmanager_client = secretsmanager_client::SecretsManager::new(
         aws_sdk_secretsmanager::Client::new(&aws_config),
@@ -229,8 +233,8 @@ pub async fn build(
     );
     let notification_reader_service = NotificationReaderService {
         repository: DbNotificationRepository::new(db.clone()),
-        queue: ai_tools::ToolNotificationQueue::Sqs(notification_reader_queue),
-        sns_endpoint: ai_tools::NoOpSnsEndpointManager,
+        queue: agent_tools::ToolNotificationQueue::Sqs(notification_reader_queue),
+        sns_endpoint: agent_tools::NoOpSnsEndpointManager,
         platform_config: PlatformArnConfig {
             apns_platform_arn: String::new(),
             fcm_platform_arn: String::new(),
@@ -239,7 +243,7 @@ pub async fn build(
         realtime: notification::domain::ports::NoopNotificationRealtimePublisher,
     };
     let notification_tool_context =
-        notification::inbound::ai_tool::NotificationToolContext::new(notification_reader_service);
+        notification_inbound::ai_tool::NotificationToolContext::new(notification_reader_service);
 
     tracing::info!("initialized notification ingress service");
     let entity_access_service = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
@@ -253,7 +257,7 @@ pub async fn build(
         crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
     );
     let email_service = EmailServiceImpl::new(
-        EmailPgRepo::new(db.clone()),
+        EmailPgRepo::new(db.clone(), Arc::new(PgAccessRepository::new(db.clone()))),
         frecency_service.clone(),
         email::domain::ports::NoOpEnqueuer,
         crm_service.clone(),
@@ -267,19 +271,25 @@ pub async fn build(
         PgChannelsRepo::new(db.clone()),
         frecency_storage,
     );
-    let email_service_for_tools: Arc<ai_tools::ToolEmailService> = Arc::new(email_service.clone());
+    let email_service_for_tools: Arc<agent_tools::ToolEmailService> =
+        Arc::new(email_service.clone());
     let github_pull_request_service = GithubPullRequestServiceImpl::new(
         ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
         PgGithubPullRequestRepo::new(db.clone()),
     );
-    let favorites_service = ai_tools::build_favorites_service(db.clone());
+    let favorites_service = agent_tools::build_favorites_service(db.clone());
     let soup_service = Arc::new(
         soup::domain::service::SoupImpl::new(
             soup::outbound::pg_soup_repo::PgSoupRepo::new(ReadOnlyPool(db.clone())),
             frecency_service,
             ReadonlyEmailPreviewAdapter(email_service),
             channels_service,
-            CallRecordQueryServiceImpl::new(PgCallRepo::new(db.clone())),
+            CallRecordQueryServiceImpl::new(PgCallRepo::new(
+                db.clone(),
+                std::sync::Arc::new(channels_outbound::channel_name::PgChannelNames::new(
+                    db.clone(),
+                )),
+            )),
             crm::domain::service::NoOpCrmService,
             github_pull_request_service,
         )
@@ -322,12 +332,12 @@ pub async fn build(
             .context("failed to create kafka event publisher")?,
         event_broker_tracker.clone(),
     );
-    let properties_service = ai_tools::build_properties_service_with_broker(
+    let properties_service = agent_tools::build_properties_service_with_broker(
         db.clone(),
         entity_access_service.clone(),
         macro_event_broker.clone(),
     );
-    let task_properties_service = ai_tools::build_task_properties_adapter(
+    let task_properties_service = agent_tools::build_task_properties_adapter(
         db.clone(),
         properties_service.clone(),
         entity_access_service.clone(),
@@ -360,7 +370,7 @@ pub async fn build(
             internal_api_key.clone(),
             ConnectionGatewayUrl::new()?.to_string(),
         ));
-    let side_effect_clients = ai_tools::ChannelSideEffectClients {
+    let side_effect_clients = agent_tools::ChannelSideEffectClients {
         connection_gateway: channels_connection_gateway.clone(),
         sqs: aws_sdk_sqs::Client::new(&aws_config),
         macro_event_broker: macro_event_broker.clone(),
@@ -376,7 +386,7 @@ pub async fn build(
             std::sync::Arc::new(reqwest::Client::new()),
         ),
         config.document_permission_jwt.as_ref().to_string(),
-        ai_tools::build_message_service_with_side_effects(
+        agent_tools::build_message_service_with_side_effects(
             db.clone(),
             lexical_client.clone(),
             &side_effect_clients,
@@ -387,7 +397,7 @@ pub async fn build(
     .with_design_files(Arc::new(document_files.clone()))
     .with_photoshop_files(Arc::new(document_files.clone()))
     .with_illustrator_files(Arc::new(document_files));
-    let document_tool_context = match ai_tools::canvas_artifacts_rollout(
+    let document_tool_context = match agent_tools::canvas_artifacts_rollout(
         config.posthog_api_key.value(),
         config.posthog_host.value(),
         config.environment,
@@ -408,14 +418,14 @@ pub async fn build(
             email_service_for_tools.clone(),
             entity_access_service.clone(),
         ),
-        chat: chat::inbound::attachment::ChatAttachmentService::new(
-            Arc::new(chat::outbound::postgres::PgChatRepo::new(
+        chat: ai_chat::inbound::attachment::ChatAttachmentService::new(
+            Arc::new(ai_chat::outbound::postgres::PgChatRepo::new(
                 db.clone(),
                 owned_entity_registrar.clone(),
             )),
             entity_access_service.clone(),
         ),
-        channel: channels::inbound::attachment::ChannelAttachmentService::new(
+        channel: channels_inbound::attachment::ChannelAttachmentService::new(
             Arc::new(PgChannelsRepo::new(db.clone())),
             entity_access_service.clone(),
         ),
@@ -424,8 +434,11 @@ pub async fn build(
         )),
     };
     let message_service = Arc::new(
-        chat::domain::service::MessageServiceImpl::new(
-            chat::outbound::postgres::PgChatRepo::new(db.clone(), owned_entity_registrar.clone()),
+        ai_chat::domain::service::MessageServiceImpl::new(
+            ai_chat::outbound::postgres::PgChatRepo::new(
+                db.clone(),
+                owned_entity_registrar.clone(),
+            ),
             attachment_provider,
         )
         .with_event_broker(macro_event_broker.clone()),
@@ -439,7 +452,7 @@ pub async fn build(
 
     let search_service_client = Arc::new(search_service_client);
 
-    let properties_tool_context = ai_tools::build_properties_tool_context(
+    let properties_tool_context = agent_tools::build_properties_tool_context(
         properties_service.clone(),
         entity_access_service.clone(),
     );
@@ -457,7 +470,7 @@ pub async fn build(
     ));
     let user_email_service = Arc::new(
         EmailServiceImpl::new(
-            EmailPgRepo::new(db.clone()),
+            EmailPgRepo::new(db.clone(), Arc::new(PgAccessRepository::new(db.clone()))),
             FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone())),
             sqs_client.clone(),
             crm_service.clone(),
@@ -485,9 +498,9 @@ pub async fn build(
         lexical_client.clone(),
     )
     .with_attachment_sender(
-        ai_tools::email_attachments::build_email_attachment_sender(
+        agent_tools::email_attachments::build_email_attachment_sender(
             user_email_service.clone(),
-            EmailPgRepo::new(db.clone()),
+            EmailPgRepo::new(db.clone(), Arc::new(PgAccessRepository::new(db.clone()))),
             document_tool_context.service.clone(),
         )
         .await,
@@ -496,7 +509,12 @@ pub async fn build(
     tracing::info!("initialized email tool context");
 
     let call_service = CallServiceImpl::new(
-        PgCallRepo::new(db.clone()),
+        PgCallRepo::new(
+            db.clone(),
+            std::sync::Arc::new(channels_outbound::channel_name::PgChannelNames::new(
+                db.clone(),
+            )),
+        ),
         NoOpCallRtcClient,
         NoOpConnectionService,
         (*entity_access_service).clone(),
@@ -508,9 +526,12 @@ pub async fn build(
 
     tracing::info!("initialized call tool context");
 
-    let chat_tool_context = chat::inbound::toolset::ChatToolContext::new(
-        chat::domain::service::ChatServiceImpl::new(
-            chat::outbound::postgres::PgChatRepo::new(db.clone(), owned_entity_registrar.clone()),
+    let chat_tool_context = ai_chat::inbound::toolset::ChatToolContext::new(
+        ai_chat::domain::service::ChatServiceImpl::new(
+            ai_chat::outbound::postgres::PgChatRepo::new(
+                db.clone(),
+                owned_entity_registrar.clone(),
+            ),
             Arc::new(ai_toolset::AsyncToolCollection::new()),
             (),
             entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
@@ -522,7 +543,7 @@ pub async fn build(
 
     tracing::info!("initialized chat tool context");
 
-    let channel_tool_context = ai_tools::build_channel_tool_context_with_side_effects(
+    let channel_tool_context = agent_tools::build_channel_tool_context_with_side_effects(
         db.clone(),
         lexical_client.clone(),
         &side_effect_clients,
@@ -578,11 +599,11 @@ pub async fn build(
     let decision_classifier = config
         .typesafe_api_key
         .value()
-        .map(jev::outbound::SystemOneJev::typesafe)
+        .map(jev_classifier::outbound::SystemOneJev::typesafe)
         .transpose()
         .context("failed to configure the decision classifier")?
-        .map(|provider| jev::domain::JevClassifier::new(provider, recorder.clone()));
-    let decisions = Arc::new(jev::domain::decisions::DecisionServiceImpl::new(
+        .map(|provider| jev_classifier::domain::JevClassifier::new(provider, recorder.clone()));
+    let decisions = Arc::new(jev_classifier::domain::decisions::DecisionServiceImpl::new(
         decision_classifier,
         admission.clone(),
     ));
@@ -686,22 +707,23 @@ pub async fn build(
     };
     // Macro Connect beside Pipedream: a user the `macro-connect` rollout is
     // on for is on Connect alone; everyone else stays on Pipedream.
-    let connect_adapter = ai_tools::connect_adapter(config.connect_customer_key.value())?;
-    let rollout = ai_tools::macro_connect_rollout(
+    let connect_adapter = agent_tools::connect_adapter(config.connect_customer_key.value())?;
+    let rollout = agent_tools::macro_connect_rollout(
         config.posthog_api_key.value(),
         config.posthog_host.value(),
         config.environment,
     )?;
-    let connectors: ai_tools::ToolPipedreamConnection = pipedream_client.as_ref().map(|client| {
-        let backends = pipedream_mcp::outbound::dispatch::ConnectorBackends::new(
-            client.clone(),
-            connect_adapter.clone(),
-        );
-        Arc::new(match &rollout {
-            Some(rollout) => backends.with_rollout(rollout.clone()),
-            None => backends,
-        })
-    });
+    let connectors: agent_tools::ToolPipedreamConnection =
+        pipedream_client.as_ref().map(|client| {
+            let backends = pipedream_mcp::outbound::dispatch::ConnectorBackends::new(
+                client.clone(),
+                connect_adapter.clone(),
+            );
+            Arc::new(match &rollout {
+                Some(rollout) => backends.with_rollout(rollout.clone()),
+                None => backends,
+            })
+        });
     let pipedream_repo =
         pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(db.clone());
     let granola_sync: Option<Arc<dyn granola_sync::domain::service::SyncService>> =
@@ -733,12 +755,13 @@ pub async fn build(
     // tools through this selector, which prefers a user's Pipedream
     // connectors and falls back to the native ones (see `mcp_select`).
     // The import service's live Slack source shares this selector.
-    let mcp_selector: Arc<ai_tools::ToolMcpSelector> = Arc::new(mcp_select::McpToolSelector::new(
-        Arc::new(mcp_server_repo.clone()),
-        mcp_http.clone(),
-        Arc::new(pipedream_repo.clone()),
-        Arc::new(connectors.clone()),
-    ));
+    let mcp_selector: Arc<agent_tools::ToolMcpSelector> =
+        Arc::new(mcp_select::McpToolSelector::new(
+            Arc::new(mcp_server_repo.clone()),
+            mcp_http.clone(),
+            Arc::new(pipedream_repo.clone()),
+            Arc::new(connectors.clone()),
+        ));
 
     // Nudges the user's connected clients when import rows flip, so setup
     // sections and chat surfaces update immediately instead of on the next
@@ -747,7 +770,7 @@ pub async fn build(
         channels_connection_gateway.clone(),
     );
 
-    let initiative_tool_context = ai_tools::build_initiative_tool_context(
+    let initiative_tool_context = agent_tools::build_initiative_tool_context(
         db.clone(),
         &document_tool_context,
         properties_service.clone(),
@@ -755,17 +778,17 @@ pub async fn build(
         macro_event_broker.clone(),
     );
 
-    let databases_tool_context = ai_tools::build_databases_tool_context(
+    let databases_tool_context = agent_tools::build_databases_tool_context(
         db.clone(),
         entity_access_service.clone(),
-        ai_tools::ToolTableEventPublisher::Gateway(
+        agent_tools::ToolTableEventPublisher::Gateway(
             databases::outbound::gateway_event_publisher::GatewayTableEventPublisher::new(
                 channels_connection_gateway.as_ref().clone(),
             ),
         ),
-        ai_tools::MaybeToolEventBroker::Real(macro_event_broker.clone()),
+        agent_tools::MaybeToolEventBroker::Real(macro_event_broker.clone()),
     );
-    let project_tool_context = ai_tools::build_project_tool_context(
+    let project_tool_context = agent_tools::build_project_tool_context(
         db.clone(),
         macro_event_broker.clone(),
         entity_access_service.clone(),
@@ -774,13 +797,13 @@ pub async fn build(
         databases_tool_context.service.clone(),
     );
 
-    let entity_creator = ai_tools::ToolEntityCreator {
+    let entity_creator = agent_tools::ToolEntityCreator {
         document_creator: document_tool_context.creator.clone(),
         entity_access_service: entity_access_service.clone(),
         channel_service: channel_tool_context.service.clone(),
         task_properties: task_properties_for_import,
         document_properties: document_properties_for_import,
-        team_repository: ai_tools::build_team_repository(db.clone()),
+        team_repository: agent_tools::build_team_repository(db.clone()),
         initiative_service: initiative_tool_context.service.clone(),
         project_service: project_tool_context.service.clone(),
         databases_service: databases_tool_context.service.clone(),
@@ -788,7 +811,7 @@ pub async fn build(
     };
     let import_service = Arc::new(
         import::domain::service::ImportServiceImpl::new(
-            ai_tools::build_import_repo(db.clone()),
+            agent_tools::build_import_repo(db.clone()),
             mcp_selector.clone(),
             Arc::new(entity_creator),
             recorder.clone(),
@@ -833,24 +856,24 @@ pub async fn build(
     });
     tracing::info!("initialized import service");
 
-    let databases_sql_tool_context = ai_tools::build_databases_sql_tool_context(
+    let databases_sql_tool_context = agent_tools::build_databases_sql_tool_context(
         &databases_tool_context,
         soup_service.clone(),
         db.clone(),
     );
-    let crm_tool_context = ai_tools::build_crm_tool_context(db.clone());
-    let pipeline_tool_context = ai_tools::build_pipeline_tool_context(
+    let crm_tool_context = agent_tools::build_crm_tool_context(db.clone());
+    let pipeline_tool_context = agent_tools::build_pipeline_tool_context(
         db.clone(),
         &databases_tool_context,
         &crm_tool_context,
     );
-    let crm_transfer_tool_context = ai_tools::build_crm_transfer_tool_context(
+    let crm_transfer_tool_context = agent_tools::build_crm_transfer_tool_context(
         &pipeline_tool_context,
         &crm_tool_context,
         &document_tool_context,
     );
 
-    let calendar_tool_context = ai_tools::build_calendar_tool_context(
+    let calendar_tool_context = agent_tools::build_calendar_tool_context(
         db.clone(),
         CalendarServiceUrl::new()?,
         internal_api_key.clone(),
@@ -860,60 +883,60 @@ pub async fn build(
             .and_then(|value| value.parse::<bool>().ok())
             .unwrap_or(false),
     );
-    let forms_tool_context = ai_tools::build_forms_tool_context(
+    let forms_tool_context = agent_tools::build_forms_tool_context(
         db.clone(),
         &document_tool_context,
         &databases_tool_context,
         &calendar_tool_context,
         Some(channels_connection_gateway.as_ref().clone()),
-        ai_tools::MaybeToolEventBroker::Real(macro_event_broker.clone()),
-        ai_tools::FormsToolConfig {
-            app_origin: macro_service_urls::AppServiceUrl::new()?.to_string(),
+        agent_tools::MaybeToolEventBroker::Real(macro_event_broker.clone()),
+        agent_tools::FormsToolConfig {
+            app_origin: app_service_url::AppServiceUrl::new()?.to_string(),
             editing_worker_url: config.ai_editing_worker_url.clone(),
             static_files: static_file_service_client::StaticFileServiceClient::new(
                 internal_api_key.clone(),
-                macro_service_urls::StaticFileServiceUrl::new()?.to_string(),
+                static_file_service_url::StaticFileServiceUrl::new()?.to_string(),
             ),
         },
     );
 
-    let tool_service_context = ai_tools::ToolServiceContext {
-        memory_tool_context: ai_tools::memory::build_memory_tool_context(
+    let tool_service_context = agent_tools::ToolServiceContext {
+        memory_tool_context: agent_tools::memory::build_memory_tool_context(
             db.clone(),
             recorder.clone(),
         ),
-        cognition_tool_context: ai_tools::build_cognition_tool_context()?,
-        connector_tool_context: ai_tools::build_connector_tool_context(db.clone(), None, None),
+        cognition_tool_context: agent_tools::build_cognition_tool_context()?,
+        connector_tool_context: agent_tools::build_connector_tool_context(db.clone(), None, None),
         search_service_client: search_service_client.clone(),
         email_service_client: email_service_client_external.clone(),
         soup_service: soup_service.clone(),
         email_service: email_service_for_tools.clone(),
-        activity_tool_context: ai_tools::build_activity_tool_context(
+        activity_tool_context: agent_tools::build_activity_tool_context(
             db.clone(),
             properties_service,
             entity_access_service.clone(),
         ),
-        image_generation_tool_context: ai_tools::build_image_generation_tool_context(
+        image_generation_tool_context: agent_tools::build_image_generation_tool_context(
             &document_tool_context,
-            ai_tools::build_image_generator_from_env(),
+            agent_tools::build_image_generator_from_env(),
             recorder.clone(),
         )?,
-        message_tool_context: ai_tools::build_message_tool_context(&document_tool_context),
+        message_tool_context: agent_tools::build_message_tool_context(&document_tool_context),
         document_tool_context: document_tool_context.clone(),
         properties_tool_context: properties_tool_context.clone(),
         email_tool_context: email_tool_context.clone(),
         call_tool_context: call_tool_context.clone(),
-        booking_management_tool_context: ai_tools::build_booking_management_tool_context(
+        booking_management_tool_context: agent_tools::build_booking_management_tool_context(
             CalendarServiceUrl::new()?,
             internal_api_key.clone(),
             config.environment,
         ),
-        booking_link_tool_context: ai_tools::build_booking_link_tool_context(
+        booking_link_tool_context: agent_tools::build_booking_link_tool_context(
             db.clone(),
             config.environment,
         ),
         calendar_tool_context,
-        team_calendar_tool_context: ai_tools::build_team_calendar_tool_context(
+        team_calendar_tool_context: agent_tools::build_team_calendar_tool_context(
             db.clone(),
             macro_env_var::maybe_read_env("CALENDAR_TEAM_SHARING_ENABLED")
                 .and_then(|value| value.parse::<bool>().ok())
@@ -921,63 +944,63 @@ pub async fn build(
         ),
         notification_tool_context: notification_tool_context.clone(),
         item_notification_preference_tool_context:
-            ai_tools::build_item_notification_preference_tool_context(db.clone()),
+            agent_tools::build_item_notification_preference_tool_context(db.clone()),
         databases_tool_context,
         forms_tool_context,
         databases_sql_tool_context,
         import_tool_context: import::inbound::toolset::ImportToolContext::wired(
             import_service.clone(),
         ),
-        mcp_server_tool_context: ai_tools::ToolMcpServerToolContext::wired(
+        mcp_server_tool_context: agent_tools::ToolMcpServerToolContext::wired(
             mcp_client::domain::service::ServerDirectory::new(Arc::new(mcp_server_repo.clone())),
         ),
         chat_tool_context,
         channel_tool_context,
-        channel_media_upload_tool_context: ai_tools::build_channel_media_upload_tool_context()?,
-        bot_tool_context: ai_tools::build_bot_tool_context(
+        channel_media_upload_tool_context: agent_tools::build_channel_media_upload_tool_context()?,
+        bot_tool_context: agent_tools::build_bot_tool_context(
             db.clone(),
-            ai_tools::MaybeToolEventBroker::Real(macro_event_broker.clone()),
+            agent_tools::MaybeToolEventBroker::Real(macro_event_broker.clone()),
             entity_access_service.clone(),
             DocumentStorageServiceUrl::new()?.to_string(),
             pipedream_client.clone(),
         ),
-        read_agent_session_context: ai_tools::build_read_agent_session_context(
+        read_agent_session_context: agent_tools::build_read_agent_session_context(
             db.clone(),
             entity_access_service.clone(),
         ),
-        coding_agent_tool_context: ai_tools::build_coding_agent_tool_context(
-            macro_service_urls::AgentHarnessServiceUrl::new()?,
+        coding_agent_tool_context: agent_tools::build_coding_agent_tool_context(
+            agent_harness_service_url::AgentHarnessServiceUrl::new()?,
             internal_api_key.clone(),
         )?,
         project_tool_context,
-        favorites_tool_context: ai_tools::build_favorites_tool_context(
+        favorites_tool_context: agent_tools::build_favorites_tool_context(
             favorites_service,
             entity_access_service.clone(),
         ),
         initiative_tool_context,
-        team_tool_context: ai_tools::build_team_tool_context(db.clone()),
+        team_tool_context: agent_tools::build_team_tool_context(db.clone()),
         crm_tool_context,
         pipeline_tool_context,
         crm_transfer_tool_context,
-        skill_tool_context: ai_tools::build_skill_tool_context(
+        skill_tool_context: agent_tools::build_skill_tool_context(
             search_service_client.clone(),
             soup_service.clone(),
             &document_tool_context,
         ),
-        schedule_tool_context: ai_tools::build_routine_tool_context()?,
-        anthropic_tool_context: ai_tools::build_anthropic_tool_context(),
-        web_search_provider: ai_tools::build_web_search_provider_from_env(),
+        schedule_tool_context: agent_tools::build_routine_tool_context()?,
+        anthropic_tool_context: agent_tools::build_anthropic_tool_context(),
+        web_search_provider: agent_tools::build_web_search_provider_from_env(),
         admission,
         recorder,
         usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),
     };
-    let all_tools = ai_tools::tools_for(ai_tools::AiHost::Chat);
+    let all_tools = agent_tools::tools_for(agent_tools::AiHost::Chat);
     let all_tools_toolset = all_tools.toolset.clone();
     let all_tools_prompt: Arc<dyn std::fmt::Display + Send + Sync> =
         Arc::new(all_tools.prompt.to_string());
 
     // Build memory service
-    let memory_service = Arc::new(ai_tools::memory::build_memory_service(
+    let memory_service = Arc::new(agent_tools::memory::build_memory_service(
         db.clone(),
         tool_service_context.clone(),
     ));
@@ -998,9 +1021,9 @@ pub async fn build(
     // Generator that materializes projections by running their prompt through
     // the shared AI toolset, attributed to the requesting user.
     let projection_generator =
-        ai_projections::outbound::agent_generator::AgentProjectionGenerator::new(
+        crate::cognition::service::projection_generator::AgentProjectionGenerator::new(
             tool_service_context.clone(),
-            ai_tools::tools_for(ai_tools::AiHost::Chat),
+            agent_tools::tools_for(agent_tools::AiHost::Chat),
         );
     // Notifier that pushes finished materializations to the target's connected
     // clients through the connection gateway.
@@ -1135,7 +1158,7 @@ pub async fn build(
         event_broker_tracker.clone(),
     );
     if !matches!(config.environment, Environment::Local) {
-        memory::schedule::start(
+        super::memory_schedule::start(
             memory_service.clone(),
             &event_broker_tracker,
             cancellation.clone(),

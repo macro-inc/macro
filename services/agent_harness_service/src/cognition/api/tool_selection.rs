@@ -1,5 +1,5 @@
 use crate::cognition::model::stream::ToolSet;
-use ai_tools::{AiToolSet, ToolMcpSelector, ToolServiceContext};
+use agent_tools::{AiToolSet, ToolMcpSelector, ToolServiceContext};
 use macro_user_id::user_id::MacroUserIdStr;
 use mcp_select::ConnectorSelect;
 use std::sync::{Arc, LazyLock};
@@ -15,7 +15,7 @@ pub(crate) type SelectedTools<Context> = Arc<dyn ai_toolset::ToolSet<Context> + 
 static DATABASE_TOOL_USE_PROMPT: LazyLock<String> = LazyLock::new(|| {
     format!(
         "{}# Macro databases\n{}\n",
-        prompt::BASE_PROMPT,
+        agent_prompts::BASE_PROMPT,
         agent_code_mode::domain::entity_guide("databases").unwrap_or_default()
     )
 });
@@ -27,8 +27,8 @@ pub(crate) fn choose_tools_prompt<'a>(
 ) -> &'a (dyn std::fmt::Display + Sync) {
     match selection {
         ToolSet::All => all_tools_prompt,
-        ToolSet::None => &prompt::BASE_PROMPT,
-        ToolSet::DatabasesReadOnly => &prompt::DATABASE_READ_ONLY_TOOL_USE_PROMPT,
+        ToolSet::None => &agent_prompts::BASE_PROMPT,
+        ToolSet::DatabasesReadOnly => &agent_prompts::DATABASE_READ_ONLY_TOOL_USE_PROMPT,
         ToolSet::Databases => &*DATABASE_TOOL_USE_PROMPT,
     }
 }
@@ -71,12 +71,12 @@ pub(crate) async fn service_tools(
     select_tools(
         selection,
         async {
-            let tools: SelectedTools<ToolServiceContext> = Arc::new(ai_tools::database_tools());
+            let tools: SelectedTools<ToolServiceContext> = Arc::new(agent_tools::database_tools());
             tools
         },
         async {
             let tools: SelectedTools<ToolServiceContext> =
-                Arc::new(ai_tools::database_read_only_tools());
+                Arc::new(agent_tools::database_read_only_tools());
             tools
         },
         async {

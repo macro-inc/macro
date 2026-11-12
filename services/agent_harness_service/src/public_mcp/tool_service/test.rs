@@ -118,7 +118,7 @@ async fn empty_toolset_lists_no_tools() {
 /// newly added tool can't quietly regress the submission.
 #[test]
 fn tools_hidden_from_chatgpt_still_exist() {
-    let tools = ai_tools::tools_for(ai_tools::AiHost::Mcp);
+    let tools = agent_tools::tools_for(agent_tools::AiHost::Mcp);
     for name in HIDDEN_FROM_CHATGPT {
         assert!(tools.toolset.tools.contains_key(name), "{name} was renamed");
     }
@@ -126,7 +126,7 @@ fn tools_hidden_from_chatgpt_still_exist() {
 
 #[test]
 fn every_exposed_tool_meets_directory_requirements() {
-    let tools = ai_tools::tools_for(ai_tools::AiHost::Mcp);
+    let tools = agent_tools::tools_for(agent_tools::AiHost::Mcp);
     assert!(
         !tools.toolset.tools.is_empty(),
         "the MCP toolset should not be empty"
@@ -284,7 +284,7 @@ mod code_mode {
         body::{Body, to_bytes},
         http::Request,
     };
-    use code_execution::domain::ExecuteRequest;
+    use code_execution_core::ExecuteRequest;
     use rmcp::transport::streamable_http_server::{
         StreamableHttpServerConfig, StreamableHttpService, session::local::LocalSessionManager,
     };
@@ -853,8 +853,8 @@ mod code_mode {
             _: &MacroUserIdStr<'static>,
             _: &ToolCaller,
             _: Option<uuid::Uuid>,
-        ) -> Result<code_execution::domain::RunEnvironment, CodeModeError> {
-            Ok(code_execution::domain::RunEnvironment::default())
+        ) -> Result<code_execution_core::RunEnvironment, CodeModeError> {
+            Ok(code_execution_core::RunEnvironment::default())
         }
     }
 
@@ -868,16 +868,16 @@ mod code_mode {
             .await
             .unwrap();
         assert!(path.status.success(), "Deno 2.9.6 must be on PATH");
-        let deno = code_execution::outbound::deno::DenoRunner::new(
+        let deno = code_execution_outbound::deno::DenoRunner::new(
             String::from_utf8(path.stdout).unwrap().trim().into(),
             scratch.path().to_owned(),
             128,
         )
         .await
         .unwrap();
-        let runner = code_execution::domain::ExecutionService::new(
+        let runner = code_execution_core::ExecutionService::new(
             Arc::new(deno),
-            code_execution::domain::Limits::default(),
+            code_execution_core::Limits::default(),
         )
         .unwrap();
         let app = app(Arc::new(agent_code_mode::domain::UserCodeModeService::new(

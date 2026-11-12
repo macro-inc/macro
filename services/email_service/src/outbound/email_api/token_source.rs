@@ -4,11 +4,11 @@
 mod test;
 
 use authentication_service_client::{AuthServiceClient, error::AuthServiceClientError};
-use email_api_client::domain::models::{AccessToken, TokenError, TokenFreshness};
-use email_api_client::domain::ports::ProviderTokenSource;
-use models_email::email::service::cache::TokenCacheKey;
-use models_email::email::service::pubsub::LinkManagerMessage;
-use models_email::service::link::Link;
+use email_api_client_core::models::{AccessToken, TokenError, TokenFreshness};
+use email_api_client_core::ports::ProviderTokenSource;
+use email_types::email::service::cache::TokenCacheKey;
+use email_types::email::service::pubsub::LinkManagerMessage;
+use email_types::service::link::Link;
 use redis::aio::MultiplexedConnection;
 use sqlx::PgPool;
 use sqs_client::SQS;
@@ -189,7 +189,7 @@ impl EmailServiceTokenSource {
 }
 
 fn require_gmail(link: &Link) -> Result<(), TokenError> {
-    if link.provider != models_email::service::link::UserProvider::Gmail {
+    if link.provider != email_types::service::link::UserProvider::Gmail {
         return Err(TokenError::Permanent {
             message: "mailbox provider does not match Gmail credentials".into(),
         });

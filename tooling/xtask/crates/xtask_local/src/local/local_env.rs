@@ -456,7 +456,7 @@ impl QueueEnv {
                 env.insert(key.into(), form.value(queue.name));
             }
         }
-        // Without these the `ai_tools` SQS client is built with no queue name
+        // Without these the `agent_tools` SQS client is built with no queue name
         // and every enqueue fails, so an agent session can neither send email
         // nor sync thread labels. Deployed environments set them in Doppler.
         env.insert("ENABLE_EMAIL_SCHEDULED_QUEUE".into(), "true".into());
@@ -508,7 +508,7 @@ struct AgentHarnessEnv {
     bot_id: &'static str,
     snapshot: &'static str,
     /// Image the local provider runs. `run_local` / `stack up` `docker build`
-    /// `crates/agent_harness/container` to this tag (BuildKit cache is the
+    /// `crates/agents/agent_harness/container` to this tag (BuildKit cache is the
     /// freshness check).
     image: &'static str,
     /// Network sandboxes join, so this service can dial their sidecars and a
@@ -752,7 +752,7 @@ impl BootStubEnv {
             "DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY".into(),
             "local".into(),
         );
-        // The `ai_tools` tool-context env (document_storage_service builds one
+        // The `agent_tools` tool-context env (document_storage_service builds one
         // at boot) reads this as a separate secret-name var.
         env.insert(
             "DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME".into(),
@@ -808,7 +808,7 @@ impl BootStubEnv {
             "STRIPE_WEBHOOK_SECRET_KEY".into(),
             "local-stripe-webhook-secret".into(),
         );
-        // ai_billing's mandatory pricing (crates/ai_billing/src/config.rs). Every
+        // ai_billing's mandatory pricing (crates/billing/ai_billing/src/config.rs). Every
         // host that composes billing refuses to boot without all four; these
         // mirror the published plan table ($5 free cap, $15 Pro, $150 Max,
         // list price + 25%). Doppler's shared_ai configs are authoritative.

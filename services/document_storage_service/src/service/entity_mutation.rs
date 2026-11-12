@@ -19,9 +19,9 @@
 
 use std::{future::Future, sync::Arc};
 
+use ai_chat::domain::ports::ChatService;
 use call::domain::ports::CallService;
 use channels::domain::ports::ChannelService;
-use chat::domain::ports::ChatService;
 use databases::domain::ports::DatabasesService;
 use documents_hex::domain::ports::DocumentService;
 use email::domain::ports::EmailService;
@@ -29,6 +29,7 @@ use entity_access::domain::{
     models::{AccessError, EditAccessLevel, EntityAccessReceipt, RequiredPermission},
     ports::EntityAccessService,
 };
+use entity_kind::{Entity, EntityType};
 use entity_mutation::{
     DeleteEntityPermanently, DuplicateEntity, DuplicateEntityRequest, EntityMutationActor,
     EntityMutationEffect, EntityMutationErrorCode, EntityMutationService, EntityMutationSuccess,
@@ -38,8 +39,7 @@ use entity_mutation::{
 };
 use entity_registry::PurgeOwnedEntity;
 use futures::{StreamExt, stream};
-use model_entity::{Entity, EntityType};
-use models_permissions::share_permission::UpdateSharePermissionRequestV2;
+use permissions_types::share_permission::UpdateSharePermissionRequestV2;
 use projects_hex::domain::{duplicate::ProjectDuplicator, ports::ProjectService};
 use tracing::Instrument;
 

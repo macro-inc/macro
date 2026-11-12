@@ -26,7 +26,7 @@ const PRODUCT_DOCS_URL = 'https://docs.macro.com';
 const SDK_DOCS_URL = 'https://sdk.macro.com';
 const MACROD_DOCS_URL = 'https://docs.macro.com/AI/bring-your-own';
 const MACROD_SOURCE_URL =
-  'https://github.com/macro-inc/macro/tree/main/crates/coding_agent_worker';
+  'https://github.com/macro-inc/macro/tree/main/crates/agents/macrod';
 
 /** The page's wording, translated where it renders. */
 export type AgentSetupCopy = {

@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
-import fixtures from '../../../../../../crates/subsequence_match/src/ranking/fixtures.tsv?raw';
-import recipientFixtures from '../../../../../../crates/subsequence_match/src/ranking/recipient-fixtures.tsv?raw';
+import fixtures from '../../../../../../crates/types/subsequence_match/src/ranking/fixtures.tsv?raw';
+import recipientFixtures from '../../../../../../crates/types/subsequence_match/src/ranking/recipient-fixtures.tsv?raw';
 import { createFreshSearch, NAME_MATCH_RANKING } from './freshSort';
 import { nameMatchQuality, nameMatchRank } from './name-match-score';
 import { recipientMatchRank } from './recipient-match-rank';

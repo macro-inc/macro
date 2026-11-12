@@ -13,19 +13,19 @@ use entity_access::domain::{
     models::{BotAccessScope, EditAccessLevel},
     ports::EntityAccessService,
 };
+use entity_kind::EntityType;
 use favorites::domain::ports::{FavoriteView, FavoritesService};
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_user_id::user_id::MacroUserIdStr;
-use model::document_storage_service_internal::{
+use model_owner::CreationPrincipal;
+use properties::{PropertiesService as _, domain::model::TagScope};
+use properties_types::api::{AddPropertyOptionRequest, AddStringOptionRequest, SetPropertyValue};
+use properties_types::service::property_option::PropertyOptionValue;
+use reqwest::StatusCode;
+use shared_types::document_storage_service_internal::{
     InitializeStarterDocsResponse, StarterDocHowToGuide,
 };
-use model::response::GenericResponse;
-use model_entity::EntityType;
-use model_owner::CreationPrincipal;
-use models_properties::api::{AddPropertyOptionRequest, AddStringOptionRequest, SetPropertyValue};
-use models_properties::service::property_option::PropertyOptionValue;
-use properties::{PropertiesService as _, domain::model::TagScope};
-use reqwest::StatusCode;
+use shared_types::response::GenericResponse;
 use system_properties::{PriorityOption, StatusOption, SystemPropertyKey};
 
 /// Also the name `get_starter_docs` resolves the guide by, so the two stay in
@@ -266,9 +266,9 @@ pub async fn handler(
                             PropertyInput {
                                 property_id: SystemPropertyKey::ASSIGNEES_UUID.to_string(),
                                 value: SetPropertyValue::MultiEntityReference {
-                                    references: vec![models_properties::EntityReference {
+                                    references: vec![properties_types::EntityReference {
                                         entity_id: user_id.as_ref().to_string(),
-                                        entity_type: models_properties::EntityType::User,
+                                        entity_type: properties_types::EntityType::User,
                                         specific_message_id: None,
                                     }],
                                 },

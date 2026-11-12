@@ -5,7 +5,7 @@ use crate::{
 use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_user_id::cowlike::CowLike;
-use model::response::{GenericErrorResponse, GenericResponse};
+use shared_types::response::{GenericErrorResponse, GenericResponse};
 
 /// Gets the instructions document for the current user
 #[utoipa::path(

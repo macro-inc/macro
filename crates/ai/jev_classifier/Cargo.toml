@@ -1,0 +1,33 @@
+[package]
+edition = "2024"
+name = "jev_classifier"
+publish = false
+version = "0.1.0"
+
+[features]
+default = []
+batches = ["dep:futures", "dep:tokio"]
+decisions = ["dep:ai_admission", "dep:async-trait", "dep:macro_user_id", "dep:tokio"]
+outbound = ["dep:macro_env_var", "dep:reqwest", "dep:tokio"]
+
+[dependencies]
+ai_usage = { workspace = true }
+async-trait = { workspace = true, optional = true }
+futures = { workspace = true, optional = true }
+macro_env_var = { workspace = true, optional = true }
+macro_user_id = { workspace = true, optional = true }
+reqwest = { workspace = true, optional = true }
+schemars = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, optional = true, features = ["rt", "sync", "time"] }
+tracing = { workspace = true }
+utoipa = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+ai_admission = { workspace = true, optional = true }
+
+[dev-dependencies]
+macro_user_id = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "test-util"] }
+wiremock = { workspace = true }

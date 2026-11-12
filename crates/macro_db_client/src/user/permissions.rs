@@ -25,7 +25,7 @@ pub async fn get_user_permissions(
     Ok(HashSet::from_iter(permissions))
 }
 
-use model::authentication::permission::Permission;
+use shared_types::authentication::permission::Permission;
 use sqlx::PgPool;
 
 /// Gets all permissions and their descriptions

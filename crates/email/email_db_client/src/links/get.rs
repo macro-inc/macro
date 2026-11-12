@@ -1,0 +1,496 @@
+use chrono::{DateTime, Utc};
+use doppleganger::Mirror;
+use email_types::email::db;
+use email_types::email::service::link;
+use email_types::service;
+use macro_user_id::user_id::MacroUserIdStr;
+use sqlx::PgPool;
+use sqlx::types::Uuid;
+
+use crate::links::types::{DbLink, DbUserProvider};
+
+#[cfg(test)]
+mod test;
+
+/// fetches a link given an email address and provider.
+#[tracing::instrument(skip(pool, email_address), err)]
+pub async fn fetch_link_by_email(
+    pool: &PgPool,
+    email_address: &str,
+    provider: service::link::UserProvider,
+) -> anyhow::Result<Option<link::Link>> {
+    if email_address.is_empty() {
+        anyhow::bail!("Email address cannot be empty");
+    }
+
+    let db_link = sqlx::query_as!(
+        DbLink,
+        r#"
+        SELECT id, macro_id, fusionauth_user_id, email_address, provider as "provider: _",
+               is_sync_active, is_primary, needs_reauth, last_sync_error_at, created_at, updated_at
+        FROM email_links
+        WHERE email_address = $1 AND provider = $2
+        LIMIT 1
+        "#,
+        email_address,
+        DbUserProvider::mirror(provider) as _
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(db_link.map(service::link::Link::try_from).transpose()?)
+}
+
+/// fetches email_links given a macro_id.
+#[tracing::instrument(skip(pool, macro_id), err)]
+pub async fn fetch_link_by_macro_id(
+    pool: &PgPool,
+    macro_id: &str,
+) -> anyhow::Result<Option<link::Link>> {
+    if macro_id.is_empty() {
+        anyhow::bail!("Macro ID cannot be empty");
+    }
+
+    let db_link = sqlx::query_as!(
+        DbLink,
+        r#"
+        SELECT id, macro_id, fusionauth_user_id, email_address, provider as "provider: _",
+               is_sync_active, is_primary, needs_reauth, last_sync_error_at, created_at, updated_at
+        FROM email_links
+        WHERE macro_id = $1
+        ORDER BY created_at DESC
+        LIMIT 1
+        "#,
+        macro_id
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    // Convert DB link to service link if it exists
+    Ok(db_link.map(service::link::Link::try_from).transpose()?)
+}
+
+/// Fetches the link for a `macro_id` whose `email_address` matches the given
+/// address. Used by the CRM backfill/teardown path, where the address is
+/// derived from the macro_id itself (`macro|<email>`) — this resolves the
+/// inbox that *is* the user rather than the most-recently-connected one that
+/// [`fetch_link_by_macro_id`] would return. The comparison is
+/// case-insensitive: the macro_id email part is always lowercased, but
+/// `email_address` preserves its original casing.
+#[tracing::instrument(skip(pool, email_address, macro_id), err)]
+pub async fn fetch_link_by_macro_id_and_email_address(
+    pool: &PgPool,
+    macro_id: &str,
+    email_address: &str,
+) -> anyhow::Result<Option<link::Link>> {
+    if macro_id.is_empty() {
+        anyhow::bail!("Macro ID cannot be empty");
+    }
+    if email_address.is_empty() {
+        anyhow::bail!("Email address cannot be empty");
+    }
+
+    let email_address = email_address.to_lowercase();
+
+    let db_link = sqlx::query_as!(
+        DbLink,
+        r#"
+        SELECT id, macro_id, fusionauth_user_id, email_address, provider as "provider: _",
+               is_sync_active, is_primary, needs_reauth, last_sync_error_at, created_at, updated_at
+        FROM email_links
+        WHERE macro_id = $1 AND LOWER(email_address) = $2
+        ORDER BY created_at DESC
+        LIMIT 1
+        "#,
+        macro_id,
+        email_address
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(db_link.map(service::link::Link::try_from).transpose()?)
+}
+
+/// Fetches all email_links the user can access via their macro_id, including any
+/// inboxes delegated via macro_user_links. The union is the read-side half of the
+/// multi-inbox narrow-graph design — it surfaces both the user's own inboxes
+/// (same macro_id) and inboxes belonging to other macro users they've been delegated.
+pub async fn fetch_inboxes_for_macro_id(
+    pool: &PgPool,
+    macro_id: &str,
+) -> anyhow::Result<Vec<link::Link>> {
+    if macro_id.is_empty() {
+        anyhow::bail!("macro_id cannot be empty");
+    }
+
+    let db_links = sqlx::query_as!(
+        DbLink,
+        r#"
+        SELECT id as "id!", macro_id as "macro_id!",
+               fusionauth_user_id as "fusionauth_user_id!",
+               email_address as "email_address!",
+               provider as "provider!: _",
+               is_sync_active as "is_sync_active!",
+               is_primary as "is_primary!",
+               needs_reauth as "needs_reauth!",
+               last_sync_error_at,
+               created_at as "created_at!",
+               updated_at as "updated_at!"
+        FROM (
+            SELECT el.id, el.macro_id, el.fusionauth_user_id, el.email_address,
+                   el.provider, el.is_sync_active, el.is_primary, el.needs_reauth,
+                   el.last_sync_error_at, el.created_at, el.updated_at,el.sync_generation,el.grant_generation
+            FROM email_links el
+            WHERE el.macro_id = $1
+            UNION
+            SELECT el.id, el.macro_id, el.fusionauth_user_id, el.email_address,
+                   el.provider, el.is_sync_active, el.is_primary, el.needs_reauth,
+                   el.last_sync_error_at, el.created_at, el.updated_at,el.sync_generation,el.grant_generation
+            FROM email_links el
+            JOIN macro_user_links mul ON el.id = mul.link_id
+            WHERE mul.primary_macro_id = $1
+        ) AS combined
+        ORDER BY created_at DESC
+        "#,
+        macro_id
+    )
+    .fetch_all(pool)
+    .await?;
+
+    let service_links: Result<Vec<_>, _> = db_links
+        .into_iter()
+        .map(service::link::Link::try_from)
+        .collect();
+
+    Ok(service_links?)
+}
+
+/// An accessible inbox plus the per-inbox details the links list endpoint
+/// renders: settings, latest backfill job status, and the self-contact photo.
+#[derive(Debug, Clone)]
+pub struct InboxDetails {
+    pub link: link::Link,
+    pub settings: service::settings::Settings,
+    pub latest_backfill_status: Option<service::backfill::BackfillJobStatus>,
+    pub photo_url: Option<String>,
+    /// The provider OAuth scopes recorded for the link's grant. An empty vector
+    /// represents either an absent grant-state row or the initial version-0 state.
+    pub provider_granted_scopes: Vec<String>,
+    /// Whether the user turned the calendar capability off for this inbox.
+    /// Distinguishes a deliberate opt-out from a grant that never carried the
+    /// calendar scopes, which read identically from the scopes alone.
+    pub calendar_disabled: bool,
+    /// Whether the inbox has a calendar account in Macro, i.e. whether there
+    /// is calendar data to remove. Independent of the recorded scopes, which
+    /// stop satisfying the capability check whenever Macro changes the scope
+    /// set it requests.
+    pub has_calendar_data: bool,
+}
+
+struct DbInboxDetailsRow {
+    id: Uuid,
+    macro_id: String,
+    fusionauth_user_id: String,
+    email_address: String,
+    provider: DbUserProvider,
+    is_sync_active: bool,
+    is_primary: bool,
+    needs_reauth: bool,
+    last_sync_error_at: Option<DateTime<Utc>>,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+    signature_on_replies_forwards: Option<bool>,
+    signature: Option<String>,
+    read_receipts_enabled: Option<bool>,
+    latest_backfill_status: Option<db::backfill::BackfillJobStatus>,
+    provider_granted_scopes: Vec<String>,
+    calendar_disabled: bool,
+    has_calendar_data: bool,
+    photo_url: Option<String>,
+}
+
+/// Single-query variant of [`fetch_inboxes_for_macro_id`] that also joins each
+/// inbox's settings, its most recent backfill job status, and its own photo
+/// (the self-contact's SFS photo, synced from people/me). Inboxes without an
+/// `email_settings` row get default settings.
+#[tracing::instrument(skip(pool, macro_id), err)]
+pub async fn fetch_inbox_details_for_macro_id(
+    pool: &PgPool,
+    macro_id: &MacroUserIdStr<'_>,
+) -> anyhow::Result<Vec<InboxDetails>> {
+    let macro_id: &str = macro_id.as_ref();
+
+    let rows = sqlx::query_as!(
+        DbInboxDetailsRow,
+        r#"
+        SELECT l.id as "id!", l.macro_id as "macro_id!",
+               l.fusionauth_user_id as "fusionauth_user_id!",
+               l.email_address as "email_address!",
+               l.provider as "provider!: _",
+               l.is_sync_active as "is_sync_active!",
+               l.is_primary as "is_primary!",
+               l.needs_reauth as "needs_reauth!",
+               l.last_sync_error_at,
+               l.created_at as "created_at!",
+               l.updated_at as "updated_at!",
+               s.signature_on_replies_forwards as "signature_on_replies_forwards?",
+               s.signature,
+               s.read_receipts_enabled as "read_receipts_enabled?",
+               CASE WHEN l.provider = 'OUTLOOK' THEN
+                   CASE WHEN NOT EXISTS (SELECT 1 FROM email_sync_streams ss WHERE ss.link_id = l.id AND ss.generation = l.sync_generation AND ss.kind IN ('folder_catalog','mail_folder'))
+                       THEN 'Init'::email_backfill_job_status
+                   WHEN EXISTS (SELECT 1 FROM email_sync_streams ss WHERE ss.link_id = l.id AND ss.generation = l.sync_generation AND ss.kind IN ('folder_catalog','mail_folder') AND NOT ss.initial_complete)
+                       OR EXISTS (SELECT 1 FROM email_message_reconciliation mr WHERE mr.link_id = l.id AND mr.generation = l.sync_generation AND mr.is_import AND mr.available_at <> 'infinity')
+                       THEN 'InProgress'::email_backfill_job_status
+                   ELSE 'Complete'::email_backfill_job_status END
+               ELSE bj.status END as "latest_backfill_status?: _",
+               c.sfs_photo_url as "photo_url?",
+               CASE WHEN l.provider = 'OUTLOOK' THEN COALESCE(ms.granted_scopes, '{}') ELSE COALESCE(g.granted_scopes, '{}') END AS "provider_granted_scopes!",
+               (CASE WHEN l.provider = 'OUTLOOK' THEN ms.calendar_disabled_at ELSE g.calendar_disabled_at END IS NOT NULL) AS "calendar_disabled!",
+               EXISTS (
+                   SELECT 1 FROM calendar_accounts ca WHERE ca.email_link_id = l.id
+               ) AS "has_calendar_data!"
+        FROM (
+            SELECT el.id, el.macro_id, el.fusionauth_user_id, el.email_address,
+                   el.provider, el.is_sync_active, el.is_primary, el.needs_reauth,
+                   el.last_sync_error_at, el.created_at, el.updated_at,el.sync_generation,el.grant_generation
+            FROM email_links el
+            WHERE el.macro_id = $1
+            UNION
+            SELECT el.id, el.macro_id, el.fusionauth_user_id, el.email_address,
+                   el.provider, el.is_sync_active, el.is_primary, el.needs_reauth,
+                   el.last_sync_error_at, el.created_at, el.updated_at,el.sync_generation,el.grant_generation
+            FROM email_links el
+            JOIN macro_user_links mul ON el.id = mul.link_id
+            WHERE mul.primary_macro_id = $1
+        ) l
+        LEFT JOIN email_link_google_scopes g ON g.link_id = l.id
+        LEFT JOIN email_link_microsoft_scopes ms ON ms.link_id = l.id AND ms.grant_generation = l.grant_generation
+        LEFT JOIN email_settings s ON s.link_id = l.id
+        LEFT JOIN LATERAL (
+            SELECT status FROM email_backfill_jobs
+            WHERE link_id = l.id
+            ORDER BY created_at DESC
+            LIMIT 1
+        ) bj ON true
+        LEFT JOIN email_contacts c
+            ON c.link_id = l.id AND LOWER(c.email_address) = LOWER(l.email_address)
+        ORDER BY l.created_at DESC
+        "#,
+        macro_id
+    )
+    .fetch_all(pool)
+    .await?;
+
+    rows.into_iter()
+        .map(|row| {
+            let settings = service::settings::Settings {
+                link_id: row.id,
+                // Missing settings row → schema defaults: replies/forwards off,
+                // read receipts on.
+                signature_on_replies_forwards: row.signature_on_replies_forwards.unwrap_or(false),
+                signature: row.signature,
+                read_receipts_enabled: row.read_receipts_enabled.unwrap_or(true),
+            };
+            let link = link::Link::try_from(DbLink {
+                id: row.id,
+                macro_id: row.macro_id,
+                fusionauth_user_id: row.fusionauth_user_id,
+                email_address: row.email_address,
+                provider: row.provider,
+                is_sync_active: row.is_sync_active,
+                is_primary: row.is_primary,
+                needs_reauth: row.needs_reauth,
+                last_sync_error_at: row.last_sync_error_at,
+                created_at: row.created_at,
+                updated_at: row.updated_at,
+            })?;
+            Ok(InboxDetails {
+                link,
+                settings,
+                latest_backfill_status: row.latest_backfill_status.map(Into::into),
+                photo_url: row.photo_url,
+                provider_granted_scopes: row.provider_granted_scopes,
+                calendar_disabled: row.calendar_disabled,
+                has_calendar_data: row.has_calendar_data,
+            })
+        })
+        .collect()
+}
+
+/// fetches email_links given a fusionauth_user_id. a fusionauth_user_id can have multiple email_links, each with a unique macro_id
+#[tracing::instrument(skip(pool), err)]
+pub async fn fetch_links_by_fusionauth_user_id(
+    pool: &PgPool,
+    fusionauth_user_id: &str,
+) -> anyhow::Result<Vec<link::Link>> {
+    if fusionauth_user_id.is_empty() {
+        anyhow::bail!("fusionauth_user_id cannot be empty");
+    }
+
+    let db_links = sqlx::query_as!(
+        DbLink,
+        r#"
+        SELECT id, fusionauth_user_id, macro_id, email_address, provider as "provider: _",
+               is_sync_active, is_primary, needs_reauth, last_sync_error_at, created_at, updated_at
+        FROM email_links
+        WHERE fusionauth_user_id = $1
+        ORDER BY created_at DESC
+        "#,
+        fusionauth_user_id
+    )
+    .fetch_all(pool)
+    .await?;
+
+    // Convert DB email_links to service email_links
+    let service_links: Result<Vec<_>, _> = db_links
+        .into_iter()
+        .map(service::link::Link::try_from)
+        .collect();
+
+    Ok(service_links?)
+}
+
+/// Resolves the inbox (email_link) that owns a thread, but only when that inbox
+/// belongs to the given macro user or is delegated to them via macro_user_links.
+/// Returns `None` when the thread doesn't exist or its inbox isn't one the caller
+/// owns or has delegated access to — callers map that to a not-found/unauthorized
+/// response. Lets mutating thread routes derive the inbox from the thread instead
+/// of an `X-Email-Link-Id` header.
+#[tracing::instrument(skip(pool, macro_id), err)]
+pub async fn fetch_owned_link_for_thread(
+    pool: &PgPool,
+    macro_id: &str,
+    thread_id: Uuid,
+) -> anyhow::Result<Option<link::Link>> {
+    let db_link = sqlx::query_as!(
+        DbLink,
+        r#"
+        SELECT l.id, l.macro_id, l.fusionauth_user_id, l.email_address, l.provider as "provider: _",
+               l.is_sync_active, l.is_primary, l.needs_reauth, l.last_sync_error_at,
+               l.created_at, l.updated_at
+        FROM email_threads t
+        JOIN email_links l ON l.id = t.link_id
+        WHERE t.id = $1
+          AND (
+              l.macro_id = $2
+              OR EXISTS (
+                  SELECT 1 FROM macro_user_links mul
+                  WHERE mul.link_id = l.id AND mul.primary_macro_id = $2
+              )
+          )
+        "#,
+        thread_id,
+        macro_id
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(db_link.map(service::link::Link::try_from).transpose()?)
+}
+
+/// Resolves the inbox (email_link) that owns a message, scoped to the caller's
+/// own and delegated inboxes. See [`fetch_owned_link_for_thread`].
+#[tracing::instrument(skip(pool, macro_id), err)]
+pub async fn fetch_owned_link_for_message(
+    pool: &PgPool,
+    macro_id: &str,
+    message_id: Uuid,
+) -> anyhow::Result<Option<link::Link>> {
+    let db_link = sqlx::query_as!(
+        DbLink,
+        r#"
+        SELECT l.id, l.macro_id, l.fusionauth_user_id, l.email_address, l.provider as "provider: _",
+               l.is_sync_active, l.is_primary, l.needs_reauth, l.last_sync_error_at,
+               l.created_at, l.updated_at
+        FROM email_messages m
+        JOIN email_links l ON l.id = m.link_id
+        WHERE m.id = $1
+          AND (
+              l.macro_id = $2
+              OR EXISTS (
+                  SELECT 1 FROM macro_user_links mul
+                  WHERE mul.link_id = l.id AND mul.primary_macro_id = $2
+              )
+          )
+        "#,
+        message_id,
+        macro_id
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(db_link.map(service::link::Link::try_from).transpose()?)
+}
+
+/// Fetches a link by its ID.
+/// Returns None if no link with the given ID exists.
+#[tracing::instrument(skip(pool), err)]
+pub async fn fetch_link_by_id(pool: &PgPool, link_id: Uuid) -> anyhow::Result<Option<link::Link>> {
+    let db_link = sqlx::query_as!(
+        DbLink,
+        r#"
+        SELECT id, macro_id, fusionauth_user_id, email_address, provider as "provider: _",
+               is_sync_active, is_primary, needs_reauth, last_sync_error_at, created_at, updated_at
+        FROM email_links
+        WHERE id = $1
+        "#,
+        link_id
+    )
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(db_link.map(link::Link::try_from).transpose()?)
+}
+
+/// One of a user's own inboxes, with the credential generations a provider
+/// read is bound to.
+#[derive(Debug, Clone)]
+pub struct ReadableInbox {
+    /// The link id.
+    pub id: Uuid,
+    /// The inbox address.
+    pub email_address: String,
+    /// Gmail or Outlook.
+    pub provider: service::link::UserProvider,
+    /// The link's sync generation.
+    pub sync_generation: i64,
+    /// The link's grant generation.
+    pub grant_generation: i64,
+}
+
+/// The inboxes `macro_id` owns (not delegated ones) that are syncing and whose
+/// credentials still work, newest first, for reading straight from the
+/// provider.
+#[tracing::instrument(skip_all, err)]
+pub async fn fetch_readable_owned_inboxes(
+    pool: &PgPool,
+    macro_id: &MacroUserIdStr<'_>,
+) -> anyhow::Result<Vec<ReadableInbox>> {
+    let rows = sqlx::query!(
+        r#"
+        SELECT id, email_address, provider as "provider: DbUserProvider",
+               sync_generation, grant_generation
+        FROM email_links
+        WHERE macro_id = $1 AND is_sync_active AND NOT needs_reauth
+        ORDER BY created_at DESC
+        "#,
+        macro_id.as_ref()
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|row| ReadableInbox {
+            id: row.id,
+            email_address: row.email_address,
+            provider: match row.provider {
+                DbUserProvider::Gmail => service::link::UserProvider::Gmail,
+                DbUserProvider::Outlook => service::link::UserProvider::Outlook,
+            },
+            sync_generation: row.sync_generation,
+            grant_generation: row.grant_generation,
+        })
+        .collect())
+}

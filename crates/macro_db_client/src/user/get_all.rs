@@ -1,5 +1,5 @@
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
-use model::organization::User;
+use shared_types::organization::User;
 
 /// Given a list of macro user ids, returns a list of user ids that exist in our system
 #[tracing::instrument(skip(db), err)]

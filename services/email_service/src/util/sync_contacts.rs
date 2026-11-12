@@ -5,14 +5,14 @@ use contacts::domain::{models::messages::ContactConnection, ports::ContactsIngre
 use email::domain::events::{
     EmailMacroEvent, ThreadsReindexReason, ThreadsReindexRequestedMetadata,
 };
-use email_api_client::domain::models::EmailApiError;
+use email_api_client_core::models::EmailApiError;
+use email_types::service::contact::{Contact, ContactList};
+use email_types::service::link::Link;
+use email_types::service::pubsub::SFSUploaderMessage;
+use email_types::service::sync_token::SyncTokens;
 use futures::{StreamExt, stream};
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_email::service::contact::{Contact, ContactList};
-use models_email::service::link::Link;
-use models_email::service::pubsub::SFSUploaderMessage;
-use models_email::service::sync_token::SyncTokens;
 use sqlx::PgPool;
 use sqs_client::SQS;
 use std::collections::HashSet;

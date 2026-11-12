@@ -1,0 +1,122 @@
+[package]
+edition = "2024"
+name = "github"
+publish = false
+version = "0.1.0"
+
+[features]
+axum = [
+  "dep:axum",
+  "dep:entity_access",
+  "dep:macro_authorization",
+  "dep:model_error_response",
+  "dep:utoipa",
+  "github_pull_requests/schema",
+  "upstream_error/axum",
+]
+default = ["axum", "inbound", "link", "outbound", "ports", "sync"]
+inbound = ["axum", "ports"]
+# Who may see an installation's deliveries, without the rest of the sync stack.
+installation_claims = ["dep:sqlx", "ports"]
+link = ["dep:entity_access", "github_pull_requests/ports", "ports"]
+outbound = [
+  "dep:connection_gateway_client",
+  "dep:fusionauth",
+  "dep:redis",
+  "dep:reqwest",
+  "dep:sqlx",
+  "dep:tokio",
+  "dep:urlencoding",
+  "ports",
+  "upstream_error/reqwest",
+]
+ports = []
+sync = [
+  "dep:documents",
+  "dep:entity_access",
+  "dep:foreign_entity",
+  "dep:entity_kind",
+  "dep:model_notifications",
+  "dep:notification",
+  "dep:reqwest",
+  "github_pull_requests/ports",
+  "ports",
+]
+
+[dependencies]
+anyhow = { workspace = true }
+base64 = { workspace = true }
+chrono = { workspace = true }
+connection_gateway_client = { workspace = true, optional = true }
+cowlike = { workspace = true }
+documents = { workspace = true, features = [
+  "ports",
+], optional = true }
+entity_access = { workspace = true, features = [
+  "inbound",
+  "ports",
+], optional = true }
+foreign_entity = { workspace = true, features = [
+  "ports",
+], optional = true }
+github_pull_requests = { workspace = true }
+hex = { workspace = true }
+hmac = { workspace = true }
+jsonwebtoken = { workspace = true }
+lru = { workspace = true }
+macro_env = { workspace = true }
+macro_event_broker = { workspace = true }
+macro_event_topics = { workspace = true }
+macro_env_var = { workspace = true }
+macro_authorization = { workspace = true, features = [
+  "axum",
+], optional = true }
+entity_kind = { workspace = true, optional = true }
+model_notifications = { workspace = true, optional = true }
+notification = { workspace = true, default-features = true, optional = true }
+regex = { workspace = true }
+reqwest = { workspace = true, optional = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+sqlx = { workspace = true, optional = true }
+subtle = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+urlencoding = { workspace = true, optional = true }
+upstream_error = { workspace = true }
+url = { workspace = true }
+uuid = { workspace = true }
+
+fusionauth = { workspace = true, optional = true }
+macro_user_id = { workspace = true }
+properties_types = { workspace = true }
+macro_uuid = { workspace = true }
+redis = { workspace = true, features = ["aio", "tokio-comp"], optional = true }
+tokio = { workspace = true, features = ["sync"], optional = true }
+
+axum = { workspace = true, optional = true }
+model_error_response = { workspace = true, optional = true }
+utoipa = { workspace = true, optional = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+app_service_url = { workspace = true }
+
+[dev-dependencies]
+axum = { workspace = true }
+wiremock = { workspace = true }
+document_sub_type = { workspace = true, default-features = true }
+foreign_entity = { workspace = true, features = [
+  "ports",
+] }
+github_pull_requests = { workspace = true, features = [
+  "service",
+] }
+macro_db_migrator = { workspace = true }
+mockall = { workspace = true }
+shared_types = { workspace = true }
+model_owner = { workspace = true }
+model_user = { workspace = true }
+permissions_types = { workspace = true }
+rootcause = { workspace = true }
+tokio = { workspace = true }
+tower = { workspace = true }

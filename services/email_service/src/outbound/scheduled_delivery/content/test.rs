@@ -8,8 +8,10 @@ use email::domain::{
 };
 use email::outbound::EmailPgRepo;
 use email_db_client::messages::scheduled::delivery::claim_delivery;
+use entity_access_outbound::PgAccessRepository;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
+use std::sync::Arc;
 use uuid::Uuid;
 
 fn link() -> Uuid {
@@ -77,7 +79,8 @@ async fn admit(pool: &PgPool) -> anyhow::Result<SendAttemptId> {
         restore_body_macro: None,
     };
     let attempt = SendAttemptId(macro_uuid::generate_uuid_v7());
-    EmailPgRepo::new(pool.clone())
+    let source_ids = Arc::new(PgAccessRepository::new(pool.clone()));
+    EmailPgRepo::new(pool.clone(), source_ids)
         .admit_send(
             &MacroUserIdStr::parse_from_str("macro|user1@test.com").unwrap(),
             link(),
@@ -111,7 +114,7 @@ async fn admit(pool: &PgPool) -> anyhow::Result<SendAttemptId> {
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(
-        path = "../../../../../../crates/email/fixtures",
+        path = "../../../../../../crates/email/email/fixtures",
         scripts("email_draft")
     )
 )]
@@ -164,7 +167,7 @@ async fn provider_sync_cannot_replace_approved_body_envelope_or_sender(
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(
-        path = "../../../../../../crates/email/fixtures",
+        path = "../../../../../../crates/email/email/fixtures",
         scripts("email_draft")
     )
 )]
@@ -192,7 +195,7 @@ async fn older_graphql_attempt_without_prepared_content_requires_review(
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(
-        path = "../../../../../../crates/email_db_client/fixtures",
+        path = "../../../../../../crates/email/email_db_client/fixtures",
         scripts("get_process_scheduled_messages")
     )
 )]

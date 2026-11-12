@@ -7,7 +7,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use macro_middleware::tracking::ClientIp;
-use model::response::ErrorResponse;
+use shared_types::response::ErrorResponse;
 
 /// IP-based rate limit for mobile welcome email requests.
 #[tracing::instrument(skip(ctx, req, next, ip_context), fields(client_ip=%ip_context), err(Debug))]

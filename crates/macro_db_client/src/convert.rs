@@ -1,5 +1,5 @@
-use model::document::DocumentMetadata;
 use model_owner::Owner;
+use shared_types::document::DocumentMetadata;
 
 /// Gets all docx files
 #[tracing::instrument(skip(db))]

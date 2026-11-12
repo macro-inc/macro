@@ -31,7 +31,7 @@ the gateway `/email` prefix.
 
 - Owns: Gmail/email API routes, email-side calendar invitation handling,
   contacts sync, and all `src/pubsub/` queue consumers listed above.
-- Not here: Google Calendar sync itself → `crates/calendar_events`,
+- Not here: Google Calendar sync itself → `crates/calendar/calendar_events`,
   `calendar_service`; scheduled-send and SFS-cleanup *triggering* (cron) →
   `email_scheduled_handler`, `email_sfs_delete_handler`, `email_refresh_handler`
   (this service consumes the queues they publish to).

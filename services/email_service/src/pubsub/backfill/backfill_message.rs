@@ -5,11 +5,11 @@ use crate::pubsub::context::PubSubContext;
 use crate::pubsub::inbox_sync::operations::pending_labels;
 use crate::pubsub::util::{CrmContactRecipient, enqueue_populate_crm_contacts};
 use crate::util::process_pre_insert::process_message_pre_insert;
-use email_api_client::domain::models::CalendarPart;
-use models_email::email::service::backfill::{BackfillMessagePayload, JobScopedPayload};
-use models_email::email::service::link;
-use models_email::email::service::message::Message;
-use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
+use email_api_client_core::models::CalendarPart;
+use email_types::email::service::backfill::{BackfillMessagePayload, JobScopedPayload};
+use email_types::email::service::link;
+use email_types::email::service::message::Message;
+use email_types::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 
 /// Backfills one message of a thread whose messages were enqueued one by one.
 ///

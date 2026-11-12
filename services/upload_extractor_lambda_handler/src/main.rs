@@ -1,9 +1,12 @@
 use anyhow::{Context, Result};
 use aws_lambda_events::{event::sqs::SqsEvent, sqs::SqsMessage};
 use aws_sdk_s3::{Client as S3Client, primitives::ByteStream};
+use bulk_upload_types::{UploadDocumentStatus, UploadFolderStatus, UploadFolderStatusUpdate};
 use connection_gateway_client::client::ConnectionGatewayClient;
+use connection_gateway_url::ConnectionGatewayUrl;
 use document_storage_service_client::DocumentStorageServiceClient;
 use dynamodb_client::DynamodbClient;
+use entity_kind::EntityType;
 use futures::{
     TryFutureExt,
     future::{join_all, try_join_all},
@@ -14,14 +17,11 @@ use lambda_runtime::{
 };
 use macro_entrypoint::MacroEntrypoint;
 use macro_env_var::env_vars;
-use macro_service_urls::ConnectionGatewayUrl;
-use model::{
+use sha2::{Digest, Sha256};
+use shared_types::{
     document::{FileType, FileTypeExt},
     folder::{FileSystemNodeWithIds, FolderItem, S3Destination, S3DestinationMap},
 };
-use model_entity::EntityType;
-use models_bulk_upload::{UploadDocumentStatus, UploadFolderStatus, UploadFolderStatusUpdate};
-use sha2::{Digest, Sha256};
 use sqs_client::upload_extractor::UploadExtractQueueMessage;
 use std::ffi::OsStr;
 use std::path::Path;
@@ -681,8 +681,8 @@ async fn main() -> Result<(), Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use model::document::FileType;
-    use model::folder::FolderItem;
+    use shared_types::document::FileType;
+    use shared_types::folder::FolderItem;
     use std::fs::{self, File};
     use std::io::Write;
     use std::path::PathBuf;

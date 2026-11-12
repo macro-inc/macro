@@ -1,0 +1,770 @@
+//! Domain models for the documents crate.
+
+use chrono::{DateTime, Utc};
+use macro_user_id::user_id::MacroUserIdStr;
+use model_owner::Owner;
+use permissions_types::share_permission::{LinkShareState, TeamLinkShareDefault};
+use shared_types::document::response::DocumentResponseMetadata;
+use shared_types::document::{DocumentMetadata, FileType};
+
+use super::response::DocumentResponse;
+use properties_types::api::requests::SetPropertyValue;
+use shared_types::sync_service::SyncServiceVersionID;
+
+/// SHA256 hash of an empty string — used for empty markdown documents (tasks).
+pub const EMPTY_SHA256: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+
+/// Assignee property id
+pub const ASSIGNEES_PROPERTY_ID: &str = "00000001-0000-0000-0000-000000000001";
+
+/// Status property id
+pub const STATUS_PROPERTY_ID: &str = "00000001-0000-0000-0000-000000000002";
+
+/// Not started status option
+pub const NOT_STARTED_STATUS_OPTION_ID: uuid::Uuid =
+    uuid::uuid!("00000001-0000-0000-0002-000000000001");
+
+/// Errors that can occur during document operations.
+#[derive(Debug, thiserror::Error)]
+pub enum DocumentError {
+    /// The requested document was not found.
+    #[error("document not found: {0}")]
+    NotFound(String),
+    /// The email attachment an import names no longer exists, e.g. its
+    /// message was deleted after the attachment was queued.
+    #[error("email attachment not found")]
+    EmailAttachmentNotFound,
+    /// The user is not authorized to perform this action.
+    #[error("unauthorized")]
+    Unauthorized,
+    /// The document does not exist in storage (S3/sync service).
+    #[error("document does not exist in storage")]
+    Gone,
+    /// A conflict occurred (e.g. duplicate document ID).
+    #[error("conflict: {0}")]
+    Conflict(String),
+    /// A bad request was made.
+    #[error("bad request: {0}")]
+    BadRequest(String),
+    /// The provided document name exceeds the maximum allowed length.
+    #[error("name too long")]
+    NameTooLong {
+        /// Maximum allowed name length, in grapheme clusters.
+        max: usize,
+    },
+    /// An internal error occurred.
+    #[error("{0}")]
+    Internal(#[from] anyhow::Error),
+    /// JWT encoding failed.
+    #[cfg(feature = "axum")]
+    #[error(transparent)]
+    JwtEncoding(#[from] jsonwebtoken::errors::Error),
+}
+
+/// Response wrapper for the copy document endpoint.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CopyDocumentResponse {
+    /// Indicates if an error occurred.
+    pub error: bool,
+    /// The copied document data.
+    pub data: DocumentResponse,
+}
+
+/// Arguments for copying a document in the repository.
+pub struct CopyDocumentRepoArgs {
+    /// The original document metadata to copy from.
+    pub original_document: DocumentMetadata,
+    /// Who owns the copy.
+    pub owner: Owner,
+    /// The name for the new document.
+    pub document_name: String,
+    /// The file type of the document.
+    pub file_type: Option<FileType>,
+    /// Team that should receive a new per-team task number when copying a task.
+    pub team_id: Option<uuid::Uuid>,
+}
+
+/// Immutable per-team task metadata assigned at task creation time.
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone, Copy)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct TeamTaskMetadata {
+    /// The team this task number is scoped to.
+    pub team_id: uuid::Uuid,
+    /// Monotonic task number within the team.
+    pub task_num: i32,
+}
+
+/// A task's number within its team, with the team's slug: `{team_slug}-{task_num}`.
+#[derive(Eq, PartialEq, Debug, Clone)]
+pub struct TeamTaskNumber {
+    /// The slug of the team the task is numbered in.
+    pub team_slug: String,
+    /// Monotonic task number within the team.
+    pub task_num: i32,
+}
+
+/// What names a task outside Macro: its title, short id, and team number.
+#[derive(Eq, PartialEq, Debug, Clone)]
+pub struct TaskIdentity {
+    /// The task document id.
+    pub document_id: String,
+    /// The task title.
+    pub title: String,
+    /// The short id of the task document.
+    pub short_id: String,
+    /// The task's team number, when it belongs to a team.
+    pub team_task: Option<TeamTaskNumber>,
+}
+
+/// User/team information needed to build a task branch name.
+#[derive(Eq, PartialEq, Debug, Clone)]
+pub struct BranchNameContext {
+    /// The user's email address, used when no GitHub username is linked.
+    pub user_email: String,
+    /// Linked GitHub username for the user, when present.
+    pub github_username: Option<String>,
+    /// Slug for the user's team, when the user belongs to a team.
+    pub team_slug: Option<String>,
+    /// Task number for the document within the user's team, when present.
+    pub team_task_id: Option<i32>,
+}
+
+/// A fully generated task branch name plus its short document id.
+#[derive(Eq, PartialEq, Debug, Clone)]
+pub struct TaskBranchName {
+    /// The short id of the document.
+    pub short_id: String,
+    /// The generated branch name.
+    pub branch_name: String,
+}
+
+/// A comment associated with a GitHub pull request.
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct GithubPullRequestComment {
+    /// The unique GitHub identifier for the comment or review.
+    pub id: u64,
+    /// The comment or review body text.
+    pub body: String,
+    /// The GitHub login for the comment author, when available.
+    pub author_login: Option<String>,
+    /// GitHub's relationship label for the author, when available.
+    pub author_association: Option<String>,
+    /// The public GitHub URL for the comment or review, when available.
+    pub url: Option<String>,
+    /// When the comment was created or the review was submitted.
+    pub created_at: Option<DateTime<Utc>>,
+    /// When the comment or review was last updated.
+    pub updated_at: Option<DateTime<Utc>>,
+    /// The GitHub source for the comment, such as `issue_comment` or `review_comment`.
+    pub source: String,
+    /// The id of the comment this one replies to, when it is part of a review
+    /// thread. Only ever present on `review_comment` sources.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub in_reply_to_id: Option<u64>,
+    /// The id of the pull request review this comment was submitted with.
+    /// Only ever present on `review_comment` sources.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pull_request_review_id: Option<u64>,
+    /// The repository-relative file path the review comment is anchored to.
+    /// Only ever present on `review_comment` sources.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+    /// The line in the current diff the comment is anchored to. Cleared by
+    /// GitHub when later commits outdate the comment's diff.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub line: Option<u64>,
+    /// The line the comment was originally anchored to, kept even when the
+    /// diff has since changed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub original_line: Option<u64>,
+}
+
+/// A check run associated with a GitHub pull request.
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct GithubPullRequestCheckRun {
+    /// The unique GitHub identifier for the check run.
+    pub id: u64,
+    /// The check run name.
+    pub name: String,
+    /// The raw GitHub check run status.
+    pub status: String,
+    /// The raw GitHub check run conclusion, when the run has completed.
+    pub conclusion: Option<String>,
+    /// The public GitHub URL for the check run, when available.
+    pub url: Option<String>,
+    /// When the check run started, when available.
+    pub started_at: Option<DateTime<Utc>>,
+    /// When the check run completed, when available.
+    pub completed_at: Option<DateTime<Utc>>,
+}
+
+/// Display-ready data for a GitHub pull request associated with a task.
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct GithubPullRequest {
+    /// The stored GitHub association key, in `owner/repo/pull/number` format.
+    pub github_key: String,
+    /// The GitHub repository owner or organization.
+    pub owner: String,
+    /// The GitHub repository name.
+    pub repo: String,
+    /// The GitHub pull request number.
+    pub number: u64,
+    /// The public GitHub URL for the pull request.
+    pub url: String,
+    /// A compact label suitable for display in the UI.
+    pub display_name: String,
+    /// The internal `foreign_entity.id` UUID for the GitHub pull request row.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub foreign_entity_id: Option<uuid::Uuid>,
+    /// The GitHub pull request title, when enrichment data is available.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// The GitHub pull request status, when enrichment data is available.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+    /// The number of added lines in the pull request, when enrichment data is available.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub additions: Option<u64>,
+    /// The number of deleted lines in the pull request, when enrichment data is available.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub deletions: Option<u64>,
+    /// Comments collected from the pull request, when enrichment data is available.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub comments: Option<Vec<GithubPullRequestComment>>,
+    /// Check runs collected from the pull request head commit, when enrichment data is available.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub checks: Option<Vec<GithubPullRequestCheckRun>>,
+}
+
+impl GithubPullRequest {
+    /// Parse a stored GitHub PR key in `owner/repo/pull/number` format.
+    pub fn from_github_key(github_key: &str) -> Option<Self> {
+        let mut parts = github_key.split('/');
+        let (Some(owner), Some(repo), Some("pull"), Some(number), None) = (
+            parts.next(),
+            parts.next(),
+            parts.next(),
+            parts.next(),
+            parts.next(),
+        ) else {
+            return None;
+        };
+
+        if owner.is_empty() || repo.is_empty() {
+            return None;
+        }
+
+        let number = number.parse::<u64>().ok()?;
+        let url = format!("https://github.com/{owner}/{repo}/pull/{number}");
+        let display_name = format!("{owner}/{repo}#{number}");
+
+        Some(Self {
+            github_key: github_key.to_string(),
+            owner: owner.to_string(),
+            repo: repo.to_string(),
+            number,
+            url,
+            display_name,
+            foreign_entity_id: None,
+            name: None,
+            status: None,
+            additions: None,
+            deletions: None,
+            comments: None,
+            checks: None,
+        })
+    }
+}
+
+/// Response containing all GitHub pull requests associated with a task.
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct GithubPullRequestsResponse {
+    /// Parsed pull requests, in repository query order.
+    pub pull_requests: Vec<GithubPullRequest>,
+}
+
+impl GithubPullRequestsResponse {
+    /// Build a response from stored GitHub PR keys, skipping malformed rows.
+    pub fn from_github_keys(github_keys: Vec<String>) -> Self {
+        let mut pull_requests = Vec::new();
+
+        for github_key in github_keys {
+            match GithubPullRequest::from_github_key(&github_key) {
+                Some(pull_request) => pull_requests.push(pull_request),
+                None => tracing::warn!(
+                    github_key = %github_key,
+                    "skipping malformed GitHub pull request key"
+                ),
+            }
+        }
+
+        Self { pull_requests }
+    }
+}
+
+/// The most pull requests one task lookup answers, one Reviews page.
+pub const MAX_GITHUB_PULL_REQUEST_TASK_LOOKUP: usize = 100;
+
+/// Request body for looking up the tasks linked to GitHub pull requests.
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct GithubPullRequestTasksRequest {
+    /// Pull request `owner/repo/pull/number` keys, at most 100.
+    pub github_keys: Vec<String>,
+}
+
+/// The tasks linked to one GitHub pull request.
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct GithubPullRequestTasks {
+    /// The pull request's `owner/repo/pull/number` key, as requested.
+    pub github_key: String,
+    /// Ids of the task documents the pull request references, oldest link first. Empty when
+    /// the caller cannot see the pull request. The caller may still lack access to a task.
+    pub task_ids: Vec<String>,
+}
+
+/// The tasks linked to each requested GitHub pull request.
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct GithubPullRequestTasksResponse {
+    /// One entry per requested pull request, in request order.
+    pub pull_requests: Vec<GithubPullRequestTasks>,
+}
+
+/// Request body for copying a document.
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CopyDocumentRequest {
+    /// The name of the new document (without extension).
+    pub document_name: String,
+    /// Optional sync service version ID for MD documents.
+    pub version_id: Option<SyncServiceVersionID>,
+}
+
+/// Query parameters for the copy document endpoint.
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+pub struct CopyDocumentQueryParams {
+    /// The DB version id of the document to copy. Defaults to latest.
+    pub version_id: Option<i64>,
+}
+
+/// How a new document's link share is initialized.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum InitialLinkShare {
+    /// The entity-type default (md is PUBLIC/Edit), overridden only by the owner's team default.
+    #[default]
+    EntityDefault,
+    /// Exactly this state, already resolved by the caller. The document never carries the
+    /// entity-type default, not even between creation and a later update.
+    Exact(LinkShareState),
+}
+
+/// A document to create, before its owner is known.
+///
+/// The service derives the owner from the verified creation principal.
+pub struct NewDocument {
+    /// Optional user-provided document ID.
+    pub id: Option<uuid::Uuid>,
+    /// SHA256 hash of the document content.
+    pub sha: String,
+    /// Document name without extension.
+    pub document_name: String,
+    /// File type of the document.
+    pub file_type: Option<FileType>,
+    /// Project to associate the document with.
+    pub project_id: Option<uuid::Uuid>,
+    /// Team to use when assigning a per-team task number, never sharing authority.
+    pub team_id: Option<uuid::Uuid>,
+    /// Explicit task creation consent. Initializes Edit using the persisted owner's team.
+    /// Ordinary documents, snippets, and imports must leave this false.
+    pub share_with_team: bool,
+    /// Custom creation timestamp.
+    pub created_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// Custom last-edit timestamp; defaults to `created_at`.
+    pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// Sub type of the document — task or snippet (MD files only).
+    pub sub_type: Option<document_sub_type::DocumentSubType>,
+    /// Whether to skip adding to user history.
+    pub skip_history: bool,
+    /// How the new document's link share is initialized.
+    pub initial_link_share: InitialLinkShare,
+}
+
+/// Arguments for creating a document in the repository.
+pub struct CreateDocumentRepoArgs {
+    /// Who owns the document.
+    pub owner: Owner,
+    /// The document to create.
+    pub document: NewDocument,
+}
+
+/// Arguments for importing an email attachment as a document.
+pub struct ImportEmailAttachmentRepoArgs {
+    /// The email attachment being imported.
+    pub email_attachment_id: uuid::Uuid,
+    /// The mailbox owner, who owns the imported document.
+    pub owner: MacroUserIdStr<'static>,
+    /// How to create the document when no reusable import exists.
+    pub document: NewDocument,
+}
+
+/// The team an owner resolves to, with the team's link-share preference.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OwnerTeam {
+    /// The owner's team.
+    pub team_id: uuid::Uuid,
+    /// The team's default link share for new documents.
+    pub default_link_share: TeamLinkShareDefault,
+}
+
+/// Fact returned by the repository for an email-attachment import.
+#[derive(Clone, Debug)]
+pub enum EmailImportRepoOutcome {
+    /// A new `Document` row was inserted and linked to the attachment.
+    Created(DocumentMetadata),
+    /// An existing live email-imported document was linked, or was already linked.
+    Reused(DocumentMetadata),
+}
+
+impl EmailImportRepoOutcome {
+    /// Metadata of the created or reused document.
+    pub fn metadata(&self) -> &DocumentMetadata {
+        match self {
+            Self::Created(metadata) | Self::Reused(metadata) => metadata,
+        }
+    }
+}
+
+/// Configuration for CloudFront presigned URL generation.
+pub struct CloudFrontConfig {
+    /// The CloudFront distribution URL.
+    pub distribution_url: String,
+    /// The public key ID for the CloudFront signer.
+    pub signer_public_key_id: String,
+    /// The private key for the CloudFront signer.
+    pub signer_private_key: String,
+    /// Number of seconds before a presigned URL expires.
+    pub presigned_url_expiry_seconds: u64,
+    /// Number of seconds for browser cache expiry (Cache-Control max-age).
+    pub browser_cache_expiry_seconds: u64,
+}
+
+/// Represents a file type update: either set to a specific type or clear to null.
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub enum FileTypeUpdate {
+    /// Set the file type to a specific value.
+    Set(FileType),
+    /// Clear the file type (set to null).
+    Clear,
+}
+
+/// Arguments for editing a document in the repository.
+pub struct EditDocumentRepoArgs {
+    /// The document ID to edit.
+    pub document_id: String,
+    /// New document name (None = no change).
+    pub document_name: Option<String>,
+    /// New project ID (None = no change, Some("") = remove from project).
+    pub project_id: Option<String>,
+    /// Updated share permissions.
+    pub share_permission:
+        Option<permissions_types::share_permission::UpdateSharePermissionRequestV2>,
+    /// Owner-authorized conditional team update, applied in the metadata transaction.
+    pub team_share:
+        Option<permissions_types::share_permission::team_share::AuthorizedTeamShareCommand>,
+    /// Whether to revoke direct non-owner user access in the edit transaction.
+    pub revoke_non_owner_user_access: bool,
+    /// New file type (None = no change).
+    pub file_type: Option<FileTypeUpdate>,
+}
+
+/// Arguments for the edit_document service call.
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct EditDocumentServiceArgs {
+    /// The name of the document.
+    pub document_name: Option<String>,
+    /// The new project id of the document.
+    pub project_id: Option<String>,
+    /// Updated share permissions for the document.
+    pub share_permission:
+        Option<permissions_types::share_permission::UpdateSharePermissionRequestV2>,
+    /// The new file type for the document (null to clear).
+    #[serde(default)]
+    pub file_type: Option<FileTypeUpdate>,
+}
+
+/// Query parameters for the location_v3 endpoint.
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug)]
+pub struct LocationQueryParams {
+    /// A specific document version id to get the location for.
+    pub document_version_id: Option<i64>,
+    /// If true, this will return the converted docx url.
+    pub get_converted_docx_url: Option<bool>,
+}
+
+/// Property input for setting a property value on a task.
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct PropertyInput {
+    /// The property definition ID.
+    pub property_id: String,
+    /// The value to set for the property.
+    pub value: SetPropertyValue,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+/// Request body for creating a markdown document whose content is initialized
+/// by the backend.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CreateMarkdownDocumentRequest {
+    /// The document name.
+    pub document_name: String,
+    /// Markdown source text. Defaults to an empty document.
+    pub markdown: Option<String>,
+    /// Optional project ID to associate the document with.
+    pub project_id: Option<uuid::Uuid>,
+    /// Whether to add a viewed_at record for this document upon creation.
+    #[serde(default)]
+    pub skip_history: bool,
+}
+
+/// Request for a backend-initialized native Canvas.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CreateCanvasDocumentRequest {
+    /// Canvas name.
+    pub document_name: String,
+    /// Optional parent project.
+    pub project_id: Option<uuid::Uuid>,
+}
+
+/// Response for creating a markdown document.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CreateMarkdownDocumentResponse {
+    /// The document ID of the created markdown document
+    pub document_id: String,
+    /// Metadata for the created document
+    pub document_metadata: DocumentResponseMetadata,
+    /// A pre-generated permission token that you can use for SS
+    pub token: String,
+}
+
+/// Response for creating a native Canvas.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CreateCanvasDocumentResponse {
+    /// The document ID of the created native Canvas
+    pub document_id: String,
+    /// Metadata for the created document
+    pub document_metadata: DocumentResponseMetadata,
+    /// A pre-generated permission token that you can use for SS
+    pub token: String,
+}
+
+/// Request body for creating a task.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CreateTaskRequest {
+    /// The name of the task.
+    pub task_name: String,
+    /// Markdown source text. Defaults to an empty task document.
+    pub markdown: Option<String>,
+    /// Optional project ID to associate the task with.
+    pub project_id: Option<uuid::Uuid>,
+    /// Team to assign the task number within. If omitted, it is inferred only
+    /// when the creator belongs to exactly one team.
+    pub team_id: Option<uuid::Uuid>,
+    /// Optional property values to set on the task.
+    pub property_values: Option<Vec<PropertyInput>>,
+    /// Whether to share the task with your team or not
+    /// Defaults to true
+    #[serde(default = "default_true")]
+    pub share_with_team: bool,
+}
+
+/// Response for creating a task.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CreateTaskResponse {
+    /// The document ID of the created task.
+    pub document_id: String,
+    /// Metadata for the created document
+    pub document_metadata: DocumentResponseMetadata,
+    /// A pre-generated permission token that you can use for SS
+    pub token: String,
+    /// Base64-encoded canonical Loro snapshot used to initialize the task.
+    pub initial_snapshot: String,
+    /// The team this task number is scoped to.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub team_id: Option<uuid::Uuid>,
+    /// The task number assigned within the team.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub team_task_id: Option<i32>,
+}
+
+/// Request body for creating a snippet — a reusable markdown document that can
+/// be inserted into any markdown area.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CreateSnippetRequest {
+    /// The name of the snippet.
+    pub snippet_name: String,
+    /// Markdown source text. Defaults to an empty snippet document.
+    pub markdown: Option<String>,
+    /// Optional project ID to associate the snippet with.
+    pub project_id: Option<uuid::Uuid>,
+}
+
+/// Response for creating a snippet.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CreateSnippetResponse {
+    /// The document ID of the created snippet.
+    pub document_id: String,
+}
+
+/// Request body for creating a skill — a markdown document containing
+/// instructions that AI reads and follows when the skill is referenced in an
+/// AI input.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CreateSkillRequest {
+    /// The name of the skill.
+    pub skill_name: String,
+    /// When to use the skill, in one line starting "Use when", e.g. "Use when
+    /// drafting release notes; not changelog entries". Agents choose skills
+    /// for a request by it.
+    pub description: String,
+    /// Markdown source text. Defaults to an empty skill document.
+    pub markdown: Option<String>,
+    /// Optional project ID to associate the skill with.
+    pub project_id: Option<uuid::Uuid>,
+}
+
+/// A skill's routing description.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct SkillDescriptionBody {
+    /// When to use the skill, in one line starting "Use when". Absent for a
+    /// skill created before descriptions existed.
+    pub description: Option<String>,
+}
+
+/// Request body for setting a skill's routing description.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct SetSkillDescriptionRequest {
+    /// When to use the skill, in one line starting "Use when", at most 300
+    /// characters.
+    pub description: String,
+}
+
+/// Response for creating a skill.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CreateSkillResponse {
+    /// The document ID of the created skill.
+    pub document_id: String,
+}
+
+/// A built-in system skill: static, code-defined AI instructions surfaced
+/// through the same tools as user-authored skill documents, but with no
+/// document behind them.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct SystemSkillSummary {
+    /// The well-known id the skill is referenced by in mentions and AI tools.
+    pub id: uuid::Uuid,
+    /// The name of the skill.
+    pub name: String,
+}
+
+/// Response listing the built-in system skills.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct SystemSkillsResponse {
+    /// Every system skill, in display order.
+    pub skills: Vec<SystemSkillSummary>,
+}
+
+/// The team-share state of a document. The team is resolved from the document
+/// owner's team membership.
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct DocumentTeamShareResponse {
+    /// Whether explicit team sharing is enabled; inherited team access does not count.
+    pub shared_with_team: bool,
+    /// The owner's team the document is (or would be) shared with. `None` when
+    /// the owner does not belong to a team.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub team_id: Option<uuid::Uuid>,
+}
+
+/// Request body for setting a document's team-share state.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct SetDocumentTeamShareRequest {
+    /// Whether the document should be shared with the owner's team.
+    pub share_with_team: bool,
+}
+
+/// Internal team-share state for a document, resolved against the owner's team.
+#[derive(Debug, Clone, Copy)]
+pub struct DocumentTeamShare {
+    /// The owner's team, when the owner belongs to one.
+    pub team_id: Option<uuid::Uuid>,
+    /// Whether the document has an explicit canonical team-share level.
+    pub shared_with_team: bool,
+}
+
+impl From<DocumentTeamShare> for DocumentTeamShareResponse {
+    fn from(value: DocumentTeamShare) -> Self {
+        Self {
+            shared_with_team: value.shared_with_team,
+            team_id: value.team_id,
+        }
+    }
+}

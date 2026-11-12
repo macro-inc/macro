@@ -1,0 +1,190 @@
+//! Broker event models for realtime activity delivery.
+//!
+//! Published by the materializing consumer after rows are durably inserted,
+//! addressed (and keyed) per recipient so every subscriber pod can route a
+//! message to its own user-scoped broadcast without re-deriving recipients.
+//! Recipients are resolved at publish time: the acting subject plus everyone
+//! with current access to the touched entities. The wire row stores the
+//! action as its two stored columns (tag + payload), so readers decode with
+//! the same forward tolerance as reads from Postgres.
+
+#[cfg(test)]
+mod test;
+
+use chrono::{DateTime, Utc};
+use entity_kind::EntityType;
+use macro_event_broker::{Event, MacroEvent, TopicEvent};
+use macro_event_topics::MacroActivityTopic;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use uuid::Uuid;
+
+use super::models::{Activity, ActivityRecord, Actor, RecordedAction};
+
+/// One activity row on the wire — the realtime projection of an inserted
+/// `activity_events` row.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct ActivityWireRow {
+    /// Originating code-mode invocation, absent on older events.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_correlation_id: Option<Uuid>,
+    /// SDK display verb, absent on older events.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_verb: Option<String>,
+    /// The stored activity id.
+    pub id: Uuid,
+    /// Who mechanically acted, as a principal string (`macro|…` / `bot|…`).
+    pub actor_id: String,
+    /// Whose activity this is (a principal string).
+    pub subject_id: String,
+    /// The kind of entity acted on.
+    pub entity_type: EntityType,
+    /// The entity acted on.
+    pub entity_id: String,
+    /// The stored action tag.
+    pub action: String,
+    /// The stored action payload, if any.
+    pub action_payload: Option<Value>,
+    /// When it happened.
+    pub occurred_at: DateTime<Utc>,
+}
+
+impl ActivityWireRow {
+    /// Projects an activity onto the wire using the stored column encoding.
+    pub fn from_activity(activity: &Activity) -> Self {
+        let (action, action_payload) = activity.action.to_columns();
+        Self {
+            id: activity.id,
+            agent_correlation_id: activity.agent_correlation_id,
+            agent_verb: activity.agent_verb.map(|verb| verb.to_string()),
+            actor_id: activity.actor.as_ref().to_owned(),
+            subject_id: activity.subject_id.clone(),
+            entity_type: activity.entity_type,
+            entity_id: activity.entity_id.clone(),
+            action: action.to_owned(),
+            action_payload,
+            occurred_at: activity.occurred_at,
+        }
+    }
+
+    /// Decodes into the read-side record, forward-tolerantly for the action.
+    /// Returns `None` when the row is too corrupt to represent (unparseable
+    /// actor) — the same skip semantics as reads from storage.
+    pub fn into_record(self) -> Option<ActivityRecord> {
+        let actor = Actor::try_from(self.actor_id).ok()?;
+        let (action, _decode_error) =
+            RecordedAction::from_columns(self.action, self.action_payload);
+        Some(ActivityRecord {
+            id: self.id,
+            agent_correlation_id: self.agent_correlation_id,
+            agent_verb: self
+                .agent_verb
+                .as_deref()
+                .and_then(|verb| verb.parse().ok()),
+            actor,
+            subject_id: self.subject_id,
+            entity_type: self.entity_type,
+            entity_id: self.entity_id,
+            action,
+            occurred_at: self.occurred_at,
+        })
+    }
+}
+
+/// Events published to [`MacroActivityTopic`].
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "event_type", content = "metadata")]
+pub enum ActivityTopicEvent {
+    /// Activities were durably recorded; addressed to one recipient.
+    #[serde(rename = "activity.recorded")]
+    Recorded {
+        /// The user this delivery is addressed to (a `macro|…` principal).
+        /// Not necessarily any row's subject: entity watchers receive other
+        /// principals' rows.
+        recipient_id: String,
+        /// The recorded rows this recipient may see.
+        activities: Vec<ActivityWireRow>,
+    },
+    /// Correlated rows for session viewers, independent of entity audiences.
+    #[serde(rename = "activity.session_recorded")]
+    SessionRecorded {
+        /// Rows with a signed agent correlation.
+        activities: Vec<ActivityWireRow>,
+    },
+    /// Stored activity changed after a purge. Contains no entity or user data:
+    /// even former viewers must refresh through authorized read paths.
+    #[serde(rename = "activity.invalidated")]
+    Invalidated,
+}
+
+impl ActivityTopicEvent {
+    /// The partition key for addressed updates or global invalidation.
+    pub fn key(&self) -> &str {
+        match self {
+            Self::Recorded { recipient_id, .. } => recipient_id,
+            Self::SessionRecorded { .. } => "activity-session-recorded",
+            Self::Invalidated => "activity-invalidated",
+        }
+    }
+}
+
+impl TopicEvent for ActivityTopicEvent {
+    type Topic = MacroActivityTopic;
+
+    // Older consumers skip the new session event during rolling deployment.
+    const SCHEMA_VERSION: u8 = 2;
+}
+
+/// Publishable realtime activity event, keyed by its recipient.
+pub struct ActivityMacroEvent {
+    key: String,
+    event: Event<ActivityTopicEvent>,
+}
+
+impl ActivityMacroEvent {
+    /// Returns the topic event carried by this event.
+    pub fn into_topic_event(self) -> ActivityTopicEvent {
+        self.event.event
+    }
+}
+
+impl MacroEvent for ActivityMacroEvent {
+    type EventPayload = ActivityTopicEvent;
+
+    fn key(&self) -> &str {
+        &self.key
+    }
+
+    fn event(&self) -> &Event<Self::EventPayload> {
+        &self.event
+    }
+
+    fn from_event(key: String, event: Event<Self::EventPayload>) -> Self {
+        Self { key, event }
+    }
+}
+
+impl From<ActivityRecord> for ActivityWireRow {
+    fn from(record: ActivityRecord) -> Self {
+        let (action, action_payload) = match record.action {
+            RecordedAction::Known(action) => {
+                let (tag, payload) = action.to_columns();
+                (tag.to_owned(), payload)
+            }
+            RecordedAction::Unknown { tag, payload } => (tag, payload),
+        };
+        Self {
+            id: record.id,
+            agent_correlation_id: record.agent_correlation_id,
+            agent_verb: record.agent_verb.map(|verb| verb.to_string()),
+            actor_id: record.actor.as_ref().to_owned(),
+            subject_id: record.subject_id,
+            entity_type: record.entity_type,
+            entity_id: record.entity_id,
+            action,
+            action_payload,
+            occurred_at: record.occurred_at,
+        }
+    }
+}

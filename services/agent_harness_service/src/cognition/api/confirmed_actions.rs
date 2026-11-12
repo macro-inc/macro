@@ -22,8 +22,8 @@ use axum::{
 use calendar_events::inbound::toolset::{CreateConfirmedCalendarEvent, ToolCalendarEvent};
 use email::inbound::toolset::{SendConfirmedEmail, SendEmailResponse};
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model::response::GenericErrorResponse;
 use serde::de::DeserializeOwned;
+use shared_types::response::GenericErrorResponse;
 
 #[cfg(test)]
 mod test;

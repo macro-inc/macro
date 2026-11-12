@@ -21,7 +21,7 @@ The pieces this builds on, so the design can be read against real code.
 
 ### The transport seam
 
-`ContainerManager` (`crates/agent_harness/src/domain/ports.rs:49`) is the port
+`ContainerManager` (`crates/agents/agent_harness/src/domain/ports.rs:49`) is the port
 every provider implements:
 
 ```rust
@@ -34,8 +34,8 @@ pub trait ContainerManager: Send + Sync + 'static {
 ```
 
 `AgentConnector` is just `Transport<ToRuntimeMessage, ToServerMessage>`
-(`crates/agent_session/src/domain/ports.rs`). And `SidecarTransport`
-(`crates/agent_harness/src/outbound/sidecar.rs`) exists purely to wrap a raw ACP
+(`crates/agents/agent_session/src/domain/ports.rs`). And `SidecarTransport`
+(`crates/agents/agent_harness/src/outbound/sidecar.rs`) exists purely to wrap a raw ACP
 JSON-RPC websocket into those envelopes — its own doc comment says the sidecar
 "is a byte pipe: it speaks bare ACP JSON-RPC ... and knows nothing about the
 runtime protocol."
@@ -45,7 +45,7 @@ end of the pipe.** That is the whole reason this project is small.
 
 ### What the harness actually asks of an ACP agent
 
-From the session actor (`crates/agent_session/src/domain/session/session.rs`):
+From the session actor (`crates/agents/agent_session/src/domain/session/session.rs`):
 
 - `initialize`
 - one of `session/new`, `session/resume`, `session/load` (`SessionOpening`, line 309)
@@ -314,7 +314,7 @@ NULL` either way.
 
 Two existing precedents in the repo, one generation apart:
 
-- **`mcp_servers.credentials`** (`crates/mcp_client/src/outbound/pg_server_repo.rs`)
+- **`mcp_servers.credentials`** (`crates/clients/mcp_client/src/outbound/pg_server_repo.rs`)
   — AES-256-GCM under a single process-wide `AesKey` from config. No AAD, no
   per-record key, no KMS. One key compromise reads every row, and without AAD a
   ciphertext is interchangeable between rows, so moving user A's blob into user
@@ -578,7 +578,7 @@ Two independent gaps that only bite on the second prompt after a restart, so
 they will not show up in a first happy-path test.
 
 **The capability gate.** `begin_opening`
-(`crates/agent_session/src/domain/session/session.rs:270`) picks the opening
+(`crates/agents/agent_session/src/domain/session/session.rs:270`) picks the opening
 method from what the agent advertised at `initialize`:
 
 ```rust

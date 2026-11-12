@@ -3,9 +3,9 @@
 use std::io::{Cursor, Write};
 
 use documents_hex::domain::docx_export::DocxExportStore;
-use model::document::BomPart;
 use s3_key::document_key_url_path;
 use sha2::{Digest, Sha256};
+use shared_types::document::BomPart;
 
 use crate::api::context::ApiContext;
 use crate::service::cloudfront::{get_cloudfront_signed_options, get_presigned_url};

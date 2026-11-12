@@ -8,8 +8,8 @@ use axum::middleware::Next;
 use github::inbound::github_sync_router::GithubSyncRouterState;
 use macro_axum_utils::compose_layers;
 use macro_tower_layers::MacroRequestIdAndTracingLayer;
-use model::version::{ServiceNameState, VersionedApiServiceName, validate_api_version};
 use search_service::SearchHandlerState;
+use shared_types::version::{ServiceNameState, VersionedApiServiceName, validate_api_version};
 use std::time::Duration;
 use tower::ServiceBuilder;
 use tower_http::compression::CompressionLayer;
@@ -138,7 +138,9 @@ fn api_router(state: ApiContext) -> Router {
         )
         .nest(
             "/cal",
-            cal::inbound::cal_webhook_router::cal_webhook_router(state.cal_webhook_state.clone()),
+            calcom_webhooks::inbound::cal_webhook_router::cal_webhook_router(
+                state.cal_webhook_state.clone(),
+            ),
         );
 
     // Internal call router — agent-authenticated via x-macro-internal-call header.
@@ -229,7 +231,7 @@ fn api_router(state: ApiContext) -> Router {
         )
         .nest(
             "/properties",
-            properties::inbound::axum_router::router()
+            properties_inbound::axum_router::router()
                 .with_state(PropertiesHandlerState::from_ref(&state)),
         )
         .nest(
@@ -238,8 +240,8 @@ fn api_router(state: ApiContext) -> Router {
         )
         .nest(
             "/sync_service",
-            sync_service_hex::inbound::axum_router::sync_service_router(
-                sync_service_hex::inbound::axum_router::SyncServiceRouterState {
+            document_sync::inbound::axum_router::sync_service_router(
+                document_sync::inbound::axum_router::SyncServiceRouterState {
                     service: state.sync_service_client.clone(),
                     authorization_state: state.authorization_state.clone(),
                 },
@@ -247,7 +249,7 @@ fn api_router(state: ApiContext) -> Router {
         )
         .nest(
             "/comms",
-            channels::inbound::list_router::channel_list_router(state.channel_list_state.clone()),
+            channels_inbound::list_router::channel_list_router(state.channel_list_state.clone()),
         )
         .nest("/entity", entity::router())
         .merge(calendar_events::inbound::axum_router::calendar_router(
@@ -271,8 +273,8 @@ fn api_router(state: ApiContext) -> Router {
         ))
         .nest(
             "/channels",
-            channels::inbound::axum_router::channels_router(state.channels_state.clone()).merge(
-                channels::inbound::axum_router::channel_access_requests_router(
+            channels_inbound::axum_router::channels_router(state.channels_state.clone()).merge(
+                channels_inbound::axum_router::channel_access_requests_router(
                     state.channels_state.clone(),
                 ),
             ),
@@ -346,17 +348,16 @@ fn api_router(state: ApiContext) -> Router {
         )
         .nest(
             "/initiatives",
-            initiative::inbound::axum_router::initiative_router(state.initiative_state.clone())
-                .merge(
-                    initiative::inbound::axum_router::initiative_activity_router(
-                        state.initiative_activity_state.clone(),
-                    ),
+            project::inbound::axum_router::initiative_router(state.initiative_state.clone()).merge(
+                project::inbound::axum_router::initiative_activity_router(
+                    state.initiative_activity_state.clone(),
                 ),
+            ),
         )
         .nest(
             "/databases",
             databases::inbound::axum_router::databases_router(state.databases_state.clone())
-                .merge(databases_sql::inbound::axum_router::sql_router(
+                .merge(database_sql_runner::inbound::axum_router::sql_router(
                     state.sql_state.clone(),
                 ))
                 .merge(databases::inbound::starter_router::starter_router(
@@ -440,8 +441,8 @@ fn api_router(state: ApiContext) -> Router {
                 )
                 .nest(
                     "/sync_service",
-                    sync_service_hex::inbound::axum_router::sync_service_router(
-                        sync_service_hex::inbound::axum_router::SyncServiceRouterState {
+                    document_sync::inbound::axum_router::sync_service_router(
+                        document_sync::inbound::axum_router::SyncServiceRouterState {
                             service: state.sync_service_client.clone(),
                             authorization_state: state.authorization_state.clone(),
                         },

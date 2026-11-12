@@ -7,11 +7,11 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use email_formatting::EmailDigestNotification;
+use entity_kind::EntityType;
 use hmac::{Hmac, Mac};
 use macro_env::Environment;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
 use model_notifications::ChannelMessageSendMetadata;
 use notification::domain::models::email_notification_digest::ports::MessageId;
 use notification::domain::models::email_notification_digest::{
@@ -23,11 +23,11 @@ use notification::domain::ports::NotificationEgress;
 use notification::domain::service::{
     NotificationEgressService, NotificationIngress, NotificationIngressService,
 };
-use notification::outbound::digest_batcher::RedisDigestBatcher;
-use notification::outbound::email::EmailAdapter;
-use notification::outbound::message_receipt_repository::DbMessageReceiptRepository;
-use notification::outbound::mobile::MobilePushAdapter;
-use notification::outbound::repository::DbNotificationRepository;
+use notification_outbound::digest_batcher::RedisDigestBatcher;
+use notification_outbound::email::EmailAdapter;
+use notification_outbound::message_receipt_repository::DbMessageReceiptRepository;
+use notification_outbound::mobile::MobilePushAdapter;
+use notification_outbound::repository::DbNotificationRepository;
 use rootcause::Report;
 use sandbox_notification::{NeverMatchNotification, SandboxNotification};
 use sqlx::PgPool;

@@ -1,0 +1,73 @@
+[package]
+edition = "2024"
+name = "hosted_runtimes"
+publish = false
+version = "0.1.0"
+
+[features]
+default = ["inbound", "outbound", "ports"]
+inbound = [
+  "dep:axum",
+  "dep:entity_access",
+  "entity_access/axum",
+  "entity_access/inbound",
+  "entity_access/ports",
+  "dep:macro_authorization",
+  "macro_authorization/axum",
+  "dep:model_error_response",
+  "dep:utoipa",
+  "bot_id/schema",
+  "computer_id/schema",
+  "pairing_id/schema",
+  "ports",
+]
+outbound = ["dep:harnesses", "dep:incus_client", "dep:macro_env", "dep:sqlx", "ports", "tokio/fs", "tokio/process", "tokio/time"]
+ports = []
+
+[dependencies]
+async-stripe = { workspace = true, default-features = false }
+axum = { workspace = true, optional = true }
+bot_id = { workspace = true }
+chrono = { workspace = true, features = ["serde"] }
+computer_id = { workspace = true }
+entity_access = { workspace = true, optional = true }
+feature_flags = { workspace = true }
+harness_id = { workspace = true }
+harnesses = { workspace = true, optional = true, features = ["outbound"] }
+incus_client = { workspace = true, optional = true }
+macro_authorization = { workspace = true, optional = true }
+macro_env = { workspace = true, optional = true }
+macro_user_id = { workspace = true }
+model_error_response = { workspace = true, optional = true }
+rootcause = { workspace = true }
+opentelemetry = { workspace = true, features = ["trace", "metrics"] }
+pairing_id = { workspace = true }
+tracing-opentelemetry = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true, optional = true }
+strum = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["io-util", "rt", "sync"] }
+tokio-retry = { workspace = true }
+tracing = { workspace = true }
+utoipa = { workspace = true, optional = true }
+url = { workspace = true, features = ["serde"] }
+uuid = { workspace = true, features = ["serde", "v7"] }
+zeroize = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+
+[dev-dependencies]
+opentelemetry_sdk = { workspace = true, features = ["trace", "testing"] }
+tracing-subscriber = { workspace = true }
+clap = { workspace = true }
+macro_db_migrator = { workspace = true }
+model_user = { workspace = true }
+proptest = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tower = { workspace = true }
+
+[[example]]
+name = "incus_fleet_smoke"
+required-features = ["outbound"]

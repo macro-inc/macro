@@ -6,7 +6,7 @@ pub struct CreateNotification {
     pub notification_event_type: String,
     /// The [Entity] the notification event was created for
     #[serde(flatten)]
-    pub entity: model_entity::Entity<'static>,
+    pub entity: entity_kind::Entity<'static>,
     /// The service that created the notification
     pub service_sender: String,
     /// Custom metadata that may be needed for the notification

@@ -1,31 +1,32 @@
 use crate::cognition::config::Config;
 use crate::cognition::service::ai_stream_registry::AiStreamRegistry;
-use ai_tools::{
+use agent_tools::{
     AiToolSet, ToolCallToolContext, ToolDocumentService, ToolDocumentToolContext, ToolEmailService,
     ToolEmailToolContext, ToolEntityAccessService, ToolPropertiesToolContext, ToolServiceContext,
     ToolSoupService,
 };
+use ai_chat::domain::service::MessageServiceImpl;
+use ai_chat::inbound::attachment::ChatAttachmentService;
+use ai_chat::outbound::postgres::PgChatRepo;
 use attachment::provider::AttachmentProvider;
 use axum::extract::FromRef;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
-use channels::inbound::attachment::ChannelAttachmentService;
-use channels::outbound::pg_channels_repo::PgChannelsRepo;
-use chat::domain::service::MessageServiceImpl;
-use chat::inbound::attachment::ChatAttachmentService;
-use chat::outbound::postgres::PgChatRepo;
+use channels_inbound::attachment::ChannelAttachmentService;
+use channels_outbound::pg_channels_repo::PgChannelsRepo;
 use connection_gateway::service::connection::ConnectionRepo;
 use document_storage_service_client::DocumentStorageServiceClient;
 use documents::inbound::attachment::DocumentAttachmentService;
 use email::inbound::attachment::EmailAttachmentService;
-use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
+use entity_access::domain::service::EntityAccessServiceImpl;
+use entity_access_outbound::PgAccessRepository;
 use entity_registry::NonUserOwners;
 use macro_auth::InternalApiKey;
 use macro_authorization::{
     MacroAuthJwtValidator, MacroAuthorizationServiceImpl, MacroAuthorizationState,
 };
 use notification::domain::service::SqsNotificationIngress;
-use notification::outbound::queue::SqsQueue;
-use notification::outbound::websocket::ConnectionGatewayClient;
+use notification_outbound::queue::SqsQueue;
+use notification_outbound::websocket::ConnectionGatewayClient;
 use search_service_client::SearchServiceClient;
 use sqlx::PgPool;
 use static_file::inbound::attachment::StaticFileAttachmentService;
@@ -59,7 +60,7 @@ pub type DcsAiBillingService = ai_billing::domain::BillingServiceImpl<
 >;
 
 /// Type alias for the chat model entitlement extractor wired to DCS services.
-pub type DcsChatModelAccess = chat::inbound::http::extractors::ChatModelAccess<
+pub type DcsChatModelAccess = ai_chat::inbound::http::extractors::ChatModelAccess<
     DcsAuthorizationService,
     DcsUserPermissionsService,
 >;
@@ -102,7 +103,7 @@ pub type DcsAiProjectionService =
     ai_projections::domain::ai_projection_service::AiProjectionServiceImpl<
         ai_projections::outbound::ai_projection_repo::AiProjectionRepositoryImpl,
         sqs_client::SQS,
-        ai_projections::outbound::agent_generator::AgentProjectionGenerator,
+        crate::cognition::service::projection_generator::AgentProjectionGenerator,
         ai_projections::outbound::gateway_notifier::GatewayProjectionNotifier,
     >;
 
@@ -118,7 +119,7 @@ pub type DcsMcpRouterState = mcp_client::inbound::McpRouterState<
 
 /// The import pipeline service, shared between the import router and the
 /// chat toolset.
-pub type DcsImportService = ai_tools::ToolImportService;
+pub type DcsImportService = agent_tools::ToolImportService;
 
 /// The onboarding orchestrator wired to the Postgres repo and the MCP server
 /// store.
@@ -156,7 +157,7 @@ pub struct ApiContext {
     /// Shared admission for new AI operations, after authorization.
     pub ai_admission: Arc<dyn ai_billing::AiAdmissionService>,
     /// General named decisions, with admission and metering in the Jev domain.
-    pub decisions: Arc<dyn jev::domain::decisions::DecisionService>,
+    pub decisions: Arc<dyn jev_classifier::domain::decisions::DecisionService>,
     /// Bounded, one-call completions without discovery or an agent loop.
     pub tool_free_completions:
         Arc<dyn crate::cognition::service::structured_completion::ToolFreeCompletion>,
@@ -187,7 +188,7 @@ pub struct ApiContext {
     pub pipedream_state: DcsPipedreamRouterState,
     pub granola_sync: Option<Arc<dyn granola_sync::domain::service::SyncService>>,
     /// Selects which MCP stack (Pipedream vs native) serves a user's tools.
-    pub mcp_selector: Arc<ai_tools::ToolMcpSelector>,
+    pub mcp_selector: Arc<agent_tools::ToolMcpSelector>,
     pub import_service: Arc<DcsImportService>,
     pub onboarding_service: Arc<DcsOnboardingService>,
     /// Kafka-backed macro event broker for publishing domain events.
@@ -195,10 +196,10 @@ pub struct ApiContext {
 }
 
 impl FromRef<ApiContext>
-    for chat::inbound::http::extractors::UserPermissionsState<DcsUserPermissionsService>
+    for ai_chat::inbound::http::extractors::UserPermissionsState<DcsUserPermissionsService>
 {
     fn from_ref(state: &ApiContext) -> Self {
-        chat::inbound::http::extractors::UserPermissionsState(
+        ai_chat::inbound::http::extractors::UserPermissionsState(
             state.user_permissions_service.clone(),
         )
     }

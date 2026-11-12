@@ -6,12 +6,13 @@ use entity_access::domain::{
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_user_id::cowlike::CowLike;
 use serde::{Deserialize, Serialize};
+use team_id::TeamId;
 use teams::domain::{model::SetTeamMemberPlanError, team_repo::TeamService};
 use utoipa::ToSchema;
 
 use super::{PaidPlan, StripeOperationError};
 use crate::api::context::{ApiContext, AuthorizationService};
-use model::response::ErrorResponse;
+use shared_types::response::ErrorResponse;
 
 /// Request body for switching plans
 #[derive(Debug, Deserialize, ToSchema)]
@@ -63,7 +64,10 @@ pub async fn change_plan(
         .get_user_team(user_id)
         .await
         .map_err(|e| StripeOperationError::TeamsErr(e.into()))?
-        && ctx.teams_service.team_bills_per_seat(&team.team_id).await?
+        && ctx
+            .teams_service
+            .team_bills_per_seat(&TeamId::from_uuid(team.team_id))
+            .await?
     {
         let receipt = EntityAccessReceipt::<AdminTeamRole>::try_new_authenticated_user(
             user_id.clone().into_owned(),

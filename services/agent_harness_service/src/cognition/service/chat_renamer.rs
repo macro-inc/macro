@@ -1,13 +1,13 @@
 use crate::cognition::api::context::ApiContext;
-use agent::PredefinedModel;
+use agent_loop::PredefinedModel;
+use ai_chat::domain::models::PatchChatRepoArgs;
+use ai_chat::domain::ports::ChatRepo;
+use ai_chat::outbound::postgres::PgChatRepo;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
-use chat::domain::models::PatchChatRepoArgs;
-use chat::domain::ports::ChatRepo;
-use chat::outbound::postgres::PgChatRepo;
+use entity_kind::EntityType;
 use entity_registry::OwnerGrantPolicy;
 use entity_registry_db_utils::OwnedEntityRegistrar;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
 use std::sync::Arc;
 
 const CHAT_RENAMED_MESSAGE_TYPE: &str = "chat_renamed";
@@ -125,7 +125,7 @@ async fn generate_chat_name(
     );
     let usage_ctx = ai_usage::UsageContext::new(ai_usage::AiFeature::ChatRename, user_id)
         .with_entity(macro_uuid::string_to_uuid(chat_id).ok());
-    let response = agent::complete(
+    let response = agent_loop::complete(
         PredefinedModel::Fast,
         CHAT_RENAME_SYSTEM_PROMPT,
         &rename_request,

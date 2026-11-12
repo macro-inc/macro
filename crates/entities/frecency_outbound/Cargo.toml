@@ -1,0 +1,32 @@
+[package]
+edition = "2024"
+name = "frecency_outbound"
+publish = false
+version = "0.1.0"
+
+[features]
+mock = ["dep:mockall", "frecency_core/mock"]
+postgres = ["dep:recursion", "dep:serde_json", "dep:sqlx", "dep:thiserror"]
+
+[dependencies]
+anyhow = { workspace = true }
+chrono = { workspace = true, features = ["serde"] }
+filter_ast = { workspace = true }
+frecency_core = { workspace = true, features = ["ports"] }
+item_filters = { workspace = true, default-features = true }
+macro_user_id = { workspace = true }
+mockall = { workspace = true, optional = true }
+entity_kind = { workspace = true }
+recursion = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+sqlx = { workspace = true, optional = true }
+thiserror = { workspace = true, optional = true }
+tokio = { workspace = true, features = ["sync", "time"] }
+tracing = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+
+[dev-dependencies]
+item_filters = { workspace = true, default-features = true, features = ["mock"] }
+macro_db_migrator = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }

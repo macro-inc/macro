@@ -11,8 +11,8 @@ accounts are linked and its messages reach Macro is in
 | Concept | Where |
 | --- | --- |
 | Entity | `EntityType::ExternalChat` (wire `external_chat`, GraphQL `EXTERNAL_CHAT`) |
-| Provider | `model_entity::ExternalChatProvider` (`whatsapp`); `label()` names it for people |
-| Kind | `model_entity::ExternalChatKind` (`group`, `direct`) |
+| Provider | `entity_kind::ExternalChatProvider` (`whatsapp`); `label()` names it for people |
+| Kind | `entity_kind::ExternalChatKind` (`group`, `direct`) |
 | Chat | `external_chat`: `provider`, `remote_id` (the provider's id; WhatsApp: a JID), `kind`, name, owner, `state`, history import (`backfill_*`) |
 | People | `external_chat_person` (the provider's display name, verified Macro user); the provider names them for reads (`ChatProvider::people`) |
 | Messages | `external_chat_message`: one row per `(chat, person, source id)`; `origin` is `remote`, `macro` or `history`; `kind` `message` or `system`; structured `rich` content and `mentions` (provider ids) |
@@ -100,14 +100,14 @@ and deleted from the static file service by DSS's drain.
 
 ## Code
 
-`crates/external_chat` is the provider-neutral domain: timeline and read
+`crates/comms/external_chat` is the provider-neutral domain: timeline and read
 state, sharing, sends, uploads, attachment import, notification effects, the
 `external_chat_changed`/`external_chat_effects` signals, the
 `/external-chats` router and the Postgres adapters for the `external_chat*`
 tables. It reaches a provider only through its `ChatProvider` port
 (accounts, who can send, members and names, adding and detaching, the send
 outbox); `ExternalChatService<P: ChatProvider>` is generic over it, with no
-trait objects or registry. `crates/whatsapp_linked` implements the port
+trait objects or registry. `crates/whatsapp/whatsapp_linked` implements the port
 (`WhatsAppProvider`) and keeps everything WhatsApp: pairing, the account's
 chat list (with saved contacts) and phone-number lookups, rosters, ingest,
 dispatch and the `/whatsapp` router; its ingest

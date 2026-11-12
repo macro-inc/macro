@@ -7961,7 +7961,7 @@
       },
       "SandboxSize": {
         "type": "string",
-        "description": "Named compute tier for a managed sandbox.\n\nThe API and database store the name. CPU, RAM, and disk live in\n`crates/agent_harness/sandbox_sizes.json`.",
+        "description": "Named compute tier for a managed sandbox.\n\nThe API and database store the name. CPU, RAM, and disk live in\n`crates/agents/agent_harness/sandbox_sizes.json`.",
         "enum": ["small", "default", "large"]
       },
       "SandboxSizeBody": {

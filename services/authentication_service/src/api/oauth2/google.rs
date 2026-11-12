@@ -7,8 +7,8 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use calendar_events::domain::models::GoogleScopeSet;
-use model::response::ErrorResponse;
 use reqwest::StatusCode;
+use shared_types::response::ErrorResponse;
 use tower_cookies::Cookies;
 use uuid::Uuid;
 
@@ -29,10 +29,10 @@ use crate::{
         },
     },
 };
+use email_types::service::link::UserProvider;
 use fusionauth::error::FusionAuthClientError;
 use fusionauth::google::oauth::GoogleExchangeTokenResponse;
 use fusionauth::identity_provider::{IdentityProviderLink, LinkUserRequest};
-use models_email::service::link::UserProvider;
 
 #[cfg(test)]
 mod test;

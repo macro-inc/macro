@@ -148,17 +148,17 @@ Pulumi stacks; they do not host extra agent processes.
   `POST /cognition/calendar/events/create-confirmed`
   (`CreateConfirmedCalendarEvent`, `calendar.createConfirmed`): the only
   immediate send or create open to an agent's program besides a review.
-- `crates/web_search` owns `POST /web/search` and `/web/fetch` (mounted in
+- `crates/ai/web_search` owns `POST /web/search` and `/web/fetch` (mounted in
   `src/cognition/api.rs`, rate limited per user through cognition's Redis) and the
   `WebSearch`/`WebFetch` tools; `TAVILY_API_KEY` comes from Doppler `shared_ai`.
-- `crates/universal_input` owns Command K's authenticated `/universal_input/classify`
+- `crates/ai/universal_input` owns Command K's authenticated `/universal_input/classify`
   and `/universal_input/extract` routes, mounted directly by `src/api.rs`. The root
   composes staged search type/field extraction and Clairic content extraction
   with Nemotron temporal extraction and the shared admission/usage services.
   It also mounts the internal `/universal_input/thread-due-date` route, which reads
   a thread's due date for `email_focus_worker` and meters it as `EmailFocus`.
 - `src/scheduling.rs`: routine HTTP routes and background scheduling;
-  domain/adapters live in `crates/scheduled_action`. Its run observers send
+  domain/adapters live in `crates/agents/scheduled_action`. Its run observers send
   `routine_run_finished` analytics and, for every run, an inbox-only
   `routine_run_finished` notification to the owner
   (`src/scheduling/routine_run_notifications.rs`), which names a
@@ -192,7 +192,7 @@ Pulumi stacks; they do not host extra agent processes.
   a step that never gets one fails with "Macro was busy running other
   routines".
 - `src/preview.rs` + `src/preview/`: preview control routes, public HTTP and SSH listeners;
-  lease/ticket and authorization logic lives in `crates/agent_preview`. The shared
+  lease/ticket and authorization logic lives in `crates/agents/agent_preview`. The shared
   pool stores replica ownership and credential hashes; startup and ten-second
   heartbeats register this process's private HTTP address for direct forwarding.
 - [Consolidation guide](../../docs/guides/consolidate-agent-services.md):
@@ -201,11 +201,11 @@ Pulumi stacks; they do not host extra agent processes.
 ## Scope
 
 - Owns: the deployed process wiring every agent-session domain crate
-  together — not the domain logic itself, which lives in `crates/agent_harness`,
-  `crates/agent_session`, `crates/agent_changes`, `crates/agent_egress`,
-  `crates/folds/agent_fold`, `crates/agent_inmem`, `crates/agent_trigger`.
+  together — not the domain logic itself, which lives in `crates/agents/agent_harness`,
+  `crates/agents/agent_session`, `crates/agents/agent_changes`, `crates/agents/agent_egress`,
+  `crates/agents/agent_fold`, `crates/agents/agent_inmem`, `crates/agents/agent_trigger`.
 - Not here: coding-agent business logic for a specific runtime (e.g. Cursor
-  API calls) → `crates/codex_connection`, `crates/codex_cloud_agents`.
+  API calls) → `crates/agents/codex_connection`, `crates/agents/codex_cloud_agents`.
 
 ## Recipes
 
@@ -219,10 +219,10 @@ Pulumi stacks; they do not host extra agent processes.
 
 - Internal session tools require explicit `acting_as`, resolved by the shared gate, plus existing owner/edit authorization. SDK executions choose one account for the whole program; review decisions use the saved acting account. Keep their restricted prompt/stop route separate from human approval controls.
 - An import review's draft is `{source, excluded, shared, personal}` (`source` is `notion`, `linear`, or `jira`): the rows the owner left out and the rows whose sharing they flipped, passed to `start_workspace_write` as `NotionWriteChoices`.
-- One `ai_tools::ImportJobs` serves the whole process: session tools, public MCP, and `cognition::build` (the `/import/*` routes and the only stalled workspace-import sweeper, which adopts Notion, Linear and Jira runs) share it, and `main.rs` hands running imports over on shutdown (`ImportJobs::hand_over`).
-- The import service registers read-only Notion, Linear and Jira Pipedream readers wherever it is built (`cognition/server.rs` and `ai_tools::build_context`, which public MCP reuses). Authenticated `/import/workspaces/{source}` report and `/cancel` routes serve the shared review card; `/import/notion` remains for existing clients. Workspace tools stage reviewed plans; they never write upstream.
+- One `agent_tools::ImportJobs` serves the whole process: session tools, public MCP, and `cognition::build` (the `/import/*` routes and the only stalled workspace-import sweeper, which adopts Notion, Linear and Jira runs) share it, and `main.rs` hands running imports over on shutdown (`ImportJobs::hand_over`).
+- The import service registers read-only Notion, Linear and Jira Pipedream readers wherever it is built (`cognition/server.rs` and `agent_tools::build_context`, which public MCP reuses). Authenticated `/import/workspaces/{source}` report and `/cancel` routes serve the shared review card; `/import/notion` remains for existing clients. Workspace tools stage reviewed plans; they never write upstream.
 - The agent approves a presented review after its account holder says yes in chat by submitting it with `DecideReview`: `Actions::session` reports the turn's prompter from `agent_session.turn_prompter`, and `approvable` refuses an import whose plan is not `ready` for that review.
-- Presenting an import review ties its plan to the review and the session (`attach_workspace_review`); the import then produces `import.planned` and `review.settled` for that session itself, in the run's transaction (`crates/import`).
+- Presenting an import review ties its plan to the review and the session (`attach_workspace_review`); the import then produces `import.planned` and `review.settled` for that session itself, in the run's transaction (`crates/integrations/import`).
 - The owner connecting an app a session asked for produces an `app.connected` event (`agent_harness::domain::app_connections`).
 
 The composition root wires `PgExternalReplyStore` into the harness and recovers
@@ -277,7 +277,7 @@ Local orchestration supplies every value explicitly for each fleet; see
 
 All feature configs read the same harness `APP_SECRETS_JSON`; the harness
 Doppler validation binary validates each config. Stable public origins resolve
-once at startup through `macro_service_urls`: `McpPublicUrl` preserves the
+once at startup through the service URL crates: `McpPublicUrl` preserves the
 `mcp-server[-dev].macro.com` OAuth identity, `CognitionPublicUrl` preserves
 `document-cognition[-dev].macro.com` integration callbacks, and `AppServiceUrl`
 supplies browser links and preview form origin. Preview control accepts the

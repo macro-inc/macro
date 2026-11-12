@@ -24,7 +24,7 @@ mod legacy_upgrade {
     use std::sync::Mutex;
     use std::time::Duration;
 
-    use model::document::FileType;
+    use shared_types::document::FileType;
 
     use crate::config::LokPath;
     use crate::process::convert::run_lok_conversion;
@@ -37,7 +37,8 @@ mod legacy_upgrade {
     }
 
     fn fonts() -> pptx_engine::font::FontDb {
-        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../crates/pptx_engine/fonts");
+        let dir =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../crates/engines/pptx_engine/fonts");
         let mut db = pptx_engine::font::FontDb::new();
         let mut files: Vec<_> = std::fs::read_dir(dir)
             .expect("pptx_engine fonts")
@@ -306,7 +307,7 @@ mod legacy_upgrade {
 }
 
 mod conversion_table {
-    use model::document::FileType;
+    use shared_types::document::FileType;
 
     use crate::utils::{conversion_timeout, get_lok_filter_from_file_types, resolve_file_type};
 
@@ -552,8 +553,8 @@ mod job_updates {
     //! What a finished conversion reports to the job update handler, which
     //! rejects updates for jobs it does not track.
 
-    use model::convert::ConvertQueueMessage;
     use serde_json::json;
+    use shared_types::convert::ConvertQueueMessage;
 
     use crate::process::convert::job_update;
 

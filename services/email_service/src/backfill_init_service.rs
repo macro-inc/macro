@@ -4,9 +4,9 @@ use crate::pubsub::context::PubSubContext;
 use crate::util::process_pre_insert::sync_labels::sync_labels;
 use crate::util::sync_contacts::sync_contacts;
 use email_db_client::backfill::job::update::{InitLeaseClaim, InitLeaseRenewal};
-use models_email::email::service::backfill::{InitPayload, JobScopedPayload};
-use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
-use models_email::email::service::{backfill, link};
+use email_types::email::service::backfill::{InitPayload, JobScopedPayload};
+use email_types::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
+use email_types::email::service::{backfill, link};
 use std::cmp::min;
 use uuid::Uuid;
 

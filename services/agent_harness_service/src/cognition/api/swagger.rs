@@ -43,14 +43,14 @@ use crate::cognition::api::preview::get_batch_preview::{
     GetBatchPreviewRequest, GetBatchPreviewResponse,
 };
 
-use chat::domain::models::{ChatResponse, FreeTierModel, GetChatResponse, WebCitation};
-use chat::inbound::http::router::{
+use ai_chat::domain::models::{ChatResponse, FreeTierModel, GetChatResponse, WebCitation};
+use ai_chat::inbound::http::router::{
     self as chat_router, CallToolRequest, CallToolResponse, CreateChatRequest,
     GetChatPermissionsResponse, PatchChatRequest, RejectToolCallRequest, UpdateToolCallRequest,
     UpdateToolResponseRequest,
 };
 
-use model::{
+use shared_types::{
     chat::{
         AttachmentMetadata, AttachmentType, Chat, ChatAttachment, ChatHistory, ChatMessage,
         ChatMessageWithAttachments, ConversationRecord, MessageWithAttachments, NewAttachment,
@@ -60,9 +60,9 @@ use model::{
     version::DocumentCognitionServiceApiVersion,
 };
 
-use model::citations::DocumentTextPart;
-use models_dcs::api::ChatHistoryBatchMessagesRequest;
-use models_permissions::share_permission::channel_share_permission::UpdateOperation;
+use dcs_types::api::ChatHistoryBatchMessagesRequest;
+use permissions_types::share_permission::channel_share_permission::UpdateOperation;
+use shared_types::citations::DocumentTextPart;
 use utoipa::OpenApi;
 
 // TODO: update to a real license - I added this bc it's required by orval
@@ -148,8 +148,8 @@ use utoipa::OpenApi;
                 StringIDResponse,
                 GenericErrorResponse,
                 // Permissions V2
-                models_permissions::share_permission::LinkShare, models_permissions::share_permission::access_level::AccessLevel, models_permissions::share_permission::SharePermissionV2, models_permissions::share_permission::UpdateSharePermissionRequestV2, // Share permission
-                models_permissions::share_permission::channel_share_permission::ChannelSharePermission, models_permissions::share_permission::channel_share_permission::UpdateChannelSharePermission, // Channel share permissions
+                permissions_types::share_permission::LinkShare, permissions_types::share_permission::access_level::AccessLevel, permissions_types::share_permission::SharePermissionV2, permissions_types::share_permission::UpdateSharePermissionRequestV2, // Share permission
+                permissions_types::share_permission::channel_share_permission::ChannelSharePermission, permissions_types::share_permission::channel_share_permission::UpdateChannelSharePermission, // Channel share permissions
 
                 // Chat
                 Chat,
@@ -215,8 +215,8 @@ use utoipa::OpenApi;
                 StructuredCompletionRequest,
                 StructuredCompletionResponse,
                 StructuredCompletionError,
-                jev::domain::DecisionRequest,
-                jev::domain::DecisionResponse,
+                jev_classifier::domain::DecisionRequest,
+                jev_classifier::domain::DecisionResponse,
                 decisions::DecisionErrorBody,
                 image_generation_api::GenerateImageRequest,
                 image_generation_api::GenerateImageResponse,
@@ -235,7 +235,7 @@ use utoipa::OpenApi;
                 skills::inbound::axum_router::SkillsResponse,
                 skills::inbound::axum_router::SkillContentResponse,
                 skills::inbound::axum_router::SkillErrorBody,
-                agent::structured_output::DynamicSchema,
+                agent_loop::structured_output::DynamicSchema,
 
                 // Memory
                 MemoryResponse,

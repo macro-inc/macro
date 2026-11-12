@@ -7,7 +7,10 @@ use super::wiring;
 use super::world::{
     INBOX, MESSAGES, STARRED, THREADS, UNREAD, WORK, World, on_worker_stacks, owner,
 };
+use email_thread_id::EmailThreadId;
+use entity_access_outbound::PgAccessRepository;
 use sqlx::PgPool;
+use std::sync::Arc;
 
 const T1: usize = 0;
 const T2: usize = 1;
@@ -327,7 +330,7 @@ scenario!(
     a_recovery_backfill_does_not_bring_back_an_archive_that_landed_during_its_fetch,
     913,
     |world| {
-        use models_email::email::service::backfill::{BackfillMessagePayload, JobScopedPayload};
+        use email_types::email::service::backfill::{BackfillMessagePayload, JobScopedPayload};
         let sim = &mut Sim::new(&mut world, 1);
         sim.act(Action::Archive(T1, true), false).await.unwrap();
         sim.deliver_all(Queue::Ops, Reply::RateLimited).await;
@@ -389,14 +392,22 @@ scenario!(
             let owner = owner.clone();
             tokio::spawn(async move {
                 email
-                    .change_thread_mailbox_state(owner, thread, MailboxAction::Read(false))
+                    .change_thread_mailbox_state(
+                        owner,
+                        EmailThreadId::from_uuid(thread),
+                        MailboxAction::Read(false),
+                    )
                     .await
             })
         };
         arrived.await.unwrap();
         // Meanwhile the user marks t1 read; this write is queued normally.
         let second = email
-            .change_thread_mailbox_state(owner, thread, MailboxAction::Read(true))
+            .change_thread_mailbox_state(
+                owner,
+                EmailThreadId::from_uuid(thread),
+                MailboxAction::Read(true),
+            )
             .await;
         sim.world.sqs.set_outage(true);
         let _ = release.send(());
@@ -570,7 +581,7 @@ async fn crossing_bulk_writes_each_send_where_they_are_newest_and_fall_back_on_r
     use crate::pubsub::gmail_ops::operations::OperationError;
     use crate::pubsub::gmail_ops::operations::modify_message_labels::modify_message_labels;
     use email::domain::ports::EmailRepo;
-    use models_email::gmail::gmail_ops::{GmailMessageRef, ModifyMessageLabelsBatchPayload};
+    use email_types::gmail::gmail_ops::{GmailMessageRef, ModifyMessageLabelsBatchPayload};
     use uuid::Uuid;
 
     let mut world = World::new(pool, 920, true).await;
@@ -580,7 +591,10 @@ async fn crossing_bulk_writes_each_send_where_they_are_newest_and_fall_back_on_r
 
     let archive = Uuid::from_u128(0xc1);
     let unarchive = Uuid::from_u128(0xc2);
-    let repo = email::outbound::EmailPgRepo::new(sim.world.db.clone());
+    let repo = email::outbound::EmailPgRepo::new(
+        sim.world.db.clone(),
+        Arc::new(PgAccessRepository::new(sim.world.db.clone())),
+    );
     for (thread, add, write_id) in [
         (T1, false, archive),
         (T2, true, unarchive),
@@ -681,7 +695,7 @@ fn label_writes_and_a_label_sync_fit_on_small_worker_stacks(
 ) {
     use aws_sdk_sqs::types::{Message, MessageSystemAttributeName};
     use email::domain::ports::EmailService;
-    use models_email::gmail::inbox_sync::{
+    use email_types::gmail::inbox_sync::{
         InboxSyncOperation, InboxSyncPubsubMessage, UpdateLabelsPayload,
     };
     let message = |id: String, body: String| {
@@ -698,7 +712,11 @@ fn label_writes_and_a_label_sync_fit_on_small_worker_stacks(
             world.reset().await;
             world
                 .email
-                .set_thread_archived(owner(), world.thread_ids[THREADS[T1]], true)
+                .set_thread_archived(
+                    owner(),
+                    EmailThreadId::from_uuid(world.thread_ids[THREADS[T1]]),
+                    true,
+                )
                 .await
                 .unwrap();
             let (sent, _) = world.sqs.take();

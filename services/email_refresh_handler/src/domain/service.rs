@@ -1,5 +1,5 @@
 use chrono::Timelike;
-use models_email::email::service::pubsub::{DeletionReason, LinkManagerMessage};
+use email_types::email::service::pubsub::{DeletionReason, LinkManagerMessage};
 
 use super::{
     models::MaintenanceConfig,

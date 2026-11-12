@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   lockSlice,
-  manifestWithoutMembers,
+  manifestForClosure,
   profileEnvPrefix,
   wasmCacheKey,
 } from './wasm-cache-key';
@@ -60,6 +60,8 @@ members = [
 
 [workspace.dependencies]
 png = "0.17"
+engine = { path = "crates/engine", default-features = false }
+server = { path = "crates/server" }
 
 [profile.engine-wasm]
 inherits = "release"
@@ -116,12 +118,13 @@ describe('lockSlice', () => {
   });
 });
 
-describe('manifestWithoutMembers', () => {
-  it('drops only the member list', () => {
-    const manifest = manifestWithoutMembers(MANIFEST);
+describe('manifestForClosure', () => {
+  it('drops the member list and the entries of crates outside the closure', () => {
+    const manifest = manifestForClosure(MANIFEST, ['crates/engine']);
     expect(manifest).not.toContain('crates/server');
     expect(manifest).toContain('resolver = "2"');
     expect(manifest).toContain('png = "0.17"');
+    expect(manifest).toContain('engine = { path = "crates/engine", default-features = false }');
     expect(manifest).toContain('[profile.engine-wasm]');
   });
 });
@@ -143,7 +146,12 @@ describe('wasmCacheKey', () => {
       key({ 'Cargo.lock': LOCK.replace('version = "1.40.0"', 'version = "1.41.0"') })
     ).toBe(base);
     expect(
-      key({ 'Cargo.toml': MANIFEST.replace('"crates/server",', '"crates/server",\n  "crates/new",') })
+      key({
+        'Cargo.toml': MANIFEST.replace('"crates/server",', '"crates/server",\n  "crates/new",').replace(
+          'server = { path = "crates/server" }',
+          'server = { path = "crates/group/server" }\nnew = { path = "crates/new" }'
+        ),
+      })
     ).toBe(base);
     expect(key({}, { CARGO_PROFILE_OTHER_WASM_LTO: 'off' })).toBe(base);
   });
@@ -156,6 +164,7 @@ describe('wasmCacheKey', () => {
       key({ 'Cargo.lock': LOCK.replace('checksum = "bbbb"', 'checksum = "ffff"') }),
       key({ 'Cargo.toml': MANIFEST.replace('png = "0.17"', 'png = "0.18"') }),
       key({ 'Cargo.toml': MANIFEST.replace('lto = true', 'lto = false') }),
+      key({ 'Cargo.toml': MANIFEST.replace(', default-features = false }', ' }') }),
       key({ 'rust-toolchain.toml': '[toolchain]\nchannel = "1.95.0"\n' }),
       key({ 'nix/tools.nix': '{ wasm-pack = "0.15.1"; }\n' }),
       key({}, { CARGO_PROFILE_ENGINE_WASM_LTO: 'off' }),

@@ -1,5 +1,5 @@
 use email::domain::mailbox::{MailboxError, lifecycle::*};
-use models_email::{
+use email_types::{
     api::refresh::RefreshEmailEvent,
     service::{
         backfill::{BackfillOperation, BackfillPubsubMessage, InitPayload, JobScopedPayload},
@@ -8,11 +8,11 @@ use models_email::{
 };
 use uuid::Uuid;
 
-use email_api_client::domain::models::{AccessToken, MailboxAccess, ProviderId};
-use email_api_client::domain::ports::{MailboxWatchClient, ScopedMailboxRepository};
+use email_api_client_core::models::{AccessToken, MailboxAccess, ProviderId};
+use email_api_client_core::ports::{MailboxWatchClient, ScopedMailboxRepository};
 
 pub struct InboxLifecycleClients {
-    pub outlook: email_api_client::OutlookApiClientRepository,
+    pub outlook: email_api_client_outbound::OutlookApiClientRepository,
     pub auth: authentication_service_client::AuthServiceClient,
     pub queue: sqs_client::SQS,
     pub gateway: connection_gateway_client::client::ConnectionGatewayClient,
@@ -22,7 +22,7 @@ impl InboxLifecycleEffects for InboxLifecycleClients {
         match effect {
             InboxLifecycleEffect::GmailHistory { work } => {
                 use email::domain::mailbox::gmail_history::HistoryWork;
-                use models_email::gmail::inbox_sync::{
+                use email_types::gmail::inbox_sync::{
                     DeleteMessagePayload, InboxSyncOperation, InboxSyncPubsubMessage,
                     UpdateLabelsPayload, UpsertMessagePayload,
                 };
@@ -161,8 +161,8 @@ impl InboxLifecycleEffects for InboxLifecycleClients {
 }
 
 use crate::outbound::email_api::GmailApi;
-use email_api_client::domain::models::EmailApiError;
-use models_email::service::{
+use email_api_client_core::models::EmailApiError;
+use email_types::service::{
     cache::TokenCacheKey,
     link::{Link, UserProvider},
 };

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use models_email::email::service::pubsub::LinkManagerMessage;
+use email_types::email::service::pubsub::LinkManagerMessage;
 
 use crate::domain::ports::LinkManagerQueue;
 

@@ -1,5 +1,5 @@
 use anyhow::{self, Result};
-use model::chat::{AttachmentType, ChatAttachment};
+use shared_types::chat::{AttachmentType, ChatAttachment};
 use sqlx::{Pool, Postgres};
 
 #[tracing::instrument(skip(db))]

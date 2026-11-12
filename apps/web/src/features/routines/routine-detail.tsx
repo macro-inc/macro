@@ -36,7 +36,7 @@ import {
 import { RoutineTriggers } from './routine-triggers';
 import { RoutineDetailView } from './views/routine-detail';
 
-/** The built-in skill for composing routines (crates/system_skills). */
+/** The built-in skill for composing routines (crates/agents/system_skills). */
 const COMPOSE_ROUTINES_SKILL = 'Compose Routines';
 
 export function Routine() {

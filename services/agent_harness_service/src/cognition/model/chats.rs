@@ -1,7 +1,7 @@
 #![allow(deprecated)]
-use model::chat::ChatMessageWithAttachments;
-use model_entity::Entity;
+use entity_kind::Entity;
 use serde::{Deserialize, Serialize};
+use shared_types::chat::ChatMessageWithAttachments;
 use unfurl_service::GetUnfurlResponse;
 use utoipa::ToSchema;
 

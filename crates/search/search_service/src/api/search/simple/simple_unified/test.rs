@@ -1,0 +1,586 @@
+use super::*;
+use chrono::{TimeZone, Utc};
+use opensearch_client::search::model::Highlight;
+use opensearch_types::SearchEntityType;
+use sqlx::types::Uuid;
+
+/// Helper to create a TaggedSearchHit for testing
+fn make_tagged_hit(
+    entity_id: Uuid,
+    updated_at: Option<chrono::DateTime<Utc>>,
+    source: SearchSource,
+) -> TaggedSearchHit {
+    TaggedSearchHit {
+        hit: SearchHit {
+            entity_id,
+            entity_type: SearchEntityType::Documents,
+            updated_at,
+            score: Some(1.0),
+            highlight: Highlight::default(),
+            goto: None,
+        },
+        source,
+    }
+}
+
+/// Helper to create a timestamp for testing
+fn ts(secs: i64) -> chrono::DateTime<Utc> {
+    Utc.timestamp_opt(secs, 0).unwrap()
+}
+
+// ==================== Tests for compute_next_cursor ====================
+
+#[test]
+fn test_compute_next_cursor_search_done_but_truncated_in_merge_continues() {
+    // The sub-search reported Done, but the cross-source merge dropped some of
+    // this source's entities (included < original). Those must resurface next
+    // page, so the cursor continues from the last included hit rather than ending
+    // — returning Done here would silently lose the bumped entities.
+    let entity_id = Uuid::new_v4();
+    let timestamp = ts(1000);
+    let last_hit = make_tagged_hit(entity_id, Some(timestamp), SearchSource::Content);
+
+    let result = compute_next_cursor(
+        &SearchCursorOption::Done,
+        5,  // included_count
+        10, // original_count (more than included — truncated in merge)
+        Some(&last_hit),
+        &SearchCursorOption::NotDone(None),
+    );
+
+    match result {
+        SearchCursorOption::NotDone(Some(cursor)) => {
+            let (id, got_ts) = cursor.as_updated_at().expect("expected UpdatedAt cursor");
+            assert_eq!(id, entity_id);
+            assert_eq!(got_ts, timestamp);
+        }
+        _ => panic!("Expected NotDone with cursor, got {:?}", result),
+    }
+}
+
+#[test]
+fn test_compute_next_cursor_excluded_results_with_included_generates_cursor() {
+    // When some results were excluded (included < original) and we have included results,
+    // generate cursor from the last included hit
+    let entity_id = Uuid::new_v4();
+    let timestamp = ts(1000);
+    let last_hit = make_tagged_hit(entity_id, Some(timestamp), SearchSource::Content);
+
+    let result = compute_next_cursor(
+        &SearchCursorOption::NotDone(None), // search says not done
+        3,                                  // included_count
+        5,                                  // original_count (more results were fetched)
+        Some(&last_hit),
+        &SearchCursorOption::NotDone(None),
+    );
+
+    match result {
+        SearchCursorOption::NotDone(Some(cursor)) => {
+            let (id, ts) = cursor.as_updated_at().expect("expected UpdatedAt cursor");
+            assert_eq!(id, entity_id);
+            assert_eq!(ts, timestamp);
+        }
+        _ => panic!("Expected NotDone with cursor, got {:?}", result),
+    }
+}
+
+#[test]
+fn test_compute_next_cursor_search_has_more_with_included_generates_cursor() {
+    // When search indicates more results (has_more) and we have included results,
+    // generate cursor from the last included hit
+    let entity_id = Uuid::new_v4();
+    let timestamp = ts(2000);
+    let last_hit = make_tagged_hit(entity_id, Some(timestamp), SearchSource::ChatName);
+
+    let result = compute_next_cursor(
+        &SearchCursorOption::NotDone(Some(SearchMethodCursor::UpdatedAt {
+            entity_id: Uuid::new_v4(),
+            updated_at: ts(500),
+        })), // search has more
+        5, // included_count
+        5, // original_count (all included)
+        Some(&last_hit),
+        &SearchCursorOption::NotDone(None),
+    );
+
+    match result {
+        SearchCursorOption::NotDone(Some(cursor)) => {
+            let (id, ts) = cursor.as_updated_at().expect("expected UpdatedAt cursor");
+            assert_eq!(id, entity_id);
+            assert_eq!(ts, timestamp);
+        }
+        _ => panic!("Expected NotDone with cursor, got {:?}", result),
+    }
+}
+
+#[test]
+fn test_compute_next_cursor_excluded_results_no_included_carries_forward() {
+    // When results were excluded but none were included in final page,
+    // carry forward the original cursor
+    let original_entity_id = Uuid::new_v4();
+    let original_timestamp = ts(500);
+    let original_cursor = SearchCursorOption::NotDone(Some(SearchMethodCursor::UpdatedAt {
+        entity_id: original_entity_id,
+        updated_at: original_timestamp,
+    }));
+
+    let result = compute_next_cursor(
+        &SearchCursorOption::NotDone(None), // search not done
+        0,                                  // included_count (none included)
+        5,                                  // original_count (had results)
+        None,                               // no last hit
+        &original_cursor,
+    );
+
+    match result {
+        SearchCursorOption::NotDone(Some(cursor)) => {
+            let (id, ts) = cursor.as_updated_at().expect("expected UpdatedAt cursor");
+            assert_eq!(id, original_entity_id);
+            assert_eq!(ts, original_timestamp);
+        }
+        _ => panic!("Expected original cursor carried forward, got {:?}", result),
+    }
+}
+
+#[test]
+fn test_compute_next_cursor_all_included_search_done_returns_done() {
+    // When all results were included and search indicates it's done,
+    // return Done
+    let result = compute_next_cursor(
+        &SearchCursorOption::Done, // search is done
+        5,                         // included_count
+        5,                         // original_count (all included)
+        Some(&make_tagged_hit(
+            Uuid::new_v4(),
+            Some(ts(1000)),
+            SearchSource::Content,
+        )),
+        &SearchCursorOption::NotDone(None),
+    );
+
+    assert!(result.is_done());
+}
+
+#[test]
+fn test_compute_next_cursor_all_included_but_search_not_done_continues() {
+    // When all fetched results were included but search indicates more exist,
+    // generate cursor from last included (search may have more pages)
+    let entity_id = Uuid::new_v4();
+    let timestamp = ts(1000);
+    let last_hit = make_tagged_hit(entity_id, Some(timestamp), SearchSource::Content);
+
+    let result = compute_next_cursor(
+        &SearchCursorOption::NotDone(None), // search says not done (more exists)
+        5,                                  // included_count
+        5,                                  // original_count (all fetched were included)
+        Some(&last_hit),
+        &SearchCursorOption::NotDone(None),
+    );
+
+    // Since search says not done, we should continue pagination
+    match result {
+        SearchCursorOption::NotDone(Some(cursor)) => {
+            let (id, ts) = cursor.as_updated_at().expect("expected UpdatedAt cursor");
+            assert_eq!(id, entity_id);
+            assert_eq!(ts, timestamp);
+        }
+        _ => panic!("Expected NotDone with cursor, got {:?}", result),
+    }
+}
+
+#[test]
+fn test_compute_next_cursor_hit_without_timestamp_returns_none_cursor() {
+    // When the last included hit has no timestamp, cursor should be NotDone(None)
+    let entity_id = Uuid::new_v4();
+    let last_hit = make_tagged_hit(entity_id, None, SearchSource::Content);
+
+    let result = compute_next_cursor(
+        &SearchCursorOption::NotDone(None),
+        3,
+        5,
+        Some(&last_hit),
+        &SearchCursorOption::NotDone(None),
+    );
+
+    match result {
+        SearchCursorOption::NotDone(None) => {}
+        _ => panic!("Expected NotDone(None), got {:?}", result),
+    }
+}
+
+// ==================== Tests for take_first_n_entities ====================
+
+#[test]
+fn take_first_n_entities_budgets_distinct_entities_keeping_all_hits() {
+    let e1 = Uuid::new_v4();
+    let e2 = Uuid::new_v4();
+    let e3 = Uuid::new_v4();
+    // e1 contributes 3 hits (e.g. three matching content chunks), e2 and e3 one
+    // each. The budget is 2 entities.
+    let combined = vec![
+        make_tagged_hit(e1, Some(ts(3000)), SearchSource::Content),
+        make_tagged_hit(e1, Some(ts(3000)), SearchSource::Content),
+        make_tagged_hit(e1, Some(ts(3000)), SearchSource::Content),
+        make_tagged_hit(e2, Some(ts(2000)), SearchSource::Content),
+        make_tagged_hit(e3, Some(ts(1000)), SearchSource::Content),
+    ];
+
+    let result = take_first_n_entities(combined, 2);
+
+    // All three of e1's hits plus e2's single hit; e3 dropped entirely.
+    assert_eq!(result.len(), 4);
+    assert_eq!(
+        result.iter().filter(|t| t.hit.entity_id == e1).count(),
+        3,
+        "every hit of an included entity is kept together"
+    );
+    assert!(
+        result
+            .iter()
+            .all(|t| t.hit.entity_id == e1 || t.hit.entity_id == e2),
+        "the third entity must not appear once the budget is full"
+    );
+}
+
+#[test]
+fn take_first_n_entities_keeps_all_when_under_budget() {
+    let e1 = Uuid::new_v4();
+    let e2 = Uuid::new_v4();
+    let combined = vec![
+        make_tagged_hit(e1, Some(ts(2000)), SearchSource::Content),
+        make_tagged_hit(e1, Some(ts(2000)), SearchSource::Content),
+        make_tagged_hit(e2, Some(ts(1000)), SearchSource::ChatName),
+    ];
+
+    let result = take_first_n_entities(combined, 10);
+
+    assert_eq!(result.len(), 3, "nothing is dropped when under the budget");
+}
+
+// ==================== Tests for find_last_of_source ====================
+
+#[test]
+fn test_find_last_of_source_finds_correct_source() {
+    let doc_id = Uuid::new_v4();
+    let chat_id = Uuid::new_v4();
+    let doc2_id = Uuid::new_v4();
+
+    let results = vec![
+        make_tagged_hit(doc_id, Some(ts(1000)), SearchSource::Content),
+        make_tagged_hit(chat_id, Some(ts(2000)), SearchSource::ChatName),
+        make_tagged_hit(doc2_id, Some(ts(3000)), SearchSource::Content),
+    ];
+
+    let last_doc = find_last_of_source(&results, SearchSource::Content);
+    assert!(last_doc.is_some());
+    assert_eq!(last_doc.unwrap().hit.entity_id, doc2_id);
+
+    let last_chat = find_last_of_source(&results, SearchSource::ChatName);
+    assert!(last_chat.is_some());
+    assert_eq!(last_chat.unwrap().hit.entity_id, chat_id);
+}
+
+#[test]
+fn test_find_last_of_source_returns_none_when_not_found() {
+    let results = vec![
+        make_tagged_hit(Uuid::new_v4(), Some(ts(1000)), SearchSource::ChatName),
+        make_tagged_hit(Uuid::new_v4(), Some(ts(2000)), SearchSource::ChatName),
+    ];
+
+    let last_email = find_last_of_source(&results, SearchSource::Content);
+    assert!(last_email.is_none());
+}
+
+#[test]
+fn test_find_last_of_source_empty_results() {
+    let results: Vec<TaggedSearchHit> = vec![];
+    let result = find_last_of_source(&results, SearchSource::Content);
+    assert!(result.is_none());
+}
+
+// ==================== Tests for cursor_from_tagged ====================
+
+#[test]
+fn test_cursor_from_tagged_with_timestamp() {
+    let entity_id = Uuid::new_v4();
+    let timestamp = ts(1000);
+    let hit = make_tagged_hit(entity_id, Some(timestamp), SearchSource::Content);
+
+    let cursor = cursor_from_tagged(&hit);
+    assert!(cursor.is_some());
+    let (id, ts) = cursor
+        .unwrap()
+        .as_updated_at()
+        .expect("expected UpdatedAt cursor");
+    assert_eq!(id, entity_id);
+    assert_eq!(ts, timestamp);
+}
+
+#[test]
+fn test_cursor_from_tagged_without_timestamp() {
+    let entity_id = Uuid::new_v4();
+    let hit = make_tagged_hit(entity_id, None, SearchSource::ChatName);
+
+    let cursor = cursor_from_tagged(&hit);
+    assert!(cursor.is_none());
+}
+
+// ==================== Integration-style tests ====================
+
+#[test]
+fn test_cursor_logic_pagination_scenario() {
+    // Simulate a pagination scenario where:
+    // - Search returned 10 content entities
+    // - Only 3 made it into the final page (others had newer timestamps from other sources)
+    // - The cursor should point to the last included content entity
+
+    let content_ids: Vec<Uuid> = (0..10).map(|_| Uuid::new_v4()).collect();
+    let timestamps: Vec<chrono::DateTime<Utc>> = (0..10).map(|i| ts(1000 + i * 100)).collect();
+
+    // Create the final tagged results (simulating merged & sorted output)
+    let final_tagged: Vec<TaggedSearchHit> = vec![
+        make_tagged_hit(Uuid::new_v4(), Some(ts(5000)), SearchSource::ChatName),
+        make_tagged_hit(content_ids[9], Some(timestamps[9]), SearchSource::Content),
+        make_tagged_hit(Uuid::new_v4(), Some(ts(4000)), SearchSource::CrmCompany),
+        make_tagged_hit(content_ids[8], Some(timestamps[8]), SearchSource::Content),
+        make_tagged_hit(content_ids[7], Some(timestamps[7]), SearchSource::Content),
+    ];
+
+    let content_next_cursor = SearchCursorOption::NotDone(Some(SearchMethodCursor::UpdatedAt {
+        entity_id: content_ids[6],
+        updated_at: timestamps[6],
+    }));
+
+    let included_content = final_tagged
+        .iter()
+        .filter(|h| h.source == SearchSource::Content)
+        .count();
+    let content_count = 10; // Original fetch returned 10
+
+    let new_content_cursor = compute_next_cursor(
+        &content_next_cursor,
+        included_content,
+        content_count,
+        find_last_of_source(&final_tagged, SearchSource::Content),
+        &SearchCursorOption::NotDone(None),
+    );
+
+    // Should generate cursor from last included content entity (content_ids[7])
+    match new_content_cursor {
+        SearchCursorOption::NotDone(Some(cursor)) => {
+            let (id, ts) = cursor.as_updated_at().expect("expected UpdatedAt cursor");
+            assert_eq!(id, content_ids[7]);
+            assert_eq!(ts, timestamps[7]);
+        }
+        _ => panic!(
+            "Expected cursor from last included content entity, got {:?}",
+            new_content_cursor
+        ),
+    }
+}
+
+#[test]
+fn test_cursor_logic_source_exhausted_scenario() {
+    // Simulate when a source is exhausted (returned fewer than requested)
+    // - Search returned 3 content entities (less than page_size of 10)
+    // - All 3 made it into the final page
+    // - Cursor should be Done since source is exhausted
+
+    let final_tagged: Vec<TaggedSearchHit> = vec![
+        make_tagged_hit(Uuid::new_v4(), Some(ts(3000)), SearchSource::Content),
+        make_tagged_hit(Uuid::new_v4(), Some(ts(2000)), SearchSource::Content),
+        make_tagged_hit(Uuid::new_v4(), Some(ts(1000)), SearchSource::Content),
+    ];
+
+    let content_next_cursor = SearchCursorOption::Done; // Search says done
+
+    let new_content_cursor = compute_next_cursor(
+        &content_next_cursor,
+        3, // all included
+        3, // all returned
+        find_last_of_source(&final_tagged, SearchSource::Content),
+        &SearchCursorOption::NotDone(None),
+    );
+
+    assert!(new_content_cursor.is_done());
+}
+
+// ==================== CRM source cursor scenarios ====================
+
+#[test]
+fn test_cursor_logic_crm_starved_preserves_cursor() {
+    // The regression-prone case for the newly-added CRM source: CRM returned
+    // a page of hits and reported more available, but the global merge/sort
+    // put only newer non-CRM hits on this page. The CRM cursor must be carried
+    // forward unchanged — advancing it (or marking it Done) would skip the CRM
+    // hits that never made it onto a page. This mirrors the exact arguments
+    // `perform_unified_search` passes for the CRM source.
+    let incoming_crm_id = Uuid::new_v4();
+    let incoming_crm_ts = ts(500);
+    let incoming_crm_cursor = SearchCursorOption::NotDone(Some(SearchMethodCursor::UpdatedAt {
+        entity_id: incoming_crm_id,
+        updated_at: incoming_crm_ts,
+    }));
+
+    // Final page: all non-CRM (CRM starved out by newer doc/chat hits).
+    let final_tagged: Vec<TaggedSearchHit> = vec![
+        make_tagged_hit(Uuid::new_v4(), Some(ts(9000)), SearchSource::Content),
+        make_tagged_hit(Uuid::new_v4(), Some(ts(8000)), SearchSource::ChatName),
+    ];
+
+    // CRM returned hits this round and reported more available.
+    let crm_next_cursor = SearchCursorOption::NotDone(Some(SearchMethodCursor::UpdatedAt {
+        entity_id: Uuid::new_v4(),
+        updated_at: ts(100),
+    }));
+    let included_crm = final_tagged
+        .iter()
+        .filter(|h| h.source == SearchSource::CrmCompany)
+        .count();
+    assert_eq!(included_crm, 0, "precondition: no CRM hit made the page");
+
+    let new_crm_cursor = compute_next_cursor(
+        &crm_next_cursor,
+        included_crm,
+        5, // CRM originally returned a full page of hits
+        find_last_of_source(&final_tagged, SearchSource::CrmCompany),
+        &incoming_crm_cursor,
+    );
+
+    match new_crm_cursor {
+        SearchCursorOption::NotDone(Some(cursor)) => {
+            let (id, t) = cursor.as_updated_at().expect("expected UpdatedAt cursor");
+            assert_eq!(id, incoming_crm_id, "CRM cursor must not advance");
+            assert_eq!(t, incoming_crm_ts, "CRM cursor must not advance");
+        }
+        other => panic!(
+            "expected the incoming CRM cursor preserved, got {:?}",
+            other
+        ),
+    }
+}
+
+#[test]
+fn test_cursor_logic_crm_included_advances_cursor() {
+    // The companion case: when a CRM hit does make the page, the CRM cursor
+    // advances to the last included CRM hit (keyset position for the next page).
+    let crm_id = Uuid::new_v4();
+    let crm_ts = ts(7000);
+    let final_tagged: Vec<TaggedSearchHit> = vec![
+        make_tagged_hit(Uuid::new_v4(), Some(ts(9000)), SearchSource::Content),
+        make_tagged_hit(crm_id, Some(crm_ts), SearchSource::CrmCompany),
+    ];
+
+    let crm_next_cursor = SearchCursorOption::NotDone(Some(SearchMethodCursor::UpdatedAt {
+        entity_id: Uuid::new_v4(),
+        updated_at: ts(100),
+    }));
+    let included_crm = final_tagged
+        .iter()
+        .filter(|h| h.source == SearchSource::CrmCompany)
+        .count();
+
+    let new_crm_cursor = compute_next_cursor(
+        &crm_next_cursor,
+        included_crm,
+        5,
+        find_last_of_source(&final_tagged, SearchSource::CrmCompany),
+        &SearchCursorOption::NotDone(None),
+    );
+
+    match new_crm_cursor {
+        SearchCursorOption::NotDone(Some(cursor)) => {
+            let (id, t) = cursor.as_updated_at().expect("expected UpdatedAt cursor");
+            assert_eq!(id, crm_id);
+            assert_eq!(t, crm_ts);
+        }
+        other => panic!(
+            "expected cursor at the last included CRM hit, got {:?}",
+            other
+        ),
+    }
+}
+
+#[test]
+fn enforce_term_limits_accepts_at_max() {
+    let terms: Vec<String> = (0..MAX_SEARCH_TERMS).map(|i| format!("t{i}")).collect();
+    let out = enforce_term_limits(terms.clone()).expect("at-limit term count should pass");
+    assert_eq!(out, terms);
+}
+
+#[test]
+fn enforce_term_limits_rejects_over_max() {
+    let terms: Vec<String> = (0..=MAX_SEARCH_TERMS).map(|i| format!("t{i}")).collect();
+    assert_eq!(terms.len(), MAX_SEARCH_TERMS + 1);
+    assert!(matches!(
+        enforce_term_limits(terms),
+        Err(SearchError::TooManyTerms)
+    ));
+}
+
+#[test]
+fn enforce_term_limits_truncates_long_term() {
+    let long = "a".repeat(MAX_TERM_CHARS + 25);
+    let out = enforce_term_limits(vec![long]).expect("single term is under the count cap");
+    assert_eq!(out[0].chars().count(), MAX_TERM_CHARS);
+}
+
+#[test]
+fn enforce_term_limits_leaves_short_terms_untouched() {
+    let terms = vec!["hello".to_string(), "world".to_string()];
+    let out = enforce_term_limits(terms.clone()).expect("short terms pass");
+    assert_eq!(out, terms);
+}
+
+#[test]
+fn enforce_term_limits_truncates_on_char_boundary() {
+    let long = "é".repeat(MAX_TERM_CHARS + 10);
+    let out = enforce_term_limits(vec![long]).expect("single term is under the count cap");
+    assert_eq!(out[0].chars().count(), MAX_TERM_CHARS);
+}
+
+/// The flag is the only thing keeping calendar events out of a deployed
+/// environment's search results, so the override direction matters: a request
+/// that asks for them must still get nothing while the flag is off.
+#[test]
+fn the_calendar_flag_overrides_what_the_request_asked_for() {
+    assert!(
+        calendar_events_searchable(true, true),
+        "requested and enabled is the only combination that searches calendar"
+    );
+    assert!(
+        !calendar_events_searchable(true, false),
+        "an explicit request must not defeat a disabled environment"
+    );
+    assert!(
+        !calendar_events_searchable(false, true),
+        "an enabled environment must still honour a NIL-excluded request"
+    );
+    assert!(!calendar_events_searchable(false, false));
+}
+
+#[test]
+fn channel_name_cursor_round_trips_through_the_unified_cursor() {
+    let entity_id = Uuid::now_v7();
+    let cursor = SearchCursor {
+        chat_name_cursor: SearchCursorOption::Done,
+        content_cursor: SearchCursorOption::Done,
+        project_name_cursor: SearchCursorOption::Done,
+        crm_company_cursor: SearchCursorOption::Done,
+        channel_name_cursor: SearchCursorOption::NotDone(Some(SearchMethodCursor::UpdatedAt {
+            entity_id,
+            updated_at: ts(1000),
+        })),
+    };
+
+    let decoded = SearchCursor::decode(&cursor.encode().expect("encode")).expect("decode");
+
+    assert!(
+        !decoded.is_exhausted(),
+        "a pending channel name cursor keeps the page alive"
+    );
+    let SearchCursorOption::NotDone(Some(channel_cursor)) = decoded.channel_name_cursor else {
+        panic!("expected the channel name cursor to survive the round trip");
+    };
+    assert_eq!(channel_cursor.as_updated_at(), Some((entity_id, ts(1000))));
+}

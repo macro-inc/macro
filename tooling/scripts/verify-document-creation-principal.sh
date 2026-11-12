@@ -9,7 +9,7 @@ unset SQLX_OFFLINE
 
 raw_owner_writes="$(rg -n --glob '!**/test.rs' --glob '!**/tests.rs' \
   'insert_entity_access_row|insert_entity\(|INSERT INTO entity_access|INSERT INTO entity ' \
-  crates/documents/src || true)"
+  crates/documents/documents/src || true)"
 if [[ -n "$raw_owner_writes" ]]; then
   echo "document owners must register through OwnedEntityRegistrar:" >&2
   echo "$raw_owner_writes" >&2
@@ -19,7 +19,7 @@ fi
 python3 - <<'PY'
 from pathlib import Path
 
-path = Path("crates/projects/src/outbound/pg_project_repo/upload_folder.rs")
+path = Path("crates/projects/folder/src/outbound/pg_project_repo/upload_folder.rs")
 source = path.read_text()
 document_create = source.split("async fn create_empty_document", 1)[1].split(
     "async fn create_document_share_permission", 1
@@ -36,8 +36,8 @@ cargo test -p activity --lib creation_principal
 cargo test -p properties --lib entity_property_event
 cargo test -p share_permission_db_utils --lib team_share
 cargo test -p documents --lib
-cargo test -p projects --lib pg_project_repo
+cargo test -p folder --lib pg_project_repo
 cargo test -p document_storage_service bot_tokens_keep_the_actor_without_inventing_a_user
-cargo test --no-run -p ai_tools -p memory -p github -p document_storage_service \
+cargo test --no-run -p agent_tools -p memory -p github -p document_storage_service \
   -p agent_harness_service -p document_upload_finalizer_handler \
   -p webhook -p search_processing_service

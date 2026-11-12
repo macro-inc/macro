@@ -2,7 +2,9 @@
 
 use ai_usage::{AiFeature, UsageContext};
 use email::domain::focus::{FocusClassifier, FocusClassifierError};
-use jev::domain::{JevClassifier, JevProvider, Probability, YesNoClassifier, YesNoQuestion};
+use jev_classifier::domain::{
+    JevClassifier, JevProvider, Probability, YesNoClassifier, YesNoQuestion,
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use serde_json::Value;
 use uuid::Uuid;

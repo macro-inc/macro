@@ -19,7 +19,7 @@ import type {
 } from './generated/types';
 
 /**
- * One statement in flight, mirroring `database_sql::wasm::Query`: start once, then feed
+ * One statement in flight, mirroring `database_sql_engine::wasm::Query`: start once, then feed
  * each request's answer back until `done`. Every method throws an `EngineError`.
  */
 export interface DatabaseSqlQuery {

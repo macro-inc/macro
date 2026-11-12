@@ -1,0 +1,207 @@
+use crate::domain::models::{
+    Attachment, Contact, EmailThreadPreview, Label, PreviewCursorQuery, PreviewView,
+    PreviewViewStandardLabel,
+};
+use doppleganger::{Doppleganger, Mirror};
+use either::Either;
+use entity_access::domain::ports::UserSourceIds;
+use filter_ast::Expr;
+use item_filters::ast::email::EmailLiteral;
+use macro_user_id::user_id::MacroUserIdStr;
+use sqlx::PgPool;
+use std::sync::Arc;
+use uuid::Uuid;
+
+use super::db_types::{AttachmentDbRow, LabelDbRow, ThreadPreviewCursorDbRow};
+
+#[tracing::instrument(err, skip(pool, source_ids, query), fields(link_count = query.link_ids.len(), view = %query.view))]
+pub(super) async fn previews_for_view_cursor(
+    pool: &PgPool,
+    source_ids: &dyn UserSourceIds,
+    query: PreviewCursorQuery,
+    user_id: MacroUserIdStr<'static>,
+) -> Result<Vec<EmailThreadPreview>, sqlx::Error> {
+    let PreviewCursorQuery {
+        view,
+        link_ids,
+        limit,
+        query,
+        team_id,
+    } = query;
+
+    let query = query.split_option();
+
+    Ok(match (view, query) {
+        (view, Either::Right(dynamic_query)) => {
+            super::dynamic::dynamic_email_thread_cursor_with_sources(
+                pool,
+                source_ids,
+                &link_ids,
+                limit,
+                &view,
+                dynamic_query,
+                user_id.as_ref(),
+                team_id,
+            )
+            .await?
+        }
+        (PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox), Either::Left(query)) => {
+            super::preview_views::new_inbox::new_inbox_preview_cursor(
+                pool, &link_ids, limit, &query,
+            )
+            .await?
+        }
+        (
+            view @ PreviewView::StandardLabel(
+                PreviewViewStandardLabel::Sent
+                | PreviewViewStandardLabel::All
+                | PreviewViewStandardLabel::Spam
+                | PreviewViewStandardLabel::Trash,
+            ),
+            Either::Left(query),
+        ) => {
+            // Use the same per-inbox ordered scan for filtered and unfiltered mail;
+            // CalendarOnly(false) is the documented no-op literal.
+            let query =
+                query.map_filter(|()| Arc::new(Expr::Literal(EmailLiteral::CalendarOnly(false))));
+            super::dynamic::dynamic_email_thread_cursor_with_sources(
+                pool,
+                source_ids,
+                &link_ids,
+                limit,
+                &view,
+                query,
+                user_id.as_ref(),
+                team_id,
+            )
+            .await?
+        }
+        (PreviewView::StandardLabel(PreviewViewStandardLabel::Drafts), Either::Left(query)) => {
+            super::preview_views::draft::drafts_preview_cursor(pool, &link_ids, limit, &query)
+                .await?
+        }
+        (PreviewView::StandardLabel(PreviewViewStandardLabel::Starred), Either::Left(query)) => {
+            super::preview_views::starred::starred_preview_cursor(pool, &link_ids, limit, &query)
+                .await?
+        }
+        (PreviewView::StandardLabel(PreviewViewStandardLabel::Important), Either::Left(query)) => {
+            super::preview_views::important::important_preview_cursor(
+                pool, &link_ids, limit, &query,
+            )
+            .await?
+        }
+        (PreviewView::StandardLabel(PreviewViewStandardLabel::Other), Either::Left(query)) => {
+            super::preview_views::other_inbox::other_inbox_preview_cursor(
+                pool, &link_ids, limit, &query,
+            )
+            .await?
+        }
+        (PreviewView::UserLabel(label_name), Either::Left(query)) => {
+            super::preview_views::user_label::user_label_preview_cursor(
+                pool,
+                &link_ids,
+                limit,
+                &query,
+                &label_name,
+            )
+            .await?
+        }
+    }
+    .into_iter()
+    .map(|row: ThreadPreviewCursorDbRow| row.into_preview())
+    .collect())
+}
+
+/// Attachments of the given threads, oldest first.
+///
+/// The query walks thread ids to messages and messages to attachments
+/// through their indexes. Each step is a lateral subquery with `OFFSET 0`
+/// so the planner can't hash-join `email_attachments`: with a plain join,
+/// a thread-id set whose estimated message count is high enough switched
+/// the plan to reading the whole attachments table, about 2.6M blocks per
+/// call, to return a few dozen rows.
+#[tracing::instrument(err, skip(pool, thread_ids), fields(thread_count = thread_ids.len()))]
+pub(super) async fn attachments_by_thread_ids(
+    pool: &PgPool,
+    thread_ids: &[Uuid],
+) -> Result<Vec<Attachment>, sqlx::Error> {
+    Ok(sqlx::query_file_as!(
+        AttachmentDbRow,
+        "src/outbound/email_pg_repo/preview/attachments_by_thread_ids.sql",
+        thread_ids
+    )
+    .fetch_all(pool)
+    .await?
+    .into_iter()
+    .map(AttachmentDbRow::mirror)
+    .collect())
+}
+
+#[tracing::instrument(err, skip(pool, thread_ids))]
+pub(super) async fn contacts_by_thread_ids(
+    pool: &PgPool,
+    thread_ids: &[Uuid],
+) -> Result<Vec<Contact>, sqlx::Error> {
+    #[derive(Debug, Doppleganger)]
+    #[dg(forward = Contact)]
+    struct ThreadContactResult {
+        thread_id: Uuid,
+        id: Uuid,
+        link_id: Uuid,
+        email_address: Option<String>,
+        name: Option<String>,
+        sfs_photo_url: Option<String>,
+    }
+
+    Ok(sqlx::query_as!(
+        ThreadContactResult,
+        r#"
+        SELECT
+            m.thread_id,
+            c.id, c.link_id, c.email_address, COALESCE(m.from_name, c.name) as "name", c.sfs_photo_url
+        FROM email_messages m
+        JOIN email_contacts c ON m.from_contact_id = c.id
+        WHERE m.thread_id = ANY($1) AND m.from_contact_id IS NOT NULL
+        ORDER BY m.created_at ASC
+        "#,
+        thread_ids
+    )
+    .fetch_all(pool)
+    .await?
+    .into_iter()
+    .map(ThreadContactResult::mirror)
+    .collect())
+}
+
+#[tracing::instrument(err, skip(pool, thread_ids))]
+pub(super) async fn labels_by_thread_ids(
+    pool: &PgPool,
+    thread_ids: &[Uuid],
+) -> Result<Vec<Label>, sqlx::Error> {
+    Ok(sqlx::query_as!(
+        LabelDbRow,
+        r#"
+    SELECT DISTINCT ON (l.id, m.thread_id)
+        l.id,
+        m.thread_id as "thread_id!",
+        l.link_id,
+        l.provider_label_id,
+        l.name,
+        l.created_at,
+        l.message_list_visibility as "message_list_visibility: _",
+        l.label_list_visibility as "label_list_visibility: _",
+        l.type as "type_: _"
+    FROM
+         email_messages m
+    JOIN email_effective_message_labels ml ON m.id = ml.message_id
+    JOIN email_labels l ON ml.label_id = l.id
+    WHERE m.thread_id = ANY($1)
+    "#,
+        thread_ids
+    )
+    .fetch_all(pool)
+    .await?
+    .into_iter()
+    .map(LabelDbRow::mirror)
+    .collect())
+}

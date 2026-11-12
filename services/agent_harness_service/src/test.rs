@@ -1,5 +1,5 @@
 use super::macro_mcp_endpoint;
-use macro_service_urls::McpServiceUrl;
+use mcp_service_url::McpServiceUrl;
 
 #[test]
 fn macro_mcp_endpoint_preserves_the_gateway_prefix() {

@@ -4,11 +4,12 @@
  *
  * Build the package with:
  *   just build-ai-engine-wasm
- * which runs wasm-pack over crates/ai_engine into
+ * which runs wasm-pack over crates/engines/ai_engine_wasm (a wrapper over
+ * illustrator_engine) into
  * src/lib/core/ai-engine/wasm/ (gitignored).
  */
 
-/** One open document. Mirrors `ai_engine::wasm::AiFile`. */
+/** One open document. Mirrors `illustrator_engine::wasm::AiFile`. */
 export interface WasmAiFile {
   /** `Summary` JSON. */
   summary: () => string;

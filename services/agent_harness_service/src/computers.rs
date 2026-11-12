@@ -162,9 +162,10 @@ impl DeploymentSource for ServiceDeployment {
 }
 
 fn resolve_deployment() -> anyhow::Result<Deployment> {
-    use macro_service_urls::{
-        AgentHarnessEgressUrl, AgentHarnessServiceUrl, AppServiceUrl, DocumentStorageServiceUrl,
-    };
+    use agent_harness_egress_url::AgentHarnessEgressUrl;
+    use agent_harness_service_url::AgentHarnessServiceUrl;
+    use app_service_url::AppServiceUrl;
+    use document_storage_service_url::DocumentStorageServiceUrl;
     Ok(Deployment {
         agent_harness_url: AgentHarnessServiceUrl::new()?.parse_url()?,
         document_storage_url: DocumentStorageServiceUrl::new()?.parse_url()?,

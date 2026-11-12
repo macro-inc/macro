@@ -15,7 +15,7 @@ use crate::workflows::{runners, steps, vars};
 
 const SANDBOX_SIZES_JSON: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../../../crates/agent_harness/sandbox_sizes.json"
+    "/../../../../crates/agents/agent_harness/sandbox_sizes.json"
 ));
 
 fn snapshot_quota() -> (String, String, String) {
@@ -54,9 +54,9 @@ fn image_source_pull_request() -> PullRequest {
 
 fn image_source_paths() -> [xtask_paths::RepoGlob<'static>; 6] {
     [
-        xtask_paths::repo_glob!("crates/agent_harness/container/**"),
-        xtask_paths::repo_glob!("crates/agent_harness/justfile"),
-        xtask_paths::repo_glob!("crates/agent_harness/sandbox_sizes.json"),
+        xtask_paths::repo_glob!("crates/agents/agent_harness/container/**"),
+        xtask_paths::repo_glob!("crates/agents/agent_harness/justfile"),
+        xtask_paths::repo_glob!("crates/agents/agent_harness/sandbox_sizes.json"),
         xtask_paths::repo_glob!("nix/cloud-storage.nix"),
         xtask_paths::repo_glob!(
             "tooling/xtask/crates/xtask_workflows/src/workflows/ensure_daytona_snapshot.rs"
@@ -106,7 +106,7 @@ fn ensure_snapshot() -> Job {
                     fi
                     daytona login --api-key "$DAYTONA_API_KEY"
                     echo "ensuring Daytona snapshot at --cpu ${DAYTONA_SNAPSHOT_CPU} --memory ${DAYTONA_SNAPSHOT_MEMORY} --disk ${DAYTONA_SNAPSHOT_DISK}"
-                    just --justfile crates/agent_harness/justfile ensure-daytona
+                    just --justfile crates/agents/agent_harness/justfile ensure-daytona
                 "#})
                 .shell("bash")
                 .add_env(("DAYTONA_API_KEY", vars::DAYTONA_API_KEY))
@@ -157,7 +157,7 @@ docker buildx build \
   --platform linux/amd64 \
   "${{tags[@]}}" \
   --push \
-  crates/agent_harness/container
+  crates/agents/agent_harness/container
 "#
                 ))
                 .shell("bash"),

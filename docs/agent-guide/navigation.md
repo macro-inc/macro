@@ -1368,7 +1368,7 @@ on GitHub triggers, which have no Macro item.
 
 Presets and **Any GitHub event** only receive events selected on the installed
 GitHub App. Account linking alone does not enable delivery. The
-[registration guide](../../crates/github/README.md) lists the reviewed
+[registration guide](../../crates/integrations/github/README.md) lists the reviewed
 subscriptions and manual permission approval steps; changing its checked-in
 specification does not change the live app. After adding subscriptions, verify
 a controlled repository's delivery and matching routine history. Wildcard

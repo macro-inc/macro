@@ -8,14 +8,14 @@ threads, pins, recents, notifications, folders, activity.
 
 ## Start here
 
-- `src/api/sync.rs`: dedicated authenticated `/sync/ws` endpoint; `crates/sync_router`
+- `src/api/sync.rs`: dedicated authenticated `/sync/ws` endpoint; `crates/documents/documents/document_sync_router`
   owns multiplex routing and cancellation. Sync-service still owns document state
   and validates scoped tokens. DSS shutdown drains these upgraded sockets.
   This binary WebSocket protocol is intentionally outside the REST OpenAPI/SDK surface.
 - `src/api.rs`: route module list — `documents`, `items`, `entity`,
   `folders_query`, `graphql_soup`, `threads`, `annotations`, `history`,
   `pins`, `recents`, `notification`, `instructions`, `internal`.
-- `/databases/query` mounts the `databases_sql` HTTP adapter, sharing the database/access services and the primary Soup reader; SQL authorization stays in its domain service. Browser people SQL executes separately in local Turso; there is no dedicated `/databases/read` endpoint or deployment prerequisite for browser execution.
+- `/databases/query` mounts the `database_sql_runner` HTTP adapter, sharing the database/access services and the primary Soup reader; SQL authorization stays in its domain service. Browser people SQL executes separately in local Turso; there is no dedicated `/databases/read` endpoint or deployment prerequisite for browser execution.
 - `/channel-labels` retains legacy participant-only label semantics; additive `/channel-sections` mounts `channel_labels` with `for_sections` services for exclusive manual or name-rule membership and visible unjoined team channels.
 - `src/service/saved_views.rs`: composes saved-view storage with the primary-backed Teams repository, reusing `get_user_teams` and `get_all_team_members`. REST and GraphQL share its owner-only domain policy. `src/api/saved_views/definitions.rs` is the SDK's REST adapter over the same `SavedViewApi` as GraphQL (kinds, revisions, sharing, order); the legacy `/saved_views` routes beside it serve CRM unchanged. All three use the one `ApiContext::saved_views` service built in `server.rs`, whose `outbound/saved_view_changes.rs` notifier pushes `saved_views_changed` through the gateway on `event_broker_tracker`, resolving team members off the request path.
 - Personal contact pages use `graphql_contacts` and the contacts directory service.
@@ -23,15 +23,15 @@ threads, pins, recents, notifications, folders, activity.
   context through the shared GraphQL HTTP/websocket request-data function.
 - `src/api/graphql_soup.rs`: the `/soup/graphql` (+ `/soup/graphql/ws`
   subscriptions) GraphQL API — the frontend's main read path for Home/Recent/
-  search ("Soup" items); see `crates/graphql_soup` for resolvers/loaders.
+  search ("Soup" items); see `crates/graphql/graphql_soup` for resolvers/loaders.
 - `src/server.rs`: composition root, including access-request routes and the
   tracked delivery dispatcher; `src/outbound/access_requests.rs` composes the
-  notification/withdrawal/realtime ports. Policy lives in `crates/access_requests`.
+  notification/withdrawal/realtime ports. Policy lives in `crates/entities/access_requests`.
   It also builds the attention feeds (Home's work feed and the notifications
   inbox) from one set of `attention_feed` adapters, triggers and viewer lookup.
 - `src/external_chat.rs`: composes `ExternalChatService<WhatsAppProvider>`,
-  mounts `/external-chats` (`crates/external_chat`) and `/whatsapp`
-  (`crates/whatsapp_linked`) and runs the notification/import worker (LISTEN
+  mounts `/external-chats` (`crates/comms/external_chat`) and `/whatsapp`
+  (`crates/whatsapp/whatsapp_linked`) and runs the notification/import worker (LISTEN
   `external_chat_effects`, `whatsapp_media_ready`; attachments become static
   files through the static file service, which also deletes released ones) and
   the `external_chat_changed` pusher (bare connection-gateway events to the
@@ -40,7 +40,7 @@ threads, pins, recents, notifications, folders, activity.
   No backend switch: the web flag `enable-whatsapp-linked` gates rollout.
 - Guest call chat is mounted outside account auth at `/call/guest-chat/{call_id}`;
   `call` verifies the RTC session and `messages` owns the shared discussion.
-- Authenticated call routes are composed from `crates/call` under `/call`;
+- Authenticated call routes are composed from `crates/comms/call` under `/call`;
   `src/api/swagger.rs` lists their OpenAPI paths and schemas, while
   `src/server.rs` supplies the per-caller start limiter.
 - `src/service/entity_mutation.rs`: generic entity-mutation plumbing used
@@ -69,12 +69,12 @@ threads, pins, recents, notifications, folders, activity.
 - Owns: document/item HTTP CRUD, the Soup GraphQL schema, and cross-entity
   surfaces (history, annotations, threads, pins, recents, notifications,
   folders, saved views, activity).
-- Not here: document content/collaboration itself → `crates/collab_surface`
+- Not here: document content/collaboration itself → `crates/documents/collab_surface`
   and the sync service; AI chat → `document_cognition_service`.
 
 ## Recipes
 
-- Add a Soup GraphQL field: resolver/loader in `crates/graphql_soup` →
+- Add a Soup GraphQL field: resolver/loader in `crates/graphql/graphql_soup` →
   `src/api/graphql_soup.rs` if wiring changes.
 - Add a REST route: `src/api/<area>.rs` → `src/api.rs` (router) →
   `src/api/swagger.rs`; register query-only schemas explicitly in its components list.
@@ -110,7 +110,7 @@ threads, pins, recents, notifications, folders, activity.
   exclusions take effect without replica lag; ordinary inbox lists keep the replica.
 - Ordinary Soup GraphQL reads a replica with multi-second lag; a read immediately after
   a write through the same request needs the primary-reading loader, not the
-  default one — see `crates/graphql_soup`.
+  default one — see `crates/graphql/graphql_soup`.
 - Dev's readonly pool keeps 2–20 connections per task, independently of the
   primary pool's 25–100. Once all tasks use this cap, three dev tasks allow 60
   sessions, or 120 while a rolling deployment overlaps all three. Old tasks

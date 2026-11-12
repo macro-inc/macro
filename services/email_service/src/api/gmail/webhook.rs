@@ -7,12 +7,12 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
-use model::response::ErrorResponse;
-use models_email::gmail::inbox_sync::{
+use email_types::gmail::inbox_sync::{
     GmailInboxSyncPayload, GmailMessagePayload, InboxSyncOperation, InboxSyncPubsubMessage,
     JwtVerificationError,
 };
-use models_email::service::link::UserProvider;
+use email_types::service::link::UserProvider;
+use shared_types::response::ErrorResponse;
 
 /// webhook that GCP hits when there are changes to a user's inbox. we authenticate the message then
 /// queue it onto our own sqs queue and handle it in pubsub/gmail/process.rs.

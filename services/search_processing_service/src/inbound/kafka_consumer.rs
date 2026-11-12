@@ -39,18 +39,18 @@ use std::{
 };
 
 use ::agent_session::domain::events::AgentSessionLifecycleMacroEvent;
+use ::ai_chat::domain::events::ChatMacroEvent;
 use ::call::domain::events::CallMacroEvent;
-use ::chat::domain::events::ChatMacroEvent;
 use ::email::domain::events::EmailMacroEvent;
 use calendar_events::domain::events::CalendarMacroEvent;
 use channels::domain::broker_events::ChannelMacroEvent;
 use documents::domain::events::DocumentMacroEvent;
+use folder::domain::events::ProjectMacroEvent;
 use kafka_util::{GroupName, InitialOffset, KafkaEventConsumer};
 use macro_event_broker::{
     KafkaConsumerAdapter, MacroEvent as _, MacroEventCollection, MacroEventConsumerService,
 };
 use messages::outbound::broker::MessageMacroEvent;
-use projects::domain::events::ProjectMacroEvent;
 use properties::domain::events::PropertyMacroEvent;
 use rdkafka::{
     consumer::CommitMode,

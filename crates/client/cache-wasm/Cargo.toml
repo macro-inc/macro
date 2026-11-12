@@ -26,22 +26,22 @@ dwarf-debug-info = true
 # compiles to an empty shell off-wasm so workspace `cargo test` stays green.
 
 [dependencies]
-cache-core = { path = "../cache-core" }
+cache-core = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 async-lock = { workspace = true }
-cache-turso = { path = "../cache-turso" }
-predicate-index = { path = "../../predicate_index" }
-soup-filter-cache-adapter = { path = "../../soup_filter_cache_adapter" }
+cache-turso = { workspace = true }
+predicate-index = { workspace = true }
+soup-filter-cache-adapter = { workspace = true }
 js-sys = { workspace = true }
 serde = { workspace = true }
 serde-wasm-bindgen = { workspace = true }
 serde_json = { workspace = true }
-turso-opfs = { path = "../turso-opfs" }
+turso-opfs = { workspace = true }
 uuid = { workspace = true, features = ["js"] }
 wasm-bindgen = { workspace = true }
 wasm-bindgen-futures = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
-soup-filter-projection = { path = "../../soup_filter_projection", default-features = false }
+soup-filter-projection = { workspace = true }
 wasm-bindgen-test = { workspace = true }

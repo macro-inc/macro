@@ -17,7 +17,7 @@ That creates two property namespaces for the same entity id:
 
 Today a task property mutation from the web client sends `entityType: TASK`, so the properties service writes the assignment under the internal `TASK` namespace. A fresh GraphQL Soup query represents the same task as a `GraphqlSoupDocument`, mints document access, and currently loads properties under `DOCUMENT`. The mutation response is therefore correct and can update the normalized cache immediately, but a fresh read cannot find the row written under `TASK`.
 
-The split is visible in `crates/properties/src/domain/model.rs`:
+The split is visible in `crates/databases/properties/src/domain/model.rs`:
 
 - `access_entity_type(EntityType::Task)` collapses to `entity_access::EntityType::Document`.
 - `PropertiesAccessReceipt` then preserves the original properties `EntityType::Task` specifically so repositories can continue using the separate storage namespace.
@@ -44,11 +44,11 @@ properties domain resolves document subtype
 1. **Entity property targets use canonical entity types externally.** A task is targeted as `DOCUMENT`; task-ness comes from document subtype.
 2. **The properties domain receives regular typed entity-access receipts.** Clients never provide receipts; inbound adapters mint them.
 3. **Task/document classification is domain policy.** Inbound GraphQL, REST, and tool adapters must not inspect document subtype or choose the internal storage namespace.
-4. **Document subtype lookup is an outbound fact.** Add a repository/port capability that can resolve document subtypes in batches; the domain maps those facts to internal `models_properties::EntityType::{Document, Task}`.
-5. **Keep `models_properties::EntityType::Task` internally.** Existing rows, task initialization, task relationships, grouping, indexing, notifications, and permission side effects continue using it.
+4. **Document subtype lookup is an outbound fact.** Add a repository/port capability that can resolve document subtypes in batches; the domain maps those facts to internal `properties_types::EntityType::{Document, Task}`.
+5. **Keep `properties_types::EntityType::Task` internally.** Existing rows, task initialization, task relationships, grouping, indexing, notifications, and permission side effects continue using it.
 6. **Separate target types from referenced-entity types.** The current `GraphqlPropertyEntityType`/generated `EntityType` is used both for the entity receiving a property and for entities stored inside property values. Introduce a target-only transport type without `TASK`. Keep the existing internal/reference type in this iteration so Parent Task/Subtasks and property-definition constraints are not redesigned accidentally.
 7. **Use one resolution path for reads and writes.** Fixing only `set_entity_property` would recreate the mismatch in the opposite direction.
-8. **Do not add `Task` to `model_entity::EntityType`.** Tasks remain canonical documents.
+8. **Do not add `Task` to `entity_kind::EntityType`.** Tasks remain canonical documents.
 9. **Do not run or create a database migration for this work.** Existing `TASK` rows remain authoritative for task documents.
 10. **Prefer strong domain types over stringly typed interfaces.** Repository and service contracts should use types such as `Uuid` for UUID-backed identifiers rather than `String`, converting only at transport boundaries when necessary.
 
@@ -91,8 +91,8 @@ Add a private/domain model such as:
 
 ```rust
 struct ResolvedPropertySubject {
-    canonical_entity: model_entity::OwnedEntity,
-    storage_entity_type: models_properties::EntityType,
+    canonical_entity: entity_kind::OwnedEntity,
+    storage_entity_type: properties_types::EntityType,
 }
 ```
 
@@ -141,11 +141,11 @@ The existing properties repository already contains document metadata lookup, so
 
 Change the service boundary to return canonical keys. Options, in preferred order:
 
-1. A map keyed by a new canonical `PropertyTargetKey` containing `model_entity::EntityType` and id.
-2. A map keyed by `model_entity::OwnedEntity`.
+1. A map keyed by a new canonical `PropertyTargetKey` containing `entity_kind::EntityType` and id.
+2. A map keyed by `entity_kind::OwnedEntity`.
 3. A vector aligned with the input receipts, if that is clearer for all callers.
 
-Keep `EntityPropertiesKey` with `models_properties::EntityType::Task` inside the repository boundary. During bulk reads, retain a canonical-to-internal mapping, query with internal keys, then map results back to canonical keys before returning.
+Keep `EntityPropertiesKey` with `properties_types::EntityType::Task` inside the repository boundary. During bulk reads, retain a canonical-to-internal mapping, query with internal keys, then map results back to canonical keys before returning.
 
 ## Transport contracts
 
@@ -170,7 +170,7 @@ Change the GraphQL mutation flow to:
 
 Change the GraphQL property reader similarly:
 
-1. Keep `GraphqlSoupDocument`/`model_entity::EntityType::Document` for tasks.
+1. Keep `GraphqlSoupDocument`/`entity_kind::EntityType::Document` for tasks.
 2. Mint canonical view receipts.
 3. Call the bulk properties service.
 4. Consume results under canonical Document keys.
@@ -179,11 +179,11 @@ Do not add task-subtype branching to `graphql_soup`, `complete_graph::SoupEdges`
 
 Likely files:
 
-- `crates/graphql_properties/src/mutations.rs`
-- `crates/graphql_properties/src/loaders.rs`
-- `crates/graphql_common/src/property_filter.rs` (only if types must be split/exported here)
-- `crates/complete_graph/src/edges.rs`
-- `crates/complete_graph/src/schema.rs`
+- `crates/graphql/graphql_properties/src/mutations.rs`
+- `crates/graphql/graphql_properties/src/loaders.rs`
+- `crates/graphql/graphql_common/src/property_filter.rs` (only if types must be split/exported here)
+- `crates/graphql/complete_graph/src/edges.rs`
+- `crates/graphql/complete_graph/src/schema.rs`
 - `services/document_storage_service/src/api/graphql_soup.rs`
 - `static_assets/schema.graphql` (generated, never edited manually)
 
@@ -195,10 +195,10 @@ Keep value-level `EntityReference.entity_type` separate so this change does not 
 
 Likely files:
 
-- `crates/models_properties/src/api/**`
-- `crates/properties/src/inbound/axum_router/extract.rs`
-- `crates/properties/src/inbound/axum_router/entities.rs`
-- `crates/properties_service/**` and DSS OpenAPI composition as required
+- `crates/types/properties_types/src/api/**`
+- `crates/databases/properties_inbound/src/axum_router/extract.rs`
+- `crates/databases/properties_inbound/src/axum_router/entities.rs`
+- `crates/databases/properties_service/**` and DSS OpenAPI composition as required
 
 ### Tools and internal adapters
 
@@ -206,12 +206,12 @@ Update user-facing tools to target tasks as documents and pass canonical receipt
 
 Review at least:
 
-- `crates/properties/src/inbound/toolset/get_entity_properties.rs`
-- `crates/properties/src/inbound/toolset/set_entity_property.rs`
-- `crates/ai_tools/src/tool_context.rs`
+- `crates/databases/properties_inbound/src/toolset/get_entity_properties.rs`
+- `crates/databases/properties_inbound/src/toolset/set_entity_property.rs`
+- `crates/ai/agent_tools/src/tool_context.rs`
 - `services/document_storage_service/src/api/context.rs`
-- `crates/documents/src/domain/ports/mod.rs`
-- `crates/documents/src/domain/service.rs`
+- `crates/documents/documents/src/domain/ports/mod.rs`
+- `crates/documents/documents/src/domain/service.rs`
 
 Do not blindly replace every Task occurrence: task relationship values, filters, system-property initialization, and internal repository keys remain Task in this phase.
 
@@ -243,15 +243,15 @@ Authorization comparisons must use canonicalized types. For example, an assignme
 
 Likely files:
 
-- `crates/properties/src/domain/model.rs`
-- `crates/properties/src/domain/service.rs`
-- `crates/properties/src/domain/service_impl/mod.rs`
-- `crates/properties/src/domain/service_impl/task_properties.rs`
-- `crates/properties/src/domain/ports.rs`
-- `crates/properties/src/outbound/metadata_queries.rs`
-- `crates/properties/src/outbound/properties_pg_repo.rs`
-- `crates/properties/src/domain/test.rs`
-- `crates/properties/src/outbound/test.rs` and focused query tests
+- `crates/databases/properties/src/domain/model.rs`
+- `crates/databases/properties/src/domain/service.rs`
+- `crates/databases/properties/src/domain/service_impl/mod.rs`
+- `crates/databases/properties/src/domain/service_impl/task_properties.rs`
+- `crates/databases/properties/src/domain/ports.rs`
+- `crates/databases/properties/src/outbound/metadata_queries.rs`
+- `crates/databases/properties/src/outbound/properties_pg_repo.rs`
+- `crates/databases/properties/src/domain/test.rs`
+- `crates/databases/properties/src/outbound/test.rs` and focused query tests
 
 ## Frontend changes
 

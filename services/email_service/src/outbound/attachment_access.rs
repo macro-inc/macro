@@ -5,8 +5,8 @@ use email::domain::{
     draft_attachments::AttachmentError,
     mailbox::{MailboxError, projection::MailboxAttachmentAccess},
 };
-use email_api_client::domain::models::EmailApiError;
-use models_email::{
+use email_api_client_core::models::EmailApiError;
+use email_types::{
     db::address::EmailRecipientType,
     service::{
         attachment::{AttachmentUploadArgs, AttachmentUploadDestination},

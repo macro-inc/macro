@@ -20,8 +20,9 @@ use crate::config::Config;
 use crate::outbound::email_api::GmailApi;
 use crate::outbound::mailbox_init::{MicrosoftGrantSource, PgMailboxInitialization};
 use crate::util::redis::RedisClient;
-use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
+use entity_access::domain::service::EntityAccessServiceImpl;
 use entity_access_management::domain::service::EntityAccessManagementServiceImpl;
+use entity_access_outbound::PgAccessRepository;
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use macro_auth::InternalApiKey;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
@@ -40,7 +41,7 @@ pub(crate) type CalendarMutationSvc = CalendarMutationServiceImpl<
     PgCalendarRepository,
     calendar_events::domain::providers::CalendarProviders<
         GoogleCalendarClient<RedisCalendarRequestGate>,
-        email_api_client::OutlookApiClientRepository,
+        email_api_client_outbound::OutlookApiClientRepository,
     >,
     CalendarTokenProviderAdapter,
     EmailEventBroker,
@@ -84,18 +85,18 @@ pub(crate) type MicrosoftTokens = email::domain::mailbox::credentials::MailboxCr
     crate::outbound::email_api::MicrosoftCredentialsClient,
 >;
 
-pub(crate) type OutlookApi = email_api_client::domain::service::mailbox::MailboxApiService<
-    email_api_client::OutlookApiClientRepository,
+pub(crate) type OutlookApi = email_api_client_core::service::mailbox::MailboxApiService<
+    email_api_client_outbound::OutlookApiClientRepository,
     MicrosoftTokens,
-    email_api_client::domain::ports::AlwaysAllowRateLimiter,
+    email_api_client_core::ports::AlwaysAllowRateLimiter,
 >;
 pub(crate) type AttachmentReadSvc = email::domain::attachment_access::AttachmentReadService<
     EmailPgRepo,
     crate::outbound::attachment_access::ProviderAttachmentBytes<
         crate::outbound::email_api::ProviderMailboxGateway<
-            email_api_client::OutlookApiClientRepository,
+            email_api_client_outbound::OutlookApiClientRepository,
             MicrosoftTokens,
-            email_api_client::domain::ports::AlwaysAllowRateLimiter,
+            email_api_client_core::ports::AlwaysAllowRateLimiter,
         >,
     >,
     crate::outbound::attachment_access::MailAttachmentFiles,
@@ -105,9 +106,9 @@ pub(crate) type AttachmentReadSvc = email::domain::attachment_access::Attachment
 pub(crate) type MessageSourceSvc = email::domain::message_source::MessageSourceService<
     EmailPgRepo,
     crate::outbound::message_source::ProviderMessageSource<
-        email_api_client::OutlookApiClientRepository,
+        email_api_client_outbound::OutlookApiClientRepository,
         MicrosoftTokens,
-        email_api_client::domain::ports::AlwaysAllowRateLimiter,
+        email_api_client_core::ports::AlwaysAllowRateLimiter,
     >,
     EmailEntityAccessService,
 >;
@@ -115,9 +116,9 @@ pub(crate) type MessageSourceSvc = email::domain::message_source::MessageSourceS
 pub(crate) type RecentInboxSvc = email::domain::recent_inbox::RecentInboxService<
     crate::outbound::recent_inbox::PgRecentInboxes,
     crate::outbound::recent_inbox::ProviderRecentInbox<
-        email_api_client::OutlookApiClientRepository,
+        email_api_client_outbound::OutlookApiClientRepository,
         MicrosoftTokens,
-        email_api_client::domain::ports::AlwaysAllowRateLimiter,
+        email_api_client_core::ports::AlwaysAllowRateLimiter,
     >,
 >;
 
@@ -133,9 +134,9 @@ pub(crate) struct ApiContext {
         email::domain::mailbox::settings::MailboxSettingsService<
             email::outbound::mailbox_pg::PgMailboxSync,
             crate::outbound::mailbox_settings::ProviderMailboxSettings<
-                email_api_client::OutlookApiClientRepository,
+                email_api_client_outbound::OutlookApiClientRepository,
                 MicrosoftTokens,
-                email_api_client::domain::ports::AlwaysAllowRateLimiter,
+                email_api_client_core::ports::AlwaysAllowRateLimiter,
             >,
         >,
     >,

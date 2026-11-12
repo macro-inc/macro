@@ -61,7 +61,7 @@ workspace-members = [
     "macro_sync_service_jwt",
     "sync_service",
     "sync_service_bebop_schema",
-    "worker-rs-otel",
+    "worker_rs_otel",
     # maybe_send: zero-dep marker traits used by cache-core; must stay
     # wasm-safe (workspace-hack pulls native-only deps like mio into wasm32).
     "maybe_send",
@@ -76,6 +76,9 @@ workspace-members = [
     # anyhow, either, nom, tracing, thiserror - is contributed by dozens of
     # other members anyway, so the deploy dependency layers are unchanged.
     "agent_fold",
+    "agent_fold_wasm",
+    # agent_session_id: the session and replica ids the fold's log carries.
+    "agent_session_id",
     # dynamic_ui: the view types the fold's tool details and activity cards hold.
     "dynamic_ui",
     "graphql_soup_filter_input",
@@ -93,17 +96,44 @@ workspace-members = [
     # filter model chain (item_filters -> item-filter-index ->
     # soup-filter-cache-adapter -> cache-wasm) and must stay wasm-safe.
     "model_owner",
+    # project_id: a leaf id type; it needs nothing from the workspace union.
+    "project_id",
+    # chat_id: a leaf id type; it needs nothing from the workspace union.
+    "chat_id",
     "bot_id",
+    # chat_message: leaf message types, kept out of workspace-hack so the
+    # crates that store chat messages need not wait for its heavy union.
+    "chat_message",
+    # Leaf type crates under crates/types/: workspace-hack would make them
+    # wait for, and compile, its heavy union (rig-core, async-graphql, ...).
+    "entity_basic_types",
+    # The entity a message belongs to; lexical_client and messages share it,
+    # and it must not pull workspace-hack into leaf type builds.
+    "message_parent",
     "macro_uuid",
     "non_empty",
     "cowlike",
-    # database_sql: the SQL-subset parser/compiler for Macro databases runs in
+    # database_sql_engine: the SQL-subset parser/compiler for Macro databases runs in
     # the browser (cache worker) as well as in services, so it must stay
     # wasm-safe.
-    "database_sql",
-    # models_databases: the typed write ops the SQL engine will emit, so it
-    # joins database_sql in the browser and must stay wasm-safe too.
-    "models_databases",
+    "database_sql_engine",
+    "database_sql_wasm",
+    # databases_types: the typed write ops the SQL engine will emit, so it
+    # joins database_sql_engine in the browser and must stay wasm-safe too.
+    "databases_types",
+    # database_id: the ids databases_types re-exports, so wasm-safe too.
+    "database_id",
+    # id_newtype: the id macro databases_types builds its ids with.
+    "id_newtype",
+    # Leaf id crates built with it stay light the same way.
+    "team_id",
+    "document_id",
+    "thread_id",
+    "message_id",
+    "email_thread_id",
+    "form_id",
+    "channel_id",
+    "calendar_event_id",
     # natural_time: date phrases are read in the browser's date fields as well
     # as in services, so it must stay wasm-safe.
     "natural_time",
@@ -111,23 +141,44 @@ workspace-members = [
     # module in the editor's worker) as well as in the AI tools, so it must
     # stay wasm-safe.
     "pptx_engine",
+    "pptx_engine_wasm",
     # docx_engine: the Word engine runs in the browser (a wasm32 module in the
     # document editor's worker) on top of pptx_engine, so it must stay
     # wasm-safe too.
     "docx_engine",
+    "docx_engine_wasm",
     # fig_engine: the .fig design viewer's parser and rasterizer runs in the
     # browser (a wasm32 module in the viewer's workers), so it must stay
     # wasm-safe.
     "fig_engine",
-    # psd_engine and ai_engine: the Photoshop and Illustrator engines run in
+    "fig_engine_wasm",
+    # psd_engine and illustrator_engine: the Photoshop and Illustrator engines run in
     # the browser too (wasm32 modules in their editors' workers), on top of
     # fig_engine, so they must stay wasm-safe as well.
     "psd_engine",
-    "ai_engine",
+    "psd_engine_wasm",
+    "illustrator_engine",
+    "ai_engine_wasm",
     # soup-filter-projection is intentionally absent: its wasm-facing adapter
     # disables the native-only default `models` feature, so the crate itself
     # does not pull workspace-hack into wasm dependency traversal.
     "soup-filter-cache-adapter",
+]
+
+# Heavy third-party crates with few owners. Unifying them through
+# workspace-hack made every member that depends on workspace-hack (so nearly
+# every crate) wait for them in a cold build, and its build-dependencies
+# section compiled them a second time for the host. Their owners still get
+# them; nothing else does. The root [workspace.dependencies] entries carry the
+# union of their features, so every service still builds each one the same way.
+[final-excludes]
+third-party = [
+    { name = "rig-core" },
+    { name = "rig-agent" },
+    { name = "async-openai" },
+    { name = "rmcp" },
+    { name = "redis" },
+    { name = "async-graphql" },
 ]
 
 # Xtask extension (the hakari engine ignores this table; `cargo x deps` in

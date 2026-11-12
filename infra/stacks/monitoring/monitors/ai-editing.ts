@@ -53,7 +53,7 @@ ${notify({ pages: false })}`,
 
 // ReqwestEditingWorkerClient::edit reports "editing worker returned" for
 // non-2xx responses and "editing worker request failed" for transport failures
-// (crates/documents/src/outbound/editing_worker_client.rs).
+// (crates/documents/documents/src/outbound/editing_worker_client.rs).
 //
 // The callers are document-cognition-service (the EditDocument tool, 174 of
 // these in the 30 days to 2026-08-31) and cloud-storage-service (7). Note the

@@ -1,0 +1,29 @@
+[package]
+edition = "2024"
+name = "soup_types"
+publish = false
+version = "0.1.0"
+
+[features]
+mock = []
+schema = ["dep:utoipa", "channel_id/schema", "item_filters/schema", "soup_property/schema"]
+
+[dependencies]
+channel_id = { workspace = true }
+chrono = { workspace = true }
+document_sub_type = { workspace = true, default-features = true }
+item_filters = { workspace = true, default-features = true }
+macro_user_id = { workspace = true }
+entity_kind = { workspace = true }
+model_owner = { workspace = true }
+pagination_types = { workspace = true }
+properties_types = { workspace = true }
+serde = { workspace = true }
+soup_property = { workspace = true }
+serde_json = { workspace = true }
+strum = { workspace = true }
+utoipa = { workspace = true, optional = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+channel_sender = { workspace = true }
+bot_id = { workspace = true }

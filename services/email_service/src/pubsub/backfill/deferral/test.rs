@@ -1,7 +1,7 @@
 use std::time::Duration;
 
-use email_api_client::domain::models::{EmailApiError, RateLimitOrigin};
-use models_email::email::service::pubsub::ProcessingError;
+use email_api_client_core::models::{EmailApiError, RateLimitOrigin};
+use email_types::email::service::pubsub::ProcessingError;
 
 use super::*;
 use crate::pubsub::backfill::db_error::map_db_error;

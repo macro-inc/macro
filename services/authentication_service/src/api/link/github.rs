@@ -11,8 +11,8 @@ use github::domain::{
 };
 use macro_authorization::{AccountHolderOrInternal, MacroAuthorizationExtractor};
 use macro_middleware::tracking::ClientIp;
-use model::response::{EmptyResponse, ErrorResponse};
 use serde_utils::urlencode::UrlEncoded;
+use shared_types::response::{EmptyResponse, ErrorResponse};
 use upstream_error::{UpstreamError, UpstreamErrorResponse};
 use url::Url;
 

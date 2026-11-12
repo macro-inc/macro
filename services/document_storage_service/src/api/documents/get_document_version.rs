@@ -9,10 +9,10 @@ use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_db_client::document::get_document_version;
 use macro_db_client::user_document_view_location::get::get_user_document_view_location;
-use model::document::response::{GetDocumentResponse, GetDocumentResponseData};
-use model::response::{GenericErrorResponse, GenericResponse};
-use models_permissions::share_permission::access_level::{AccessLevel, ViewAccessLevel};
+use permissions_types::share_permission::access_level::{AccessLevel, ViewAccessLevel};
 use serde::Deserialize;
+use shared_types::document::response::{GetDocumentResponse, GetDocumentResponseData};
+use shared_types::response::{GenericErrorResponse, GenericResponse};
 use sqlx::PgPool;
 
 #[derive(Deserialize)]

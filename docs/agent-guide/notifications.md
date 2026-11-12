@@ -16,7 +16,7 @@ once there is more than one thing), an entity's comments, a task assignment, a
 pull request, a calendar event, an access request or grant, or an agent session.
 A top-level message that mentions you has its own row, with its thread; an
 entity's comments stay on one row even when one mentions you. The server decides
-all of this (`crates/notification_inbox/src/domain/rows.rs`), so live updates and
+all of this (`crates/notifications/notification_inbox/src/domain/rows.rs`), so live updates and
 reads stack the same way. A row shows who it is from (an avatar, an initial for a
 sender known only by name such as an email's, or the kind of notification for a
 reminder), with a badge on the avatar's corner saying what kind it is, in the theme's color for

@@ -1,5 +1,5 @@
 /**
- * The engine's transcripts from `crates/database_sql/fixtures/transcripts`:
+ * The engine's transcripts from `crates/databases/database_sql_engine/fixtures/transcripts`:
  * every step it took answering a statement and what was fed back. A replay
  * stands in for the wasm engine, and refuses any page or bins other than
  * the recorded ones, so a test proves the TypeScript side feeds
@@ -37,7 +37,7 @@ export function readTranscript(name: string): Transcript {
     readFileSync(
       resolve(
         import.meta.dirname,
-        `../../../../../../../crates/database_sql/fixtures/transcripts/${name}.json`
+        `../../../../../../../crates/databases/database_sql_engine/fixtures/transcripts/${name}.json`
       ),
       'utf8'
     )

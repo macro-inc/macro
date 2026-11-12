@@ -5,7 +5,7 @@ use axum::{
     response::IntoResponse,
 };
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model::{
+use shared_types::{
     pin::request::ReorderPinRequest,
     response::{GenericErrorResponse, GenericResponse, GenericSuccessResponse, SuccessResponse},
 };

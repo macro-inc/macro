@@ -3,20 +3,21 @@ use crate::api::context::{ApiContext, AuthorizationService};
 use crate::api::user_notification::BLOCKABLE_NOTIFICATIONS;
 use ::notification::domain::models::email_notification_digest::ports::DigestBatch;
 use ::notification::domain::service::NotificationEgressService;
-use ::notification::inbound::notification_events_listener::NotificationEventsListener;
-use ::notification::inbound::worker::NotificationWorker;
-use ::notification::outbound::email::{EmailAdapter, SignedUnsubscribeLinks};
-use ::notification::outbound::fanout_notification_realtime::FanoutNotificationRealtimePublisher;
-use ::notification::outbound::fanout_realtime::FanoutRealtimeSender;
-use ::notification::outbound::kafka_notification_realtime::KafkaNotificationRealtimePublisher;
-use ::notification::outbound::kafka_realtime::KafkaRealtimeSender;
-use ::notification::outbound::mobile::MobilePushAdapter;
-use ::notification::outbound::notification_events::PgNotificationEventsReceiver;
-use ::notification::outbound::rate_limit::RedisRateLimitAdapter;
-use ::notification::outbound::websocket::{ConnectionGatewayClient, WebSocketGatewayAdapter};
+use ::notification_inbound::notification_events_listener::NotificationEventsListener;
+use ::notification_inbound::worker::NotificationWorker;
+use ::notification_outbound::email::{EmailAdapter, SignedUnsubscribeLinks};
+use ::notification_outbound::fanout_notification_realtime::FanoutNotificationRealtimePublisher;
+use ::notification_outbound::fanout_realtime::FanoutRealtimeSender;
+use ::notification_outbound::kafka_notification_realtime::KafkaNotificationRealtimePublisher;
+use ::notification_outbound::kafka_realtime::KafkaRealtimeSender;
+use ::notification_outbound::mobile::MobilePushAdapter;
+use ::notification_outbound::notification_events::PgNotificationEventsReceiver;
+use ::notification_outbound::rate_limit::RedisRateLimitAdapter;
+use ::notification_outbound::websocket::{ConnectionGatewayClient, WebSocketGatewayAdapter};
 use ::rate_limit::RateLimitServiceImpl;
 use anyhow::Context;
 use config::Config;
+use connection_gateway_url::ConnectionGatewayUrl;
 use email_formatting::EmailDigestNotification;
 use hmac::{Hmac, Mac};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
@@ -27,7 +28,6 @@ use macro_authorization::{
 use macro_entrypoint::MacroEntrypoint;
 use macro_env::Environment;
 use macro_event_broker::{GlobalSpawner, KafkaEventPublisher, MacroEventBrokerService};
-use macro_service_urls::ConnectionGatewayUrl;
 use secretsmanager_client::SecretManager;
 use sha2::Sha256;
 use sqlx::postgres::PgPoolOptions;
@@ -88,9 +88,9 @@ pub async fn main() -> anyhow::Result<()> {
     #[cfg(feature = "push_notification_event_handler")]
     {
         let event_notif_repo =
-            ::notification::outbound::repository::DbNotificationRepository::new(db.clone());
+            ::notification_outbound::repository::DbNotificationRepository::new(db.clone());
         let event_sns_manager =
-            ::notification::outbound::sns_endpoint::SnsEndpointManagerAdapter::new(
+            ::notification_outbound::sns_endpoint::SnsEndpointManagerAdapter::new(
                 aws_sdk_sns::Client::new(&aws_config),
             );
 
@@ -102,14 +102,14 @@ pub async fn main() -> anyhow::Result<()> {
         let digest_failure_sm =
             ::notification::domain::models::email_notification_digest::StateMachineDriverC {
                 message_receipt_repo:
-                    ::notification::outbound::message_receipt_repository::DbMessageReceiptRepository::new(
+                    ::notification_outbound::message_receipt_repository::DbMessageReceiptRepository::new(
                         db.clone(),
                     ),
-                digest_batcher: ::notification::outbound::digest_batcher::RedisDigestBatcher::new(
+                digest_batcher: ::notification_outbound::digest_batcher::RedisDigestBatcher::new(
                     push_event_redis_conn,
                 ),
                 notif_repo:
-                    ::notification::outbound::repository::DbNotificationRepository::new(db.clone()),
+                    ::notification_outbound::repository::DbNotificationRepository::new(db.clone()),
                 digest_window: std::time::Duration::from_secs(30 * 60),
             };
 
@@ -119,14 +119,14 @@ pub async fn main() -> anyhow::Result<()> {
             digest_failure_sm,
         );
         let event_queue =
-            ::notification::outbound::push_notification_event_queue::SqsPushNotificationEventQueue::new(
+            ::notification_outbound::push_notification_event_queue::SqsPushNotificationEventQueue::new(
                 aws_sdk_sqs::Client::new(&aws_config),
                 macro_queues::PushNotificationEventHandlerQueue::new().to_string(),
                 config.notification_queue_max_messages,
                 config.notification_queue_wait_time_seconds,
             );
         let event_worker =
-            ::notification::inbound::push_notification_event_worker::PushNotificationEventWorker::new(
+            ::notification_inbound::push_notification_event_worker::PushNotificationEventWorker::new(
                 event_service,
                 event_queue,
             );
@@ -149,14 +149,14 @@ pub async fn main() -> anyhow::Result<()> {
     )));
 
     let notification_repository =
-        ::notification::outbound::repository::DbNotificationRepository::new(db.clone());
+        ::notification_outbound::repository::DbNotificationRepository::new(db.clone());
 
-    let notification_queue = ::notification::outbound::queue::SqsQueue::new(
+    let notification_queue = ::notification_outbound::queue::SqsQueue::new(
         aws_sdk_sqs::Client::new(&aws_config),
         macro_queues::NotificationQueue::new().to_string(),
     );
     let sns_endpoint_manager =
-        ::notification::outbound::sns_endpoint::SnsEndpointManagerAdapter::new(
+        ::notification_outbound::sns_endpoint::SnsEndpointManagerAdapter::new(
             aws_sdk_sns::Client::new(&aws_config),
         );
     let platform_config = ::notification::domain::service::PlatformArnConfig {
@@ -204,7 +204,7 @@ pub async fn main() -> anyhow::Result<()> {
         platform_config,
         realtime: reader_realtime_adapter,
     };
-    let ingress_state = ::notification::inbound::http::NotificationRouterState::new(
+    let ingress_state = ::notification_inbound::http::NotificationRouterState::new(
         reader_service,
         &BLOCKABLE_NOTIFICATIONS,
         hmac_key.clone(),
@@ -213,7 +213,7 @@ pub async fn main() -> anyhow::Result<()> {
 
     // Set up egress worker for delivering notifications from the queue
     let egress_repository =
-        ::notification::outbound::repository::DbNotificationRepository::new(db.clone());
+        ::notification_outbound::repository::DbNotificationRepository::new(db.clone());
 
     let realtime_adapter = FanoutRealtimeSender::new(
         WebSocketGatewayAdapter {
@@ -238,7 +238,7 @@ pub async fn main() -> anyhow::Result<()> {
             crate::env::SENDER_ADDRESS.clone(),
             config.ses_configuration_set.value().map(str::to_owned),
         ),
-        macro_service_urls::NotificationServiceUrl::new_for_environment(config.environment)?
+        notification_service_url::NotificationServiceUrl::new_for_environment(config.environment)?
             .parse_url()?,
         hmac_key.clone(),
     );
@@ -256,17 +256,17 @@ pub async fn main() -> anyhow::Result<()> {
     let egress_state_machine =
         ::notification::domain::models::email_notification_digest::StateMachineDriverB {
             message_receipt_repo:
-                ::notification::outbound::message_receipt_repository::DbMessageReceiptRepository::new(
+                ::notification_outbound::message_receipt_repository::DbMessageReceiptRepository::new(
                     db.clone(),
                 ),
-            digest_batcher: ::notification::outbound::digest_batcher::RedisDigestBatcher::new(
+            digest_batcher: ::notification_outbound::digest_batcher::RedisDigestBatcher::new(
                 redis_multiplexed_conn.clone(),
             ),
             digest_window: std::time::Duration::from_secs(30 * 60),
         };
 
     let egress_digest_batcher =
-        ::notification::outbound::digest_batcher::RedisDigestBatcher::new(redis_multiplexed_conn);
+        ::notification_outbound::digest_batcher::RedisDigestBatcher::new(redis_multiplexed_conn);
 
     let egress_service = NotificationEgressService {
         queue: notification_queue,
@@ -314,13 +314,13 @@ pub async fn main() -> anyhow::Result<()> {
 
     let ingress_state_machine =
         ::notification::domain::models::email_notification_digest::StateMachineDriverA::new_with_defaults(
-            ::notification::outbound::user_existence_checker::DbUserExistenceChecker::new(
+            ::notification_outbound::user_existence_checker::DbUserExistenceChecker::new(
                 db.clone(),
             ),
-            ::notification::outbound::push_notification_checker::PushNotificationCheckerImpl::new(
-                ::notification::outbound::repository::DbNotificationRepository::new(db.clone()),
+            ::notification_outbound::push_notification_checker::PushNotificationCheckerImpl::new(
+                ::notification_outbound::repository::DbNotificationRepository::new(db.clone()),
             ),
-            ::notification::outbound::last_online_checker::LastOnlineCheckerImpl::new(
+            ::notification_outbound::last_online_checker::LastOnlineCheckerImpl::new(
                 last_online_tracker::domain::services::LastOnlineService::new(
                     last_online_tracker::outbound::time::DefaultTime,
                     last_online_tracker::outbound::redis::RedisLastOnlineRepo::new(
@@ -328,13 +328,13 @@ pub async fn main() -> anyhow::Result<()> {
                     ),
                 ),
             ),
-            ::notification::outbound::digest_batcher::RedisDigestBatcher::new(ingress_redis_conn),
+            ::notification_outbound::digest_batcher::RedisDigestBatcher::new(ingress_redis_conn),
             model_notifications::digest_state::digest_email_block_list(),
         );
 
     let ingress_repository =
-        ::notification::outbound::repository::DbNotificationRepository::new(db.clone());
-    let ingress_delivery_queue = ::notification::outbound::queue::SqsQueue::new(
+        ::notification_outbound::repository::DbNotificationRepository::new(db.clone());
+    let ingress_delivery_queue = ::notification_outbound::queue::SqsQueue::new(
         aws_sdk_sqs::Client::new(&aws_config),
         macro_queues::NotificationQueue::new().to_string(),
     );
@@ -344,12 +344,12 @@ pub async fn main() -> anyhow::Result<()> {
         ingress_state_machine,
     );
 
-    let ingress_queue = ::notification::outbound::queue::SqsQueue::new(
+    let ingress_queue = ::notification_outbound::queue::SqsQueue::new(
         aws_sdk_sqs::Client::new(&aws_config),
         macro_queues::NotificationIngressQueue::new().to_string(),
     );
     let ingress_worker =
-        ::notification::inbound::ingress_worker::IngressWorker::new(ingress_service, ingress_queue);
+        ::notification_inbound::ingress_worker::IngressWorker::new(ingress_service, ingress_queue);
 
     tokio::spawn(async move {
         tracing::info!("starting notification ingress worker");
@@ -360,7 +360,7 @@ pub async fn main() -> anyhow::Result<()> {
         ApiContext {
             correlation: agent_correlation::inbound::CorrelationState::new(db.clone(), jwt_args),
             item_preferences: ::notification::domain::item_preferences::ItemNotificationPreferenceService::new(
-                ::notification::outbound::item_preferences::PgItemNotificationPreferenceRepository(db.clone()),
+                ::notification_outbound::item_preferences::PgItemNotificationPreferenceRepository(db.clone()),
             ),
             internal_api_key: config.internal_api_key.clone(),
             db,

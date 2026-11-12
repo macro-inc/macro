@@ -6,7 +6,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model::response::ErrorResponse;
+use shared_types::response::ErrorResponse;
 use uuid::Uuid;
 
 const EML_CONTENT_TYPE: &str = "message/rfc822";

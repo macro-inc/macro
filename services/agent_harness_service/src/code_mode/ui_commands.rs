@@ -12,9 +12,9 @@ use agent_session::domain::model::AgentSessionId;
 use agent_session::domain::ports::AgentSessionRepo;
 use async_trait::async_trait;
 use connection_gateway_client::ConnectionGatewayClient;
+use entity_kind::EntityType;
 use feature_flags::FeatureFlags;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
 use rate_limit::{RateLimitConfig, RateLimitKey, RateLimitService};
 use std::sync::Arc;
 

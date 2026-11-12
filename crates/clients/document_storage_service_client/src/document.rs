@@ -1,0 +1,538 @@
+use crate::constants::MACRO_INTERNAL_USER_ID_HEADER_KEY;
+
+use super::DocumentStorageServiceClient;
+use anyhow::Result;
+use permissions_types::share_permission::access_level::AccessLevel;
+use reqwest::StatusCode;
+use serde::{Deserialize, Serialize};
+use shared_types::document::list::ListDocumentsWithAccessResponse;
+use shared_types::document::response::{
+    CreateDocumentRequest, CreateDocumentResponse, EMAIL_ATTACHMENT_NOT_FOUND_CODE,
+};
+use shared_types::document::{
+    DocumentBasic, FileType,
+    response::{GetDocumentResponse, LocationResponseData, LocationResponseV3},
+};
+use shared_types::document_storage_service_internal::{
+    GetDocumentsMetadataRequest, GetDocumentsMetadataResponse, InitializeStarterDocsResponse,
+    StarterDocHowToGuide,
+};
+
+#[cfg(test)]
+mod test;
+
+#[derive(Serialize, Deserialize)]
+pub struct GetDocumentTextResponse {
+    pub text: String,
+}
+
+// TODO: make the export call return a string instead of a struct
+#[derive(Deserialize)]
+pub struct ExportDocumentResponse {
+    pub presigned_url: String,
+}
+
+#[derive(Serialize)]
+struct ContentUploadedRequest {
+    file_type: FileType,
+    document_version_id: Option<String>,
+}
+
+impl DocumentStorageServiceClient {
+    pub async fn get_document(&self, document_id: String) -> Result<GetDocumentResponse> {
+        let res = self
+            .client
+            .get(format!("{}/internal/documents/{}", self.url, document_id))
+            .send()
+            .await?
+            .json()
+            .await?;
+
+        let doc_data: GetDocumentResponse = serde_json::from_value(res)?;
+        Ok(doc_data)
+    }
+
+    /// Notify the document storage service that document content was uploaded.
+    #[tracing::instrument(skip(self), err)]
+    pub async fn publish_document_content_uploaded(
+        &self,
+        document_id: &str,
+        file_type: FileType,
+        document_version_id: Option<String>,
+    ) -> Result<()> {
+        let response = self
+            .client
+            .post(format!(
+                "{}/internal/documents/{}/content-uploaded",
+                self.url, document_id
+            ))
+            .json(&ContentUploadedRequest {
+                file_type,
+                document_version_id,
+            })
+            .send()
+            .await?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let body = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "<failed to read body>".to_string());
+            anyhow::bail!(
+                "publishing document content upload failed: {} - {}",
+                status,
+                body
+            );
+        }
+
+        Ok(())
+    }
+
+    pub async fn get_document_basic(&self, document_id: &str) -> Result<Option<DocumentBasic>> {
+        let res = self
+            .client
+            .get(format!(
+                "{}/internal/documents/{}/basic",
+                self.url, document_id
+            ))
+            .send()
+            .await?;
+
+        let status_code = res.status();
+
+        if status_code == StatusCode::NOT_FOUND {
+            return Ok(None);
+        }
+
+        if !status_code.is_success() {
+            let body = res.text().await.unwrap_or("no body".to_string());
+            tracing::error!(
+                body=%body,
+                status=%status_code,
+                "unexpected response from document storage service"
+            );
+            anyhow::bail!("HTTP {}: {}", status_code, body);
+        }
+
+        let doc_data: DocumentBasic = res.json().await?;
+        Ok(Some(doc_data))
+    }
+
+    pub async fn get_document_location(
+        &self,
+        document_id: String,
+        document_version_id: String,
+    ) -> Result<LocationResponseData> {
+        let res = self
+            .client
+            .get(format!(
+                "{}/internal/documents/{}/location?document_version_id={}",
+                self.url, document_id, document_version_id,
+            ))
+            .send()
+            .await?;
+
+        let location_data = res.json::<LocationResponseData>().await?;
+        Ok(location_data)
+    }
+
+    /// Get the document lcoation url ignoring version
+    pub async fn get_recent_document_location(
+        &self,
+        document_id: String,
+    ) -> Result<LocationResponseData> {
+        let res = self
+            .client
+            .get(format!(
+                "{}/internal/documents/{}/location",
+                self.url, document_id,
+            ))
+            .send()
+            .await?;
+
+        let location_data = res.json::<LocationResponseData>().await?;
+        Ok(location_data)
+    }
+
+    #[tracing::instrument(err(Debug), skip(self))]
+    pub async fn get_recent_document_location_v3(
+        &self,
+        document_id: &str,
+    ) -> Result<LocationResponseV3> {
+        let res = self
+            .client
+            .get(format!(
+                "{}/internal/documents/{}/location_v3",
+                self.url, document_id,
+            ))
+            .send()
+            .await?
+            .error_for_status()?;
+
+        let location_data = res.json::<LocationResponseV3>().await?;
+        Ok(location_data)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    pub async fn get_document_presigned_url(&self, document_id: &str) -> Result<String> {
+        let res = self
+            .client
+            .get(format!(
+                "{}/internal/documents/{}/export",
+                self.url, document_id
+            ))
+            .send()
+            .await?
+            .error_for_status()?;
+
+        let export_document_response = res.json::<ExportDocumentResponse>().await?;
+
+        Ok(export_document_response.presigned_url)
+    }
+
+    #[tracing::instrument(skip(self))]
+    pub async fn get_document_text(&self, document_id: &str) -> Result<String> {
+        let res = self
+            .client
+            .get(format!(
+                "{}/internal/documents/{}/text",
+                self.url, document_id,
+            ))
+            .send()
+            .await?;
+
+        let response_data = res.json::<GetDocumentTextResponse>().await?;
+        Ok(response_data.text)
+    }
+
+    // === JWT-authenticated external API methods ===
+
+    /// Get document basic info using JWT authentication (calls external API)
+    #[tracing::instrument(skip(self, jwt_token))]
+    pub async fn get_document_basic_external(
+        &self,
+        document_id: &str,
+        jwt_token: &str,
+    ) -> Result<Option<DocumentBasic>> {
+        let res = self
+            .external_request(
+                reqwest::Method::GET,
+                &format!("/documents/{}/basic", document_id),
+                jwt_token,
+            )
+            .send()
+            .await?;
+
+        let status_code = res.status();
+
+        if status_code == StatusCode::NOT_FOUND {
+            return Ok(None);
+        }
+
+        if !status_code.is_success() {
+            let body = res.text().await.unwrap_or("no body".to_string());
+            tracing::error!(
+                body=%body,
+                status=%status_code,
+                "unexpected response from document storage service"
+            );
+            anyhow::bail!("HTTP {}: {}", status_code, body);
+        }
+
+        let doc_data: DocumentBasic = res.json().await?;
+        Ok(Some(doc_data))
+    }
+
+    /// Get document location using JWT authentication (calls external API)
+    #[tracing::instrument(skip(self, jwt_token))]
+    pub async fn get_recent_document_location_v3_external(
+        &self,
+        document_id: &str,
+        jwt_token: &str,
+    ) -> Result<LocationResponseV3> {
+        let res = self
+            .external_request(
+                reqwest::Method::GET,
+                &format!("/documents/{}/location_v3", document_id),
+                jwt_token,
+            )
+            .send()
+            .await?;
+
+        let status_code = res.status();
+
+        if !status_code.is_success() {
+            let body = res.text().await.unwrap_or("no body".to_string());
+            tracing::error!(
+                body=%body,
+                status=%status_code,
+                document_id=%document_id,
+                "external API error when fetching document location"
+            );
+            anyhow::bail!("HTTP {}: {}", status_code, body);
+        }
+
+        let location_data = res.json::<LocationResponseV3>().await?;
+        Ok(location_data)
+    }
+
+    /// Get document text using JWT authentication (calls external API)
+    #[tracing::instrument(skip(self, jwt_token))]
+    pub async fn get_document_text_external(
+        &self,
+        document_id: &str,
+        jwt_token: &str,
+    ) -> Result<String> {
+        let res = self
+            .external_request(
+                reqwest::Method::GET,
+                &format!("/documents/{}/text", document_id),
+                jwt_token,
+            )
+            .send()
+            .await?;
+
+        let status_code = res.status();
+
+        if !status_code.is_success() {
+            let body = res.text().await.unwrap_or("no body".to_string());
+            tracing::error!(
+                body=%body,
+                status=%status_code,
+                document_id=%document_id,
+                "external API error when fetching document text"
+            );
+            anyhow::bail!("HTTP {}: {}", status_code, body);
+        }
+
+        let response_data = res.json::<GetDocumentTextResponse>().await?;
+        Ok(response_data.text)
+    }
+
+    /// Get metadata for documents
+    #[tracing::instrument(skip(self))]
+    pub async fn get_documents_metadata(
+        &self,
+        document_ids: Vec<String>,
+    ) -> Result<GetDocumentsMetadataResponse> {
+        let url = format!("{}/internal/documents/metadata", self.url);
+
+        let request = GetDocumentsMetadataRequest { document_ids };
+
+        let response = self.client.post(&url).json(&request).send().await?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "<failed to read body>".into());
+
+            anyhow::bail!("get documents metadata failed: {} - {}", status, text);
+        }
+
+        let data = response
+            .json::<GetDocumentsMetadataResponse>()
+            .await
+            .map_err(|_| anyhow::anyhow!("unable to parse response"))?;
+
+        Ok(data)
+    }
+
+    /// List documents the user has access to with filtering (calls internal API)
+    #[tracing::instrument(skip(self))]
+    pub async fn list_documents_with_access(
+        &self,
+        user_id: &str,
+        file_types: Option<Vec<String>>,
+        min_access_level: Option<AccessLevel>,
+        page: i64,
+        page_size: i64,
+    ) -> Result<ListDocumentsWithAccessResponse> {
+        let mut query_params = vec![
+            ("page".to_string(), page.to_string()),
+            ("page_size".to_string(), page_size.to_string()),
+        ];
+
+        if let Some(file_types) = file_types {
+            query_params.push(("file_types".to_string(), file_types.join(",")));
+        }
+
+        if let Some(min_access_level) = min_access_level {
+            query_params.push((
+                "min_access_level".to_string(),
+                min_access_level.to_string().to_lowercase(),
+            ));
+        }
+
+        let query_string = query_params
+            .iter()
+            .map(|(k, v)| format!("{}={}", k, v))
+            .collect::<Vec<_>>()
+            .join("&");
+
+        let url = format!(
+            "{}/internal/documents/list_with_access?{}",
+            self.url, query_string
+        );
+
+        tracing::debug!(url=%url, "list_documents_with_access_internal");
+
+        let res = self
+            .client
+            .get(&url)
+            .header(MACRO_INTERNAL_USER_ID_HEADER_KEY, user_id)
+            .send()
+            .await?;
+
+        let status_code = res.status();
+
+        if !status_code.is_success() {
+            let body = res.text().await.unwrap_or("no body".to_string());
+            tracing::error!(
+                body=%body,
+                status=%status_code,
+                user_id=%user_id,
+                "error when listing documents with access"
+            );
+            anyhow::bail!("HTTP {}: {}", status_code, body);
+        }
+
+        let response_data = res.json::<ListDocumentsWithAccessResponse>().await?;
+        Ok(response_data)
+    }
+
+    /// Create a document
+    #[tracing::instrument(skip(self, jwt_token))]
+    pub async fn create_document_external(
+        &self,
+        req: CreateDocumentRequest,
+        jwt_token: &str,
+    ) -> Result<CreateDocumentResponse> {
+        let res = self
+            .external_request(reqwest::Method::POST, "/documents", jwt_token)
+            .json(&req)
+            .send()
+            .await?;
+
+        let status_code = res.status();
+
+        if !status_code.is_success() {
+            let body = res.text().await.unwrap_or("no body".to_string());
+            tracing::error!(
+                body=%body,
+                status=%status_code,
+                document_name=%req.document_name,
+                "external API error when creating document"
+            );
+            anyhow::bail!("HTTP {}: {}", status_code, body);
+        }
+
+        let response_data = res.json::<CreateDocumentResponse>().await?;
+        Ok(response_data)
+    }
+
+    /// Create the starter documents for a user — the "Macro how to guide"
+    /// plus the starter tasks it links to — and pin the guide to their
+    /// sidebar favorites. Returns a reference to the guide document when it
+    /// could be resolved, so callers can link to it (e.g. the support
+    /// channel welcome message).
+    #[tracing::instrument(skip(self))]
+    pub async fn initialize_starter_docs(
+        &self,
+        user_id: &str,
+    ) -> Result<Option<StarterDocHowToGuide>> {
+        let url = format!("{}/internal/documents/initialize_starter_docs", self.url);
+
+        let res = self
+            .client
+            .post(&url)
+            .header(MACRO_INTERNAL_USER_ID_HEADER_KEY, user_id)
+            .send()
+            .await?;
+
+        let status_code = res.status();
+
+        if !status_code.is_success() {
+            let body = res.text().await.unwrap_or("no body".to_string());
+            tracing::error!(
+                body=%body,
+                status=%status_code,
+                user_id=%user_id,
+                "error when initializing how to guide"
+            );
+            anyhow::bail!("HTTP {}: {}", status_code, body);
+        }
+
+        let response: InitializeStarterDocsResponse = res.json().await?;
+        Ok(response.how_to_guide)
+    }
+
+    /// Create a document
+    #[tracing::instrument(skip(self))]
+    pub async fn create_document_internal(
+        &self,
+        req: CreateDocumentRequest,
+        user_id: &str,
+    ) -> Result<CreateDocumentResponse, CreateDocumentInternalError> {
+        let url = format!("{}/internal/documents", self.url);
+
+        let res = self
+            .client
+            .post(&url)
+            .json(&req)
+            .header(MACRO_INTERNAL_USER_ID_HEADER_KEY, user_id)
+            .send()
+            .await
+            .map_err(CreateDocumentInternalError::internal)?;
+
+        let status_code = res.status();
+
+        if !status_code.is_success() {
+            let body = res.text().await.unwrap_or("no body".to_string());
+            if status_code == StatusCode::NOT_FOUND
+                && serde_json::from_str::<ErrorCodeBody>(&body)
+                    .is_ok_and(|body| body.code == EMAIL_ATTACHMENT_NOT_FOUND_CODE)
+            {
+                return Err(CreateDocumentInternalError::EmailAttachmentNotFound);
+            }
+            tracing::error!(
+                body=%body,
+                status=%status_code,
+                document_name=%req.document_name,
+                "external API error when creating document"
+            );
+            return Err(CreateDocumentInternalError::Internal(
+                rootcause::report!("HTTP {status_code}: {body}").into_dynamic(),
+            ));
+        }
+
+        res.json::<CreateDocumentResponse>()
+            .await
+            .map_err(CreateDocumentInternalError::internal)
+    }
+}
+
+/// Why [`DocumentStorageServiceClient::create_document_internal`] failed.
+#[derive(thiserror::Error, Debug)]
+pub enum CreateDocumentInternalError {
+    /// The request's `email_attachment_id` no longer exists, so there is
+    /// nothing to import. Retrying cannot succeed.
+    #[error("email attachment not found")]
+    EmailAttachmentNotFound,
+    /// The request failed or DSS answered with any other error.
+    #[error("{0}")]
+    Internal(rootcause::Report),
+}
+
+impl CreateDocumentInternalError {
+    fn internal(error: reqwest::Error) -> Self {
+        Self::Internal(rootcause::Report::new(error).into_dynamic())
+    }
+}
+
+#[derive(Deserialize)]
+struct ErrorCodeBody {
+    code: String,
+}

@@ -20,14 +20,14 @@ aws-sdk-kms = { workspace = true }
 aws-sdk-s3 = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 clap = { workspace = true }
-macro_aws_config = { path = "../../../../crates/macro_aws_config" }
-macro_queues = { path = "../../../../crates/macro_queues" }
+macro_aws_config = { workspace = true }
+macro_queues = { workspace = true }
 serde = { workspace = true }
 # Content-address the init snapshots (`stack up` restore/save keys).
 sha2 = { workspace = true }
 tokio = { workspace = true }
 # Source of truth for the declared Kafka topics (local-stack provisioning).
-macro_event_topics = { path = "../../../../crates/macro_event_topics", optional = true }
+macro_event_topics = { workspace = true, optional = true }
 # AdminClient for creating the declared topics on the local broker. Optional
 # (behind `local-stack`) so plain xtask builds don't spend time compiling the
 # bundled static librdkafka dependency.
@@ -47,13 +47,13 @@ serde_yaml = { workspace = true }
 dotenvy = { workspace = true }
 # Signal the frontend dev server's whole process group on shutdown.
 libc = { workspace = true }
-macro_env_var = { path = "../../../../crates/macro_env_var" }
-xtask_paths = { path = "../xtask_paths" }
+macro_env_var = { workspace = true }
+xtask_paths = { workspace = true }
 # Port windows, subnets and the machine-wide allocation registry.
-xtask_ports = { path = "../xtask_ports" }
+xtask_ports = { workspace = true }
 # Local build telemetry, on by default (`local/telemetry.rs`); container health times.
 chrono = { workspace = true }
-xtask_local_telemetry = { path = "../xtask_local_telemetry" }
+xtask_local_telemetry = { workspace = true }
 
 [dev-dependencies]
 jsonwebtoken = { workspace = true }

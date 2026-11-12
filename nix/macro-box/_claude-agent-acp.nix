@@ -4,7 +4,7 @@
 { pkgs }:
 let
   inherit (pkgs) lib;
-  pin = builtins.readFile ../../crates/coding_agent_worker/src/tui/agent_catalog/claude_code.rs;
+  pin = builtins.readFile ../../crates/agents/macrod/src/tui/agent_catalog/claude_code.rs;
   pinned = builtins.elemAt (builtins.match ''.*"@agentclientprotocol/claude-agent-acp@([^"]+)".*'' pin) 0;
   package = lib.importJSON ./claude-agent-acp/package.json;
   lock = lib.importJSON ./claude-agent-acp/package-lock.json;

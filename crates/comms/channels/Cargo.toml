@@ -1,0 +1,94 @@
+[package]
+edition = "2024"
+name = "channels"
+publish = false
+version = "0.1.0"
+
+[features]
+# The JsonSchema derives the AI toolset in `channels_inbound` reads.
+ai_tools = ["dep:schemars", "ports"]
+# The attachment-rendering port the attachment adapter implements.
+attachment = ["ports"]
+list = [
+  "dep:soup_types",
+  "dep:entity_kind",
+  "dep:rootcause",
+  "ports",
+  "dep:frecency_core",
+  "frecency_core/ports",
+]
+entity_mutation = [
+  "dep:entity_access",
+  "dep:entity_mutation",
+  "dep:entity_kind",
+  "dep:rootcause",
+  "entity_access/ports",
+  "ports",
+]
+ports = [
+  "dep:async-trait",
+  "dep:entity_access",
+  "dep:rootcause",
+  "dep:tokio",
+  "entity_access/ports",
+  "messages/ports",
+]
+schema = [
+  "channel_sender/schema",
+  "dep:utoipa",
+  "item_filters/schema",
+  "macro_user_id/schema",
+  "messages/schema",
+]
+# `sqlx::Type` derives on domain types the Postgres adapter stores.
+sqlx = ["dep:sqlx", "macro_user_id/sqlx"]
+
+[dependencies]
+agent_correlation = { workspace = true }
+activity = { workspace = true }
+anyhow = { workspace = true }
+bot_id = { workspace = true }
+channel_id = { workspace = true }
+channel_sender = { workspace = true }
+thread_id = { workspace = true }
+entity_mutation = { workspace = true, optional = true }
+chrono = { workspace = true }
+entity_access = { workspace = true, optional = true }
+item_filters = { workspace = true }
+macro_event_broker = { workspace = true }
+macro_event_topics = { workspace = true }
+macro_user_id = { workspace = true }
+messages = { workspace = true, features = ["broker"] }
+entity_kind = { workspace = true, optional = true }
+model_file_type = { workspace = true }
+pagination_types = { workspace = true }
+rootcause = { workspace = true, optional = true }
+serde = { workspace = true }
+sqlx = { workspace = true, optional = true }
+strum = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["macros", "sync", "time"], optional = true }
+tracing = { workspace = true }
+utoipa = { workspace = true, optional = true }
+uuid = { workspace = true }
+
+# AI Tool dependencies
+async-trait = { workspace = true, optional = true }
+schemars = { workspace = true, optional = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+soup_types = { workspace = true, optional = true }
+frecency_core = { workspace = true, optional = true }
+
+[dev-dependencies]
+bot_id = { workspace = true, features = ["test-utils"] }
+messages = { workspace = true, features = ["test-utils"] }
+kafka_util = { workspace = true }
+macro_env_var = { workspace = true }
+# Examples need the Kafka adapter (outbound); the library itself only uses ports.
+macro_event_broker = { workspace = true, default-features = true }
+mockall = { workspace = true }
+rdkafka = { workspace = true }
+rootcause = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal", "test-util"] }
+tracing-subscriber = { workspace = true }

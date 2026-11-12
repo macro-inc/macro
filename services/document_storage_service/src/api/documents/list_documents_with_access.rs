@@ -5,11 +5,11 @@ use axum::{
     response::{IntoResponse, Json},
 };
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model::document::list::{DocumentListFilters, ListDocumentsWithAccessResponse};
-use model::response::GenericErrorResponse;
-use models_permissions::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::access_level::AccessLevel;
 use schemars::JsonSchema;
 use serde::Deserialize;
+use shared_types::document::list::{DocumentListFilters, ListDocumentsWithAccessResponse};
+use shared_types::response::GenericErrorResponse;
 use std::str::FromStr;
 use utoipa::IntoParams;
 

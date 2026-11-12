@@ -1,4 +1,4 @@
-use model::user_document_view_location::UserDocumentViewLocation;
+use shared_types::user_document_view_location::UserDocumentViewLocation;
 use sqlx::{Pool, Postgres};
 
 /// Gets the user document view location

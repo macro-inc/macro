@@ -40,9 +40,9 @@ The plan must show all four, judged against [table sizes](../query-review/table-
    team, or the table.
 4. **A statement timeout covers it.** Any query whose cost depends on a
    tenant's data runs under `statement_timeout`: `SET LOCAL` in its
-   transaction (`crates/notification/src/outbound/retention.rs`,
-   `dynamic_email_thread_cursor` in `crates/email`) or a pool created with the
-   option (`crates/github/src/outbound/pg_github_repo.rs`). Most pools set no
+   transaction (`crates/notifications/notification_outbound/src/retention.rs`,
+   `dynamic_email_thread_cursor` in `crates/email/email`) or a pool created with the
+   option (`crates/integrations/github/src/outbound/pg_github_repo.rs`). Most pools set no
    default, so a slow query otherwise runs until it finishes, long after the
    client gave up and retried. A repository that is handed its pool does not
    know that pool's settings: find where the service builds it, and if it sets
@@ -95,7 +95,7 @@ ORDER BY e.occurred_at DESC, e.id DESC
 LIMIT $4
 ```
 
-That is `crates/activity/src/outbound/pg_activity_repo/team_feed.sql`. Two
+That is `crates/search/activity/src/outbound/pg_activity_repo/team_feed.sql`. Two
 details in it matter:
 
 - The `ORDER BY` matches an index, column for column and direction for
@@ -104,7 +104,7 @@ details in it matter:
 - The first page uses `COALESCE`, not `$2 IS NULL OR (…) < (…)`. The `OR` form
   stops being an index condition once the prepared statement gets a generic
   plan. Separate first-page and next-page queries
-  (`crates/activity/src/outbound/pg_activity_repo/timeline.rs`) work too.
+  (`crates/search/activity/src/outbound/pg_activity_repo/timeline.rs`) work too.
 
 The scope key, the sort columns, and the tiebreaker must sit in one index on
 one table. When the scope is on a parent (a channel's messages) and the sort
@@ -129,7 +129,7 @@ one entity's pending requests.
 - An expression index is used only when the query repeats its expression
   exactly: `idx_email_contacts_email_domain` is on
   `lower(split_part(email_address, '@', 2))`, and the domain filter in
-  `crates/email` writes that same expression.
+  `crates/email/email` writes that same expression.
 - A partial index is used only when the query repeats its `WHERE` predicate in
   a form the planner can prove.
 - An index without the tenant or parent key reads every tenant's matches and
@@ -164,7 +164,7 @@ CROSS JOIN LATERAL (
 ) m
 ```
 
-(`crates/email/src/outbound/email_pg_repo/preview/attachments_by_thread_ids.sql`),
+(`crates/email/email/src/outbound/email_pg_repo/preview/attachments_by_thread_ids.sql`),
 or `WHERE id = ANY($1)` for a plain lookup. Cap the array's length at the
 caller. For writes, insert from `unnest` in one statement and keep it
 idempotent with `ON CONFLICT` (CS-02).

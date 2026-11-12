@@ -4,7 +4,7 @@ use crate::util::process_pre_insert::clean_message::clean_subject_snippet::{
 use crate::util::process_pre_insert::clean_message::remove_trailing_br_tags::{
     remove_trailing_br_tags, remove_trailing_br_tags_threads,
 };
-use models_email::service;
+use email_types::service;
 
 mod clean_subject_snippet;
 mod remove_trailing_br_tags;

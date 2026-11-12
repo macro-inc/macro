@@ -1,0 +1,427 @@
+//! The wire contract for streaming a live session's log, and the
+//! connection-gateway adapter that speaks it.
+//!
+//! # The contract
+//!
+//! Websocket payloads are not part of the OpenAPI surface, so nothing
+//! generates the client's half of this. The paired type is
+//! `apps/web/src/lib/queries/agent-session/realtime-protocol.ts`, hand-written against
+//! what is here; the two doc comments point at each other and are the whole
+//! agreement.
+//!
+//! Messages go out as type [`AGENT_SESSION_LOG`] with a
+//! [`AgentSessionLogEvent`] body: the session, and the run of frames the
+//! writer just flushed, in log order.
+//!
+//! ```json
+//! {
+//!   "agentSessionId": "019f…",
+//!   "entries": [
+//!     {
+//!       "id":        "019f…",
+//!       "createdAt": "2026-08-13T12:34:56.789Z",
+//!       "userId":    "macro|someone@example.com",
+//!       "direction": "to_server",
+//!       "content":   { "type": "acp", "jsonrpc": "2.0", … }
+//!     }
+//!   ]
+//! }
+//! ```
+//!
+//! Each entry is exactly the entry shape `GET /agent-sessions/{id}/log`
+//! serves, flattened in the same way. That is the point of the contract
+//! rather than an accident of it: a client catching up on a log and a client
+//! following one are folding the same bytes, so they can share one fold and
+//! cannot disagree about what a frame means. A batch rather than a frame
+//! because the writer publishes once per flush, however many frames that is.
+//!
+//! `agentSessionId` both addresses the frame and is what the fold keys its
+//! messages on, so it must be passed through unchanged: a message is
+//! identified by that session plus the session-local `"{turn}:{author}"` id
+//! the fold derives.
+
+use crate::domain::model::QueuedActionDto;
+use crate::domain::model::{
+    AgentSessionActivitySummarized, AgentSessionId, AgentSessionLog, AgentSessionRenamed,
+    LogAppended, Message, StoredAgentSessionLog,
+};
+use crate::domain::ports::{AgentSessionQueueChanged, AgentSessionRealtime};
+use connection_gateway_client::ConnectionGatewayClient;
+use entity_kind::EntityType as GatewayEntityType;
+use macro_uuid::Uuid;
+use serde::Serialize;
+use std::sync::Arc;
+
+/// The realtime message type carrying a run of appended log frames.
+///
+/// Matched on by the web client's websocket dispatch; changing it breaks
+/// streaming silently, since an unrecognized type is ignored rather than
+/// rejected.
+pub const AGENT_SESSION_LOG: &str = "agent_session_log";
+
+/// The realtime message type carrying a persisted session-name change.
+pub const AGENT_SESSION_RENAMED: &str = "agent_session_renamed";
+
+/// The realtime message type carrying a running session's newest one-line
+/// activity summary. Ephemeral: a viewer that missed it keeps its own label
+/// until the next one.
+pub const AGENT_SESSION_ACTIVITY: &str = "agent_session_activity";
+
+/// The realtime message type carrying a session's whole queue after a change.
+///
+/// Always the full queue, never a delta: any one event is a complete,
+/// self-sufficient truth, which is what lets a client treat the socket as the
+/// only writer once it has heard anything on it - a late `GET .../queue`
+/// response can never carry information the socket will not deliver.
+pub const AGENT_SESSION_QUEUE: &str = "agent_session_queue";
+
+/// The realtime message type telling viewers a session's captured changes
+/// moved: a capture started, finished, or failed. Carries only the session
+/// id; viewers refetch `GET /agent-sessions/{id}/changes`.
+pub const AGENT_SESSION_CHANGES: &str = "agent_session_changes";
+
+/// The body of an [`AGENT_SESSION_LOG`] message - the module docs are the
+/// contract.
+#[derive(Debug, Serialize)]
+pub struct AgentSessionLogEvent {
+    /// The authoritative activity projection after the flushed frames.
+    #[serde(rename = "turnState")]
+    pub turn_state: Option<agent_fold::domain::model::TurnState>,
+    /// The session the frames belong to, and half of the composite id their
+    /// folded messages are keyed by.
+    #[serde(rename = "agentSessionId")]
+    pub agent_session_id: Uuid,
+    /// The flushed frames, in log order. Never empty.
+    pub entries: Vec<AgentSessionLogEventEntry>,
+}
+
+/// One frame of an [`AgentSessionLogEvent`]: the GET log entry shape.
+#[derive(Debug, Serialize)]
+pub struct AgentSessionLogEventEntry {
+    /// Durable row identity, matching the GET log entry and breaking timestamp ties.
+    pub id: Uuid,
+    /// When the durable log recorded the frame.
+    #[serde(rename = "createdAt")]
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    /// The user whose action produced the frame, when one did.
+    #[serde(rename = "userId", skip_serializing_if = "Option::is_none")]
+    pub user_id: Option<String>,
+    /// `direction` and `content`, flattened in - the frame's own two fields,
+    /// serialized by [`Message`] itself so they match the log verbatim.
+    #[serde(flatten)]
+    pub message: Message,
+}
+
+/// A persisted session changed; viewers should reload its current metadata.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionUpdatedEvent {
+    /// Changed session.
+    pub agent_session_id: Uuid,
+}
+
+/// User-facing metadata changed for an agent session.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionRenamedEvent {
+    /// Renamed session.
+    pub agent_session_id: Uuid,
+    /// New user-facing name.
+    pub name: String,
+}
+
+impl From<AgentSessionRenamed> for AgentSessionRenamedEvent {
+    fn from(event: AgentSessionRenamed) -> Self {
+        Self {
+            agent_session_id: event.agent_session_id.as_uuid(),
+            name: event.name,
+        }
+    }
+}
+
+/// The body of an [`AGENT_SESSION_ACTIVITY`] message.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionActivityEvent {
+    /// The running session.
+    pub agent_session_id: Uuid,
+    /// The status line; `null` once the turn that had one has ended.
+    pub text: Option<String>,
+}
+
+impl From<AgentSessionActivitySummarized> for AgentSessionActivityEvent {
+    fn from(event: AgentSessionActivitySummarized) -> Self {
+        Self {
+            agent_session_id: event.agent_session_id.as_uuid(),
+            text: event.text,
+        }
+    }
+}
+
+/// The body of an [`AGENT_SESSION_QUEUE`] message.
+///
+/// `entries` are [`QueuedActionDto`] - the exact rows `GET .../queue` serves -
+/// for the same reason the log event flattens [`Message`] verbatim: a client
+/// baselining from the REST endpoint and one following the socket are reading
+/// the same bytes, so they cannot disagree about what an entry means.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionQueueEvent {
+    /// The session whose queue this is.
+    pub agent_session_id: Uuid,
+    /// Everything waiting, oldest (next to dispatch) first. The whole queue,
+    /// every time - see [`AGENT_SESSION_QUEUE`].
+    pub entries: Vec<QueuedActionDto>,
+}
+
+impl From<AgentSessionQueueChanged> for AgentSessionQueueEvent {
+    fn from(event: AgentSessionQueueChanged) -> Self {
+        Self {
+            agent_session_id: event.agent_session_id.as_uuid(),
+            entries: event.entries.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
+impl AgentSessionLogEvent {
+    /// The event for one flushed run of frames.
+    #[must_use]
+    pub fn new(event: LogAppended) -> Self {
+        Self {
+            agent_session_id: event.agent_session_id.as_uuid(),
+            turn_state: event.turn_state,
+            entries: event
+                .entries
+                .into_iter()
+                .map(
+                    |StoredAgentSessionLog {
+                         id,
+                         created_at,
+                         entry:
+                             AgentSessionLog {
+                                 user_id, content, ..
+                             },
+                     }| AgentSessionLogEventEntry {
+                        id,
+                        created_at,
+                        user_id: user_id.map(|user| user.to_string()),
+                        message: content,
+                    },
+                )
+                .collect(),
+        }
+    }
+}
+
+/// Publishes appended frames to a session's viewers through the connection
+/// gateway.
+#[derive(Clone)]
+pub struct ConnectionGatewayAgentSessionRealtime<Participants> {
+    client: Arc<ConnectionGatewayClient>,
+    participants: Participants,
+}
+
+impl<Participants> ConnectionGatewayAgentSessionRealtime<Participants> {
+    /// Build the adapter from a gateway client and a way to ask who is in a
+    /// channel.
+    pub fn new(client: Arc<ConnectionGatewayClient>, participants: Participants) -> Self {
+        Self {
+            client,
+            participants,
+        }
+    }
+}
+
+pub use crate::domain::audience::SessionAudience;
+
+/// Reads subscriptions without treating a tracked entity as a permission grant.
+#[derive(Clone)]
+pub struct ConnectionGatewaySessionSubscriptions(pub Arc<ConnectionGatewayClient>);
+
+impl crate::domain::audience::SessionSubscriptions for ConnectionGatewaySessionSubscriptions {
+    async fn candidates(
+        &self,
+        id: AgentSessionId,
+        parent: Option<&messages::domain::models::MessageParent>,
+    ) -> Result<std::collections::HashSet<String>, rootcause::Report> {
+        let mut users: std::collections::HashSet<_> = self
+            .0
+            .track_entity_users(GatewayEntityType::AgentSession.with_entity_string(id.to_string()))
+            .await
+            .map_err(|error| rootcause::report!(error))?
+            .into_iter()
+            .collect();
+        if let Some(parent) = parent {
+            use messages::domain::models::MessageParent;
+            let kind = match parent {
+                MessageParent::Channel(_) => GatewayEntityType::Channel,
+                MessageParent::Document(_) => GatewayEntityType::Document,
+                MessageParent::Initiative(_) => GatewayEntityType::Initiative,
+                MessageParent::CrmCompany(_) => GatewayEntityType::CrmCompany,
+                MessageParent::CrmContact(_) => GatewayEntityType::CrmContact,
+                MessageParent::Call(_) => GatewayEntityType::Call,
+            };
+            users.extend(
+                self.0
+                    .track_entity_users(kind.with_entity_string(parent.entity_id()))
+                    .await
+                    .map_err(|error| rootcause::report!(error))?,
+            );
+        }
+        Ok(users)
+    }
+}
+
+impl<Participants> AgentSessionRealtime for ConnectionGatewayAgentSessionRealtime<Participants>
+where
+    Participants: SessionAudience,
+{
+    async fn publish(&self, event: LogAppended) -> Result<(), rootcause::Report> {
+        let recipients = self.participants.viewers(event.agent_session_id).await?;
+        if recipients.is_empty() {
+            return Ok(());
+        }
+
+        let payload = serde_json::to_value(AgentSessionLogEvent::new(event))
+            .map_err(|error| rootcause::report!(error))?;
+
+        self.client
+            .batch_send_message(
+                AGENT_SESSION_LOG.to_string(),
+                payload,
+                recipients
+                    .iter()
+                    .map(|user| GatewayEntityType::User.with_entity_str(user.as_ref()))
+                    .collect(),
+            )
+            .await
+            .map_err(|error| rootcause::report!(error))?;
+
+        Ok(())
+    }
+
+    async fn publish_queue_changed(
+        &self,
+        event: AgentSessionQueueChanged,
+    ) -> Result<(), rootcause::Report> {
+        let recipients = self.participants.viewers(event.agent_session_id).await?;
+        if recipients.is_empty() {
+            return Ok(());
+        }
+
+        let payload = serde_json::to_value(AgentSessionQueueEvent::from(event))
+            .map_err(|error| rootcause::report!(error))?;
+        self.client
+            .batch_send_message(
+                AGENT_SESSION_QUEUE.to_string(),
+                payload,
+                recipients
+                    .iter()
+                    .map(|user| GatewayEntityType::User.with_entity_str(user.as_ref()))
+                    .collect(),
+            )
+            .await
+            .map_err(|error| rootcause::report!(error))?;
+
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err, fields(agent.session.id = %session))]
+    async fn publish_updated(&self, session: AgentSessionId) -> Result<(), rootcause::Report> {
+        let recipients = self.participants.viewers(session).await?;
+        if recipients.is_empty() {
+            return Ok(());
+        }
+        let payload = serde_json::to_value(AgentSessionUpdatedEvent {
+            agent_session_id: session.as_uuid(),
+        })
+        .map_err(|error| rootcause::report!(error))?;
+        self.client
+            .batch_send_message(
+                "agent_session_updated".to_owned(),
+                payload,
+                recipients
+                    .iter()
+                    .map(|user| GatewayEntityType::User.with_entity_str(user.as_ref()))
+                    .collect(),
+            )
+            .await
+            .map_err(|error| rootcause::report!(error))?;
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err, fields(agent.session.id = %session))]
+    async fn publish_changes_updated(
+        &self,
+        session: AgentSessionId,
+    ) -> Result<(), rootcause::Report> {
+        let recipients = self.participants.viewers(session).await?;
+        if recipients.is_empty() {
+            return Ok(());
+        }
+        let payload = serde_json::to_value(AgentSessionUpdatedEvent {
+            agent_session_id: session.as_uuid(),
+        })
+        .map_err(|error| rootcause::report!(error))?;
+        self.client
+            .batch_send_message(
+                AGENT_SESSION_CHANGES.to_owned(),
+                payload,
+                recipients
+                    .iter()
+                    .map(|user| GatewayEntityType::User.with_entity_str(user.as_ref()))
+                    .collect(),
+            )
+            .await
+            .map_err(|error| rootcause::report!(error))?;
+        Ok(())
+    }
+
+    async fn publish_activity_summarized(
+        &self,
+        event: AgentSessionActivitySummarized,
+    ) -> Result<(), rootcause::Report> {
+        let recipients = self.participants.viewers(event.agent_session_id).await?;
+        if recipients.is_empty() {
+            return Ok(());
+        }
+
+        let payload = serde_json::to_value(AgentSessionActivityEvent::from(event))
+            .map_err(|error| rootcause::report!(error))?;
+        self.client
+            .batch_send_message(
+                AGENT_SESSION_ACTIVITY.to_owned(),
+                payload,
+                recipients
+                    .iter()
+                    .map(|user| GatewayEntityType::User.with_entity_str(user.as_ref()))
+                    .collect(),
+            )
+            .await
+            .map_err(|error| rootcause::report!(error))?;
+        Ok(())
+    }
+
+    async fn publish_renamed(&self, event: AgentSessionRenamed) -> Result<(), rootcause::Report> {
+        let recipients = self.participants.viewers(event.agent_session_id).await?;
+        if recipients.is_empty() {
+            return Ok(());
+        }
+
+        let payload = serde_json::to_value(AgentSessionRenamedEvent::from(event))
+            .map_err(|error| rootcause::report!(error))?;
+        self.client
+            .batch_send_message(
+                AGENT_SESSION_RENAMED.to_string(),
+                payload,
+                recipients
+                    .iter()
+                    .map(|user| GatewayEntityType::User.with_entity_str(user.as_ref()))
+                    .collect(),
+            )
+            .await
+            .map_err(|error| rootcause::report!(error))?;
+
+        Ok(())
+    }
+}

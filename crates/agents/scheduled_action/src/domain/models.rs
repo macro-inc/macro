@@ -1,0 +1,795 @@
+use anyhow::{Result, bail};
+use bot_id::BotId;
+use chrono::{DateTime, Duration, Utc};
+use chrono_tz::Tz;
+use cron::Schedule as CronSchedule;
+use macro_user_id::user_id::MacroUserIdStr;
+use macro_uuid::Uuid;
+use model_owner::{Owner, OwnerType};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use std::str::FromStr;
+use utoipa::ToSchema;
+
+use agent_session::domain::model::SessionVisibility;
+use routine_program::{AgentStep, StepRecord};
+
+use super::event_runs::ConfigurationRevision;
+use super::event_trigger::ActionTrigger;
+
+#[cfg(test)]
+mod test;
+
+pub const MAX_ACTION_TIME: Duration = Duration::minutes(20);
+
+#[derive(Serialize, Debug, Clone, PartialEq, Eq, ToSchema)]
+pub struct Schedule(String);
+
+impl Schedule {
+    /// Parse a cron expression in the 6-/7-field format required by the `cron`
+    /// crate (`sec min hour dom mon dow [year]`).
+    pub fn from_cron(cron: String) -> Result<Self> {
+        let fields = cron.split_whitespace().count();
+        if !(6..=7).contains(&fields) {
+            bail!(
+                "cron schedule `{cron}` has {fields} fields; use 6 or 7 \
+                 (second minute hour day-of-month month day-of-week [year]), \
+                 e.g. `0 */10 * * * *` for every ten minutes"
+            );
+        }
+        if let Err(error) = CronSchedule::from_str(&cron) {
+            bail!("invalid cron schedule `{cron}`: {error}");
+        }
+        Ok(Self(cron))
+    }
+
+    pub fn as_cron(&self) -> CronSchedule {
+        CronSchedule::from_str(&self.0).expect("always valid schedule")
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// Next firing time after "now" in the given timezone, expressed in UTC.
+    pub fn next_run_after_now(&self, tz: Tz) -> Option<DateTime<Utc>> {
+        self.as_cron()
+            .upcoming(tz)
+            .next()
+            .map(|dt| dt.with_timezone(&Utc))
+    }
+}
+
+impl<'de> Deserialize<'de> for Schedule {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Schedule::from_cron(s).map_err(serde::de::Error::custom)
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, ToSchema)]
+pub enum ActionKind {
+    Agent,
+}
+
+/// Whether a routine's runs are listed in Home and the Agents list. Routines
+/// that run often would bury the owner's own work, so runs start unlisted;
+/// either way they stay in the routine's history. The string form is the
+/// `scheduled_action.run_visibility` column's.
+#[derive(
+    Debug,
+    Default,
+    Serialize,
+    Deserialize,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    ToSchema,
+    strum::EnumString,
+    strum::IntoStaticStr,
+)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum RunVisibility {
+    /// Runs show up wherever the owner's sessions do.
+    Listed,
+    /// Runs stay out of Home and the default Agents list.
+    #[default]
+    Unlisted,
+}
+
+impl From<RunVisibility> for SessionVisibility {
+    fn from(visibility: RunVisibility) -> Self {
+        match visibility {
+            RunVisibility::Listed => Self::Listed,
+            RunVisibility::Unlisted => Self::Unlisted,
+        }
+    }
+}
+
+/// Validated execution choice. Callers must not fall back from an agent to a model.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ResolvedTaskTarget<'a> {
+    Model {
+        model: &'a str,
+    },
+    Agent {
+        bot_id: BotId,
+        /// None means use the selected persona's default at execution time.
+        model: Option<&'a str>,
+    },
+}
+
+impl<'a> ResolvedTaskTarget<'a> {
+    /// Resolve an agent step's target once. A supplied model must be nonblank.
+    pub fn of(step: &'a AgentStep) -> Result<Self, TaskTargetError> {
+        let model = match step.model.as_deref() {
+            Some(model) if model.trim().is_empty() => return Err(TaskTargetError::BlankModel),
+            model => model,
+        };
+        match (step.agent, model) {
+            (Some(agent), model) => Ok(Self::Agent {
+                bot_id: BotId::new_from_uuid(agent.bot_id),
+                model,
+            }),
+            (None, Some(model)) => Ok(Self::Model { model }),
+            (None, None) => Err(TaskTargetError::MissingTarget),
+        }
+    }
+
+    /// Use the same Macro runtime as the new AI composer for model selections.
+    /// Explicit agent selections keep their own runtime and optional model override.
+    pub fn session_target(self) -> (BotId, Option<&'a str>) {
+        match self {
+            Self::Model { model } => (bot_id::MACRO_NEW_BOT_ID, Some(model)),
+            Self::Agent { bot_id, model } => (bot_id, model),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum TaskTargetError {
+    #[error("a supplied model must not be blank")]
+    BlankModel,
+    #[error("a task must select a model or an agent")]
+    MissingTarget,
+}
+
+/// Longest description a routine or template can carry.
+pub const MAX_DESCRIPTION_CHARS: usize = 1_000;
+
+/// Client configuration, the create body. Ownership and execution state are
+/// server-owned.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ActionConfiguration {
+    pub name: String,
+    pub trigger: ActionTrigger,
+    pub kind: ActionKind,
+    #[schema(value_type = routine_program::RoutineTask)]
+    pub task: Value,
+    pub enabled: bool,
+    /// Omitted by clients that predate the setting; runs then start unlisted.
+    #[serde(default)]
+    pub run_visibility: RunVisibility,
+    /// What the routine is for, in the owner's words; empty when unset.
+    #[serde(default)]
+    pub description: String,
+}
+
+/// What saving a routine would find wrong, without saving it: the answer to
+/// `POST /scheduled-actions/check`.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RoutineCheck {
+    /// Whether saving it would succeed: no problems and no failing steps.
+    pub ok: bool,
+    /// Why saving it would fail, other than its code, for its author.
+    pub problems: Vec<String>,
+    /// Code steps that don't type-check against Macro's SDK.
+    pub steps: Vec<CheckedStepProblems>,
+    /// The routine as saving would store it: code steps named and the SDK
+    /// their code checks against stamped.
+    pub routine: ActionConfiguration,
+}
+
+/// Something a routine draft's session created for the routine to use, such
+/// as the database it writes to: it exists whether or not the routine is
+/// saved.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CreatedItem {
+    /// What kind of item.
+    #[schema(inline)]
+    pub entity_type: entity_kind::EntityType,
+    /// Its id.
+    pub entity_id: String,
+}
+
+/// A code step that doesn't type-check.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CheckedStepProblems {
+    /// Its place among the routine's steps, from zero.
+    pub index: usize,
+    /// Its title.
+    pub title: String,
+    /// What the type checker reports, first problems first.
+    pub problems: Vec<String>,
+}
+
+/// Configuration replacement, the update body. Activation has its own endpoint, so
+/// omitting `enabled` keeps the stored value; omitting `run_visibility` or
+/// `description` keeps them too, so clients that predate them do not reset them.
+#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ActionConfigurationUpdate {
+    pub name: String,
+    pub trigger: ActionTrigger,
+    pub kind: ActionKind,
+    #[schema(value_type = routine_program::RoutineTask)]
+    pub task: Value,
+    /// Still sent by clients deployed before the activation endpoint.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(deprecated)]
+    pub enabled: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub run_visibility: Option<RunVisibility>,
+    /// An empty string clears it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+}
+
+impl ActionConfigurationUpdate {
+    /// The replacement configuration, keeping the stored values of fields
+    /// the input omits.
+    pub fn into_configuration(self, stored: &ScheduledAction) -> ActionConfiguration {
+        ActionConfiguration {
+            name: self.name,
+            trigger: self.trigger,
+            kind: self.kind,
+            task: self.task,
+            enabled: self.enabled.unwrap_or(stored.enabled),
+            run_visibility: self.run_visibility.unwrap_or(stored.run_visibility),
+            description: self
+                .description
+                .unwrap_or_else(|| stored.description.clone()),
+        }
+    }
+}
+
+/// Expected management failures; adapters map these without exposing internals.
+#[derive(Debug, thiserror::Error)]
+pub enum ActionPolicyError {
+    #[error("scheduled action not found")]
+    NotFound,
+    #[error("schedule has no future firings")]
+    NoFutureFirings,
+    #[error("event-trigger management is not enabled")]
+    EventManagementDisabled,
+    #[error("trigger conditions are not enabled")]
+    ConditionsDisabled,
+    #[error("connect GitHub before enabling a GitHub trigger")]
+    GithubNotLinked,
+    #[error("a routine description can be at most {MAX_DESCRIPTION_CHARS} characters")]
+    DescriptionTooLong,
+    #[error("scheduled action changed or is running; reload before updating")]
+    UpdateConflict,
+    #[error("only a routine suggestion session may suggest routines")]
+    NotSuggesting,
+    #[error(
+        "this routine already has {MAX_ACTIVE_SUB_ROUTINES} active sub-routines; \
+         delete or finish some before creating another"
+    )]
+    TooManySubRoutines,
+    #[error("a key names a routine created by a routine's run; create it without a key here")]
+    KeyOutsideRun,
+    #[error("a routine key must be 1 to {MAX_KEY_CHARS} characters")]
+    InvalidKey,
+    #[error("this routine was not created by another routine")]
+    NotSubRoutine,
+}
+
+/// Most active sub-routines one routine can have; finished one-time ones
+/// don't count.
+pub const MAX_ACTIVE_SUB_ROUTINES: i64 = 50;
+
+/// Longest key a run can name a sub-routine by.
+pub const MAX_KEY_CHARS: usize = 200;
+
+/// The name a run gives a routine it creates, so creating it again under the
+/// same parent updates it instead of adding a duplicate.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(transparent)]
+pub struct SubRoutineKey(String);
+
+impl SubRoutineKey {
+    /// A key of 1 to [`MAX_KEY_CHARS`] characters, trimmed.
+    pub fn new(key: &str) -> Result<Self, ActionPolicyError> {
+        let key = key.trim();
+        if key.is_empty() || key.chars().count() > MAX_KEY_CHARS {
+            return Err(ActionPolicyError::InvalidKey);
+        }
+        Ok(Self(key.to_owned()))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+/// How a routine created by a routine's run belongs to that routine.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+pub struct SubRoutine {
+    /// The top-level routine it follows: pausing that routine pauses it, and
+    /// deleting that routine deletes it. A routine a sub-routine's run
+    /// creates follows the same top-level routine.
+    #[schema(value_type = String, format = Uuid)]
+    pub parent_id: Uuid,
+    /// The run that created it: the id of that run's history record, which
+    /// exists once the run ends.
+    #[schema(value_type = String, format = Uuid)]
+    pub created_by_run_id: Uuid,
+    /// The name its creating code gave it, when it gave one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<String>)]
+    pub key: Option<SubRoutineKey>,
+    /// It is off because its parent was switched off, and resumes with it.
+    #[serde(default)]
+    pub paused_by_parent: bool,
+}
+
+/// A routine's run that is in progress, as the caller of a create proves it:
+/// who a new routine would belong to.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RunningRun {
+    /// The routine that is running.
+    pub routine_id: Uuid,
+    /// The routine it follows, when it is a sub-routine itself.
+    pub parent_id: Option<Uuid>,
+    /// Who the running routine belongs to.
+    pub owner: Owner,
+    /// The run: its claim's token, which becomes its history record's id.
+    pub run_id: Uuid,
+}
+
+/// How a create request says it comes from a routine's run. Both come from
+/// the request's signed credential, never from its body.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct RunCaller {
+    /// The routine a code step's credential is signed for.
+    pub routine: Option<Uuid>,
+    /// The code-mode invocation of an agent session, validated against it.
+    pub correlation: Option<Uuid>,
+}
+
+/// Which of a person's routines a list holds.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ListScope {
+    /// Routines nobody's run created, as the main list shows them.
+    #[default]
+    TopLevel,
+    /// One routine's sub-routines: the active ones and its newest finished
+    /// one-time ones.
+    ChildrenOf(Uuid),
+    /// Top-level routines and their active sub-routines.
+    WithChildren,
+}
+
+/// A routine a run created, as that run's history names it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+pub struct CreatedRoutine {
+    #[schema(value_type = String, format = Uuid)]
+    pub id: Uuid,
+    pub name: String,
+}
+
+/// A finished run with the routines it created that still exist.
+#[derive(Debug, Clone)]
+pub struct ListedRun {
+    pub record: ActionExecutionRecord,
+    pub created: Vec<CreatedRoutine>,
+}
+
+/// A routine's finished runs, as code reads them: its last run and its last
+/// successful one. Runs a trigger's condition skipped don't count.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct RunHistory {
+    /// When the last finished run started, and whether it succeeded.
+    pub previous: Option<(DateTime<Utc>, bool)>,
+    /// When the last successful run started.
+    pub last_succeeded_at: Option<DateTime<Utc>>,
+}
+
+/// What started a run, for its page.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum RunStart {
+    /// One of its schedules came due.
+    Schedule {
+        /// The cron expression.
+        schedule: String,
+        /// Its IANA time zone.
+        timezone: String,
+    },
+    /// An event it watches happened.
+    Event {
+        /// The event's name, e.g. `email.message_received`.
+        event: String,
+        /// The item the event is about.
+        entity_id: Option<String>,
+    },
+    /// Its owner started it by hand.
+    Manual {
+        /// Who started it.
+        by: String,
+    },
+}
+
+/// What the run page says about a run: what started it, when it counts as
+/// happening, and since when.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+pub struct RunInfo {
+    /// When the run counts as happening: its trigger's time.
+    pub at: DateTime<Utc>,
+    /// The IANA time zone code reads `at` in, when the run had one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timezone: Option<String>,
+    /// What started it.
+    pub started_by: RunStart,
+    /// When the routine's previous finished run started.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub previous_at: Option<DateTime<Utc>>,
+    /// Who its code steps' writes were attributed to; absent when it had no
+    /// code steps, and on runs recorded before this was.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub code_acts_as: Option<routine_program::CodeIdentity>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
+pub struct ScheduledAction {
+    #[schema(value_type = Option<String>, format = Uuid)]
+    pub id: Option<Uuid>,
+    /// Who the action belongs to. Every action is user-owned today, but the
+    /// type no longer says so: the principal string on the wire and in the
+    /// `owner` column is the same, and a bot- or team-owned row decodes
+    /// rather than failing to parse.
+    #[schema(value_type = String)]
+    pub owner: Owner,
+    pub name: String,
+    pub trigger: ActionTrigger,
+    pub kind: ActionKind,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    /// Independent of execution bookkeeping in `updated_at`.
+    #[schema(value_type = i64)]
+    pub configuration_revision: ConfigurationRevision,
+    /// Event publication boundary; absent for cron actions.
+    pub event_activated_at: Option<DateTime<Utc>>,
+    #[schema(value_type = routine_program::RoutineTask)]
+    pub task: Value,
+    pub claimed: Option<DateTime<Utc>>,
+    /// Next cron firing, absent for event-triggered actions.
+    pub next_run_at: Option<DateTime<Utc>>,
+    /// When false, automatic dispatch skips this action. `run_now` remains
+    /// available regardless.
+    pub enabled: bool,
+    /// Whether the action's runs are listed in Home and the Agents list.
+    pub run_visibility: RunVisibility,
+    /// The shared template this routine was activated from, if any.
+    #[serde(default)]
+    #[schema(value_type = Option<String>, format = Uuid)]
+    pub template_id: Option<Uuid>,
+    /// The routine suggestion it was saved from, if any: a plain pointer
+    /// that stays after the suggestion is replaced.
+    #[serde(default)]
+    #[schema(value_type = Option<String>, format = Uuid)]
+    pub suggestion_id: Option<Uuid>,
+    /// What the routine is for, in the owner's words; empty when unset.
+    #[serde(default)]
+    pub description: String,
+    /// Set on a routine one of another routine's runs created: the routine
+    /// it follows and the run that created it.
+    #[serde(default)]
+    pub sub_routine: Option<SubRoutine>,
+}
+
+impl ScheduledAction {
+    /// The routine this one follows, when a routine's run created it.
+    pub fn parent_id(&self) -> Option<Uuid> {
+        self.sub_routine.as_ref().map(|link| link.parent_id)
+    }
+
+    /// Whether it ran its single time and has nothing left to run: a `once`
+    /// routine with no next run. A finished sub-routine leaves its parent's
+    /// active list and stops counting toward the parent's cap.
+    pub fn is_finished_once(&self) -> bool {
+        matches!(self.trigger, ActionTrigger::Once { .. }) && self.next_run_at.is_none()
+    }
+
+    /// The user this action runs as.
+    ///
+    /// For every path that acts as the owner rather than merely naming them:
+    /// creating a chat in their account, reading their memory, spending their
+    /// AI budget, notifying them. Asking here fails typed for a bot or team
+    /// instead of treating one as a person.
+    pub fn owner_user(&self) -> Result<&MacroUserIdStr<'static>, OwnerNotUserError> {
+        self.owner.as_user().ok_or(OwnerNotUserError {
+            owner_type: self.owner.owner_type(),
+        })
+    }
+
+    pub fn claim_expires_at(&self) -> Option<DateTime<Utc>> {
+        self.claimed.map(|claimed| claimed + MAX_ACTION_TIME)
+    }
+}
+
+/// Transcript resource created by a run. Never infer this from current task configuration.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+pub struct ExecutionResource {
+    #[serde(rename = "type")]
+    pub resource_type: ExecutionResourceType,
+    pub id: String,
+}
+
+/// Closed set of transcript destinations understood by routine clients.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ExecutionResourceType {
+    Chat,
+    Agent,
+}
+
+impl ExecutionResource {
+    /// Compatibility field for old clients; agent session IDs are never chat IDs.
+    pub fn chat_id(&self) -> Option<String> {
+        match self.resource_type {
+            ExecutionResourceType::Chat => Some(self.id.clone()),
+            ExecutionResourceType::Agent => None,
+        }
+    }
+}
+
+/// Version 1 execution metadata stored in the existing JSON result column.
+/// Null/string column values predate this envelope and refer to legacy chats.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct ExecutionResult {
+    pub version: u8,
+    pub resource: Option<ExecutionResource>,
+    pub error: Option<String>,
+    /// Present when an event trigger's condition stopped the run from starting.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub condition: Option<ConditionResult>,
+    /// What each step that ran did, in order: decisions, tool calls, the agent.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[schema(value_type = Vec<Object>)]
+    pub steps: Vec<StepRecord>,
+    /// The routine configuration the run used. Step paths only name the same
+    /// steps in that configuration; a later edit can put another step there.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<i64>)]
+    pub configuration_revision: Option<ConfigurationRevision>,
+    /// What started the run and when, for runs of programs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub run: Option<RunInfo>,
+}
+
+impl ExecutionResult {
+    pub fn new(resource: Option<ExecutionResource>, error: Option<String>) -> Self {
+        Self {
+            version: 1,
+            resource,
+            error,
+            condition: None,
+            steps: Vec::new(),
+            configuration_revision: None,
+            run: None,
+        }
+    }
+
+    pub fn with_steps(mut self, steps: Vec<StepRecord>, revision: ConfigurationRevision) -> Self {
+        self.steps = steps;
+        self.configuration_revision = Some(revision);
+        self
+    }
+
+    /// What started the run and when.
+    pub fn with_run(mut self, run: Option<RunInfo>) -> Self {
+        self.run = run;
+        self
+    }
+
+    /// A run its trigger's condition kept from starting. No agent ran.
+    pub fn skipped(condition: ConditionResult) -> Self {
+        let error = match condition {
+            ConditionResult::NotMet { .. } => None,
+            ConditionResult::Unavailable => Some(CONDITION_UNAVAILABLE_ERROR.to_owned()),
+        };
+        Self {
+            condition: Some(condition),
+            ..Self::new(None, error)
+        }
+    }
+}
+
+const CONDITION_UNAVAILABLE_ERROR: &str =
+    "The trigger's condition couldn't be checked, so this run was skipped.";
+
+/// Why an event-triggered run was skipped before it started.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, ToSchema)]
+#[serde(tag = "status", rename_all = "snake_case")]
+pub enum ConditionResult {
+    /// The triggering content answered the condition with no.
+    NotMet {
+        /// The classifier's probability, from 0 to 1, that the answer was yes.
+        probability: f32,
+    },
+    /// The condition could not be checked before the retry window closed.
+    Unavailable,
+}
+
+impl ActionExecutionRecord {
+    /// History for a run that was skipped at `at` without starting an agent.
+    pub fn skipped(action_id: Uuid, at: DateTime<Utc>, condition: ConditionResult) -> Self {
+        let is_success = matches!(condition, ConditionResult::NotMet { .. });
+        Self {
+            id: None,
+            action_id,
+            resource_id: None,
+            start_time: at,
+            end_time: at,
+            is_success,
+            result: serde_json::to_value(ExecutionResult::skipped(condition))
+                .expect("execution results serialize"),
+            created_at: at,
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct InProgressExecution {
+    #[schema(value_type = String, format = Uuid)]
+    pub action_id: Uuid,
+    pub chat_id: Option<String>,
+    /// Absent only in responses from legacy workers.
+    #[serde(default)]
+    pub resource: Option<ExecutionResource>,
+}
+
+/// A routine as its list shows it.
+#[derive(Debug, Clone)]
+pub struct ListedAction {
+    pub action: ScheduledAction,
+    /// Its latest finished run, so lists can flag failures and say what it
+    /// did; None until it has finished one.
+    pub last_run: Option<ActionExecutionRecord>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
+pub struct ActionExecutionRecord {
+    #[schema(value_type = Option<String>, format = Uuid)]
+    pub id: Option<Uuid>,
+    #[schema(value_type = String, format = Uuid)]
+    pub action_id: Uuid,
+    /// ID of the primary resource produced by this run. Its type is recorded in
+    /// `result`, independently of the routine's current configuration.
+    pub resource_id: Option<String>,
+    pub start_time: DateTime<Utc>,
+    pub end_time: DateTime<Utc>,
+    pub is_success: bool,
+    #[schema(value_type = Object)]
+    pub result: Value,
+    pub created_at: DateTime<Utc>,
+}
+
+impl ActionExecutionRecord {
+    /// Decode typed metadata, falling back to chat only for genuinely legacy rows.
+    pub fn execution_resource(&self) -> Result<Option<ExecutionResource>> {
+        if self.result.is_null() || self.result.is_string() {
+            return Ok(self.resource_id.clone().map(|id| ExecutionResource {
+                resource_type: ExecutionResourceType::Chat,
+                id,
+            }));
+        }
+        let result: ExecutionResult = serde_json::from_value(self.result.clone())?;
+        anyhow::ensure!(result.version == 1, "unsupported execution result version");
+        anyhow::ensure!(
+            result.resource.as_ref().map(|resource| &resource.id) == self.resource_id.as_ref(),
+            "execution resource does not match history ID"
+        );
+        Ok(result.resource)
+    }
+}
+
+#[derive(Debug)]
+pub enum DispatchEvent {
+    Create(ScheduledAction),
+    Update(ScheduledAction),
+    Delete(ScheduledAction),
+}
+
+/// Live status update for a scheduled-action run, broadcast via the connection
+/// gateway to the owner. Clients use the typed resource to navigate to the run
+/// transcript and the variant tag to toggle the running indicator. `chat_id`
+/// remains populated only for chat runs, for older clients.
+///
+/// Serialized with a `type` tag (`started`/`stopped`) and delivered over the
+/// single `scheduled_action_update` message type on the gateway.
+#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ScheduledActionUpdate {
+    Started {
+        #[schema(value_type = String)]
+        owner: MacroUserIdStr<'static>,
+        #[schema(value_type = String, format = Uuid)]
+        action_id: Uuid,
+        chat_id: Option<String>,
+        #[serde(default)]
+        resource: Option<ExecutionResource>,
+    },
+    Stopped {
+        #[schema(value_type = String)]
+        owner: MacroUserIdStr<'static>,
+        #[schema(value_type = String, format = Uuid)]
+        action_id: Uuid,
+        chat_id: Option<String>,
+        #[serde(default)]
+        resource: Option<ExecutionResource>,
+        is_success: bool,
+    },
+}
+
+impl ScheduledActionUpdate {
+    pub fn owner(&self) -> &MacroUserIdStr<'static> {
+        match self {
+            ScheduledActionUpdate::Started { owner, .. } => owner,
+            ScheduledActionUpdate::Stopped { owner, .. } => owner,
+        }
+    }
+}
+
+/// Message type on connection_gateway for live scheduled-action updates. The
+/// payload is a serialized [`ScheduledActionUpdate`]; the variant tag lives
+/// inside the payload so the wire surface stays as one message type.
+pub const SCHEDULED_ACTION_UPDATE_MESSAGE_TYPE: &str = "scheduled_action_update";
+
+/// Returned by the executor when a run cannot start because the action is
+/// already claimed by another in-flight execution, or its configuration changed
+/// after the caller read it. Callers at the HTTP boundary map this to 409
+/// Conflict; the polling dispatcher treats it as benign and polls again.
+#[derive(Debug)]
+pub struct AlreadyRunningError {
+    pub action_id: Uuid,
+}
+
+impl std::fmt::Display for AlreadyRunningError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "scheduled action {} is already running", self.action_id)
+    }
+}
+
+impl std::error::Error for AlreadyRunningError {}
+
+/// Returned when a path that must run as a person meets an action owned by a
+/// bot or a team. Callers at the HTTP boundary map this to 400 Bad Request;
+/// the polling dispatcher logs it and leaves the action alone.
+#[derive(Debug)]
+pub struct OwnerNotUserError {
+    pub owner_type: OwnerType,
+}
+
+impl std::fmt::Display for OwnerNotUserError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "this path needs a user-owned scheduled action, but the owner is a {}",
+            self.owner_type
+        )
+    }
+}
+
+impl std::error::Error for OwnerNotUserError {}

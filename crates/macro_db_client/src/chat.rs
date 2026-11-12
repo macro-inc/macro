@@ -1,5 +1,5 @@
-use model::chat::ChatBasic;
 use model_owner::Owner;
+use shared_types::chat::ChatBasic;
 use sqlx::{Pool, Postgres};
 use std::collections::HashSet;
 

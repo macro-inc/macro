@@ -1,0 +1,55 @@
+[package]
+edition = "2024"
+name = "agent_changes"
+publish = false
+version = "0.1.0"
+
+[features]
+default = ["inbound", "outbound"]
+# The axum router serving a session's changes over HTTP.
+inbound = [
+  "dep:axum",
+  "dep:macro_authorization",
+  "entity_access/inbound",
+  "macro_authorization/axum",
+  "schema",
+]
+# Postgres and S3.
+outbound = ["dep:aws-sdk-s3", "dep:sqlx", "macro_user_id/sqlx"]
+# OpenAPI schemas for the router's DTOs.
+schema = ["dep:utoipa", "git_patch/schema"]
+# In-memory port implementations, for crates that test against this one.
+test-utils = []
+
+[dependencies]
+agent_fold = { workspace = true }
+agent_session = { workspace = true }
+anyhow = { workspace = true }
+aws-sdk-s3 = { workspace = true, optional = true }
+axum = { workspace = true, optional = true }
+chrono = { workspace = true }
+entity_access = { workspace = true, features = [
+  "ports",
+] }
+git_patch = { workspace = true }
+github_pull_requests = { workspace = true, features = [
+  "ports",
+] }
+macro_authorization = { workspace = true, optional = true }
+macro_user_id = { workspace = true }
+macro_uuid = { workspace = true }
+rootcause = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true, features = ["json"], optional = true }
+strum = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["rt", "sync"] }
+tracing = { workspace = true }
+utoipa = { workspace = true, optional = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+
+[dev-dependencies]
+agent_session = { workspace = true, features = ["test-utils"] }
+macro_db_migrator = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }

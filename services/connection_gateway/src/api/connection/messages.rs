@@ -16,9 +16,9 @@ use crate::{
 use anyhow::{Context, Result};
 use axum::extract::ws::{Message, WebSocket};
 use cowlike::CowLike;
+use entity_kind::Entity;
 use futures::{StreamExt, stream::SplitStream};
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::Entity;
 use tokio::{
     sync::mpsc::Sender,
     time::{Instant, MissedTickBehavior},

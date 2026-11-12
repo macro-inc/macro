@@ -12,7 +12,8 @@ use connection_gateway_client::ConnectionGatewayClient;
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_db_client::annotations::create_anchor::create_unthreaded_anchor;
-use model::{
+use permissions_types::share_permission::access_level::CommentAccessLevel;
+use shared_types::{
     annotations::{
         AnnotationIncrementalUpdate,
         create::{CreateUnthreadedAnchorRequest, CreateUnthreadedAnchorResponse},
@@ -20,7 +21,6 @@ use model::{
     document::DocumentBasic,
     response::ErrorResponse,
 };
-use models_permissions::share_permission::access_level::CommentAccessLevel;
 use sqlx::PgPool;
 
 use super::annotation_error_response;

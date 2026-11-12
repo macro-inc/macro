@@ -1,6 +1,6 @@
 use crate::pubsub::context::PubSubContext;
-use models_email::gmail::inbox_sync::InboxSyncPubsubMessage;
-use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
+use email_types::gmail::inbox_sync::InboxSyncPubsubMessage;
+use email_types::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use sqs_worker::cleanup_message;
 
 /// Handles non-retryable errors by updating the appropriate status in the database and cleaning up the SQS message

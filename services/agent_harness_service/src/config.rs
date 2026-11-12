@@ -6,7 +6,7 @@
 //! environments, surfacing any missing or mistyped values at CI time.
 
 use anyhow::Context;
-use database_env_vars::{DatabaseUrl, RedisUri};
+use datastore_env_vars::{DatabaseUrl, RedisUri};
 use entity_registry::NonUserOwners;
 pub use macro_env::Environment;
 use macro_uuid::Uuid;
@@ -86,7 +86,7 @@ fn default_pipedream_environment() -> String {
 pub struct Config {
     /// Optional TypeSafe key for Command K classification and for routing
     /// unmentioned thread replies to agents.
-    pub typesafe_api_key: jev::outbound::TypesafeApiKey,
+    pub typesafe_api_key: jev_classifier::outbound::TypesafeApiKey,
     /// Optional Workers AI account for Clairic extraction and Auto mode's Clef Flash.
     pub cloudflare_account_id: universal_input::outbound::clairic::CloudflareAccountId,
     /// Workers AI token paired with the account ID.
@@ -194,7 +194,7 @@ pub struct Config {
     /// API key sandboxes run Anthropic models with. Injected into the
     /// sandbox environment at creation, where it activates opencode's
     /// `anthropic` provider — the only provider
-    /// `crates/agent_harness/container/opencode.json` enables. Empty means
+    /// `crates/agents/agent_harness/container/opencode.json` enables. Empty means
     /// sandboxes advertise no models and managed sessions cannot prompt.
     #[macro_config_default(String::new())]
     pub anthropic_api_key: String,
@@ -364,7 +364,7 @@ impl Config {
     ) -> anyhow::Result<authentication_service_client::AuthServiceClient> {
         Ok(authentication_service_client::AuthServiceClient::new(
             self.authentication_service_secret_key.as_ref().to_owned(),
-            macro_service_urls::AuthServiceUrl::new()?.to_string(),
+            auth_service_url::AuthServiceUrl::new()?.to_string(),
         ))
     }
 

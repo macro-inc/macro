@@ -3,8 +3,8 @@ import * as pulumi from '@pulumi/pulumi';
 import { stack } from '../../shared';
 
 /**
- * Infrastructure wiring required by services that host the `ai_tools` crate
- * (see `crates/ai_tools/src/build_context.rs`). Callers spread
+ * Infrastructure wiring required by services that host the `agent_tools` crate
+ * (see `crates/ai/agent_tools/src/build_context.rs`). Callers spread
  * these into their service's IAM role and container environment alongside any
  * service-specific values.
  */
@@ -16,7 +16,7 @@ export type AiToolsInfra = {
 
 /**
  * Returns the env vars, secret/queue/bucket ARNs needed by any service that
- * hosts `ai_tools::build_tool_service_context_from_env`. Stack references are
+ * hosts `agent_tools::build_tool_service_context_from_env`. Stack references are
  * namespaced with `ai-tools-` so callers can keep their own references to the
  * same target stacks for unrelated outputs (e.g. cluster info).
  */
@@ -129,7 +129,7 @@ export function getAiToolsInfra(): AiToolsInfra {
 }
 
 /**
- * Role ARNs of every service that hosts `ai_tools`. Resource-side policies
+ * Role ARNs of every service that hosts `agent_tools`. Resource-side policies
  * (e.g. the doc-storage bucket policy) use this to grant bulk access to the
  * group — adding a new tool-hosting service only requires updating this list.
  */

@@ -13,10 +13,10 @@ use std::collections::BTreeMap;
 
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::domain::service::EntityAccessServiceImpl;
-use entity_access::outbound::PgAccessRepository;
+use entity_access_outbound::PgAccessRepository;
+use entity_kind::EntityType;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
-use models_permissions::share_permission::{LinkShare, access_level::AccessLevel};
+use permissions_types::share_permission::{LinkShare, access_level::AccessLevel};
 
 use super::apply;
 use super::spec::{ScenarioSpec, ShareLevel};

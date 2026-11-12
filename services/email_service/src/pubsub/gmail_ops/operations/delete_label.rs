@@ -1,6 +1,6 @@
-use email_api_client::domain::models::EmailApiError;
-use models_email::gmail::gmail_ops::DeleteLabelPayload;
-use models_email::service::link::Link;
+use email_api_client_core::models::EmailApiError;
+use email_types::gmail::gmail_ops::DeleteLabelPayload;
+use email_types::service::link::Link;
 
 use crate::pubsub::gmail_ops::email_api_error::is_delete_label_success;
 use crate::pubsub::gmail_ops::worker::GmailOpsContext;

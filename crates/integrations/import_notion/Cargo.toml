@@ -1,0 +1,28 @@
+[package]
+name = "import_notion"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+chrono = { workspace = true }
+futures = { workspace = true }
+http = { workspace = true }
+indexmap = { workspace = true, features = ["serde"] }
+lazy-regex = { workspace = true }
+macro_user_id = { workspace = true }
+pipedream_mcp = { workspace = true }
+databases_types = { workspace = true }
+rand = { workspace = true }
+rootcause = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["time"] }
+tracing = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+uuid = { workspace = true }
+
+[dev-dependencies]
+anyhow = { workspace = true }
+tokio = { workspace = true, features = ["test-util"] }

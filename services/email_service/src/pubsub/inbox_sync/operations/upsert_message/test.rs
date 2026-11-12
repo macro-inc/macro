@@ -1,5 +1,5 @@
 use super::*;
-use email_api_client::domain::models::RateLimitOrigin;
+use email_api_client_core::models::RateLimitOrigin;
 use email_db_client::attachments::provider::upload::new_email_media_atts;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use std::time::Duration;
@@ -406,7 +406,7 @@ async fn inserting_into_a_concurrently_deleted_thread_is_retryable(pool: PgPool)
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(
-        path = "../../../../../../../crates/email_db_client/fixtures",
+        path = "../../../../../../../crates/email/email_db_client/fixtures",
         scripts("upload_claim_tests")
     )
 )]
@@ -479,7 +479,7 @@ async fn a_refused_attachment_fetch_is_claimed_again_by_the_retry(
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(
-        path = "../../../../../../../crates/email_db_client/fixtures",
+        path = "../../../../../../../crates/email/email_db_client/fixtures",
         scripts("upload_claim_tests")
     )
 )]

@@ -41,9 +41,9 @@ the scan does not retain the replacement migration's exclusive table lock.
 ## Boundaries
 
 - Depends on: `entity_access_db_utils`, `entity_registry_db_utils`,
-  `models_permissions`, `models_entity_access_management`, `model`, `model-entity`.
+  `permissions_types`, `entity_access_management_types`, `shared_types`, `entity_kind`.
 - Used by: most Rust services and several domain crates (e.g. `documents`,
-  `ai_tools`, `authentication_service`, `email_service`); a query here is
+  `agent_tools`, `authentication_service`, `email_service`); a query here is
   widely shared — check callers before changing a function's signature.
 
 ## Recipes
@@ -57,7 +57,7 @@ the scan does not retain the replacement migration's exclusive table lock.
   gate it behind a Cargo feature in `Cargo.toml` only if it's optional (see
   `account_merge_request`, `team`).
 
-- Composed-memory tables and refresh leases are owned by `crates/memory`; migrations leave legacy memory rows intact.
+- Composed-memory tables and refresh leases are owned by `crates/ai/memory`; migrations leave legacy memory rows intact.
 
 ## Checks
 
@@ -80,7 +80,7 @@ unreferenced replicas. These additive tables do not change agent-session claims.
 ## Gotchas
 
 - `user::get_user_name::get_user_names_with_email` is shared by authentication and bounded contact-directory enrichment; preserve viewer-only address-book fallback and keep its IDs/names off tracing spans.
-- `contacts_connections` keeps its raw forward/reverse paging indexes; upstream migration `20261101055556` owns `idx_contacts_connections_user2_user1`, so do not add a duplicate branch migration. Migrations `20261105044718` and `20261105044750` add `(raw viewer, lower(peer COLLATE "C"))` point-lookup indexes with a strict peer `macro|` prefix predicate. They preserve stored rows, edge constraints and cursor order; bounded directory reads belong to `crates/contacts`. Apply both before new readers, with a short session `lock_timeout` (for SQLx CLI, e.g. `PGOPTIONS='-c lock_timeout=5s'`). An interrupted concurrent build must be inspected/repaired before retrying; these migrations do not hide an existing invalid index with `IF NOT EXISTS`.
+- `contacts_connections` keeps its raw forward/reverse paging indexes; upstream migration `20261101055556` owns `idx_contacts_connections_user2_user1`, so do not add a duplicate branch migration. Migrations `20261105044718` and `20261105044750` add `(raw viewer, lower(peer COLLATE "C"))` point-lookup indexes with a strict peer `macro|` prefix predicate. They preserve stored rows, edge constraints and cursor order; bounded directory reads belong to `crates/comms/contacts_core`. Apply both before new readers, with a short session `lock_timeout` (for SQLx CLI, e.g. `PGOPTIONS='-c lock_timeout=5s'`). An interrupted concurrent build must be inspected/repaired before retrying; these migrations do not hide an existing invalid index with `IF NOT EXISTS`.
 
 - Migrations deploy before service code: never drop a column/table in the
   same PR that removes its last usage (see `docs/development/database.md`).

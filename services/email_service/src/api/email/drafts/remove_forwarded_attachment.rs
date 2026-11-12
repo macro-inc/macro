@@ -9,7 +9,7 @@ use axum_extra::extract::Cached;
 use email::inbound::axum::api_types::DraftEditPrecondition;
 use email::inbound::axum::axum_impls::EmailLinkExtractor;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model::response::ErrorResponse;
+use shared_types::response::ErrorResponse;
 use utoipa::IntoParams;
 use uuid::Uuid;
 #[derive(serde::Serialize, serde::Deserialize, Debug, IntoParams)]

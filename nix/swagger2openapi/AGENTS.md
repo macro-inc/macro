@@ -14,5 +14,5 @@ Pinned npm inputs for the Incus API converter in the default Nix dev shell.
 ## Checks
 
 - `nix develop --command swagger2openapi --version`
-- `nix develop --command crates/incus_client/regen.sh --fetch`; review the
+- `nix develop --command crates/clients/incus_client/regen.sh --fetch`; review the
   generated diff and compare the fetched spec with the pinned upstream release.

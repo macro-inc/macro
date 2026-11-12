@@ -6,7 +6,7 @@ use tracing::instrument;
 
 use s3::presigning::PresigningConfig;
 
-use model::document::ContentType;
+use shared_types::document::ContentType;
 
 #[instrument(skip(client))]
 pub(in crate::service::s3) async fn put_presigned_url(

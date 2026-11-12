@@ -1,5 +1,5 @@
-use model::project::Project;
 use model_owner::Owner;
+use shared_types::project::Project;
 use sqlx::{Pool, Postgres};
 
 /// Fetch a project row for search indexing. Soft-deleted rows are returned

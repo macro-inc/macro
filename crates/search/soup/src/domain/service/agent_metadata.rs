@@ -1,0 +1,126 @@
+//! Persisted coding context for the already-authorized agent rows in one page.
+
+use std::collections::{HashMap, HashSet};
+
+use github_pull_requests::domain::models::{PullRequestRef, RepositorySlug};
+use soup_types::agent_session::AgentPullRequestState;
+
+use super::*;
+
+fn pull_request_key(url: &str) -> Option<String> {
+    let reference = PullRequestRef::parse(url)?;
+    Some(format!(
+        "{}/pull/{}",
+        reference.repository, reference.number
+    ))
+}
+
+/// Use a captured branch only while it still describes the session's current repository.
+fn for_repository<'a>(
+    fact: &'a crate::domain::ports::AgentWorkingBranch,
+    repository_url: &str,
+) -> Option<&'a str> {
+    let current = RepositorySlug::parse(repository_url)?;
+    let captured = RepositorySlug::parse(&fact.repository_url)?;
+    (current.owner.eq_ignore_ascii_case(&captured.owner)
+        && current.name.eq_ignore_ascii_case(&captured.name))
+    .then_some(fact.branch.as_str())
+}
+
+/// Enrich only returned rows, so metadata work is bounded by the page size and
+/// never reads branch facts for sessions outside the caller's visible page.
+pub(super) async fn enrich<F: GithubPullRequestListing>(
+    pull_requests: &F,
+    branches: Option<&dyn crate::domain::ports::AgentWorkingBranches>,
+    user: String,
+    sources: Vec<SourceId>,
+    items: &mut [SoupCandidate],
+) -> Result<(), SoupErr> {
+    let sessions: Vec<_> = items
+        .iter()
+        .filter_map(|candidate| match &candidate.item {
+            SoupItem::AgentSession(session) if session.working_branch.is_none() => Some(session.id),
+            _ => None,
+        })
+        .collect();
+    if !items
+        .iter()
+        .any(|candidate| matches!(candidate.item, SoupItem::AgentSession(_)))
+    {
+        return Ok(());
+    }
+
+    let keys: HashSet<_> = items
+        .iter()
+        .filter_map(|candidate| match &candidate.item {
+            SoupItem::AgentSession(session) => session
+                .pull_request_url
+                .as_deref()
+                .and_then(pull_request_key),
+            _ => None,
+        })
+        .collect();
+
+    let branch_facts = async {
+        match branches {
+            Some(reader) if !sessions.is_empty() => reader
+                .working_branches(&sessions)
+                .await
+                .map_err(|error| anyhow::anyhow!("reading agent working branches: {error}")),
+            _ => Ok(HashMap::new()),
+        }
+    };
+    let pr_facts = async {
+        let Some(ids) = balanced_or_tree(
+            keys.iter()
+                .cloned()
+                .map(ForeignEntityLiteral::ForeignEntityId)
+                .map(Expr::Literal)
+                .collect(),
+        ) else {
+            return Ok(Vec::new());
+        };
+        pull_requests
+            .list_pull_requests(
+                Some(user),
+                sources,
+                keys.len() as u32,
+                Query::new(None, SimpleSortMethod::UpdatedAt, Some(ids)),
+                None,
+                GithubPullRequestSortDirection::Desc,
+            )
+            .await
+            .map_err(anyhow::Error::from)
+    };
+    let (branch_facts, pr_facts) = tokio::try_join!(branch_facts, pr_facts)?;
+    let states: HashMap<_, (Uuid, Option<AgentPullRequestState>)> = pr_facts
+        .into_iter()
+        .map(|entity| {
+            let state = entity
+                .metadata
+                .get("status")
+                .and_then(|status| serde_json::from_value(status.clone()).ok());
+            (entity.foreign_entity_id, (entity.id, state))
+        })
+        .collect();
+
+    for candidate in items {
+        let SoupItem::AgentSession(session) = &mut candidate.item else {
+            continue;
+        };
+        if session.working_branch.is_none() {
+            session.working_branch = branch_facts
+                .get(&session.id)
+                .and_then(|fact| for_repository(fact, session.repo_url.as_deref()?))
+                .map(str::to_owned);
+        }
+        let pull_request = session
+            .pull_request_url
+            .as_deref()
+            .and_then(pull_request_key)
+            .and_then(|key| states.get(&key).copied());
+        session.pull_request_id = pull_request.map(|(id, _)| id);
+        session.pull_request_state = pull_request.and_then(|(_, state)| state);
+    }
+    Ok(())
+}

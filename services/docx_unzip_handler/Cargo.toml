@@ -8,33 +8,33 @@ version = "0.1.0"
 [dependencies]
 anyhow = { workspace = true }
 aws-sdk-lambda = { workspace = true }
-macro_aws_config = { path = "../../crates/macro_aws_config", features = ["s3"] }
+macro_aws_config = { workspace = true, features = ["s3"] }
 aws-sdk-sqs = { workspace = true }
 aws_lambda_events = { workspace = true, features = ["s3"] }
 futures = { workspace = true }
-lambda_client = { path = "../../crates/lambda_client" }
+lambda_client = { workspace = true }
 lambda_runtime = { workspace = true }
-macro_db_client = { path = "../../crates/macro_db_client" }
-macro_entrypoint = { path = "../../crates/macro_entrypoint" }
-macro_sha_count_client = { path = "../../crates/macro_sha_count_client" }
-macro_uuid = { path = "../../crates/macro_uuid" }
-model = { path = "../../crates/model" }
-model_owner = { path = "../../crates/model_owner" }
-s3_key = { path = "../../crates/s3_key" }
+macro_db_client = { workspace = true, default-features = true }
+macro_entrypoint = { workspace = true }
+macro_sha_count_client = { workspace = true }
+macro_uuid = { workspace = true }
+shared_types = { workspace = true }
+model_owner = { workspace = true }
+s3_key = { workspace = true }
 redis = { workspace = true, features = [
   "aio",
   "tokio-rustls-comp",
 ] }
-s3_client = { path = "../../crates/s3_client" }
+s3_client = { workspace = true }
 serde = { workspace = true }
 sha2 = { workspace = true }
 sqlx = { workspace = true }
-sqs_client = { path = "../../crates/sqs_client" }
+sqs_client = { workspace = true, default-features = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 urlencoding = { workspace = true }
 zip = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
-macro_env_var = { path = "../../crates/macro_env_var" }
-macro_queues = { path = "../../crates/macro_queues" }
+macro_env_var = { workspace = true }
+macro_queues = { workspace = true }
 

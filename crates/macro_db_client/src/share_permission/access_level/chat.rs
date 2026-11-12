@@ -1,4 +1,4 @@
-use models_permissions::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::access_level::AccessLevel;
 use std::collections::HashMap;
 use std::str::FromStr;
 

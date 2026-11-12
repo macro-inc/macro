@@ -2,9 +2,9 @@ use crate::pubsub::backfill::write_slot;
 use crate::pubsub::context::PubSubContext;
 use crm::domain::model::CrmError;
 use crm::domain::service::CrmService;
-use models_email::email::service::backfill::PopulateCrmContactPayload;
-use models_email::email::service::link;
-use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
+use email_types::email::service::backfill::PopulateCrmContactPayload;
+use email_types::email::service::link;
+use email_types::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 
 /// Records a CRM interaction for one `(link, contact_email)` —
 /// possibly inserting new `crm_companies` / `crm_contacts` /

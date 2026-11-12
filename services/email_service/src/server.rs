@@ -12,6 +12,7 @@ use crate::outbound::email_api::{
     EmailServiceTokenSource, GmailApi, RateBudget, RedisGmailRequestGate,
 };
 use anyhow::Context;
+use auth_service_url::AuthServiceUrl;
 use calendar_events::{
     domain::{
         invitations::CalendarInvitationResolver, mutations::CalendarMutationServiceImpl,
@@ -19,7 +20,9 @@ use calendar_events::{
     },
     outbound::{google::GoogleCalendarClient, pg::PgCalendarRepository},
 };
+use connection_gateway_url::ConnectionGatewayUrl;
 use document_storage_service_client::DocumentStorageServiceClient;
+use document_storage_service_url::DocumentStorageServiceUrl;
 use email::{
     domain::service::EmailServiceImpl,
     inbound::axum::{
@@ -28,8 +31,9 @@ use email::{
     },
     outbound::{EmailPgRepo, GmailTokenProviderImpl},
 };
-use email_api_client::GmailApiClientRepository;
-use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
+use email_api_client_outbound::GmailApiClientRepository;
+use entity_access::domain::service::EntityAccessServiceImpl;
+use entity_access_outbound::PgAccessRepository;
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_authorization::{
@@ -38,11 +42,9 @@ use macro_authorization::{
 };
 use macro_env::Environment;
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
-use macro_service_urls::{
-    AuthServiceUrl, ConnectionGatewayUrl, DocumentStorageServiceUrl, StaticFileServiceUrl,
-};
 use sqlx::postgres::PgPoolOptions;
 use static_file_service_client::StaticFileServiceClient;
+use static_file_service_url::StaticFileServiceUrl;
 use std::{sync::Arc, time::Duration};
 use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImpl};
 use tokio_util::task::TaskTracker;
@@ -174,7 +176,7 @@ async fn run_server() -> anyhow::Result<()> {
     );
     let email_service = EmailRouterState::new(
         EmailServiceImpl::new(
-            EmailPgRepo::new(db.clone()),
+            EmailPgRepo::new(db.clone(), Arc::new(PgAccessRepository::new(db.clone()))),
             FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone())),
             (*sqs_client).clone(),
             crm_service,
@@ -236,11 +238,13 @@ async fn run_server() -> anyhow::Result<()> {
         CalendarMutationServiceImpl::new(
             PgCalendarRepository::new(db.clone()),
             calendar_events::domain::providers::CalendarProviders {
-                outlook: email_api_client::OutlookApiClientRepository::with_gate(Arc::new(
-                    email_api_client::outbound::microsoft_gate::RedisMicrosoftRequestGate(
-                        redis_conn.clone(),
+                outlook: email_api_client_outbound::OutlookApiClientRepository::with_gate(
+                    Arc::new(
+                        email_api_client_outbound::microsoft_gate::RedisMicrosoftRequestGate(
+                            redis_conn.clone(),
+                        ),
                     ),
-                ))?
+                )?
                 .with_rejected_token_refresh(Arc::new(
                     CalendarTokenProviderAdapter::new(
                         redis_conn.clone(),
@@ -262,8 +266,8 @@ async fn run_server() -> anyhow::Result<()> {
         .with_outlook_writes_enabled(config.outlook_writes_enabled),
     );
     let outlook_api: crate::api::context::OutlookApi =
-        email_api_client::domain::service::mailbox::MailboxApiService::new(
-            email_api_client::OutlookApiClientRepository::with_gate(Arc::new(
+        email_api_client_core::service::mailbox::MailboxApiService::new(
+            email_api_client_outbound::OutlookApiClientRepository::with_gate(Arc::new(
                 crate::outbound::email_api::RedisMicrosoftRequestGate(redis_conn.clone()),
             ))?,
             crate::api::context::MicrosoftTokens::new(
@@ -272,11 +276,11 @@ async fn run_server() -> anyhow::Result<()> {
                     auth_service_client.as_ref().clone(),
                 ),
             ),
-            email_api_client::domain::ports::AlwaysAllowRateLimiter,
+            email_api_client_core::ports::AlwaysAllowRateLimiter,
         );
     let transfer_bytes = Arc::new(
         email::domain::mailbox::drafts::content::DraftContentService {
-            repository: EmailPgRepo::new(db.clone()),
+            repository: EmailPgRepo::new(db.clone(), Arc::new(PgAccessRepository::new(db.clone()))),
             bytes: crate::outbound::mailbox_drafts::MailboxDraftContent {
                 provider: crate::outbound::attachment_access::ProviderAttachmentBytes {
                     s3: s3_client.clone(),
@@ -294,7 +298,7 @@ async fn run_server() -> anyhow::Result<()> {
     );
     let api_result = api::setup_and_serve(ApiContext {
         draft_transfers: Arc::new(email::domain::draft_transfer::DraftTransferService {
-            repository: EmailPgRepo::new(db.clone()),
+            repository: EmailPgRepo::new(db.clone(), Arc::new(PgAccessRepository::new(db.clone()))),
             bytes: transfer_bytes,
             storage: crate::outbound::draft_attachment_storage::DraftAttachmentS3 {
                 s3: s3_client.clone(),
@@ -302,7 +306,7 @@ async fn run_server() -> anyhow::Result<()> {
             },
         }),
         inbox_lifecycle: Arc::new(crate::composition::inbox_lifecycle(
-            email_api_client::OutlookApiClientRepository::with_gate(Arc::new(
+            email_api_client_outbound::OutlookApiClientRepository::with_gate(Arc::new(
                 crate::outbound::email_api::RedisMicrosoftRequestGate(redis_conn.clone()),
             ))?,
             db.clone(),
@@ -349,7 +353,7 @@ async fn run_server() -> anyhow::Result<()> {
             },
         )),
         message_sources: Arc::new(email::domain::message_source::MessageSourceService {
-            repository: EmailPgRepo::new(db.clone()),
+            repository: EmailPgRepo::new(db.clone(), Arc::new(PgAccessRepository::new(db.clone()))),
             provider: crate::outbound::message_source::ProviderMessageSource {
                 gmail: email_api.clone(),
                 outlook: outlook_api.clone(),
@@ -357,7 +361,7 @@ async fn run_server() -> anyhow::Result<()> {
             access: entity_access_service.as_ref().clone(),
         }),
         attachment_reads: Arc::new(email::domain::attachment_access::AttachmentReadService {
-            repository: EmailPgRepo::new(db.clone()),
+            repository: EmailPgRepo::new(db.clone(), Arc::new(PgAccessRepository::new(db.clone()))),
             provider: crate::outbound::attachment_access::ProviderAttachmentBytes {
                 s3: s3_client.clone(),
                 bucket: config.attachment_bucket.to_string(),
@@ -386,7 +390,7 @@ async fn run_server() -> anyhow::Result<()> {
         event_forward_sender: Arc::new(
             email::domain::service::attachments::StagedAttachmentSender::new(
                 email_service.service(),
-                EmailPgRepo::new(db.clone()),
+                EmailPgRepo::new(db.clone(), Arc::new(PgAccessRepository::new(db.clone()))),
                 crate::outbound::draft_attachment_storage::DraftAttachmentS3 {
                     s3: s3_client.clone(),
                     bucket: config.attachment_bucket.to_string(),
@@ -394,7 +398,10 @@ async fn run_server() -> anyhow::Result<()> {
             ),
         ),
         draft_attachments: Arc::new(email::domain::draft_attachments::DraftAttachmentService {
-            repository: email::outbound::EmailPgRepo::new(db.clone()),
+            repository: email::outbound::EmailPgRepo::new(
+                db.clone(),
+                Arc::new(PgAccessRepository::new(db.clone())),
+            ),
             storage: crate::outbound::draft_attachment_storage::DraftAttachmentS3 {
                 s3: s3_client.clone(),
                 bucket: config.attachment_bucket.to_string(),

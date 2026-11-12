@@ -1,0 +1,71 @@
+# bots
+
+## What it is
+
+Part of agent sessions: owns the bot entity itself — models, persistence,
+ownership (user or team), and HTTP/AI-tool adapters, plus lifecycle events
+for bot mutations that channel bots, agent triggers, and memory build on.
+
+## Start here
+
+- `src/domain/service.rs` + `src/domain/models.rs`: bot CRUD policy and model.
+  Team admins may delete team agents; other team bots require the creator or
+  team owner.
+- `src/domain/events.rs`: `bot.created`/`bot.updated`/`bot.deleted` events published
+  to the `macro.bots` Kafka topic (see `README.md` for the wire schema).
+- `src/inbound/axum_router.rs`, `src/inbound/channel_webhook_router.rs`,
+  `src/inbound/toolset.rs`: HTTP, channel-webhook, and AI-tool adapters.
+  `PATCH /agents/{id}` and the `ConfigureAgent` tool share `patch_agent`;
+  `PUT` replaces the whole agent, ownership included.
+- `src/outbound/pg_bots_repo.rs`: Postgres repository (feature `outbound`).
+
+## Scope
+
+- Owns: bot CRUD, ownership (user or team), and bot lifecycle events.
+- Not here: agent sessions, channel message triggers, or trigger detection →
+  `crates/agents/agent_session`, `crates/comms/channel_bots`.
+
+## Boundaries
+
+- Depends on: `channels` (inbound, optional), `entity_access`, `entity_registry`,
+  `messages`, `macro_event_broker`/`macro_event_topics`, `macro_authorization`.
+- Used by: `memory`, `agent_tools`, `agent_trigger`, `complete_graph`, `agent_session`.
+
+## Recipes
+
+- Add a bot field or mutation: `src/domain/models.rs` → `src/domain/service.rs`
+  → `src/outbound/pg_bots_repo.rs` → `src/inbound/axum_router.rs` → emit/update
+  the matching event in `src/domain/events.rs` if it changes mutable state.
+- Add an AI tool over bots: `src/inbound/toolset.rs` (feature `agent_tools`).
+
+## Checks
+
+- `cargo test -p bots` (`SQLX_OFFLINE` unset).
+
+## Gotchas
+
+- Agent create/update/patch must persist `has_agent = true` atomically with
+  configuration writes; mention dispatch gates on this flag for every harness.
+- Soft-deleting a harness unbinds its agents (a trigger nulls
+  `agent_configs.harness_id`), leaving `macrod` agents unbound. A Macro
+  computer's harness keeps them bound, and its release then deletes them through
+  the trusted `HarnessAgentDeletion::delete_harness_agents` (no caller check;
+  never a route).
+- Agent create and update hold a chosen harness's row `FOR SHARE` in their
+  transaction and refuse a deleted one (`HarnessRemoved`, a 400), so no bind
+  slips past a concurrent harness delete.
+- An agent created on a Macro computer's harness without a permission choice
+  gets `auto_accept_permissions = Some(true)` when the harness allows bypass. The
+  `macrod`⇔`harness_id` pairing is checked only for a runtime the request
+  chooses; a patch that omits `harness` keeps an unbound agent editable.
+- Kafka events key on the bot's bare UUID (no `bot|` prefix); `bot.updated`
+  metadata describes the requested PATCH, not a full snapshot — an omitted
+  field serializes as `null` (see `README.md`).
+
+## Related
+
+- Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/observability.md`
+- Docs: [`docs/guides/bots.md`](../../../docs/guides/bots.md) (setting up a bot
+  in the app and using it from the SDK)
+
+- `HarnessAssignments` exposes trusted agent-config routing reads without reading session or harness tables.

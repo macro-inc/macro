@@ -2,7 +2,7 @@
 
 use email::domain::send_attempt::{PreparedSendContent, PreparedSendContentUnavailable};
 use email_db_client::messages::scheduled::delivery::DeliveryClaim;
-use models_email::service::{address::ContactInfo, message::MessageToSend};
+use email_types::service::{address::ContactInfo, message::MessageToSend};
 use sqlx::PgPool;
 
 pub(super) async fn load_delivery_content(

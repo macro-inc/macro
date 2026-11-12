@@ -23,7 +23,7 @@ local_queue = []
 push_notification_event_handler = []
 
 [dependencies]
-agent_correlation = { path = "../../crates/agent_correlation", features = ["http", "postgres"] }
+agent_correlation = { workspace = true, features = ["http", "postgres"] }
 anyhow = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
 aws-sdk-sesv2 = { workspace = true }
@@ -31,44 +31,46 @@ aws-sdk-sns = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true }
 chrono = { workspace = true }
-database_env_vars = { path = "../../crates/database_env_vars" }
-email_formatting = { path = "../../crates/email_formatting" }
+datastore_env_vars = { workspace = true }
+email_formatting = { workspace = true }
 hmac = { workspace = true }
 http-body-util = { workspace = true }
 itertools = { workspace = true }
-last_online_tracker = { path = "../../crates/last_online_tracker" }
-macro_auth = { path = "../../crates/macro_auth" }
-macro_authorization = { path = "../../crates/macro_authorization", features = [
+last_online_tracker = { workspace = true }
+macro_auth = { workspace = true }
+macro_authorization = { workspace = true, default-features = true, features = [
   "postgres",
 ] }
-macro_aws_config = { path = "../../crates/macro_aws_config" }
-macro_config = { path = "../../crates/macro_config" }
+macro_aws_config = { workspace = true }
+macro_config = { workspace = true }
 doppler-config = { workspace = true }
-macro_cors = { path = "../../crates/macro_cors" }
-macro_entrypoint = { path = "../../crates/macro_entrypoint" }
-macro_env = { path = "../../crates/macro_env" }
-macro_env_var = { path = "../../crates/macro_env_var" }
-macro_event_broker = { path = "../../crates/macro_event_broker" }
-macro_middleware = { path = "../../crates/macro_middleware", default-features = false }
-macro_queues = { path = "../../crates/macro_queues" }
-macro_tower_layers = { path = "../../crates/macro_tower_layers" }
-macro_user_id = { path = "../../crates/macro_user_id" }
-model = { path = "../../crates/model" }
-model-entity = { path = "../../crates/model-entity" }
-model-error-response = { path = "../../crates/model-error-response" }
-model_notifications = { path = "../../crates/model_notifications" }
-models_pagination = { path = "../../crates/models_pagination", features = [
+macro_cors = { workspace = true }
+macro_entrypoint = { workspace = true }
+macro_env = { workspace = true }
+macro_env_var = { workspace = true }
+macro_event_broker = { workspace = true, default-features = true }
+macro_middleware = { workspace = true }
+macro_queues = { workspace = true }
+macro_tower_layers = { workspace = true }
+macro_user_id = { workspace = true }
+shared_types = { workspace = true, features = ["axum"] }
+entity_kind = { workspace = true }
+model_error_response = { workspace = true }
+model_notifications = { workspace = true }
+pagination_types = { workspace = true, features = [
   "axum",
 ] }
-notification = { path = "../../crates/notification", features = ["axum"] }
-notification_db_client = { path = "../../crates/notification_db_client" }
-rate_limit = { path = "../../crates/rate_limit" }
+notification = { workspace = true }
+notification_inbound = { workspace = true, features = ["axum"] }
+notification_outbound = { workspace = true }
+notification_db_client = { workspace = true }
+rate_limit = { workspace = true }
 redis = { workspace = true }
-secretsmanager_client = { path = "../../crates/secretsmanager_client" }
+secretsmanager_client = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
-sns_client = { path = "../../crates/sns_client" }
+sns_client = { workspace = true }
 sqlx = { workspace = true }
 tokio = { workspace = true }
 tower = { workspace = true }
@@ -77,9 +79,10 @@ tracing = { workspace = true }
 utoipa = { workspace = true, features = ["chrono"] }
 utoipa-swagger-ui = { workspace = true }
 uuid = { workspace = true }
-
-macro_service_urls = { path = "../../crates/macro_service_urls" }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
+connection_gateway_url = { workspace = true }
+notification_service_url = { workspace = true }
+
 [dev-dependencies]
-macro_auth = { path = "../../crates/macro_auth", features = ["testing"] }
+macro_auth = { workspace = true, features = ["testing"] }

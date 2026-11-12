@@ -1,0 +1,637 @@
+//! Port definitions (interfaces) for the notification service.
+//!
+//! These traits define the boundaries between the domain logic and external
+//! dependencies, following hexagonal architecture principles.
+
+use std::collections::{HashMap, HashSet};
+use std::future::Future;
+use std::sync::Arc;
+
+use macro_user_id::user_id::MacroUserIdStr;
+use rootcause::Report;
+use serde::Serialize;
+use serde::de::DeserializeOwned;
+use uuid::Uuid;
+
+use entity_kind::Entity;
+use pagination_types::{CreatedAt, Query};
+
+use crate::domain::models::device::DeviceType;
+use crate::domain::models::{NotificationStatusPayload, TaggedContent};
+
+use crate::domain::models::email_notification_digest::ports::{ClaimResult, DigestBatch};
+use crate::domain::models::request::{NotificationListFilters, NotificationStatus};
+use crate::domain::models::{
+    DeviceEndpoint, DisabledNotificationType, NativeCallPushResult, NotificationExtEmail,
+    NotificationIdAndCollapseKey, SendNotificationRequestBuilder, UserNotificationRow,
+    VoipPushTarget,
+    android::FCMMessage,
+    apple::{APNSPushNotification, VoipPushPayload},
+    mobile::MessageAttributes,
+};
+
+/// Port for sending mobile push notifications (iOS/Android via SNS).
+pub trait NotificationSender: Send + Sync + 'static {
+    /// Send an iOS push notification via APNS.
+    ///
+    /// Returns the SNS message ID on success (used for delivery failure tracking).
+    fn send_ios_push_notification<T: Serialize + Send + Sync>(
+        &self,
+        endpoint_arn: &str,
+        notification: &APNSPushNotification<T>,
+        attributes: &MessageAttributes,
+    ) -> impl Future<Output = Result<String, Report>> + Send;
+
+    /// Send an Android push notification via FCM.
+    ///
+    /// Returns the SNS message ID on success (used for delivery failure tracking).
+    fn send_android_push_notification<T: Serialize + Send + Sync>(
+        &self,
+        endpoint_arn: &str,
+        notification: &FCMMessage<T>,
+        attributes: &MessageAttributes,
+    ) -> impl Future<Output = Result<String, Report>> + Send;
+}
+
+pub use rate_limit::{RateLimitPort, RateLimitService};
+
+/// Port for notification persistence operations.
+pub trait NotificationRepository: Send + Sync + 'static {
+    /// Get users who have muted notifications.
+    fn get_muted_users<'a>(
+        &self,
+        user_ids: &[MacroUserIdStr<'a>],
+    ) -> impl Future<Output = Result<HashSet<MacroUserIdStr<'static>>, Report>> + Send;
+
+    /// Get users who have unsubscribed from notifications for a specific item.
+    fn get_unsubscribed_users<'a>(
+        &self,
+        item_id: &str,
+        user_ids: &[MacroUserIdStr<'a>],
+    ) -> impl Future<Output = Result<HashSet<MacroUserIdStr<'static>>, Report>> + Send;
+
+    /// Create a notification and user notification records.
+    ///
+    /// Returns new or unpublished recipient rows, or None after publication or withdrawal.
+    /// Retried publication preserves the original recipients and their lifecycle state.
+    fn create_notification<'a, T: Serialize + Send + Sync>(
+        &self,
+        request: SendNotificationRequestBuilder<'a, TaggedContent<T>>,
+        notification_id: Uuid,
+        service_sender: &str,
+        apns_collapse_key: Option<&str>,
+    ) -> impl Future<Output = Result<Option<Vec<UserNotificationRow<Arc<T>>>>, Report>> + Send;
+
+    /// Whether a resolved workflow has withdrawn this notification before delivery.
+    fn notification_is_withdrawn(
+        &self,
+        notification_id: Uuid,
+    ) -> impl std::future::Future<Output = Result<bool, Report>> + Send;
+
+    /// Record successful delivery-queue publication; retries remain pending until this succeeds.
+    fn complete_notification_publication(
+        &self,
+        notification_id: Uuid,
+    ) -> impl std::future::Future<Output = Result<(), Report>> + Send;
+
+    /// Update the sent status for users who received the notification.
+    fn update_sent_status<'a>(
+        &self,
+        notification_id: Uuid,
+        user_ids: &[MacroUserIdStr<'a>],
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Get device endpoints for push notifications.
+    fn get_device_endpoints<'a>(
+        &self,
+        user_ids: &[MacroUserIdStr<'a>],
+    ) -> impl Future<Output = Result<HashMap<MacroUserIdStr<'static>, Vec<DeviceEndpoint>>, Report>> + Send;
+
+    /// Atomically apply `MarkSeen` from [`super::models::NotificationAction`].
+    /// Preserve done state and any recorded viewing timestamp; return user-owned rows.
+    fn mark_notifications_seen(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        notification_ids: &[Uuid],
+    ) -> impl Future<Output = Result<Vec<UserNotificationRow<serde_json::Value>>, Report>> + Send;
+
+    /// Atomically mark done, or reopen done notifications as seen.
+    /// Reopening leaves active states unchanged. Preserve viewing timestamps and
+    /// return the updated user-owned rows, following [`super::models::NotificationState::apply`].
+    fn mark_notifications_done(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        notification_ids: &[Uuid],
+        done: bool,
+    ) -> impl Future<Output = Result<Vec<UserNotificationRow<serde_json::Value>>, Report>> + Send;
+
+    /// Get non-deleted, user-owned notification IDs associated with any primary or secondary
+    /// entity that need the requested status transition or an initial viewing timestamp.
+    fn get_notification_ids_for_entities(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        entities: &[Entity<'_>],
+        status: &NotificationStatus,
+    ) -> impl Future<Output = Result<Vec<Uuid>, Report>> + Send;
+
+    /// Get basic notification data (collapse keys) needed for push clearing.
+    fn get_basic_notifications(
+        &self,
+        notification_ids: &[Uuid],
+    ) -> impl Future<Output = Result<Vec<NotificationIdAndCollapseKey>, Report>> + Send;
+
+    /// Return notification IDs that still exist for the user and are eligible for digest email.
+    ///
+    /// Includes only unseen notifications that exist and are not soft-deleted.
+    fn get_digest_eligible_notification_ids(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        notification_ids: &[Uuid],
+    ) -> impl Future<Output = Result<HashSet<Uuid>, Report>> + Send;
+
+    /// Get a user's non-deleted notifications with cursor-based pagination.
+    ///
+    /// The metadata JSON column is deserialized into `T`. `filters` selects exact states.
+    fn get_user_notifications<T: DeserializeOwned + Send>(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        limit: u32,
+        cursor: Query<Uuid, CreatedAt, ()>,
+        filters: NotificationListFilters,
+    ) -> impl Future<Output = Result<Vec<UserNotificationRow<T>>, Report>> + Send;
+
+    /// Get a user's non-deleted notifications filtered by event item IDs, with cursor-based pagination.
+    ///
+    /// Only returns notifications matching one of the provided `event_item_ids` and the status filters.
+    fn get_user_notifications_by_event_item_ids<T: DeserializeOwned + Send>(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        event_item_ids: &[Uuid],
+        limit: u32,
+        cursor: Query<Uuid, CreatedAt, ()>,
+        filters: NotificationListFilters,
+    ) -> impl Future<Output = Result<Vec<UserNotificationRow<T>>, Report>> + Send;
+
+    /// Get viewer-owned notifications grouped by entity, filtering before each limit.
+    /// The default query preserves the complete active-notification edge.
+    fn get_entity_notifications_batch(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        entities: Vec<Entity<'static>>,
+        query: super::models::entity_query::EntityNotificationQuery,
+    ) -> impl Future<
+        Output = Result<
+            HashMap<Entity<'static>, Vec<UserNotificationRow<serde_json::Value>>>,
+            Report,
+        >,
+    > + Send;
+
+    /// Get a single user notification by ID.
+    ///
+    /// Returns `None` if no active (non-deleted) notification exists for the given user and ID.
+    fn get_user_notification_by_id<T: DeserializeOwned + Send>(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        notification_id: Uuid,
+    ) -> impl Future<Output = Result<Option<UserNotificationRow<T>>, Report>> + Send;
+
+    /// Soft-delete a single user notification.
+    fn delete_user_notification(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        notification_id: Uuid,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Soft-delete multiple user notifications.
+    fn bulk_delete_user_notifications(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        notification_ids: &[Uuid],
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Hard-delete all notifications for a user.
+    fn delete_all_user_notifications(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Look up an existing device endpoint ARN by its device token.
+    ///
+    /// Returns `None` if no registration exists for this token.
+    fn get_device_endpoint(
+        &self,
+        device_token: &str,
+        device_type: &DeviceType,
+    ) -> impl Future<Output = Result<Option<String>, Report>> + Send;
+
+    /// Upsert a device registration: create a new one or update the existing
+    /// record if the endpoint already exists.
+    fn upsert_device(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        device_token: &str,
+        device_endpoint: &str,
+        device_type: &DeviceType,
+        native_call_capable: bool,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Delete all of the user's device registrations matching the given token
+    /// and type.
+    ///
+    /// Returns the endpoint ARNs that were removed (empty if none matched).
+    fn delete_user_devices_by_token(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        device_token: &str,
+        device_type: &DeviceType,
+    ) -> impl Future<Output = Result<Vec<String>, Report>> + Send;
+
+    /// Delete registrations that share the given token and type but point at a
+    /// different endpoint than `active_endpoint` — stale rows left behind when
+    /// SNS minted a new endpoint for the same physical device.
+    ///
+    /// Returns the endpoint ARNs that were removed.
+    fn delete_stale_devices_by_token(
+        &self,
+        device_token: &str,
+        device_type: &DeviceType,
+        active_endpoint: &str,
+    ) -> impl Future<Output = Result<Vec<String>, Report>> + Send;
+
+    /// Delete a device registration by its endpoint ARN.
+    fn delete_device_by_endpoint(
+        &self,
+        endpoint_arn: &str,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Get users (from the given set) who have disabled the specified notification type.
+    fn get_users_with_type_disabled<'a>(
+        &self,
+        notification_event_type: &str,
+        user_ids: &[MacroUserIdStr<'a>],
+    ) -> impl Future<Output = Result<HashSet<MacroUserIdStr<'static>>, Report>> + Send;
+
+    /// Get all disabled notification types for a user.
+    fn get_disabled_notification_types(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Vec<DisabledNotificationType>, Report>> + Send;
+
+    /// Disable a notification type for a user (insert).
+    fn disable_notification_type(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        notification_event_type: &str,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Re-enable a notification type for a user (delete).
+    fn enable_notification_type(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        notification_event_type: &str,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+}
+
+/// Port for receiving realtime notification database events.
+pub trait NotificationEventsReceiver: Send + 'static {
+    /// Receive the next raw notification database event payload.
+    fn receive(&mut self) -> impl Future<Output = Result<String, Report>> + Send;
+}
+
+/// Port for publishing realtime notification updates.
+pub trait NotificationRealtimePublisher: Send + Sync + 'static {
+    /// Publish notification status updates to the users who own the notifications.
+    fn publish_updates(
+        &self,
+        payload: &NotificationStatusPayload<'_>,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+}
+
+/// No-op realtime publisher for consumers that do not wire connection gateway.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NoopNotificationRealtimePublisher;
+
+impl NotificationRealtimePublisher for NoopNotificationRealtimePublisher {
+    async fn publish_updates(&self, _: &NotificationStatusPayload<'_>) -> Result<(), Report> {
+        Ok(())
+    }
+}
+
+/// Port for realtime notification delivery.
+pub trait RealtimeSender: Send + Sync + 'static {
+    /// Send notifications to users in realtime.
+    ///
+    /// Returns the set of users who successfully received the notification
+    /// (i.e., they were online and the message was delivered).
+    fn send_notifications<'a, T: Serialize + Send + Sync>(
+        &self,
+        recipients: &[MacroUserIdStr<'a>],
+        notification: &T,
+    ) -> impl Future<Output = Result<HashSet<MacroUserIdStr<'static>>, Report>> + Send;
+}
+
+/// Receives events from the notifications topic with notification metadata decoded as `T`.
+pub trait NotificationTopicEventConsumer<T: Clone + 'static>: Send + Sync + 'static {
+    /// Waits for and returns the next notification topic event.
+    fn recv(
+        &self,
+    ) -> impl Future<
+        Output = Result<
+            crate::domain::models::websocket_notification_event::NotificationTopicEvent<'static, T>,
+            Report,
+        >,
+    > + Send;
+}
+
+/// Why a WebSocket notification subscription ended after its messages were drained.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum WebSocketNotificationSubscriptionExit {
+    /// The subscription closed normally.
+    Closed,
+    /// The subscriber's bounded buffer filled.
+    SlowConsumer,
+    /// The subscriber fell behind the shared broadcast buffer.
+    Lagging {
+        /// Number of messages skipped by the broadcast receiver.
+        skipped: u64,
+    },
+}
+
+/// A WebSocket notification receiver with independently observable completion status.
+pub struct WebSocketNotificationSubscription<T> {
+    receiver: tokio::sync::mpsc::Receiver<T>,
+    exit_reason: tokio::sync::oneshot::Receiver<WebSocketNotificationSubscriptionExit>,
+}
+
+impl<T> WebSocketNotificationSubscription<T> {
+    /// Creates a subscription from its message and exit-reason receivers.
+    pub fn from_parts(
+        receiver: tokio::sync::mpsc::Receiver<T>,
+        exit_reason: tokio::sync::oneshot::Receiver<WebSocketNotificationSubscriptionExit>,
+    ) -> Self {
+        Self {
+            receiver,
+            exit_reason,
+        }
+    }
+
+    /// Receives the next buffered notification.
+    pub async fn recv(&mut self) -> Option<T> {
+        self.receiver.recv().await
+    }
+
+    /// Returns why the forwarding task stopped after buffered notifications are drained.
+    pub async fn exit_reason(self) -> WebSocketNotificationSubscriptionExit {
+        self.exit_reason
+            .await
+            .unwrap_or(WebSocketNotificationSubscriptionExit::Closed)
+    }
+}
+
+/// Provides user-scoped subscriptions to received WebSocket notification updates of type `T`.
+pub trait WebSocketNotificationSubscriptionService<T>: Send + Sync + 'static {
+    /// Subscribes to WebSocket notification updates addressed to `user_id`.
+    fn subscribe(&self, user_id: MacroUserIdStr<'static>) -> WebSocketNotificationSubscription<T>;
+}
+
+impl<S, T> WebSocketNotificationSubscriptionService<T> for std::sync::Arc<S>
+where
+    S: WebSocketNotificationSubscriptionService<T>,
+{
+    fn subscribe(&self, user_id: MacroUserIdStr<'static>) -> WebSocketNotificationSubscription<T> {
+        self.as_ref().subscribe(user_id)
+    }
+}
+
+/// No-op WebSocket notification subscription service for schema-only consumers.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct NoopWebSocketNotificationSubscriptionService;
+
+impl<T: Send + 'static> WebSocketNotificationSubscriptionService<T>
+    for NoopWebSocketNotificationSubscriptionService
+{
+    fn subscribe(&self, _user_id: MacroUserIdStr<'static>) -> WebSocketNotificationSubscription<T> {
+        let (_sender, receiver) = tokio::sync::mpsc::channel(1);
+        let (exit_reason_sender, exit_reason) = tokio::sync::oneshot::channel();
+        let _ = exit_reason_sender.send(WebSocketNotificationSubscriptionExit::Closed);
+        WebSocketNotificationSubscription::from_parts(receiver, exit_reason)
+    }
+}
+
+use crate::domain::models::queue_message::EmailContent;
+
+/// Port for email delivery.
+pub trait EmailSender: Send + Sync + 'static {
+    /// Send an email with pre-built content to a user. `notification_type` is the type name
+    /// of the notification the email delivers.
+    fn send_email(
+        &self,
+        recipient: MacroUserIdStr<'_>,
+        notification_type: &str,
+        content: &EmailContent,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+}
+
+use crate::domain::models::push_notification_event::RawPushNotificationEventMessage;
+use crate::domain::models::queue_message::{
+    DeliverySuccess, IngressQueueMessage, QueueMessage, RawIngressQueueMessage, RawQueueMessage,
+};
+
+/// Port for publishing notifications to delivery queue and receiving them.
+pub trait NotificationQueue: Send + Sync + 'static {
+    /// Publish notifications for async delivery (after DB persistence).
+    fn publish<'a, T: Serialize + Send + Sync, U: Serialize + Send + Sync>(
+        &self,
+        messages: Vec<QueueMessage<'a, T, U>>,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Receive messages from the queue (for worker).
+    fn receive_messages(&self)
+    -> impl Future<Output = Result<Vec<RawQueueMessage>, Report>> + Send;
+
+    /// Delete a message from the queue after terminal processing.
+    fn delete_message(
+        &self,
+        receipt_handle: &str,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+}
+
+/// Port for delivering notifications from the queue.
+///
+/// This trait defines the egress (outbound delivery) side of the notification
+/// system. Implementations poll the queue and deliver via WebSocket, push, and email.
+pub trait NotificationEgress: Send + Sync + 'static {
+    /// Poll the queue and attempt to deliver notifications.
+    ///
+    /// Returns results for each delivery attempt across all messages received.
+    /// Messages are deleted from the queue after terminal outcomes, including
+    /// successful delivery and rate-limit rejection.
+    fn poll_and_deliver(&self)
+    -> impl Future<Output = Vec<Result<DeliverySuccess, Report>>> + Send;
+
+    /// Poll for ready digest batches, template them as emails, and send.
+    fn poll_email_digests<
+        'a,
+        T: NotificationExtEmail,
+        F: Fn(DigestBatch) -> Result<T, Report> + Send + Sync + 'static,
+    >(
+        &'a self,
+        f: &'a F,
+    ) -> impl Future<Output = Result<ClaimResult<()>, Report>> + Send + 'a;
+}
+
+/// Port for SNS platform endpoint management (create, get/set attributes).
+pub trait SnsEndpointManager: Send + Sync + 'static {
+    /// Create a new SNS platform endpoint for the given platform ARN and device token.
+    ///
+    /// Returns the new endpoint ARN.
+    fn create_platform_endpoint(
+        &self,
+        platform_arn: &str,
+        token: &str,
+    ) -> impl Future<Output = Result<String, Report>> + Send;
+
+    /// Get the attributes of an existing SNS endpoint.
+    fn get_endpoint_attributes(
+        &self,
+        endpoint_arn: &str,
+    ) -> impl Future<Output = Result<HashMap<String, String>, Report>> + Send;
+
+    /// Set/update attributes on an existing SNS endpoint.
+    fn set_endpoint_attributes(
+        &self,
+        endpoint_arn: &str,
+        attributes: HashMap<String, String>,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Delete an SNS platform endpoint by its ARN.
+    fn delete_endpoint(
+        &self,
+        endpoint_arn: &str,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+}
+
+/// Port for receiving and acknowledging push notification event messages from a queue.
+pub trait PushNotificationEventQueue: Send + Sync + 'static {
+    /// Receive a batch of raw push notification event messages from the queue.
+    fn receive_messages(
+        &self,
+    ) -> impl Future<Output = Result<Vec<RawPushNotificationEventMessage>, Report>> + Send;
+
+    /// Delete a message from the queue after successful processing.
+    fn delete_message(
+        &self,
+        receipt_handle: &str,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+}
+
+/// Port for publishing and consuming notification requests on the ingress queue.
+///
+/// This is separate from [`NotificationQueue`] (the delivery queue).
+/// The ingress queue carries type-erased [`IngressQueueMessage`] payloads
+/// that are processed by the ingress worker inside `notification_service`.
+pub trait NotificationIngressQueue: Send + Sync + 'static {
+    /// Publish a notification request to the ingress queue.
+    fn publish(
+        &self,
+        message: IngressQueueMessage,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Receive messages from the ingress queue.
+    fn receive_messages(
+        &self,
+    ) -> impl Future<Output = Result<Vec<RawIngressQueueMessage>, Report>> + Send;
+
+    /// Delete a message from the ingress queue after successful processing.
+    fn delete_message(
+        &self,
+        receipt_handle: &str,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+}
+
+/// Outbound port for delivering one VoIP push to an already-resolved
+/// endpoint. Implemented by the SNS mobile adapter; the domain's
+/// [`VoipPushSender`] service depends on this instead of the concrete
+/// adapter type.
+pub trait VoipPushDelivery: Send + Sync + 'static {
+    /// Deliver one VoIP push to the endpoint, returning the provider
+    /// message id.
+    fn send_voip_push(
+        &self,
+        endpoint_arn: &str,
+        recipient_id: &MacroUserIdStr<'_>,
+        payload: &VoipPushPayload,
+    ) -> impl Future<Output = Result<String, Report>> + Send;
+}
+
+/// Port for sending native call pushes to iOS PushKit and Android FCM devices.
+///
+/// VoIP pushes bypass the regular notification pipeline — they are delivered
+/// immediately without DB persistence and wake the app via PushKit so that
+/// CallKit can display the native incoming-call UI.
+pub trait VoipPushSender: Send + Sync + 'static {
+    /// Batch-resolve VoIP endpoints before the caller mints per-recipient tokens.
+    fn get_voip_push_targets(
+        &self,
+        recipient_ids: &[MacroUserIdStr<'_>],
+    ) -> impl Future<Output = Result<Vec<VoipPushTarget>, Report>> + Send;
+
+    /// Send recipient-specific payloads to already-resolved VoIP endpoints.
+    ///
+    /// Errors are logged but do not propagate. Successful deliveries suppress
+    /// ordinary alerts only on the corresponding platform. Users whose mobile
+    /// platforms are all handled natively need no fallback notification row.
+    fn send_voip_pushes(
+        &self,
+        pushes: Vec<(VoipPushTarget, VoipPushPayload)>,
+    ) -> impl std::future::Future<Output = NativeCallPushResult> + Send;
+}
+
+impl VoipPushSender for () {
+    async fn get_voip_push_targets(
+        &self,
+        _: &[MacroUserIdStr<'_>],
+    ) -> Result<Vec<VoipPushTarget>, Report> {
+        Ok(Vec::new())
+    }
+
+    async fn send_voip_pushes(
+        &self,
+        _: Vec<(VoipPushTarget, VoipPushPayload)>,
+    ) -> NativeCallPushResult {
+        NativeCallPushResult::default()
+    }
+}
+
+impl<V: VoipPushSender> VoipPushSender for Option<V> {
+    async fn get_voip_push_targets(
+        &self,
+        recipient_ids: &[MacroUserIdStr<'_>],
+    ) -> Result<Vec<VoipPushTarget>, Report> {
+        if let Some(inner) = self {
+            inner.get_voip_push_targets(recipient_ids).await
+        } else {
+            Ok(Vec::new())
+        }
+    }
+
+    async fn send_voip_pushes(
+        &self,
+        pushes: Vec<(VoipPushTarget, VoipPushPayload)>,
+    ) -> NativeCallPushResult {
+        if let Some(inner) = self {
+            inner.send_voip_pushes(pushes).await
+        } else {
+            NativeCallPushResult::default()
+        }
+    }
+}
+
+/// Permanently suppress a superseded notification, including delayed queue delivery.
+pub trait NotificationWithdrawal: Send + Sync + 'static {
+    /// Record withdrawal before completing any existing recipient notifications.
+    fn withdraw(
+        &self,
+        notification_id: Uuid,
+    ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
+}

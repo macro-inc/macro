@@ -14,8 +14,8 @@ use std::{
 
 use connection_gateway_client::ConnectionGatewayClient;
 use email::domain::focus::FocusNotifier;
+use email_types::api::refresh::RefreshEmailEvent;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_email::api::refresh::RefreshEmailEvent;
 use sqlx::PgPool;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use tracing::{Instrument as _, field::Empty};

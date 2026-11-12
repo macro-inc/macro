@@ -5,11 +5,11 @@ use email::domain::attachment_access::AuthorizedAttachmentBytes;
 use email::domain::scheduled_delivery::attachments::{
     ApprovedAttachments, AttachmentSnapshotMismatch,
 };
-use futures::{StreamExt, TryStreamExt};
-use models_email::service::{
+use email_types::service::{
     attachment::{AttachmentDraft, AttachmentToSend},
     message::MessageToSend,
 };
+use futures::{StreamExt, TryStreamExt};
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -81,9 +81,9 @@ async fn prepare_provider_attachments(
             .await
             .map_err(|error| match error {
                 email::domain::mailbox::MailboxError::Provider(
-                    email_api_client::domain::models::EmailApiError::NotFound
-                    | email_api_client::domain::models::EmailApiError::Forbidden
-                    | email_api_client::domain::models::EmailApiError::AuthRequired,
+                    email_api_client_core::models::EmailApiError::NotFound
+                    | email_api_client_core::models::EmailApiError::Forbidden
+                    | email_api_client_core::models::EmailApiError::AuthRequired,
                 ) => anyhow::Error::new(AttachmentSnapshotMismatch),
                 other => anyhow::Error::new(other),
             })

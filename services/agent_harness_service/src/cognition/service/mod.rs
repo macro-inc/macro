@@ -5,4 +5,5 @@ pub mod get_chat;
 pub mod id_mapping;
 pub mod integration_analytics;
 pub mod notification;
+pub mod projection_generator;
 pub mod structured_completion;

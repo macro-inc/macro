@@ -3,11 +3,11 @@ use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
+use email_types::service::thread::GetThreadOwnerResponse;
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
-use model::response::ErrorResponse;
-use models_email::service::thread::GetThreadOwnerResponse;
+use shared_types::response::ErrorResponse;
 use uuid::Uuid;
 
 #[tracing::instrument(skip(ctx))]

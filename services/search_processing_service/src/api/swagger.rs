@@ -1,7 +1,7 @@
 use utoipa::OpenApi;
 
 use crate::api::health;
-use model::response::EmptyResponse;
+use shared_types::response::EmptyResponse;
 
 #[derive(OpenApi)]
 #[openapi(

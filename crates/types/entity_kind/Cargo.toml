@@ -1,0 +1,15 @@
+[package]
+edition = "2024"
+name = "entity_kind"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+cowlike = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+strum = { workspace = true, features = ["derive"] }
+utoipa = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+
+[dev-dependencies]
+serde_json = { workspace = true }

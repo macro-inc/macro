@@ -1,7 +1,7 @@
+use ai_chat::domain::models::FREE_MODEL;
 use ai_projections::domain::ai_projection_service::{
     FREE_TIER_MODELS, requires_professional_features,
 };
-use chat::domain::models::FREE_MODEL;
 use utoipa::OpenApi;
 
 #[test]

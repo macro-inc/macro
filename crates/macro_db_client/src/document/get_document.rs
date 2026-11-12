@@ -2,7 +2,7 @@ use model_owner::Owner;
 use sqlx::{Pool, Postgres, Transaction};
 
 use document_sub_type::DocumentSubType;
-use model::document::{BomPart, DocumentBasic, DocumentMetadata};
+use shared_types::document::{BomPart, DocumentBasic, DocumentMetadata};
 
 /// Gets the documents name
 #[tracing::instrument(skip(db))]

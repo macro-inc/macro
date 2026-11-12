@@ -5,11 +5,11 @@ mod test;
 
 use std::time::Duration;
 
-use email_api_client::domain::models::{
+use email_api_client_core::models::{
     ApiOperationKind, EmailApiError, MailboxLoad, RateLimitOrigin, RateLimitRefusal, RequestPermit,
 };
-use email_api_client::domain::ports::ProviderRequestGate;
-use models_email::gmail::operations::GmailApiOperation;
+use email_api_client_core::ports::ProviderRequestGate;
+use email_types::gmail::operations::GmailApiOperation;
 use redis::aio::ConnectionManager;
 use uuid::Uuid;
 

@@ -21,13 +21,14 @@ use macro_user_id::email::Email;
 use macro_user_id::lowercased::Lowercase;
 use macro_user_id::user_id::MacroUserIdStr;
 use miniserde::json::Value as JsonValue;
-use model::response::ErrorResponse;
 use roles_and_permissions::domain::{
     model::{ProductTier, SubscriptionStatus},
     port::UserRolesAndPermissionsService,
 };
 use serde::Serialize;
+use shared_types::response::ErrorResponse;
 use stripe_webhook::{EventObject, EventType};
+use team_id::TeamId;
 use teams::domain::team_repo::TeamService;
 use tracing::Instrument;
 
@@ -778,6 +779,7 @@ async fn handle_team_subscription_event<'a>(
     tracking_data: SubscriptionTrackingData,
 ) -> anyhow::Result<()> {
     tracing::trace!("handling team subscription");
+    let typed_team_id = TeamId::from_uuid(*team_id);
 
     if subscription_status == "trialing" {
         // set has_trialed in macro_user table
@@ -789,7 +791,7 @@ async fn handle_team_subscription_event<'a>(
         async {
             let subscription_id = stripe::SubscriptionId::from_str(subscription_id).unwrap();
             ctx.teams_service
-                .patch_team_subscription_id(team_id, &subscription_id)
+                .patch_team_subscription_id(&typed_team_id, &subscription_id)
                 .await?;
 
             match subscription_status {
@@ -798,7 +800,7 @@ async fn handle_team_subscription_event<'a>(
                     // subscriber role and the tier role of their own seat's plan.
                     ctx.teams_service
                         .restore_permissions_for_team_members(
-                            team_id,
+                            &typed_team_id,
                             tracking_data
                                 .is_new
                                 .then(|| {
@@ -816,7 +818,7 @@ async fn handle_team_subscription_event<'a>(
                     sync_team_billing_period(ctx, &plan_sync).await?;
 
                     ctx.teams_service
-                        .patch_team_payment_status(team_id, true)
+                        .patch_team_payment_status(&typed_team_id, true)
                         .await?;
 
                     track_stripe_subscription(
@@ -829,11 +831,11 @@ async fn handle_team_subscription_event<'a>(
                 "canceled" | "incomplete" | "incomplete_expired" | "past_due" | "paused"
                 | "unpaid" => {
                     ctx.teams_service
-                        .revoke_permissions_for_team_members(team_id)
+                        .revoke_permissions_for_team_members(&typed_team_id)
                         .await?;
                     sync_team_billing_period(ctx, &plan_sync).await?;
                     ctx.teams_service
-                        .patch_team_payment_status(team_id, false)
+                        .patch_team_payment_status(&typed_team_id, false)
                         .await?;
 
                     track_stripe_subscription(

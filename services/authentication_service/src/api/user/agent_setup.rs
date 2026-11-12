@@ -1,7 +1,7 @@
 use axum::{Json, extract::State, http::StatusCode};
 use macro_authorization::{AccountHolderOrInternal, MacroAuthorizationExtractor};
 use macro_user_id::user_id::MacroUserIdStr;
-use model::response::ErrorResponse;
+use shared_types::response::ErrorResponse;
 use teams::domain::team_repo::TeamService;
 use user_api_key::domain::{ports::UserApiKeyService, service::UserApiKeyServiceImpl};
 use user_api_key::outbound::pg_user_api_keys_repo::PgUserApiKeysRepo;

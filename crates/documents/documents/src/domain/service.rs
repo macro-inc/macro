@@ -1,0 +1,2488 @@
+//! Document service implementation.
+
+mod content_events;
+
+#[cfg(test)]
+mod tests;
+
+use crate::domain::ports::sync::DocumentSyncPort;
+use entity_access_management::domain::ports::EntityAccessManagementService;
+use entity_kind::EntityType;
+use permissions_types::share_permission::team_share::{
+    AuthorizedTeamShareCommand, TeamShareLevel, TeamSharePolicyError, TeamShareRequest,
+    authorize_team_share,
+};
+use permissions_types::share_permission::{
+    LinkShare, SharePermissionV2, UpdateSharePermissionRequestV2,
+};
+use properties_types::EntityReference;
+use properties_types::api::SetPropertyValue;
+use properties_types::service::property_change_source::PropertyChangeSource;
+use std::borrow::Cow;
+use std::str::FromStr;
+use std::time::{SystemTime, UNIX_EPOCH};
+use unicode_segmentation::UnicodeSegmentation;
+
+use activity::{Actor, Attribution};
+use anyhow::anyhow;
+use cloudfront_sign::{SignedOptions, get_signed_url};
+use connection::domain::models::{InvalidationEvent, InvalidationReason};
+use connection::domain::ports::ConnectionService;
+use document_sub_type::DocumentSubType;
+use entity_access::domain::models::{
+    BotReceiptScope, EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, MemberTeamRole,
+    OwnerAccessLevel, ViewAccessLevel,
+};
+use foreign_entity::domain::models::{ForeignEntity, SourceId};
+use foreign_entity::domain::ports::ForeignEntityService;
+use github_pull_requests::domain::models::GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE;
+use macro_event_broker::MacroEventBroker;
+use macro_user_id::user_id::MacroUserIdStr;
+use model_owner::{CreationPrincipal, Owner};
+use s3_key::{
+    build_cloud_storage_bucket_document_key, build_docx_staging_bucket_document_key,
+    build_docx_to_pdf_converted_document_key, document_key_url_path,
+};
+use shared_types::document::response::{DocumentResponseMetadata, LocationResponseData};
+use shared_types::document::{
+    ContentType, DocumentBasic, DocumentMetadata, FileAssociation, FileType, FileTypeExt,
+    MAX_DOCUMENT_NAME_GRAPHEMES,
+};
+use shared_types::response::PresignedUrl;
+use tracing;
+
+use crate::domain::models::{
+    ASSIGNEES_PROPERTY_ID, InitialLinkShare, NOT_STARTED_STATUS_OPTION_ID, PropertyInput,
+    STATUS_PROPERTY_ID,
+};
+
+use super::branch_name::{build_task_branch_name, user_branch_prefix};
+use super::content::{DocumentContent, DocumentContentLocation, DocumentContentState};
+use super::events::{
+    DocumentCopiedMetadata, DocumentCreatedMetadata, DocumentDeletedMetadata,
+    DocumentInteractionMetadata, DocumentMacroEvent, DocumentUpdatedMetadata, InteractionReason,
+};
+use super::models::{
+    CloudFrontConfig, CopyDocumentRepoArgs, CreateDocumentRepoArgs, CreateTaskRequest,
+    DocumentError, DocumentTeamShareResponse, EditDocumentRepoArgs, EditDocumentServiceArgs,
+    EmailImportRepoOutcome, FileTypeUpdate, GithubPullRequest, GithubPullRequestTasks,
+    GithubPullRequestTasksResponse, GithubPullRequestsResponse, ImportEmailAttachmentRepoArgs,
+    LocationQueryParams, MAX_GITHUB_PULL_REQUEST_TASK_LOOKUP, NewDocument, TaskBranchName,
+    TaskIdentity, TeamTaskMetadata,
+};
+#[cfg(feature = "document_create")]
+use super::ports::create::DocumentCreationService;
+use super::ports::{
+    DocumentContentEventService, DocumentRepo, DocumentService, PresignedUploadUrlPort,
+    TaskPropertiesPort,
+};
+use super::response::{
+    CreateDocumentResponseData, DocumentMetadataWithContent, DocumentResponse,
+    DocumentResponseMetadataWithContent, GetDocumentResponseData, LocationResponseV3,
+};
+use super::skill_description::SkillDescription;
+
+/// The concrete document service implementation.
+pub struct DocumentServiceImpl<
+    R: DocumentRepo,
+    U: PresignedUploadUrlPort,
+    T: TaskPropertiesPort,
+    C: ConnectionService,
+    Eam: EntityAccessManagementService,
+    F: ForeignEntityService,
+    B: MacroEventBroker,
+    S: DocumentSyncPort,
+> {
+    /// Document repository
+    pub repo: R,
+    /// Cloudfront config
+    pub cloudfront_config: CloudFrontConfig,
+    /// Sync service client
+    pub sync_service_client: S,
+    /// Upload service
+    pub upload_url_service: U,
+    /// Task properties service
+    pub task_properties_service: T,
+    /// Connection service
+    pub connection_service: C,
+    /// entity access management service
+    pub entity_access_management_service: Eam,
+    /// Foreign entity service
+    pub foreign_entity_service: F,
+    /// Macro event broker for publishing document lifecycle events
+    pub macro_event_broker: B,
+}
+
+/// Blank native spreadsheets have no object upload; importing workbook bytes is
+/// a separate operation and must never silently discard an uploaded workbook.
+fn validate_spreadsheet_creation(
+    file_type: Option<FileType>,
+    sha: &str,
+) -> Result<(), DocumentError> {
+    const EMPTY_SHA256: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+    if file_type == Some(FileType::Spreadsheet) && sha != EMPTY_SHA256 {
+        return Err(DocumentError::BadRequest(
+            "Native spreadsheet file imports are not supported; create a blank spreadsheet and paste cells instead".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn ready_content_for_file_type(file_type: Option<FileType>) -> DocumentContent {
+    match file_type {
+        Some(FileType::Md | FileType::Spreadsheet) => {
+            DocumentContent::ready(DocumentContentLocation::SyncService)
+        }
+        Some(FileType::Docx) => DocumentContent::ready(DocumentContentLocation::ConvertedPdf),
+        _ => DocumentContent::ready(DocumentContentLocation::ObjectStorage),
+    }
+}
+
+fn content_at_location(
+    state: DocumentContentState,
+    location: DocumentContentLocation,
+) -> DocumentContent {
+    DocumentContent {
+        state,
+        location: Some(location),
+    }
+}
+
+fn presigned_location_content(
+    state: DocumentContentState,
+    file_type: Option<FileType>,
+    get_converted_docx: bool,
+) -> DocumentContent {
+    let location = match (file_type, get_converted_docx) {
+        (Some(FileType::Docx), true) => DocumentContentLocation::ConvertedPdf,
+        (Some(FileType::Docx), false) => DocumentContentLocation::DocxBomParts,
+        _ => DocumentContentLocation::ObjectStorage,
+    };
+
+    content_at_location(state, location)
+}
+
+fn pending_content_for_file_type(file_type: Option<FileType>) -> DocumentContent {
+    match file_type {
+        Some(FileType::Spreadsheet) => {
+            DocumentContent::pending_at(DocumentContentLocation::SyncService)
+        }
+        Some(FileType::Docx) => DocumentContent::pending_at(DocumentContentLocation::ConvertedPdf),
+        _ => DocumentContent::pending_at(DocumentContentLocation::ObjectStorage),
+    }
+}
+
+/// Whether an import holding an attachment's bytes should upload them to the
+/// pending document it reused.
+///
+/// An import links the document before the bytes reach storage, so a failed
+/// upload leaves it pending with nothing else to retry it. DOCX stays pending
+/// through its conversion, and spreadsheets are not stored as objects. The
+/// checksum keeps different bytes from replacing the document's object.
+fn reused_email_document_needs_upload(
+    content: &DocumentContent,
+    file_type: Option<FileType>,
+    document_sha: Option<&str>,
+    sha: &str,
+) -> bool {
+    content.state == DocumentContentState::Pending
+        && !matches!(file_type, Some(FileType::Docx | FileType::Spreadsheet))
+        && document_sha == Some(sha)
+}
+
+fn should_revoke_non_owner_user_access(
+    share_permission: Option<&UpdateSharePermissionRequestV2>,
+) -> bool {
+    match share_permission.and_then(|permission| permission.link_share) {
+        Some(Some(LinkShare::Team)) | Some(None) => true,
+        Some(Some(LinkShare::Public)) | None => false,
+    }
+}
+
+/// Attribution fields published on document `updated` / `deleted` events.
+///
+/// User receipts keep filling the legacy `actor_user_id`; bot receipts acting
+/// for a user fill `actor` + `on_behalf_of`. Team-scoped bots, internal and
+/// unauthenticated callers publish nothing attributable.
+#[derive(Default)]
+struct PublishedDocumentActors {
+    actor: Option<Actor<'static>>,
+    on_behalf_of: Option<MacroUserIdStr<'static>>,
+    actor_user_id: Option<MacroUserIdStr<'static>>,
+}
+
+fn published_document_actors(auth: &EntityAccessAuth) -> PublishedDocumentActors {
+    match auth {
+        EntityAccessAuth::Authenticated(user_id) => PublishedDocumentActors {
+            actor_user_id: Some(user_id.clone()),
+            ..Default::default()
+        },
+        EntityAccessAuth::Bot(bot) => match bot.scope() {
+            BotReceiptScope::User { acting_user } => PublishedDocumentActors {
+                actor: Some(Actor::new_from_bot(bot.bot_id())),
+                on_behalf_of: Some(acting_user.clone()),
+                actor_user_id: None,
+            },
+            BotReceiptScope::Team { .. } | BotReceiptScope::Channel { .. } => {
+                PublishedDocumentActors::default()
+            }
+        },
+        EntityAccessAuth::Unauthenticated | EntityAccessAuth::Internal => {
+            PublishedDocumentActors::default()
+        }
+    }
+}
+
+/// The dates a document was created with, when its creator supplied them
+/// rather than taking now.
+#[derive(Debug, Clone, Copy)]
+struct DocumentDates {
+    created_at: chrono::DateTime<chrono::Utc>,
+    updated_at: chrono::DateTime<chrono::Utc>,
+}
+
+impl DocumentDates {
+    fn of(document: &NewDocument) -> Option<Self> {
+        document.created_at.map(|created_at| Self {
+            created_at,
+            updated_at: document.updated_at.unwrap_or(created_at),
+        })
+    }
+}
+
+fn short_id_for_entity_id(entity_id: &str) -> Result<String, DocumentError> {
+    let uuid = macro_uuid::string_to_uuid(entity_id)
+        .map_err(|e| DocumentError::BadRequest(format!("invalid entity_id: {e}")))?;
+    Ok(macro_uuid::ShortUuidConverter::default().from_uuid(&uuid))
+}
+
+fn invalid_team_task_slug() -> DocumentError {
+    DocumentError::BadRequest("invalid team task slug".to_string())
+}
+
+fn map_basic_document_error(document_id: &str, error: anyhow::Error) -> DocumentError {
+    if error
+        .to_string()
+        .contains("no rows returned by a query that expected to return at least one row")
+    {
+        DocumentError::NotFound(document_id.to_string())
+    } else {
+        DocumentError::Internal(error)
+    }
+}
+
+fn team_task_number_from_slug(slug: &str) -> Result<i32, DocumentError> {
+    let (prefix, number) = slug.rsplit_once('-').ok_or_else(invalid_team_task_slug)?;
+
+    let has_malformed_separator = prefix.split('-').any(str::is_empty);
+    if has_malformed_separator
+        || number.is_empty()
+        || !number.bytes().all(|byte| byte.is_ascii_digit())
+    {
+        return Err(invalid_team_task_slug());
+    }
+
+    let task_num = number
+        .parse::<i32>()
+        .map_err(|_| invalid_team_task_slug())?;
+    if task_num <= 0 {
+        return Err(invalid_team_task_slug());
+    }
+
+    Ok(task_num)
+}
+
+fn foreign_entity_matches_source_id(foreign_entity: &ForeignEntity, source_id: &SourceId) -> bool {
+    foreign_entity.stored_for_id == source_id.id
+        && foreign_entity.stored_for_auth_entity == source_id.auth_entity
+}
+
+fn first_visible_foreign_entity<'a>(
+    foreign_entities: &'a [ForeignEntity],
+    source_ids: Option<&[SourceId]>,
+) -> Option<&'a ForeignEntity> {
+    foreign_entities.iter().find(|foreign_entity| {
+        foreign_entity.foreign_entity_source == GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE
+            && source_ids.is_none_or(|source_ids| {
+                source_ids
+                    .iter()
+                    .any(|source_id| foreign_entity_matches_source_id(foreign_entity, source_id))
+            })
+    })
+}
+
+fn hydrate_github_pull_request_from_foreign_entity(
+    pull_request: &mut GithubPullRequest,
+    foreign_entity: &ForeignEntity,
+) {
+    let Ok(mut hydrated_pull_request) = serde_json::from_value::<GithubPullRequest>(
+        foreign_entity.metadata.clone(),
+    )
+    .inspect_err(|error| {
+        tracing::warn!(
+            error = ?error,
+            foreign_entity_id = %foreign_entity.id,
+            fallback_github_key = %pull_request.github_key,
+            "failed to parse GitHub pull request foreign entity metadata"
+        );
+    }) else {
+        pull_request.foreign_entity_id = Some(foreign_entity.id);
+        return;
+    };
+
+    if hydrated_pull_request.github_key != pull_request.github_key {
+        tracing::warn!(
+            foreign_entity_id = %foreign_entity.id,
+            metadata_github_key = %hydrated_pull_request.github_key,
+            fallback_github_key = %pull_request.github_key,
+            "ignoring mismatched GitHub pull request foreign entity metadata"
+        );
+        pull_request.foreign_entity_id = Some(foreign_entity.id);
+        return;
+    }
+
+    hydrated_pull_request.foreign_entity_id = Some(foreign_entity.id);
+    *pull_request = hydrated_pull_request;
+}
+
+impl<
+    R: DocumentRepo,
+    U: PresignedUploadUrlPort,
+    T: TaskPropertiesPort,
+    C: ConnectionService,
+    Eam: EntityAccessManagementService,
+    F: ForeignEntityService,
+    B: MacroEventBroker,
+    S: DocumentSyncPort,
+> DocumentServiceImpl<R, U, T, C, Eam, F, B, S>
+{
+    /// Create a document service with its repository and external service ports.
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        repo: R,
+        cloudfront_config: CloudFrontConfig,
+        sync_service_client: S,
+        upload_url_service: U,
+        task_properties_service: T,
+        connection_service: C,
+        entity_access_management_service: Eam,
+        foreign_entity_service: F,
+        macro_event_broker: B,
+    ) -> Self {
+        Self {
+            repo,
+            cloudfront_config,
+            sync_service_client,
+            upload_url_service,
+            task_properties_service,
+            connection_service,
+            entity_access_management_service,
+            foreign_entity_service,
+            macro_event_broker,
+        }
+    }
+
+    async fn authorize_document_team_share(
+        &self,
+        receipt: &EntityAccessReceipt<EditAccessLevel>,
+        request: TeamShareRequest,
+    ) -> Result<Option<AuthorizedTeamShareCommand>, DocumentError> {
+        if request == TeamShareRequest::default() {
+            return Ok(None);
+        }
+        let facts = self
+            .repo
+            .get_team_share_facts(&receipt.entity().entity_id)
+            .await?;
+        authorize_team_share(
+            receipt.acting_user_id(),
+            &facts,
+            request,
+            TeamShareLevel::Edit,
+        )
+        .map_err(|error| match error {
+            TeamSharePolicyError::MissingActor | TeamSharePolicyError::NotOwner => {
+                DocumentError::Unauthorized
+            }
+            TeamSharePolicyError::InvalidRevision => DocumentError::Conflict(error.to_string()),
+            _ => DocumentError::BadRequest(error.to_string()),
+        })
+    }
+
+    fn get_signed_options(&self) -> SignedOptions {
+        let current_unix_timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let date_less_than =
+            current_unix_timestamp + self.cloudfront_config.presigned_url_expiry_seconds;
+
+        SignedOptions {
+            key_pair_id: self.cloudfront_config.signer_public_key_id.clone(),
+            date_less_than,
+            private_key: self.cloudfront_config.signer_private_key.clone(),
+            ..Default::default()
+        }
+    }
+
+    /// The CloudFront URL an object key is served from. The key is
+    /// percent-encoded per path segment here, not where it is built.
+    fn cloudfront_url_for_key(&self, key: &str) -> String {
+        format!(
+            "{}/{}",
+            self.cloudfront_config.distribution_url,
+            document_key_url_path(key)
+        )
+    }
+
+    fn make_presigned_url(&self, key: &str) -> anyhow::Result<String> {
+        let constructed_url = self.cloudfront_url_for_key(key);
+        let options = self.get_signed_options();
+
+        let signed_url = if !macro_aws_config::is_local_aws() {
+            get_signed_url(&constructed_url, &options)?
+        } else {
+            constructed_url
+        };
+
+        Ok(signed_url)
+    }
+
+    async fn get_editable_url(
+        &self,
+        owner: &Owner,
+        document_id: &str,
+        document_version_id: Option<i64>,
+        _file_type: &str,
+    ) -> anyhow::Result<LocationResponseData> {
+        let document_version_id = if let Some(id) = document_version_id {
+            id
+        } else {
+            self.repo
+                .get_latest_document_version_id(document_id)
+                .await
+                .map_err(Into::into)?
+                .0
+        };
+
+        let document_key =
+            build_cloud_storage_bucket_document_key(owner, document_id, document_version_id);
+
+        let signed_url = self.make_presigned_url(&document_key)?;
+        Ok(LocationResponseData::PresignedUrl(signed_url))
+    }
+
+    async fn get_static_url(
+        &self,
+        owner: &Owner,
+        document_id: &str,
+        _file_type: &Option<FileType>,
+    ) -> anyhow::Result<LocationResponseData> {
+        let (document_version_id, _) = self
+            .repo
+            .get_document_version_id(document_id)
+            .await
+            .map_err(Into::into)?;
+
+        let document_key =
+            build_cloud_storage_bucket_document_key(owner, document_id, document_version_id);
+
+        let signed_url = self.make_presigned_url(&document_key)?;
+        Ok(LocationResponseData::PresignedUrl(signed_url))
+    }
+
+    async fn get_converted_docx_url(
+        &self,
+        owner: &Owner,
+        document_id: &str,
+    ) -> anyhow::Result<LocationResponseData> {
+        let document_key = build_docx_to_pdf_converted_document_key(owner, document_id);
+
+        let signed_url = self.make_presigned_url(&document_key)?;
+        Ok(LocationResponseData::PresignedUrl(signed_url))
+    }
+
+    async fn get_docx_urls(
+        &self,
+        document_id: &str,
+        document_version_id: Option<i64>,
+    ) -> anyhow::Result<LocationResponseData> {
+        let shas: Vec<String> = if let Some(version_id) = document_version_id {
+            self.repo
+                .get_document_shas(version_id)
+                .await
+                .map_err(Into::into)?
+        } else {
+            self.repo
+                .get_document_shas_by_document_id(document_id)
+                .await
+                .map_err(Into::into)?
+        };
+
+        let options = self.get_signed_options();
+        let distribution_url = &self.cloudfront_config.distribution_url;
+
+        let presigned_urls: Vec<PresignedUrl> = shas
+            .iter()
+            .filter_map(|sha| {
+                let constructed_url = format!("{}/{}", distribution_url, sha);
+                match get_signed_url(&constructed_url, &options) {
+                    Ok(url) => Some(PresignedUrl {
+                        presigned_url: url,
+                        sha: sha.to_string(),
+                    }),
+                    Err(e) => {
+                        tracing::error!(error=?e, sha=?sha, "unable to generate presigned url");
+                        None
+                    }
+                }
+            })
+            .collect();
+
+        if shas.len() != presigned_urls.len() {
+            anyhow::bail!("unable to generate presigned urls");
+        }
+
+        Ok(LocationResponseData::PresignedUrls(presigned_urls))
+    }
+
+    async fn get_presigned_url_by_type(
+        &self,
+        owner: &Owner,
+        document_id: &str,
+        file_type: Option<FileType>,
+        document_version_id: Option<i64>,
+        get_converted_docx: bool,
+    ) -> anyhow::Result<LocationResponseData> {
+        match file_type {
+            None => self.get_static_url(owner, document_id, &None).await,
+            Some(ft) => {
+                if ft == FileType::Docx && get_converted_docx {
+                    self.get_converted_docx_url(owner, document_id).await
+                } else if ft == FileType::Docx && !get_converted_docx {
+                    self.get_docx_urls(document_id, document_version_id).await
+                } else if ft.is_static() {
+                    self.get_static_url(owner, document_id, &Some(ft)).await
+                } else {
+                    self.get_editable_url(owner, document_id, document_version_id, ft.as_str())
+                        .await
+                }
+            }
+        }
+    }
+
+    async fn content_for_document(
+        &self,
+        document_id: &str,
+        file_type: Option<FileType>,
+    ) -> Result<DocumentContent, DocumentError> {
+        if let Some(content) = self
+            .repo
+            .get_persisted_document_content(document_id)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))?
+        {
+            return Ok(content);
+        }
+
+        let (_, uploaded) = if file_type
+            .is_none_or(|file_type| file_type == FileType::Docx || file_type.is_static())
+        {
+            self.repo
+                .get_document_version_id(document_id)
+                .await
+                .map_err(|e| DocumentError::Internal(e.into()))?
+        } else {
+            self.repo
+                .get_latest_document_version_id(document_id)
+                .await
+                .map_err(|e| DocumentError::Internal(e.into()))?
+        };
+
+        Ok(DocumentContent::from_legacy_uploaded(uploaded, file_type))
+    }
+
+    fn markdown_sync_service_location_response(
+        &self,
+        document_context: &DocumentBasic,
+        content: DocumentContent,
+    ) -> LocationResponseV3 {
+        LocationResponseV3::SyncServiceContent {
+            metadata: document_context.clone(),
+            content,
+        }
+    }
+
+    async fn resolve_markdown_sync_service_location(
+        &self,
+        document_context: &DocumentBasic,
+        document_id: &str,
+        content: DocumentContent,
+    ) -> Result<Option<LocationResponseV3>, DocumentError> {
+        if content.state == DocumentContentState::Ready
+            && content.location == Some(DocumentContentLocation::SyncService)
+        {
+            return Ok(Some(self.markdown_sync_service_location_response(
+                document_context,
+                content,
+            )));
+        }
+
+        match self.sync_service_client.exists(document_id).await {
+            Ok(true) => Ok(Some(self.markdown_sync_service_location_response(
+                document_context,
+                DocumentContent::ready(DocumentContentLocation::SyncService),
+            ))),
+            Ok(false) => Ok(None),
+            Err(error) => {
+                tracing::warn!(
+                    error=?error,
+                    document_id=?document_id,
+                    "temporary markdown location fallback did not find sync-service state"
+                );
+                Ok(None)
+            }
+        }
+    }
+
+    /// A new document starts its own collaborative session, so a caller-chosen
+    /// id must not already have one: the document would take it over instead.
+    /// Only random (v4/v7) ids can name a collab surface's session, the kind a
+    /// document must never adopt. Other ids, such as the deterministic v5 ids
+    /// of starter documents, can retry after a partial create left a session.
+    async fn refuse_existing_session(&self, id: Option<uuid::Uuid>) -> Result<(), DocumentError> {
+        let Some(id) = id.filter(|id| {
+            matches!(
+                id.get_version(),
+                Some(uuid::Version::Random | uuid::Version::SortRand)
+            )
+        }) else {
+            return Ok(());
+        };
+        if self
+            .sync_service_client
+            .exists(&id.to_string())
+            .await
+            .map_err(DocumentError::Internal)?
+        {
+            return Err(DocumentError::Conflict(
+                "document id is already in use".to_string(),
+            ));
+        }
+        Ok(())
+    }
+
+    /// Clean up a document on creation error.
+    async fn cleanup_document(&self, document_id: &str) {
+        if let Err(e) = self.repo.delete_document_by_id(document_id).await {
+            tracing::error!(error=?e, document_id=?document_id, "failed to clean up document");
+        }
+    }
+
+    async fn cleanup_canvas_copy(&self, document_id: &str, seed_key: Option<&str>, room: bool) {
+        if let Some(key) = seed_key
+            && let Err(error) = self.upload_url_service.delete_object(key).await
+        {
+            tracing::error!(?error, document_id, "failed to clean up copied canvas seed");
+        }
+        if room && let Err(error) = self.sync_service_client.delete_document(document_id).await {
+            tracing::error!(?error, document_id, "failed to clean up copied canvas room");
+        }
+        self.cleanup_document(document_id).await;
+    }
+
+    async fn team_task_metadata_for_document(
+        &self,
+        document_id: &str,
+    ) -> Result<Option<TeamTaskMetadata>, DocumentError> {
+        self.repo
+            .get_team_task_metadata(document_id)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))
+    }
+
+    /// Publish a document lifecycle event; failures are logged and dropped.
+    fn publish_document_event(&self, event: &DocumentMacroEvent) {
+        let _ = self.macro_event_broker.send_event(event).inspect_err(|e| {
+            tracing::error!(error=?e, "failed to publish document event");
+        });
+    }
+
+    async fn import_email_attachment_unlogged(
+        &self,
+        args: ImportEmailAttachmentRepoArgs,
+    ) -> Result<CreateDocumentResponseData, DocumentError> {
+        validate_spreadsheet_creation(args.document.file_type, &args.document.sha)?;
+        if args.document.document_name.graphemes(true).count() > MAX_DOCUMENT_NAME_GRAPHEMES {
+            return Err(DocumentError::NameTooLong {
+                max: MAX_DOCUMENT_NAME_GRAPHEMES,
+            });
+        }
+
+        // Imports reuse documents by attachment and content, so their ids are
+        // always server-chosen and never meet an existing session.
+        if args.document.id.is_some() {
+            return Err(DocumentError::BadRequest(
+                "email attachment imports cannot choose a document id".to_string(),
+            ));
+        }
+
+        let file_type = args.document.file_type;
+        let project_id = args.document.project_id;
+        let dates = DocumentDates::of(&args.document);
+        let sha = args.document.sha.clone();
+        let attribution = Attribution::direct(Actor::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID));
+
+        let owner_team = self
+            .repo
+            .get_owner_team(&Owner::User(args.owner.clone()))
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))?;
+        let share_permission = SharePermissionV2::new_document_share_permission(
+            file_type,
+            owner_team.map(|team| team.default_link_share),
+        );
+
+        match self
+            .repo
+            .import_email_attachment_document(args, share_permission)
+            .await?
+        {
+            EmailImportRepoOutcome::Created(document_metadata) => {
+                self.finish_created_document(
+                    document_metadata,
+                    file_type,
+                    project_id,
+                    dates,
+                    sha,
+                    attribution,
+                    None,
+                )
+                .await
+            }
+            EmailImportRepoOutcome::Reused(document_metadata) => {
+                self.reused_email_import_response(document_metadata, file_type, &sha)
+                    .await
+            }
+        }
+    }
+
+    async fn reused_email_import_response(
+        &self,
+        document_metadata: DocumentMetadata,
+        file_type: Option<FileType>,
+        sha: &str,
+    ) -> Result<CreateDocumentResponseData, DocumentError> {
+        let document_id = document_metadata.document_id.clone();
+        // The reused document keeps its own type, whatever this attachment declared.
+        let file_type = document_metadata
+            .file_type
+            .as_deref()
+            .and_then(|file_type| FileType::from_str(file_type).ok())
+            .or(file_type);
+        // Reuse returns whatever content already exists, and an upload URL
+        // only when a previous import never finished storing the bytes.
+        let content = self.content_for_document(&document_id, file_type).await?;
+        let content_type = match file_type {
+            Some(FileType::Docx) => ContentType::Docx,
+            _ => file_type.into(),
+        };
+        let mime_type = content_type.mime_type().to_string();
+        let presigned_url = if reused_email_document_needs_upload(
+            &content,
+            file_type,
+            document_metadata.sha.as_deref(),
+            sha,
+        ) {
+            tracing::warn!(%document_id, "reissuing the upload of a pending email document");
+            let key = build_cloud_storage_bucket_document_key(
+                &document_metadata.owner,
+                &document_id,
+                document_metadata.document_version_id,
+            );
+            let url = self
+                .upload_url_service
+                .put_document_storage_presigned_url(&key, sha, content_type)
+                .await
+                .map_err(|e| {
+                    tracing::error!(error=?e, %document_id, "unable to generate presigned url");
+                    DocumentError::Internal(anyhow!("unable to generate presigned url"))
+                })?;
+            Some(url)
+        } else {
+            None
+        };
+        let document_response_metadata =
+            DocumentResponseMetadata::from_document_metadata(&document_metadata).map_err(
+                |e| {
+                    tracing::error!(error=?e, document_id=?document_id, "unable to convert document metadata");
+                    DocumentError::Internal(anyhow!("unable to convert document metadata"))
+                },
+            )?;
+        let team_task_metadata = self.team_task_metadata_for_document(&document_id).await?;
+        Ok(CreateDocumentResponseData {
+            document_response: DocumentResponse {
+                document_metadata: DocumentResponseMetadataWithContent::new(
+                    document_response_metadata,
+                    content,
+                )
+                .with_team_task_metadata(team_task_metadata),
+                presigned_url,
+            },
+            content_type: mime_type,
+            file_type: file_type.map(|f| f.to_string()),
+        })
+    }
+
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "a created document carries its type, folder, dates, content hash, attribution and job"
+    )]
+    async fn finish_created_document(
+        &self,
+        document_metadata: DocumentMetadata,
+        file_type: Option<FileType>,
+        project_id: Option<uuid::Uuid>,
+        dates: Option<DocumentDates>,
+        sha: String,
+        attribution: Attribution,
+        job_id: Option<String>,
+    ) -> Result<CreateDocumentResponseData, DocumentError> {
+        let document_id = document_metadata.document_id.clone();
+
+        let mut initial_content = pending_content_for_file_type(file_type);
+        if let Err(e) = self
+            .repo
+            .set_document_content(&document_id, initial_content.clone())
+            .await
+        {
+            tracing::error!(error=?e, document_id=?document_id, "failed to initialize document content metadata");
+            self.cleanup_document(&document_id).await;
+            return Err(DocumentError::Internal(e.into()));
+        }
+
+        if let Some(job_id) = &job_id
+            && let Err(e) = self.repo.update_upload_job(&document_id, job_id).await
+        {
+            tracing::error!(error=?e, document_id=?document_id, "failed to update upload job");
+            self.cleanup_document(&document_id).await;
+            return Err(DocumentError::Internal(anyhow!(
+                "unable to update upload job"
+            )));
+        }
+
+        let content_type = match file_type {
+            Some(FileType::Docx) => ContentType::Docx,
+            _ => file_type.into(),
+        };
+
+        let mime_type = content_type.mime_type().to_string();
+
+        let presigned_url = match file_type {
+            Some(FileType::Spreadsheet) => {
+                if let Err(error) = self
+                    .sync_service_client
+                    .initialize_spreadsheet(&document_id)
+                    .await
+                {
+                    self.cleanup_document(&document_id).await;
+                    return Err(DocumentError::Internal(error));
+                }
+                initial_content = DocumentContent::ready(DocumentContentLocation::SyncService);
+                if let Err(error) = self
+                    .repo
+                    .set_document_content(&document_id, initial_content.clone())
+                    .await
+                {
+                    self.cleanup_document(&document_id).await;
+                    return Err(DocumentError::Internal(error.into()));
+                }
+                Ok(None)
+            }
+            Some(FileType::Docx) => {
+                let docx_key = build_docx_staging_bucket_document_key(
+                    &document_metadata.owner,
+                    &document_id,
+                    document_metadata.document_version_id,
+                );
+                self.upload_url_service
+                    .put_docx_upload_presigned_url(&docx_key, &sha, content_type)
+                    .await
+                    .map(Some)
+            }
+            _ => {
+                let key = build_cloud_storage_bucket_document_key(
+                    &document_metadata.owner,
+                    &document_id,
+                    document_metadata.document_version_id,
+                );
+                self.upload_url_service
+                    .put_document_storage_presigned_url(&key, &sha, content_type)
+                    .await
+                    .map(Some)
+            }
+        }
+        .map_err(|e| {
+            tracing::error!(error=?e, document_id=?document_id, "unable to generate presigned url");
+            DocumentError::Internal(anyhow!("unable to generate presigned url"))
+        })?;
+
+        let document_response_metadata =
+            DocumentResponseMetadata::from_document_metadata(&document_metadata).map_err(|e| {
+                tracing::error!(error=?e, document_id=?document_id, "unable to convert document metadata");
+                DocumentError::Internal(anyhow!("unable to convert document metadata"))
+            })?;
+
+        if let Some(project_id) = &project_id {
+            let project_id_str = project_id.to_string();
+            let document_uuid =
+                uuid::Uuid::parse_str(&document_response_metadata.document_id).unwrap();
+            let _ = self
+                .entity_access_management_service
+                .add_entity_to_project(&document_uuid, EntityType::Document, project_id)
+                .await.inspect_err(|e| tracing::error!(error=?e, project_id=?project_id, "unable to update entity access for project"));
+            // A document carrying its own dates dates its folders by them
+            // rather than by now.
+            let updated = match dates {
+                Some(DocumentDates {
+                    created_at,
+                    updated_at,
+                }) => {
+                    self.repo
+                        .extend_project_dates(&project_id_str, created_at, updated_at)
+                        .await
+                }
+                None => self.repo.update_project_modified(&project_id_str).await,
+            };
+            let _ = updated.inspect_err(
+                |e| tracing::error!(error=?e, project_id=?project_id, "unable to update project modified date"),
+            );
+        }
+
+        if document_response_metadata.sub_type == Some(DocumentSubType::Task) {
+            self.task_properties_service
+                .attach_task_properties(vec![document_response_metadata.document_id.clone()])
+                .await
+                .map_err(|e| {
+                    tracing::error!(error=?e, document_id=?document_id, "failed to attach task properties");
+                    DocumentError::Internal(anyhow!("failed to attach task properties"))
+                })?;
+        }
+
+        let team_task_metadata = self.team_task_metadata_for_document(&document_id).await?;
+
+        self.publish_document_event(&DocumentMacroEvent::created(
+            document_metadata.document_id.clone(),
+            DocumentCreatedMetadata {
+                document_id: document_metadata.document_id.clone(),
+                owner: document_metadata.owner.clone(),
+                actor: Some(attribution.actor()),
+                on_behalf_of: attribution.on_behalf_of(),
+                document_name: document_metadata.document_name.clone(),
+                file_type,
+                project_id: project_id.map(|p| p.to_string()),
+                sub_type: document_metadata.sub_type,
+                created_at: document_metadata.created_at,
+            },
+        ));
+
+        Ok(CreateDocumentResponseData {
+            document_response: DocumentResponse {
+                document_metadata: DocumentResponseMetadataWithContent::new(
+                    document_response_metadata,
+                    initial_content,
+                )
+                .with_team_task_metadata(team_task_metadata),
+                presigned_url,
+            },
+            content_type: mime_type,
+            file_type: file_type.map(|f| f.to_string()),
+        })
+    }
+}
+
+#[cfg(feature = "document_create")]
+impl<
+    R: DocumentRepo,
+    U: PresignedUploadUrlPort,
+    T: TaskPropertiesPort,
+    C: ConnectionService,
+    Eam: EntityAccessManagementService,
+    F: ForeignEntityService,
+    B: MacroEventBroker,
+    S: DocumentSyncPort,
+> DocumentCreationService for DocumentServiceImpl<R, U, T, C, Eam, F, B, S>
+{
+    async fn create_document(
+        &self,
+        principal: &CreationPrincipal,
+        document: NewDocument,
+        job_id: Option<String>,
+    ) -> Result<CreateDocumentResponseData, DocumentError> {
+        <Self as DocumentService>::create_document(self, principal, document, job_id).await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn initialize_canvas(&self, document_id: &str) -> Result<(), DocumentError> {
+        let result = async {
+            self.sync_service_client
+                .initialize_canvas(document_id)
+                .await
+                .map_err(DocumentError::Internal)?;
+            self.repo
+                .set_document_content(
+                    document_id,
+                    DocumentContent::ready(DocumentContentLocation::SyncService),
+                )
+                .await
+                .map_err(|error| DocumentError::Internal(error.into()))
+        }
+        .await;
+        if result.is_err()
+            && let Err(error) = self.sync_service_client.delete_document(document_id).await
+        {
+            tracing::error!(
+                ?error,
+                document_id,
+                "failed to clean up Canvas initialization"
+            );
+        }
+        result
+    }
+
+    async fn handle_task_properties(
+        &self,
+        principal: &CreationPrincipal,
+        document_id: &str,
+        request: &CreateTaskRequest,
+    ) -> Result<(), DocumentError> {
+        <Self as DocumentService>::handle_task_properties(self, principal, document_id, request)
+            .await
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn mark_document_uploaded(&self, document_id: &str) -> Result<(), DocumentError> {
+        self.repo
+            .mark_document_uploaded(document_id)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))
+    }
+
+    #[tracing::instrument(err, skip(self, content))]
+    async fn set_document_content(
+        &self,
+        document_id: &str,
+        content: DocumentContent,
+    ) -> Result<(), DocumentError> {
+        self.repo
+            .set_document_content(document_id, content)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))
+    }
+
+    #[tracing::instrument(skip(self))]
+    async fn cleanup_created_document(&self, document_id: &str) {
+        self.cleanup_document(document_id).await;
+    }
+}
+
+impl<
+    R: DocumentRepo,
+    U: PresignedUploadUrlPort,
+    T: TaskPropertiesPort,
+    C: ConnectionService,
+    Eam: EntityAccessManagementService,
+    F: ForeignEntityService,
+    B: MacroEventBroker,
+    S: DocumentSyncPort,
+> DocumentService for DocumentServiceImpl<R, U, T, C, Eam, F, B, S>
+{
+    #[tracing::instrument(err, skip(self, team_receipt))]
+    async fn get_document_by_team_slug(
+        &self,
+        team_receipt: EntityAccessReceipt<MemberTeamRole>,
+        slug: &str,
+    ) -> Result<String, DocumentError> {
+        if team_receipt.entity().entity_type != EntityType::Team {
+            return Err(DocumentError::BadRequest(
+                "access receipt must be for a team".to_string(),
+            ));
+        }
+
+        let team_id = uuid::Uuid::parse_str(&team_receipt.entity().entity_id)
+            .map_err(|_| DocumentError::BadRequest("invalid team id".to_string()))?;
+        let task_num = team_task_number_from_slug(slug)?;
+        let document_id = self
+            .repo
+            .get_document_id_by_team_task_number(&team_id, task_num)
+            .await
+            .map_err(|error| DocumentError::Internal(error.into()))?
+            .ok_or_else(|| DocumentError::NotFound(slug.to_string()))?;
+        let document = self
+            .repo
+            .get_basic_document(&document_id)
+            .await
+            .map_err(|error| DocumentError::Internal(error.into()))?;
+
+        let is_owner = matches!(
+            team_receipt.auth(),
+            EntityAccessAuth::Authenticated(user_id) if document.owner.is_user(user_id)
+        );
+        if document.deleted_at.is_some() && !is_owner {
+            return Err(DocumentError::Unauthorized);
+        }
+
+        Ok(document_id)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_document(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<GetDocumentResponseData, DocumentError> {
+        let document_id = entity_access_receipt.entity().entity_id.clone();
+        // get access level
+        // check if >= view
+        // do work
+        let document_metadata = self
+            .repo
+            .get_document_metadata(&document_id)
+            .await
+            .map_err(|e| {
+                let err: anyhow::Error = e.into();
+                if err.to_string().contains(
+                    "no rows returned by a query that expected to return at least one row",
+                ) {
+                    DocumentError::NotFound(document_id.clone())
+                } else {
+                    DocumentError::Internal(err)
+                }
+            })?;
+
+        let view_location = match entity_access_receipt.auth() {
+            EntityAccessAuth::Authenticated(user_id) => self
+                .repo
+                .get_user_view_location(user_id.as_ref(), &document_id)
+                .await
+                .map_err(|e| DocumentError::Internal(e.into()))?,
+            EntityAccessAuth::Bot(_)
+            | EntityAccessAuth::Unauthenticated
+            | EntityAccessAuth::Internal => None,
+        };
+
+        let access_level = match entity_access_receipt.entity_permission() {
+            entity_access::domain::models::EntityPermission::AccessLevel { access_level } => {
+                access_level
+            }
+            _ => unreachable!(),
+        };
+
+        let file_type = document_metadata
+            .file_type
+            .as_deref()
+            .and_then(|file_type| FileType::from_str(file_type).ok());
+        let content = self.content_for_document(&document_id, file_type).await?;
+        let team_task_metadata = self.team_task_metadata_for_document(&document_id).await?;
+
+        Ok(GetDocumentResponseData {
+            document_metadata: DocumentMetadataWithContent::new(document_metadata, content)
+                .with_team_task_metadata(team_task_metadata),
+            user_access_level: *access_level,
+            view_location,
+        })
+    }
+
+    #[tracing::instrument(err, skip(self, document_context))]
+    async fn get_document_location(
+        &self,
+        document_context: &DocumentBasic,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+        params: LocationQueryParams,
+    ) -> Result<LocationResponseV3, DocumentError> {
+        let file_type = document_context
+            .file_type
+            .as_deref()
+            .and_then(|f| FileType::from_str(f).ok());
+
+        let document_id = entity_access_receipt.entity().entity_id.clone();
+        let content = self.content_for_document(&document_id, file_type).await?;
+
+        if file_type == Some(FileType::Canvas)
+            && content.location == Some(DocumentContentLocation::SyncService)
+        {
+            return Ok(LocationResponseV3::SyncServiceContent {
+                metadata: document_context.clone(),
+                content,
+            });
+        }
+
+        if matches!(file_type, Some(FileType::Md | FileType::Spreadsheet))
+            && let Some(response) = self
+                .resolve_markdown_sync_service_location(
+                    document_context,
+                    &document_id,
+                    content.clone(),
+                )
+                .await?
+        {
+            return Ok(response);
+        }
+
+        let get_converted_docx_url = params.get_converted_docx_url.unwrap_or(false);
+        let response_data = self
+            .get_presigned_url_by_type(
+                &document_context.owner,
+                &document_id,
+                file_type,
+                params.document_version_id,
+                get_converted_docx_url,
+            )
+            .await
+            .map(|response| match response {
+                LocationResponseData::PresignedUrl(url) => {
+                    let content = presigned_location_content(
+                        content.state,
+                        file_type,
+                        get_converted_docx_url,
+                    );
+                    LocationResponseV3::PresignedUrl {
+                        presigned_url: url,
+                        metadata: document_context.clone(),
+                        content,
+                    }
+                }
+                LocationResponseData::PresignedUrls(urls) => {
+                    let content =
+                        content_at_location(content.state, DocumentContentLocation::DocxBomParts);
+                    LocationResponseV3::PresignedUrls {
+                        presigned_urls: urls,
+                        metadata: document_context.clone(),
+                        content,
+                    }
+                }
+            })
+            .map_err(|e| {
+                if e.to_string() == "document does not exist in s3" {
+                    DocumentError::Gone
+                } else {
+                    DocumentError::Internal(e)
+                }
+            })?;
+
+        Ok(response_data)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn delete_document(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
+        project_id: Option<String>,
+    ) -> Result<(), DocumentError> {
+        let document_id = entity_access_receipt.entity().entity_id.clone();
+        let metadata = self
+            .repo
+            .get_document_metadata(&document_id)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))?;
+        if metadata.sub_type == Some(DocumentSubType::InitiativeDescription) {
+            return Err(DocumentError::BadRequest(
+                "initiative description documents cannot be deleted".to_string(),
+            ));
+        }
+
+        self.repo
+            .soft_delete_document(&document_id)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))?;
+
+        if let Some(project_id) = &project_id
+            && !project_id.is_empty()
+        {
+            let _ = self.repo.update_project_modified(project_id).await.inspect_err(
+                |e| tracing::error!(error=?e, project_id=?project_id, "unable to update project modified date"),
+            );
+        }
+
+        let _ = self
+            .connection_service
+            .send_invalidation_event(InvalidationEvent::<()> {
+                invalidation_reason: InvalidationReason::Deleted,
+                entity_id: Cow::Borrowed(&entity_access_receipt.entity().entity_id),
+                entity_type: entity_access_receipt.entity().entity_type,
+                invalidated_by: entity_access_receipt.auth().clone(),
+                metadata: None,
+            })
+            .await
+            .inspect_err(|e| {
+                tracing::error!(error=?e, "failed to send invalidation event");
+            });
+
+        let PublishedDocumentActors {
+            actor,
+            on_behalf_of,
+            actor_user_id,
+        } = published_document_actors(entity_access_receipt.auth());
+        self.publish_document_event(&DocumentMacroEvent::deleted(
+            entity_access_receipt.entity().entity_id.clone(),
+            DocumentDeletedMetadata {
+                document_id: entity_access_receipt.entity().entity_id.clone(),
+                sub_type: metadata.sub_type,
+                actor_user_id,
+                actor,
+                on_behalf_of,
+                project_id,
+            },
+        ));
+
+        Ok(())
+    }
+
+    async fn internal_get_basic_document(
+        &self,
+        document_id: &str,
+    ) -> Result<DocumentBasic, DocumentError> {
+        self.repo
+            .get_basic_document(document_id)
+            .await
+            .map_err(|error| map_basic_document_error(document_id, error.into()))
+    }
+
+    async fn internal_get_user_display_name(
+        &self,
+        user_id: &str,
+    ) -> Result<Option<String>, DocumentError> {
+        let (first, last) = self
+            .repo
+            .get_user_name(user_id)
+            .await
+            .map_err(|error| DocumentError::Internal(error.into()))?;
+        let name = [first, last]
+            .into_iter()
+            .flatten()
+            .map(|part| part.trim().to_owned())
+            .filter(|part| !part.is_empty())
+            .collect::<Vec<_>>()
+            .join(" ");
+        Ok((!name.is_empty()).then_some(name))
+    }
+
+    async fn get_document_text(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<String, DocumentError> {
+        self.repo
+            .get_document_text(&entity_access_receipt.entity().entity_id)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_project_name(&self, project_id: &str) -> Result<String, DocumentError> {
+        self.repo
+            .get_project_name(project_id)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_project_children(
+        &self,
+        project_id: &str,
+    ) -> Result<Vec<entity_kind::Entity<'static>>, DocumentError> {
+        self.repo
+            .get_project_children(project_id)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))
+    }
+
+    async fn get_short_id(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<String, DocumentError> {
+        short_id_for_entity_id(&entity_access_receipt.entity().entity_id)
+    }
+
+    async fn get_task_branch_name(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+        document_name: String,
+    ) -> Result<TaskBranchName, DocumentError> {
+        let document_id = &entity_access_receipt.entity().entity_id;
+        let short_id = short_id_for_entity_id(document_id)?;
+        let (user_prefix, team_slug, team_task_id) = match entity_access_receipt.auth() {
+            EntityAccessAuth::Authenticated(user_id) => {
+                let context = self
+                    .repo
+                    .get_branch_name_context(document_id, user_id.as_ref())
+                    .await
+                    .map_err(|e| DocumentError::Internal(e.into()))?;
+                (
+                    user_branch_prefix(context.github_username.as_deref(), &context.user_email),
+                    context.team_slug,
+                    context.team_task_id,
+                )
+            }
+            EntityAccessAuth::Bot(_)
+            | EntityAccessAuth::Unauthenticated
+            | EntityAccessAuth::Internal => ("macro".to_string(), None, None),
+        };
+
+        let branch_name = build_task_branch_name(
+            &user_prefix,
+            team_slug.as_deref(),
+            team_task_id,
+            &short_id,
+            &document_name,
+        );
+
+        Ok(TaskBranchName {
+            short_id,
+            branch_name,
+        })
+    }
+
+    #[tracing::instrument(err, skip(self, document_context))]
+    async fn get_task_identity(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+        document_context: &DocumentBasic,
+    ) -> Result<TaskIdentity, DocumentError> {
+        if document_context.sub_type != Some(DocumentSubType::Task) {
+            return Err(DocumentError::BadRequest(
+                "document is not a task".to_string(),
+            ));
+        }
+        let document_id = &entity_access_receipt.entity().entity_id;
+        if document_context.deleted_at.is_some() {
+            return Err(DocumentError::NotFound(document_id.clone()));
+        }
+        let team_task = self
+            .repo
+            .get_team_task_number(document_id)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))?;
+        Ok(TaskIdentity {
+            document_id: document_id.clone(),
+            title: document_context.document_name.clone(),
+            short_id: short_id_for_entity_id(document_id)?,
+            team_task,
+        })
+    }
+
+    #[tracing::instrument(err, skip(self, document_context))]
+    async fn get_task_github_pull_requests(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+        document_context: &DocumentBasic,
+    ) -> Result<GithubPullRequestsResponse, DocumentError> {
+        if document_context.sub_type != Some(DocumentSubType::Task) {
+            return Err(DocumentError::BadRequest(
+                "document is not a task".to_string(),
+            ));
+        }
+
+        let document_id = &entity_access_receipt.entity().entity_id;
+        let short_id = short_id_for_entity_id(document_id)?;
+        let github_keys = self
+            .repo
+            .get_task_github_pull_request_keys(&short_id)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))?;
+        let mut response = GithubPullRequestsResponse::from_github_keys(github_keys);
+
+        if response.pull_requests.is_empty() {
+            return Ok(response);
+        }
+
+        let source_ids = match entity_access_receipt.auth() {
+            EntityAccessAuth::Authenticated(user_id) => {
+                let user_id = user_id.as_ref().to_string();
+                let team_ids = self
+                    .repo
+                    .get_team_ids_for_user(&user_id)
+                    .await
+                    .map_err(|e| DocumentError::Internal(e.into()))?;
+                let mut source_ids = Vec::with_capacity(team_ids.len() + 1);
+                source_ids.push(SourceId::user(user_id));
+                source_ids.extend(team_ids.into_iter().map(SourceId::team));
+                Some(source_ids)
+            }
+            EntityAccessAuth::Bot(_) => Some(Vec::new()),
+            EntityAccessAuth::Unauthenticated => Some(Vec::new()),
+            EntityAccessAuth::Internal => None,
+        };
+
+        for pull_request in &mut response.pull_requests {
+            let foreign_entities = self
+                .foreign_entity_service
+                .get_foreign_entities_by_foreign_entity_id(
+                    &pull_request.github_key,
+                    Some(GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE),
+                )
+                .await
+                .map_err(|error| DocumentError::Internal(error.into()))?;
+
+            if let Some(foreign_entity) =
+                first_visible_foreign_entity(&foreign_entities, source_ids.as_deref())
+            {
+                hydrate_github_pull_request_from_foreign_entity(pull_request, foreign_entity);
+            }
+        }
+
+        Ok(response)
+    }
+
+    #[tracing::instrument(err, skip(self, github_keys), fields(github_keys = github_keys.len()))]
+    async fn get_github_pull_request_tasks(
+        &self,
+        user_id: &str,
+        github_keys: Vec<String>,
+    ) -> Result<GithubPullRequestTasksResponse, DocumentError> {
+        if github_keys.len() > MAX_GITHUB_PULL_REQUEST_TASK_LOOKUP {
+            return Err(DocumentError::BadRequest(format!(
+                "at most {MAX_GITHUB_PULL_REQUEST_TASK_LOOKUP} pull requests per lookup"
+            )));
+        }
+        let mut response = GithubPullRequestTasksResponse {
+            pull_requests: github_keys
+                .into_iter()
+                .map(|github_key| GithubPullRequestTasks {
+                    github_key,
+                    task_ids: Vec::new(),
+                })
+                .collect(),
+        };
+        let mut keys: Vec<String> = response
+            .pull_requests
+            .iter()
+            .map(|pull_request| pull_request.github_key.clone())
+            .collect();
+        keys.sort();
+        keys.dedup();
+        if keys.is_empty() {
+            return Ok(response);
+        }
+
+        let links = self
+            .repo
+            .get_github_pull_request_task_links(&keys)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))?;
+        if links.is_empty() {
+            return Ok(response);
+        }
+
+        let converter = macro_uuid::ShortUuidConverter::default();
+        let mut task_ids_by_key = std::collections::HashMap::<String, Vec<String>>::new();
+        for (github_key, task_short_id) in links {
+            match converter.to_uuid(&task_short_id) {
+                Ok(task_id) => task_ids_by_key
+                    .entry(github_key)
+                    .or_default()
+                    .push(task_id.to_string()),
+                Err(error) => tracing::warn!(
+                    error = ?error,
+                    github_key = %github_key,
+                    "skipping malformed task id linked to a GitHub pull request"
+                ),
+            }
+        }
+
+        // Task ids come from the pull request's own text, so they are visible to whoever can
+        // see the pull request; Soup still checks access to each task.
+        let team_ids = self
+            .repo
+            .get_team_ids_for_user(user_id)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))?;
+        let mut source_ids = Vec::with_capacity(team_ids.len() + 1);
+        source_ids.push(SourceId::user(user_id.to_string()));
+        source_ids.extend(team_ids.into_iter().map(SourceId::team));
+
+        let mut visible_keys = std::collections::HashSet::new();
+        for github_key in task_ids_by_key.keys() {
+            let foreign_entities = self
+                .foreign_entity_service
+                .get_foreign_entities_by_foreign_entity_id(
+                    github_key,
+                    Some(GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE),
+                )
+                .await
+                .map_err(|error| DocumentError::Internal(error.into()))?;
+            if first_visible_foreign_entity(&foreign_entities, Some(&source_ids)).is_some() {
+                visible_keys.insert(github_key.clone());
+            }
+        }
+
+        for pull_request in &mut response.pull_requests {
+            if visible_keys.contains(&pull_request.github_key)
+                && let Some(task_ids) = task_ids_by_key.get(&pull_request.github_key)
+            {
+                pull_request.task_ids = task_ids.clone();
+            }
+        }
+        Ok(response)
+    }
+
+    #[tracing::instrument(err, skip(self, document_context))]
+    async fn get_document_content(
+        &self,
+        document_context: &DocumentBasic,
+    ) -> Result<DocumentContent, DocumentError> {
+        self.content_for_document(
+            &document_context.document_id,
+            document_context.try_file_type(),
+        )
+        .await
+    }
+
+    #[tracing::instrument(err, skip(self, document))]
+    async fn create_document(
+        &self,
+        principal: &CreationPrincipal,
+        mut document: NewDocument,
+        job_id: Option<String>,
+    ) -> Result<CreateDocumentResponseData, DocumentError> {
+        validate_spreadsheet_creation(document.file_type, &document.sha)?;
+        if document.document_name.graphemes(true).count() > MAX_DOCUMENT_NAME_GRAPHEMES {
+            return Err(DocumentError::NameTooLong {
+                max: MAX_DOCUMENT_NAME_GRAPHEMES,
+            });
+        }
+
+        if document.sub_type == Some(DocumentSubType::InitiativeDescription)
+            && matches!(document.initial_link_share, InitialLinkShare::EntityDefault)
+        {
+            return Err(DocumentError::BadRequest(
+                "initiative descriptions must set an exact initial link share".to_string(),
+            ));
+        }
+        if let CreationPrincipal::TeamBot { team, .. } = principal
+            && document.sub_type == Some(DocumentSubType::Task)
+        {
+            if document.team_id.is_some_and(|requested| requested != *team) {
+                return Err(DocumentError::BadRequest(
+                    "task team does not match the creating bot's team".to_string(),
+                ));
+            }
+            document.team_id = Some(*team);
+        }
+        self.refuse_existing_session(document.id).await?;
+
+        let owner = principal.owner();
+        let file_type = document.file_type;
+        let project_id = document.project_id;
+        let dates = DocumentDates::of(&document);
+        let sha = document.sha.clone();
+
+        let share_permission = match document.initial_link_share {
+            InitialLinkShare::EntityDefault => {
+                let owner_team = self
+                    .repo
+                    .get_owner_team(&owner)
+                    .await
+                    .map_err(|e| DocumentError::Internal(e.into()))?;
+                SharePermissionV2::new_document_share_permission(
+                    file_type,
+                    owner_team.map(|team| team.default_link_share),
+                )
+            }
+            InitialLinkShare::Exact(state) => SharePermissionV2::from_link_share_state(state),
+        };
+
+        let document_metadata = self
+            .repo
+            .create_document(CreateDocumentRepoArgs { owner, document }, share_permission)
+            .await?;
+
+        self.finish_created_document(
+            document_metadata,
+            file_type,
+            project_id,
+            dates,
+            sha,
+            Attribution::from(principal),
+            job_id,
+        )
+        .await
+    }
+
+    #[tracing::instrument(skip(self, args))]
+    async fn import_email_attachment(
+        &self,
+        args: ImportEmailAttachmentRepoArgs,
+    ) -> Result<CreateDocumentResponseData, DocumentError> {
+        // A deleted attachment is an expected outcome, not a failure.
+        self.import_email_attachment_unlogged(args)
+            .await
+            .inspect_err(|error| {
+                if !matches!(error, DocumentError::EmailAttachmentNotFound) {
+                    tracing::error!(error = ?error, "email attachment import failed");
+                }
+            })
+    }
+
+    #[tracing::instrument(err, skip(self, document_context, args))]
+    async fn edit_document(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<EditAccessLevel>,
+        document_context: DocumentBasic,
+        args: EditDocumentServiceArgs,
+    ) -> Result<(), DocumentError> {
+        if let Some(name) = args.document_name.as_ref()
+            && name.graphemes(true).count() > MAX_DOCUMENT_NAME_GRAPHEMES
+        {
+            return Err(DocumentError::NameTooLong {
+                max: MAX_DOCUMENT_NAME_GRAPHEMES,
+            });
+        }
+
+        let team_share = self
+            .authorize_document_team_share(
+                &entity_access_receipt,
+                TeamShareRequest {
+                    access_level: args
+                        .share_permission
+                        .as_ref()
+                        .and_then(|p| p.team_share_access_level),
+                    legacy_enabled: None,
+                },
+            )
+            .await?;
+
+        // Team sharing was authorized against the persisted owner above. Project moves and
+        // the remaining permission fields keep requiring effective Owner access.
+        if let entity_access::domain::models::EntityPermission::AccessLevel { access_level } =
+            entity_access_receipt.entity_permission()
+        {
+            if args.project_id.is_some()
+                && *access_level
+                    != permissions_types::share_permission::access_level::AccessLevel::Owner
+            {
+                return Err(DocumentError::Unauthorized);
+            }
+
+            let requires_legacy_owner_access = args.share_permission.as_ref().is_some_and(|p| {
+                p.team_share_access_level.is_none()
+                    || p.link_share.is_some()
+                    || p.link_share_access_level.is_some()
+                    || p.channel_share_permissions.is_some()
+            });
+            if requires_legacy_owner_access
+                && *access_level
+                    != permissions_types::share_permission::access_level::AccessLevel::Owner
+            {
+                return Err(DocumentError::Unauthorized);
+            }
+        }
+
+        if let Some(file_type_update) = &args.file_type {
+            let current_file_type = document_context
+                .file_type
+                .as_ref()
+                .and_then(|ft| FileType::from_str(ft).ok())
+                .ok_or_else(|| {
+                    DocumentError::BadRequest(
+                        "cannot change file type of a document with no file type".to_string(),
+                    )
+                })?;
+
+            let current_association = current_file_type.macro_app_path();
+
+            if !matches!(current_association, FileAssociation::Code(_)) {
+                return Err(DocumentError::BadRequest(
+                    "file type changes are only supported for code files".to_string(),
+                ));
+            }
+
+            if let FileTypeUpdate::Set(new_file_type) = file_type_update {
+                let new_association = new_file_type.macro_app_path();
+                if std::mem::discriminant(&current_association)
+                    != std::mem::discriminant(&new_association)
+                {
+                    return Err(DocumentError::BadRequest(
+                        "cannot change file type to a different association".to_string(),
+                    ));
+                }
+            }
+        }
+
+        // Clean the document name (remove file extension if present)
+        let document_name = args
+            .document_name
+            .map(|s| FileType::clean_document_name(&s).unwrap_or(s));
+
+        let share_permission_updated = args.share_permission.is_some();
+        let revoke_non_owner_user_access =
+            should_revoke_non_owner_user_access(args.share_permission.as_ref());
+
+        self.repo
+            .edit_document(EditDocumentRepoArgs {
+                document_id: entity_access_receipt.entity().entity_id.clone(),
+                document_name: document_name.clone(),
+                project_id: args.project_id.clone(),
+                share_permission: args.share_permission,
+                team_share,
+                revoke_non_owner_user_access,
+                file_type: args.file_type.clone(),
+            })
+            .await?;
+
+        // Update project modified timestamps. args.project_id of None means "no change",
+        // so only move the document out of its old project when a different project (or
+        // "" for no project) was explicitly requested.
+        if let Some(new_project_id) = &args.project_id
+            && let Some(old_project_id) = &document_context.project_id
+            && new_project_id != old_project_id
+            && !old_project_id.is_empty()
+        {
+            let old_project_id = uuid::Uuid::parse_str(old_project_id).unwrap();
+            let document_uuid = uuid::Uuid::parse_str(&document_context.document_id).unwrap();
+            let _ = self
+                .entity_access_management_service
+                .remove_entity_from_project(&document_uuid, EntityType::Document, &old_project_id)
+                .await.inspect_err(|e| tracing::error!(error=?e, project_id=?old_project_id, "unable to update entity access for project"));
+            let _ = self.repo.update_project_modified(&old_project_id.to_string()).await.inspect_err(
+                |e| tracing::error!(error=?e, project_id=?old_project_id, "unable to update project modified date"),
+            );
+        }
+        if let Some(project_id) = &args.project_id
+            && !project_id.is_empty()
+        {
+            let project_id = uuid::Uuid::parse_str(project_id).unwrap();
+            let document_uuid = uuid::Uuid::parse_str(&document_context.document_id).unwrap();
+            let _ = self
+                .entity_access_management_service
+                .add_entity_to_project(&document_uuid, EntityType::Document, &project_id)
+                .await.inspect_err(|e| tracing::error!(error=?e, project_id=?project_id, "unable to update entity access for project"));
+            let _ = self.repo.update_project_modified(&project_id.to_string()).await.inspect_err(
+                |e| tracing::error!(error=?e, project_id=?project_id, "unable to update project modified date"),
+            );
+        }
+
+        // Send invalidation event
+        let _ = self
+            .connection_service
+            .send_invalidation_event(InvalidationEvent::<()> {
+                invalidation_reason: InvalidationReason::Content,
+                entity_id: Cow::Borrowed(&entity_access_receipt.entity().entity_id),
+                entity_type: entity_access_receipt.entity().entity_type,
+                invalidated_by: entity_access_receipt.auth().clone(),
+                metadata: None,
+            })
+            .await
+            .inspect_err(|e| {
+                tracing::error!(error=?e, "failed to send invalidation event");
+            });
+
+        let PublishedDocumentActors {
+            actor,
+            on_behalf_of,
+            actor_user_id,
+        } = published_document_actors(entity_access_receipt.auth());
+        self.publish_document_event(&DocumentMacroEvent::updated(
+            entity_access_receipt.entity().entity_id.clone(),
+            DocumentUpdatedMetadata {
+                document_id: entity_access_receipt.entity().entity_id.clone(),
+                owner: document_context.owner.clone(),
+                actor_user_id,
+                actor,
+                on_behalf_of,
+                document_name,
+                previous_project_id: document_context.project_id.clone(),
+                project_id: args.project_id,
+                file_type: args.file_type,
+                share_permission_updated,
+            },
+        ));
+
+        Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self, document_context, document_name))]
+    async fn copy_document(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+        document_context: DocumentBasic,
+        principal: &CreationPrincipal,
+        document_name: String,
+        query_version_id: Option<i64>,
+        sync_version_id: Option<shared_types::sync_service::SyncServiceVersionID>,
+    ) -> Result<DocumentResponse, DocumentError> {
+        use shared_types::document::response::DocumentResponseMetadata;
+
+        if document_name.graphemes(true).count() > MAX_DOCUMENT_NAME_GRAPHEMES {
+            return Err(DocumentError::NameTooLong {
+                max: MAX_DOCUMENT_NAME_GRAPHEMES,
+            });
+        }
+
+        if document_context.deleted_at.is_some() {
+            return Err(DocumentError::BadRequest(
+                "cannot copy deleted document".to_string(),
+            ));
+        }
+
+        let document_id = &entity_access_receipt.entity().entity_id;
+
+        // Get full document metadata (at specific version or latest)
+        let mut original_metadata = if let Some(version_id) = query_version_id {
+            self.repo
+                .get_document_metadata_at_version(document_id, version_id)
+                .await
+                .map_err(|e| DocumentError::Internal(e.into()))?
+        } else {
+            self.repo
+                .get_document_metadata(document_id)
+                .await
+                .map_err(|e| DocumentError::Internal(e.into()))?
+        };
+
+        let owner = principal.owner();
+
+        if let Some(project_id) = &original_metadata.project_id {
+            match self.repo.get_project_owner(project_id).await {
+                Ok(project_owner) => {
+                    if !owner.is_user(&project_owner) {
+                        original_metadata.project_id = None;
+                        original_metadata.project_name = None;
+                    }
+                }
+                Err(e) => {
+                    tracing::error!(error=?e, "unable to get project owner");
+                    return Err(DocumentError::Internal(e.into()));
+                }
+            }
+        }
+
+        let file_type: Option<FileType> = document_context
+            .file_type
+            .as_deref()
+            .and_then(|f| FileType::from_str(f).ok());
+
+        let native_canvas = if file_type == Some(FileType::Canvas) {
+            self.repo
+                .get_persisted_document_content(&original_metadata.document_id)
+                .await
+                .map_err(|error| DocumentError::Internal(error.into()))?
+                .is_some_and(|content| {
+                    content.location == Some(DocumentContentLocation::SyncService)
+                })
+        } else {
+            false
+        };
+
+        // Validate DOCX has BOM
+        if file_type == Some(FileType::Docx) && original_metadata.document_bom.is_none() {
+            return Err(DocumentError::Internal(anyhow!("document bom is missing")));
+        }
+
+        // Clean the document name
+        let document_name = FileType::clean_document_name(&document_name).unwrap_or(document_name);
+
+        let owner_team = self
+            .repo
+            .get_owner_team(&owner)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))?;
+        let copy_team_id = owner_team
+            .filter(|_| original_metadata.sub_type == Some(DocumentSubType::Task))
+            .map(|team| team.team_id);
+        let share_permission = SharePermissionV2::new_document_share_permission(
+            file_type,
+            owner_team.map(|team| team.default_link_share),
+        );
+
+        // Create the copy in the database
+        let new_metadata = self
+            .repo
+            .copy_document(
+                CopyDocumentRepoArgs {
+                    original_document: original_metadata.clone(),
+                    owner,
+                    document_name,
+                    file_type,
+                    team_id: copy_team_id,
+                },
+                share_permission,
+            )
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))?;
+
+        let new_document_id = new_metadata.document_id.clone();
+        let new_owner = &new_metadata.owner;
+        let mut canvas_seed_key = None;
+        let mut canvas_room = false;
+
+        // File-type-specific S3 operations
+        let copy_result = match file_type {
+            Some(FileType::Docx) => {
+                // Copy the converted PDF version
+                let source_key = build_docx_to_pdf_converted_document_key(
+                    &original_metadata.owner,
+                    &original_metadata.document_id,
+                );
+                let dest_key =
+                    build_docx_to_pdf_converted_document_key(new_owner, &new_document_id);
+                self.upload_url_service
+                    .copy_object(&source_key, &dest_key)
+                    .await
+            }
+            Some(FileType::Canvas) if native_canvas => {
+                canvas_room = true;
+                self.sync_service_client
+                    .copy_document(
+                        &original_metadata.document_id,
+                        &new_document_id,
+                        sync_version_id,
+                    )
+                    .await
+            }
+            Some(FileType::Md | FileType::Spreadsheet) => {
+                // Copy via sync service
+                if let Err(e) = self
+                    .sync_service_client
+                    .copy_document(
+                        &original_metadata.document_id,
+                        &new_document_id,
+                        sync_version_id,
+                    )
+                    .await
+                {
+                    tracing::error!(error=?e, "unable to copy document through sync service");
+                    self.cleanup_document(&new_document_id).await;
+                    return Err(DocumentError::Internal(e));
+                }
+
+                // Legacy markdown has a best-effort S3 representation. Native
+                // spreadsheets are entirely stored in the collaborative room.
+                if file_type == Some(FileType::Md) {
+                    let source_version_id = self
+                        .repo
+                        .get_latest_document_version_id(&original_metadata.document_id)
+                        .await
+                        .map_err(|e| DocumentError::Internal(e.into()))?
+                        .0;
+
+                    let source_key = build_cloud_storage_bucket_document_key(
+                        &original_metadata.owner,
+                        &original_metadata.document_id,
+                        source_version_id,
+                    );
+                    let dest_key = build_cloud_storage_bucket_document_key(
+                        new_owner,
+                        &new_document_id,
+                        new_metadata.document_version_id,
+                    );
+                    // Best effort S3 copy for live collab
+                    let _ = self
+                        .upload_url_service
+                        .copy_object(&source_key, &dest_key)
+                        .await
+                        .inspect_err(|e| {
+                            tracing::error!(error=?e, "unable to copy live collab document");
+                        });
+                }
+                Ok(())
+            }
+            _ => {
+                // Copy PDF parts if applicable
+                if file_type == Some(FileType::Pdf)
+                    && let Err(e) = self
+                        .repo
+                        .copy_pdf_parts(&new_document_id, &original_metadata.document_id)
+                        .await
+                {
+                    tracing::error!(error=?e, "unable to copy pdf parts");
+                    self.cleanup_document(&new_document_id).await;
+                    return Err(DocumentError::Internal(e.into()));
+                }
+
+                // Get source version id
+                let source_version_id = if file_type.is_none_or(|f| f.is_static()) {
+                    self.repo
+                        .get_document_version_id(&original_metadata.document_id)
+                        .await
+                        .map_err(|e| DocumentError::Internal(e.into()))?
+                        .0
+                } else {
+                    self.repo
+                        .get_latest_document_version_id(&original_metadata.document_id)
+                        .await
+                        .map_err(|e| DocumentError::Internal(e.into()))?
+                        .0
+                };
+
+                let source_key = build_cloud_storage_bucket_document_key(
+                    &original_metadata.owner,
+                    &original_metadata.document_id,
+                    source_version_id,
+                );
+                let dest_key = build_cloud_storage_bucket_document_key(
+                    new_owner,
+                    &new_document_id,
+                    new_metadata.document_version_id,
+                );
+                if file_type == Some(FileType::Canvas) {
+                    canvas_seed_key = Some(dest_key.clone());
+                }
+                let copied = self
+                    .upload_url_service
+                    .copy_object(&source_key, &dest_key)
+                    .await;
+                if copied.is_err() || file_type != Some(FileType::Canvas) {
+                    copied
+                } else {
+                    // Canvas keeps its original JSON as a migration seed, while
+                    // edits live in sync-service. A copy needs both representations.
+                    match self
+                        .sync_service_client
+                        .exists(&original_metadata.document_id)
+                        .await
+                    {
+                        Ok(true) => {
+                            // A failed response can follow a committed room copy.
+                            // Compensate the attempted destination in either case.
+                            canvas_room = true;
+                            self.sync_service_client
+                                .copy_document(
+                                    &original_metadata.document_id,
+                                    &new_document_id,
+                                    sync_version_id,
+                                )
+                                .await
+                        }
+                        Ok(false) => Ok(()),
+                        Err(error) => Err(error),
+                    }
+                }
+            }
+        };
+
+        if let Err(e) = copy_result {
+            tracing::error!(error=?e, "unable to copy document files");
+            self.cleanup_canvas_copy(&new_document_id, canvas_seed_key.as_deref(), canvas_room)
+                .await;
+            return Err(DocumentError::Internal(e));
+        }
+
+        // Copy task properties if the original document is a task
+        if original_metadata.sub_type == Some(document_sub_type::DocumentSubType::Task)
+            && let Err(e) = self
+                .task_properties_service
+                .copy_task_properties(&original_metadata.document_id, &new_document_id)
+                .await
+        {
+            tracing::error!(error=?e, document_id=?new_document_id, "failed to copy task properties");
+            self.cleanup_canvas_copy(&new_document_id, canvas_seed_key.as_deref(), canvas_room)
+                .await;
+            return Err(DocumentError::Internal(e));
+        }
+
+        let content = if native_canvas {
+            DocumentContent::ready(DocumentContentLocation::SyncService)
+        } else {
+            ready_content_for_file_type(file_type)
+        };
+        if let Err(e) = self
+            .repo
+            .set_document_content(&new_document_id, content.clone())
+            .await
+        {
+            tracing::error!(error=?e, document_id=?new_document_id, "failed to mark copied document content ready");
+            self.cleanup_canvas_copy(&new_document_id, canvas_seed_key.as_deref(), canvas_room)
+                .await;
+            return Err(DocumentError::Internal(e.into()));
+        }
+
+        if let Some(project_id) = &new_metadata.project_id {
+            let _ = self.repo.update_project_modified(project_id).await.inspect_err(
+                |e| tracing::error!(error=?e, project_id=?project_id, "unable to update project modified date"),
+            );
+        }
+
+        let response: Result<_, DocumentError> = async {
+            let metadata = DocumentResponseMetadata::from_document_metadata(&new_metadata)
+                .map_err(|e| {
+                    tracing::error!(error=?e, "unable to convert document metadata");
+                    DocumentError::Internal(anyhow!("unable to convert document metadata"))
+                })?;
+            let team = self
+                .team_task_metadata_for_document(&new_document_id)
+                .await?;
+            Ok((metadata, team))
+        }
+        .await;
+        let (document_response_metadata, team_task_metadata) = match response {
+            Ok(response) => response,
+            Err(error) => {
+                if file_type == Some(FileType::Canvas) {
+                    self.cleanup_canvas_copy(
+                        &new_document_id,
+                        canvas_seed_key.as_deref(),
+                        canvas_room,
+                    )
+                    .await;
+                }
+                return Err(error);
+            }
+        };
+        let attribution = Attribution::from(principal);
+
+        self.publish_document_event(&DocumentMacroEvent::copied(
+            new_document_id.clone(),
+            DocumentCopiedMetadata {
+                document_id: new_document_id.clone(),
+                source_document_id: original_metadata.document_id.clone(),
+                source_version_id: query_version_id,
+                owner: new_owner.clone(),
+                actor: Some(attribution.actor()),
+                on_behalf_of: attribution.on_behalf_of(),
+                document_name: new_metadata.document_name.clone(),
+                file_type,
+                project_id: new_metadata.project_id.clone(),
+                sub_type: new_metadata.sub_type,
+            },
+        ));
+
+        Ok(DocumentResponse {
+            document_metadata: DocumentResponseMetadataWithContent::new(
+                document_response_metadata,
+                content,
+            )
+            .with_team_task_metadata(team_task_metadata),
+            presigned_url: None,
+        })
+    }
+
+    #[tracing::instrument(
+        skip(self, entity_access_receipt, credited_user, source),
+        fields(
+            task_id = %entity_access_receipt.entity().entity_id,
+            credit_requested = credited_user.is_some(),
+            has_source = source.is_some()
+        ),
+        err
+    )]
+    async fn update_task_status(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<entity_access::domain::models::EditAccessLevel>,
+        credited_user: Option<MacroUserIdStr<'static>>,
+        source: Option<PropertyChangeSource>,
+        status: &str,
+    ) -> Result<(), DocumentError> {
+        self.task_properties_service
+            .update_task_status(
+                &entity_access_receipt,
+                credited_user.as_ref(),
+                source.as_ref(),
+                status,
+            )
+            .await
+            .map_err(DocumentError::Internal)?;
+
+        let _ = self
+            .connection_service
+            .send_invalidation_event(InvalidationEvent::<()> {
+                invalidation_reason: InvalidationReason::Metadata,
+                entity_id: Cow::Borrowed(&entity_access_receipt.entity().entity_id),
+                entity_type: entity_access_receipt.entity().entity_type,
+                invalidated_by: entity_access_receipt.auth().clone(),
+                metadata: None,
+            })
+            .await
+            .inspect_err(|e| {
+                tracing::error!(error=?e, "failed to send invalidation event");
+            });
+
+        Ok(())
+    }
+
+    async fn get_snapshot(&self, document_id: &str) -> anyhow::Result<Option<Vec<u8>>> {
+        self.upload_url_service.get_snapshot(document_id).await
+    }
+
+    async fn upload_snapshot(&self, document_id: &str, bytes: Vec<u8>) -> anyhow::Result<()> {
+        self.upload_url_service
+            .upload_snapshot(document_id, bytes)
+            .await?;
+        Ok(())
+    }
+
+    async fn record_interaction(
+        &self,
+        document_id: &str,
+        reason: InteractionReason,
+    ) -> anyhow::Result<()> {
+        if reason == InteractionReason::Edited {
+            self.repo
+                .update_document_modified(document_id)
+                .await
+                .map_err(Into::into)?;
+        }
+
+        self.publish_document_event(&DocumentMacroEvent::interaction(
+            document_id,
+            DocumentInteractionMetadata {
+                document_id: document_id.to_owned(),
+                reason,
+            },
+        ));
+        Ok(())
+    }
+
+    /// Assigns the task properties to a document
+    #[tracing::instrument(skip(self, request), err)]
+    async fn handle_task_properties(
+        &self,
+        principal: &CreationPrincipal,
+        document_id: &str,
+        request: &CreateTaskRequest,
+    ) -> Result<(), DocumentError> {
+        // Use provided properties or assign default ones for task
+        let properties = if let Some(properties) = request.property_values.as_ref() {
+            properties
+        } else {
+            &principal
+                .user()
+                .map(|user| PropertyInput {
+                    property_id: ASSIGNEES_PROPERTY_ID.to_string(),
+                    value: SetPropertyValue::MultiEntityReference {
+                        references: vec![EntityReference {
+                            entity_id: user.as_ref().to_string(),
+                            entity_type: properties_types::EntityType::User,
+                            specific_message_id: None,
+                        }],
+                    },
+                })
+                .into_iter()
+                .chain([PropertyInput {
+                    property_id: STATUS_PROPERTY_ID.to_string(),
+                    value: SetPropertyValue::SelectOption {
+                        option_id: NOT_STARTED_STATUS_OPTION_ID,
+                    },
+                }])
+                .collect::<Vec<_>>()
+        };
+
+        for property_input in properties {
+            let Ok(property_uuid) = uuid::Uuid::parse_str(&property_input.property_id) else {
+                tracing::warn!(property_id=?property_input.property_id, "invalid property_id UUID, skipping");
+                continue;
+            };
+
+            let _ = self
+                .task_properties_service
+                .set_entity_property(
+                    principal,
+                    document_id,
+                    property_uuid,
+                    Some(property_input.value.clone()),
+                )
+                .await
+                .inspect_err(|e| {
+                    tracing::warn!(
+                            error=?e,
+                            property_uuid=?property_uuid,
+                            "unable to set entity property")
+                });
+        }
+
+        Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self, entity_access_receipt))]
+    async fn get_team_share(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<DocumentTeamShareResponse, DocumentError> {
+        let document_id = &entity_access_receipt.entity().entity_id;
+
+        let state = self.repo.get_team_share(document_id).await?;
+
+        Ok(state.into())
+    }
+
+    #[tracing::instrument(err, skip(self, entity_access_receipt, description))]
+    async fn set_skill_description(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<EditAccessLevel>,
+        description: SkillDescription,
+    ) -> Result<(), DocumentError> {
+        let document_id = &entity_access_receipt.entity().entity_id;
+        let metadata = self
+            .repo
+            .get_document_metadata(document_id)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))?;
+        if metadata.sub_type != Some(DocumentSubType::Skill) {
+            return Err(DocumentError::BadRequest(
+                "only a skill has a description".to_string(),
+            ));
+        }
+        self.repo
+            .set_skill_description(document_id, &description)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))
+    }
+
+    #[tracing::instrument(err, skip(self, description))]
+    async fn describe_new_skill(
+        &self,
+        document_id: &str,
+        description: SkillDescription,
+    ) -> Result<(), DocumentError> {
+        self.repo
+            .set_skill_description(document_id, &description)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))
+    }
+
+    #[tracing::instrument(err, skip(self, document_ids), fields(skills = document_ids.len()))]
+    async fn skill_descriptions(
+        &self,
+        document_ids: &[String],
+    ) -> Result<std::collections::HashMap<String, SkillDescription>, DocumentError> {
+        self.repo
+            .get_skill_descriptions(document_ids)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))
+    }
+
+    #[tracing::instrument(err, skip(self, entity_access_receipt))]
+    async fn set_team_share(
+        &self,
+        entity_access_receipt: EntityAccessReceipt<EditAccessLevel>,
+        share: bool,
+    ) -> Result<DocumentTeamShareResponse, DocumentError> {
+        let document_id = entity_access_receipt.entity().entity_id.clone();
+
+        let command = self
+            .authorize_document_team_share(
+                &entity_access_receipt,
+                TeamShareRequest {
+                    access_level: None,
+                    legacy_enabled: Some(share),
+                },
+            )
+            .await?
+            .expect("a supplied legacy toggle produces a command");
+        let state = self.repo.set_team_share(command).await?;
+
+        let _ = self
+            .connection_service
+            .send_invalidation_event(InvalidationEvent::<()> {
+                invalidation_reason: InvalidationReason::Metadata,
+                entity_id: Cow::Owned(document_id),
+                entity_type: entity_access_receipt.entity().entity_type,
+                invalidated_by: entity_access_receipt.auth().clone(),
+                metadata: None,
+            })
+            .await
+            .inspect_err(|e| {
+                tracing::error!(error=?e, "failed to send invalidation event");
+            });
+
+        Ok(state.into())
+    }
+}

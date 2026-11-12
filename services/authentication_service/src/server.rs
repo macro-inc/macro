@@ -5,24 +5,26 @@ use analytics_client::{
     AnalyticsClient, AnalyticsClientConfig, GoogleAnalyticsConfig, MetaConfig, PostHogConfig,
 };
 use anyhow::{Context, anyhow};
+use app_service_url::AppServiceUrl;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
-use channels::{
-    domain::{
-        service::ChannelServiceImpl,
-        side_effects::{ChannelSideEffectService, SpawnedChannelEventDispatcher},
-    },
-    outbound::{
-        connection_gateway_realtime::ConnectionGatewayChannelRealtimePublisher,
-        contacts_dispatcher::ContactsChannelDispatcher,
-        notification_sender::NotificationChannelSender,
-        pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions,
-        pg_channels_repo::PgChannelsRepo, pg_side_effect_context::PgChannelSideEffectContext,
-    },
+use channels::domain::{
+    service::ChannelServiceImpl,
+    side_effects::{ChannelSideEffectService, SpawnedChannelEventDispatcher},
+};
+use channels_outbound::{
+    connection_gateway_realtime::ConnectionGatewayChannelRealtimePublisher,
+    contacts_dispatcher::ContactsChannelDispatcher, notification_sender::NotificationChannelSender,
+    pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions,
+    pg_channels_repo::PgChannelsRepo, pg_side_effect_context::PgChannelSideEffectContext,
 };
 use connection_gateway_client::ConnectionGatewayClient;
+use connection_gateway_url::ConnectionGatewayUrl;
 use contacts::{domain::service::SqsContactsIngress, outbound::ingress::SqsContactsQueue};
 use document_storage_service_client::DocumentStorageServiceClient;
-use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
+use document_storage_service_url::DocumentStorageServiceUrl;
+use email_service_url::EmailServiceUrl;
+use entity_access::domain::service::EntityAccessServiceImpl;
+use entity_access_outbound::PgAccessRepository;
 use entity_registry::{EntityRegistryServiceImpl, PgEntityRegistryRepository};
 use foreign_entity::{
     domain::service::ForeignEntityServiceImpl,
@@ -46,25 +48,22 @@ use macro_authorization::{
     PgUserApiKeyAuthorizationRepo, PgUserApiKeyAuthorizer,
 };
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
-use macro_service_urls::{
-    AppServiceUrl, ConnectionGatewayUrl, DocumentStorageServiceUrl, EmailServiceUrl,
-    StaticFilePublicUrl, StaticFileServiceUrl,
-};
 use native_app_service::{
     domain::{models::PlatformData, service::NativeAppServiceImpl},
     outbound::DefaultBundleFetcher,
 };
-use notification::outbound::queue::SqsQueue;
-use notification::{
-    domain::service::SqsNotificationIngress, outbound::rate_limit::RedisRateLimitAdapter,
-};
+use notification::domain::service::SqsNotificationIngress;
+use notification_outbound::queue::SqsQueue;
+use notification_outbound::rate_limit::RedisRateLimitAdapter;
 use rate_limit::domain::service::RateLimitServiceImpl;
 use roles_and_permissions::{
     domain::service::UserRolesAndPermissionsServiceImpl, outbound::pgpool::MacroDB,
 };
 use secretsmanager_client::SecretManager;
 use sqlx::postgres::PgPoolOptions;
+use static_file_public_url::StaticFilePublicUrl;
 use static_file_service_client::StaticFileServiceClient;
+use static_file_service_url::StaticFileServiceUrl;
 use teams::{
     domain::team_service::TeamServiceImpl,
     outbound::{
@@ -480,8 +479,8 @@ async fn run_server() -> anyhow::Result<()> {
     let channel_messages: Arc<dyn messages::domain::api::MessageCommands> = Arc::new(
         messages::domain::service::MessageService::new(
             messages::outbound::pg_message_repo::PgMessageRepository::new(db.clone())
-                .with_initiatives(initiative::domain::lookup::InitiativeLookup::new(
-                    initiative::outbound::PgInitiativeRepo::new(db.clone()),
+                .with_initiatives(project::domain::lookup::InitiativeLookup::new(
+                    project::outbound::PgInitiativeRepo::new(db.clone()),
                 ))
                 .with_crm(crm::outbound::lookup::PgCrmParentReader::new(db.clone())),
             messages::domain::effects::MessageEffects::new(
@@ -497,7 +496,7 @@ async fn run_server() -> anyhow::Result<()> {
                     messages::outbound::connection_gateway::ConnectionGatewayMessages(
                         connection_gateway_client.clone(),
                     ),
-                    channels::outbound::pg_agent_creations::PgAgentCreations::new(db.clone()),
+                    channels_outbound::pg_agent_creations::PgAgentCreations::new(db.clone()),
                 ),
             ),
         )
@@ -675,8 +674,9 @@ async fn run_server() -> anyhow::Result<()> {
     // The harness and scheduled-action services validate the fleet-wide
     // internal key, not this service's own inbound key.
     let internal_key = config.service_internal_auth_key.to_string();
-    let harness_url = macro_service_urls::AgentHarnessServiceUrl::new()?.to_string();
-    let scheduled_action_url = macro_service_urls::ScheduledActionServiceUrl::new()?.to_string();
+    let harness_url = agent_harness_service_url::AgentHarnessServiceUrl::new()?.to_string();
+    let scheduled_action_url =
+        scheduled_action_service_url::ScheduledActionServiceUrl::new()?.to_string();
     let team_owned_entity_cleanup = TeamOwnedEntityCleanupAdapter::new(
         Arc::new(
             passwords::outbound::postgres::PgRepository::new(db.clone())
@@ -699,7 +699,7 @@ async fn run_server() -> anyhow::Result<()> {
     let teams_service_impl = TeamServiceImpl::new_with_analytics(
         teams_repo_impl.clone(),
         customer_repo_impl,
-        channel_service.clone(),
+        crate::outbound::team_channels::ChannelServiceTeamChannels(channel_service.clone()),
         user_roles_and_permissions_service.clone(),
         notification_ingress_service.clone(),
         crm_enqueuer,
@@ -820,7 +820,10 @@ async fn run_server() -> anyhow::Result<()> {
     let server_result = api::setup_and_serve(
         ApiContext {
             inbox_connections: Arc::new(email::domain::inbox_entitlement::InboxConnectionService(
-                email::outbound::EmailPgRepo::new(db.clone()),
+                email::outbound::EmailPgRepo::new(
+                    db.clone(),
+                    Arc::new(PgAccessRepository::new(db.clone())),
+                ),
             )),
             db,
             github_link_service: Arc::new(github_link_service_impl),

@@ -5,7 +5,7 @@ use utoipa::ToSchema;
 
 use super::{StripeOperationError, StripeSessionResponse};
 use crate::api::context::{ApiContext, AuthorizationService};
-use model::response::ErrorResponse;
+use shared_types::response::ErrorResponse;
 
 /// Request body for creating a Stripe portal session
 #[derive(Debug, Deserialize, ToSchema)]

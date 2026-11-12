@@ -7,15 +7,15 @@ use email::domain::events::{
 };
 use email::domain::mailbox::MailboxError;
 #[cfg(test)]
-use email_api_client::domain::models::AccessToken;
+use email_api_client_core::models::AccessToken;
 #[cfg(test)]
-use email_api_client::domain::models::EmailApiError;
+use email_api_client_core::models::EmailApiError;
 use email_db_client::links::delete::PurgePacing;
-use model_entity::EntityType;
+use email_types::api::refresh::RefreshEmailEvent;
+use email_types::email::service::pubsub::{DeletionReason, LinkManagerMessage};
+use email_types::service::link::Link;
+use entity_kind::EntityType;
 use model_notifications::InboxReauthRequiredMetadata;
-use models_email::api::refresh::RefreshEmailEvent;
-use models_email::email::service::pubsub::{DeletionReason, LinkManagerMessage};
-use models_email::service::link::Link;
 use notification::domain::models::SendNotificationRequestBuilder;
 use notification::domain::service::NotificationIngress;
 use sqs_worker::cleanup_message;

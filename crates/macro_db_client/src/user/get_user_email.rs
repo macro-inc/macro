@@ -1,4 +1,4 @@
-use model::user::UserInfo;
+use shared_types::user::UserInfo;
 use sqlx::{Pool, Postgres, Transaction};
 
 #[tracing::instrument(skip(db))]

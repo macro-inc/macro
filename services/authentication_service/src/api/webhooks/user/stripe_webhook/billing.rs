@@ -65,9 +65,13 @@ pub(super) fn personal_plan_change(
             let old = previous?
                 .iter()
                 .find(|old| object_id(&old["id"]) == Some(item_id))?;
-            prices.plan_for_price(object_id(&old["price"])?)?.into()
+            teams::outbound::billing_seats::plan_tier(
+                prices.plan_for_price(object_id(&old["price"])?)?,
+            )
         };
-        let to = prices.plan_for_price(object_id(&item["price"])?)?.into();
+        let to = teams::outbound::billing_seats::plan_tier(
+            prices.plan_for_price(object_id(&item["price"])?)?,
+        );
         let period = period(subscription, item)?;
         let previous_period = previous
             .and_then(|items| {

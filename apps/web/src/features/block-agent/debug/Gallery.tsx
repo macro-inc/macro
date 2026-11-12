@@ -1238,12 +1238,12 @@ export default function AgentUiGallery() {
           <Item label="PermissionCard (native Herdr session)">
             <PermissionCard
               action="Run command"
-              detail="cargo test -p coding_agent_worker"
+              detail="cargo test -p macrod"
               options={[
                 { id: 'allow', name: 'Allow once', kind: 'allow_once' },
                 {
                   id: 'always',
-                  name: 'Always allow `cargo test -p coding_agent_worker` in this session',
+                  name: 'Always allow `cargo test -p macrod` in this session',
                   kind: 'allow_always',
                 },
                 { id: 'reject', name: 'Reject', kind: 'reject_once' },

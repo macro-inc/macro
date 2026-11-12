@@ -1,5 +1,5 @@
-use model_entity::EntityType;
-use models_permissions::share_permission::UpdateSharePermissionRequestV2;
+use entity_kind::EntityType;
+use permissions_types::share_permission::UpdateSharePermissionRequestV2;
 use sqlx::{Postgres, QueryBuilder, Transaction};
 
 use super::channel_permission::edit::edit_channel_share_permission;

@@ -7,7 +7,7 @@ use axum::{
 use documents::domain::events::{DocumentMacroEvent, DocumentSyncContentUpdatedMetadata};
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
 use macro_event_broker::MacroEventBroker as _;
-use model::document::FileType;
+use shared_types::document::FileType;
 
 #[cfg(test)]
 mod test;

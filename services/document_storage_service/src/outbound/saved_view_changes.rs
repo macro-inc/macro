@@ -2,7 +2,7 @@
 //! however the change was made: the app, the SDK, or an agent's program.
 
 use connection_gateway_client::client::ConnectionGatewayClient;
-use model_entity::EntityType;
+use entity_kind::EntityType;
 use saved_views::domain::{ChangeNotifier, MembershipPort, ViewsChanged};
 use std::{collections::BTreeSet, sync::Arc};
 use tokio_util::task::TaskTracker;

@@ -3,9 +3,9 @@ use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::Response;
 use axum::{Extension, Json};
+use email_types::service::link::Link;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model::response::ErrorResponse;
-use models_email::service::link::Link;
+use shared_types::response::ErrorResponse;
 use utoipa::ToSchema;
 
 /// Request to unblock a sender.

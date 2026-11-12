@@ -4,11 +4,11 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use entity_access::domain::ports::EntityAccessService;
+use entity_kind::EntityType;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model::response::GenericResponse;
-use model::thread::response::GetThreadUserAccessLevelResponse;
-use model_entity::EntityType;
-use models_permissions::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::access_level::AccessLevel;
+use shared_types::response::GenericResponse;
+use shared_types::thread::response::GetThreadUserAccessLevelResponse;
 
 #[derive(serde::Deserialize)]
 pub struct Params {

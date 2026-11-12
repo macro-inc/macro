@@ -1,6 +1,6 @@
-use email_api_client::domain::models::EmailApiError;
-use models_email::gmail::inbox_sync::{InboxSyncOperation, InboxSyncPubsubMessage};
-use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
+use email_api_client_core::models::EmailApiError;
+use email_types::gmail::inbox_sync::{InboxSyncOperation, InboxSyncPubsubMessage};
+use email_types::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 
 use crate::pubsub::context::PubSubContext;
 

@@ -15,6 +15,25 @@ Return to the [repository guide](../../AGENTS.md) for other task guides.
   bypass the owning domain's APIs with direct database access.
 - For queries, migrations, or SQLx failures, use [database development](database.md).
 
+## Crates and dependencies
+
+- `crates/` is grouped one level deep by feature (`crates/<group>/<crate>`);
+  [`crates/AGENTS.md`](../../crates/AGENTS.md) lists the groups and the
+  crates that stay at the top level. Put a new crate in its feature's group,
+  with directory, package and lib name all the same snake_case name.
+- Add a new crate to the root `Cargo.toml` `members` list (one per line, sorted),
+  then run `just hakari` (`cargo x deps`). It gives every crate another member
+  depends on a root `[workspace.dependencies]` entry at its current path, drops
+  entries nothing uses, and rewrites relative `path = "../x"` dependencies
+  between members to `x = { workspace = true }`. A crate's first dependent can
+  write a relative path; the command turns it into a root entry. Moving a crate
+  needs only its `members` line changed; the same command updates the root
+  entry. CI fails when the manifests drift from that.
+- hakari owns the `workspace-hack = { version = "0.1", path = "../workspace-hack" }`
+  lines; leave them as it writes them.
+- A root entry with `default-features = false` turns defaults off for every
+  dependent; dependents that need them say `default-features = true`.
+
 ## Environment
 
 Run commands from the repository root inside `nix develop`, unless a guide says
@@ -56,8 +75,46 @@ service's build recipe, e.g. `just services/document_text_extractor/build`.
 Use `just --show <recipe>` to check prerequisites; do not assume all Lambdas
 have the same build requirements.
 
+The dev profile builds workspace crates incrementally with line-table debuginfo
+and dependencies without debuginfo, which keeps edit-to-binary rebuilds short.
+Backtraces keep file and line for workspace code. For a debugger, pass
+`--config 'profile.dev.debug="full"' --config 'profile.dev.package."*".debug="full"'`.
+A crate the browser loads keeps its `cdylib` in a thin `<crate>_wasm` wrapper
+(`pub use <crate>::*;`, built with `wasm-pack --out-name <crate>`), never on the
+library itself: a library `cdylib` links an unused `.so` into every native build,
+and two services built in one target dir overwrite each other's copy.
+Gate wasm-only features such as `uuid/js` on
+`[target.'cfg(target_arch = "wasm32")'.dependencies]`: enabled natively, they
+change the feature set of a shared dependency and rebuild everything above it
+whenever you switch between services.
+
 Command definitions live in [rust.just](../../tooling/just/rust.just) and
 [check.just](../../tooling/just/check.just).
+
+## Crate layers
+
+[`.config/layers.toml`](../../.config/layers.toml) puts every workspace crate
+in a layer (`types`, `platform`, `aws`, `clients`, `engines`, `client`,
+`domain`, `graphql`, `testing`, `services`, `tooling`) by directory glob, and
+says which layers each may depend on. `cargo x deps` (and CI's
+`cargo x deps --check`) prints the report after regenerating the dependency
+artifacts, and fails on anything it lists below; allowed (baselined) edges
+only print.
+
+- **New crate:** if the report lists it as `unassigned`, add its directory to
+  the layer it belongs in. A crate directory under a group (`crates/types/`,
+  `crates/email/email/`, …) is placed by that group's glob.
+- **`violation`:** a normal or build dependency from one layer into a layer it
+  may not use. Cut the edge (move the shared types down into a `types` crate,
+  or construct the adapter in the composition root). The `[[allow]]` entries
+  (`from`, `to` package names and a `reason`) are the baseline from before the
+  check became blocking; do not add new ones.
+- **`stale allow`:** the edge is gone; delete the `[[allow]]` entry.
+- **`unmatched path`:** a literal path names a crate that moved or was
+  removed; update it.
+
+Dev-dependencies are exempt, except that only dev-dependencies may point at
+the `testing` layer.
 
 ## Test the affected packages
 

@@ -1,5 +1,6 @@
 use anyhow::{Context, bail};
 use bytes::{Bytes, BytesMut};
+use email_types::email::service::{message, thread};
 use futures::{StreamExt, stream};
 use lol_html::html_content::Element;
 use lol_html::{HtmlRewriter, Settings, element};

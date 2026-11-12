@@ -43,18 +43,18 @@ use ::email::inbound::axum::thread_labels_router::{
 use ::email::inbound::axum::thread_project_router::{
     UpdateThreadProjectRequest, UpdateThreadProjectResponse,
 };
-use model::response::EmptyResponse;
-use models_email::api::link::SyncStatus;
-use models_email::api::refresh::{BackfillStatus, RefreshEmailEvent};
-use models_email::api::settings::Settings;
-use models_email::email::service;
-use models_email::email::service::address::ContactInfoWithInteraction;
-use models_email::email::service::backfill::BackfillJob;
-use models_email::email::service::link::Link;
-use models_email::email::service::thread::{PreviewView, PreviewViewStandardLabel};
-use models_email::service::label::Label;
-use models_email::service::message::ParsedMessage;
-use models_email::service::thread::ThreadPreviewCursor;
+use email_types::api::link::SyncStatus;
+use email_types::api::refresh::{BackfillStatus, RefreshEmailEvent};
+use email_types::api::settings::Settings;
+use email_types::email::service;
+use email_types::email::service::address::ContactInfoWithInteraction;
+use email_types::email::service::backfill::BackfillJob;
+use email_types::email::service::link::Link;
+use email_types::email::service::thread::{PreviewView, PreviewViewStandardLabel};
+use email_types::service::label::Label;
+use email_types::service::message::ParsedMessage;
+use email_types::service::thread::ThreadPreviewCursor;
+use shared_types::response::EmptyResponse;
 use utoipa::OpenApi;
 
 #[derive(OpenApi)]

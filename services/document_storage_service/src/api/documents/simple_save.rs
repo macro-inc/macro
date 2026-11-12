@@ -14,14 +14,14 @@ use axum::{
 };
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model::document::response::DocumentResponseMetadata;
-use model::{
+use permissions_types::share_permission::access_level::EditAccessLevel;
+use s3_key::build_cloud_storage_bucket_document_key;
+use serde::Deserialize;
+use shared_types::document::response::DocumentResponseMetadata;
+use shared_types::{
     document::{DocumentBasic, FileType, FileTypeExt},
     response::{GenericErrorResponse, GenericResponse},
 };
-use models_permissions::share_permission::access_level::EditAccessLevel;
-use s3_key::build_cloud_storage_bucket_document_key;
-use serde::Deserialize;
 
 /// Largest request `simple_save` accepts: a file of up to 100 MiB plus its
 /// multipart framing. Presentations edited in the browser are saved whole,

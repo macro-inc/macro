@@ -6,7 +6,7 @@ use axum::{
 };
 use github::domain::{models::GithubError, ports::GithubLinkService};
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserId};
-use model::response::ErrorResponse;
+use shared_types::response::ErrorResponse;
 use tower_cookies::Cookies;
 
 use crate::api::{

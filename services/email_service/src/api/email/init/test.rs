@@ -99,7 +99,7 @@ fn unusable_provider_grants_classify_as_no_gmail_grant() {
 fn rate_limiting_classifies_as_http_429() {
     let error = classify_provider_init_error(EmailApiError::RateLimited {
         retry_after: None,
-        origin: email_api_client::domain::models::RateLimitOrigin::Provider { concurrency: false },
+        origin: email_api_client_core::models::RateLimitOrigin::Provider { concurrency: false },
     });
     assert_eq!(error.status_code(), StatusCode::TOO_MANY_REQUESTS);
 }
@@ -108,7 +108,7 @@ fn rate_limiting_classifies_as_http_429() {
 fn a_rate_limited_init_tells_the_client_when_to_retry() {
     let response = InitError::ProviderError(EmailApiError::RateLimited {
         retry_after: Some(std::time::Duration::from_millis(1_200)),
-        origin: email_api_client::domain::models::RateLimitOrigin::Local,
+        origin: email_api_client_core::models::RateLimitOrigin::Local,
     })
     .into_response();
 

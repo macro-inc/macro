@@ -1,4 +1,4 @@
-use model::document::DocumentMetadata;
+use shared_types::document::DocumentMetadata;
 
 use super::SearchExtractorMessage;
 

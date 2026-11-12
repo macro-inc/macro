@@ -7,7 +7,7 @@ import forms from './forms';
 // Produced by the Rust Forms codec, also read by the browser's codec tests.
 const fixture = readFileSync(
   new URL(
-    '../../../../crates/forms/fixtures/collaboration/rust-seeded.loro',
+    '../../../../crates/databases/forms/fixtures/collaboration/rust-seeded.loro',
     import.meta.url
   )
 );

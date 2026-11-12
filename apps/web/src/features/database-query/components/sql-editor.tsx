@@ -6,7 +6,7 @@ import { basicSetup } from 'codemirror';
 import { createEffect, on, onCleanup, onMount } from 'solid-js';
 import { type QuerySchema, unquoteIdentifier } from '../core/query';
 
-/** The Macro Databases subset (`crates/database_sql`): its keywords and nothing more. */
+/** The Macro Databases subset (`crates/databases/database_sql_engine`): its keywords and nothing more. */
 const macroDialect = SQLDialect.define({
   keywords:
     'select distinct from join on where and or not in has is null like group by order asc desc limit offset true false count sum avg min max',

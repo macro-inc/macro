@@ -9,9 +9,9 @@ use macro_db_client::user::get_user_name::get_user_names_with_email;
 use macro_user_id::user_id::MacroUserId;
 use macro_user_id::{cowlike::CowLike, lowercased::Lowercase};
 
-use model::response::ErrorResponse;
-use model::user::UserNames;
 use non_empty::NonEmpty;
+use shared_types::response::ErrorResponse;
+use shared_types::user::UserNames;
 
 #[derive(Default, Debug, serde::Serialize, serde::Deserialize, utoipa::ToSchema)]
 pub struct GetNamesWithEmailRequestBody {

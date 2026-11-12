@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import fixtures from '../../../../../../crates/contacts/src/domain/models/contact/identity-fixtures.json';
+import fixtures from '../../../../../../crates/comms/contacts_core/src/models/contact/identity-fixtures.json';
 import { contactRecordKey } from './contact-key';
 
 it('derives only the requested viewer-scoped keys using the backend identity contract', () => {

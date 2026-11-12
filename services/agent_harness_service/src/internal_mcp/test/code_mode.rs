@@ -4,10 +4,8 @@ use agent_code_mode::{
     outbound::postgres::PgExecutionStore,
 };
 use async_trait::async_trait;
-use code_execution::{
-    domain::{ExecutionService, Limits},
-    outbound::deno::DenoRunner,
-};
+use code_execution_core::{ExecutionService, Limits};
+use code_execution_outbound::deno::DenoRunner;
 use serde_json::json;
 
 struct NoAppEgress;
@@ -32,9 +30,8 @@ impl agent_code_mode::domain::ExecutionCredentials for Credentials {
         _: &agent_code_mode::domain::ExecutionIdentity,
         _: &str,
         _: tokio_util::sync::CancellationToken,
-    ) -> Result<code_execution::domain::RunEnvironment, agent_code_mode::domain::CodeModeError>
-    {
-        Ok(code_execution::domain::RunEnvironment::default())
+    ) -> Result<code_execution_core::RunEnvironment, agent_code_mode::domain::CodeModeError> {
+        Ok(code_execution_core::RunEnvironment::default())
     }
 }
 
@@ -42,7 +39,7 @@ impl agent_code_mode::domain::ExecutionCredentials for Credentials {
 #[ignore = "requires pinned Deno runtime"]
 async fn authenticated_mcp_runs_javascript_and_persists_source_and_result(pool: sqlx::PgPool) {
     sqlx::raw_sql(include_str!(
-        "../../../../../crates/agent_code_mode/src/outbound/postgres/test/sessions.sql"
+        "../../../../../crates/agents/agent_code_mode/src/outbound/postgres/test/sessions.sql"
     ))
     .execute(&pool)
     .await
@@ -168,7 +165,7 @@ async fn authenticated_mcp_runs_javascript_and_persists_source_and_result(pool: 
     assert_eq!(guides["guides"][0]["topic"], "examples");
     assert_eq!(
         guides["guides"][0]["markdown"],
-        include_str!("../../../../../crates/agent_code_mode/SKILL.md")
+        include_str!("../../../../../crates/agents/agent_code_mode/SKILL.md")
     );
     assert!(
         guides["guides"][1]["markdown"]
@@ -229,7 +226,7 @@ async fn authenticated_mcp_runs_javascript_and_persists_source_and_result(pool: 
         .connect(vec![entry("session-secret")])
         .await
         .expect("the default agent must discover internal code tools");
-    let remote = ai_tools::DeferredToolSet::new(
+    let remote = agent_tools::DeferredToolSet::new(
         Arc::new(
             mcp_select::CombinedToolSet::new(Arc::new(AsyncToolCollection::<()>::new()), remote)
                 .with_eager_mcp_tools(&[

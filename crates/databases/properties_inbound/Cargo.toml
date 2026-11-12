@@ -1,0 +1,57 @@
+[package]
+edition = "2024"
+name = "properties_inbound"
+publish = false
+version = "0.1.0"
+
+[features]
+default = ["ai_tools", "axum"]
+# The AI toolset.
+ai_tools = [
+  "dep:ai_toolset",
+  "dep:async-trait",
+  "dep:schemars",
+  "properties/ai_tools",
+]
+# The HTTP routes, router state and OpenAPI paths.
+axum = [
+  "dep:axum",
+  "dep:macro_authorization",
+  "dep:tokio",
+  "dep:utoipa",
+  "entity_access/inbound",
+]
+
+[dependencies]
+ai_toolset = { workspace = true, optional = true }
+anyhow = { workspace = true }
+async-trait = { workspace = true, optional = true }
+axum = { workspace = true, optional = true }
+bot_id = { workspace = true }
+chrono = { workspace = true }
+entity_access = { workspace = true, features = [
+  "ports",
+] }
+macro_authorization = { workspace = true, features = [
+  "axum",
+], optional = true }
+macro_user_id = { workspace = true }
+entity_kind = { workspace = true }
+properties_types = { workspace = true }
+properties = { workspace = true, features = ["ports"] }
+schemars = { workspace = true, optional = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["macros"], optional = true }
+tracing = { workspace = true }
+utoipa = { workspace = true, optional = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+
+[dev-dependencies]
+ai_toolset = { workspace = true }
+properties = { workspace = true, features = ["mock", "ports"] }
+rootcause = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tower = { workspace = true }

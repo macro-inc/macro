@@ -188,7 +188,7 @@ app and SDK together.
 
 ## Backend changes
 
-All in `crates/call`, in its hexagonal layout.
+All in `crates/comms/call`, in its hexagonal layout.
 
 **Routes**
 
@@ -287,7 +287,7 @@ for audio under Bun, including its native-library needs on NixOS. Its docs show
 and we need to confirm the app renders one and whether Node has the screen-content mode
 Python has (`is_screencast`), which affects text legibility.
 
-Each phase updates `docs/agent-guide/calls.md`, `crates/call/AGENTS.md` and
+Each phase updates `docs/agent-guide/calls.md`, `crates/comms/call/AGENTS.md` and
 `packages/sdk/AGENTS.md`, adds a `@routing` sentence and `@agent` rules to the call
 namespace, and releases through `release-sdk`. The optional room entry points are
 documented in `packages/sdk/CALLS.md`. Connections sit behind a server flag so

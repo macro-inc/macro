@@ -1,4 +1,4 @@
-// Native call pushes (crates/notification/src/domain/service/voip.rs).
+// Native call pushes (crates/notifications/notification/src/domain/service/voip.rs).
 //
 // New monitor, not adopted from the UI, so it is not `protect`ed.
 //

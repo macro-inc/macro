@@ -1,15 +1,15 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
+use ::ai_chat::domain::events::{
+    ChatCopiedMetadata, ChatCreatedMetadata, ChatDeletedMetadata, ChatMessageDeletedMetadata,
+    ChatMessageRole, ChatMessageSentMetadata, ChatPermanentlyDeletedMetadata, ChatRestoredMetadata,
+    ChatTopicEvent, ChatUpdatedMetadata,
+};
 use ::call::domain::events::{
     CallArchiveReason, CallRecordArchivedMetadata, CallRecordDeletedMetadata,
     CallRecordSummarizedMetadata, CallRecordUpdatedMetadata, CallRecordingReadyMetadata,
     CallStartedMetadata, CallTopicEvent,
-};
-use ::chat::domain::events::{
-    ChatCopiedMetadata, ChatCreatedMetadata, ChatDeletedMetadata, ChatMessageDeletedMetadata,
-    ChatMessageRole, ChatMessageSentMetadata, ChatPermanentlyDeletedMetadata, ChatRestoredMetadata,
-    ChatTopicEvent, ChatUpdatedMetadata,
 };
 use ::email::domain::events::{
     EmailEventOrigin, EmailMacroEvent, EmailTopicEvent, LinkConnectedMetadata,
@@ -38,26 +38,26 @@ use documents::domain::events::{
     DocumentSyncContentUpdatedMetadata, DocumentTopicEvent, DocumentUpdatedMetadata,
     InteractionReason,
 };
+use folder::domain::events::{
+    ProjectCreatedMetadata, ProjectDeletedMetadata, ProjectPermanentlyDeletedMetadata,
+    ProjectRestoredMetadata, ProjectTopicEvent, ProjectUpdatedMetadata, ProjectUploadedMetadata,
+};
 use macro_event_broker::{Event, EventBrokerError, MacroEvent as _, MessageParts};
 use macro_event_topics::{
     MacroCalendarTopic, MacroCallsTopic, MacroChannelsTopic, MacroChatsTopic, MacroDocumentsTopic,
     MacroEmailTopic, MacroProjectsTopic, MacroPropertiesTopic, Topic as _,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use model::document::FileType;
 use model_owner::Owner;
-use models_properties::{
-    DataType, EntityType, PropertyOwner, service::property_option::PropertyOptionValue,
-};
-use projects::domain::events::{
-    ProjectCreatedMetadata, ProjectDeletedMetadata, ProjectPermanentlyDeletedMetadata,
-    ProjectRestoredMetadata, ProjectTopicEvent, ProjectUpdatedMetadata, ProjectUploadedMetadata,
-};
 use properties::domain::events::{
     EntityPropertiesClearedMetadata, EntityPropertyDeletedMetadata, EntityPropertyUpdatedMetadata,
     PropertyCreatedMetadata, PropertyDeletedMetadata, PropertyOptionCreatedMetadata,
     PropertyOptionDeletedMetadata, PropertyOptionUpdatedMetadata, PropertyTopicEvent,
 };
+use properties_types::{
+    DataType, EntityType, PropertyOwner, service::property_option::PropertyOptionValue,
+};
+use shared_types::document::FileType;
 use uuid::Uuid;
 
 use messages::domain::models::MessageParent;

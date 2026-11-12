@@ -1,0 +1,44 @@
+[package]
+edition = "2024"
+name = "channel_labels"
+publish = false
+version = "0.1.0"
+
+[features]
+default = []
+inbound = [
+  "dep:axum",
+  "dep:macro_authorization",
+  "dep:model_error_response",
+  "dep:utoipa",
+  "entity_access/axum",
+  "entity_access/inbound",
+  "ports",
+]
+outbound = ["ports"]
+ports = ["dep:tokio"]
+postgres = ["dep:sqlx", "outbound"]
+
+[dependencies]
+anyhow = { workspace = true }
+axum = { workspace = true, optional = true }
+chrono = { workspace = true, features = ["serde"] }
+cowlike = { workspace = true }
+entity_access = { workspace = true, features = ["ports"] }
+macro_authorization = { workspace = true, optional = true, features = ["axum"] }
+macro_user_id = { workspace = true }
+entity_kind = { workspace = true }
+model_error_response = { workspace = true, optional = true }
+serde = { workspace = true }
+sqlx = { workspace = true, optional = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, optional = true }
+tracing = { workspace = true }
+utoipa = { workspace = true, optional = true }
+uuid = { workspace = true, features = ["serde", "v7"] }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+
+[dev-dependencies]
+macro_db_migrator = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

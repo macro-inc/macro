@@ -1,0 +1,115 @@
+# channels
+
+## What it is
+
+Part of Chat: paginated channel messages — threads, reactions, attachments,
+DMs, and the shared message store other domains discuss things on.
+
+## Start here
+
+- `src/domain/service.rs`, `src/domain/models.rs`: channel/message CRUD and policy.
+- `src/domain/message_delivery.rs`, `src/domain/broker_events.rs`: realtime
+  fan-out of new messages to connection gateway.
+- `src/domain/dm.rs`, `src/domain/teammate_dms.rs`: direct-message channels.
+- `src/domain/reference_sharing.rs`: sharing an external item (PDF, doc, CRM
+  record) into a channel.
+- `src/domain/access_requests.rs`, `src/domain/service/access_requests.rs`:
+  requests to join a private or team channel, answered by any participant.
+- The HTTP routes, AI toolset, attachment adapter and teammate-DM consumer are
+  `crates/comms/channels_inbound`; the Postgres, gateway, notification and
+  static-file adapters are `crates/comms/channels_outbound`. This crate is the
+  domain only, so an adapter edit does not rebuild its dependents.
+
+## Scope
+
+- Owns: channels, channel messages, threads, reactions, DMs, and message-level
+  attachment/reference sharing.
+- Not here: channel labels → `crates/comms/channel_labels`; calls/video →
+  `crates/comms/call`; built-in agent triggers → `crates/comms/channel_bots`.
+
+## Boundaries
+
+- Depends on: `entity_access` (ports), `messages`, `entity_kind`. Features
+  `schema`, `sqlx` and `agent_tools` add the utoipa, sqlx and JsonSchema derives
+  the adapter crates need.
+- Used by: widely — `bots`, `call`, `teams`, `webhook`, `soup`/`soup_realtime_inbound`,
+  `agent_harness`, `agent_trigger`, `macrod`, `comms_db_client`,
+  `graphql_channel`, `search_service`, `name_search`, `agent_tools`, `memory`.
+  Check callers before changing a public service method's signature.
+
+## Recipes
+
+- Add a message field or mutation: `src/domain/models.rs` → `src/domain/service.rs`
+  → `channels_outbound`'s `src/pg_channels_repo.rs` → `channels_inbound`'s
+  `src/axum_router.rs`.
+- Change realtime delivery: `src/domain/message_delivery.rs` →
+  `channels_outbound`'s `src/connection_gateway_realtime.rs`.
+- Add a channel-message AI tool: `channels_inbound`'s `src/toolset.rs` (feature
+  `agent_tools`).
+
+## Tool contracts
+
+- `ShareWithChannel` exposes agent sessions and omits legacy chat targets; the domain retains historical entity support.
+  `POST /channels/{channel_id}/shares` is its HTTP twin (the SDK's `shareWithChannel(channel)` on every shareable handle, through `packages/sdk/src/entities/channels/share.ts`); both take `ChannelShareEntityType` from `domain/models.rs`.
+- The channel read tools return `senderName` beside `senderId`: the name the app shows (imported author, bot, call guest, or the person's profile name from `get_user_display_names`). One lookup per call; a failed lookup omits names instead of failing the read.
+
+## Checks
+
+- `cargo test -p channels --all-features`; the repository tests are in
+  `channels_outbound` (`SQLX_OFFLINE` unset). The SQL fixtures stay in this
+  crate's `fixtures/`, which other crates' tests share.
+
+## Gotchas
+
+- Deletion is authorized in `ChannelServiceImpl::delete_channel`: the channel
+  participant owner may delete it; a team owner/admin may delete only a `team`
+  channel whose `team_id` matches their membership. Membership in a channel or
+  the channel creator's team never grants deletion authority on its own. Both
+  REST deletion and permanent entity deletion call this policy.
+
+- Human DM messages to nonusers use immediate email, including mentions and replies; empty DM creation, bot messages, and silent/mentions-only policies do not trigger this path. Keep registered recipients on their normal notification routes.
+- Channel access requests are separate from `crates/entities/access_requests`: access is
+  membership, and every participant reviews. Each attempt is its own row so a
+  timeline entry keeps its outcome. Approval adds the member in the request's
+  transaction, then dispatches `ParticipantsAdded`; the announcement reaches the
+  timeline through `macro.channels` and the activity consumer.
+  Withdrawal starts the one-minute retry cooldown at `resolved_at`, even when
+  the request has been pending longer than a minute.
+  Completing a resolved request's notification attempts every recipient before
+  returning a recipient update error.
+
+- A person's message shares every item it links; a bot message posted for a
+  person (`triggered_by`) shares, as that person, only the linked items the
+  sending bot created for them while answering: `created` rows in
+  `activity_events` by that bot on the person's behalf since the person's
+  latest message in the thread before the reply, falling back to their
+  latest message in the channel only when the bot message starts its own
+  thread; a reply never falls back (`PgAgentCreations`). The same
+  bound covers classic `@Macro` and agent session turns. Activity lands asynchronously, so misses are
+  re-checked after 5 s and 30 s in a spawned task. Creations recorded under
+  another bot (`MACRO_AI_BOT_ID` for Claude/Codex/Cursor MCP tools) or the
+  user (projects, chats, calls) never match, and fail safe as unshared.
+- DM invitation emails must stay distinguishable from channel invites (#7964) —
+  don't collapse the two email templates.
+- Legacy document/CRM/channel message paths were removed (#6732); don't
+  reintroduce a parallel message path outside this crate's domain service.
+- Attachment references from comments (messages on documents, initiatives, CRM
+  records, calls) are authorized in `ChannelServiceImpl::get_attachment_references`
+  through the `CommentParentAccess` port; the repo returns every parent. A
+  service built without `with_comment_parent_access` withholds them.
+- Notification filters read `user_notification`'s copied entity columns, never a
+  `notification` join: through `notification`, a per-channel check walks every
+  user's history on the channel (once ~24% of the prod read replica's buffer
+  hits). The channel list seeks `idx_user_notification_viewer_entity` once per
+  candidate channel; an array of the user's notified channels reads every
+  notification the user has in that state, PR ones included.
+- The thread feed's notified roots skip `channel_message_send` rows, which never
+  name a thread, so `idx_user_notification_channel_threads` holds only rows
+  that can. Web Home sends `(unseen OR seen) AND unseen`;
+  `drop_implied_notification_conjuncts` folds that to one notification read.
+
+## Related
+
+- Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/rust/db.md`
+
+- Capture agent correlation when spawning mutation side effects and restore it when team events create direct-message channels.

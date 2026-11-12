@@ -17,7 +17,8 @@ use super::world::{self, MESSAGES, THREADS, TRACKED, WORK, World};
 use aws_sdk_sqs::types::{Message, MessageSystemAttributeName};
 use email::domain::models::mailbox_action::MailboxAction;
 use email::domain::ports::EmailService;
-use models_email::gmail::inbox_sync::{
+use email_thread_id::EmailThreadId;
+use email_types::gmail::inbox_sync::{
     InboxSyncOperation, InboxSyncPubsubMessage, UpdateLabelsPayload, UpsertMessagePayload,
 };
 use rand::rngs::StdRng;
@@ -658,27 +659,39 @@ impl<'w> Sim<'w> {
             Action::Archive(t, value) => self
                 .world
                 .email
-                .set_thread_archived(owner, thread(*t), *value)
+                .set_thread_archived(owner, EmailThreadId::from_uuid(thread(*t)), *value)
                 .await
                 .map_err(|error| format!("{error:?}")),
             Action::Read(t, value) => self
                 .world
                 .email
-                .change_thread_mailbox_state(owner, thread(*t), MailboxAction::Read(*value))
+                .change_thread_mailbox_state(
+                    owner,
+                    EmailThreadId::from_uuid(thread(*t)),
+                    MailboxAction::Read(*value),
+                )
                 .await
                 .map(|_| ())
                 .map_err(|error| format!("{error:?}")),
             Action::Star(t, value) => self
                 .world
                 .email
-                .change_thread_mailbox_state(owner, thread(*t), MailboxAction::Flagged(*value))
+                .change_thread_mailbox_state(
+                    owner,
+                    EmailThreadId::from_uuid(thread(*t)),
+                    MailboxAction::Flagged(*value),
+                )
                 .await
                 .map(|_| ())
                 .map_err(|error| format!("{error:?}")),
             Action::Trash(t, value) => self
                 .world
                 .email
-                .change_thread_mailbox_state(owner, thread(*t), MailboxAction::Trashed(*value))
+                .change_thread_mailbox_state(
+                    owner,
+                    EmailThreadId::from_uuid(thread(*t)),
+                    MailboxAction::Trashed(*value),
+                )
                 .await
                 .map(|_| ())
                 .map_err(|error| format!("{error:?}")),
@@ -687,7 +700,7 @@ impl<'w> Sim<'w> {
                 .email
                 .update_thread_labels_for_user(
                     owner,
-                    thread(*t),
+                    EmailThreadId::from_uuid(thread(*t)),
                     self.world.label_ids[WORK],
                     *value,
                 )

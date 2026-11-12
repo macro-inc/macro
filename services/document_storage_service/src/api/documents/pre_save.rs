@@ -19,14 +19,14 @@ use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
 #[allow(unused_imports)]
 use futures::stream::StreamExt;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model::response::GenericErrorResponse;
+use shared_types::response::GenericErrorResponse;
 
-use model::{
+use shared_types::{
     document::{ContentType, DocumentBasic, FileType},
     response::{GenericResponse, PresignedUrl},
 };
 
-use models_permissions::share_permission::access_level::EditAccessLevel;
+use permissions_types::share_permission::access_level::EditAccessLevel;
 use serde::Deserialize;
 
 #[derive(Deserialize)]

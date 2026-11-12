@@ -7,8 +7,8 @@ use crate::pubsub::gmail_ops::operations::modify_message_labels::modify_message_
 use crate::pubsub::gmail_ops::operations::unblock_sender::unblock_sender;
 use crate::pubsub::gmail_ops::worker::GmailOpsContext;
 use anyhow::{Context, Result, anyhow};
-use models_email::gmail::gmail_ops::{GmailOpsOperation, GmailOpsPubsubMessage};
-use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
+use email_types::gmail::gmail_ops::{GmailOpsOperation, GmailOpsPubsubMessage};
+use email_types::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use sqs_worker::cleanup_message;
 
 /// Processes a message from the gmail ops queue.

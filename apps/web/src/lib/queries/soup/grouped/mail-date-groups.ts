@@ -2,7 +2,7 @@ import type { SoupAstItemsData } from '../items';
 import { DATE_GROUP_BUCKETS } from './api';
 import type { GroupMeta } from './types';
 
-/** Matches models_grouping's UTC date buckets; counts describe loaded cached mail. */
+/** Matches grouping_types's UTC date buckets; counts describe loaded cached mail. */
 export function groupCachedMailByDate(
   data: SoupAstItemsData,
   now = new Date()

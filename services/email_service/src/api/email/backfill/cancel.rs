@@ -5,10 +5,10 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
+use email_types::email::service::backfill::BackfillJobStatus;
+use email_types::email::service::link::Link;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model::response::{EmptyResponse, ErrorResponse};
-use models_email::email::service::backfill::BackfillJobStatus;
-use models_email::email::service::link::Link;
+use shared_types::response::{EmptyResponse, ErrorResponse};
 use sqlx::types::Uuid;
 use utoipa::ToSchema;
 

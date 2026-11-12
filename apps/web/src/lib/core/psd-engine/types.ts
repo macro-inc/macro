@@ -1,5 +1,5 @@
 /**
- * The JSON the Photoshop engine (`crates/psd_engine`) reads and writes,
+ * The JSON the Photoshop engine (`crates/engines/psd_engine`) reads and writes,
  * as TypeScript types. Names and shapes follow the engine's serde
  * attributes: camelCase fields, enums tagged by `type` (operations by
  * `op`), tuples as arrays. Colors are straight sRGB in `0..=1`; positions

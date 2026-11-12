@@ -16,11 +16,12 @@ use axum::Router;
 use axum::response::IntoResponse;
 use email::domain::service::EmailServiceImpl;
 use email::outbound::EmailPgRepo;
+use email_types::email::service::cache::TokenCacheKey;
+use entity_access_outbound::PgAccessRepository;
 use frecency::domain::services::FrecencyQueryServiceImpl;
 use frecency::outbound::postgres::FrecencyPgStorage;
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_email::email::service::cache::TokenCacheKey;
 use sqlx::PgPool;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
@@ -276,7 +277,7 @@ impl World {
             redis_client: wiring::redis_client(redis_client.clone()),
             notification_ingress_service: Arc::new(
                 notification::domain::service::SqsNotificationIngress {
-                    queue: notification::outbound::queue::SqsQueue::new(
+                    queue: notification_outbound::queue::SqsQueue::new(
                         sqs_sdk.clone(),
                         format!("{services_url}/queue/notifications"),
                     ),
@@ -306,7 +307,7 @@ impl World {
             retry_worker,
         };
         let email = EmailServiceImpl::new(
-            EmailPgRepo::new(db.clone()),
+            EmailPgRepo::new(db.clone(), Arc::new(PgAccessRepository::new(db.clone()))),
             FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone())),
             sqs_client.clone(),
             crm::domain::service::CrmServiceImpl::new(

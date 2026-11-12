@@ -54,7 +54,7 @@ You need a macOS, Linux, or Windows computer that can stay online and an install
     <Tabs>
       <Tab title="macOS and Linux">
         ```bash
-        curl -fsSL https://raw.githubusercontent.com/macro-inc/macro/main/crates/coding_agent_worker/install/install.sh | sh
+        curl -fsSL https://raw.githubusercontent.com/macro-inc/macro/main/crates/agents/macrod/install/install.sh | sh
         ```
 
         This installs `macrod` to `~/.local/bin` and adds that folder to your `PATH` in your shell's startup file (`~/.zshrc`, `~/.bashrc` and `~/.bash_profile`, or fish's `conf.d`), once. Open a new terminal afterwards. To leave your startup files alone, run `curl -fsSL … | sh -s -- --no-modify-path` or set `MACROD_NO_MODIFY_PATH=1`.
@@ -63,7 +63,7 @@ You need a macOS, Linux, or Windows computer that can stay online and an install
         In PowerShell:
 
         ```powershell
-        irm https://raw.githubusercontent.com/macro-inc/macro/main/crates/coding_agent_worker/install/install.ps1 | iex
+        irm https://raw.githubusercontent.com/macro-inc/macro/main/crates/agents/macrod/install/install.ps1 | iex
         ```
 
         This installs `macrod.exe` to `%LOCALAPPDATA%\Programs\macrod` and adds that folder to your user `PATH`. Open a new terminal afterwards.

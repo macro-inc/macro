@@ -21,7 +21,7 @@ engine) — keep it free of native-only dependencies.
 
 - Owns: AST → predicate-index compilation and the `soup-flat-v*` profile
   vocabulary.
-- Not here: the filter AST itself → `crates/filter_ast`, `crates/item_filters`;
+- Not here: the filter AST itself → `crates/types/filter_ast`, `crates/search/item_filters`;
   predicate index execution → `crates/predicate_index`; which fields a given
   profile actually serializes → the soup projection crates
   (`soup_filter_cache_adapter`, `soup_filter_projection`).

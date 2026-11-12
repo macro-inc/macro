@@ -1,0 +1,194 @@
+use super::SearchPaginationParams;
+use crate::api::{
+    context::{SearchAuthorizationService, SearchHandlerState},
+    search::{
+        crm_company::{enrich_crm_companies, resolve_crm_team_receipt},
+        enrich::enrich_search_response,
+        simple::{SearchError, simple_unified::perform_unified_search},
+    },
+};
+use axum::{
+    extract::{self, State},
+    response::Json,
+};
+use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
+use opensearch_client::search::unified::{
+    SplitUnifiedSearchResponse, SplitUnifiedSearchResponseValues,
+};
+use search_types::unified::{
+    UnifiedSearchRequest, UnifiedSearchResponse, UnifiedSearchResponseItem,
+};
+use shared_types::response::ErrorResponse;
+use std::cmp::Ordering;
+
+/// Perform a search through all items
+#[utoipa::path(
+    post,
+    path = "/search",
+    operation_id = "unified_search",
+    params(
+            ("page_size" = i64, Query, description = "The page size. Defaults to 10."),
+            ("cursor" = Option<String>, Query, description = "Base64 encoded cursor value.")
+    ),
+    responses(
+            (status = 200, body=UnifiedSearchResponse),
+            (status = 400, body=ErrorResponse),
+            (status = 401, body=ErrorResponse),
+            (status = 500, body=ErrorResponse),
+    )
+)]
+pub async fn handler(
+    State(ctx): State<SearchHandlerState>,
+    authorization: MacroAuthorizationExtractor<SearchAuthorizationService, UserOrInternal>,
+    extract::Query(query_params): extract::Query<SearchPaginationParams>,
+    extract::Json(req): extract::Json<UnifiedSearchRequest>,
+) -> Result<Json<UnifiedSearchResponse>, SearchError> {
+    let user_context = &authorization.authorization.user.user_context;
+
+    tracing::info!(
+        user_id = user_context.user_id,
+        query = ?req.query,
+        search_on = ?req.search_on,
+        include_crm = req.include_crm,
+        "unified_search"
+    );
+
+    // CRM is opt-in: only when the caller asks for it does this resolve a
+    // team membership and mint a capability receipt. No membership → empty
+    // CRM slice, not a failed search. See `resolve_crm_team_receipt`.
+    let crm_access = resolve_crm_team_receipt(&ctx, user_context, req.include_crm).await?;
+
+    let document_name_term = match req.search_on {
+        search_types::SearchOn::Name | search_types::SearchOn::NameContent => {
+            let trimmed = req.query.trim();
+            (!trimmed.is_empty()).then(|| trimmed.to_string())
+        }
+        search_types::SearchOn::Content => None,
+    };
+
+    let (results, next_cursor) =
+        perform_unified_search(&ctx, user_context, crm_access.as_ref(), query_params, req).await?;
+
+    // Split the results by entity type
+    let SplitUnifiedSearchResponseValues {
+        agent_session,
+        channel_message,
+        chat,
+        document,
+        email,
+        project,
+        call_record,
+        crm_company,
+        calendar_event,
+    } = results.into_iter().split_search_response();
+
+    let (
+        enriched_agent_session_results,
+        enriched_document_results,
+        enriched_chat_results,
+        enriched_channel_results,
+        enriched_project_results,
+        enriched_email_results,
+        enriched_call_record_results,
+        enriched_crm_results,
+        enriched_calendar_event_results,
+    ) = tokio::try_join!(
+        enrich_search_response(
+            &ctx,
+            &user_context.user_id,
+            agent_session,
+            opensearch_types::SearchEntityType::AgentSessions,
+            None,
+        ),
+        enrich_search_response(
+            &ctx,
+            &user_context.user_id,
+            document,
+            opensearch_types::SearchEntityType::Documents,
+            document_name_term.as_deref(),
+        ),
+        enrich_search_response(
+            &ctx,
+            &user_context.user_id,
+            chat,
+            opensearch_types::SearchEntityType::Chats,
+            None,
+        ),
+        enrich_search_response(
+            &ctx,
+            &user_context.user_id,
+            channel_message,
+            opensearch_types::SearchEntityType::Channels,
+            None,
+        ),
+        enrich_search_response(
+            &ctx,
+            &user_context.user_id,
+            project,
+            opensearch_types::SearchEntityType::Projects,
+            None,
+        ),
+        enrich_search_response(
+            &ctx,
+            &user_context.user_id,
+            email,
+            opensearch_types::SearchEntityType::Emails,
+            None,
+        ),
+        enrich_search_response(
+            &ctx,
+            &user_context.user_id,
+            call_record,
+            opensearch_types::SearchEntityType::CallRecords,
+            None,
+        ),
+        enrich_crm_companies(&ctx, crm_access.as_ref(), crm_company),
+        enrich_search_response(
+            &ctx,
+            &user_context.user_id,
+            calendar_event,
+            opensearch_types::SearchEntityType::CalendarEvents,
+            None,
+        ),
+    )
+    .map_err(|e| SearchError::InternalError(anyhow::anyhow!("tokio error: {:?}", e)))?;
+
+    let results = {
+        let mut results = vec![];
+        results.extend(enriched_agent_session_results);
+
+        results.extend(enriched_document_results);
+        results.extend(enriched_chat_results);
+        results.extend(enriched_channel_results);
+        results.extend(enriched_project_results);
+        results.extend(enriched_email_results);
+        results.extend(enriched_call_record_results);
+        results.extend(enriched_crm_results);
+        results.extend(enriched_calendar_event_results);
+
+        sort_unified_search_results(results)
+    };
+
+    Ok(Json(UnifiedSearchResponse {
+        results,
+        next_cursor,
+    }))
+}
+
+/// Sorts the unified results
+/// This method is so we can more easily test sorting
+fn sort_unified_search_results(
+    mut results: Vec<UnifiedSearchResponseItem>,
+) -> Vec<UnifiedSearchResponseItem> {
+    // Sort the results by their updated_at
+    results.sort_by(|a, b| {
+        b.updated_at()
+            .partial_cmp(&a.updated_at())
+            .unwrap_or(Ordering::Equal)
+    });
+
+    results
+}
+
+#[cfg(test)]
+mod test;

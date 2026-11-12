@@ -3,16 +3,16 @@ use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use document_storage_service_client::DocumentStorageServiceClient;
 use document_storage_service_client::document::CreateDocumentInternalError;
-use email_api_client::domain::models::EmailApiError;
-use macro_user_id::lowercased::Lowercase;
-use macro_user_id::user_id::{MacroUserId, MacroUserIdStr};
-use model::document::MAX_DOCUMENT_NAME_GRAPHEMES;
-use model::document::response::{CreateDocumentRequest, CreateDocumentResponse};
-use models_email::service::attachment::{
+use email_api_client_core::models::EmailApiError;
+use email_types::service::attachment::{
     AttachmentSfs, AttachmentUploadArgs, AttachmentUploadMetadata,
 };
-use models_email::service::link;
+use email_types::service::link;
+use macro_user_id::lowercased::Lowercase;
+use macro_user_id::user_id::{MacroUserId, MacroUserIdStr};
 use sha2::{Digest, Sha256};
+use shared_types::document::MAX_DOCUMENT_NAME_GRAPHEMES;
+use shared_types::document::response::{CreateDocumentRequest, CreateDocumentResponse};
 use static_file_service_client::StaticFileServiceClient;
 use std::sync::Arc;
 use system_properties::{
@@ -122,10 +122,10 @@ pub async fn store_attachment(
     let mime_type = args.attachment_metadata.mime_type.clone();
 
     match args.upload_destination {
-        models_email::service::attachment::AttachmentUploadDestination::Sfs => {
+        email_types::service::attachment::AttachmentUploadDestination::Sfs => {
             upload_media_attachment(&ctx, args, attachment_data, mime_type).await
         }
-        models_email::service::attachment::AttachmentUploadDestination::Dss => {
+        email_types::service::attachment::AttachmentUploadDestination::Dss => {
             upload_document_attachment(&ctx, args, attachment_data).await
         }
     }
@@ -409,7 +409,7 @@ async fn set_email_attachment_properties(
 fn email_attachment_property(p: &AttachmentUploadArgs) -> EmailAttachmentProperty<'static> {
     EmailAttachmentProperty {
         source: Some(SourceEntity {
-            entity_type: models_properties::EntityType::Thread,
+            entity_type: properties_types::EntityType::Thread,
             entity_id: p.attachment_metadata.thread_db_id.to_string(),
             specific_message_id: Some(p.attachment_metadata.message_db_id),
         }),

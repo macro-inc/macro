@@ -5,10 +5,10 @@ use axum::{extract::Path, http::StatusCode, response::IntoResponse};
 use entity_access::domain::models::EntityPermission;
 use entity_access::inbound::axum_extractors::HistoryAccessExtractor;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model::response::{
+use permissions_types::share_permission::access_level::{AccessLevel, ViewAccessLevel};
+use shared_types::response::{
     GenericErrorResponse, GenericResponse, GenericSuccessResponse, SuccessResponse,
 };
-use models_permissions::share_permission::access_level::{AccessLevel, ViewAccessLevel};
 
 #[derive(serde::Deserialize)]
 pub struct Params {

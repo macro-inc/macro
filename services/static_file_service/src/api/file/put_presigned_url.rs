@@ -9,7 +9,7 @@ use axum::response::IntoResponse;
 use axum::response::Response;
 use chrono::Utc;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model::document::FileType;
+use shared_types::document::FileType;
 use uuid::Uuid;
 
 #[utoipa::path(

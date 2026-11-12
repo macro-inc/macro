@@ -1,8 +1,8 @@
 use axum::{Json, extract::State, http::StatusCode};
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_db_client::user::update_profile_picture::update_profile_picture;
-use model::response::{EmptyResponse, ErrorResponse};
-use models_sfs::FileMetadata;
+use sfs_types::FileMetadata;
+use shared_types::response::{EmptyResponse, ErrorResponse};
 
 use rate_limit::domain::{
     models::{RateLimitConfig, RateLimitKey},

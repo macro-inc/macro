@@ -1,7 +1,7 @@
 #[cfg(not(test))]
 use cached::proc_macro::cached;
 
-use model::item::UserAccessibleItem;
+use shared_types::item::UserAccessibleItem;
 use sqlx::{Pool, Postgres};
 
 /// Gets all accessible items for a user by querying entity_access with the user's source IDs

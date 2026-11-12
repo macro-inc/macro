@@ -22,7 +22,7 @@ them instead of their generic equivalents.
   Ports expose `type Err: std::error::Error + Send + Sync + 'static`; services
   map adapter errors with `rootcause::Report::new(e).into_dynamic()`. Binaries
   return `Result<(), rootcause::Report>`. Never add `anyhow` to a crate that
-  doesn't use it (CS-46). Model: `crates/user_api_key`.
+  doesn't use it (CS-46). Model: `crates/accounts/user_api_key`.
 - **CS-57** No panics outside tests and startup: no `.unwrap()`, `.expect()`,
   `unreachable!`, `panic!`, `todo!`, or unchecked indexing on a path a request,
   tool call, or message can reach. Return a typed error the caller can show
@@ -30,7 +30,7 @@ them instead of their generic equivalents.
   `catch_unwind` or a `JoinError`; fix the code that panics. No
   `Box<dyn Error>` or `Result<_, String>` either.
 - **CS-58** Parse structured text with `nom` (and `logos` for tokenizing a real
-  grammar, as `crates/database_sql` does), not hand-rolled `split_once` /
+  grammar, as `crates/databases/database_sql_engine` does), not hand-rolled `split_once` /
   `strip_prefix` / index scanners.
 - **CS-59** Enum string forms (CS-11) use `strum` derives (`EnumString`,
   `Display`, `AsRefStr`, `IntoStaticStr`, `EnumIter`) with `serialize_all`
@@ -62,7 +62,13 @@ them instead of their generic equivalents.
 - **CS-66** Never wait for a condition by polling: no `yield_now` or `sleep`
   loops. Signal with `oneshot`, `Notify`, `watch`, `Barrier`, or a channel, and
   use `#[tokio::test(start_paused = true)]` for time.
-- **CS-67** Dependencies come from root `[workspace.dependencies]` as `x = {
-  workspace = true }`; after any `Cargo.toml` change run `just hakari` and
-  commit `crates/workspace-hack`. Check the workspace list before adding a
-  crate, and don't add one that duplicates an existing choice.
+- **CS-67** Dependencies, workspace crates included, come from root
+  `[workspace.dependencies]` as `x = { workspace = true }`, never a relative
+  `path`; after any `Cargo.toml` change run `just hakari` (it adds a new
+  member's root entry and rewrites relative paths) and commit the result.
+  Check the workspace list before adding a crate, and don't add one that
+  duplicates an existing choice. Heavy crates with few users (rig, rmcp,
+  redis, async-openai, async-graphql) are `[final-excludes]` in
+  `.config/hakari.toml`: their root entry lists the features every user gets,
+  and `cargo x deps` rejects a member that declares one without
+  `workspace = true`.

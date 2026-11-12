@@ -4,11 +4,11 @@
 use axum::{Json, http::StatusCode};
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
-use model::response::ErrorResponse;
 use rate_limit::domain::{
     models::{RateLimitConfig, RateLimitExceeded, RateLimitKey, RateLimitResult},
     ports::RateLimitService,
 };
+use shared_types::response::ErrorResponse;
 use user_events::{UserMacroEvent, UserPictureChangedMetadata};
 
 use crate::api::{context::ApiContext, middleware::rate_limit::RATE_LIMIT_ENABLED};

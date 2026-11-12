@@ -1,0 +1,94 @@
+use email_types::{db, service};
+
+/// Upserts a scheduled message entry
+#[tracing::instrument(skip(tx, scheduled_message), err)]
+pub async fn upsert_scheduled_message(
+    tx: &mut sqlx::PgConnection,
+    scheduled_message: service::message::ScheduledMessage,
+) -> anyhow::Result<()> {
+    let db_message = db::message::ScheduledMessage::from(scheduled_message);
+    let result = sqlx::query!(
+        r#"
+        INSERT INTO email_scheduled_messages (
+            link_id, message_id, send_time, sent, actor_id, agent_correlation_id,
+            created_at, updated_at
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+        ON CONFLICT (link_id, message_id) DO UPDATE SET
+            send_time = EXCLUDED.send_time,
+            actor_id = EXCLUDED.actor_id,
+                agent_correlation_id = EXCLUDED.agent_correlation_id,
+            updated_at = NOW()
+        WHERE NOT email_scheduled_messages.sent AND NOT email_scheduled_messages.processing
+        "#,
+        db_message.link_id,
+        db_message.message_id,
+        db_message.send_time,
+        db_message.sent,
+        db_message.actor_id,
+        db_message.agent_correlation_id,
+    )
+    .execute(&mut *tx)
+    .await?;
+    anyhow::ensure!(
+        result.rows_affected() == 1,
+        "scheduled message is already processing or sent"
+    );
+    Ok(())
+}
+
+/// Marks a scheduled message as sent
+#[tracing::instrument(skip(executor), err)]
+pub async fn mark_scheduled_message_as_sent<'e, E>(
+    executor: E,
+    link_id: sqlx::types::Uuid,
+    message_id: sqlx::types::Uuid,
+) -> anyhow::Result<bool>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Postgres>,
+{
+    let result = sqlx::query!(
+        r#"
+        UPDATE email_scheduled_messages
+        SET
+            sent = true,
+            processing = false,
+            updated_at = NOW()
+        WHERE link_id = $1 AND message_id = $2 AND processing AND NOT sent AND delivery_claim_id IS NULL
+        "#,
+        link_id,
+        message_id,
+    )
+    .execute(executor)
+    .await?;
+
+    // Return whether a row was actually updated
+    Ok(result.rows_affected() > 0)
+}
+
+/// Set processing to false, on failure of sending scheduled message
+#[tracing::instrument(skip(executor), err)]
+pub async fn clear_scheduled_message_processing<'e, E>(
+    executor: E,
+    link_id: sqlx::types::Uuid,
+    message_id: sqlx::types::Uuid,
+) -> anyhow::Result<bool>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Postgres>,
+{
+    let result = sqlx::query!(
+        r#"
+        UPDATE email_scheduled_messages
+        SET
+            processing = false,
+            updated_at = NOW()
+        WHERE link_id = $1 AND message_id = $2 AND processing AND NOT sent AND delivery_claim_id IS NULL
+        "#,
+        link_id,
+        message_id,
+    )
+    .execute(executor)
+    .await?;
+
+    Ok(result.rows_affected() > 0)
+}

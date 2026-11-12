@@ -118,7 +118,7 @@ pub enum EngineError<S: std::error::Error + 'static> {
     RevisionOverflow,
     /// The local people SQL compiler rejected a read.
     #[error(transparent)]
-    PeopleSql(#[from] database_sql::local_people::PeopleSqlError),
+    PeopleSql(#[from] database_sql_engine::local_people::PeopleSqlError),
     /// The background response belongs to an obsolete account or generation.
     #[error("cache hydration scope changed")]
     StaleHydrationScope,

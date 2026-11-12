@@ -17,11 +17,11 @@ use comms_db_client::messages::create_message::CreateMessageOptions;
 use comms_db_client::messages::create_message_mentions::CreateMessageMentionOptions;
 use comms_db_client::messages::seed_message::SeedMessageOptions;
 use comms_db_client::model::SimpleMention;
-use model::document::DocumentMetadata;
-use models_email::email::service;
-use models_permissions::share_permission::SharePermissionV2;
-use models_permissions::share_permission::access_level::AccessLevel;
-use models_permissions::share_permission::team_share::TeamShareCreation;
+use email_types::email::service;
+use permissions_types::share_permission::SharePermissionV2;
+use permissions_types::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::team_share::TeamShareCreation;
+use shared_types::document::DocumentMetadata;
 use uuid::Uuid;
 
 /// Everything needed to seed one scenario user.
@@ -219,7 +219,7 @@ impl SeedDb {
         entity_access_db_utils::insert_entity_access_row(
             &mut tx,
             &macro_uuid::string_to_uuid(item_id).unwrap(),
-            model_entity::EntityType::from_str(item_type).unwrap(),
+            entity_kind::EntityType::from_str(item_type).unwrap(),
             &channel_id.to_string(),
             entity_access_db_utils::EntityAccessSourceType::Channel,
             AccessLevel::View,
@@ -477,7 +477,7 @@ impl SeedDb {
         macro_db_client::share_permission::channel_permission::create::create_channel_share_permissions(
             &mut transaction,
             &args.share_permission_id,
-            &vec![models_permissions::share_permission::channel_share_permission::ChannelSharePermission {
+            &vec![permissions_types::share_permission::channel_share_permission::ChannelSharePermission {
                 channel_id: args.channel_id.to_string(),
                 access_level: AccessLevel::Edit,
             }],
@@ -529,7 +529,7 @@ impl SeedDb {
         // dropped; readers derive `shareWithTeam` from this state.
         share_permission_db_utils::team_share::initialize(
             &mut transaction,
-            &model_entity::EntityType::Call.with_entity_string(args.call_id.to_string()),
+            &entity_kind::EntityType::Call.with_entity_string(args.call_id.to_string()),
             if args.share_with_team {
                 TeamShareCreation::Call
             } else {

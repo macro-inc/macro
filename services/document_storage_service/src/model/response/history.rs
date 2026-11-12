@@ -1,7 +1,7 @@
 use utoipa::ToSchema;
 
-use model::item::Item;
 use serde::{Deserialize, Serialize};
+use shared_types::item::Item;
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]
 pub struct GetUserHistoryResponse {

@@ -1,0 +1,98 @@
+//! This module is responsible for enriching search results with metadata
+
+use opensearch_client::search::model::SearchHit;
+use opensearch_types::SearchEntityType;
+use search_types::unified::UnifiedSearchResponseItem;
+
+use crate::api::{
+    context::SearchHandlerState,
+    search::{
+        calendar_event::enrich_calendar_events,
+        call_record::enrich_call_records,
+        channel::{enrich_channel_messages, enrich_channel_names, split_channel_hits},
+        chat::enrich_chats,
+        document::enrich_documents,
+        email::enrich_emails,
+        project::enrich_projects,
+        simple::SearchError,
+    },
+};
+
+/// Enriches search results with metadata and converts to UnifiedSearchResponseItem
+#[tracing::instrument(skip(ctx, results), fields(result_count = results.len()), err)]
+pub async fn enrich_search_response(
+    ctx: &SearchHandlerState,
+    user_id: &str,
+    results: Vec<SearchHit>,
+    entity_type: SearchEntityType,
+    search_term: Option<&str>,
+) -> Result<Vec<UnifiedSearchResponseItem>, SearchError> {
+    match entity_type {
+        SearchEntityType::AgentSessions => Ok(super::agent_session::enrich_agent_sessions(
+            ctx, user_id, results,
+        )
+        .await?
+        .into_iter()
+        .map(UnifiedSearchResponseItem::AgentSession)
+        .collect()),
+        SearchEntityType::Documents => {
+            let response = enrich_documents(ctx, user_id, results, search_term).await?;
+            Ok(response
+                .into_iter()
+                .map(UnifiedSearchResponseItem::Document)
+                .collect())
+        }
+        SearchEntityType::Emails => {
+            let response = enrich_emails(ctx, user_id, results).await?;
+            Ok(response
+                .into_iter()
+                .map(UnifiedSearchResponseItem::Email)
+                .collect())
+        }
+        SearchEntityType::Channels => {
+            // Message hits from OpenSearch carry goto content; name hits from
+            // the Postgres channel name search have none and become channels.
+            let (message_hits, name_hits) = split_channel_hits(results);
+            let (messages, channels) = tokio::try_join!(
+                enrich_channel_messages(ctx, user_id, message_hits),
+                enrich_channel_names(ctx, user_id, name_hits),
+            )?;
+            Ok(messages
+                .into_iter()
+                .map(UnifiedSearchResponseItem::ChannelMessage)
+                .chain(channels.into_iter().map(UnifiedSearchResponseItem::Channel))
+                .collect())
+        }
+        SearchEntityType::Chats => {
+            let response = enrich_chats(ctx, user_id, results).await?;
+            Ok(response
+                .into_iter()
+                .map(UnifiedSearchResponseItem::Chat)
+                .collect())
+        }
+        SearchEntityType::Projects => {
+            let response = enrich_projects(ctx, user_id, results).await?;
+            Ok(response
+                .into_iter()
+                .map(UnifiedSearchResponseItem::Project)
+                .collect())
+        }
+        SearchEntityType::CallRecords => {
+            let response = enrich_call_records(ctx, user_id, results).await?;
+            Ok(response
+                .into_iter()
+                .map(UnifiedSearchResponseItem::Call)
+                .collect())
+        }
+        SearchEntityType::CalendarEvents => {
+            let response = enrich_calendar_events(ctx, user_id, results).await?;
+            Ok(response
+                .into_iter()
+                .map(UnifiedSearchResponseItem::CalendarEvent)
+                .collect())
+        }
+        // CRM companies are enriched separately (they need the team
+        // receipt) via `crm_company::enrich_crm_companies`.
+        SearchEntityType::CrmCompanies => Ok(vec![]),
+    }
+}

@@ -1,0 +1,114 @@
+[package]
+edition = "2024"
+name = "databases"
+publish = false
+version = "0.1.0"
+
+[[bin]]
+name = "backfill_formula_cells"
+path = "src/bin/backfill_formula_cells.rs"
+required-features = ["backfill_binary"]
+
+[features]
+default = []
+# AI tools. A driving adapter like `inbound`, but for the agent loop rather
+# than HTTP, so it needs neither axum nor a router.
+ai_tools = [
+  "dep:ai_toolset",
+  "dep:anyhow",
+  "dep:async-trait",
+  "dep:schemars",
+  "databases_types/schema",
+  "ports",
+]
+# The one-off backfill of formula columns' stored cells.
+backfill_binary = [
+  "dep:clap",
+  "dep:datastore_env_vars",
+  "dep:macro_entrypoint",
+  "postgres",
+  "tokio/macros",
+  "tokio/rt-multi-thread",
+]
+# Axum HTTP router: ops, schema ops, and saved queries.
+inbound = [
+  "dep:axum",
+  "dep:macro_authorization",
+  "dep:model_error_response",
+  "entity_access/inbound",
+  "ports",
+]
+# Capability impls for the unified entity-mutation router (rename, trash,
+# restore, permanent delete). `rootcause` is already an unconditional
+# dependency, so only the trait crate is pulled in here.
+entity_mutation = ["dep:entity_mutation", "ports"]
+# Liveness fan-out through the connection gateway.
+gateway = ["dep:anyhow", "dep:connection_gateway_client", "outbound"]
+# Driven adapters share the port contracts.
+outbound = ["ports"]
+ports = ["dep:entity_access", "dep:tokio", "dep:tracing"]
+# Ordered, filtered reads of a database view.
+view_rows = ["ports"]
+# Postgres persistence for databases/tables/columns/rows, and cells through
+# the properties adapter.
+postgres = [
+  "dep:anyhow",
+  "dep:entity_access_db_utils",
+  "dep:properties",
+  "dep:share_permission_db_utils",
+  "dep:sqlx",
+  "outbound",
+]
+
+[dependencies]
+database_sql_engine = { workspace = true }
+activity = { workspace = true }
+ai_toolset = { workspace = true, optional = true }
+anyhow = { workspace = true, optional = true }
+async-trait = { workspace = true, optional = true }
+axum = { workspace = true, optional = true }
+clap = { workspace = true, optional = true }
+bot_id = { workspace = true }
+chrono = { workspace = true, features = ["serde"] }
+connection_gateway_client = { workspace = true, optional = true }
+datastore_env_vars = { workspace = true, optional = true }
+entity_access = { workspace = true, optional = true, features = ["ports"] }
+entity_access_db_utils = { workspace = true, optional = true }
+entity_mutation = { workspace = true, optional = true }
+macro_authorization = { workspace = true, optional = true, features = ["axum"] }
+macro_entrypoint = { workspace = true, optional = true }
+macro_event_broker = { workspace = true }
+macro_event_topics = { workspace = true }
+macro_user_id = { workspace = true }
+macro_uuid = { workspace = true }
+entity_kind = { workspace = true }
+model_error_response = { workspace = true, optional = true }
+databases_types = { workspace = true }
+properties_types = { workspace = true }
+permissions_types = { workspace = true }
+properties = { workspace = true, optional = true, features = ["outbound"] }
+rootcause = { workspace = true }
+schemars = { workspace = true, optional = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+share_permission_db_utils = { workspace = true, optional = true }
+sqlx = { workspace = true, optional = true }
+strum = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, optional = true, features = ["rt"] }
+tracing = { workspace = true, optional = true }
+utoipa = { workspace = true }
+uuid = { workspace = true }
+url = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+
+[dev-dependencies]
+entity_access = { workspace = true }
+entity_access_outbound = { workspace = true }
+macro_db_migrator = { workspace = true }
+model_owner = { workspace = true }
+# The palette the fakes colour new options from.
+properties = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tower = { workspace = true }

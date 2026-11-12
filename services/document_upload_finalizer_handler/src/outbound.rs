@@ -8,8 +8,6 @@ use documents::domain::upload_finalize::{RepoUploadFinalizePort, UploadFinalizeD
 use documents::outbound::pg_document_repo::PgDocumentRepo;
 use documents::outbound::s3_utf8_object_reader::S3Utf8ObjectReader;
 use entity_registry::BotFacts;
-use model::convert::ConvertQueueMessage;
-use model::document::{DocumentBasic, FileType};
 use model_owner::Owner;
 use s3_key::{
     UpgradedOfficeFormat, build_cloud_storage_bucket_document_key,
@@ -17,6 +15,8 @@ use s3_key::{
     document_key_url_path,
 };
 use sha2::{Digest, Sha256};
+use shared_types::convert::ConvertQueueMessage;
+use shared_types::document::{DocumentBasic, FileType};
 
 use crate::ports::{DocumentObjectReader, DocumentUploadMetadataPort};
 

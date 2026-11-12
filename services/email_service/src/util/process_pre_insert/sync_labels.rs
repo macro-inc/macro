@@ -1,5 +1,5 @@
 use anyhow::Context;
-use models_email::email::service::label::Label;
+use email_types::email::service::label::Label;
 use sqlx::PgPool;
 use std::collections::HashMap;
 use uuid::Uuid;

@@ -1,6 +1,5 @@
+use entity_kind::Entity;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::Entity;
-use models_pagination::{CreatedAt, Query};
 use notification::domain::models::TaggedContent;
 use notification::domain::models::request::{NotificationListFilters, NotificationStatus};
 use notification::domain::models::{
@@ -8,7 +7,8 @@ use notification::domain::models::{
     UserNotificationRow, device::DeviceType,
 };
 use notification::domain::ports::NotificationRepository;
-use notification::outbound::repository::DbNotificationRepository;
+use notification_outbound::repository::DbNotificationRepository;
+use pagination_types::{CreatedAt, Query};
 use rootcause::Report;
 use serde::Serialize;
 use serde::de::DeserializeOwned;

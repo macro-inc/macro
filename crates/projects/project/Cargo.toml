@@ -1,0 +1,79 @@
+[package]
+edition = "2024"
+name = "project"
+publish = false
+version = "0.1.0"
+
+[features]
+toolset = ["inbound", "dep:ai_toolset", "dep:anyhow", "dep:async-trait", "dep:bot_id", "dep:schemars"]
+default = ["ports", "postgres"]
+inbound = [
+  "dep:axum",
+  "dep:macro_authorization",
+  "dep:model_error_response",
+  "dep:utoipa",
+  "entity_access/inbound",
+  "ports",
+]
+# Serves the messages domain's initiative-parent port from `InitiativeLookup`,
+# for compositions that host initiative discussions.
+messages = ["dep:messages", "outbound"]
+outbound = ["ports"]
+resources = ["outbound", "dep:properties", "dep:system_properties"]
+ports = ["dep:entity_access", "dep:tracing"]
+postgres = [
+  "dep:sqlx",
+  "dep:entity_access_db_utils",
+  "dep:share_permission_db_utils",
+  "dep:entity_kind",
+  "outbound",
+]
+
+[dependencies]
+ai_toolset = { workspace = true, optional = true }
+anyhow = { workspace = true, optional = true }
+async-trait = { workspace = true, optional = true }
+bot_id = { workspace = true, optional = true }
+schemars = { workspace = true, optional = true }
+properties = { workspace = true, optional = true }
+system_properties = { workspace = true, optional = true }
+properties_types = { workspace = true }
+activity = { workspace = true }
+axum = { workspace = true, optional = true }
+chrono = { workspace = true, features = ["serde"] }
+entity_access = { workspace = true, optional = true, features = ["ports"] }
+entity_access_db_utils = { workspace = true, optional = true }
+macro_authorization = { workspace = true, optional = true, features = ["axum"] }
+macro_event_broker = { workspace = true }
+macro_event_topics = { workspace = true }
+macro_user_id = { workspace = true }
+entity_kind = { workspace = true, optional = true }
+model_error_response = { workspace = true, optional = true }
+permissions_types = { workspace = true }
+rootcause = { workspace = true }
+messages = { workspace = true, features = ["ports"], optional = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+share_permission_db_utils = { workspace = true, optional = true }
+sqlx = { workspace = true, optional = true }
+thiserror = { workspace = true }
+tracing = { workspace = true, optional = true }
+unicode-segmentation = { workspace = true }
+utoipa = { workspace = true, optional = true }
+uuid = { workspace = true, features = ["serde", "v7"] }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+mockall = { workspace = true }
+
+[dev-dependencies]
+activity = { workspace = true, features = ["outbound"] }
+entity_access = { workspace = true }
+entity_access_outbound = { workspace = true }
+anyhow = { workspace = true }
+http-body-util = { workspace = true }
+macro_db_migrator = { workspace = true }
+model_user = { workspace = true }
+properties = { workspace = true, features = ["outbound"] }
+serde_json = { workspace = true }
+system_properties = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tower = { workspace = true }

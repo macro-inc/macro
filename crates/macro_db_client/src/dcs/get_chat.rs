@@ -1,10 +1,10 @@
 // biohazard
-use agent::types::ChatMessageContent;
-use agent::types::Role;
 use anyhow::{Error, Result};
-use model::chat::{AttachmentType, Chat, ChatAttachment, ChatMessageWithAttachments};
-use model_entity::{Entity, EntityType};
+use chat_message::ChatMessageContent;
+use chat_message::Role;
+use entity_kind::{Entity, EntityType};
 use model_owner::Owner;
+use shared_types::chat::{AttachmentType, Chat, ChatAttachment, ChatMessageWithAttachments};
 use sqlx::{Executor, Pool, Postgres};
 use std::collections::HashMap;
 

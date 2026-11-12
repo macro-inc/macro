@@ -10,9 +10,9 @@ name: Ensure Daytona Snapshot
     branches:
     - main
     paths:
-    - crates/agent_harness/container/**
-    - crates/agent_harness/justfile
-    - crates/agent_harness/sandbox_sizes.json
+    - crates/agents/agent_harness/container/**
+    - crates/agents/agent_harness/justfile
+    - crates/agents/agent_harness/sandbox_sizes.json
     - nix/cloud-storage.nix
     - tooling/xtask/crates/xtask_workflows/src/workflows/ensure_daytona_snapshot.rs
     - '.github/workflows/ensure_daytona_snapshot.yml'
@@ -20,9 +20,9 @@ name: Ensure Daytona Snapshot
     branches:
     - main
     paths:
-    - crates/agent_harness/container/**
-    - crates/agent_harness/justfile
-    - crates/agent_harness/sandbox_sizes.json
+    - crates/agents/agent_harness/container/**
+    - crates/agents/agent_harness/justfile
+    - crates/agents/agent_harness/sandbox_sizes.json
     - nix/cloud-storage.nix
     - tooling/xtask/crates/xtask_workflows/src/workflows/ensure_daytona_snapshot.rs
     - '.github/workflows/ensure_daytona_snapshot.yml'
@@ -59,7 +59,7 @@ jobs:
         fi
         daytona login --api-key "$DAYTONA_API_KEY"
         echo "ensuring Daytona snapshot at --cpu ${DAYTONA_SNAPSHOT_CPU} --memory ${DAYTONA_SNAPSHOT_MEMORY} --disk ${DAYTONA_SNAPSHOT_DISK}"
-        just --justfile crates/agent_harness/justfile ensure-daytona
+        just --justfile crates/agents/agent_harness/justfile ensure-daytona
       shell: bash
       env:
         DAYTONA_API_KEY: ${{ secrets.DAYTONA_API_KEY }}
@@ -99,7 +99,7 @@ jobs:
           --platform linux/amd64 \
           "${tags[@]}" \
           --push \
-          crates/agent_harness/container
+          crates/agents/agent_harness/container
       shell: bash
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

@@ -12,14 +12,14 @@ use email::domain::events::{
 use email_db_client::labels::delete::delete_db_message_labels;
 use email_db_client::labels::insert;
 use email_db_client::threads::update::update_thread_metadata;
-use macro_user_id::user_id::MacroUserIdStr;
-use models_email::api::refresh::RefreshEmailEvent;
-use models_email::email::service::link;
-use models_email::gmail::inbox_sync::{
+use email_types::api::refresh::RefreshEmailEvent;
+use email_types::email::service::link;
+use email_types::gmail::inbox_sync::{
     InboxSyncOperation, InboxSyncPubsubMessage, UpdateLabelsPayload, UpsertMessagePayload,
 };
-use models_email::service;
-use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
+use email_types::service;
+use email_types::service::pubsub::{DetailedError, FailureReason, ProcessingError};
+use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 use std::result;
 use uuid::Uuid;
@@ -289,7 +289,7 @@ async fn publish_label_diff_events(
     thread_db_id: Uuid,
     labels_to_add: &[String],
     labels_to_delete: &[String],
-    db_message_labels: &[models_email::db::label::Label],
+    db_message_labels: &[email_types::db::label::Label],
 ) {
     let added = |label: &str| labels_to_add.iter().any(|l| l == label);
     let removed = |label: &str| labels_to_delete.iter().any(|l| l == label);

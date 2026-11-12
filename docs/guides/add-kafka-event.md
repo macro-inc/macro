@@ -14,14 +14,14 @@ section below is one place, in order; past misses are called out inline.
 
 | Adding | Copy | Why |
 | --- | --- | --- |
-| A topic | The `macro.messages` registration: `crates/macro_event_topics/src/lib.rs`, its `test.rs`, `.github/kafka-cluster-topics.json` | Three files, shipped as its own PR ahead of the producer |
-| Events on a topic | `crates/github_pull_requests/src/broker.rs` (one variant), `crates/messages/src/outbound/broker.rs` (several) | Topic enum, keyed envelope, broker-backed adapter for a domain port |
-| A durable consumer | `crates/crm/src/inbound/call_archived.rs` | Smallest grouped consumer: poison commit, bounded retry, commit after work, cancel-safe |
-| An at-least-once consumer that must not skip | `crates/webhook/src/inbound/kafka_consumer.rs` | Transient vs permanent errors; exits uncommitted so a restart redelivers |
-| A per-process fan-out (GraphQL subscription, SSE) | `crates/agent_session_realtime/src/outbound/log_topic_consumer.rs` | Ungrouped, starts at `Latest`, commits nothing |
+| A topic | The `macro.messages` registration: `crates/platform/macro_event_topics/src/lib.rs`, its `test.rs`, `.github/kafka-cluster-topics.json` | Three files, shipped as its own PR ahead of the producer |
+| Events on a topic | `crates/integrations/github_pull_requests/src/broker.rs` (one variant), `crates/comms/messages/src/outbound/broker.rs` (several) | Topic enum, keyed envelope, broker-backed adapter for a domain port |
+| A durable consumer | `crates/databases/crm/src/inbound/call_archived.rs` | Smallest grouped consumer: poison commit, bounded retry, commit after work, cancel-safe |
+| An at-least-once consumer that must not skip | `crates/integrations/webhook/src/inbound/kafka_consumer.rs` | Transient vs permanent errors; exits uncommitted so a restart redelivers |
+| A per-process fan-out (GraphQL subscription, SSE) | `crates/agents/agent_session_realtime/src/outbound/log_topic_consumer.rs` | Ungrouped, starts at `Latest`, commits nothing |
 
-Background: `crates/macro_event_broker/AGENTS.md` maps the broker crate;
-`crates/properties/README.md` ("Delivery semantics and compatibility") states the
+Background: `crates/platform/macro_event_broker/AGENTS.md` maps the broker crate;
+`crates/databases/properties/README.md` ("Delivery semantics and compatibility") states the
 delivery contract every producer has.
 
 ## 1. Register the topic (new topics only)
@@ -30,7 +30,7 @@ Add a variant to an existing topic when the event is about the same entity as
 the topic's other events; add a topic only for a new entity stream.
 
 - Add `MacroXTopic => "macro.<snake_plural>"` with a doc comment to `topics!` in
-  `crates/macro_event_topics/src/lib.rs`, and an assertion to
+  `crates/platform/macro_event_topics/src/lib.rs`, and an assertion to
   `all_topic_names_includes_declared_topics` in `src/test.rs`.
 - Run `cargo x kafka-topics` and commit `.github/kafka-cluster-topics.json`. Never
   hand-edit it. CI (`check_generated`) fails when it is stale, and the
@@ -69,7 +69,7 @@ Put the types next to the domain that owns the fact
 - Define a publisher port in the domain and implement it in an adapter over
   `MacroEventBroker` (`GithubPullRequestEventPublisher` +
   `BrokerGithubPullRequestPublisher`, `MessageEventPublisher` +
-  `BrokerMessagePublisher`). Small domains such as `crates/forms` take
+  `BrokerMessagePublisher`). Small domains such as `crates/databases/forms` take
   `B: MacroEventBroker` directly; either keeps Kafka types out of
   `src/domain/**` ([CS-51](../../.agents/rules/rust/architecture.md)).
 - Publish only after the transaction commits, from committed state (see
@@ -79,7 +79,7 @@ Put the types next to the domain that owns the fact
   There is no outbox; delivery is at most once relative to the write.
 - Tests: a recording `MacroEventBroker` that captures topic, key, and
   `serde_json::to_value(event.event())`, asserting the full JSON literal
-  (`crates/messages/src/outbound/broker/test.rs`). That literal is the wire
+  (`crates/comms/messages/src/outbound/broker/test.rs`). That literal is the wire
   contract.
 
 ## 4. Wire a real broker into every composition root
@@ -88,7 +88,7 @@ Services default their broker generic to `NoopMacroEventBroker`, so a compositio
 that forgets it compiles and silently publishes nothing.
 
 - Find every place the producing service is constructed: its service binaries,
-  `crates/ai_tools/src/tool_context.rs` (AI tools and MCP; use
+  `crates/ai/agent_tools/src/tool_context.rs` (AI tools and MCP; use
   `MaybeToolEventBroker`), and any other host. A write path left on the no-op
   broker is a write that never produces an event.
 - Build the broker as `MacroEventBrokerService::new(KafkaEventPublisher::new(..)?,
@@ -109,12 +109,12 @@ rg -l 'declare_topics!' crates services | xargs rg -l '<XMacroEvent>'
 
 | Consumer | What to add | Silent-drop behavior if you don't |
 | --- | --- | --- |
-| Webhook ingestion and SSE, `crates/webhook/src/domain/ingestion.rs` + `ingestion/stream.rs`, topic list in `crates/webhook/src/topics.rs` | A normalization arm and audience, a case in `ingestion/test.rs`, a row in the README event table | An agent-trigger shape with no arm is rejected as `InvalidEntityId` ("unrecognized agent-trigger event shape") and committed; the error is logged in DSS, not by the producer, so the producer looks healthy while nothing reaches the daemon |
-| Realtime Soup, `crates/soup_realtime/src/inbound/kafka_consumer.rs` | Patches for every Soup item the event changes, including items reached through the event (entities shared into a channel) | No patch means no realtime update; the channel-shared case was missed once |
+| Webhook ingestion and SSE, `crates/integrations/webhook/src/domain/ingestion.rs` + `ingestion/stream.rs`, topic list in `crates/integrations/webhook/src/topics.rs` | A normalization arm and audience, a case in `ingestion/test.rs`, a row in the README event table | An agent-trigger shape with no arm is rejected as `InvalidEntityId` ("unrecognized agent-trigger event shape") and committed; the error is logged in DSS, not by the producer, so the producer looks healthy while nothing reaches the daemon |
+| Realtime Soup, `crates/search/soup_realtime_inbound/src/kafka_consumer.rs` | Patches for every Soup item the event changes, including items reached through the event (entities shared into a channel) | No patch means no realtime update; the channel-shared case was missed once |
 | Activity, `services/document_storage_service/src/service/activity.rs` and the owning domain's activity mapping | Map the variant to an activity row | No activity entry |
 | Search, `services/search_processing_service/src/inbound/kafka_consumer.rs` | Index or delete | Stale search results |
-| Routines and scheduled actions, `crates/scheduled_action/src/inbound/kafka_consumer.rs` | Trigger filter support | Routine never fires |
-| Agent triggers, `crates/agent_trigger/src/domain/sources.rs` | Trigger input, when the event should start an agent | No agent session |
+| Routines and scheduled actions, `crates/agents/scheduled_action/src/inbound/kafka_consumer.rs` | Trigger filter support | Routine never fires |
+| Agent triggers, `crates/agents/agent_trigger/src/domain/sources.rs` | Trigger input, when the event should start an agent | No agent session |
 
 Adding a **new topic** to an existing consumer means adding its `XMacroEvent` to
 that consumer's `declare_topics!` list. The group then reads a partition it has
@@ -188,7 +188,7 @@ payload change must be readable by both the deployed code and the new code.
 
 Variants on `macro.documents`, `macro.channels`, `macro.messages`, and
 `macro.agent_session_lifecycle` reach customers through `WebhookEvent`
-(`crates/webhook/src/domain/events.rs`), which is part of the storage OpenAPI spec.
+(`crates/integrations/webhook/src/domain/events.rs`), which is part of the storage OpenAPI spec.
 
 - Derive `utoipa::ToSchema` on the new metadata under the crate's `schema` or
   `inbound` feature, like `MessageTopicEvent`.

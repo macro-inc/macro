@@ -118,7 +118,7 @@ async fn deliver_to_viewers<R: MessageRealtime, A: MessageAudienceAccess>(
             serde_json::json!({ "parent": parent, "activities": activities }),
             viewers
                 .into_iter()
-                .map(|user| model_entity::EntityType::User.with_entity_string(user))
+                .map(|user| entity_kind::EntityType::User.with_entity_string(user))
                 .collect(),
         )
         .await

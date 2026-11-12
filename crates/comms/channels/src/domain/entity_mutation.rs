@@ -1,0 +1,91 @@
+//! Unified entity-mutation capability impls for channels.
+
+use channel_id::ChannelId;
+use entity_access::domain::models::{
+    EntityAccessReceipt, MemberParticipantRole, RequiredPermission, ViewOnly,
+};
+use entity_kind::Entity;
+use entity_mutation::{
+    DeleteEntityPermanently, EntityMutationEffect, EntityMutationErrorCode, RenameEntity,
+};
+use uuid::Uuid;
+
+use super::{
+    models::{PatchChannelRequest, Sender},
+    ports::{ChannelMutationErr, ChannelService},
+    service::ChannelServiceImpl,
+};
+
+impl From<ChannelMutationErr> for EntityMutationErrorCode {
+    fn from(error: ChannelMutationErr) -> Self {
+        match error {
+            error @ ChannelMutationErr::BadRequest(_) => Self::invalid(rootcause::report!(error)),
+            error @ (ChannelMutationErr::Unauthorized(_) | ChannelMutationErr::Forbidden(_)) => {
+                Self::forbidden(rootcause::report!(error))
+            }
+            error @ ChannelMutationErr::NotFound(_) => Self::not_found(rootcause::report!(error)),
+            error => Self::internal(rootcause::report!(error)),
+        }
+    }
+}
+
+/// Parse the channel id, rejecting non-UUID identifiers.
+fn channel_uuid(entity: &Entity<'static>) -> Result<Uuid, EntityMutationErrorCode> {
+    Uuid::parse_str(&entity.entity_id)
+        .map_err(|error| EntityMutationErrorCode::invalid(rootcause::report!(error)))
+}
+
+/// Convert the authenticated receipt holder into a channel sender.
+fn sender_from_receipt<T: RequiredPermission>(
+    receipt: &EntityAccessReceipt<T>,
+) -> Result<Sender, EntityMutationErrorCode> {
+    receipt
+        .get_authenticated_user()
+        .cloned()
+        .map(Sender::new_from_user)
+        .map_err(|error| EntityMutationErrorCode::forbidden(rootcause::report!(error)))
+}
+
+impl<R, E, P, F> RenameEntity for ChannelServiceImpl<R, E, P, F>
+where
+    Self: ChannelService,
+{
+    type Receipt = MemberParticipantRole;
+
+    async fn rename_entity(
+        &self,
+        entity: Entity<'static>,
+        receipt: EntityAccessReceipt<Self::Receipt>,
+        display_name: String,
+    ) -> Result<Vec<EntityMutationEffect>, EntityMutationErrorCode> {
+        self.patch_channel(
+            receipt,
+            PatchChannelRequest {
+                channel_name: Some(display_name),
+                convert_to_team_channel: None,
+                auto_join_team: None,
+            },
+        )
+        .await?;
+        Ok(vec![EntityMutationEffect::updated(entity)])
+    }
+}
+
+impl<R, E, P, F> DeleteEntityPermanently for ChannelServiceImpl<R, E, P, F>
+where
+    Self: ChannelService,
+{
+    // The domain service checks ownership or admin access to this channel's team.
+    type Receipt = ViewOnly;
+
+    async fn delete_entity_permanently(
+        &self,
+        entity: Entity<'static>,
+        receipt: EntityAccessReceipt<Self::Receipt>,
+    ) -> Result<Vec<EntityMutationEffect>, EntityMutationErrorCode> {
+        let channel_id = channel_uuid(&entity)?;
+        let sender = sender_from_receipt(&receipt)?;
+        self.delete_channel(sender, ChannelId(channel_id)).await?;
+        Ok(vec![EntityMutationEffect::deleted(entity)])
+    }
+}

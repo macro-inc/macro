@@ -2,7 +2,7 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use anyhow::Context;
-use model::document::FileType;
+use shared_types::document::FileType;
 
 /// Cleanup the folder of the job
 pub fn cleanup_folder(job_id: &str) -> anyhow::Result<()> {

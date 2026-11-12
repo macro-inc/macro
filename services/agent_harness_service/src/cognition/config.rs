@@ -1,9 +1,9 @@
+use ai_editing_worker_url::AiEditingWorkerUrl;
 use anyhow::Context;
 use entity_registry::NonUserOwners;
 use macro_auth::InternalApiKey;
 pub use macro_env::Environment;
 use macro_env_var::{env_vars, maybe_env_vars};
-use macro_service_urls::AiEditingWorkerUrl;
 use secretsmanager_client::LocalOrRemoteSecret;
 
 use crate::cognition::core::constants::DEFAULT_DOCUMENT_BATCH_LIMIT;
@@ -87,7 +87,7 @@ pub struct Config {
     pub enable_ai_usage_billing: ai_billing::AiUsageBilling,
     /// Optional TypeSafe credential for named decisions.
     /// Without it, these endpoints respond with 503.
-    pub typesafe_api_key: jev::outbound::TypesafeApiKey,
+    pub typesafe_api_key: jev_classifier::outbound::TypesafeApiKey,
     /// The free plan's hard monthly AI cap, in cents at provider cost.
     /// Mandatory; set in Doppler.
     pub ai_usage_free_included_allowance_cents: ai_billing::IncludedAllowanceCents,
@@ -208,7 +208,7 @@ impl Config {
         Config {
             enable_ai_usage_enforcement: ai_usage::AiUsageEnforcement::Disabled,
             enable_ai_usage_billing: ai_billing::AiUsageBilling::Disabled,
-            typesafe_api_key: jev::outbound::TypesafeApiKey::Unset,
+            typesafe_api_key: jev_classifier::outbound::TypesafeApiKey::Unset,
             ai_usage_free_included_allowance_cents: ai_billing::IncludedAllowanceCents::new(500)
                 .unwrap(),
             ai_usage_included_allowance_cents: ai_billing::IncludedAllowanceCents::new(2_000)

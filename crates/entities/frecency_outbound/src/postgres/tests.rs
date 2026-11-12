@@ -1,0 +1,982 @@
+use frecency_core::models::{
+    AggregateId, FrecencyAction, FrecencyData, FrecencyEntity, FrecencyEvent,
+};
+
+use super::*;
+use chrono::Utc;
+use entity_kind::EntityType;
+use item_filters::ChatFilters;
+use macro_db_migrator::MACRO_DB_MIGRATIONS;
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use std::collections::VecDeque;
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_set_event(pool: PgPool) {
+    let storage = FrecencyPgStorage::new(pool.clone());
+    let test_user_id = "test_user_set_event";
+
+    // Create a test event record
+    let event = EventRecord::from_stored(
+        FrecencyEvent {
+            entity: FrecencyEntity {
+                user_id: Cow::Borrowed(test_user_id),
+                entity: EntityType::Document.with_entity_str("doc123"),
+            },
+            action: FrecencyAction::Open,
+        },
+        Utc::now(),
+    );
+
+    // Insert the event
+    let result = storage.set_event(event).await;
+    assert!(result.is_ok(), "Failed to set event: {:?}", result);
+
+    // Verify the event was inserted
+    let row = sqlx::query!(
+        r#"
+        SELECT user_id, entity_type, event_type, entity_id, was_processed
+        FROM frecency_events
+        WHERE user_id = $1 AND entity_id = $2
+        "#,
+        test_user_id,
+        "doc123"
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(row.user_id, test_user_id);
+    assert_eq!(row.entity_type, "document");
+    assert_eq!(row.event_type, "open");
+    assert_eq!(row.entity_id, "doc123");
+    assert!(!row.was_processed);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_set_and_get_aggregate(pool: PgPool) {
+    let storage = FrecencyPgStorage::new(pool.clone());
+    let test_user_id = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
+
+    // Create a test aggregate
+    let mut recent_events = VecDeque::new();
+    recent_events.push_back(TimestampWeight {
+        timestamp: Utc::now(),
+        weight: 1.0,
+    });
+
+    let aggregate = AggregateFrecency::from_stored(
+        AggregateId {
+            entity: EntityType::Document.with_entity_str("doc456"),
+            user_id: test_user_id.clone(),
+        },
+        FrecencyData::from_stored(5, 75.5, Utc::now(), recent_events),
+    );
+
+    // Insert the aggregate
+    let result = storage.set_aggregate(aggregate.clone()).await;
+    assert!(result.is_ok(), "Failed to set aggregate: {:?}", result);
+
+    // Retrieve the aggregate
+    let retrieved = storage
+        .get_top_entities(FrecencyPageRequest {
+            user_id: test_user_id.copied(),
+            from_score: None,
+            limit: 1,
+            filters: None,
+        })
+        .await
+        .unwrap();
+
+    let retrieved = retrieved.into_iter().next().unwrap();
+    assert_eq!(retrieved.id.user_id.as_ref(), test_user_id.as_ref());
+    assert_eq!(retrieved.id.entity.entity_id, "doc456");
+    assert_eq!(retrieved.id.entity.entity_type, EntityType::Document);
+    assert_eq!(retrieved.data.event_count, 5);
+    assert_eq!(retrieved.data.frecency_score, 75.5);
+    assert_eq!(retrieved.data.recent_events.len(), 1);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_update_aggregate(pool: PgPool) {
+    let storage = FrecencyPgStorage::new(pool.clone());
+    let test_user_id = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
+
+    // Create initial aggregate
+    let aggregate1 = AggregateFrecency::from_stored(
+        AggregateId {
+            entity: EntityType::Chat.with_entity_str("chat789"),
+            user_id: test_user_id.clone(),
+        },
+        FrecencyData::from_stored(3, 50.0, Utc::now(), VecDeque::new()),
+    );
+
+    storage.set_aggregate(aggregate1).await.unwrap();
+
+    // Update with new values
+    let mut updated_events = VecDeque::new();
+    updated_events.push_back(TimestampWeight {
+        timestamp: Utc::now(),
+        weight: 2.0,
+    });
+
+    let aggregate2 = AggregateFrecency::from_stored(
+        AggregateId {
+            entity: EntityType::Chat.with_entity_str("chat789"),
+            user_id: test_user_id.clone(),
+        },
+        FrecencyData::from_stored(10, 95.0, Utc::now(), updated_events),
+    );
+
+    storage.set_aggregate(aggregate2).await.unwrap();
+
+    // Verify the update
+    let retrieved = storage
+        .get_top_entities(FrecencyPageRequest {
+            user_id: test_user_id.copied(),
+            from_score: None,
+            limit: 1,
+            filters: None,
+        })
+        .await
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+
+    assert_eq!(retrieved.data.event_count, 10);
+    assert_eq!(retrieved.data.frecency_score, 95.0);
+    assert_eq!(retrieved.data.recent_events.len(), 1);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_get_top_entities(pool: PgPool) {
+    let storage = FrecencyPgStorage::new(pool.clone());
+    let test_user_id = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
+
+    // Create multiple aggregates with different scores
+    let entities = vec![
+        ("doc1", EntityType::Document, 90.0),
+        ("doc2", EntityType::Document, 70.0),
+        ("chat1", EntityType::Chat, 85.0),
+        ("project1", EntityType::Project, 60.0),
+        ("doc3", EntityType::Document, 95.0),
+    ];
+
+    for (id, entity_type, score) in entities {
+        let aggregate = AggregateFrecency::from_stored(
+            AggregateId {
+                entity: entity_type.with_entity_string(id.to_string()),
+                user_id: test_user_id.clone(),
+            },
+            FrecencyData::from_stored(1, score, Utc::now(), VecDeque::new()),
+        );
+        storage.set_aggregate(aggregate).await.unwrap();
+    }
+
+    // Get top 3 entities
+    let top_entities = storage
+        .get_top_entities(FrecencyPageRequest {
+            user_id: test_user_id.copied(),
+            from_score: None,
+            limit: 3,
+            filters: None,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(top_entities.len(), 3);
+    assert_eq!(top_entities[0].id.entity.entity_id, "doc3");
+    assert_eq!(top_entities[0].data.frecency_score, 95.0);
+    assert_eq!(top_entities[1].id.entity.entity_id, "doc1");
+    assert_eq!(top_entities[1].data.frecency_score, 90.0);
+    assert_eq!(top_entities[2].id.entity.entity_id, "chat1");
+    assert_eq!(top_entities[2].data.frecency_score, 85.0);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_get_aggregate_for_user_entities(pool: PgPool) {
+    let storage = FrecencyPgStorage::new(pool.clone());
+    let test_user_id = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
+
+    // Create multiple aggregates
+    let aggregates = vec![
+        ("doc1", EntityType::Document, 80.0),
+        ("doc2", EntityType::Document, 70.0),
+        ("chat1", EntityType::Chat, 85.0),
+        ("project1", EntityType::Project, 60.0),
+    ];
+
+    for (id, entity_type, score) in &aggregates {
+        let aggregate = AggregateFrecency::from_stored(
+            AggregateId {
+                entity: (*entity_type).with_entity_string(id.to_string()),
+                user_id: test_user_id.clone(),
+            },
+            FrecencyData::from_stored(1, *score, Utc::now(), VecDeque::new()),
+        );
+        storage.set_aggregate(aggregate).await.unwrap();
+    }
+
+    // Query for specific entities
+    let entities_to_query = vec![
+        EntityType::Document.with_entity_str("doc1"),
+        EntityType::Chat.with_entity_str("chat1"),
+        EntityType::Document.with_entity_str("doc_nonexistent"),
+    ];
+
+    let results = storage
+        .get_aggregate_for_user_entities(test_user_id.into_owned(), entities_to_query.as_slice())
+        .await
+        .unwrap();
+
+    // Should return 2 results (doc1 and chat1), ordered by score
+    assert_eq!(results.len(), 2);
+    assert_eq!(results[0].id.entity.entity_id, "chat1");
+    assert_eq!(results[0].data.frecency_score, 85.0);
+    assert_eq!(results[1].id.entity.entity_id, "doc1");
+    assert_eq!(results[1].data.frecency_score, 80.0);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_get_top_entities_empty(pool: PgPool) {
+    let storage = FrecencyPgStorage::new(pool.clone());
+    let test_user_id =
+        MacroUserIdStr::parse_from_str("macro|test-user-nonexistent@example.com").unwrap();
+
+    // Get top entities for user with no data
+    let top_entities = storage
+        .get_top_entities(FrecencyPageRequest {
+            user_id: test_user_id.copied(),
+            from_score: None,
+            limit: 10,
+            filters: None,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(top_entities.len(), 0);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_get_aggregate_for_empty_entities_list(pool: PgPool) {
+    let storage = FrecencyPgStorage::new(pool.clone());
+    let test_user_id = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
+
+    // Query with empty entities list
+    let results = storage
+        .get_aggregate_for_user_entities(test_user_id, &[])
+        .await
+        .unwrap();
+
+    assert_eq!(results.len(), 0);
+}
+
+// Tests for FrecencyPgProcessor
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_get_top_entities_with_from_score(pool: PgPool) {
+    let storage = FrecencyPgStorage::new(pool.clone());
+    let test_user_id = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
+
+    // Create multiple aggregates with different scores
+    let entities = vec![
+        ("doc1", EntityType::Document, 100.0),
+        ("doc2", EntityType::Document, 80.0),
+        ("chat1", EntityType::Chat, 60.0),
+        ("project1", EntityType::Project, 40.0),
+        ("doc3", EntityType::Document, 20.0),
+    ];
+
+    for (id, entity_type, score) in entities {
+        let aggregate = AggregateFrecency::from_stored(
+            AggregateId {
+                entity: entity_type.with_entity_string(id.to_string()),
+                user_id: test_user_id.clone(),
+            },
+            FrecencyData::from_stored(1, score, Utc::now(), VecDeque::new()),
+        );
+        storage.set_aggregate(aggregate).await.unwrap();
+    }
+
+    // Test 1: Get all top entities without from_score
+    let all_entities = storage
+        .get_top_entities(FrecencyPageRequest {
+            user_id: test_user_id.copied(),
+            from_score: None,
+            limit: 10,
+            filters: None,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(all_entities.len(), 5);
+    assert_eq!(all_entities[0].id.entity.entity_id, "doc1");
+    assert_eq!(all_entities[0].data.frecency_score, 100.0);
+
+    // Test 2: Get entities with score < 80.0 (should get 60, 40, 20)
+    let filtered_entities = storage
+        .get_top_entities(FrecencyPageRequest {
+            user_id: test_user_id.copied(),
+            from_score: Some(80.0),
+            limit: 10,
+            filters: None,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(filtered_entities.len(), 3);
+    assert_eq!(filtered_entities[0].id.entity.entity_id, "chat1");
+    assert_eq!(filtered_entities[0].data.frecency_score, 60.0);
+    assert_eq!(filtered_entities[1].id.entity.entity_id, "project1");
+    assert_eq!(filtered_entities[1].data.frecency_score, 40.0);
+    assert_eq!(filtered_entities[2].id.entity.entity_id, "doc3");
+    assert_eq!(filtered_entities[2].data.frecency_score, 20.0);
+
+    // Test 3: Pagination - get top 2, then next 2
+    let page1 = storage
+        .get_top_entities(FrecencyPageRequest {
+            user_id: test_user_id.copied(),
+            from_score: None,
+            limit: 2,
+            filters: None,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(page1.len(), 2);
+    assert_eq!(page1[0].data.frecency_score, 100.0);
+    assert_eq!(page1[1].data.frecency_score, 80.0);
+
+    // Use the last score from page1 to get the next page
+    let last_score = page1.last().unwrap().data.frecency_score;
+    let page2 = storage
+        .get_top_entities(FrecencyPageRequest {
+            user_id: test_user_id.copied(),
+            from_score: Some(last_score),
+            limit: 2,
+            filters: None,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(page2.len(), 2);
+    assert_eq!(page2[0].data.frecency_score, 60.0);
+    assert_eq!(page2[1].data.frecency_score, 40.0);
+
+    // Test 4: from_score lower than all scores (should return empty)
+    let no_entities = storage
+        .get_top_entities(FrecencyPageRequest {
+            user_id: test_user_id.copied(),
+            from_score: Some(10.0),
+            limit: 10,
+            filters: None,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(no_entities.len(), 0);
+
+    // Test 5: from_score higher than all scores (should return all)
+    let all_with_high_score = storage
+        .get_top_entities(FrecencyPageRequest {
+            user_id: test_user_id.copied(),
+            from_score: Some(150.0),
+            limit: 10,
+            filters: None,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(all_with_high_score.len(), 5);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_processor_get_unprocessed_events(pool: PgPool) {
+    let processor = FrecencyPgProcessor::new(pool.clone());
+    let test_user_id = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
+
+    // Insert some unprocessed events directly
+    for i in 0..3 {
+        sqlx::query!(
+            r#"
+            INSERT INTO frecency_events (
+                user_id, entity_type, event_type, timestamp,
+                connection_id, entity_id, was_processed
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, false)
+            "#,
+            test_user_id.as_ref(),
+            "document",
+            "open",
+            Utc::now(),
+            format!("conn_{}", i),
+            format!("doc_{}", i)
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+
+    // Insert a processed event (should not be returned)
+    sqlx::query!(
+        r#"
+        INSERT INTO frecency_events (
+            user_id, entity_type, event_type, timestamp,
+            connection_id, entity_id, was_processed
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, true)
+        "#,
+        test_user_id.as_ref(),
+        "document",
+        "open",
+        Utc::now(),
+        "conn_processed",
+        "doc_processed"
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    // Get unprocessed events
+    let unprocessed = processor.get_unprocessed_events().await.unwrap();
+
+    // Should have at least our 3 unprocessed events
+    assert!(unprocessed.len() >= 3);
+
+    // Verify none are marked as processed
+    let unprocessed_for_user: Vec<_> = unprocessed
+        .into_iter()
+        .filter(|e| e.event_record.event.entity.user_id == test_user_id.as_ref())
+        .collect();
+
+    assert_eq!(unprocessed_for_user.len(), 3);
+    for event in unprocessed_for_user {
+        assert!(
+            event
+                .event_record
+                .event
+                .entity
+                .entity
+                .entity_id
+                .starts_with("doc_")
+        );
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_processor_mark_processed(pool: PgPool) {
+    let processor = FrecencyPgProcessor::new(pool.clone());
+    let test_user_id = "test_processor_mark";
+
+    // Insert unprocessed events
+    let mut event_ids = Vec::new();
+    for i in 0..2 {
+        let id = sqlx::query_scalar!(
+            r#"
+            INSERT INTO frecency_events (
+                user_id, entity_type, event_type, timestamp,
+                connection_id, entity_id, was_processed
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, false)
+            RETURNING id
+            "#,
+            test_user_id,
+            "document",
+            "open",
+            Utc::now(),
+            format!("conn_{}", i),
+            format!("doc_mark_{}", i)
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        event_ids.push(id);
+    }
+
+    // Claims the batch and commits; the rows are already marked processed.
+    let unprocessed = processor.get_unprocessed_events().await.unwrap();
+
+    // Filter to just our test events
+    let to_mark: Vec<_> = unprocessed
+        .into_iter()
+        .filter(|e| event_ids.contains(&e.id))
+        .collect();
+
+    assert_eq!(to_mark.len(), 2);
+
+    // Releases the aggregation lock; the rows were marked by the claim.
+    processor.mark_processed(to_mark).await.unwrap();
+
+    // Verify they are marked as processed in the database
+    for id in event_ids {
+        let was_processed = sqlx::query_scalar!(
+            "SELECT was_processed FROM frecency_events WHERE id = $1",
+            id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+
+        assert!(was_processed, "Event {} should be marked as processed", id);
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_processor_get_aggregates_for_users_entities(pool: PgPool) {
+    let processor = FrecencyPgProcessor::new(pool.clone());
+    let test_user_id: MacroUserIdStr<'static> =
+        MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
+
+    // Insert some aggregates directly
+    let aggregates_data = vec![
+        ("doc_agg_1", EntityType::Document, 90.0),
+        ("chat_agg_1", EntityType::Chat, 80.0),
+        ("project_agg_1", EntityType::Project, 70.0),
+    ];
+
+    for (entity_id, entity_type, score) in &aggregates_data {
+        sqlx::query!(
+            r#"
+            INSERT INTO frecency_aggregates (
+                entity_id, entity_type, user_id, event_count,
+                frecency_score, first_event, recent_events
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            "#,
+            entity_id,
+            entity_type.to_string(),
+            test_user_id.0.as_ref(),
+            5,
+            score,
+            Utc::now(),
+            serde_json::json!([])
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+
+    // Start a transaction by getting unprocessed events
+    let _ = processor.get_unprocessed_events().await.unwrap();
+
+    // Create aggregate IDs to query
+    let aggregate_ids = vec![
+        AggregateId {
+            entity: EntityType::Document.with_entity_str("doc_agg_1"),
+            user_id: test_user_id.clone(),
+        },
+        AggregateId {
+            entity: EntityType::Chat.with_entity_str("chat_agg_1"),
+            user_id: test_user_id.clone(),
+        },
+        AggregateId {
+            entity: EntityType::Document.with_entity_str("nonexistent"),
+            user_id: test_user_id.clone(),
+        },
+    ];
+
+    let retrieved = processor
+        .get_aggregates_for_users_entities(aggregate_ids)
+        .await
+        .unwrap();
+
+    // Should get 2 results (doc_agg_1 and chat_agg_1)
+    assert_eq!(retrieved.len(), 2);
+
+    let doc_agg = retrieved
+        .iter()
+        .find(|a| a.id.entity.entity_id == "doc_agg_1");
+    assert!(doc_agg.is_some());
+    assert_eq!(doc_agg.unwrap().data.frecency_score, 90.0);
+
+    let chat_agg = retrieved
+        .iter()
+        .find(|a| a.id.entity.entity_id == "chat_agg_1");
+    assert!(chat_agg.is_some());
+    assert_eq!(chat_agg.unwrap().data.frecency_score, 80.0);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_processor_set_aggregates(pool: PgPool) {
+    let processor = FrecencyPgProcessor::new(pool.clone());
+    let test_user_id = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
+
+    // Start a transaction
+    let _ = processor.get_unprocessed_events().await.unwrap();
+
+    // Create new aggregates to insert
+    let mut recent_events = VecDeque::new();
+    recent_events.push_back(TimestampWeight {
+        timestamp: Utc::now(),
+        weight: 1.5,
+    });
+
+    let aggregates = vec![
+        AggregateFrecency::from_stored(
+            AggregateId {
+                entity: EntityType::Document.with_entity_str("doc_set_1"),
+                user_id: test_user_id.clone(),
+            },
+            FrecencyData::from_stored(10, 85.0, Utc::now(), recent_events.clone()),
+        ),
+        AggregateFrecency::from_stored(
+            AggregateId {
+                entity: EntityType::Chat.with_entity_str("chat_set_1"),
+                user_id: test_user_id.clone(),
+            },
+            FrecencyData::from_stored(5, 65.0, Utc::now(), recent_events.clone()),
+        ),
+    ];
+
+    // Set the aggregates
+    processor.set_aggregates(aggregates.clone()).await.unwrap();
+
+    // Commit the transaction by calling mark_processed with empty list
+    processor.mark_processed(vec![]).await.unwrap();
+
+    // Verify they were inserted
+    let doc_result = sqlx::query!(
+        r#"
+        SELECT event_count, frecency_score
+        FROM frecency_aggregates
+        WHERE user_id = $1 AND entity_id = $2
+        "#,
+        test_user_id.as_ref(),
+        "doc_set_1"
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(doc_result.event_count, 10);
+    assert_eq!(doc_result.frecency_score, 85.0);
+
+    let chat_result = sqlx::query!(
+        r#"
+        SELECT event_count, frecency_score
+        FROM frecency_aggregates
+        WHERE user_id = $1 AND entity_id = $2
+        "#,
+        test_user_id.as_ref(),
+        "chat_set_1"
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(chat_result.event_count, 5);
+    assert_eq!(chat_result.frecency_score, 65.0);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_processor_set_aggregates_update_existing(pool: PgPool) {
+    let processor = FrecencyPgProcessor::new(pool.clone());
+    let test_user_id = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
+
+    // Insert initial aggregate
+    sqlx::query!(
+        r#"
+        INSERT INTO frecency_aggregates (
+            entity_id, entity_type, user_id, event_count,
+            frecency_score, first_event, recent_events
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        "#,
+        "doc_update_1",
+        "document",
+        test_user_id.as_ref(),
+        3,
+        50.0,
+        Utc::now(),
+        serde_json::json!([])
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    // Start a transaction
+    let _ = processor.get_unprocessed_events().await.unwrap();
+
+    // Create updated aggregate
+    let mut recent_events = VecDeque::new();
+    recent_events.push_back(TimestampWeight {
+        timestamp: Utc::now(),
+        weight: 2.0,
+    });
+
+    let updated_aggregate = vec![AggregateFrecency::from_stored(
+        AggregateId {
+            entity: EntityType::Document.with_entity_str("doc_update_1"),
+            user_id: test_user_id.clone(),
+        },
+        FrecencyData::from_stored(15, 95.0, Utc::now(), recent_events),
+    )];
+
+    // Update the aggregate
+    processor.set_aggregates(updated_aggregate).await.unwrap();
+
+    // Commit the transaction by calling mark_processed with empty list
+    processor.mark_processed(vec![]).await.unwrap();
+
+    // Verify it was updated
+    let result = sqlx::query!(
+        r#"
+        SELECT event_count, frecency_score
+        FROM frecency_aggregates
+        WHERE user_id = $1 AND entity_id = $2
+        "#,
+        test_user_id.as_ref(),
+        "doc_update_1"
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(result.event_count, 15);
+    assert_eq!(result.frecency_score, 95.0);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_processor_set_aggregates_empty_list(pool: PgPool) {
+    let processor = FrecencyPgProcessor::new(pool.clone());
+
+    // Start a transaction
+    let _ = processor.get_unprocessed_events().await.unwrap();
+
+    // Set empty list of aggregates (should handle gracefully)
+    let result = processor.set_aggregates(Vec::new()).await;
+    assert!(result.is_ok());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_processor_claim_aggregate_lifecycle(pool: PgPool) {
+    let processor = FrecencyPgProcessor::new(pool.clone());
+    let test_user_id = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
+
+    // Insert an unprocessed event
+    let event_id = sqlx::query_scalar!(
+        r#"
+        INSERT INTO frecency_events (
+            user_id, entity_type, event_type, timestamp,
+            connection_id, entity_id, was_processed
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, false)
+        RETURNING id
+        "#,
+        test_user_id.as_ref(),
+        "document",
+        "open",
+        Utc::now(),
+        "conn_tx",
+        "doc_tx"
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    // Claims the batch and commits.
+    let events = processor.get_unprocessed_events().await.unwrap();
+    let test_event = events.into_iter().find(|e| e.id == event_id);
+    assert!(test_event.is_some());
+
+    // Create an aggregate for the event
+    let aggregate = AggregateFrecency::from_stored(
+        AggregateId {
+            entity: EntityType::Document.with_entity_str("doc_tx"),
+            user_id: test_user_id.clone(),
+        },
+        FrecencyData::from_stored(1, 100.0, Utc::now(), VecDeque::new()),
+    );
+
+    // Written on its own statement, after the claim committed.
+    processor.set_aggregates(vec![aggregate]).await.unwrap();
+
+    // Releases the aggregation lock taken by the claim.
+    processor
+        .mark_processed(vec![test_event.unwrap()])
+        .await
+        .unwrap();
+
+    // Verify the aggregate was saved
+    let saved_aggregate = sqlx::query!(
+        r#"
+        SELECT frecency_score
+        FROM frecency_aggregates
+        WHERE user_id = $1 AND entity_id = $2
+        "#,
+        test_user_id.as_ref(),
+        "doc_tx"
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(saved_aggregate.frecency_score, 100.0);
+
+    // Verify event is marked as processed
+    let was_processed = sqlx::query_scalar!(
+        "SELECT was_processed FROM frecency_events WHERE id = $1",
+        event_id
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    assert!(was_processed);
+}
+
+/// An idle queue must not strand the aggregation lock.
+///
+/// The pass still takes the lock before discovering there is nothing to claim,
+/// so it has to be closed out by mark_processed like any other. Otherwise the
+/// lock would sit held until the next tick cleaned it up -- once per poll, on
+/// every replica, for as long as the queue stays empty.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_empty_batch_still_releases_the_aggregation_lock(pool: PgPool) {
+    let first = FrecencyPgProcessor::new(pool.clone());
+    let second = FrecencyPgProcessor::new(pool);
+
+    // No events inserted: the claim finds nothing.
+    let events = first.get_unprocessed_events().await.unwrap();
+    assert!(events.is_empty());
+
+    // The lock was taken regardless, so the second poller is still shut out.
+    let err = second.get_unprocessed_events().await.unwrap_err();
+    assert!(matches!(err, PollerErr::DbLockErr), "got {err:?}");
+
+    // Closing out the empty pass releases it.
+    first.mark_processed(Vec::new()).await.unwrap();
+    let res = second.get_unprocessed_events().await.unwrap();
+    assert!(res.is_empty());
+}
+
+/// The aggregate lookup renders its filter with `push_tuples`, which emits a
+/// bare `IN ()` for an empty batch. Callers should short-circuit before here,
+/// but the method must not turn "nothing to look up" into a syntax error.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn empty_aggregate_lookup_returns_empty_rather_than_failing(pool: PgPool) {
+    let processor = FrecencyPgProcessor::new(pool);
+    let res = processor
+        .get_aggregates_for_users_entities(Vec::new())
+        .await
+        .expect("an empty lookup must not be a syntax error");
+    assert!(res.is_empty());
+}
+
+/// Only one poller may aggregate at a time.
+///
+/// Disjoint event batches can still merge into the same aggregate key, and
+/// set_aggregates blind-overwrites that row, so two concurrent passes would
+/// lose one of their contributions. The second poller must be turned away
+/// while the first holds the lock, and admitted once it releases.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_second_poller_is_locked_out_until_the_first_finishes(pool: PgPool) {
+    let test_user_id = "test_processor_claim_is_exclusive";
+    // Insert an unprocessed event
+    let event_id = sqlx::query_scalar!(
+        r#"
+        INSERT INTO frecency_events (
+            user_id, entity_type, event_type, timestamp,
+            connection_id, entity_id, was_processed
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, false)
+        RETURNING id
+        "#,
+        test_user_id,
+        "document",
+        "open",
+        Utc::now(),
+        "conn_tx",
+        "doc_tx"
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    let pool_handle = pool.clone();
+    let first = FrecencyPgProcessor::new(pool.clone());
+    let second = FrecencyPgProcessor::new(pool);
+
+    let events = first.get_unprocessed_events().await.unwrap();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events.first().unwrap().id, event_id);
+
+    // The first poller holds the aggregation lock across its whole pass, so
+    // the second must not be allowed to read-modify-write concurrently.
+    let err = second.get_unprocessed_events().await.unwrap_err();
+    assert!(
+        matches!(err, PollerErr::DbLockErr),
+        "second poller should be locked out, got {err:?}"
+    );
+
+    // The claim itself already marked the row, independent of the lock.
+    let was_processed = sqlx::query_scalar!(
+        r#"SELECT was_processed AS "was_processed!" FROM frecency_events WHERE id = $1"#,
+        event_id
+    )
+    .fetch_one(&pool_handle)
+    .await
+    .unwrap();
+    assert!(was_processed);
+
+    // Ending the first pass releases the lock and lets the second in; there
+    // is simply nothing left for it to claim.
+    first.mark_processed(Vec::new()).await.unwrap();
+    let res = second.get_unprocessed_events().await.unwrap();
+    assert!(res.is_empty());
+}
+
+/// Tests that mixing supported (chat_id) and unsupported (role) filters
+/// does not produce malformed SQL. Role filters don't apply to frecency
+/// aggregates and should be ignored without breaking the query.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_get_top_entities_mixed_supported_and_unsupported_chat_filters(pool: PgPool) {
+    use item_filters::{EntityFilters, ast::EntityFilterAst};
+
+    let storage = FrecencyPgStorage::new(pool.clone());
+    let test_user_id = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
+
+    // Create a chat aggregate
+    let chat_id = "11111111-1111-1111-1111-111111111111";
+    let aggregate = AggregateFrecency::from_stored(
+        AggregateId {
+            entity: EntityType::Chat.with_entity_string(chat_id.to_string()),
+            user_id: test_user_id.clone(),
+        },
+        FrecencyData::from_stored(5, 75.0, Utc::now(), VecDeque::new()),
+    );
+    storage.set_aggregate(aggregate).await.unwrap();
+
+    // Create filter with both chat_id (supported) and role (unsupported at frecency level)
+    // This combination previously produced malformed SQL like "( AND entity_id = '...')"
+    let entity_filters = EntityFilters {
+        chat_filters: ChatFilters {
+            chat_ids: vec![chat_id.to_string()],
+            role: vec!["user".to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let filter = EntityFilterAst::new_from_filters(entity_filters)
+        .unwrap()
+        .unwrap();
+
+    // This should not fail with a SQL syntax error
+    let results = storage
+        .get_top_entities(FrecencyPageRequest {
+            user_id: test_user_id.copied(),
+            from_score: None,
+            limit: 10,
+            filters: Some(filter),
+        })
+        .await
+        .unwrap();
+
+    // Should still filter by the supported chat_id filter
+    assert_eq!(results.len(), 1, "Should return exactly one chat");
+    assert_eq!(
+        results[0].id.entity.entity_id, chat_id,
+        "Should return the correct chat"
+    );
+}

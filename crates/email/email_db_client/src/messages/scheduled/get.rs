@@ -1,0 +1,198 @@
+use crate::messages::get::convert_db_messages_to_service_concurrent;
+use email_types::{db, service};
+use sqlx::PgPool;
+use sqlx::types::Uuid;
+
+/// Retrieves a scheduled message by link_id and message_id
+/// Returns None if the message doesn't exist
+#[tracing::instrument(skip(db), err)]
+pub async fn get_scheduled_message<'e, E>(
+    db: E,
+    link_id: Uuid,
+    message_id: Uuid,
+) -> anyhow::Result<Option<service::message::ScheduledMessage>>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Postgres>,
+{
+    let record = sqlx::query_as!(
+        service::message::ScheduledMessage,
+        r#"
+        SELECT link_id, message_id, send_time, sent, processing, actor_id, agent_correlation_id
+        FROM email_scheduled_messages
+        WHERE link_id = $1 AND message_id = $2
+        "#,
+        link_id,
+        message_id,
+    )
+    .fetch_optional(db)
+    .await?;
+
+    Ok(record)
+}
+
+/// Atomically claim a due, unsent, unclaimed message. The returned row is the
+/// owned claim (processing=true); None never grants permission to clear it.
+#[tracing::instrument(skip(db), err)]
+pub async fn get_and_start_processing_scheduled_message(
+    db: &sqlx::PgPool,
+    link_id: Uuid,
+    message_id: Uuid,
+) -> anyhow::Result<Option<service::message::ScheduledMessage>> {
+    let mut tx = db.begin().await?;
+    // Same message -> schedule lock order as schedule/cancel and finalization.
+    let message = sqlx::query!(
+        "SELECT is_sent FROM email_messages WHERE id = $1 AND link_id = $2 FOR UPDATE",
+        message_id,
+        link_id,
+    )
+    .fetch_optional(&mut *tx)
+    .await?;
+    if message.is_none_or(|message| message.is_sent) {
+        return Ok(None);
+    }
+    let record = sqlx::query_as!(
+        service::message::ScheduledMessage,
+        r#"
+        UPDATE email_scheduled_messages
+        SET processing = true, updated_at = NOW()
+        WHERE link_id = $1 AND message_id = $2
+          AND NOT sent AND NOT processing AND send_time <= NOW()
+          AND delivery_claim_id IS NULL AND delivery_started_at IS NULL AND delivery_status = 'ready'
+          AND NOT EXISTS(SELECT 1 FROM email_attachments_drafts WHERE draft_id=$2 AND upload_pending)
+          AND NOT EXISTS(SELECT 1 FROM email_draft_transfers WHERE (destination_id=$2 AND state NOT IN ('ready','retained','preparing')) OR (source_id=$2 AND state<>'preparing'))
+        RETURNING link_id, message_id, send_time, sent, processing, actor_id, agent_correlation_id
+        "#,
+        link_id,
+        message_id,
+    )
+    .fetch_optional(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(record)
+}
+
+/// Retrieves scheduled messages for drafts that have not been sent yet. used for populating
+/// messages in get thread by id endpoint
+#[tracing::instrument(skip(db), err)]
+pub async fn get_scheduled_message_no_auth(
+    db: &sqlx::PgPool,
+    message_id: sqlx::types::Uuid,
+) -> anyhow::Result<Option<db::message::ScheduledMessage>> {
+    let record = sqlx::query_as!(
+        db::message::ScheduledMessage,
+        r#"
+        SELECT link_id, message_id, send_time, sent, processing, actor_id, agent_correlation_id
+        FROM email_scheduled_messages
+        WHERE message_id = $1 and sent = false
+        "#,
+        message_id,
+    )
+    .fetch_optional(db)
+    .await?;
+
+    Ok(record)
+}
+
+/// Fetches unsent scheduled messages for a link with pagination
+#[tracing::instrument(skip(pool), err)]
+pub async fn get_scheduled_messages_by_link_id(
+    pool: &PgPool,
+    link_id: Uuid,
+    offset: u32,
+    limit: u32,
+) -> anyhow::Result<Vec<service::message::Message>> {
+    if limit == 0 {
+        anyhow::bail!("limit must be positive");
+    }
+
+    let db_messages = get_scheduled_db_messages_by_link_id(pool, link_id, offset, limit).await?;
+    convert_db_messages_to_service_concurrent(pool, db_messages).await
+}
+
+/// Fetches scheduled messages for multiple message IDs, returning a map keyed by message_id.
+/// Only returns scheduled messages that have not been sent yet.
+#[tracing::instrument(skip(db), err)]
+pub async fn fetch_scheduled_messages_in_bulk(
+    db: &sqlx::PgPool,
+    message_ids: &[Uuid],
+) -> anyhow::Result<std::collections::HashMap<Uuid, db::message::ScheduledMessage>> {
+    if message_ids.is_empty() {
+        return Ok(std::collections::HashMap::new());
+    }
+
+    let records = sqlx::query_as!(
+        db::message::ScheduledMessage,
+        r#"
+        SELECT link_id, message_id, send_time, sent, processing, actor_id, agent_correlation_id
+        FROM email_scheduled_messages
+        WHERE message_id = ANY($1) AND sent = false
+        "#,
+        message_ids,
+    )
+    .fetch_all(db)
+    .await?;
+
+    let mut scheduled_map = std::collections::HashMap::new();
+    for record in records {
+        scheduled_map.insert(record.message_id, record);
+    }
+
+    Ok(scheduled_map)
+}
+
+/// Fetches unsent scheduled db messages for a link with pagination
+#[tracing::instrument(skip(pool), err)]
+pub async fn get_scheduled_db_messages_by_link_id(
+    pool: &PgPool,
+    link_id: Uuid,
+    offset: u32,
+    limit: u32,
+) -> anyhow::Result<Vec<db::message::Message>> {
+    let db_messages = sqlx::query_as!(
+        db::message::Message,
+        r#"
+        SELECT
+            m.id,
+            m.provider_id,
+            m.global_id,
+            m.thread_id,
+            m.provider_thread_id,
+            m.replying_to_id,
+            m.link_id,
+            m.provider_history_id,
+            m.internal_date_ts,
+            m.snippet,
+            m.size_estimate,
+            m.subject,
+            m.from_name,
+            m.from_contact_id,
+            m.sent_at,
+            m.has_attachments,
+            m.is_read,
+            m.is_starred,
+            m.is_sent,
+            m.is_draft,
+            m.body_text,
+            m.body_html_sanitized,
+            m.body_macro,
+            m.headers_jsonb,
+            m.created_at,
+            m.updated_at
+        FROM email_messages m
+        JOIN email_scheduled_messages sm ON m.id = sm.message_id
+        WHERE m.link_id = $1
+          AND m.is_draft = true
+          AND m.is_sent = false
+          AND sm.sent = false
+        ORDER BY m.created_at DESC
+        LIMIT $2 OFFSET $3
+        "#,
+        link_id,
+        limit as i64,
+        offset as i64
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(db_messages)
+}

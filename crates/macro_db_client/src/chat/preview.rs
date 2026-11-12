@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use model::chat::preview::{ChatPreviewData, ChatPreviewV2, WithChatId};
+use shared_types::chat::preview::{ChatPreviewData, ChatPreviewV2, WithChatId};
 
 #[tracing::instrument(skip(db))]
 pub async fn batch_get_document_preview_v2(

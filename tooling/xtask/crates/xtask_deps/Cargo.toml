@@ -11,14 +11,18 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = { workspace = true }
+# Layer path globs in .config/layers.toml.
+glob = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 guppy = { workspace = true }
 # For the [xtask] extension table in .config/hakari.toml (path-glob
 # traversal excludes); the hakari engine ignores that table.
 toml = { workspace = true }
+# Rewrites manifests in place, keeping their comments and layout.
+toml_edit = { workspace = true }
 # Pinned engine for the generated dependency artifacts. This version lives in
 # Cargo.lock, so dev machines and CI always run the identical generator —
 # upgrading it is an explicit, reviewed lock change.
 hakari = { version = "0.17.9", features = ["cli-support"] }
-xtask_graph = { path = "../xtask_graph" }
+xtask_graph = { workspace = true }

@@ -1,0 +1,130 @@
+[package]
+edition = "2024"
+name = "crm"
+publish = false
+version = "0.1.0"
+
+[features]
+ai_tools = [
+  "dep:ai_toolset",
+  "dep:async-trait",
+  "dep:macro_user_id",
+  "dep:properties_types",
+  "dep:properties",
+  "dep:schemars",
+  "entity_access/ports",
+  "ports",
+]
+axum = [
+  "dep:axum",
+  "dep:messages",
+  "dep:macro_authorization",
+  "dep:macro_uuid",
+  "dep:model_error_response",
+  "dep:utoipa",
+  "entity_access/axum",
+  "entity_access/inbound",
+  "entity_access/ports",
+  "ports",
+]
+# Links archived call records to CRM records from the call topic.
+call_link = [
+  "dep:call",
+  "dep:kafka_util",
+  "dep:macro_event_broker",
+  "dep:properties_types",
+  "dep:rdkafka",
+  "dep:rootcause",
+  "dep:sqlx",
+  "dep:tokio",
+  "macro_event_broker/outbound",
+  "ports",
+]
+default = ["ai_tools", "call_link", "inbound", "lookup", "outbound", "ports"]
+inbound = ["axum", "ports"]
+# Read-only company/contact identity for other domains. Pulls only sqlx + ports.
+lookup = ["dep:messages", "dep:rootcause", "dep:sqlx", "ports"]
+outbound = [
+  "dep:opentelemetry",
+  "dep:tracing-opentelemetry",
+  "dep:entity_access_db_utils",
+  "dep:macro_user_id",
+  "dep:properties_types",
+  "dep:properties",
+  "dep:sqlx",
+  "dep:unfurl",
+  "ports",
+]
+ports = ["dep:bot_id", "dep:csv", "dep:databases", "dep:futures", "dep:databases_types", "dep:permissions_types", "dep:properties_types", "dep:macro_user_id", "dep:macro_uuid", "dep:rootcause", "dep:utoipa", "dep:properties", "entity_access/ports"]
+# Read-only CRM search (name/domain). Pulls only sqlx + ports — no
+# unfurl/axum — so search consumers stay lightweight.
+search = ["dep:sqlx", "ports"]
+
+[dependencies]
+bot_id = { workspace = true, optional = true }
+databases = { workspace = true, features = ["ports"], optional = true }
+databases_types = { workspace = true, optional = true }
+permissions_types = { workspace = true, optional = true }
+entity_access_db_utils = { workspace = true, optional = true }
+anyhow = { workspace = true }
+csv = { workspace = true, optional = true }
+futures = { workspace = true, optional = true }
+chrono = { workspace = true }
+filter_ast = { workspace = true }
+item_filters = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+call = { workspace = true, features = ["ports"], optional = true }
+entity_access = { workspace = true }
+kafka_util = { workspace = true, optional = true }
+macro_event_broker = { workspace = true, optional = true }
+messages = { workspace = true, features = ["ports"], optional = true }
+rdkafka = { workspace = true, optional = true }
+rootcause = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
+
+# AI toolset dependencies
+ai_toolset = { workspace = true, optional = true }
+async-trait = { workspace = true, optional = true }
+macro_user_id = { workspace = true, optional = true }
+properties_types = { workspace = true, optional = true }
+properties = { workspace = true, features = [
+  "ports",
+], optional = true }
+schemars = { workspace = true, optional = true }
+system_properties = { workspace = true }
+
+# Axum / inbound dependencies
+axum = { workspace = true, optional = true }
+macro_authorization = { workspace = true, optional = true, features = ["axum"] }
+macro_uuid = { workspace = true, optional = true }
+model_error_response = { workspace = true, optional = true }
+utoipa = { workspace = true, optional = true }
+
+# Outbound dependencies
+opentelemetry = { workspace = true, features = ["trace"], optional = true }
+tracing-opentelemetry = { workspace = true, optional = true }
+sqlx = { workspace = true, optional = true }
+unfurl = { workspace = true, features = ["ports"], optional = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+soup_types = { workspace = true }
+
+[dev-dependencies]
+databases = { workspace = true, features = ["postgres", "gateway"] }
+entity_access = { workspace = true }
+entity_access_outbound = { workspace = true }
+macro_event_broker = { workspace = true }
+
+macro_db_migrator = { workspace = true }
+messages = { workspace = true, features = ["outbound", "test-utils"] }
+macro_user_id = { workspace = true }
+properties = { workspace = true, features = [
+  "outbound",
+  "ports",
+] }
+rootcause = { workspace = true }
+tokio = { workspace = true, features = ["macros"] }
+tower = { workspace = true }

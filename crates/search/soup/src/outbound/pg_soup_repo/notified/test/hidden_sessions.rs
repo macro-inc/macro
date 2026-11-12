@@ -1,0 +1,202 @@
+use super::*;
+use crate::domain::models::{AttentionCandidateRequest, AttentionKeying};
+use crate::outbound::pg_soup_repo::attention::attention_soup_page;
+use item_filters::ast::agent_session::AgentSessionVisibility;
+
+fn work_request<'a>(
+    filter: &'a EntityFilterAst,
+    sources: &'a [SourceId],
+    own_work: bool,
+    only: Option<&'a [entity_kind::Entity<'static>]>,
+) -> AttentionCandidateRequest<'a> {
+    AttentionCandidateRequest {
+        user_id: MacroUserIdStr::parse_from_str(USER_1).unwrap(),
+        limit: 50,
+        own_work,
+        keying: AttentionKeying::ThreadScoped,
+        after: None,
+        types: &[EntityType::AgentSession],
+        filter: Some(filter),
+        link_ids: &[],
+        foreign_entity_sources: sources,
+        hydratable: EVERYTHING,
+        crm: false,
+        only,
+    }
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../../../fixtures", scripts("notified_at")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn hidden_contexts_with_notifications_and_activity_stay_out_of_broad_feeds(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let (mine, _) = seed_agent_sessions(&pool).await?;
+    let sources = sources();
+    let include = EntityFilterAst {
+        agent_session_filter: Some(Arc::new(Expr::val(AgentSessionLiteral::Include))),
+        ..Default::default()
+    };
+    sqlx::query!(
+        "INSERT INTO activity_events (id, actor_id, subject_id, action, entity_type, entity_id, occurred_at) VALUES ($1, $2, $2, 'edited', 'agent_session', $3, '2024-06-01 10:22:00+00')",
+        Uuid::now_v7(), USER_1, mine.to_string(),
+    ).execute(&pool).await?;
+    let before = attention_soup_page(&pool, work_request(&include, &sources, true, None)).await?;
+    assert_eq!(before.len(), 1);
+    assert!(before[0].attention_at.is_some() && before[0].touched_at.is_some());
+    sqlx::query!(
+        "UPDATE agent_session SET visibility = 'hidden', for_warming = FALSE WHERE id = $1",
+        mine
+    )
+    .execute(&pool)
+    .await?;
+    let notified =
+        notified_soup_page(&pool, req(Some(&include), &[], &sources, EVERYTHING)).await?;
+    assert!(!keys(&notified).contains(&(EntityType::AgentSession, mine.to_string())));
+    for mode in [true, false] {
+        assert!(
+            attention_soup_page(&pool, work_request(&include, &sources, mode, None))
+                .await?
+                .is_empty()
+        );
+    }
+    let only = [EntityType::AgentSession.with_entity_string(mine.to_string())];
+    assert!(
+        attention_soup_page(&pool, work_request(&include, &sources, true, Some(&only)))
+            .await?
+            .is_empty(),
+        "internal by-ID recomputation does not reopen broad-list visibility"
+    );
+    let named = EntityFilterAst {
+        agent_session_filter: Some(Arc::new(Expr::val(AgentSessionLiteral::Id(mine)))),
+        ..Default::default()
+    };
+    assert_eq!(
+        attention_soup_page(&pool, work_request(&named, &sources, true, None))
+            .await?
+            .len(),
+        1
+    );
+    let notified = notified_soup_page(&pool, req(Some(&named), &[], &sources, EVERYTHING)).await?;
+    assert!(keys(&notified).contains(&(EntityType::AgentSession, mine.to_string())));
+    // Favorites add positive ID constraints to the view's existing filter.
+    let favorite = EntityFilterAst {
+        agent_session_filter: Some(Arc::new(Expr::And(
+            Box::new(Expr::val(AgentSessionLiteral::Include)),
+            Box::new(Expr::val(AgentSessionLiteral::Id(mine))),
+        ))),
+        ..Default::default()
+    };
+    assert_eq!(
+        attention_soup_page(&pool, work_request(&favorite, &sources, true, None))
+            .await?
+            .len(),
+        1
+    );
+    let excluded = EntityFilterAst {
+        agent_session_filter: Some(Arc::new(Expr::And(
+            Box::new(Expr::val(AgentSessionLiteral::Include)),
+            Box::new(Expr::Not(Box::new(Expr::val(AgentSessionLiteral::Id(
+                mine,
+            ))))),
+        ))),
+        ..Default::default()
+    };
+    assert!(
+        attention_soup_page(&pool, work_request(&excluded, &sources, true, None))
+            .await?
+            .is_empty()
+    );
+    Ok(())
+}
+
+/// Home's work feed leaves unlisted routine runs out even while they hold
+/// attention, and a feed that does not exclude them still shows them.
+#[sqlx::test(
+    fixtures(path = "../../../../../fixtures", scripts("notified_at")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn unlisted_runs_with_notifications_stay_out_of_feeds_that_exclude_them(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let (mine, _) = seed_agent_sessions(&pool).await?;
+    let sources = sources();
+    sqlx::query!(
+        "UPDATE agent_session SET source = 'routine', visibility = 'unlisted' WHERE id = $1",
+        mine,
+    )
+    .execute(&pool)
+    .await?;
+    let include = EntityFilterAst {
+        agent_session_filter: Some(Arc::new(Expr::val(AgentSessionLiteral::Include))),
+        ..Default::default()
+    };
+    let without_runs = EntityFilterAst {
+        agent_session_filter: Some(Arc::new(Expr::and(
+            Expr::val(AgentSessionLiteral::Include),
+            Expr::is_not(Expr::val(AgentSessionLiteral::Visibility(
+                AgentSessionVisibility::Unlisted,
+            ))),
+        ))),
+        ..Default::default()
+    };
+    assert_eq!(
+        attention_soup_page(&pool, work_request(&include, &sources, false, None))
+            .await?
+            .len(),
+        1
+    );
+    for mode in [true, false] {
+        assert!(
+            attention_soup_page(&pool, work_request(&without_runs, &sources, mode, None))
+                .await?
+                .is_empty()
+        );
+    }
+    let notified =
+        notified_soup_page(&pool, req(Some(&without_runs), &[], &sources, EVERYTHING)).await?;
+    assert!(!keys(&notified).contains(&(EntityType::AgentSession, mine.to_string())));
+    Ok(())
+}
+
+/// A hidden session its owner follows (they prompted it from the session
+/// itself) is back in Home's notified and work feeds for them.
+#[sqlx::test(
+    fixtures(path = "../../../../../fixtures", scripts("notified_at")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn followed_hidden_sessions_return_to_broad_feeds(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let (mine, _) = seed_agent_sessions(&pool).await?;
+    let sources = sources();
+    let include = EntityFilterAst {
+        agent_session_filter: Some(Arc::new(Expr::val(AgentSessionLiteral::Include))),
+        ..Default::default()
+    };
+    sqlx::query!(
+        "UPDATE agent_session SET visibility = 'hidden', for_warming = FALSE WHERE id = $1",
+        mine
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        "INSERT INTO agent_session_follower (agent_session_id, user_id) VALUES ($1, $2)",
+        mine,
+        USER_1,
+    )
+    .execute(&pool)
+    .await?;
+
+    let notified =
+        notified_soup_page(&pool, req(Some(&include), &[], &sources, EVERYTHING)).await?;
+    assert!(keys(&notified).contains(&(EntityType::AgentSession, mine.to_string())));
+    assert_eq!(
+        attention_soup_page(&pool, work_request(&include, &sources, false, None))
+            .await?
+            .len(),
+        1
+    );
+    Ok(())
+}

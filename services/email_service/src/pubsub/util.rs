@@ -3,17 +3,17 @@ use chrono::{DateTime, Utc};
 use connection_gateway_client::client::ConnectionGatewayClient;
 use contacts::domain::models::messages::ContactConnection;
 use email::domain::events::EmailMacroEvent;
+/// shared utils across different pubsub workers
+use email_types::api::refresh::RefreshEmailEvent;
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
-/// shared utils across different pubsub workers
-use models_email::api::refresh::RefreshEmailEvent;
 
 #[cfg(test)]
 mod test;
-use models_email::email::service::backfill::{
+use email_types::email::service::backfill::{
     BackfillOperation, BackfillPubsubMessage, LinkScopedPayload, PopulateCrmContactPayload,
 };
-use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
+use email_types::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use std::collections::HashSet;
 use uuid::Uuid;
 

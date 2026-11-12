@@ -103,7 +103,7 @@ class PersistenceIntegration(unittest.TestCase):
                     public_key_path.write_text(public_key)
                     rust = subprocess.run([
                         rust_binary, "--ignored", "--test-threads=1", "--nocapture",
-                    ], cwd=source.parents[2] / "crates/passwords", env={
+                    ], cwd=source.parents[2] / "crates/accounts/passwords", env={
                         **os.environ,
                         "BAO_TOKEN": json.loads(credentials)["root_token"],
                         "PASSWORDS_TEST_OPENBAO_ADDRESS": "http://127.0.0.1:" + port,

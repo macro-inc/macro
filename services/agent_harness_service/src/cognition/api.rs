@@ -3,7 +3,7 @@ use axum::Router;
 use axum::extract::DefaultBodyLimit;
 use axum::routing::post;
 use context::GLOBAL_CONTEXT;
-use model::version::{ServiceNameState, VersionedApiServiceName, validate_api_version};
+use shared_types::version::{ServiceNameState, VersionedApiServiceName, validate_api_version};
 use tower::ServiceBuilder;
 use tower_http::limit::RequestBodyLimitLayer;
 use utoipa::OpenApi;

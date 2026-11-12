@@ -12,7 +12,7 @@ use macro_middleware::tracking::ClientIp;
 use crate::api::context::{ApiContext, AuthorizationService};
 use fusionauth::identity_provider::{IdentityProviderLink, LinkUserRequest};
 
-use model::response::{EmptyResponse, ErrorResponse};
+use shared_types::response::{EmptyResponse, ErrorResponse};
 
 #[derive(serde::Deserialize)]
 pub struct Params {

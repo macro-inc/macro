@@ -1,6 +1,6 @@
-use model_entity::EntityType;
-use models_permissions::share_permission::access_level::AccessLevel;
-use models_permissions::share_permission::{
+use entity_kind::EntityType;
+use permissions_types::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::{
     LinkShare, SharePermissionV2, UpdateSharePermissionRequestV2,
 };
 use sqlx::{Pool, Postgres, Transaction};

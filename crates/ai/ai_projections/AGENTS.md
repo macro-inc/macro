@@ -1,0 +1,54 @@
+# ai_projections
+
+## What it is
+
+Part of AI: materialized, cached AI-generated views of a user's data (for
+example a dashboard widget), keyed by a frontend-defined id and
+regenerated on demand or when cold.
+
+## Start here
+
+- `src/lib.rs` doc comment: the full lifecycle — upsert-and-read on
+  `POST /ai-projections`, async vs. `await: true` materialization,
+  `prompt_hash` versioning, push via connection gateway.
+- Reads recover abandoned loading instances as cold when their
+  processing claim is missing or expired; active claims and retained results
+  stay intact; queued refreshing instances need no processing claim. The
+  persistence adapter shares one processing lease for recovery and claim
+  replacement. Recovery locks the instance before checking its claim in a
+  fresh statement snapshot.
+- `src/domain/ai_projection_service.rs`: the upsert/read/invalidate logic.
+- `src/domain/projection_generator.rs`: the generation port.
+- `services/agent_harness_service/src/cognition/service/projection_generator.rs`:
+  the agent-backed generator, in the composition root because it runs the
+  `agent_tools` toolset — two-phase when `output_schema` is set (tool-enabled
+  agent gathers context, then a structured completion distills it).
+- `src/worker.rs`: the SQS-polling worker that drains `ai_projection_queue`.
+
+## Scope
+
+- Owns: projection definitions, per-user cached instances, generation
+  orchestration (inline or queued), and push notification on completion.
+- Not here: the agent turn loop itself → `agent`; tool definitions →
+  `agent_tools`/`ai_toolset`.
+
+## Boundaries
+
+- Depends on: `ai_projection_types`, and (behind `agent`) `agent_tools`,
+  `ai_toolset`, `agent`, `ai_usage`.
+- Used by: `document_cognition_service` (inbound/outbound/agent) and
+  `ai_projections_refresh_handler` (the scheduled refresh lambda).
+
+## Recipes
+
+- Add a projection type: define its prompt/schema at the frontend-defined
+  id → `src/domain/model.rs` if a new output shape → the AHS
+  `projection_generator.rs` if it needs the two-phase schema path.
+
+## Checks
+
+- `cargo test -p ai_projections` (`SQLX_OFFLINE` unset).
+
+## Related
+
+- Rules: `.agents/rules/rust/architecture.md`

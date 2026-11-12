@@ -3,10 +3,10 @@
 use std::collections::BTreeMap;
 use std::sync::LazyLock;
 
-use agent::types::AssistantMessagePart;
+use agent_loop::types::AssistantMessagePart;
 use ai_toolset::ToolKind;
 use ai_toolset::schema::generate_validated_input_schema;
-use databases_sql::toolset::{QueryDatabase, SaveDatabaseQuery};
+use database_sql_runner::toolset::{QueryDatabase, SaveDatabaseQuery};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -78,7 +78,7 @@ struct DatabaseTools {
 
 fn database_tools() -> &'static DatabaseTools {
     static TOOLS: LazyLock<DatabaseTools> = LazyLock::new(|| DatabaseTools {
-        kinds: ai_tools::database_tools()
+        kinds: agent_tools::database_tools()
             .tools
             .into_iter()
             .map(|(name, tool)| (name, tool.annotations.kind))
@@ -103,7 +103,7 @@ struct QueryDatabaseReceipt {
     statement: ReceiptStatement,
 }
 
-/// The kinds of `databases_sql::SqlStatement`, which is serialize-only.
+/// The kinds of `database_sql_runner::SqlStatement`, which is serialize-only.
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 enum ReceiptStatement {

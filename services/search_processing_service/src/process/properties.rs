@@ -1,9 +1,9 @@
 use anyhow::Context;
-use models_properties::EntityType;
 use opensearch_client::{OpensearchClient, upsert::properties::IndexedProperty};
 use properties::outbound::entity_properties_get_query::{
     IndexedEntityProperty, get_entity_properties_for_index,
 };
+use properties_types::EntityType;
 
 /// Refresh only the indexed `properties` of an entity after a property
 /// mutation, without re-extracting its content. Fetches once, then routes to

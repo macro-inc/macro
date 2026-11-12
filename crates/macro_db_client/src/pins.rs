@@ -3,13 +3,13 @@ use document_sub_type::DocumentSubType;
 use sqlx::{Pool, Postgres};
 use system_properties::{StatusOption, SystemPropertyKey};
 
-use model::{
+use shared_types::{
     activity::map_item::{map_chat_item, map_document_item},
     item::{Item, map_item::map_project_item},
     pin::PinnedItem,
 };
 
-use model::pin::request::ReorderPinRequest;
+use shared_types::pin::request::ReorderPinRequest;
 
 #[tracing::instrument(skip(db))]
 pub async fn upsert_pin(

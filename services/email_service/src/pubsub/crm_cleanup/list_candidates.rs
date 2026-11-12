@@ -1,10 +1,10 @@
 use crate::pubsub::crm_cleanup::worker::CrmCleanupContext;
 use crm::domain::service::CrmService;
 use email_db_client::crm_cleanup::{candidates, job};
-use models_email::email::service::crm_cleanup::{
+use email_types::email::service::crm_cleanup::{
     CrmCleanupJobStatus, CrmCleanupOperation, CrmCleanupPubsubMessage,
 };
-use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
+use email_types::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use std::collections::HashSet;
 use uuid::Uuid;
 

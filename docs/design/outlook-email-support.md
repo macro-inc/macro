@@ -431,7 +431,7 @@ properties. A custom decline scheduler or a conference replacement would have
 additional behavior and failure modes; do not silently substitute one. Build and
 validate the equivalents, then present any remaining material limitation with
 its exact user impact. Full parity stays the release gate.
-[Current calendar contracts](../../crates/calendar_events/src/domain/models.rs),
+[Current calendar contracts](../../crates/calendar/calendar_events/src/domain/models.rs),
 [Graph event model](https://learn.microsoft.com/en-us/graph/api/resources/event?view=graph-rest-1.0).
 
 **Implementation and acceptance order.**
@@ -476,18 +476,18 @@ claim about a newer deployment.
 | Backfill | Job tracking, retries, storage, downstream processing, and outbox patterns. | Enumerates Gmail threads in batches of 500, requires total thread counts, and prioritizes CATEGORY_PERSONAL. Outlook needs message/folder enumeration. |
 | Connection and delivery | Linking groundwork, local draft model, scheduled-delivery service boundaries, and shared rendering. | Active connection/reconnect UI uses Gmail; initialization assumes Google grants; the delivery adapter binds to `GmailApi`. |
 
-The evidence is in the [GraphQL message fields](../../crates/graphql_email/src/objects.rs),
-[mailbox objects](../../crates/graphql_email/src/user_objects.rs),
-[mutation boundary](../../crates/graphql_email/src/mutation.rs), and
+The evidence is in the [GraphQL message fields](../../crates/graphql/graphql_email/src/objects.rs),
+[mailbox objects](../../crates/graphql/graphql_email/src/user_objects.rs),
+[mutation boundary](../../crates/graphql/graphql_email/src/mutation.rs), and
 [GraphQL-to-viewer mapper](../../apps/web/src/lib/queries/email/graphql/mapper.ts).
 The mapper is strong evidence that Outlook should use the existing message viewer.
 
 The less obvious coupling is below the response types:
-[thread actions](../../crates/email/src/domain/service/thread_labels.rs) resolve
+[thread actions](../../crates/email/email/src/domain/service/thread_labels.rs) resolve
 system labels and call `enqueue_gmail_ops_modify_labels_batch`;
-[message classification](../../crates/models_email/src/email/service/message.rs)
+[message classification](../../crates/types/email_types/src/email/service/message.rs)
 uses INBOX, TRASH, and SPAM; and
-[thread queries](../../crates/email/src/outbound/email_pg_repo/thread.rs) use Gmail
+[thread queries](../../crates/email/email/src/outbound/email_pg_repo/thread.rs) use Gmail
 category names for signal/noise decisions. Returning the same JSON shape is not
 enough if Outlook messages land in the wrong view or trigger the wrong action.
 
@@ -528,7 +528,7 @@ Current constraints are visible in the
 [Gmail-only composition](../../services/email_service/src/outbound/email_api/mod.rs),
 [Google token source](../../services/email_service/src/outbound/email_api/token_source.rs),
 [mailbox initialization](../../services/email_service/src/api/email/init.rs),
-[sync cursor model](../../crates/email_api_client/src/domain/models/changes.rs), and
+[sync cursor model](../../crates/email/email_api_client_core/src/models/changes.rs), and
 [thread-based backfill](../../services/email_service/src/pubsub/backfill/list_threads.rs).
 
 ## Domain ownership and provider selection
@@ -538,9 +538,9 @@ mailbox binding.**
 
 | Component | Responsibility |
 | --- | --- |
-| `crates/email/src/domain` | Mailbox access policy, setup and teardown, sync state transitions, mutation intent, delivery state, and capability enforcement. Add focused services/ports alongside existing services. |
-| `crates/email_api_client/src/domain` | Provider operation contracts, normalized content, typed identities/cursors, capabilities, and classified provider outcomes. |
-| `crates/email_api_client/src/outbound/outlook` | Graph requests, wire models, pagination, conversion, and provider error mapping, behind an `outbound-outlook` feature. |
+| `crates/email/email/src/domain` | Mailbox access policy, setup and teardown, sync state transitions, mutation intent, delivery state, and capability enforcement. Add focused services/ports alongside existing services. |
+| `crates/email/email_api_client_core` | Provider operation contracts, normalized content, typed identities/cursors, capabilities, and classified provider outcomes. |
+| `crates/email/email_api_client_outbound/src/outlook` | Graph requests, wire models, pagination, conversion, and provider error mapping, behind an `outbound-outlook` feature. |
 | Existing calendar and contacts domains | Own their current product behavior and provider contracts; email orchestration calls their services rather than duplicating their policy. |
 | Auth-owned Microsoft grant service in `authentication_service` | OAuth lifecycle, identity validation, grant ownership, refresh coordination, and revocation. Put policy in a domain module behind storage, cipher, clock, and OAuth ports. |
 | Email/auth outbound adapters | Implement persistence, queue publication, token acquisition, and external domain calls. Reuse existing owning storage utilities through these adapters. |
@@ -775,7 +775,7 @@ misreporting completion.
 **Decision: make sending a durable state machine with an explicit ambiguous
 outcome.**
 
-The current [scheduled delivery contract](../../crates/email/src/domain/scheduled_delivery.rs)
+The current [scheduled delivery contract](../../crates/email/email/src/domain/scheduled_delivery.rs)
 claims work, sends it, and releases the claim on failure. Outlook needs to retain
 provider preparation/submission state across failures. A Graph send returns
 `202 Accepted` with no response body, while a sent copy may become visible later.
@@ -872,7 +872,7 @@ mailboxes cover behavior mocks cannot establish.
 
 Generate migrations with `sqlx migrate add`, refresh the root SQLx cache through
 the documented Nix workflow, and run affected package tests from the repository
-root with `SQLX_OFFLINE` unset. Packages will include `email`, `email_api_client`,
+root with `SQLX_OFFLINE` unset. Packages will include `email`, `email_api_client_core`, `email_api_client_outbound`,
 `email_service`, `authentication_service`, and the touched auth/storage/client
 crates. Run `just check`, `just check full`, and the relevant frontend tests as
 appropriate to each slice. Update the [app agent guide](../agent-guide/README.md)

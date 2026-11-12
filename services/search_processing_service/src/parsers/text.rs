@@ -4,7 +4,6 @@
 //! attempt, so text that is not valid UTF-8 is decoded rather than rejected.
 
 use encoding_rs::{Encoding, UTF_8, UTF_16BE, UTF_16LE};
-use model::document::FileType;
 use nom::{
     IResult, Parser,
     bytes::complete::{tag, take_till1, take_until},
@@ -12,6 +11,7 @@ use nom::{
     combinator::{opt, value},
     sequence::preceded,
 };
+use shared_types::document::FileType;
 
 /// How far into an HTML file a `charset` declaration is looked for, as in the
 /// HTML standard's encoding prescan.

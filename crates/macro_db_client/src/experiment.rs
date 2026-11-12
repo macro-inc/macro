@@ -1,4 +1,4 @@
-use model::experiment::Experiment;
+use shared_types::experiment::Experiment;
 
 /// Gets all of the active experiments
 #[tracing::instrument(skip(db))]

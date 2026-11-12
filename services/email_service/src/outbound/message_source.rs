@@ -4,14 +4,14 @@ use email::domain::{
     draft_attachments::AttachmentError,
     message_source::{MessageSourceBytes, MessageSourceRecord},
 };
-use email_api_client::domain::{
+use email_api_client_core::{
     models::{EmailApiError, MailboxAccess, ProviderId},
     ports::{
         MailboxContentReader, MailboxTokenSource, ProviderRateLimiter, ScopedMailboxRepository,
     },
     service::mailbox::MailboxApiService,
 };
-use models_email::service::link::UserProvider;
+use email_types::service::link::UserProvider;
 
 pub struct ProviderMessageSource<R, T, L> {
     pub gmail: GmailApi,

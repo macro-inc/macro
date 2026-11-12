@@ -1,0 +1,137 @@
+[package]
+edition = "2024"
+name = "email"
+publish = false
+version = "0.1.0"
+
+[features]
+# Calendar invitation extraction and resolution against the viewer's calendar.
+calendar_invitations = ["dep:calendar_events", "dep:chrono-tz", "dep:ical", "dep:url"]
+mailbox = ["ports", "dep:email_api_client_core", "dep:email_types", "dep:calendar_events", "dep:subtle"]
+all = [
+  "ai_tools",
+  "gmail_token",
+  "http_client",
+  "inbound",
+  "outbound",
+  "ports",
+  "s3",
+  "sqs",
+]
+attachment = [
+  "dep:attachment",
+  "dep:non_empty",
+  "ports",
+]
+ai_schema = ["dep:schemars"]
+ai_tools = [
+  "dep:ai_toolset",
+  "dep:async-trait",
+  "dep:email_validator",
+  "dep:schemars",
+  "dep:specta",
+  "ports",
+]
+axum = [
+  "dep:axum",
+  "dep:axum-extra",
+  "dep:macro_authorization",
+  "dep:model_error_response",
+  "dep:utoipa",
+  "pagination_types/axum",
+]
+gmail_senders = ["gmail_token", "dep:gmail_client", "dep:email_types"]
+gmail_token = ["dep:authentication_service_client", "dep:google_token", "dep:redis", "ports"]
+http_client = ["dep:reqwest", "ports"]
+inbound = ["ports"]
+outbound = ["dep:calendar_events", "dep:sqlx", "ports"]
+sqs = ["dep:email_types", "dep:sqs_client", "ports"]
+ports = ["crm/ports", "dep:chrono-tz", "dep:tokio", "frecency_core/ports"]
+# The S3 adapter for staged draft attachments.
+s3 = ["dep:aws-sdk-s3", "ports"]
+
+[dependencies]
+agent_correlation = { workspace = true }
+email_thread_id = { workspace = true }
+subtle = { workspace = true, optional = true }
+calendar_events = { workspace = true, optional = true }
+ical = { version = "0.11", default-features = false, features = ["ical"], optional = true }
+chrono-tz = { workspace = true, optional = true }
+sha2 = { workspace = true }
+url = { workspace = true, optional = true }
+activity = { workspace = true }
+ai_toolset = { workspace = true, optional = true }
+attachment = { workspace = true, optional = true }
+anyhow = { workspace = true }
+async-trait = { workspace = true, optional = true }
+aws-sdk-s3 = { workspace = true, optional = true }
+base64 = { workspace = true }
+lexical_client = { workspace = true }
+email_validator = { workspace = true, optional = true }
+entity_access = { workspace = true, default-features = true }
+entity_access_management = { workspace = true, features = [
+  "ports",
+] }
+futures = { workspace = true }
+axum = { workspace = true, optional = true }
+axum-extra = { workspace = true, optional = true }
+chrono = { workspace = true, features = ["serde"] }
+crm = { workspace = true }
+doppleganger = { workspace = true, features = ["chrono", "uuid"] }
+either = { workspace = true }
+email_utils = { workspace = true }
+email_db_client = { workspace = true }
+filter_ast = { workspace = true }
+gmail_client = { workspace = true, optional = true }
+google_token = { workspace = true, optional = true }
+item_filters = { workspace = true, default-features = true }
+lol_html = { workspace = true }
+scraper = { workspace = true }
+macro_authorization = { workspace = true, features = ["axum"], optional = true }
+macro_event_broker = { workspace = true }
+macro_event_topics = { workspace = true }
+entity_mutation = { workspace = true }
+macro_user_id = { workspace = true }
+macro_uuid = { workspace = true }
+entity_kind = { workspace = true }
+non_empty = { workspace = true, optional = true }
+model_error_response = { workspace = true, optional = true }
+pagination_types = { workspace = true }
+email_types = { workspace = true, optional = true }
+sqs_client = { workspace = true, features = ["email"], optional = true }
+rand = { workspace = true }
+recursion = { workspace = true }
+reqwest = { workspace = true, optional = true }
+rootcause = { workspace = true }
+schemars = { workspace = true, optional = true, features = ["uuid1"] }
+specta = { workspace = true, optional = true, features = ["uuid"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_with = { workspace = true }
+authentication_service_client = { workspace = true, optional = true }
+redis = { workspace = true, features = ["tokio-rustls-comp"], optional = true }
+sqlx = { workspace = true, optional = true }
+strum = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["macros", "time"], optional = true }
+opentelemetry = { workspace = true, features = ["trace"] }
+tracing = { workspace = true }
+tracing-opentelemetry = { workspace = true }
+utoipa = { workspace = true, optional = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+soup_types = { workspace = true }
+email_api_client_core = { workspace = true, optional = true, features = ["ports"] }
+frecency_core = { workspace = true }
+
+[dev-dependencies]
+entity_access_outbound = { workspace = true }
+tokio = { workspace = true, features = ["test-util"] }
+email_types = { workspace = true }
+email_db_client = { workspace = true }
+crm = { workspace = true, default-features = true, features = ["outbound"] }
+frecency = { workspace = true, features = ["outbound", "postgres"] }
+macro_db_migrator = { workspace = true }
+serde_json = { workspace = true }
+opentelemetry_sdk = { workspace = true, features = ["trace", "testing"] }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }

@@ -1,14 +1,15 @@
 pub mod ai_request;
 
 use crate::cognition::{api::context::ApiContext, model::stream::SendChatMessagePayload};
+use chat_id::ChatId;
 
-use agent::types::Role;
-use agent::types::{ChatMessage, ChatMessageContent};
+use agent_loop::types::Role;
+use agent_loop::types::{ChatMessage, ChatMessageContent};
+use ai_chat::domain::models::ResolvedMessageContent;
+use ai_chat::domain::ports::MessageService;
 use anyhow::{Context, Result};
-use chat::domain::models::ResolvedMessageContent;
-use chat::domain::ports::MessageService;
-use model::chat::{AttachmentType, NewAttachment, NewChatMessage};
-use model_entity::EntityType;
+use entity_kind::EntityType;
+use shared_types::chat::{AttachmentType, NewAttachment, NewChatMessage};
 use std::sync::Arc;
 
 /// Stores the incoming user message and resolves its attachments in one step.
@@ -52,7 +53,11 @@ pub async fn store_incoming_message(
     let user_id: macro_user_id::user_id::MacroUserIdStr<'static> =
         user_id.to_owned().try_into().map_err(anyhow::Error::msg)?;
     ctx.message_service
-        .create(&user_id, &incoming_message.chat_id, new_chat_message)
+        .create(
+            &user_id,
+            &ChatId::from(incoming_message.chat_id.as_str()),
+            new_chat_message,
+        )
         .await
         .context("failed to create chat message")
 }
@@ -96,7 +101,7 @@ pub async fn store_conversation_messages(
 
         let message_id = ctx
             .message_service
-            .store(chat_id, new_chat_message)
+            .store(&ChatId::from(chat_id), new_chat_message)
             .await
             .context("failed to create chat message")?;
 

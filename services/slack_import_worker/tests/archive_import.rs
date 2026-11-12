@@ -13,10 +13,8 @@ use std::{
 
 use aws_sdk_s3::config::{BehaviorVersion, Credentials, Region};
 use chrono::{DateTime, Utc};
-use entity_access::{
-    domain::{models::*, service::EntityAccessServiceImpl},
-    outbound::PgAccessRepository,
-};
+use entity_access::domain::{models::*, service::EntityAccessServiceImpl};
+use entity_access_outbound::PgAccessRepository;
 use import::outbound::pg_import_repo::PgImportRepo;
 use macro_queues::{SlackImportDlq, SlackImportQueue};
 use macro_user_id::user_id::MacroUserIdStr;

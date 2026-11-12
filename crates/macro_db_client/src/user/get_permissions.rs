@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use sqlx::{Pool, Postgres};
 
-use model::user::UserPermission;
+use shared_types::user::UserPermission;
 
 /// Creates a hashset of the users permissions to be checked against later
 #[tracing::instrument(fields(user_id=?user_id), err)]

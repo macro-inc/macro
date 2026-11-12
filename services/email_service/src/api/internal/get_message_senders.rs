@@ -5,8 +5,8 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
+use email_types::service::message::{MessageSendersRequest, MessageSendersResponse};
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
-use models_email::service::message::{MessageSendersRequest, MessageSendersResponse};
 use strum_macros::AsRefStr;
 use thiserror::Error;
 

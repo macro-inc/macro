@@ -75,7 +75,7 @@ use channel_labels::domain::models::{
 use channel_labels::inbound::axum_router::{
     CreateChannelLabelRequest, RenameChannelLabelRequest, SetChannelLabelRequest,
 };
-use channels::inbound::axum_router::{
+use channels_inbound::axum_router::{
     ApiActivity, ApiAttachmentChannelReference, ApiAttachmentCommentReference,
     ApiAttachmentEntityReference, ApiAttachmentGenericReference, ApiChannelAttachment,
     ApiChannelAttachmentsPage, ApiChannelDetail, ApiChannelParticipant, ApiParticipantRole,
@@ -85,6 +85,9 @@ use channels::inbound::axum_router::{
 use collab_surface::domain::models::SurfaceState;
 use collab_surface::inbound::axum_router::{
     CollabSurfaceResponse, CollabSurfaceTokenResponse, EnsureCollabSurfaceRequest,
+};
+use database_sql_runner::inbound::axum_router::{
+    SaveQueryChart as DatabaseSaveQueryChart, SaveQueryRequest as DatabaseSaveQueryRequest,
 };
 use databases::domain::journal::{
     ColumnChangeKind as DatabaseColumnChangeKind, RowChangeKind as DatabaseRowChangeKind,
@@ -114,8 +117,29 @@ use databases::inbound::axum_router::{CreateDatabaseRequest, duplicate::Duplicat
 use databases::outbound::gateway_event_publisher::{
     AwarenessRelay as DatabaseAwarenessRelay, TableChanged as DatabaseTableChanged,
 };
-use databases_sql::inbound::axum_router::{
-    SaveQueryChart as DatabaseSaveQueryChart, SaveQueryRequest as DatabaseSaveQueryRequest,
+use databases_types::views::{
+    CardPosition as DatabaseCardPosition, Conjunction as DatabaseFilterConjunction, DatabaseView,
+    DateOperator as DatabaseDateOperator, FilterCondition as DatabaseFilterCondition,
+    FilterGroup as DatabaseFilterGroup, FilterNode as DatabaseFilterNode,
+    FilterTest as DatabaseFilterTest, Lane as DatabaseBoardLane, LaneKey as DatabaseLaneKey,
+    NewView as DatabaseNewView, NumberOperator as DatabaseNumberOperator,
+    PresenceOperator as DatabasePresenceOperator, RequestedLayout as DatabaseRequestedLayout,
+    SetOperator as DatabaseSetOperator, SortDirection as DatabaseSortDirection,
+    SortKey as DatabaseSortKey, TextOperator as DatabaseTextOperator,
+    ViewColumn as DatabaseViewColumn, ViewLayout as DatabaseViewLayout,
+    ViewPosition as DatabaseViewPosition, ViewQuery as DatabaseViewQuery,
+};
+use databases_types::{
+    CellValue as DatabaseCellValue, CellWrite as DatabaseCellWrite,
+    ColumnChange as DatabaseColumnChange, ColumnKind as DatabaseColumnKind,
+    ColumnResult as DatabaseColumnResult, DatabaseOp, EntityKind as DatabaseEntityKind,
+    EntityRef as DatabaseEntityRef, NewColumn as DatabaseNewColumn, NewOption as DatabaseNewOption,
+    OpResult as DatabaseOpResult, OptionRef as DatabaseOptionRef, RowChange as DatabaseRowChange,
+    RowChanges as DatabaseRowChanges, RowsChange as DatabaseRowsChange,
+    RowsResult as DatabaseRowsResult, TableChange as DatabaseTableChange,
+    TableResult as DatabaseTableResult, TakenId as DatabaseTakenId,
+    VersionedTable as DatabaseVersionedTable, ViewChange as DatabaseViewChange,
+    ViewResult as DatabaseViewResult,
 };
 use document_sub_type::DocumentSubType;
 use documents_hex::inbound::axum_router::{
@@ -135,19 +159,23 @@ use github_pull_requests::inbound::changes_router::{
     ChangedFileDto, ChangesetDto, ChangesetSourceDto, FileChangeKindDto, GitRefDto,
     GithubPullRequestChangesPatchResponse, GithubPullRequestChangesResponse,
 };
-use initiative::domain::models::{
+use permissions_types::share_permission::channel_share_permission::UpdateOperation;
+use project::domain::models::{
     CreateInitiativeRequest, InitialPropertyValue, InitiativeDetail, InitiativeId, InitiativeList,
     InitiativeSummary, UpdateInitiativeRequest,
 };
-use initiative::domain::reads::{
+use project::domain::reads::{
     InitiativePage, InitiativePageRow, InitiativePropertySnapshot, InitiativeSort,
 };
-use initiative::inbound::axum_router::description::InitiativeDescription;
-use model::document::response::{
+use project::inbound::axum_router::description::InitiativeDescription;
+use projects_hex::inbound::axum_router::delete_project::{
+    ProjectDeleteResponse, ProjectDeleteResponseData,
+};
+use shared_types::document::response::{
     CreateDocumentRequest, CreateDocumentResponse, CreateDocumentResponseData,
     DocumentResponseMetadata,
 };
-use model::{
+use shared_types::{
     annotations::AnnotationIncrementalUpdate,
     chat::Chat,
     document::{
@@ -175,43 +203,6 @@ use model::{
     user_document_view_location::UserDocumentViewLocation,
     version::DocumentStorageServiceApiVersion,
 };
-use models_databases::views::{
-    CardPosition as DatabaseCardPosition, Conjunction as DatabaseFilterConjunction, DatabaseView,
-    DateOperator as DatabaseDateOperator, FilterCondition as DatabaseFilterCondition,
-    FilterGroup as DatabaseFilterGroup, FilterNode as DatabaseFilterNode,
-    FilterTest as DatabaseFilterTest, Lane as DatabaseBoardLane, LaneKey as DatabaseLaneKey,
-    NewView as DatabaseNewView, NumberOperator as DatabaseNumberOperator,
-    PresenceOperator as DatabasePresenceOperator, RequestedLayout as DatabaseRequestedLayout,
-    SetOperator as DatabaseSetOperator, SortDirection as DatabaseSortDirection,
-    SortKey as DatabaseSortKey, TextOperator as DatabaseTextOperator,
-    ViewColumn as DatabaseViewColumn, ViewLayout as DatabaseViewLayout,
-    ViewPosition as DatabaseViewPosition, ViewQuery as DatabaseViewQuery,
-};
-use models_databases::{
-    CellValue as DatabaseCellValue, CellWrite as DatabaseCellWrite,
-    ColumnChange as DatabaseColumnChange, ColumnKind as DatabaseColumnKind,
-    ColumnResult as DatabaseColumnResult, DatabaseOp, EntityKind as DatabaseEntityKind,
-    EntityRef as DatabaseEntityRef, NewColumn as DatabaseNewColumn, NewOption as DatabaseNewOption,
-    OpResult as DatabaseOpResult, OptionRef as DatabaseOptionRef, RowChange as DatabaseRowChange,
-    RowChanges as DatabaseRowChanges, RowsChange as DatabaseRowsChange,
-    RowsResult as DatabaseRowsResult, TableChange as DatabaseTableChange,
-    TableResult as DatabaseTableResult, TakenId as DatabaseTakenId,
-    VersionedTable as DatabaseVersionedTable, ViewChange as DatabaseViewChange,
-    ViewResult as DatabaseViewResult,
-};
-use models_permissions::share_permission::channel_share_permission::UpdateOperation;
-use models_soup::call_record::{SoupCallRecord, SoupCallRecordParticipant};
-use models_soup::chat::SoupChat;
-use models_soup::document::SoupDocument;
-use models_soup::email_thread::{
-    SoupAttachment, SoupContact, SoupEmailThreadPreview, SoupEnrichedEmailThreadPreview, SoupLabel,
-    SoupLabelListVisibility, SoupLabelType, SoupMessageListVisibility,
-};
-use models_soup::foreign_entity::SoupForeignEntity;
-use models_soup::project::SoupProject;
-use projects_hex::inbound::axum_router::delete_project::{
-    ProjectDeleteResponse, ProjectDeleteResponseData,
-};
 use soup::domain::models::{SoupItemWithProperties, SoupPropertiesField};
 use soup::inbound::axum_router::{
     ApiGroupByField, ApiGroupMeta, GroupedSoupGroupPage, GroupedSoupInitialPage, GroupedSoupPage,
@@ -219,6 +210,15 @@ use soup::inbound::axum_router::{
     PostGroupedSoupAstRequest, PostSoupAstRequest, PostSoupRequest, PropertyBucketing,
     PropertyDateRange, PropertyDateRanges, SoupApiItem, SoupApiSort, SoupPage,
 };
+use soup_types::call_record::{SoupCallRecord, SoupCallRecordParticipant};
+use soup_types::chat::SoupChat;
+use soup_types::document::SoupDocument;
+use soup_types::email_thread::{
+    SoupAttachment, SoupContact, SoupEmailThreadPreview, SoupEnrichedEmailThreadPreview, SoupLabel,
+    SoupLabelListVisibility, SoupLabelType, SoupMessageListVisibility,
+};
+use soup_types::foreign_entity::SoupForeignEntity;
+use soup_types::project::SoupProject;
 use user_api_key::domain::models::{CreatedUserApiKey, UserApiKeyInfo};
 use user_api_key::inbound::axum_router::{CreateUserApiKeyRequest, UserApiKeysList};
 use utoipa::OpenApi;
@@ -360,7 +360,7 @@ use utoipa::OpenApi;
         soup::inbound::axum_router::post_grouped_soup_ast_handler,
 
         // channel list (comms hex)
-        channels::inbound::list_router::get_channels_handler,
+        channels_inbound::list_router::get_channels_handler,
 
         // messages (channels and documents)
         messages::inbound::axum_router::timeline,
@@ -379,33 +379,33 @@ use utoipa::OpenApi;
         messages::inbound::axum_router::legacy,
 
         // channels
-        channels::inbound::axum_router::create_channel_handler,
-        channels::inbound::axum_router::get_or_create_dm_handler,
-        channels::inbound::axum_router::get_or_create_private_handler,
-        channels::inbound::axum_router::patch_channel_handler,
-        channels::inbound::axum_router::profile_picture::set_channel_picture_handler,
-        channels::inbound::axum_router::delete_channel_handler,
-        channels::inbound::axum_router::add_participants_handler,
-        channels::inbound::axum_router::share_with_channel_handler,
-        channels::inbound::axum_router::remove_participants_handler,
-        channels::inbound::axum_router::get_channel_join_link_handler,
-        channels::inbound::axum_router::join_channel_by_code_handler,
-        channels::inbound::axum_router::join_channel_handler,
-        channels::inbound::axum_router::leave_channel_handler,
-        channels::inbound::axum_router::get_channel_attachments_handler,
-        channels::inbound::axum_router::get_channel_handler,
-        channels::inbound::axum_router::get_channel_participants_handler,
-        channels::inbound::axum_router::get_batch_channel_preview_handler,
-        channels::inbound::axum_router::create_mention_handler,
-        channels::inbound::axum_router::delete_mention_handler,
-        channels::inbound::axum_router::get_attachment_references_handler,
-        channels::inbound::axum_router::get_activity_handler,
-        channels::inbound::axum_router::access_requests::my_access_request_handler,
-        channels::inbound::axum_router::access_requests::request_access_handler,
-        channels::inbound::axum_router::access_requests::cancel_access_request_handler,
-        channels::inbound::axum_router::access_requests::get_access_request_handler,
-        channels::inbound::axum_router::access_requests::resolve_access_request_handler,
-        channels::inbound::axum_router::post_activity_handler,
+        channels_inbound::axum_router::create_channel_handler,
+        channels_inbound::axum_router::get_or_create_dm_handler,
+        channels_inbound::axum_router::get_or_create_private_handler,
+        channels_inbound::axum_router::patch_channel_handler,
+        channels_inbound::axum_router::profile_picture::set_channel_picture_handler,
+        channels_inbound::axum_router::delete_channel_handler,
+        channels_inbound::axum_router::add_participants_handler,
+        channels_inbound::axum_router::share_with_channel_handler,
+        channels_inbound::axum_router::remove_participants_handler,
+        channels_inbound::axum_router::get_channel_join_link_handler,
+        channels_inbound::axum_router::join_channel_by_code_handler,
+        channels_inbound::axum_router::join_channel_handler,
+        channels_inbound::axum_router::leave_channel_handler,
+        channels_inbound::axum_router::get_channel_attachments_handler,
+        channels_inbound::axum_router::get_channel_handler,
+        channels_inbound::axum_router::get_channel_participants_handler,
+        channels_inbound::axum_router::get_batch_channel_preview_handler,
+        channels_inbound::axum_router::create_mention_handler,
+        channels_inbound::axum_router::delete_mention_handler,
+        channels_inbound::axum_router::get_attachment_references_handler,
+        channels_inbound::axum_router::get_activity_handler,
+        channels_inbound::axum_router::access_requests::my_access_request_handler,
+        channels_inbound::axum_router::access_requests::request_access_handler,
+        channels_inbound::axum_router::access_requests::cancel_access_request_handler,
+        channels_inbound::axum_router::access_requests::get_access_request_handler,
+        channels_inbound::axum_router::access_requests::resolve_access_request_handler,
+        channels_inbound::axum_router::post_activity_handler,
 
         // harnesses
         harnesses::inbound::axum_router::create_pairing_handler,
@@ -598,16 +598,16 @@ use utoipa::OpenApi;
         reminders::inbound::axum_router::set_email_followup_handler,
         reminders::inbound::axum_router::email_collection::list_email_reminders_handler,
         // initiatives
-        initiative::inbound::axum_router::list::list_initiatives_handler,
-        initiative::inbound::axum_router::page::page_initiatives_handler,
-        initiative::inbound::axum_router::description::get_initiative_description_handler,
-        initiative::inbound::axum_router::create::create_initiative_handler,
-        initiative::inbound::axum_router::get::get_initiative_handler,
-        initiative::inbound::axum_router::activity::get_initiative_activity_handler,
-        initiative::inbound::axum_router::update::update_initiative_handler,
-        initiative::inbound::axum_router::delete::delete_initiative_handler,
+        project::inbound::axum_router::list::list_initiatives_handler,
+        project::inbound::axum_router::page::page_initiatives_handler,
+        project::inbound::axum_router::description::get_initiative_description_handler,
+        project::inbound::axum_router::create::create_initiative_handler,
+        project::inbound::axum_router::get::get_initiative_handler,
+        project::inbound::axum_router::activity::get_initiative_activity_handler,
+        project::inbound::axum_router::update::update_initiative_handler,
+        project::inbound::axum_router::delete::delete_initiative_handler,
         // databases
-        databases_sql::inbound::axum_router::query_databases_handler,
+        database_sql_runner::inbound::axum_router::query_databases_handler,
         databases::inbound::axum_router::list_databases_handler,
         databases::inbound::starter_router::ensure_starter_handler,
         databases::inbound::axum_router::create_database_handler,
@@ -622,7 +622,7 @@ use utoipa::OpenApi;
         databases::inbound::axum_router::duplicate::duplicate_database_handler,
         databases::inbound::axum_router::sharing::get_permissions_handler,
         databases::inbound::axum_router::sharing::update_permissions_handler,
-        databases_sql::inbound::axum_router::save_query_handler,
+        database_sql_runner::inbound::axum_router::save_query_handler,
         databases::inbound::axum_router::saved_queries::get_query_handler,
         databases::inbound::axum_router::casts::column_casts_handler,
         databases::inbound::axum_router::casts::column_conversion_handler,
@@ -664,7 +664,7 @@ use utoipa::OpenApi;
         github::inbound::github_sync_router::install_sync_handler,
 
         // /internal/sync_service
-        sync_service_hex::inbound::axum_router::bulk_wakeup_handler,
+        document_sync::inbound::axum_router::bulk_wakeup_handler,
 
         // /crm
         crm::inbound::pipelines::create,
@@ -761,9 +761,9 @@ use utoipa::OpenApi;
             documents_hex::domain::models::SetSkillDescriptionRequest,
             documents_hex::domain::models::SkillDescriptionBody,
             documents_hex::domain::models::PropertyInput,
-            models_properties::api::requests::SetPropertyValue,
-            models_properties::shared::EntityReference,
-            models_properties::shared::EntityType, // Quick create task
+            properties_types::api::requests::SetPropertyValue,
+            properties_types::shared::EntityReference,
+            properties_types::shared::EntityType, // Quick create task
             CreateBulkDocumentResponseData,
             CreateBulkDocumentResponse, // Create document bulk
             GetDocumentListResult,
@@ -962,9 +962,9 @@ use utoipa::OpenApi;
             InitiativeId,
             InitiativeSummary,
             InitiativeDetail,
-            initiative::domain::history::InitiativeActivityPage,
-            initiative::domain::history::InitiativeActivityRecord,
-            initiative::domain::history::InitiativeActivityCursor,
+            project::domain::history::InitiativeActivityPage,
+            project::domain::history::InitiativeActivityRecord,
+            project::domain::history::InitiativeActivityCursor,
             InitiativeList,
             InitiativePage,
             InitiativePageRow,
@@ -1003,12 +1003,12 @@ use utoipa::OpenApi;
             GroupedSoupPage,
 
             // Channel list (comms hex)
-            channels::inbound::list_router::ApiChannelListPage,
-            channels::inbound::list_router::ApiChannelWithLatest,
-            channels::inbound::list_router::ApiChannelListMessage,
-            channels::inbound::list_router::ApiChannelListParticipant,
-            channels::inbound::list_router::ApiChannelListType,
-            channels::inbound::list_router::ApiParticipantListRole,
+            channels_inbound::list_router::ApiChannelListPage,
+            channels_inbound::list_router::ApiChannelWithLatest,
+            channels_inbound::list_router::ApiChannelListMessage,
+            channels_inbound::list_router::ApiChannelListParticipant,
+            channels_inbound::list_router::ApiChannelListType,
+            channels_inbound::list_router::ApiParticipantListRole,
 
             // Messages (channels and documents)
             messages::domain::models::MessageParent,
@@ -1180,12 +1180,12 @@ use utoipa::OpenApi;
 
 
             // Permissions V2
-            models_permissions::share_permission::LinkShare,
-            models_permissions::share_permission::access_level::AccessLevel,
-            models_permissions::share_permission::SharePermissionV2,
-            models_permissions::share_permission::UpdateSharePermissionRequestV2, // Share permission
-            models_permissions::share_permission::channel_share_permission::ChannelSharePermission,
-            models_permissions::share_permission::channel_share_permission::UpdateChannelSharePermission, // Channel share permissions
+            permissions_types::share_permission::LinkShare,
+            permissions_types::share_permission::access_level::AccessLevel,
+            permissions_types::share_permission::SharePermissionV2,
+            permissions_types::share_permission::UpdateSharePermissionRequestV2, // Share permission
+            permissions_types::share_permission::channel_share_permission::ChannelSharePermission,
+            permissions_types::share_permission::channel_share_permission::UpdateChannelSharePermission, // Channel share permissions
             entity::get_entity_permission::EntityPermissionResponse,
             entity_access::domain::models::EntityPermission,
             entity_access::domain::models::ParticipantRole,
@@ -1245,8 +1245,8 @@ use utoipa::OpenApi;
             documents_hex::domain::models::GithubPullRequestTasksResponse,
 
             // Sync service
-            sync_service_hex::domain::models::BulkWakeupRequest,
-            sync_service_hex::domain::models::BulkWakeupResponse,
+            document_sync::domain::models::BulkWakeupRequest,
+            document_sync::domain::models::BulkWakeupResponse,
 
             // CRM
             crm::inbound::axum_router::set_email_sync::SetEmailSyncRequest,

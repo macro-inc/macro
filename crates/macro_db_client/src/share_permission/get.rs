@@ -1,8 +1,8 @@
 use anyhow::Context;
-use model::thread::EmailThreadPermission;
-use models_permissions::share_permission::access_level::AccessLevel;
-use models_permissions::share_permission::channel_share_permission::ChannelSharePermission;
-use models_permissions::share_permission::{LinkShare, SharePermissionV2};
+use permissions_types::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::channel_share_permission::ChannelSharePermission;
+use permissions_types::share_permission::{LinkShare, SharePermissionV2};
+use shared_types::thread::EmailThreadPermission;
 use std::str::FromStr;
 
 fn parse_share_permission(

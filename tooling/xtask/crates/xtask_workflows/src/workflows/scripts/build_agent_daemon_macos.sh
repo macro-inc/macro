@@ -17,4 +17,4 @@ if ! command -v cmake >/dev/null 2>&1; then
   brew install cmake
 fi
 
-cargo build --release --package coding_agent_worker --target "$TARGET"
+cargo build --release --package macrod --target "$TARGET"

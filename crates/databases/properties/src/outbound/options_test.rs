@@ -1,0 +1,790 @@
+//! Integration tests for property option and tag operations on PropertiesPgRepo.
+
+use super::properties_pg_repo::PropertiesPgRepo;
+use crate::domain::model::{
+    PropertyDefinitionOwner, PropertyOptionInsert, PropertyOptionReplaceOutcome,
+    PropertyOptionReplacePlan, PropertyOptionRewrite, UpdatePropertyOptionOutcome,
+};
+use crate::domain::ports::PropertiesRepo;
+use macro_db_migrator::MACRO_DB_MIGRATIONS;
+use properties_types::service::property_option::PropertyOptionValue;
+use properties_types::service::property_value::PropertyValue;
+use properties_types::{DataType, EntityType};
+use sqlx::{Pool, Postgres};
+use uuid::Uuid;
+
+const PRIORITY_PROPERTY_ID: &str = "11111111-1111-1111-1111-111111111111";
+const SCORE_PROPERTY_ID: &str = "44444444-4444-4444-4444-444444444444";
+const PRIORITY_OPTION_LOW: &str = "10111111-1111-1111-1111-111111111111";
+const PRIORITY_OPTION_MEDIUM: &str = "10111111-1111-1111-1111-111111111112";
+const PRIORITY_OPTION_HIGH: &str = "10111111-1111-1111-1111-111111111113";
+const PRIORITY_OPTION_URGENT: &str = "10111111-1111-1111-1111-111111111114";
+
+fn team_1() -> Uuid {
+    "0e000000-0000-0000-0000-000000000001".parse().unwrap()
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("properties"))
+)]
+async fn create_property_option_string(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = PropertiesPgRepo::new(pool);
+    let property_id = PRIORITY_PROPERTY_ID.parse::<Uuid>().unwrap();
+
+    let options_before = repo.get_property_options(property_id).await?;
+    assert_eq!(options_before.len(), 4);
+
+    let option = repo
+        .create_property_option(
+            property_id,
+            4,
+            PropertyOptionValue::String("Extra High".to_string()),
+            None,
+        )
+        .await?;
+
+    let options_after = repo.get_property_options(property_id).await?;
+    assert_eq!(options_after.len(), 5);
+
+    assert_eq!(option.display_order, 4);
+    assert_eq!(option.property_definition_id, property_id);
+    assert_eq!(
+        option.value,
+        PropertyOptionValue::String("Extra High".to_string())
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("properties"))
+)]
+async fn create_property_option_number(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = PropertiesPgRepo::new(pool);
+    let property_id = SCORE_PROPERTY_ID.parse::<Uuid>().unwrap();
+
+    let option = repo
+        .create_property_option(property_id, 0, PropertyOptionValue::Number(3.5), None)
+        .await?;
+
+    assert_eq!(option.display_order, 0);
+    assert_eq!(option.value, PropertyOptionValue::Number(3.5));
+
+    // Options are ordered by display_order, so the new option sorts first.
+    let options = repo.get_property_options(property_id).await?;
+    assert_eq!(options[0].value, PropertyOptionValue::Number(3.5));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("properties"))
+)]
+async fn create_property_option_duplicate_fails(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = PropertiesPgRepo::new(pool);
+
+    // "Low" already exists on the priority property.
+    let result = repo
+        .create_property_option(
+            PRIORITY_PROPERTY_ID.parse().unwrap(),
+            4,
+            PropertyOptionValue::String("Low".to_string()),
+            None,
+        )
+        .await;
+    assert!(result.is_err());
+
+    // 1.0 already exists on the score property.
+    let result = repo
+        .create_property_option(
+            SCORE_PROPERTY_ID.parse().unwrap(),
+            5,
+            PropertyOptionValue::Number(1.0),
+            None,
+        )
+        .await;
+    assert!(result.is_err());
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("properties"))
+)]
+async fn create_property_option_invalid_property_fails(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = PropertiesPgRepo::new(pool);
+
+    let result = repo
+        .create_property_option(
+            Uuid::nil(),
+            0,
+            PropertyOptionValue::String("Test".to_string()),
+            None,
+        )
+        .await;
+
+    assert!(result.is_err()); // Foreign key constraint violation
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("properties"))
+)]
+async fn update_property_option_renames_and_recolors(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = PropertiesPgRepo::new(pool);
+    let option_id = PRIORITY_OPTION_LOW.parse::<Uuid>().unwrap();
+
+    let outcome = repo
+        .update_property_option(
+            option_id,
+            PropertyOptionValue::String("Lowest".to_string()),
+            Some("#FF0000".to_string()),
+            3,
+        )
+        .await?;
+
+    // Same id, so every entity referencing it resolves the new value/color (propagation by id).
+    let UpdatePropertyOptionOutcome::Updated(updated) = outcome else {
+        panic!("expected Updated outcome");
+    };
+    assert_eq!(updated.id, option_id);
+    assert_eq!(updated.color.as_deref(), Some("#FF0000"));
+    assert_eq!(updated.display_order, 3);
+    assert_eq!(
+        updated.value,
+        PropertyOptionValue::String("Lowest".to_string())
+    );
+
+    let fetched = repo
+        .get_property_option(option_id)
+        .await?
+        .expect("option should still exist");
+    assert_eq!(fetched.color.as_deref(), Some("#FF0000"));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("properties"))
+)]
+async fn update_property_option_missing_returns_not_found(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = PropertiesPgRepo::new(pool);
+
+    let outcome = repo
+        .update_property_option(
+            Uuid::nil(),
+            PropertyOptionValue::String("x".to_string()),
+            None,
+            0,
+        )
+        .await?;
+
+    assert!(matches!(outcome, UpdatePropertyOptionOutcome::NotFound));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("properties"))
+)]
+async fn update_property_option_duplicate_value(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = PropertiesPgRepo::new(pool);
+    let option_id = PRIORITY_OPTION_LOW.parse::<Uuid>().unwrap();
+
+    // "Medium" already exists on the same property.
+    let outcome = repo
+        .update_property_option(
+            option_id,
+            PropertyOptionValue::String("Medium".to_string()),
+            None,
+            0,
+        )
+        .await?;
+
+    assert!(matches!(
+        outcome,
+        UpdatePropertyOptionOutcome::DuplicateValue
+    ));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("properties"))
+)]
+async fn delete_property_option_removes_option(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = PropertiesPgRepo::new(pool);
+    let property_id = PRIORITY_PROPERTY_ID.parse::<Uuid>().unwrap();
+    let option_id = PRIORITY_OPTION_LOW.parse::<Uuid>().unwrap();
+
+    assert!(repo.get_property_option(option_id).await?.is_some());
+
+    let deleted = repo.delete_property_option(property_id, option_id).await?;
+    assert!(deleted.is_some());
+
+    assert!(repo.get_property_option(option_id).await?.is_none());
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("properties"))
+)]
+async fn delete_nonexistent_property_option(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = PropertiesPgRepo::new(pool);
+
+    let deleted = repo
+        .delete_property_option(PRIORITY_PROPERTY_ID.parse().unwrap(), Uuid::nil())
+        .await?;
+    assert!(deleted.is_none());
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("properties"))
+)]
+async fn delete_property_option_reduces_count(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = PropertiesPgRepo::new(pool);
+    let property_id = PRIORITY_PROPERTY_ID.parse::<Uuid>().unwrap();
+    let option_id = PRIORITY_OPTION_LOW.parse::<Uuid>().unwrap();
+
+    let count_before = repo.get_property_options(property_id).await?.len();
+
+    repo.delete_property_option(property_id, option_id).await?;
+
+    let count_after = repo.get_property_options(property_id).await?.len();
+    assert_eq!(count_after, count_before - 1);
+
+    Ok(())
+}
+
+/// Reproduces the dangling-option bug: an entity value referencing
+/// [A, B, C, D] must drop D once option D is deleted, so a later set-value
+/// echoing the surviving ids passes option validation.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("properties"))
+)]
+async fn delete_property_option_strips_value_references(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = PropertiesPgRepo::new(pool.clone());
+    let property_id = PRIORITY_PROPERTY_ID.parse::<Uuid>().unwrap();
+    let opt_a = PRIORITY_OPTION_LOW.parse::<Uuid>().unwrap();
+    let opt_b = PRIORITY_OPTION_MEDIUM.parse::<Uuid>().unwrap();
+    let opt_c = PRIORITY_OPTION_HIGH.parse::<Uuid>().unwrap();
+    let opt_d = PRIORITY_OPTION_URGENT.parse::<Uuid>().unwrap();
+
+    // Entity selects all four options.
+    repo.upsert_entity_property(
+        "doc_cascade",
+        EntityType::Document,
+        property_id,
+        Some(PropertyValue::SelectOption(vec![
+            opt_a, opt_b, opt_c, opt_d,
+        ])),
+    )
+    .await?;
+
+    // A new option created after selection (the "new tag" in the repro).
+    let opt_e = repo
+        .create_property_option(
+            property_id,
+            4,
+            PropertyOptionValue::String("New".to_string()),
+            None,
+        )
+        .await?
+        .id;
+
+    // Delete option D.
+    let deleted = repo
+        .delete_property_option(property_id, opt_d)
+        .await?
+        .expect("option D exists");
+
+    // One snapshot per entity that held D (the fixture's thread1 too), so the
+    // service can publish an entity event for each; doc1 never held D.
+    let mut stripped: Vec<_> = deleted
+        .into_iter()
+        .map(|m| (m.property.entity_id, m.value, m.previous_value))
+        .collect();
+    stripped.sort_by(|a, b| a.0.cmp(&b.0));
+    assert_eq!(
+        stripped,
+        vec![
+            (
+                "doc_cascade".to_string(),
+                Some(PropertyValue::SelectOption(vec![opt_a, opt_b, opt_c])),
+                Some(PropertyValue::SelectOption(vec![
+                    opt_a, opt_b, opt_c, opt_d,
+                ])),
+            ),
+            (
+                "thread1".to_string(),
+                Some(PropertyValue::SelectOption(vec![])),
+                Some(PropertyValue::SelectOption(vec![opt_d])),
+            ),
+        ]
+    );
+
+    // Read the raw stored value (bypassing the read-path cleaner) to prove
+    // the dangling id is gone from storage, not just filtered on read.
+    let raw: serde_json::Value = sqlx::query_scalar!(
+        r#"
+        SELECT values as "values!: serde_json::Value"
+        FROM entity_properties
+        WHERE entity_id = $1 AND entity_type = $2 AND property_definition_id = $3
+        "#,
+        "doc_cascade",
+        EntityType::Document as EntityType,
+        property_id
+    )
+    .fetch_one(&pool)
+    .await?;
+
+    let stored: PropertyValue = serde_json::from_value(raw)?;
+    let PropertyValue::SelectOption(ids) = stored else {
+        panic!("expected SelectOption");
+    };
+    assert_eq!(ids, vec![opt_a, opt_b, opt_c]);
+
+    // The surviving selection plus the new option all validate, so the
+    // set-value that previously 400'd now succeeds.
+    let valid = repo
+        .count_valid_property_options(property_id, &[opt_a, opt_b, opt_c, opt_e])
+        .await?;
+    assert_eq!(valid, 4);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("properties"))
+)]
+async fn get_or_create_tag_definition_is_idempotent(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = PropertiesPgRepo::new(pool);
+    let owner = PropertyDefinitionOwner::Team(team_1());
+
+    let first = repo.get_or_create_tag_definition(owner).await?;
+    assert!(first.created);
+    assert_eq!(first.definition.data_type, DataType::Tag);
+    assert!(first.definition.is_multi_select);
+
+    // A second call returns the same definition rather than creating a duplicate.
+    let second = repo.get_or_create_tag_definition(owner).await?;
+    assert!(!second.created);
+    assert_eq!(first.definition.id, second.definition.id);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("properties"))
+)]
+async fn get_or_create_tag_definition_race_reuses_winner(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let first_repo = PropertiesPgRepo::new(pool.clone());
+    let second_repo = PropertiesPgRepo::new(pool);
+    let owner = PropertyDefinitionOwner::Team(team_1());
+
+    let (first, second) = tokio::join!(
+        first_repo.get_or_create_tag_definition(owner),
+        second_repo.get_or_create_tag_definition(owner),
+    );
+    let first = first?;
+    let second = second?;
+
+    assert_ne!(first.created, second.created);
+    assert_eq!(first.definition.id, second.definition.id);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("properties"))
+)]
+async fn get_tag_definition_none_then_some(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = PropertiesPgRepo::new(pool);
+    let owner = PropertyDefinitionOwner::Team(team_1());
+
+    let before = repo.get_tag_definition(owner).await?;
+    assert!(before.is_none());
+
+    let created = repo.get_or_create_tag_definition(owner).await?;
+    assert!(created.created);
+
+    let after = repo.get_tag_definition(owner).await?;
+    assert_eq!(
+        after.map(|definition| definition.id),
+        Some(created.definition.id)
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("properties"))
+)]
+async fn get_or_create_tag_definition_coexists_with_same_named_property(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = PropertiesPgRepo::new(pool);
+    let owner = PropertyDefinitionOwner::Team(team_1());
+
+    // Owner already has a non-tag property literally named "Tags".
+    repo.create_property_definition(owner, "Tags", DataType::String, false, None, Vec::new())
+        .await?;
+
+    // Provisioning the tag set still succeeds: tag definitions are exempt from the
+    // display-name uniqueness that applies to user-created properties.
+    let tag_definition = repo.get_or_create_tag_definition(owner).await?;
+    assert!(tag_definition.created);
+    assert_eq!(tag_definition.definition.data_type, DataType::Tag);
+
+    let again = repo.get_or_create_tag_definition(owner).await?;
+    assert!(!again.created);
+    assert_eq!(tag_definition.definition.id, again.definition.id);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("properties"))
+)]
+async fn replace_property_options_applies_the_plan_in_one_pass(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = PropertiesPgRepo::new(pool.clone());
+    let property_id = PRIORITY_PROPERTY_ID.parse::<Uuid>().unwrap();
+    let low = PRIORITY_OPTION_LOW.parse::<Uuid>().unwrap();
+    let medium = PRIORITY_OPTION_MEDIUM.parse::<Uuid>().unwrap();
+    let high = PRIORITY_OPTION_HIGH.parse::<Uuid>().unwrap();
+    let urgent = PRIORITY_OPTION_URGENT.parse::<Uuid>().unwrap();
+
+    repo.upsert_entity_property(
+        "doc_replace",
+        EntityType::Document,
+        property_id,
+        Some(PropertyValue::SelectOption(vec![low, urgent])),
+    )
+    .await?;
+
+    let outcome = repo
+        .replace_property_options(
+            property_id,
+            &PropertyOptionReplacePlan {
+                delete: vec![urgent],
+                rewrite: vec![
+                    PropertyOptionRewrite {
+                        option_id: low,
+                        value: PropertyOptionValue::String("High".to_string()),
+                        display_order: 0,
+                    },
+                    PropertyOptionRewrite {
+                        option_id: high,
+                        value: PropertyOptionValue::String("Low".to_string()),
+                        display_order: 2,
+                    },
+                ],
+                insert: vec![PropertyOptionInsert {
+                    value: PropertyOptionValue::String("Blocked".to_string()),
+                    display_order: 3,
+                }],
+            },
+        )
+        .await?;
+
+    let PropertyOptionReplaceOutcome::Replaced { options, .. } = outcome else {
+        panic!("expected Replaced, got {outcome:?}");
+    };
+    let labels: Vec<(Uuid, String)> = options
+        .iter()
+        .map(|o| {
+            let PropertyOptionValue::String(s) = &o.value else {
+                panic!("string option")
+            };
+            (o.id, s.clone())
+        })
+        .collect();
+    assert_eq!(labels[0], (low, "High".to_string()));
+    assert_eq!(labels[1], (medium, "Medium".to_string()));
+    assert_eq!(labels[2], (high, "Low".to_string()));
+    assert_eq!(labels[3].1, "Blocked");
+    assert_eq!(options.len(), 4);
+
+    let raw: serde_json::Value = sqlx::query_scalar!(
+        r#"
+        SELECT values as "values!: serde_json::Value"
+        FROM entity_properties
+        WHERE entity_id = $1 AND entity_type = $2 AND property_definition_id = $3
+        "#,
+        "doc_replace",
+        EntityType::Document as EntityType,
+        property_id
+    )
+    .fetch_one(&pool)
+    .await?;
+    let stored: PropertyValue = serde_json::from_value(raw)?;
+    assert_eq!(stored, PropertyValue::SelectOption(vec![low]));
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("properties"))
+)]
+async fn replace_property_options_strips_every_deleted_id(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = PropertiesPgRepo::new(pool.clone());
+    let property_id = PRIORITY_PROPERTY_ID.parse::<Uuid>().unwrap();
+    let low = PRIORITY_OPTION_LOW.parse::<Uuid>().unwrap();
+    let medium = PRIORITY_OPTION_MEDIUM.parse::<Uuid>().unwrap();
+    let urgent = PRIORITY_OPTION_URGENT.parse::<Uuid>().unwrap();
+
+    repo.upsert_entity_property(
+        "doc_multi_delete",
+        EntityType::Document,
+        property_id,
+        Some(PropertyValue::SelectOption(vec![low, medium, urgent])),
+    )
+    .await?;
+
+    let outcome = repo
+        .replace_property_options(
+            property_id,
+            &PropertyOptionReplacePlan {
+                delete: vec![medium, urgent],
+                ..Default::default()
+            },
+        )
+        .await?;
+
+    let PropertyOptionReplaceOutcome::Replaced { options, mutations } = outcome else {
+        panic!("expected Replaced, got {outcome:?}");
+    };
+    assert_eq!(options.len(), 2);
+    assert!(options.iter().all(|o| o.id != medium && o.id != urgent));
+
+    // The fixture's proj1 held Medium and thread1 held Urgent.
+    let mut stripped: Vec<_> = mutations
+        .into_iter()
+        .map(|m| (m.property.entity_id, m.value))
+        .collect();
+    stripped.sort_by(|a, b| a.0.cmp(&b.0));
+    assert_eq!(
+        stripped,
+        vec![
+            (
+                "doc_multi_delete".to_string(),
+                Some(PropertyValue::SelectOption(vec![low])),
+            ),
+            (
+                "proj1".to_string(),
+                Some(PropertyValue::SelectOption(vec![])),
+            ),
+            (
+                "thread1".to_string(),
+                Some(PropertyValue::SelectOption(vec![])),
+            ),
+        ]
+    );
+
+    let raw: serde_json::Value = sqlx::query_scalar!(
+        r#"
+        SELECT values as "values!: serde_json::Value"
+        FROM entity_properties
+        WHERE entity_id = $1 AND entity_type = $2 AND property_definition_id = $3
+        "#,
+        "doc_multi_delete",
+        EntityType::Document as EntityType,
+        property_id
+    )
+    .fetch_one(&pool)
+    .await?;
+    let stored: PropertyValue = serde_json::from_value(raw)?;
+    assert_eq!(stored, PropertyValue::SelectOption(vec![low]));
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("properties"))
+)]
+async fn replace_property_options_rejects_duplicates_within_the_batch(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = PropertiesPgRepo::new(pool.clone());
+    let property_id = PRIORITY_PROPERTY_ID.parse::<Uuid>().unwrap();
+    let before = repo.get_property_options(property_id).await?.len();
+
+    let outcome = repo
+        .replace_property_options(
+            property_id,
+            &PropertyOptionReplacePlan {
+                insert: vec![
+                    PropertyOptionInsert {
+                        value: PropertyOptionValue::String("Blocked".to_string()),
+                        display_order: 4,
+                    },
+                    PropertyOptionInsert {
+                        value: PropertyOptionValue::String("Blocked".to_string()),
+                        display_order: 5,
+                    },
+                ],
+                ..Default::default()
+            },
+        )
+        .await?;
+
+    assert!(matches!(
+        outcome,
+        PropertyOptionReplaceOutcome::DuplicateValue
+    ));
+    assert_eq!(repo.get_property_options(property_id).await?.len(), before);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("properties"))
+)]
+async fn replace_property_options_rolls_back_on_duplicate(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = PropertiesPgRepo::new(pool);
+    let property_id = PRIORITY_PROPERTY_ID.parse::<Uuid>().unwrap();
+    let urgent = PRIORITY_OPTION_URGENT.parse::<Uuid>().unwrap();
+
+    let outcome = repo
+        .replace_property_options(
+            property_id,
+            &PropertyOptionReplacePlan {
+                delete: vec![urgent],
+                insert: vec![PropertyOptionInsert {
+                    value: PropertyOptionValue::String("Low".to_string()),
+                    display_order: 4,
+                }],
+                ..Default::default()
+            },
+        )
+        .await?;
+    assert!(matches!(
+        outcome,
+        PropertyOptionReplaceOutcome::DuplicateValue
+    ));
+    assert_eq!(repo.get_property_options(property_id).await?.len(), 4);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("properties"))
+)]
+async fn replace_property_options_rejects_foreign_ids(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = PropertiesPgRepo::new(pool);
+    let property_id = PRIORITY_PROPERTY_ID.parse::<Uuid>().unwrap();
+    let outcome = repo
+        .replace_property_options(
+            property_id,
+            &PropertyOptionReplacePlan {
+                delete: vec![Uuid::now_v7()],
+                ..Default::default()
+            },
+        )
+        .await?;
+    assert!(matches!(
+        outcome,
+        PropertyOptionReplaceOutcome::OptionNotFound
+    ));
+    assert_eq!(repo.get_property_options(property_id).await?.len(), 4);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("properties"))
+)]
+async fn get_or_create_option_converges_under_concurrency(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = PropertiesPgRepo::new(pool);
+    let property_id = PRIORITY_PROPERTY_ID.parse()?;
+    let create = || {
+        repo.get_or_create_property_option(
+            property_id,
+            4,
+            PropertyOptionValue::String("docs".into()),
+            Some("#0091FF".into()),
+        )
+    };
+    let (first, second) = tokio::join!(create(), create());
+    let first = first?;
+    let second = second?;
+    assert_eq!(first.option.id, second.option.id);
+    assert_ne!(first.created, second.created);
+    let repeated = repo
+        .get_or_create_property_option(
+            property_id,
+            99,
+            PropertyOptionValue::String("docs".into()),
+            Some("#FF0000".into()),
+        )
+        .await?;
+    assert!(!repeated.created);
+    assert_eq!(repeated.option.id, first.option.id);
+    assert_eq!(repeated.option.display_order, 4);
+    assert_eq!(repeated.option.color.as_deref(), Some("#0091FF"));
+    assert_eq!(
+        repo.get_property_options(property_id)
+            .await?
+            .iter()
+            .filter(|option| option.value == PropertyOptionValue::String("docs".into()))
+            .count(),
+        1
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn get_or_create_option_propagates_non_duplicate_errors(pool: Pool<Postgres>) {
+    let repo = PropertiesPgRepo::new(pool);
+    let error = repo
+        .get_or_create_property_option(
+            Uuid::nil(),
+            0,
+            PropertyOptionValue::String("docs".into()),
+            None,
+        )
+        .await
+        .unwrap_err();
+    assert!(
+        error
+            .downcast_ref::<sqlx::Error>()
+            .unwrap()
+            .as_database_error()
+            .unwrap()
+            .is_foreign_key_violation()
+    );
+}

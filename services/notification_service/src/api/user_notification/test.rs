@@ -1,8 +1,8 @@
 use super::*;
 use chrono::Utc;
+use entity_kind::EntityType;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
 use model_notifications::{ChannelMentionMetadata, GithubPrEventAction, GithubPrEventStatus};
 use notification::domain::models::UserNotificationRow;
 

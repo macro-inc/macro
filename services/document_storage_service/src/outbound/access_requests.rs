@@ -8,7 +8,6 @@ use model_notifications::{
     EntityAccessGrantedMetadata, EntityAccessRequestedMetadata, RequestedAccessLevel,
     RuntimeAccessRemovedMetadata, StoppedAgent,
 };
-use models_permissions::share_permission::access_level::AccessLevel;
 use notification::domain::{
     models::{
         SendNotificationRequestBuilder,
@@ -16,6 +15,7 @@ use notification::domain::{
     },
     service::{NotificationIngress, NotificationReader},
 };
+use permissions_types::share_permission::access_level::AccessLevel;
 use rootcause::prelude::IntoRootcause;
 use std::{collections::HashSet, sync::Arc};
 
@@ -47,7 +47,7 @@ impl<
                     ));
                 }
             };
-            let notification_entity = model_entity::EntityType::from(event.entity.entity_type)
+            let notification_entity = entity_kind::EntityType::from(event.entity.entity_type)
                 .with_entity_string(event.entity.entity_id.to_string());
             match request.status {
                 RequestStatus::Pending => {
@@ -103,7 +103,7 @@ impl<
             self.ingress
                 .send_notification(
                     SendNotificationRequestBuilder {
-                        notification_entity: model_entity::EntityType::from(
+                        notification_entity: entity_kind::EntityType::from(
                             event.entity.entity_type,
                         )
                         .with_entity_string(event.entity.entity_id.to_string()),

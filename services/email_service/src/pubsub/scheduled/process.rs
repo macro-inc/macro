@@ -1,7 +1,7 @@
 use crate::pubsub::scheduled::context::ScheduledContext;
 use anyhow::Context;
 use email::domain::scheduled_delivery::deliver_scheduled;
-use models_email::service::pubsub::ScheduledPubsubMessage;
+use email_types::service::pubsub::ScheduledPubsubMessage;
 use sqs_worker::cleanup_message;
 
 #[tracing::instrument(skip(ctx, message), err)]

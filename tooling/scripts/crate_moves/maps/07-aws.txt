@@ -1,0 +1,9 @@
+crates/dynamodb_client crates/aws/dynamodb_client
+crates/lambda_client crates/aws/lambda_client
+crates/macro_aws_config crates/aws/macro_aws_config
+crates/s3_client crates/aws/s3_client
+crates/secretsmanager_client crates/aws/secretsmanager_client
+crates/ses_client crates/aws/ses_client
+crates/sns_client crates/aws/sns_client
+crates/sqs_client crates/aws/sqs_client
+crates/sqs_worker crates/aws/sqs_worker

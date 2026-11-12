@@ -15,7 +15,7 @@ import { z } from 'zod';
 import { documentCognitionBase } from './services';
 
 const rustWorkspaceDir = path.resolve(import.meta.dirname, '../../..');
-const aiToolsDir = path.join(rustWorkspaceDir, 'crates', 'ai_tools');
+const aiToolsDir = path.join(rustWorkspaceDir, 'crates', 'ai', 'agent_tools');
 const schemasJsonPath = path.join(aiToolsDir, 'schemas', 'tools.json');
 
 const serviceDir = path.resolve(
@@ -61,7 +61,7 @@ async function buildAndRunSchemaGenerator(): Promise<void> {
   console.log('Building gen_tool_schemas binary...');
   // No `--package`: like the OpenAPI bins and apps/docs' generator, resolve
   // features across the workspace, so one build serves every caller instead
-  // of `--package ai_tools` compiling a second feature set of its deps.
+  // of `--package agent_tools` compiling a second feature set of its deps.
   await $`cd ${rustWorkspaceDir} && SQLX_OFFLINE=true cargo build --bin gen_tool_schemas`;
   console.log('Build complete.');
 

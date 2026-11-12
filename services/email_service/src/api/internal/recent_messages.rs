@@ -11,11 +11,11 @@ use email::domain::{
     mailbox::MailboxError,
     recent_inbox::{DEFAULT_RECENT_MESSAGES, DEFAULT_SNIPPET_CHARS},
 };
+use email_types::email::service::message::RecentInboxMessagesResponse;
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
 use macro_user_id::user_id::MacroUserIdStr;
-use model::response::ErrorResponse;
-use models_email::email::service::message::RecentInboxMessagesResponse;
 use serde::Deserialize;
+use shared_types::response::ErrorResponse;
 
 use crate::api::context::{ApiContext, AuthorizationService};
 

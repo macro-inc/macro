@@ -1,0 +1,50 @@
+[package]
+edition = "2024"
+name = "foreign_entity"
+publish = false
+version = "0.1.0"
+
+[features]
+default = ["outbound", "ports", "service"]
+inbound = [
+  "dep:axum",
+  "dep:macro_authorization",
+  "dep:model_error_response",
+  "dep:utoipa",
+  "entity_access/inbound",
+  "ports",
+  "service",
+]
+outbound = ["dep:filter_ast", "dep:sqlx", "ports"]
+ports = ["dep:entity_access", "dep:item_filters", "dep:pagination_types", "dep:tokio"]
+service = ["ports"]
+
+[dependencies]
+anyhow = { workspace = true }
+axum = { workspace = true, optional = true }
+chrono = { workspace = true }
+entity_access = { workspace = true, optional = true, features = ["ports"] }
+filter_ast = { workspace = true, optional = true }
+item_filters = { workspace = true, default-features = true, optional = true }
+macro_authorization = { workspace = true, optional = true, features = ["axum"] }
+macro_user_id = { workspace = true }
+macro_uuid = { workspace = true }
+model_error_response = { workspace = true, optional = true }
+pagination_types = { workspace = true, optional = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true, optional = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, optional = true }
+tracing = { workspace = true }
+utoipa = { workspace = true, optional = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+
+[dev-dependencies]
+http-body-util = { workspace = true }
+macro_db_migrator = { workspace = true }
+model_user = { workspace = true }
+rootcause = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tower = { workspace = true }

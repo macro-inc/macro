@@ -3,12 +3,12 @@ use super::message;
 use crate::model::connection::StoredConnectionEntity;
 use crate::model::tracking::TrackAction;
 use crate::model::websocket::{ToWebsocketMessage, TrackEntityMessage};
+use bulk_upload_types::UploadFolderStatusUpdate;
 use connection_gateway_models::{
     BatchSendMessageBody, MessageReceipt, SendMessageBody, SendMessageResponse,
 };
-use model::response::{GenericErrorResponse, StringIDResponse};
-use model_entity::{Entity, EntityType};
-use models_bulk_upload::UploadFolderStatusUpdate;
+use entity_kind::{Entity, EntityType};
+use shared_types::response::{GenericErrorResponse, StringIDResponse};
 use stream::domain::{StreamEvent, StreamItem};
 use utoipa::{
     Modify, OpenApi,

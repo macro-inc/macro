@@ -2,7 +2,7 @@ use crate::api::context::AuthorizationService;
 use crate::api::documents::initialize_starter_docs::{HOW_TO_GUIDE_NAME, starter_doc_id};
 use axum::Json;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model::response::GenericErrorResponse;
+use shared_types::response::GenericErrorResponse;
 use utoipa::ToSchema;
 
 /// The deterministic starter document ids for the current user.

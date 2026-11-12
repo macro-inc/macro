@@ -1,7 +1,7 @@
 use super::*;
+use database_sql_runner::SqlStatement;
+use database_sql_runner::toolset::QueryDatabaseResponse;
 use databases::domain::models::{ColumnId, TableId};
-use databases_sql::SqlStatement;
-use databases_sql::toolset::QueryDatabaseResponse;
 use serde_json::json;
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -188,7 +188,7 @@ fn sql_schema_receipts_are_decoded_and_report_schema_activity() {
         read_versions: vec![],
         truncated_tables: vec![],
         statement: SqlStatement::Schema {
-            database_id: databases::domain::models::DatabaseId::new(),
+            database_id: databases::domain::models::DatabaseId::generate(),
             summary: "Created database".into(),
         },
         summary: "Created database".into(),

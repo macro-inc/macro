@@ -21,14 +21,14 @@ impl Notification for SandboxNotification {
 impl NotificationExtIos for SandboxNotification {
     type NotifData = SandboxNotification;
 
-    fn collapse_key(&self, _entity: &model_entity::Entity<'_>) -> NotifCollapseKey {
+    fn collapse_key(&self, _entity: &entity_kind::Entity<'_>) -> NotifCollapseKey {
         NotifCollapseKey::new("sandbox")
     }
 
     fn as_apns<'a>(
         &self,
         _sender_id: Option<MacroUserIdStr<'a>>,
-        _entity: &model_entity::Entity<'_>,
+        _entity: &entity_kind::Entity<'_>,
         _notification_id: uuid::Uuid,
     ) -> Option<APNSPushNotification<Self::NotifData>> {
         Some(APNSPushNotification {
