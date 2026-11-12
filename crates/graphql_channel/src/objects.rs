@@ -318,7 +318,7 @@ pub enum GraphqlChannelTimelineEntry {
     /// A root message, including a call root.
     Message(Box<GraphqlChannelMessage>),
     /// A recorded channel activity.
-    Activity(GraphqlChannelTimelineActivity),
+    Activity(Box<GraphqlChannelTimelineActivity>),
 }
 
 impl GraphqlChannelTimelineEntry {
@@ -331,9 +331,9 @@ impl GraphqlChannelTimelineEntry {
             MessageTimelineEntry::Call { message, status } => Self::Message(Box::new(
                 GraphqlChannelMessage::from_item(*message, channel_id, Some(status)),
             )),
-            MessageTimelineEntry::Activity { activity } => Self::Activity(
+            MessageTimelineEntry::Activity { activity } => Self::Activity(Box::new(
                 GraphqlChannelTimelineActivity::from_activity(activity, channel_id),
-            ),
+            )),
         }
     }
 }
