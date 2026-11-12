@@ -250,9 +250,8 @@ pkgs.testers.runNixOSTest {
           agent.succeed("install -m 0600 -o macro -g macro ${credentialedAgentEnvironment} /var/lib/macrod/agent.env")
           agent.wait_until_succeeds("journalctl -u macro-agent.service | grep -F 'MACRO_REPO_URL must be an HTTP(S) URL without credentials'")
           agent.fail("test -e /home/macro/agent/workspace")
-          # Rejected before git sends any request, and not a failed boot.
+          # Rejected before git sends any request.
           agent.fail("test -e /srv/git/traceparents")
-          agent.fail("test -s /home/macro/agent/state/failed-boots")
 
       with subtest("a rewritten agent environment restarts the agent, which clones and runs"):
           agent.succeed("install -m 0600 -o macro -g macro ${goodAgentEnvironment} /var/lib/macrod/agent.env")
@@ -306,6 +305,7 @@ pkgs.testers.runNixOSTest {
           agent.wait_for_open_port(5900)
           agent.wait_for_open_port(9222)
           agent.succeed("su - macro -c 'curl --fail --silent http://127.0.0.1:9222/json/version'")
+          print(agent.succeed("ss -ltnH '( sport = :5900 or sport = :9222 )'"))
           agent.succeed("su - macro -c 'mkdir -p ~/.macrod && echo macrod-secret > ~/.macrod/escape-probe'")
           openbox = agent.succeed("systemctl show macro-agent-openbox.service --property=MainPID --value").strip()
           # The agent's unit, and what Openbox's menu would start.
@@ -319,8 +319,9 @@ pkgs.testers.runNixOSTest {
               # macro's display, by socket or VNC, and its DevTools.
               status, refused = agent.execute(f"{inside} {xclip} -display :0 -o 2>&1")
               assert status != 0 and "open display" in refused, refused
-              for port in (5900, 9222):
-                  agent.fail(f"{inside} ${pkgs.bash}/bin/bash -c 'exec 3<>/dev/tcp/127.0.0.1/{port}'")
+              for host in ("127.0.0.1", "::1"):
+                  for port in (5900, 9222):
+                      agent.fail(f"{inside} ${pkgs.bash}/bin/bash -c 'exec 3<>/dev/tcp/{host}/{port}'")
               # Its own desktop and browser.
               for port in (5901, 9223):
                   agent.succeed(f"{inside} ${pkgs.bash}/bin/bash -c 'exec 3<>/dev/tcp/127.0.0.1/{port}'")

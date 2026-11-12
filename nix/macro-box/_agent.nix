@@ -319,14 +319,14 @@ in
     users.groups.${agentGroup} = { };
     # macro's own desktop and browser are for macro's sessions, not the
     # agent (its group), whose sandbox they would let it out of.
-    networking.firewall.extraCommands = ''
-      iptables -w -N macro-agent-out 2>/dev/null || iptables -w -F macro-agent-out
-      iptables -w -A macro-agent-out -d 127.0.0.0/8 -p tcp -m multiport --dports 5900,9222 -m owner --gid-owner ${agentGroup} -j REJECT --reject-with tcp-reset
-      iptables -w -C OUTPUT -o lo -j macro-agent-out 2>/dev/null || iptables -w -I OUTPUT -o lo -j macro-agent-out
-    '';
-    networking.firewall.extraStopCommands = ''
-      iptables -w -D OUTPUT -o lo -j macro-agent-out 2>/dev/null || true
-    '';
+    networking.firewall.extraCommands = lib.concatMapStrings (iptables: ''
+      ${iptables} -w -N macro-agent-out 2>/dev/null || ${iptables} -w -F macro-agent-out
+      ${iptables} -w -A macro-agent-out -p tcp -m multiport --dports 5900,9222 -m owner --gid-owner ${agentGroup} -j REJECT --reject-with tcp-reset
+      ${iptables} -w -C OUTPUT -o lo -j macro-agent-out 2>/dev/null || ${iptables} -w -I OUTPUT -o lo -j macro-agent-out
+    '') [ "iptables" "ip6tables" ];
+    networking.firewall.extraStopCommands = lib.concatMapStrings (iptables: ''
+      ${iptables} -w -D OUTPUT -o lo -j macro-agent-out 2>/dev/null || true
+    '') [ "iptables" "ip6tables" ];
     fonts.packages = [
       pkgs.noto-fonts-cjk-sans
       pkgs.noto-fonts-color-emoji
