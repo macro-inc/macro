@@ -920,6 +920,19 @@ export const enableActivityFeed = defineFlag({
   default: onInDev,
 });
 
+/**
+ * Notifications a person, agent or script writes with
+ * `macro.notifications.send`: their "Agent pings" setting. The notification
+ * service refuses to send while the same flag is off for the sender. On only
+ * on a local stack, where that service is on for everyone; a deployment asks
+ * PostHog on both sides. Override with VITE_ENABLE_AGENT_NOTIFICATIONS.
+ */
+export const enableAgentNotifications = defineFlag({
+  key: 'enable-agent-notifications',
+  env: 'ENABLE_AGENT_NOTIFICATIONS',
+  default: LOCAL_ONLY || undefined,
+});
+
 // The unified notifications view: the /notifications route (redirects to Home
 // when off), the rail bell, its go-to hotkey, and the mobile dock bell's
 // target. PostHog-gated with a dev-mode default; override with
