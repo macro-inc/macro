@@ -1,6 +1,5 @@
 import { TagMentionNode } from '@macro-inc/lexical-core';
 import type { MacroDecorators } from '@macro-inc/lexical-wasm-view/view/node-views/macro';
-import type { JsonValue } from '@macro-inc/lexical-wasm-view/view/types';
 import type { TagMentionUIProps } from '../component/decorator/TagMention';
 import type { DecoratorHostCapabilities } from '../context/DecoratorHostContext';
 import {
@@ -8,25 +7,6 @@ import {
   type NativeDecoratorContext,
 } from './native-adapter';
 import type { TagMentionHost } from './tag-mention-host';
-
-/** A stored text field Source passes through: a string, an explicit null, or omitted. */
-function isStoredText(
-  value: JsonValue | undefined
-): value is string | null | undefined {
-  return value === undefined || value === null || typeof value === 'string';
-}
-
-/** A stored scope Source passes through: user, team, an explicit null, or omitted. */
-function isStoredScope(
-  value: JsonValue | undefined
-): value is TagMentionUIProps['scope'] {
-  return (
-    value === undefined ||
-    value === null ||
-    value === 'user' ||
-    value === 'team'
-  );
-}
 
 /** Project the native tag-mention payload into the registered TagMention props. */
 export function createNativeTagMentionViews<
@@ -37,12 +17,14 @@ export function createNativeTagMentionViews<
     'tag-mention': bind<TagMentionUIProps>(TagMentionNode, (node, context) => {
       const { optionId, propertyDefinitionId, scope, name, color } =
         node.props();
+      // Source fails the whole document on a null or missing name; null ids
+      // are a recorded gap (opening the tag needs text ids).
       if (
-        !isStoredText(optionId) ||
-        !isStoredText(propertyDefinitionId) ||
-        !isStoredScope(scope) ||
-        !isStoredText(name) ||
-        !isStoredText(color)
+        typeof optionId !== 'string' ||
+        typeof propertyDefinitionId !== 'string' ||
+        (scope !== 'user' && scope !== 'team') ||
+        typeof name !== 'string' ||
+        (color !== undefined && color !== null && typeof color !== 'string')
       )
         throw new Error('Invalid tag mention payload');
       return {
@@ -50,6 +32,7 @@ export function createNativeTagMentionViews<
         propertyDefinitionId,
         scope,
         name,
+        // Source hands a stored null color over unchanged.
         color,
         key: String(node.key),
         theme: context.theme,

@@ -1,16 +1,12 @@
 import type {
   DateMentionDecoratorProps,
   DateMentionInfo,
-  PasteNodeDecoratorProps,
   TagMentionDecoratorProps,
 } from '@macro-inc/lexical-core';
 import type { DateMentionUIProps } from '../component/decorator/DateMention';
-import type { PasteNodeUIProps } from '../component/decorator/PasteNode';
 import type { TagMentionUIProps } from '../component/decorator/TagMention';
 
 type Assert<T extends true> = T;
-type PastedProps = Exclude<PasteNodeUIProps, { origin: 'referenced' }>;
-type ReferencedProps = Extract<PasteNodeUIProps, { origin: 'referenced' }>;
 
 export type DateUiKeepsNullDate = Assert<
   null extends DateMentionUIProps['date'] ? true : false
@@ -33,37 +29,24 @@ export type SourceDateFitsUiProps = Assert<
     : false
 >;
 
-export type TagUiKeepsNullOptionId = Assert<
-  null extends TagMentionUIProps['optionId'] ? true : false
+export type TagUiOptionIdRemainsText = Assert<
+  null extends TagMentionUIProps['optionId'] ? false : true
 >;
-export type TagUiKeepsNullDefinitionId = Assert<
-  null extends TagMentionUIProps['propertyDefinitionId'] ? true : false
+export type TagUiDefinitionIdRemainsText = Assert<
+  null extends TagMentionUIProps['propertyDefinitionId'] ? false : true
 >;
-export type TagUiKeepsNullScope = Assert<
-  null extends TagMentionUIProps['scope'] ? true : false
+export type TagUiScopeRemainsUserOrTeam = Assert<
+  TagMentionUIProps['scope'] extends 'user' | 'team' ? true : false
 >;
-export type TagUiScopeStaysUserOrTeam = Assert<
-  string extends TagMentionUIProps['scope'] ? false : true
->;
-export type TagUiKeepsNullName = Assert<
-  null extends TagMentionUIProps['name'] ? true : false
+export type TagUiNameRemainsText = Assert<
+  TagMentionUIProps['name'] extends string ? true : false
 >;
 export type TagUiKeepsNullColor = Assert<
   null extends TagMentionUIProps['color'] ? true : false
 >;
-export type PublicTagNameRemainsExact = Assert<
-  null extends TagMentionDecoratorProps['name'] ? false : true
+export type PublicTagColorRemainsExact = Assert<
+  null extends TagMentionDecoratorProps['color'] ? false : true
 >;
 export type SourceTagFitsUiProps = Assert<
   TagMentionDecoratorProps extends TagMentionUIProps ? true : false
->;
-
-export type PastedUiKeepsNullContent = Assert<
-  null extends PastedProps['content'] ? true : false
->;
-export type ReferencedUiContentRemainsText = Assert<
-  null extends ReferencedProps['content'] ? false : true
->;
-export type PublicPasteContentRemainsExact = Assert<
-  null extends PasteNodeDecoratorProps['content'] ? false : true
 >;

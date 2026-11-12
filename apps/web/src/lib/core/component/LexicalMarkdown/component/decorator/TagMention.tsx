@@ -37,18 +37,11 @@ function optionLabel(value: unknown): string | undefined {
 }
 
 /**
- * Source `importJSON` and `decorate` hand stored values over unchanged, so null
- * or omitted fields reach this component. It renders them: ids are only
- * compared, the name is a text child and a missing color takes TagDot's default.
+ * Source `importJSON` and `decorate` hand a stored color over unchanged, so an
+ * explicit null reaches this component. Ids, scope and name stay required:
+ * Source fails the whole document on a null name, and opening a tag needs ids.
  */
-export type TagMentionUIProps = Omit<
-  TagMentionDecoratorProps,
-  'optionId' | 'propertyDefinitionId' | 'scope' | 'name' | 'color'
-> & {
-  optionId?: string | null;
-  propertyDefinitionId?: string | null;
-  scope?: TagMentionDecoratorProps['scope'] | null;
-  name?: string | null;
+export type TagMentionUIProps = Omit<TagMentionDecoratorProps, 'color'> & {
   color?: string | null;
 } & TagMentionHostProp;
 
@@ -97,16 +90,12 @@ export function TagMention(props: TagMentionUIProps) {
     ) {
       return;
     }
-    // The option resolved, but its label is not text and the stored name is
-    // null or missing: the write takes text names only.
-    const name = tag.name;
-    if (typeof name !== 'string') return;
 
     if (props.host) {
       props.host.setTagInfo(props.key, {
         propertyDefinitionId: tag.propertyDefinitionId,
         scope: tag.scope,
-        name,
+        name: tag.name,
         color: tag.color,
       });
       return;
@@ -118,7 +107,7 @@ export function TagMention(props: TagMentionUIProps) {
         node.setTagInfo({
           propertyDefinitionId: tag.propertyDefinitionId,
           scope: tag.scope,
-          name,
+          name: tag.name,
           color: tag.color,
         });
       },
@@ -132,18 +121,8 @@ export function TagMention(props: TagMentionUIProps) {
   const open = () => {
     if (isAuthenticated() !== true) return;
 
-    // A stored null or missing id names no tag to open.
-    const { optionId, propertyDefinitionId } = resolvedTag();
-    if (
-      typeof optionId !== 'string' ||
-      typeof propertyDefinitionId !== 'string'
-    )
-      return;
-    navigateToTag(
-      split.openWithSplit,
-      { optionId, propertyDefinitionId },
-      { handle: panel?.handle }
-    );
+    const tag = resolvedTag();
+    navigateToTag(split.openWithSplit, tag, { handle: panel?.handle });
   };
 
   const onEnter = (event: KeyboardEvent | null) => {
@@ -182,6 +161,7 @@ export function TagMention(props: TagMentionUIProps) {
         }}
       >
         <span class="relative inline-flex -top-px mr-1">
+          {/* TagDot reads a missing color with `??`, so null and undefined match. */}
           <TagDot
             color={resolvedTag().color ?? undefined}
             class="size-[0.5em]"

@@ -84,85 +84,53 @@ const fields = ({
   color,
 });
 
-test('stored tag fields Source keeps as null or missing reach the component unchanged', () => {
+const VALID = {
+  optionId: 'o-1',
+  propertyDefinitionId: 'p-1',
+  scope: 'team',
+  name: 'Valid',
+};
+
+test('a stored null color reaches the component unchanged beside a rendering sibling', () => {
   withMounted(
     [
-      {
-        optionId: 'o-1',
-        propertyDefinitionId: 'p-1',
-        scope: 'team',
-        name: 'Valid',
-        color: '#f00',
-      },
-      {
-        optionId: null,
-        propertyDefinitionId: null,
-        scope: null,
-        name: null,
-        color: null,
-      },
-      {},
-      {
-        optionId: '',
-        propertyDefinitionId: '',
-        scope: 'user',
-        name: '',
-        color: '',
-      },
+      { ...VALID, color: '#f00' },
+      { ...VALID, color: null },
+      { ...VALID, color: undefined },
     ],
-    ({ received }) => {
+    ({ root, received }) => {
       expect(received.map(fields)).toEqual([
-        {
-          optionId: 'o-1',
-          propertyDefinitionId: 'p-1',
-          scope: 'team',
-          name: 'Valid',
-          color: '#f00',
-        },
-        {
-          optionId: null,
-          propertyDefinitionId: null,
-          scope: null,
-          name: null,
-          color: null,
-        },
-        {
-          optionId: undefined,
-          propertyDefinitionId: undefined,
-          scope: undefined,
-          name: undefined,
-          color: undefined,
-        },
-        {
-          optionId: '',
-          propertyDefinitionId: '',
-          scope: 'user',
-          name: '',
-          color: '',
-        },
+        { ...VALID, color: '#f00' },
+        { ...VALID, color: null },
+        { ...VALID, color: undefined },
       ]);
+      expect(root.textContent).toContain('sibling stays');
     }
   );
 });
 
-test('a null-heavy tag mention leaves the rest of the document rendering', () => {
-  withMounted(
-    [
-      {
-        optionId: null,
-        propertyDefinitionId: null,
-        scope: null,
-        name: null,
-        color: null,
-      },
-    ],
-    ({ root }) => {
-      expect(root.querySelectorAll('[data-recorded-tag="true"]')).toHaveLength(
-        1
-      );
-      expect(root.textContent).toContain('sibling stays');
-    }
-  );
+// Source throws in getTextContentSize for these, so the whole state fails there too.
+test('a null or missing name is refused like Source', () => {
+  for (const name of [null, undefined]) {
+    expect(() => withMounted([{ ...VALID, name }], () => {})).toThrow(
+      'Invalid tag mention payload'
+    );
+  }
+});
+
+// Known gap: Source opens these and navigates with null ids; the navigation
+// target is typed text, owned outside the editor.
+test('null or missing ids are refused', () => {
+  for (const ids of [
+    { optionId: null },
+    { propertyDefinitionId: null },
+    { optionId: undefined },
+    { propertyDefinitionId: undefined },
+  ]) {
+    expect(() => withMounted([{ ...VALID, ...ids }], () => {})).toThrow(
+      'Invalid tag mention payload'
+    );
+  }
 });
 
 test('wrong value types and unknown scopes are refused by the stored model before any projection', () => {
