@@ -20,7 +20,7 @@ use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::domain::{
-    meeting_links::{CreateEventWithMacroCallError, MeetingLinkError},
+    meeting_links::{MacroCallEventError, MeetingLinkError},
     models::{
         AttendeeResponseStatus, CalendarAttendeeInput, CalendarEvent, CalendarEventDraft,
         CalendarEventPatch, VisibleCalendar,
@@ -192,18 +192,15 @@ fn fallback_error(status: StatusCode, message: String) -> CalendarMutationError 
 /// Map an error response of a create carrying a Macro call. The calendar
 /// service reports a meeting it could not mint under its own code; every
 /// other failure is the calendar write's.
-fn macro_call_error_from_response(
-    status: StatusCode,
-    body: Option<String>,
-) -> CreateEventWithMacroCallError {
+fn macro_call_error_from_response(status: StatusCode, body: Option<String>) -> MacroCallEventError {
     let parsed = body
         .as_deref()
         .and_then(|body| serde_json::from_str::<MutationErrorWire>(body).ok());
     match parsed {
         Some(error) if error.code == "macro_call_failed" => {
-            CreateEventWithMacroCallError::MeetingLink(MeetingLinkError::Failed(error.message))
+            MacroCallEventError::MeetingLink(MeetingLinkError::Failed(error.message))
         }
-        _ => CreateEventWithMacroCallError::Calendar(error_from_response(status, body)),
+        _ => MacroCallEventError::Calendar(error_from_response(status, body)),
     }
 }
 
@@ -239,6 +236,7 @@ fn update_body(
     calendar_id: Option<Uuid>,
     patch: &CalendarEventPatch,
     scope: &CalendarUpdateScope,
+    macro_call: bool,
 ) -> serde_json::Value {
     let (scope_name, recurrence_id) = match scope {
         CalendarUpdateScope::All => ("all", None),
@@ -261,6 +259,7 @@ fn update_body(
         "transparency": patch.transparency,
         "reminders": patch.reminders,
         "conference": patch.conference,
+        "macroCall": macro_call,
         "outOfOffice": patch.out_of_office,
         "guestPolicy": patch.guest_policy,
         "scope": scope_name,
@@ -363,11 +362,41 @@ impl CalendarMacroCallService for CalendarServiceMutations {
         email_link_id: Option<Uuid>,
         calendar_id: Option<Uuid>,
         draft: CalendarEventDraft,
-    ) -> Result<CalendarEvent, CreateEventWithMacroCallError> {
+    ) -> Result<CalendarEvent, MacroCallEventError> {
         let response = self
             .send_raw(
                 self.request(reqwest::Method::POST, "/events", requester_id)
                     .json(&create_body(email_link_id, calendar_id, &draft, true)),
+            )
+            .await
+            .map_err(|failure| match failure {
+                ResponseFailure::Transport(message) => {
+                    CalendarMutationError::Retryable(message).into()
+                }
+                ResponseFailure::Status(status, body) => {
+                    macro_call_error_from_response(status, body)
+                }
+            })?;
+        parse_event(response).await.map_err(Into::into)
+    }
+
+    #[tracing::instrument(skip(self, requester_id, patch), err)]
+    async fn update_event_with_macro_call(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
+        calendar_id: Option<Uuid>,
+        patch: CalendarEventPatch,
+        scope: CalendarUpdateScope,
+    ) -> Result<CalendarEvent, MacroCallEventError> {
+        let response = self
+            .send_raw(
+                self.request(
+                    reqwest::Method::PATCH,
+                    &format!("/events/{event_id}"),
+                    requester_id,
+                )
+                .json(&update_body(calendar_id, &patch, &scope, true)),
             )
             .await
             .map_err(|failure| match failure {
@@ -430,7 +459,7 @@ impl CalendarMutationService for CalendarServiceMutations {
                 &format!("/events/{event_id}"),
                 requester_id,
             )
-            .json(&update_body(calendar_id, &patch, &scope)),
+            .json(&update_body(calendar_id, &patch, &scope, false)),
         )
         .await
     }

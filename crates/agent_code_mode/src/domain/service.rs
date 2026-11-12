@@ -401,6 +401,12 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "UpdateInitiative"
                 | "UpdateInitiativeSharing"
                 | "DeleteInitiative"
+                // macro.imports: list(), track(), recordImported(),
+                // importNotionPage() and ImportEntry.decline().
+                | "ListImportEntities"
+                | "CreateImportEntity"
+                | "DeleteImportEntity"
+                | "ImportNotionPage"
                 // macro.agentSessions.updates(), whose cards an agentUpdates
                 // view draws.
                 | "ListAgentUpdates"
