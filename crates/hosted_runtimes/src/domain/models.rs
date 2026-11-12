@@ -146,8 +146,8 @@ pub enum ComputerRecord {
 pub struct ComputerDisplayMetadata {
     /// Stored display name.
     pub name: String,
-    /// Stored size identifier.
-    pub size: String,
+    /// Purchased catalog size.
+    pub size: ComputerSize,
     /// Recorded virtual CPU count.
     pub vcpus: i64,
     /// Recorded memory in GiB.
@@ -166,7 +166,7 @@ impl From<&Computer> for ComputerDisplayMetadata {
     fn from(computer: &Computer) -> Self {
         Self {
             name: computer.name.as_str().to_owned(),
-            size: computer.size.as_ref().to_owned(),
+            size: computer.size,
             vcpus: i64::from(computer.resources.vcpus.get()),
             memory_gib: i64::from(computer.resources.memory_gib.get()),
             disk_gib: i64::from(computer.resources.disk_gib.get()),
@@ -364,7 +364,7 @@ impl Reservation {
         ComputerStatus {
             id: self.id,
             name: self.name.as_str().to_owned(),
-            size: self.size.as_ref().to_owned(),
+            size: self.size,
             vcpus: i64::from(self.resources.vcpus.get()),
             memory_gib: i64::from(self.resources.memory_gib.get()),
             disk_gib: i64::from(self.resources.disk_gib.get()),
@@ -651,7 +651,7 @@ pub struct ComputerStatus {
     #[cfg_attr(feature = "inbound", schema(value_type = String))]
     pub name: String,
     /// Purchased catalog size.
-    pub size: String,
+    pub size: ComputerSize,
     /// Virtual CPU count.
     pub vcpus: i64,
     /// Memory limit saved at purchase.
@@ -759,7 +759,7 @@ impl Computer {
         ComputerStatus {
             id: self.id,
             name: self.name.as_str().to_owned(),
-            size: self.size.as_ref().to_owned(),
+            size: self.size,
             vcpus: i64::from(self.resources.vcpus.get()),
             memory_gib: i64::from(self.resources.memory_gib.get()),
             disk_gib: i64::from(self.resources.disk_gib.get()),
@@ -803,7 +803,7 @@ impl ComputerRecord {
                 id: *id,
                 status: ComputerStatusKind::NeedsAttention,
                 name: display.name.clone(),
-                size: display.size.clone(),
+                size: display.size,
                 vcpus: display.vcpus,
                 memory_gib: display.memory_gib,
                 disk_gib: display.disk_gib,

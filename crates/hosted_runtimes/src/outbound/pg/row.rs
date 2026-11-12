@@ -177,7 +177,7 @@ impl PgComputerRepo {
         let host_id = Some(HostId::new(row.host_id));
         let display = ComputerDisplayMetadata {
             name: row.name.clone(),
-            size: row.size.as_ref().to_owned(),
+            size: row.size,
             vcpus: i64::from(row.vcpus),
             memory_gib: i64::from(row.memory_gib),
             disk_gib: i64::from(row.disk_gib),
