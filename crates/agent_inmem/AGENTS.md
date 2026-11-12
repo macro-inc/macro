@@ -86,6 +86,9 @@ DecideReview are eager internal tools in both standard and code modes.
 
 ## Gotchas
 
+- A native tool call held for owner approval must watch `request_context.cancel`
+  (`check_unless_cancelled`): the agent loop waits for running tools on cancel,
+  so an unwatched hold keeps a stopped turn alive.
 - Owners with `auto-skills` (`domain::entity_routing`) route SDK entities on
   code-mode turns: the prompt is `routed_prompt` (no area guidance) and the
   entities `select_documentation` picks bring their `@agent` guide with their
