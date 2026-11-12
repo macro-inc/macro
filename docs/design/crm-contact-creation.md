@@ -32,8 +32,10 @@ companies remain open.
 The create API remains an insert, not an idempotent import/upsert API; callers
 must retain a successful response instead of retrying a confirmed create.
 
-The company Emails view and automatic call association remain domain-based;
+The company Emails view and a call's company association remain domain-based;
 use the contact's Emails view for an explicitly attached off-domain address.
+A call's contact association matches any address of any visible contact of the
+team, with or without a company, and links every contact that holds it.
 Address prechecks aggregate repeated emails within the team, preserving any
 hidden or disabled association rather than letting a second company bypass it.
 The existing People listing still displays one representative per email; each
@@ -57,7 +59,7 @@ known by, with `crm_contacts.email` kept as the primary. A trigger records the
 primary there, so writers from before the table keep it complete during a
 rolling deploy, and a backfill covers existing contacts. Address lookups (personal
 sync and teardown, email scope prechecks, thread access, call linking, lookup
-by email) read that table; the team-wide activity scope still reads the primary. Until an API adds further addresses
+by email, the team-wide activity scope) read that table. Until an API adds further addresses
 the table mirrors the primary and behavior is unchanged.
 
 Deploy nullable-aware readers to every consuming service before enabling

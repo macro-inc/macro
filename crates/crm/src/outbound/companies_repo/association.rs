@@ -50,33 +50,66 @@ impl CompaniesRepositoryImpl {
             CrmContactListScope::Viewer(user_id) => (Some(user_id), None),
             CrmContactListScope::Team { team_id, .. } => (None, Some(team_id)),
         };
+        // The read's cost follows the team's record count, so bound it.
+        let mut transaction = self
+            .pool
+            .begin()
+            .await
+            .map_err(|error| CrmError::StorageLayerError(error.into()))?;
+        sqlx::query!("SET LOCAL statement_timeout = '15s'")
+            .execute(&mut *transaction)
+            .await
+            .map_err(|error| CrmError::StorageLayerError(error.into()))?;
+        // Every step is a probe by key, so the cost stays with the team's own
+        // records whatever the planner knows about the tables. The teams are
+        // collected into an array first, so both arms start from their team
+        // index. Each contact's addresses are read behind an `OFFSET 0` fence:
+        // unfenced, the planner can hash the whole address table, which holds
+        // every team's contacts. Contacts without a company are narrowed to
+        // the team behind a fence too, so the scan cannot start from every
+        // team's company-less contacts.
         let rows = sqlx::query!(
             r#"
+            WITH scope AS (
+                SELECT tu.team_id FROM team_user tu WHERE tu.user_id = $1
+                UNION ALL
+                SELECT $2::uuid
+            )
             SELECT co.id AS "company_id?", ct.id AS "contact_id?",
-                   LOWER(BTRIM(d.domain)) AS "domain?", LOWER(BTRIM(ct.email)) AS "email?"
+                   LOWER(BTRIM(d.domain)) AS "domain?", address.email AS "email?"
             FROM crm_companies co
-            LEFT JOIN team_user tu ON tu.team_id = co.team_id AND tu.user_id = $1
             LEFT JOIN crm_contacts ct ON ct.company_id = co.id AND NOT ct.hidden
+            LEFT JOIN LATERAL (
+                SELECT ce.email FROM crm_contact_emails ce WHERE ce.contact_id = ct.id OFFSET 0
+            ) address ON TRUE
             LEFT JOIN crm_domains d ON d.company_id = co.id
             WHERE NOT co.hidden
-              AND (($1::text IS NOT NULL AND tu.user_id IS NOT NULL)
-                   OR ($2::uuid IS NOT NULL AND co.team_id = $2))
+              AND co.team_id = ANY(ARRAY(SELECT team_id FROM scope))
             UNION ALL
             -- Contacts without a company.
-            SELECT NULL, ct.id, NULL, LOWER(BTRIM(ct.email))
-            FROM crm_contacts ct
-            LEFT JOIN team_user tu ON tu.team_id = ct.team_id AND tu.user_id = $1
+            SELECT NULL, ct.id, NULL, address.email
+            FROM (
+                SELECT ct.id, ct.company_id, ct.hidden
+                FROM crm_contacts ct
+                WHERE ct.team_id = ANY(ARRAY(SELECT team_id FROM scope))
+                OFFSET 0
+            ) ct
+            LEFT JOIN LATERAL (
+                SELECT ce.email FROM crm_contact_emails ce WHERE ce.contact_id = ct.id OFFSET 0
+            ) address ON TRUE
             WHERE ct.company_id IS NULL
               AND NOT ct.hidden
-              AND (($1::text IS NOT NULL AND tu.user_id IS NOT NULL)
-                   OR ($2::uuid IS NOT NULL AND ct.team_id = $2))
             "#,
             viewer,
             team_id,
         )
-        .fetch_all(&self.pool)
+        .fetch_all(&mut *transaction)
         .await
         .map_err(|error| CrmError::StorageLayerError(error.into()))?;
+        transaction
+            .commit()
+            .await
+            .map_err(|error| CrmError::StorageLayerError(error.into()))?;
         let mut company_ids = std::collections::BTreeSet::new();
         let mut contact_ids = std::collections::BTreeSet::new();
         let mut domains = std::collections::BTreeSet::new();

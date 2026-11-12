@@ -84,6 +84,14 @@ tools/HTTP/GraphQL surfaces over them.
   teams within the viewer/verified-bot scope, excluding hidden rows
   even for admins. Preserve distinct contact IDs that share an email; returned
   domains and addresses constrain the viewer's mailbox, not team email access.
+- An archived call links to the companies whose domain a participant's address
+  is at, and separately to every visible contact of the team holding the
+  address as any of its addresses, with or without a company
+  (`src/outbound/call_link.rs`). A contact under a hidden company does not
+  link, and a team's own members never match its CRM. Calendar events and
+  bookings have no link by attendee address: they reach a record only through
+  a Companies or Contacts property someone set, a reference, or the call held
+  for them.
 
 - Manual companies require a name and accept an optional domain; explicit
   contact creation accepts any valid email, including personal providers.
@@ -147,11 +155,13 @@ tools/HTTP/GraphQL surfaces over them.
   trimmed and lowercased. `crm_contacts.email` is the primary address, and a
   trigger records it in that table. Find a contact by address through
   `crm_contact_emails` (sync, teardown, email scope, thread access, call
-  linking); read `crm_contacts.email` only to display the primary. Three
-  paths still match the primary only: company-domain population (it upserts
-  on company and primary), contact search and listing, and the activity
-  scope, where joining every contact of a team to its addresses costs a probe
-  per contact and needs its own plan. A mailbox source is recorded per contact
+  linking, the activity scope); read `crm_contacts.email` only to display the
+  primary. Two paths still match the primary only: company-domain population
+  (it upserts on company and primary), and contact search and listing.
+  The table has no team column, so a read by address starts from the address
+  index and a read by team probes it once per contact: keep both behind their
+  `OFFSET 0` fences, or the planner joins against every team's addresses.
+  A mailbox source is recorded per contact
   and mailbox, not per address: before anything writes a second address,
   teardown must keep the source while that mailbox still has mail with
   another of the contact's addresses.
