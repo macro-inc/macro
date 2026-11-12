@@ -45,7 +45,9 @@ alwaysApply: false
   limit; split it rather than raising the limit.
 - The build also fails if a chunk with source code has no source map or a map
   exceeds PostHog's 25 MB symbolication limit. `startupChunks()` in
-  `vite.base.ts` splits the code each HTML entry loads into `vendor`,
-  `api-schemas`, and one `startup-<entries>` chunk per set of entries, so each
-  map stays under it and `index.html` preloads a handful of files; it moves
-  only modules an entry already imports.
+  `vite.base.ts` splits the code each HTML entry loads into `vendor-<n>`,
+  `api-schemas-<n>`, and `startup-<entries>-<n>` chunks of about
+  `STARTUP_PART_CODE_BYTES` of module code, cut along the import order so they
+  never import each other in a cycle. It moves only modules an entry already
+  imports. Don't use Rolldown's `maxSize` for startup groups; its parts import
+  each other in cycles.
