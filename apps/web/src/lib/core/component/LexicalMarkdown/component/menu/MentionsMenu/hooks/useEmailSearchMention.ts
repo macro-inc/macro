@@ -4,6 +4,7 @@ import { createFreshSearch } from '@core/util/freshSort';
 import {
   type SearchSoupQueryArgs,
   useSearchSoupQuery,
+  validateSearchServiceText,
 } from '@queries/soup/search';
 import { createLazyMemo } from '@solid-primitives/memo';
 import type { Accessor } from 'solid-js';
@@ -13,6 +14,11 @@ const USE_QUICK_ACCESS_FOR_EMAIL_MENTIONS: boolean = false;
 type UseEmailSearchMentionOptions = {
   searchTerm: Accessor<string>;
   enabled?: Accessor<boolean | undefined>;
+  /**
+   * List recent threads while the term is too short for the search service.
+   * Set for menus that offer only emails, which would otherwise be empty.
+   */
+  recentWhenShort?: Accessor<boolean>;
 };
 
 type UseEmailSearchMentionResult = {
@@ -24,8 +30,9 @@ type UseEmailSearchMentionResult = {
 };
 
 /**
- * Provides email mentions through unified search by default. The Quick Access
- * path remains available behind USE_QUICK_ACCESS_FOR_EMAIL_MENTIONS.
+ * Provides email mentions through unified search by default. Quick Access
+ * supplies them behind USE_QUICK_ACCESS_FOR_EMAIL_MENTIONS, and for
+ * `recentWhenShort` menus while the term is too short to search.
  */
 export function useEmailSearchMention(
   options: UseEmailSearchMentionOptions
@@ -34,7 +41,10 @@ export function useEmailSearchMention(
   const listEnabled = () => enabled?.() !== false;
   const quickAccess = useQuickAccess();
   const usesQuickAccess = () =>
-    USE_QUICK_ACCESS_FOR_EMAIL_MENTIONS && quickAccess.usesRecordSelection();
+    (USE_QUICK_ACCESS_FOR_EMAIL_MENTIONS &&
+      quickAccess.usesRecordSelection()) ||
+    (options.recentWhenShort?.() === true &&
+      !validateSearchServiceText(searchTerm().trim()));
   const cachedEmails = quickAccess.useList({
     buckets: ['email'],
     searchTerm,
