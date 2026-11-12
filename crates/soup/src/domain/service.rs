@@ -78,7 +78,7 @@ mod crm_association;
 mod favorites;
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 
 #[derive(Debug)]
 struct SoupCandidate {
@@ -1302,12 +1302,18 @@ where
 
         let email_response = match self.email_service.get_email_thread_previews(req).await {
             Ok(response) => response,
-            // An archived company, or one whose domains have left the team's
-            // CRM, still opens with its email list. Email authorizes only
-            // the team-wide widening, so its threads are left out of the page
-            // and every other source keeps its results.
-            Err(err @ (EmailErr::CrmDomainNotFound(_) | EmailErr::CrmDomainNotPermitted(_))) => {
-                tracing::warn!(error = %err, "CRM domain scope rejected; omitting email threads");
+            // An archived company or hidden contact, or one whose domains or
+            // addresses have left the team's CRM, still opens with its email
+            // list. Email authorizes only the team-wide widening, so its
+            // threads are left out of the page and every other source keeps
+            // its results.
+            Err(
+                err @ (EmailErr::CrmDomainNotFound(_)
+                | EmailErr::CrmDomainNotPermitted(_)
+                | EmailErr::CrmAddressNotFound(_)
+                | EmailErr::CrmAddressNotPermitted(_)),
+            ) => {
+                tracing::warn!(error = %err, "CRM email scope rejected; omitting email threads");
                 return Ok(Either::Left(None.into_iter()));
             }
             Err(err) => return Err(err.into()),

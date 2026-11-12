@@ -43,6 +43,8 @@ use crate::{
     inbound::axum_router::{SoupRouterState, soup_router},
 };
 
+mod crm_scope;
+
 /// Date-range grouping, sort routing, and nullable continuation coverage.
 
 static CURSOR: &str = "eyJpZCI6ImUzNmM5MTJlLTU2M2MtNDIxZS1iMTAzLWE0YjAwY2ZmMzBlZSIsImxpbWl0IjoxMDAsInZhbCI6eyJzb3J0X3R5cGUiOiJ1cGRhdGVkX2F0IiwibGFzdF92YWwiOiIyMDI1LTExLTA3VDE5OjEyOjU5Ljc4MFoifSwiZmlsdGVyIjp7fX0=";
@@ -462,8 +464,10 @@ impl EmailService for MockEmail {
     }
 }
 
-#[derive(Clone)]
-struct MockEntityAccess;
+#[derive(Clone, Default)]
+struct MockEntityAccess {
+    team: Option<entity_access::domain::models::UserTeamInfo>,
+}
 
 impl entity_access::domain::ports::EntityAccessService for MockEntityAccess {
     async fn generate_entity_access_receipt<
@@ -605,7 +609,7 @@ impl entity_access::domain::ports::EntityAccessService for MockEntityAccess {
         Option<entity_access::domain::models::UserTeamInfo>,
         entity_access::domain::models::AccessError,
     > {
-        Ok(None)
+        Ok(self.team)
     }
 }
 
@@ -662,7 +666,7 @@ where
     SoupRouterState::new(
         service,
         email,
-        Arc::new(MockEntityAccess),
+        Arc::new(MockEntityAccess::default()),
         MacroAuthorizationState::new(Arc::new(FakeAuthorizationService)),
     )
 }
