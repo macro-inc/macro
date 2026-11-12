@@ -1,0 +1,67 @@
+# Temporary benchmark for the deploy web build. Not for merging: it lives on a
+# draft PR stacked on synoet/ci-web-build-2min and is closed after measuring.
+#   before-dev:  Build Web App as on main (every wasm package compiled)
+#   after-dev:   Build Web App from this branch (wasm packages from the Actions cache)
+#   before-prod: the build job of release-production.yml as on main
+#   after-prod:  Build Web App from this branch for prod
+name: Bench web build (temporary)
+on:
+  pull_request:
+    branches: [synoet/ci-web-build-2min]
+permissions:
+  contents: read
+jobs:
+  before-dev:
+    uses: macro-inc/macro/.github/workflows/build_web_app.yml@main
+    with:
+      environment: dev
+    secrets:
+      SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}
+      POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
+  # Same artifact name as before-dev, so it waits for it.
+  after-dev:
+    needs: before-dev
+    if: ${{ !cancelled() }}
+    uses: ./.github/workflows/build_web_app.yml
+    with:
+      environment: dev
+    secrets:
+      SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}
+      POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
+  before-prod:
+    name: Build Web App (release-production)
+    runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
+    env:
+      CI: "true"
+      MODE: "production"
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      - name: Mount Namespace cache volume
+        continue-on-error: true
+        uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+        with:
+          cache: nix
+          path: /home/runner/.bun/install/cache
+      - name: Setup Nix
+        uses: ./.github/actions/setup-nix
+      - name: Setup Prereqs
+        uses: ./.github/actions/setup-reqs-web
+      - name: Build for Production
+        working-directory: apps/web
+        run: just build-prod
+        env:
+          VITE_SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}
+          VITE_POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
+          VITE_OTEL_EXPORTER_URL: https://macro-prox-prod.macroverse.workers.dev/i/otlp/v1/traces
+          VITE_OTEL_ENV: prod
+      - name: Teardown Nix
+        if: ${{ always() }}
+        uses: ./.github/actions/teardown-nix
+  after-prod:
+    uses: ./.github/workflows/build_web_app.yml
+    with:
+      environment: prod
+    secrets:
+      SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}
+      POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
