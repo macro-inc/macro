@@ -18,6 +18,7 @@ import {
 import type { Klass, LexicalNode } from 'lexical';
 import { afterEach, beforeAll, expect, test } from 'vitest';
 import type { GroupMentionUIProps } from '../component/decorator/GroupMention';
+import type { UnknownMentionUIProps } from '../component/decorator/UnknownMention';
 import { theme } from '../theme';
 import { createNativeFastSelectionDecoratorViews } from './fast-selection-views';
 import { createNativeSelectionDecoratorContext } from './native-selection-host';
@@ -114,5 +115,33 @@ test('projector hands a stored null or missing group alias to the registered com
 test('stored model refuses a wrong group alias type before any projection', () => {
   expect(() =>
     mount('group-mention', GroupMentionNode, [{ groupAlias: 5 }]).close()
+  ).toThrow('JSON error: invalid type');
+});
+
+test('projector hands a stored null or missing unknown mention name to the registered component unchanged', () => {
+  const mounted = mount<UnknownMentionUIProps>(
+    'unknown-mention',
+    UnknownMentionNode,
+    [{ name: 'Someone' }, { name: null }, {}, { name: '' }]
+  );
+  try {
+    expect(mounted.received.map(({ name }) => name)).toEqual([
+      'Someone',
+      null,
+      undefined,
+      '',
+    ]);
+    expect(
+      mounted.fixture.root.querySelectorAll('[data-recorded-decorator]')
+    ).toHaveLength(4);
+    expect(mounted.fixture.root.textContent).toContain('sibling stays');
+  } finally {
+    mounted.close();
+  }
+});
+
+test('stored model refuses a wrong unknown mention name type before any projection', () => {
+  expect(() =>
+    mount('unknown-mention', UnknownMentionNode, [{ name: 5 }]).close()
   ).toThrow('JSON error: invalid type');
 });

@@ -4,7 +4,6 @@ import {
   GroupMentionNode,
   type ThemeMentionDecoratorProps,
   ThemeMentionNode,
-  type UnknownMentionDecoratorProps,
   UnknownMentionNode,
 } from '@macro-inc/lexical-core';
 import type { MacroDecorators } from '@macro-inc/lexical-wasm-view/view/node-views/macro';
@@ -13,6 +12,7 @@ import type {
   JsonValue,
 } from '@macro-inc/lexical-wasm-view/view/types';
 import type { GroupMentionUIProps } from '../component/decorator/GroupMention';
+import type { UnknownMentionUIProps } from '../component/decorator/UnknownMention';
 import type { DecoratorHostCapabilities } from '../context/DecoratorHostContext';
 import {
   createNativeDecoratorAdapter,
@@ -57,19 +57,21 @@ export function createNativeFastSelectionDecoratorViews<
         };
       }
     ),
-    'unknown-mention': bind<
-      UnknownMentionDecoratorProps & DecoratorSelectionHostProp
-    >(UnknownMentionNode, (node, context) => {
-      const value = node.props().name;
-      if (typeof value !== 'string')
-        throw new Error('Invalid unknown mention name');
-      return {
-        name: value,
-        key: String(node.key),
-        theme: context.theme,
-        host: context.host,
-      };
-    }),
+    'unknown-mention': bind<UnknownMentionUIProps>(
+      UnknownMentionNode,
+      (node, context) => {
+        const name = node.props().name;
+        // Source keeps a stored null or omitted name and renders "Unknown".
+        if (name !== undefined && name !== null && typeof name !== 'string')
+          throw new Error('Invalid unknown mention name');
+        return {
+          name,
+          key: String(node.key),
+          theme: context.theme,
+          host: context.host,
+        };
+      }
+    ),
     'theme-mention': bind<
       ThemeMentionDecoratorProps & DecoratorSelectionHostProp
     >(ThemeMentionNode, (node, context) => {

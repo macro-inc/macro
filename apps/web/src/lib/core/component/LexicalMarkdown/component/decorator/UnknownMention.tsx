@@ -4,9 +4,15 @@ import { useContext } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import type { DecoratorSelectionHostProp } from '../../decorator-host/selection-host';
 
-export function UnknownMention(
-  props: UnknownMentionDecoratorProps & DecoratorSelectionHostProp
-) {
+/** Source `importJSON` keeps a stored null or omitted name; it renders as "Unknown". */
+export type UnknownMentionUIProps = Omit<
+  UnknownMentionDecoratorProps,
+  'name'
+> & {
+  name?: string | null;
+} & DecoratorSelectionHostProp;
+
+export function UnknownMention(props: UnknownMentionUIProps) {
   const lexicalWrapper = useContext(LexicalWrapperContext);
   const selection = () => lexicalWrapper?.selection;
 
