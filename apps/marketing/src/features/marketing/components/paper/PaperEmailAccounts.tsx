@@ -154,14 +154,14 @@ export function PaperEmailAccounts() {
               <div class="paper-feature-node-199">
                 <div class="paper-feature-node-200">A</div>
               </div>
-              <div class="paper-feature-node-190">alex@northwind.co</div>
+              <div class="paper-feature-node-190">alex@example.com</div>
               <div class="paper-feature-node-36" />
             </div>
             <div class="paper-feature-node-198">
               <div class="paper-feature-node-199">
                 <div class="paper-feature-node-200">A</div>
               </div>
-              <div class="paper-feature-node-190">alex.rivera@gmail.com</div>
+              <div class="paper-feature-node-190">alex@example.org</div>
               <div class="paper-feature-node-36" />
             </div>
             <div class="paper-feature-node-198">
@@ -191,7 +191,7 @@ export function PaperEmailAccounts() {
                   stroke-linejoin="round"
                 />
               </svg>
-              <div class="paper-feature-node-190">billing@northwind.co</div>
+              <div class="paper-feature-node-190">billing@example.com</div>
               <div class="paper-feature-node-201">alias</div>
               <div class="paper-feature-node-36" />
             </div>

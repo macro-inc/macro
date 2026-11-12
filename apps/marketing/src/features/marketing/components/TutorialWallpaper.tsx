@@ -165,7 +165,7 @@ export function TutorialWallpaper(props: { tutorial: TutorialVideoId }) {
       <path
         fill={theme().colors[0]}
         opacity=".16"
-        d={`M${theme().ridge + 420} 0H${theme().ridge + 650}C1480 280 1240 330 1250 630S1720 800 1920 900V1080C1370 880 970 670 1120 370Z`}
+        d={`M${theme().ridge + 420} 0H${theme().ridge + 650}C1480,280 1240,330 1250,630S1720,800 1920,900V1080C1370,880 970,670 1120,370Z`}
       />
       <path
         fill={`url(#${id}-front)`}
@@ -174,7 +174,7 @@ export function TutorialWallpaper(props: { tutorial: TutorialVideoId }) {
       <path
         fill={theme().colors[3]}
         opacity=".5"
-        d={`M0 ${theme().crest + 180}C360 470 510 950 1100 930S1700 760 1920 800V1080H0Z`}
+        d={`M0 ${theme().crest + 180}C360,470 510,950 1100,930S1700,760 1920,800V1080H0Z`}
       />
     </svg>
   );

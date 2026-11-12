@@ -339,7 +339,8 @@ it('keeps the document share controls interactive', () => {
   });
   fireEvent.click(dialog.getByRole('button', { name: /Share/ }));
   expect(
-    (view.getByLabelText('Access for user@example.com') as HTMLSelectElement).value
+    (view.getByLabelText('Access for user@example.com') as HTMLSelectElement)
+      .value
   ).toBe('comment');
   fireEvent.click(dialog.getByRole('button', { name: 'Cancel' }));
   expect(view.queryByRole('dialog')).toBeNull();

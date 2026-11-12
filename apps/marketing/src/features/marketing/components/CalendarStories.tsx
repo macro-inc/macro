@@ -34,12 +34,12 @@ export function CalendarStories() {
             </div>
             <div class="calendar-story-account">
               <OutlookIcon />
-              <span>julia@outlook.com</span>
+              <span>personal@example.com</span>
               <CheckIcon />
             </div>
             <div class="calendar-story-account">
               <GoogleIcon />
-              <span>julia@gmail.com</span>
+              <span>family@example.com</span>
               <CheckIcon />
             </div>
           </div>
