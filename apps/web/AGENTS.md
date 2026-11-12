@@ -568,6 +568,15 @@ on desktop and mobile. Tool results render through
 `lib/core/component/AI/component/tool/Canvas.tsx`; edits arrive through live sync.
 The shared plain-text Lexical codec is `packages/lexical-core/canvas-text.ts`.
 
+## Group chats in the notifications inbox
+
+A group chat's message row shows the chat (its picture or the channel kind)
+and its name, with the sender in the body, never whoever wrote last as the
+row's author; unnamed group chats shorten to two names and a count
+(`features/channel/group-chat-name.ts`). The backend-free desktop/phone
+regression is
+`bunx playwright test --config src/features/notifications-inbox/browser-test/playwright.config.ts`.
+
 ## Message notification reads
 
 Gate automatic message notification reads on the actual message element

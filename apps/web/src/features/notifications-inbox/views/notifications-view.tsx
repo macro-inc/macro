@@ -92,7 +92,6 @@ import type { InboxDecision } from '../core/inbox-row';
 import {
   describeInboxCard,
   describeStackItem,
-  groupChatId,
   inboxCardKind,
 } from '../primitives/describe-row';
 import {
@@ -118,7 +117,7 @@ import {
 } from '../primitives/notification-location';
 import { createRowActions, rowButtons } from '../primitives/row-actions';
 import { rowEntity } from '../primitives/row-entity';
-import { GroupChatAvatar } from './group-chat-avatar';
+import { InboxRowAvatar } from './inbox-row-avatar';
 import { NotificationsNoneSelected } from './notifications-none-selected';
 
 type ActivationMetadata = { event?: MouseEvent; newSplit?: boolean };
@@ -724,23 +723,7 @@ export function NotificationsView(props: NotificationsViewProps) {
       <SwipeToDone id={card.row().id}>
         <NotificationRow
           id={card.row().id}
-          icon={
-            <Show
-              when={groupChatId(card.row())}
-              fallback={
-                <InboxSenderAvatar
-                  notification={card.row().content.notifications[0]}
-                  kind={inboxCardKind(card.row())}
-                  entity={card.row().content.entity}
-                  badged
-                />
-              }
-            >
-              {(channelId) => (
-                <GroupChatAvatar channelId={channelId()} row={card.row()} />
-              )}
-            </Show>
-          }
+          icon={<InboxRowAvatar row={card.row()} />}
           who={display().who}
           what={display().what}
           body={display().body}
