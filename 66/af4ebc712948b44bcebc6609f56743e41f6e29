@@ -1,0 +1,19 @@
+apps/web/src/routes/shells.test.tsx
+  s_72add11554f3a3::t_6a93f4e92782fa 28-31
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "66af4ebc712948b44bcebc6609f56743e41f6e29",
+  "prompts": {},
+  "sessions": {
+    "s_72add11554f3a3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c1c9036c-c305-4887-9a9f-464214fab70f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
