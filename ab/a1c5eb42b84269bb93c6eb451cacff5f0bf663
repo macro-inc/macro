@@ -1,0 +1,21 @@
+tooling/xtask/crates/xtask_workflows/src/workflows/deploy_pulumi_stack.rs
+  s_84cf0ca6488a34::t_6cf58c6e0c7395 74-80
+.github/workflows/deploy-pulumi-stack.yml
+  s_84cf0ca6488a34::t_6cf58c6e0c7395 39-45
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "aba1c5eb42b84269bb93c6eb451cacff5f0bf663",
+  "prompts": {},
+  "sessions": {
+    "s_84cf0ca6488a34": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c2af1daa-2406-4e09-9c66-310cee2f1781",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
