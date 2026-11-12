@@ -30,6 +30,7 @@ import {
   PromptTrace,
 } from '@core/agent-session/prompt-telemetry';
 import { markSessionCreated } from '@core/agent-session/recently-created';
+import { typedInClientId } from '@core/agent-session/ui-client';
 import {
   enableFirstPromptOnCreate,
   isFeatureEnabled,
@@ -169,6 +170,9 @@ export function startPendingSession(
     !options.speedOverride
       ? uuidv7()
       : undefined;
+  // The tab the prompt was typed in, as a control prompt carries it, so
+  // what the first turn opens (`macro.ui.open`) reaches this tab.
+  const promptClientId = promptActionId ? typedInClientId() : undefined;
   const [sessionId, setSessionId] = createSignal<string>();
   const [error, setError] = createSignal<string>();
   let navigation: AgentSession | undefined;
@@ -213,6 +217,7 @@ export function startPendingSession(
         ? {
             prompt,
             promptActionId,
+            ...(promptClientId ? { promptClientId } : {}),
             ...(options.attachments?.length
               ? { promptAttachments: options.attachments }
               : {}),
