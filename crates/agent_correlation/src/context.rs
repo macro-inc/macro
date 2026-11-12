@@ -10,6 +10,9 @@ pub struct Attribution {
     pub correlation_id: Option<Uuid>,
     /// Routine whose run the work acts for, from a signed token claim.
     pub routine_id: Option<Uuid>,
+    /// Channel message whose bot mention the work answers, from a signed
+    /// token claim. Restricts (no email sends); never grants.
+    pub channel_mention_id: Option<Uuid>,
     /// Display verb the SDK sent with a validated correlation. Display only;
     /// it is dropped whenever there is no correlation.
     pub verb: Option<AgentVerb>,
@@ -40,6 +43,11 @@ pub fn current_routine() -> Option<Uuid> {
     attribution().routine_id
 }
 
+/// The channel mention whose bot program the current request comes from, if any.
+pub fn current_channel_mention() -> Option<Uuid> {
+    attribution().channel_mention_id
+}
+
 /// Run work with the correlation accepted at its boundary. `None` clears any
 /// surrounding context, preventing uncorrelated work from inheriting attribution.
 /// Any surrounding routine is cleared too; use [`scope_attribution`] to keep one.
@@ -63,6 +71,7 @@ pub async fn scope_with_verb<F: Future>(
     let attribution = Attribution {
         correlation_id: id,
         routine_id: None,
+        channel_mention_id: None,
         verb,
     };
     scope_attribution(attribution, future).await
@@ -118,6 +127,7 @@ mod tests {
         let routine_run = Attribution {
             correlation_id: Some(correlation),
             routine_id: Some(routine),
+            channel_mention_id: None,
             verb: None,
         };
         let (a, b) = tokio::join!(

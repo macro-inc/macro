@@ -35,6 +35,11 @@ pub struct MacroApiToken {
     /// supplied by an API caller.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub routine_id: Option<Uuid>,
+    /// Channel message whose bot mention this program answers, signed by the
+    /// harness; never supplied by an API caller. A restriction, not a grant:
+    /// runs carrying it never send email.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub channel_mention_id: Option<Uuid>,
 }
 
 pub struct EncodeMacroApiTokenArgs {
@@ -61,6 +66,10 @@ pub struct EncodeMacroApiTokenArgs {
     /// Routine whose run this token acts for, signed by the harness; never
     /// supplied by an API caller.
     pub routine_id: Option<Uuid>,
+    /// Channel message whose bot mention this program answers, signed by the
+    /// harness; never supplied by an API caller. A restriction, not a grant:
+    /// runs carrying it never send email.
+    pub channel_mention_id: Option<Uuid>,
 }
 
 #[tracing::instrument(skip(args))]
@@ -77,6 +86,7 @@ pub fn encode_macro_api_token(args: EncodeMacroApiTokenArgs) -> anyhow::Result<S
         agent_correlation_id: args.agent_correlation_id,
         agent_session_id: args.agent_session_id,
         routine_id: args.routine_id,
+        channel_mention_id: args.channel_mention_id,
         iss: args.issuer.clone(),
         fusion_user_id: args.fusionauth_id.clone(),
         macro_user_id: args.macro_user_id.clone(),

@@ -123,7 +123,7 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["test-util"] }
+tokio = { workspace = true, features = ["macros", "rt", "test-util"] }
 models_email = { path = "../models_email" }
 email_db_client = { path = "../email_db_client" }
 crm = { path = "../crm", features = ["outbound"] }

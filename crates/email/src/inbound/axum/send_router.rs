@@ -49,6 +49,9 @@ pub fn refuse_program_send(
     headers: &HeaderMap,
     confirmation: Option<&str>,
 ) -> Result<(), SendMessageError> {
+    if crate::is_channel_mention_run() {
+        return Err(SendMessageError::ChannelMention);
+    }
     let confirmed = confirmation.is_some_and(|quote| !quote.trim().is_empty());
     if is_agent_run(agent_attributed, headers) && !confirmed {
         return Err(SendMessageError::ConfirmationRequired);
@@ -68,6 +71,9 @@ pub enum SendMessageError {
     /// An agent's program asked to send without the user seeing the email.
     #[error("{PROGRAM_SEND_REFUSAL}")]
     ConfirmationRequired,
+    /// A channel-mention bot's program asked to send; it never may.
+    #[error("{}", crate::CHANNEL_MENTION_SEND_REFUSAL)]
+    ChannelMention,
     /// Internal error.
     #[error("Internal error")]
     Internal(EmailErr),
@@ -82,7 +88,9 @@ impl IntoResponse for SendMessageError {
         let status = match &self {
             SendMessageError::Validation(_) => StatusCode::BAD_REQUEST,
             SendMessageError::NotFound(_) => StatusCode::NOT_FOUND,
-            SendMessageError::ConfirmationRequired => StatusCode::FORBIDDEN,
+            SendMessageError::ConfirmationRequired | SendMessageError::ChannelMention => {
+                StatusCode::FORBIDDEN
+            }
             SendMessageError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
