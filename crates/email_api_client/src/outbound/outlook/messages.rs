@@ -159,6 +159,7 @@ impl MailboxContentReader for OutlookApiClientRepository {
                         name: folder.display_name,
                         role,
                         has_children: folder.child_folder_count > 0,
+                        total_items: folder.total_item_count,
                     });
                 }
                 match page.next {

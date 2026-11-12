@@ -56,6 +56,10 @@ through its breadcrumb retains the selected project view.
 Cached project rows remain available through offline/background refresh failures.
 Cache misses, server/permission errors, and failed continuation requests retain
 failure and retry controls.
+Project list rows, project breadcrumbs, task project chips, and project pickers
+show the saved icon and color. With the normalized cache active, Apply updates
+these surfaces before the save completes, without changing project recency or
+refetching their pages; resetting appearance restores the default project icon.
 Opening a project shows a content-shaped skeleton while its data loads: title,
 wrapping property pills, description, and discussion for Overview; toolbar and
 rows for Tasks. The mobile skeleton uses the same compact insets as the content.
@@ -710,12 +714,12 @@ Sort offers Priority, Recently updated, Least recently updated, Newest, and Olde
 Priority orders the loaded rows most urgent first and keeps recency within a
 priority. Date sorts group rows under the same headings as email (Today,
 Yesterday, Last 7 days, Earlier this month, Last month, Older) by the sorted
-date; Priority sorts and searches list rows flat. When visible PRs
-have GitHub labels, a Labels section below Favorites lists them like email's
-Tags section (a colored dot and the name); choosing a label shows only PRs with
-it, and choosing it again clears it. Above it, an **Agents** section lists the
-tools the loaded PRs were started from (Claude, Codex, Cursor, and so on, with
-their marks); choosing one shows only PRs started from it, using the same
+date; Priority sorts and searches list rows flat. When visible PRs have GitHub
+labels, a **Labels** section below Favorites lists them with a colored dot and
+the name. These are GitHub labels, not Macro tags. Choosing a label shows only
+PRs with it, and choosing it again clears it. Above it, an **Agents** section
+lists the tools the loaded PRs were started from (Claude, Codex, Cursor, and so
+on, with their marks); choosing one shows only PRs started from it, using the same
 **Started from** filter as the filter menu. PR rows use the shared entity layout with selection checkboxes,
 author avatars and names, and a context menu. The current user's Macro display
 name appears when their linked GitHub identity matches the PR author; other
@@ -1337,8 +1341,8 @@ message.
 
 ### Nested sidebar tags
 
-In the Email and Calls sidebar Tags sections, tag names containing `/` render with
-one child level (for example, `Work/Urgent`).
+The shared sidebar tag tree renders tag names containing `/` with one child
+level (for example, `Work/Urgent`).
 Deeper paths remain in the child label: `Work/Customers/Acme` appears as
 `Customers/Acme` under `Work`, alongside any actual `Customers` tag.
 Use the caret to expand or collapse a branch. A folder-only parent expands without
