@@ -23,6 +23,9 @@ It runs on a local stack against the live model, one draft at a time.
 
 **Time.** The `draft` arm is timed from the request to the answer; the `bare`
 arm from the message to the routine existing (its turn's end is kept too).
+Only drafts that came back with a routine or a step are timed; the share under
+15 s is out of every request, so a build can't look faster by failing fast or
+running out of time on its slowest drafts.
 Each draft is sent with its own `traceparent` and its trace is read back from
 Tempo to split the time:
 
@@ -41,17 +44,19 @@ draft on a busy machine can be told apart.
 
 **Quality**, three ways, reported apart:
 
-- *Mechanical checks* on the draft: the trigger (days, time, event), the items
-  it uses by id or by a knob naming them, none of their look-alikes, the step
-  kind, nothing created that it doesn't use, and leaving out a name with no
-  match or two matches. In the `bare` arm asking the person instead is right
-  for those two cases, if the question names the item (`asking` in
-  `cases.ts`).
+- *Mechanical checks* on the draft: the trigger (days, time and the person's
+  time zone, or the event), the items it uses by id or by a knob naming them,
+  none of their look-alikes, the step kind, nothing created that it doesn't
+  use, and leaving out a name with no match or two matches, without guessing
+  it: no channel made for it, no knob or code string naming it. In the `bare`
+  arm asking the person instead is right for those two cases, if the question
+  names the item (`asking` in `cases.ts`).
 - *Run check*: the drafted routine is saved, fired once with a made-up trigger
   (a seeded person posts, a task changes status or is created, or it is run
-  now) and its effect is read from the stack's database: the message it
-  posted in the seeded channels, the task it made, its own notifications,
-  what its run returned. A run whose condition wasn't met did nothing.
+  now) and its effect is read from the stack's database, in the owner's
+  workspace only: the message it posted in a channel they're in, the task it
+  made for them, its own notifications, what its run returned. A run whose
+  condition wasn't met did nothing.
 - *Judge*: a model that sees only the request and the routine, with a glossary
   of the ids in it, grades it 1 to 5 (`RUBRIC` in `judge.ts`); 4 or 5 is a
   draft the person would keep.
@@ -79,7 +84,10 @@ writes rows straight to the database, so search never hears of them: `seed`,
 and every run when name search can't find a seeded document or project,
 backfills the seeded workspace through the stack's
 `search_processing_service`. Without it every by-name lookup of a document or
-project fails, as it wouldn't for a real person.
+project fails, as it wouldn't for a real person. An agent session takes the
+person's time zone from their primary calendar, so setup gives the owner one
+in the eval's zone (`America/New_York`), marked synced so the calendar service
+leaves it alone.
 
 ```bash
 B=crates/scheduled_action/bench
@@ -107,7 +115,8 @@ The model's speed drifts over a day by more than most changes save, so builds
 are compared on interleaved rounds. `ab` swaps the stack's harness between two
 builds (A then B, then B then A, ...), holding the stack for each segment,
 and puts back the harness the stack ran before when it ends. Run again with the
-same `--dir` and it fills the gaps a stopped run left:
+same `--dir` and it fills the gaps a stopped run left (`--rounds` is the
+total):
 
 ```bash
 mkdir -p ~/.cache/routines-eval/bin/mine && cp -l target/debug/agent_harness_service ~/.cache/routines-eval/bin/mine/   # keep the build still
