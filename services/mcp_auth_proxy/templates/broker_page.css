@@ -1,52 +1,189 @@
+{% include "roboto_slab_font.css" %}
+
+/* The Macro app's sign-in palette (apps/web/src/features/onboarding/components/
+   onboarding.css): black by default, cream when the system is light. */
+:root {
+  color-scheme: dark;
+  --surface: #000;
+  --ink: #fff;
+  --heading: #fff;
+  --ink-muted: #a8a8a8;
+  --ink-extra-muted: #737373;
+  --ink-placeholder: #737373;
+  --edge: #292929;
+  --input: #171717;
+  --hover: rgb(255 255 255 / 5%);
+  --failure: #f87171;
+  --warning-ink: #fcd34d;
+  --warning-edge: #78350f;
+  --warning-bg: #1c1408;
+  --mark-background: linear-gradient(145deg, #171717, #090909 65%);
+  --mark-shadow: inset 0.5px 0.5px 1px #ffffff1c, inset -0.5px -0.5px 1px #0008,
+    0 1px 1px #131313, 0 4px 10px #0005;
+  --heading-weight: 315;
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    color-scheme: light;
+    --surface: #f5f1e8;
+    --ink: #1d1c1a;
+    --heading: #000;
+    --ink-muted: #54524f;
+    --ink-extra-muted: #72706c;
+    --ink-placeholder: #8f8c86;
+    --edge: #d9d4ca;
+    --input: #faf8f3;
+    --hover: rgb(29 28 26 / 5%);
+    --failure: #b42318;
+    --warning-ink: #7a4b0c;
+    --warning-edge: #e8cf9c;
+    --warning-bg: #f9edd2;
+    --mark-background: linear-gradient(145deg, #fdfcfb, #faf8f3);
+    --mark-shadow: 0 8px 30px -12px #1d1c1a20;
+    --heading-weight: 330;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
 body {
   margin: 0;
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f5f5f4;
-  color: #1c1917;
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  padding: 96px 24px 40px;
+  background: var(--surface);
+  color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Inter Variable", Roboto,
+    "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 main {
-  box-sizing: border-box;
   width: 100%;
-  max-width: 440px;
-  margin: 24px 16px;
-  padding: 32px 28px;
-  background: #ffffff;
-  border: 1px solid #e7e5e4;
-  border-radius: 8px;
+  max-width: 384px;
+  animation: card-in 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes card-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  main {
+    animation: none;
+  }
+}
+
+.intro {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 36px;
+  text-align: center;
+}
+.mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  background: var(--mark-background);
+  box-shadow: var(--mark-shadow);
+  color: var(--ink);
+}
+.mark svg {
+  width: 32px;
+  height: 22px;
 }
 h1 {
-  margin: 0 0 16px;
-  font-size: 20px;
-  font-weight: 600;
-  line-height: 1.3;
+  margin: 32px 0 0;
+  color: var(--heading);
+  font-family: "Roboto Slab Variable", Georgia, serif;
+  font-size: 30px;
+  font-weight: var(--heading-weight);
+  line-height: 1.2;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
   overflow-wrap: anywhere;
 }
+.lede {
+  margin: 16px 0 0;
+  color: var(--ink-muted);
+  font-size: 14px;
+  line-height: 24px;
+  text-wrap: balance;
+}
+@media (min-width: 640px) {
+  h1 {
+    font-size: 36px;
+  }
+  .lede {
+    font-size: 15px;
+  }
+}
+
 p {
   margin: 0 0 16px;
   font-size: 14px;
-  line-height: 1.5;
+  line-height: 1.6;
 }
-.destination {
+.muted {
+  color: var(--ink-muted);
+}
+.destination,
+.copy {
   margin: 0 0 16px;
-  padding: 12px 14px;
-  background: #fafaf9;
-  border: 1px solid #e7e5e4;
-  border-radius: 6px;
+  padding: 12px 16px;
+  background: var(--input);
+  border: 1px solid var(--edge);
+  border-radius: 16px;
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
-  font-size: 15px;
-  font-weight: 600;
   overflow-wrap: anywhere;
 }
+.destination {
+  font-size: 15px;
+  font-weight: 600;
+}
+.copy {
+  font-size: 13px;
+  white-space: pre-wrap;
+  user-select: all;
+}
 .warning {
-  padding: 12px 14px;
-  background: #fffbeb;
-  border: 1px solid #fde68a;
-  border-radius: 6px;
-  color: #78350f;
+  padding: 12px 16px;
+  background: var(--warning-bg);
+  border: 1px solid var(--warning-edge);
+  border-radius: 16px;
+  color: var(--warning-ink);
+  font-size: 13px;
+}
+.error {
+  margin: 0;
+  color: var(--failure);
+  font-size: 12px;
+  line-height: 1.4;
+}
+code {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 13px;
+}
+
+form + form {
+  margin-top: 12px;
+}
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 .actions {
   display: flex;
@@ -54,66 +191,132 @@ p {
   margin-top: 24px;
 }
 button {
+  display: flex;
   flex: 1;
-  padding: 10px 16px;
-  border-radius: 6px;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 56px;
+  padding: 14px 24px;
+  border-radius: 9999px;
   font: inherit;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 16px;
+  font-weight: 500;
   cursor: pointer;
+  transition: opacity 150ms, background-color 150ms;
 }
-.deny {
-  background: #ffffff;
-  border: 1px solid #d6d3d1;
-  color: #1c1917;
+button:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 4px;
+}
+button svg {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
 }
 .approve {
-  background: #1c1917;
-  border: 1px solid #1c1917;
-  color: #ffffff;
+  background: var(--ink);
+  border: 1px solid var(--ink);
+  color: var(--surface);
 }
-.stack {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-top: 24px;
+.approve:hover {
+  opacity: 0.9;
 }
+.deny {
+  background: transparent;
+  border: 1px solid var(--edge);
+  color: var(--ink);
+}
+.deny:hover {
+  background: var(--hover);
+}
+
 label {
   display: block;
   margin-bottom: 6px;
-  font-size: 14px;
-  font-weight: 600;
-}
-.option {
-  display: flex;
-  gap: 8px;
-  margin: 20px 0 0;
-  font-weight: 400;
-  line-height: 1.5;
+  color: var(--ink-muted);
+  font-size: 12px;
+  font-weight: 500;
 }
 input[type="email"],
 input[type="text"] {
-  box-sizing: border-box;
   width: 100%;
-  padding: 10px 12px;
-  border: 1px solid #d6d3d1;
-  border-radius: 6px;
+  padding: 12px 16px;
+  background: var(--input);
+  border: 1px solid var(--edge);
+  border-radius: 16px;
+  color: var(--ink);
   font: inherit;
-  font-size: 15px;
+  font-size: 14px;
+  transition: border-color 150ms;
 }
-.copy {
-  margin: 0 0 16px;
-  padding: 12px 14px;
-  background: #fafaf9;
-  border: 1px solid #e7e5e4;
-  border-radius: 6px;
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
-  font-size: 13px;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  user-select: all;
+input[type="email"]::placeholder,
+input[type="text"]::placeholder {
+  color: var(--ink-placeholder);
 }
-code {
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+input[type="email"]:focus,
+input[type="text"]:focus {
+  border-color: color-mix(in srgb, var(--ink) 40%, transparent);
+  outline: none;
+}
+input:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0 1000px var(--input) inset;
+  -webkit-text-fill-color: var(--ink);
+  caret-color: var(--ink);
+}
+.option {
+  display: flex;
+  gap: 10px;
+  margin: 24px 0 0;
+  color: var(--ink-muted);
   font-size: 13px;
+  font-weight: 400;
+  line-height: 1.5;
+  cursor: pointer;
+}
+.option input {
+  flex-shrink: 0;
+  margin: 3px 0 0;
+  accent-color: var(--ink);
+}
+
+.legal {
+  margin: 32px 0 0;
+  color: var(--ink-extra-muted);
+  font-size: 12px;
+  line-height: 20px;
+  text-align: center;
+  text-wrap: balance;
+}
+.legal a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.legal a:hover {
+  color: var(--ink-muted);
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* The consent and manual-delivery pages carry long headings and URLs. */
+.consent h1,
+.wide h1 {
+  font-size: 26px;
+}
+@media (min-width: 640px) {
+  .consent h1,
+  .wide h1 {
+    font-size: 30px;
+  }
+}
+.wide {
+  max-width: 480px;
 }
