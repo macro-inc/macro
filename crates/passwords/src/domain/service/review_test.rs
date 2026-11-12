@@ -88,9 +88,9 @@ struct Unavailable;
 #[async_trait::async_trait]
 impl Availability for Unavailable {
     async fn require_enabled(&self, _: &Actor) -> Result<(), Error> {
-        self.require_service_enabled().await
+        self.require_provider()
     }
-    async fn require_service_enabled(&self) -> Result<(), Error> {
+    fn require_provider(&self) -> Result<(), Error> {
         Err(Error::Unavailable)
     }
 }

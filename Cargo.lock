@@ -6192,6 +6192,7 @@ dependencies = [
  "item_filters",
  "macro_authorization",
  "macro_user_id",
+ "model-entity",
  "model-error-response",
  "model_owner",
  "models_databases",
@@ -7506,7 +7507,6 @@ dependencies = [
  "sqlx",
  "tokio",
  "tracing",
- "tracing-subscriber",
  "workspace-hack",
 ]
 
@@ -7648,7 +7648,6 @@ dependencies = [
  "email_utils",
  "entity_access",
  "entity_access_management",
- "filter_ast",
  "frecency",
  "futures",
  "generic_email_domains",
@@ -7657,7 +7656,6 @@ dependencies = [
  "html-escape",
  "http-body-util",
  "infer 0.19.0",
- "item_filters",
  "lol_html",
  "macro_auth",
  "macro_authorization",
@@ -7682,7 +7680,6 @@ dependencies = [
  "model_file_type",
  "model_notifications",
  "models_email",
- "models_pagination",
  "models_properties",
  "notification",
  "opentelemetry",
@@ -7830,6 +7827,15 @@ dependencies = [
  "async-openai",
  "genai_telemetry",
  "workspace-hack",
+]
+
+[[package]]
+name = "emojis"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "589871e639330783bc20ad89d32ac1b049e02c273d96c907ca27478c8bc674a2"
+dependencies = [
+ "phf 0.13.1",
 ]
 
 [[package]]
@@ -11196,6 +11202,7 @@ dependencies = [
  "macro_event_broker",
  "macro_event_topics",
  "macro_user_id",
+ "macro_uuid",
  "mockall",
  "model-entity",
  "model-error-response",
@@ -13478,8 +13485,11 @@ name = "model-entity"
 version = "0.1.0"
 dependencies = [
  "cowlike",
+ "emojis",
+ "schemars 1.2.1",
  "serde",
  "serde_json",
+ "specta",
  "strum 0.27.2",
  "utoipa",
  "workspace-hack",
@@ -13640,6 +13650,7 @@ dependencies = [
  "chrono",
  "lazy-regex",
  "macro_uuid",
+ "model-entity",
  "models_databases",
  "schemars 1.2.1",
  "serde",
@@ -18235,6 +18246,7 @@ dependencies = [
  "chrono",
  "clap",
  "comms_db_client",
+ "email",
  "email_db_client",
  "email_utils",
  "entity_access",
