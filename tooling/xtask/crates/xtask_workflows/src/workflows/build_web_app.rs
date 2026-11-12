@@ -1,7 +1,7 @@
 //! `Build Web App` — builds apps/web for one environment and uploads `dist` as
 //! the [`ARTIFACT`] run artifact. Call-only: [`crate::workflows::deploy_web_app`]
 //! uses it for standalone deploys, and [`crate::workflows::deploy_on_push`] and
-//! the hand-written `release-production.yml` call it directly so the build
+//! [`crate::workflows::release_production`] call it directly so the build
 //! overlaps the backend deploy and only the upload waits for it. Generated into
 //! `build_web_app.yml`.
 
@@ -17,6 +17,11 @@ mod test;
 /// caller's run, so the deploy job finds this regardless of which workflow
 /// called the build.
 pub const ARTIFACT: &str = "web-app-dist-${{ inputs.environment }}";
+
+/// [`ARTIFACT`] as a caller that names the environment itself downloads it.
+pub fn artifact(environment: &str) -> String {
+    ARTIFACT.replace("${{ inputs.environment }}", environment)
+}
 
 pub fn build_web_app() -> Workflow {
     Workflow::new("Build Web App")
