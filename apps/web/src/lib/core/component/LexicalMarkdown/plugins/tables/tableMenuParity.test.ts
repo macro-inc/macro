@@ -1,16 +1,20 @@
 /** @vitest-environment jsdom */
 /**
- * Touch handle menu parity, Source against native. The Source side is a
- * literal copy of TableMoveHandle runMenuAction (live Range/Table anchor cell,
- * else tracked.selectStart(), then the item's Lexical call) in one update.
- * Native runs the move host. Both then undo once. Grid, selection after the
- * action, and grid and selection after undo are compared by cell coordinate.
+ * Touch handle menu parity, Source against native. Both engines load the same
+ * serialized state. The Source side is a literal copy of TableMoveHandle
+ * runMenuAction (live Range/Table anchor cell, else tracked.selectStart(), then
+ * the item's Lexical call) in one update; native runs the move host and awaits
+ * its settlement. Compared after the action and after one undo: the whole
+ * root JSON (spans, header state, widths, every node; only `$` id metadata is
+ * stripped) and the full selection (both endpoints as root paths with type and
+ * offset, format and style; none and an outside range kept distinct).
+ *
+ * History here is fixture history only: @lexical/history on Source against the
+ * native session's own undo. It is not app Loro history acceptance, which
+ * stays with the table-hover-browser-test history epoch.
  */
 import { createEmptyHistoryState, registerHistory } from '@lexical/history';
 import {
-  $createTableCellNode,
-  $createTableNode,
-  $createTableRowNode,
   $createTableSelection,
   $deleteTableColumnAtSelection,
   $deleteTableRowAtSelection,
@@ -31,13 +35,15 @@ import {
   nativeSurface,
 } from '@macro-inc/lexical-wasm-view/view/test/native-surface';
 import {
-  $createParagraphNode,
-  $createTextNode,
+  $getNodeByKey,
   $getRoot,
   $getSelection,
+  $isNodeSelection,
   $isRangeSelection,
   $setSelection,
   type LexicalEditor,
+  type LexicalNode,
+  type PointType,
   UNDO_COMMAND,
 } from 'lexical';
 import { match } from 'ts-pattern';
@@ -59,13 +65,22 @@ type Live =
   | { kind: 'table'; anchor: Coordinate; focus: Coordinate }
   | { kind: 'caret'; cell: Coordinate }
   | { kind: 'outside' };
-type SelectionSummary =
-  | { kind: 'table'; anchor: Coordinate; focus: Coordinate }
-  | { kind: 'caret'; cell: Coordinate }
-  | { kind: 'outside-or-none' };
+/** A point as child indices from the root to its node, plus type and offset. */
+type Endpoint = { path: number[]; type: 'text' | 'element'; offset: number };
+type SelectionDescriptor =
+  | { kind: 'none' }
+  | {
+      kind: 'range';
+      anchor: Endpoint;
+      focus: Endpoint;
+      format: number;
+      style: string;
+    }
+  | { kind: 'table'; table: number[]; anchor: number[]; focus: number[] }
+  | { kind: 'node'; nodes: number[][] };
 interface Outcome {
-  grid: string[][];
-  selection: SelectionSummary;
+  json: unknown;
+  selection: SelectionDescriptor;
 }
 interface Scenario {
   name: string;
@@ -190,6 +205,61 @@ const SCENARIOS: Scenario[] = [
     action: 'delete-table',
   },
 ];
+const columnCount = (rows: CellSpec[][]) =>
+  Math.max(
+    ...rows.map((cells) =>
+      cells.reduce((sum, cell) => sum + (cell.colSpan ?? 1), 0)
+    )
+  );
+function stateJSON(rows: CellSpec[][]) {
+  return JSON.stringify({
+    root: {
+      type: 'root',
+      version: 1,
+      children: [
+        {
+          type: 'table',
+          version: 1,
+          // Explicit, because native import fills default widths for a merged
+          // table that Source leaves unset (a separate import finding).
+          colWidths: Array.from({ length: columnCount(rows) }, () => 120),
+          children: rows.map((cells) => ({
+            type: 'tablerow',
+            version: 1,
+            children: cells.map((spec) => ({
+              type: 'tablecell',
+              version: 1,
+              colSpan: spec.colSpan ?? 1,
+              rowSpan: spec.rowSpan ?? 1,
+              children: [
+                {
+                  type: 'paragraph',
+                  version: 1,
+                  children: [{ type: 'text', version: 1, text: spec.text }],
+                },
+              ],
+            })),
+          })),
+        },
+        {
+          type: 'paragraph',
+          version: 1,
+          children: [{ type: 'text', version: 1, text: 'after' }],
+        },
+      ],
+    },
+  });
+}
+/** Engine-local `$` id metadata removed; every other key and value kept. */
+function normalize(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(normalize);
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([key]) => key !== '$')
+      .map(([key, item]) => [key, normalize(item)])
+  );
+}
 
 // --- Source -------------------------------------------------------------
 
@@ -202,36 +272,59 @@ function $cellAt([row, column]: Coordinate): TableCellNode {
   if (!$isTableCellNode(cell)) throw new Error('Missing Source cell');
   return cell;
 }
-function $coordinate(cell: TableCellNode): Coordinate {
-  const row = cell.getParent();
-  if (!$isTableRowNode(row)) throw new Error('Cell outside a row');
-  return [$tableRows().indexOf(row), row.getChildren().indexOf(cell)];
+function $path(node: LexicalNode): number[] {
+  const path: number[] = [];
+  let current: LexicalNode | null = node;
+  while (current && current.getParent()) {
+    path.unshift(current.getIndexWithinParent());
+    current = current.getParent();
+  }
+  return path;
 }
-function $sourceSelection(): SelectionSummary {
+function $endpoint(point: PointType): Endpoint {
+  return {
+    path: $path(point.getNode()),
+    type: point.type,
+    offset: point.offset,
+  };
+}
+function $cellPath(key: string): number[] {
+  const node = $getNodeByKey(key);
+  if (!node) throw new Error('Missing selected node');
+  const cell = $getTableCellNodeFromLexicalNode(node);
+  return $path(cell ?? node);
+}
+function $sourceSelection(): SelectionDescriptor {
   const selection = $getSelection();
-  if ($isTableSelection(selection)) {
-    const anchor = $getTableCellNodeFromLexicalNode(selection.anchor.getNode());
-    const focus = $getTableCellNodeFromLexicalNode(selection.focus.getNode());
-    if (anchor && focus)
-      return {
-        kind: 'table',
-        anchor: $coordinate(anchor),
-        focus: $coordinate(focus),
-      };
-  }
-  if ($isRangeSelection(selection) && selection.isCollapsed()) {
-    const cell = $getTableCellNodeFromLexicalNode(selection.anchor.getNode());
-    if (cell) return { kind: 'caret', cell: $coordinate(cell) };
-  }
-  return { kind: 'outside-or-none' };
+  if ($isTableSelection(selection))
+    return {
+      kind: 'table',
+      table: $path(
+        $getTableNodeFromLexicalNodeOrThrow($cellAt([0, 0]).getLatest())
+      ),
+      anchor: $cellPath(selection.anchor.key),
+      focus: $cellPath(selection.focus.key),
+    };
+  if ($isRangeSelection(selection))
+    return {
+      kind: 'range',
+      anchor: $endpoint(selection.anchor),
+      focus: $endpoint(selection.focus),
+      format: selection.format,
+      style: selection.style,
+    };
+  if ($isNodeSelection(selection))
+    return { kind: 'node', nodes: selection.getNodes().map($path) };
+  return { kind: 'none' };
 }
 function sourceOutcome(editor: LexicalEditor): Outcome {
-  return editor.getEditorState().read(() => ({
-    grid: $tableRows().map((row) =>
-      row.getChildren().map((cell) => cell.getTextContent())
+  return {
+    // The serialized form: own undefined values are dropped, as on storage.
+    json: normalize(
+      JSON.parse(JSON.stringify(editor.getEditorState().toJSON()))
     ),
-    selection: $sourceSelection(),
-  }));
+    selection: editor.getEditorState().read($sourceSelection),
+  };
 }
 function update(editor: LexicalEditor, fn: () => void) {
   return new Promise<void>((resolve) =>
@@ -257,21 +350,7 @@ async function source(scenario: Scenario) {
   cleanups.push(() => editor.getRootElement()?.remove());
   cleanups.push(registerHistory(editor, createEmptyHistoryState(), 0));
   await update(editor, () => {
-    const table = $createTableNode();
-    for (const cells of scenario.rows) {
-      const row = $createTableRowNode();
-      for (const spec of cells) {
-        const cell = $createTableCellNode(0, spec.colSpan ?? 1).setRowSpan(
-          spec.rowSpan ?? 1
-        );
-        cell.append($createParagraphNode().append($createTextNode(spec.text)));
-        row.append(cell);
-      }
-      table.append(row);
-    }
-    $getRoot()
-      .clear()
-      .append(table, $createParagraphNode().append($createTextNode('after')));
+    editor.setEditorState(editor.parseEditorState(stateJSON(scenario.rows)));
   });
   await update(editor, () => {
     const live = scenario.live;
@@ -321,42 +400,7 @@ async function source(scenario: Scenario) {
 function nativeMount(rows: CellSpec[][]) {
   const fixture = nativeSurface();
   cleanups.push(() => fixture.close());
-  fixture.port.setState(
-    JSON.stringify({
-      root: {
-        type: 'root',
-        version: 1,
-        children: [
-          {
-            type: 'table',
-            version: 1,
-            children: rows.map((cells) => ({
-              type: 'tablerow',
-              version: 1,
-              children: cells.map((spec) => ({
-                type: 'tablecell',
-                version: 1,
-                colSpan: spec.colSpan ?? 1,
-                rowSpan: spec.rowSpan ?? 1,
-                children: [
-                  {
-                    type: 'paragraph',
-                    version: 1,
-                    children: [{ type: 'text', version: 1, text: spec.text }],
-                  },
-                ],
-              })),
-            })),
-          },
-          {
-            type: 'paragraph',
-            version: 1,
-            children: [{ type: 'text', version: 1, text: 'after' }],
-          },
-        ],
-      },
-    })
-  );
+  fixture.port.setState(stateJSON(rows));
   fixture.root.contentEditable = 'true';
   fixture.port.command(CommandCode.ClearHistory);
   return fixture;
@@ -370,40 +414,51 @@ function nativeCell(fixture: NativeFixture, [row, column]: Coordinate) {
   if (key === null) throw new Error('Missing native cell');
   return key;
 }
-function nativeCoordinate(fixture: NativeFixture, key: number) {
+function nativePath(fixture: NativeFixture, key: number): number[] {
+  const path: number[] = [];
   let current = fixture.view.node(key);
-  while (current && current.type !== 'tablecell')
-    current =
-      current.parent === null ? null : fixture.view.node(current.parent);
-  const cell = current ? fixture.view.getElementByKey(current.key) : null;
-  const row = cell?.parentElement;
-  if (!cell || !(row instanceof HTMLTableRowElement)) return undefined;
-  const coordinate: Coordinate = [
-    [...fixture.root.querySelectorAll('tr')].indexOf(row),
-    [...row.children].indexOf(cell),
-  ];
-  return coordinate;
+  while (current && current.parent !== null) {
+    const parent = fixture.view.node(current.parent);
+    if (!parent) break;
+    path.unshift(parent.children.indexOf(current.key));
+    current = parent;
+  }
+  return path;
 }
 function nativeOutcome(fixture: NativeFixture): Outcome {
-  const grid = [...fixture.root.querySelectorAll('tr')].map((row) =>
-    [...row.querySelectorAll('td,th')].map((cell) => cell.textContent ?? '')
-  );
-  const selection = fixture.view.selection().selection;
-  if (selection?.kind === 'table') {
-    const anchor = nativeCoordinate(fixture, selection.anchorCell);
-    const focus = nativeCoordinate(fixture, selection.focusCell);
-    if (anchor && focus)
-      return { grid, selection: { kind: 'table', anchor, focus } };
-  }
-  if (
-    selection?.kind === 'range' &&
-    selection.anchor.key === selection.focus.key &&
-    selection.anchor.offset === selection.focus.offset
-  ) {
-    const cell = nativeCoordinate(fixture, selection.anchor.key);
-    if (cell) return { grid, selection: { kind: 'caret', cell } };
-  }
-  return { grid, selection: { kind: 'outside-or-none' } };
+  const json = normalize(JSON.parse(fixture.view.query.serializedState()));
+  const info = fixture.view.selection();
+  const selection = info.selection;
+  const endpoint = (point: {
+    key: number;
+    offset: number;
+    type: 'text' | 'element';
+  }) => ({
+    path: nativePath(fixture, point.key),
+    type: point.type,
+    offset: point.offset,
+  });
+  const descriptor: SelectionDescriptor = match(selection)
+    .with({ kind: 'range' }, (range) => ({
+      kind: 'range' as const,
+      anchor: endpoint(range.anchor),
+      focus: endpoint(range.focus),
+      format: info.format,
+      style: info.style,
+    }))
+    .with({ kind: 'table' }, (table) => ({
+      kind: 'table' as const,
+      table: nativePath(fixture, table.table),
+      anchor: nativePath(fixture, table.anchorCell),
+      focus: nativePath(fixture, table.focusCell),
+    }))
+    .with({ kind: 'node' }, (node) => ({
+      kind: 'node' as const,
+      nodes: node.keys.map((key) => nativePath(fixture, key)),
+    }))
+    .with({ kind: 'none' }, { kind: 'keep' }, () => ({ kind: 'none' as const }))
+    .exhaustive();
+  return { json, selection: descriptor };
 }
 function nativeLive(fixture: NativeFixture, live: Live) {
   const textIn = (cell: number) => {
@@ -446,9 +501,10 @@ function nativeLive(fixture: NativeFixture, live: Live) {
 
 for (const scenario of SCENARIOS) {
   test(`Source oracle is self-consistent: ${scenario.name}`, async () => {
-    const { before, undone } = await source(scenario);
-    // One undo restores the grid on Source; the selection oracle is recorded.
-    expect(undone.grid).toEqual(before.grid);
+    const { before, after, undone } = await source(scenario);
+    expect(after).not.toEqual(before);
+    // One fixture-history undo restores the whole document on Source.
+    expect(undone.json).toEqual(before.json);
   });
 
   test(`(e) native menu equals Source after the action and after one undo: ${scenario.name}`, async () => {
@@ -464,7 +520,8 @@ for (const scenario of SCENARIOS) {
       index: nativeCell(fixture, scenario.tracked),
       generation,
     };
-    host.menuAction(scenario.action, {
+    // The host's own settlement, awaited before any comparison or undo.
+    await host.menuAction(scenario.action, {
       anchor: tracked,
       focus: tracked,
       merged: false,
