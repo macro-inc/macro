@@ -42,7 +42,7 @@ impl GraphqlChannelQuery {
             .instrument(tracing::info_span!("channel.timeline.authorize"))
             .await?;
         let seq = reads
-            .channel_seq(access.clone())
+            .channel_seq(channel_id)
             .instrument(tracing::info_span!("channel.timeline.sequence"))
             .await?;
         let page = reads
@@ -84,7 +84,7 @@ impl GraphqlChannelQuery {
         tracing::Span::current().record("page_size", i64::from(query.limit.unwrap_or(50)));
         let reads = ctx.data::<ChannelGraphqlContext>()?;
         let access = reads.authorize(self.user_id.clone(), channel_id).await?;
-        let seq = reads.channel_seq(access.clone()).await?;
+        let seq = reads.channel_seq(channel_id).await?;
         let page = reads
             .messages
             .thread_page(access, root_id, query)
@@ -171,6 +171,6 @@ impl GraphqlChannelQuery {
             .ok_or_else(|| crate::bad_input("after must be a nonnegative decimal sequence"))?;
         let reads = ctx.data::<ChannelGraphqlContext>()?;
         let access = reads.authorize(self.user_id.clone(), channel_id).await?;
-        reads.channel_changes(access, after).await
+        reads.channel_changes(access, channel_id, after).await
     }
 }

@@ -4,7 +4,7 @@ use entity_access::domain::{
     ports::EntityAccessService,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use messages::domain::{api::MessageReader, service::MessageView};
+use messages::domain::{api::MessageReader, changes::ChannelMessageChange, service::MessageView};
 use std::{future::Future, pin::Pin, sync::Arc};
 use uuid::Uuid;
 
@@ -71,30 +71,55 @@ impl ChannelGraphqlContext {
             })
     }
 
-    // SEQUENCE INTEGRATION SEAM: replace these reads with the messages service
-    // channel_seq/channel_changes after composing the sequence branch.
-
-    /// Read the sequence BEFORE a page; temporary until the sequence branch lands.
-    pub(crate) async fn channel_seq(
-        &self,
-        _access: EntityAccessReceipt<MessageView>,
-    ) -> async_graphql::Result<String> {
-        Ok("0".to_owned())
+    /// Read the committed sequence BEFORE loading an authorized channel page.
+    pub(crate) async fn channel_seq(&self, channel_id: Uuid) -> async_graphql::Result<String> {
+        self.messages
+            .channel_seq(channel_id)
+            .await
+            .map(|seq| seq.to_string())
+            .map_err(crate::message_error)
     }
 
-    /// Read changes from the same temporary sequence integration seam.
+    /// Map the authorized domain change page without additional per-item reads.
     pub(crate) async fn channel_changes(
         &self,
         access: EntityAccessReceipt<MessageView>,
+        channel_id: Uuid,
         after: i64,
     ) -> async_graphql::Result<crate::GraphqlChannelChanges> {
+        let changes = self
+            .messages
+            .channel_changes(access, channel_id, after)
+            .await
+            .map_err(crate::message_error)?;
         Ok(crate::GraphqlChannelChanges {
-            reset_required: after != 0,
-            seq: self.channel_seq(access).await?,
-            has_more: false,
-            messages: vec![],
-            activities: vec![],
-            removed_ids: vec![],
+            reset_required: changes.reset_required,
+            seq: changes.seq.to_string(),
+            has_more: changes.has_more,
+            messages: changes
+                .messages
+                .into_iter()
+                .map(|change| match change {
+                    ChannelMessageChange::Root { message, call } => {
+                        crate::GraphqlChannelMessage::from_item(*message, channel_id, call)
+                    }
+                    ChannelMessageChange::Reply { message } => {
+                        crate::GraphqlChannelMessage::from_message(*message, channel_id)
+                    }
+                })
+                .collect(),
+            activities: changes
+                .activities
+                .into_iter()
+                .map(|activity| {
+                    crate::GraphqlChannelTimelineActivity::from_activity(activity, channel_id)
+                })
+                .collect(),
+            removed_ids: changes
+                .removed_ids
+                .into_iter()
+                .map(|id| async_graphql::ID(id.to_string()))
+                .collect(),
         })
     }
 }

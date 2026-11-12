@@ -291,6 +291,27 @@ pub struct GraphqlChannelTimelineActivity {
     pub payload: Option<Json<serde_json::Value>>,
 }
 
+impl GraphqlChannelTimelineActivity {
+    /// Preserve the same activity projection in timeline and change pages.
+    pub(crate) fn from_activity(
+        activity: activity::domain::timeline::TimelineActivity,
+        channel_id: Uuid,
+    ) -> Self {
+        Self {
+            id: ID(activity.id.to_string()),
+            channel_id: ID(channel_id.to_string()),
+            sort_key: encode_cursor(&MessageCursor {
+                created_at: activity.occurred_at,
+                id: activity.id,
+            }),
+            actor_id: activity.actor_id,
+            occurred_at: timestamp(activity.occurred_at),
+            action: activity.action,
+            payload: activity.payload.map(Json),
+        }
+    }
+}
+
 /// A message root or recorded activity in a channel timeline.
 #[derive(Union)]
 pub enum GraphqlChannelTimelineEntry {
@@ -310,20 +331,9 @@ impl GraphqlChannelTimelineEntry {
             MessageTimelineEntry::Call { message, status } => Self::Message(Box::new(
                 GraphqlChannelMessage::from_item(*message, channel_id, Some(status)),
             )),
-            MessageTimelineEntry::Activity { activity } => {
-                Self::Activity(GraphqlChannelTimelineActivity {
-                    id: ID(activity.id.to_string()),
-                    channel_id: ID(channel_id.to_string()),
-                    sort_key: encode_cursor(&MessageCursor {
-                        created_at: activity.occurred_at,
-                        id: activity.id,
-                    }),
-                    actor_id: activity.actor_id,
-                    occurred_at: timestamp(activity.occurred_at),
-                    action: activity.action,
-                    payload: activity.payload.map(Json),
-                })
-            }
+            MessageTimelineEntry::Activity { activity } => Self::Activity(
+                GraphqlChannelTimelineActivity::from_activity(activity, channel_id),
+            ),
         }
     }
 }
