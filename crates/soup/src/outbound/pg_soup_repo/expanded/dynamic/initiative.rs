@@ -4,6 +4,7 @@ use chrono::{DateTime, Utc};
 use filter_ast::Expr;
 use item_filters::ast::initiative::InitiativeLiteral;
 use models_pagination::SimpleSortMethod;
+use recursion::CollapsibleExt;
 use system_properties::SystemPropertyKey;
 
 use super::{build_notification_state_clause, sql_string_literal, top_needs_user_history};
@@ -13,9 +14,10 @@ use crate::outbound::pg_soup_repo::candidate_gates::PER_CANDIDATE;
 /// Public links do not enumerate otherwise undiscovered initiatives.
 ///
 /// This per-row form gates initiatives whose ids are already known (feed
-/// candidates, by-id reads): both checks run per initiative against sources
-/// collected once into an array, so cost follows the candidate count.
-/// Listings use [`INITIATIVE_LISTING_ACCESS`], the same policy as a set.
+/// candidates, by-id reads, listings that name their ids): both checks run per
+/// initiative against sources collected once into an array, so cost follows
+/// the candidate count. Other listings use [`INITIATIVE_LISTING_ACCESS`], the
+/// same policy as a set.
 pub(in crate::outbound::pg_soup_repo) fn initiative_access_clause() -> String {
     format!(
         r#"(EXISTS (
@@ -34,7 +36,9 @@ pub(in crate::outbound::pg_soup_repo) fn initiative_access_clause() -> String {
 
 /// [`initiative_access_clause`] as the set of initiatives the caller can list,
 /// so a listing starts from the caller's grants and team instead of testing
-/// every initiative in the table.
+/// every initiative in the table. Building the set costs one index descent per
+/// source, so a listing that names its ids keeps the per-row form
+/// ([`names_initiative_ids`]).
 ///
 /// The grant leg is one `(source_id, entity_type, entity_id)` index descent per
 /// source, returning only that source's initiative grants. The team link leg
@@ -61,6 +65,22 @@ const INITIATIVE_LISTING_ACCESS: &str = r#"i.id = ANY(ARRAY(
     ))"#;
 
 pub(in crate::outbound::pg_soup_repo) use item_filters::ast::initiative::initiatives_requested as initiative_opted_in;
+
+/// Whether `filter` admits only initiatives it names by id: GraphQL hydrates
+/// through the listing that way, and names the nil id to rule initiatives out.
+/// Those rows are known before access is checked, so they are checked one by
+/// one instead of building the caller's whole accessible set.
+fn names_initiative_ids(filter: Option<&Expr<InitiativeLiteral>>) -> bool {
+    filter.is_some_and(|expr| {
+        expr.collapse_frames(|frame| match frame {
+            filter_ast::ExprFrame::And(a, b) => a || b,
+            filter_ast::ExprFrame::Or(a, b) => a && b,
+            filter_ast::ExprFrame::Not(_) => false,
+            filter_ast::ExprFrame::Literal(InitiativeLiteral::Id(_)) => true,
+            filter_ast::ExprFrame::Literal(_) => false,
+        })
+    })
+}
 
 pub(in crate::outbound::pg_soup_repo) fn build_initiative_filter(
     filter: Option<&Expr<InitiativeLiteral>>,
@@ -104,6 +124,7 @@ pub(super) fn initiative_top_clause(
     sort: SimpleSortMethod,
     grouped: bool,
     property_sort: bool,
+    filter: Option<&Expr<InitiativeLiteral>>,
 ) -> String {
     let sort_ts = match sort {
         SimpleSortMethod::CreatedAt => "i.created_at",
@@ -125,11 +146,16 @@ pub(super) fn initiative_top_clause(
     } else {
         ""
     };
+    let access = if names_initiative_ids(filter) {
+        initiative_access_clause()
+    } else {
+        INITIATIVE_LISTING_ACCESS.to_owned()
+    };
     format!(
         r#"SELECT 'initiative'::text as item_type, i.id::text as id,
         {sort_ts}::timestamptz as sort_ts {group_columns}
         FROM initiative i
         {history_join}
-        WHERE {INITIATIVE_LISTING_ACCESS}"#
+        WHERE {access}"#
     )
 }

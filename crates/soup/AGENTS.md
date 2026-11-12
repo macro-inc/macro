@@ -151,9 +151,12 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   was planned as sequential scans of `initiative` there. The per-row form
   tests every initiative in the table, each against every source. Never match
   `team_user.team_id::text` against the source array: no index serves it, so
-  it reads all of `team_user`. Detail joins
-  compare the bare uuid (`i.id = (CASE ... END)::uuid`); `i.id::text = t.id`
-  read the table once per page row.
+  it reads all of `team_user`. A filter that names its ids (GraphQL
+  hydration, and the nil id every other hydration passes) keeps the per-row
+  form (`names_initiative_ids`): the set costs a descent per source even when
+  one row comes back. Detail joins compare the bare uuid
+  (`i.id = (CASE ... END)::uuid`); `i.id::text = t.id` read the table once per
+  page row.
 
 ## Related
 
