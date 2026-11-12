@@ -1,0 +1,23 @@
+docs/architecture/email.md
+  s_a6299fa8ee9c1b::t_b91516822fe584 615-617
+apps/web/src/lib/queries/email/email-send-dispatcher.test.ts
+  s_a6299fa8ee9c1b::t_d5067891619f5f 194-228
+apps/web/src/lib/queries/email/email-send-dispatcher.ts
+  s_a6299fa8ee9c1b::t_55aa206e6c2561 207-210
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "d2bd563820327b212f9b1d53c6a2236056c7674b",
+  "prompts": {},
+  "sessions": {
+    "s_a6299fa8ee9c1b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "170bbff4-e56a-4e72-9ff2-65f9d866584e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
