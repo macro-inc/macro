@@ -232,7 +232,9 @@ It exercises the real resize solver, scroll container, and Lexical layout primit
 
 Stacked splits have a backend-free browser regression over the real split
 router and tiled layout: splitting keeps the pane mounted, stacked gutters drag
-and nudge to the minimum height, and closing hands the column back:
+and nudge to the minimum height, closing hands the column back, and a document
+keeps its reading position as the splits beside it close (WebKit has no CSS
+scroll anchoring; see `keepScrollAnchorOnResize`):
 `bunx playwright test --config src/components/app/split-layout/browser-test/playwright.config.ts`.
 Keep panes in one keyed list positioned by the layout tree; nesting a
 `Resize.Zone` per split remounts a pane whenever its split changes.
@@ -248,6 +250,10 @@ retained detail is claimed by another pane or preview. Keep this check in view
 restoration and preserve entity deduplication and native dock stack restoration;
 `split-layout/tests/view-restoration.test.tsx` covers Chat and Tasks lists in
 either pane, keeping the other pane's detail and history independent.
+
+Links in database text and URL cells open without editing the cell, on desktop
+and touch, while the rest of the cell still edits:
+`bunx playwright test --config src/features/block-database/browser-test/playwright.config.ts links.browser.e2e.ts`.
 
 Database document-reference cells have a backend-free desktop/touch regression:
 `bunx playwright test --config src/features/block-database/browser-test/playwright.config.ts references.browser.e2e.ts`.
@@ -345,6 +351,12 @@ and Unicode contact names at the server's character limit:
 `bunx playwright test --config src/features/crm/browser-test/creation/playwright.config.ts`.
 Nested picker selection must keep its containing drawer open when the option
 unmounts during the tap; drawer dismissal checks the original event path.
+
+Collapsible document sections (the real heading-folds plugin and its gutter
+controls) have a backend-free desktop/tablet/phone regression: placement in
+the 24px phone gutter, hover and touch visibility, nested folds, reload, and
+Mod+Enter:
+`bunx playwright test --config src/lib/core/component/LexicalMarkdown/component/misc/browser-test/playwright.config.ts`.
 
 Composer typeahead menus choosing the side with room for their full list
 (`floatWithSelection`'s `fullHeight`), above a composer at the bottom of a
@@ -569,6 +581,15 @@ Canvas **Ask Macro**, including the Drive detail header, attaches the current ca
 on desktop and mobile. Tool results render through
 `lib/core/component/AI/component/tool/Canvas.tsx`; edits arrive through live sync.
 The shared plain-text Lexical codec is `packages/lexical-core/canvas-text.ts`.
+
+## Group chats in the notifications inbox
+
+A group chat's message row shows the chat (its picture or the channel kind)
+and its name, with the sender in the body, never whoever wrote last as the
+row's author; unnamed group chats shorten to two names and a count
+(`features/channel/group-chat-name.ts`). The backend-free desktop/phone
+regression is
+`bunx playwright test --config src/features/notifications-inbox/browser-test/playwright.config.ts`.
 
 ## Message notification reads
 
