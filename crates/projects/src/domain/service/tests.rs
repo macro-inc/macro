@@ -23,7 +23,8 @@ use model::project::{
 use model_owner::{CreationPrincipal, Owner};
 use models_bulk_upload::{
     BulkUploadRequest, BulkUploadRequestDocuments, ProjectDocumentStatus, UploadDocumentStatus,
-    UploadExtractFolderRequest, UploadFolderStatus,
+    UploadExtractFolderRequest, UploadExtractStatusResponseData, UploadFolderProgress,
+    UploadFolderStatus,
 };
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::{LinkShare, UpdateSharePermissionRequestV2};
@@ -337,6 +338,13 @@ impl BulkUploadRequestPort for RecordingBulkUpload {
                 documents: vec![document_status()],
             }),
         }
+    }
+
+    async fn find_bulk_upload_request(
+        &self,
+        _upload_request_id: &str,
+    ) -> anyhow::Result<Option<BulkUploadRequest>> {
+        unreachable!()
     }
 }
 
@@ -1962,6 +1970,7 @@ impl BulkUploadRequestPort for RecordingExtract {
             error_message: None,
             root_project_id: None,
             parent_id: parent_id.map(str::to_string),
+            progress: None,
         })
     }
 
@@ -1971,6 +1980,116 @@ impl BulkUploadRequestPort for RecordingExtract {
     ) -> anyhow::Result<BulkUploadRequestDocuments> {
         unreachable!()
     }
+
+    async fn find_bulk_upload_request(
+        &self,
+        _upload_request_id: &str,
+    ) -> anyhow::Result<Option<BulkUploadRequest>> {
+        unreachable!()
+    }
+}
+
+/// One stored extraction request, owned by `owner`, or none at all.
+struct StoredUploadRequest {
+    owner: Option<&'static str>,
+}
+
+impl BulkUploadRequestPort for StoredUploadRequest {
+    async fn create_bulk_upload_request(
+        &self,
+        _request_id: Uuid,
+        _user_id: &str,
+        _name: Option<&str>,
+        _parent_id: Option<&str>,
+    ) -> anyhow::Result<BulkUploadRequest> {
+        unreachable!()
+    }
+
+    async fn get_bulk_upload_document_statuses(
+        &self,
+        _upload_request_id: &str,
+    ) -> anyhow::Result<BulkUploadRequestDocuments> {
+        unreachable!()
+    }
+
+    async fn find_bulk_upload_request(
+        &self,
+        upload_request_id: &str,
+    ) -> anyhow::Result<Option<BulkUploadRequest>> {
+        Ok(self.owner.map(|owner| BulkUploadRequest {
+            request_id: upload_request_id.to_string(),
+            user_id: owner.to_string(),
+            key: format!("extract/{upload_request_id}"),
+            status: UploadFolderStatus::PartiallyCompleted,
+            name: Some("Archive".to_string()),
+            created_at: String::new(),
+            updated_at: String::new(),
+            completed_at: None,
+            error_message: Some("internal failure detail".to_string()),
+            root_project_id: Some("root-project".to_string()),
+            parent_id: None,
+            progress: Some(UploadFolderProgress {
+                files_total: 8_500,
+                files_stored: 8_497,
+                files_failed: 3,
+            }),
+        }))
+    }
+}
+
+#[tokio::test]
+async fn upload_extract_status_reports_the_owners_request() {
+    let service = service(
+        MockProjectRepo::new(),
+        StoredUploadRequest {
+            owner: Some("macro|owner@example.com"),
+        },
+    );
+
+    let status = service
+        .get_upload_extract_status(user_id("macro|owner@example.com"), "request-1")
+        .await
+        .unwrap();
+
+    assert_eq!(
+        status,
+        UploadExtractStatusResponseData {
+            status: UploadFolderStatus::PartiallyCompleted,
+            project_id: Some("root-project".to_string()),
+            progress: Some(UploadFolderProgress {
+                files_total: 8_500,
+                files_stored: 8_497,
+                files_failed: 3,
+            }),
+        }
+    );
+}
+
+#[tokio::test]
+async fn upload_extract_status_hides_another_users_request() {
+    let service = service(
+        MockProjectRepo::new(),
+        StoredUploadRequest {
+            owner: Some("macro|owner@example.com"),
+        },
+    );
+
+    let result = service
+        .get_upload_extract_status(user_id(OTHER_USER), "request-1")
+        .await;
+
+    assert!(matches!(result, Err(ProjectError::NotFound(_))));
+}
+
+#[tokio::test]
+async fn upload_extract_status_of_a_missing_request_is_not_found() {
+    let service = service(MockProjectRepo::new(), StoredUploadRequest { owner: None });
+
+    let result = service
+        .get_upload_extract_status(user_id("macro|owner@example.com"), "request-1")
+        .await;
+
+    assert!(matches!(result, Err(ProjectError::NotFound(_))));
 }
 
 fn upload_document(id: &str, file_type: FileType) -> DocumentMetadata {

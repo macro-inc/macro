@@ -670,6 +670,46 @@ service_url! {
 }
 
 service_url! {
+    /// Gmail REST API base. Google's host in every environment; override it
+    /// to run against `crates/gmail_emulator`.
+    pub struct GmailApiUrl {
+        local: "https://www.googleapis.com/gmail/v1",
+        dev: "https://www.googleapis.com/gmail/v1",
+        prod: "https://www.googleapis.com/gmail/v1",
+    }
+}
+
+service_url! {
+    /// Google People API base. Google's host in every environment; override
+    /// it to run against `crates/gmail_emulator`.
+    pub struct GooglePeopleApiUrl {
+        local: "https://people.googleapis.com/v1",
+        dev: "https://people.googleapis.com/v1",
+        prod: "https://people.googleapis.com/v1",
+    }
+}
+
+service_url! {
+    /// Google's public keys for verifying Gmail push tokens. Google's host in
+    /// every environment; override it to run against `crates/gmail_emulator`.
+    pub struct GoogleOauthCertsUrl {
+        local: "https://www.googleapis.com/oauth2/v3/certs",
+        dev: "https://www.googleapis.com/oauth2/v3/certs",
+        prod: "https://www.googleapis.com/oauth2/v3/certs",
+    }
+}
+
+service_url! {
+    /// Microsoft Graph v1.0 API root. Microsoft's host in every environment;
+    /// override it to run against `crates/outlook_emulator`.
+    pub struct MicrosoftGraphUrl {
+        local: "https://graph.microsoft.com/v1.0/",
+        dev: "https://graph.microsoft.com/v1.0/",
+        prod: "https://graph.microsoft.com/v1.0/",
+    }
+}
+
+service_url! {
     /// Control and internal MCP surface of the live preview service.
     pub struct PreviewGatewayUrl {
         local: "http://localhost:8101/preview",

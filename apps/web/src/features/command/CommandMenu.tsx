@@ -999,6 +999,7 @@ function CommandSearchMenu(
           scrollSelectedIntoView={listController.shouldScrollSelectedIntoView()}
           pagination={pagination}
           loading={isLoadingEntities()}
+          searching={defaultCommandItems?.isSearchingEntities() ?? false}
         />
       </CommandMenuShell.Body>
 

@@ -1412,6 +1412,8 @@ export function createQuickAccessValue(): QuickAccessContextValue {
             historyQuery.isLoading ||
             (cacheHost() ? cachedChannelsQuery.isLoading : channelsLoading())
         ),
+      isSearching: () =>
+        options?.enabled?.() !== false && (projected?.isSearching() ?? false),
       isLoadingMore: () =>
         personList.isLoadingMore() || (projected?.isLoadingMore() ?? false),
       error: () => personList.error() ?? projected?.error(),

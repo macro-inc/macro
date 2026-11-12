@@ -4717,6 +4717,17 @@ export type ConferenceProvider = 'microsoft_teams' | 'google_meet' | 'other';
 export type Conjunction = 'and' | 'or';
 
 /**
+ * One of a contact's addresses. It travels in the body, never the path, so
+ * request telemetry does not record it.
+ */
+export type ContactEmailRequest = {
+    /**
+     * The address to add or remove. An identical retry is accepted.
+     */
+    email: string;
+};
+
+/**
  * Source Slack conversation ID (C, G or D prefix); unique only within a source.
  */
 export type ConversationId = string;
@@ -4893,6 +4904,12 @@ export type CountedReaction = {
      * Emoji being reacted with.
      */
     emoji: string;
+    /**
+     * Display names for reactors whose account identity is not visible to this viewer.
+     */
+    names?: {
+        [key: string]: string;
+    };
     /**
      * User identifiers.
      */
@@ -6080,6 +6097,17 @@ export type CrmCompanyResponse = {
  */
 export type CrmContactResponse = {
     /**
+     * Whether the contact has an address on one of its company's domains.
+     * Such a contact cannot be unlinked from the company or moved to another.
+     * Older servers omit this classification; clients must then keep it read-only.
+     */
+    companyDomain?: boolean;
+    /**
+     * The addresses on one of the company's domains. The last one cannot be
+     * removed while the contact is linked to the company.
+     */
+    companyDomainEmails?: Array<string>;
+    /**
      * The id of the company the contact belongs to; absent for a
      * contact without a company.
      */
@@ -6089,10 +6117,15 @@ export type CrmContactResponse = {
      */
     createdAt: string;
     /**
-     * The contact's email address; absent for contacts added by name
-     * alone.
+     * The contact's primary email address; absent for contacts added by
+     * name alone.
      */
     email?: string | null;
+    /**
+     * Every address the contact is known by: the primary first, then the
+     * rest oldest first. Older servers omit it; clients then show `email`.
+     */
+    emails?: Array<string>;
     /**
      * Earliest known interaction with this contact.
      */
@@ -6117,7 +6150,8 @@ export type CrmContactResponse = {
      */
     name?: string | null;
     /**
-     * Whether the address uses a known personal provider and permits company edits.
+     * Whether the primary address uses a known personal provider. Linking
+     * or switching the company needs this and `companyDomain = false`.
      * Older servers omit this classification; clients must then keep it read-only.
      */
     personalEmail?: boolean;
@@ -12373,6 +12407,16 @@ export type GuestChatPage = {
 };
 
 /**
+ * Text-only update to a guest-authored message.
+ */
+export type GuestChatPatch = {
+    /**
+     * Replacement message body.
+     */
+    content: string;
+};
+
+/**
  * Guests may send text only; attribution and parent are server-owned.
  */
 export type GuestChatPost = {
@@ -12384,6 +12428,17 @@ export type GuestChatPost = {
      * UUIDv7 used to deduplicate retries, including the first message.
      */
     id: string;
+};
+
+/**
+ * A call thread and the verified viewer's sender identity.
+ */
+export type GuestChatThread = {
+    thread?: null | MessageThread;
+    /**
+     * Guest sender ID used for own-message controls.
+     */
+    viewer_id: string;
 };
 
 /**
@@ -17825,17 +17880,18 @@ export type SetCompanyNameRequest = {
  */
 export type SetContactCompanyRequest = {
     /**
-     * Destination company in the same team. Unlinking is not supported.
+     * Destination company in the same team.
      */
     companyId: string;
 };
 
 /**
- * Add a missing contact email. Existing addresses are read-only.
+ * Choose a contact's primary email.
  */
 export type SetContactEmailRequest = {
     /**
-     * The address to add. An identical retry is accepted.
+     * The address to make primary. It is added when the contact does not
+     * hold it yet. An identical retry is accepted.
      */
     email: string;
 };
@@ -22337,6 +22393,24 @@ export type UploadFileResponse = {
     sizeBytes: number;
 };
 
+/**
+ * Files of an extracted folder moved into storage so far.
+ */
+export type UploadFolderProgress = {
+    /**
+     * Files that could not be stored.
+     */
+    filesFailed: number;
+    /**
+     * Files stored successfully.
+     */
+    filesStored: number;
+    /**
+     * Files the folder holds.
+     */
+    filesTotal: number;
+};
+
 export type UploadFolderRequest = {
     /**
      * The content of the folder
@@ -22363,6 +22437,11 @@ export type UploadFolderRequest = {
      */
     uploadRequestId: string;
 };
+
+/**
+ * The upload status of the folder
+ */
+export type UploadFolderStatus = 'pending' | 'uploaded' | 'processing' | 'partially_completed' | 'completed' | 'failed' | 'unknown';
 
 /**
  * Signed upload permission returned just before PUT; never persisted as an identity.
@@ -24425,6 +24504,104 @@ export type GuestCallChatPostResponses = {
 };
 
 export type GuestCallChatPostResponse = GuestCallChatPostResponses[keyof GuestCallChatPostResponses];
+
+export type GuestCallChatPostMessageData = {
+    body: GuestChatPost;
+    path: {
+        call_id: string;
+    };
+    query?: never;
+    url: '/call/guest-chat/{call_id}/messages';
+};
+
+export type GuestCallChatPostMessageErrors = {
+    403: unknown;
+};
+
+export type GuestCallChatPostMessageResponses = {
+    200: Message;
+};
+
+export type GuestCallChatPostMessageResponse = GuestCallChatPostMessageResponses[keyof GuestCallChatPostMessageResponses];
+
+export type GuestCallChatDeleteMessageData = {
+    body?: never;
+    path: {
+        call_id: string;
+        message_id: string;
+    };
+    query?: never;
+    url: '/call/guest-chat/{call_id}/messages/{message_id}';
+};
+
+export type GuestCallChatDeleteMessageErrors = {
+    403: unknown;
+};
+
+export type GuestCallChatDeleteMessageResponses = {
+    204: void;
+};
+
+export type GuestCallChatDeleteMessageResponse = GuestCallChatDeleteMessageResponses[keyof GuestCallChatDeleteMessageResponses];
+
+export type GuestCallChatPatchMessageData = {
+    body: GuestChatPatch;
+    path: {
+        call_id: string;
+        message_id: string;
+    };
+    query?: never;
+    url: '/call/guest-chat/{call_id}/messages/{message_id}';
+};
+
+export type GuestCallChatPatchMessageErrors = {
+    403: unknown;
+};
+
+export type GuestCallChatPatchMessageResponses = {
+    200: Message;
+};
+
+export type GuestCallChatPatchMessageResponse = GuestCallChatPatchMessageResponses[keyof GuestCallChatPatchMessageResponses];
+
+export type GuestCallChatReactMessageData = {
+    body: ReactionInput;
+    path: {
+        call_id: string;
+        message_id: string;
+    };
+    query?: never;
+    url: '/call/guest-chat/{call_id}/messages/{message_id}/reactions';
+};
+
+export type GuestCallChatReactMessageErrors = {
+    403: unknown;
+};
+
+export type GuestCallChatReactMessageResponses = {
+    200: Message;
+};
+
+export type GuestCallChatReactMessageResponse = GuestCallChatReactMessageResponses[keyof GuestCallChatReactMessageResponses];
+
+export type GuestCallChatReadThreadData = {
+    body?: never;
+    path: {
+        call_id: string;
+    };
+    query?: never;
+    url: '/call/guest-chat/{call_id}/thread';
+};
+
+export type GuestCallChatReadThreadErrors = {
+    403: unknown;
+};
+
+export type GuestCallChatReadThreadResponses = {
+    200: GuestChatThread;
+};
+
+export type GuestCallChatReadThreadResponse = GuestCallChatReadThreadResponses[keyof GuestCallChatReadThreadResponses];
 
 export type MeetingLookupData = {
     body?: never;
@@ -27114,6 +27291,35 @@ export type GetContactResponses = {
 
 export type GetContactResponse = GetContactResponses[keyof GetContactResponses];
 
+export type UnlinkCrmContactCompanyData = {
+    body?: never;
+    path: {
+        /**
+         * The contact to update
+         */
+        contact_id: string;
+    };
+    query?: never;
+    url: '/crm/contacts/{contact_id}/company';
+};
+
+export type UnlinkCrmContactCompanyErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type UnlinkCrmContactCompanyError = UnlinkCrmContactCompanyErrors[keyof UnlinkCrmContactCompanyErrors];
+
+export type UnlinkCrmContactCompanyResponses = {
+    200: CrmContactResponse;
+};
+
+export type UnlinkCrmContactCompanyResponse = UnlinkCrmContactCompanyResponses[keyof UnlinkCrmContactCompanyResponses];
+
 export type SetCrmContactCompanyData = {
     body: SetContactCompanyRequest;
     path: {
@@ -27171,6 +27377,64 @@ export type SetCrmContactEmailResponses = {
 };
 
 export type SetCrmContactEmailResponse = SetCrmContactEmailResponses[keyof SetCrmContactEmailResponses];
+
+export type RemoveCrmContactEmailData = {
+    body: ContactEmailRequest;
+    path: {
+        /**
+         * The contact to update
+         */
+        contact_id: string;
+    };
+    query?: never;
+    url: '/crm/contacts/{contact_id}/emails';
+};
+
+export type RemoveCrmContactEmailErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type RemoveCrmContactEmailError = RemoveCrmContactEmailErrors[keyof RemoveCrmContactEmailErrors];
+
+export type RemoveCrmContactEmailResponses = {
+    200: CrmContactResponse;
+};
+
+export type RemoveCrmContactEmailResponse = RemoveCrmContactEmailResponses[keyof RemoveCrmContactEmailResponses];
+
+export type AddCrmContactEmailData = {
+    body: ContactEmailRequest;
+    path: {
+        /**
+         * The contact to update
+         */
+        contact_id: string;
+    };
+    query?: never;
+    url: '/crm/contacts/{contact_id}/emails';
+};
+
+export type AddCrmContactEmailErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type AddCrmContactEmailError = AddCrmContactEmailErrors[keyof AddCrmContactEmailErrors];
+
+export type AddCrmContactEmailResponses = {
+    200: CrmContactResponse;
+};
+
+export type AddCrmContactEmailResponse = AddCrmContactEmailResponses[keyof AddCrmContactEmailResponses];
 
 export type SetContactHiddenData = {
     body: SetContactHiddenRequest;
@@ -34068,6 +34332,48 @@ export type UploadExtractFolderHandlerResponses = {
 };
 
 export type UploadExtractFolderHandlerResponse = UploadExtractFolderHandlerResponses[keyof UploadExtractFolderHandlerResponses];
+
+export type GetUploadExtractStatusHandlerData = {
+    body?: never;
+    path: {
+        /**
+         * The upload request id
+         */
+        request_id: string;
+    };
+    query?: never;
+    url: '/projects/upload_extract/{request_id}';
+};
+
+export type GetUploadExtractStatusHandlerErrors = {
+    401: GenericErrorResponse;
+    404: GenericErrorResponse;
+    500: GenericErrorResponse;
+};
+
+export type GetUploadExtractStatusHandlerError = GetUploadExtractStatusHandlerErrors[keyof GetUploadExtractStatusHandlerErrors];
+
+export type GetUploadExtractStatusHandlerResponses = {
+    200: {
+        /**
+         * Where a folder upload stands, for the uploader to follow it to the end.
+         */
+        data: {
+            progress?: null | UploadFolderProgress;
+            /**
+             * The uploaded folder, once it exists.
+             */
+            projectId?: string | null;
+            status: UploadFolderStatus;
+        };
+        /**
+         * Indicates if an error occurred
+         */
+        error: boolean;
+    };
+};
+
+export type GetUploadExtractStatusHandlerResponse = GetUploadExtractStatusHandlerResponses[keyof GetUploadExtractStatusHandlerResponses];
 
 export type DeleteProjectHandlerData = {
     body?: never;
