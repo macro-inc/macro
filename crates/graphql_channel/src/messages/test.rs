@@ -71,6 +71,7 @@ fn message(id: u128, thread: Option<u128>) -> Message {
         reactions: vec![CountedReaction {
             emoji: "+1".into(),
             users: vec![USER.into()],
+            names: None,
         }],
     }
 }
