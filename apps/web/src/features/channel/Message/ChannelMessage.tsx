@@ -153,6 +153,7 @@ function RegularMessageLayout(props: {
               }
             />
             <Message.EditedIndicator class="shrink-0" />
+            <Message.UnsentIndicator class="shrink-0" />
           </div>
           <Message.AgentSessionLink class="ml-auto" />
         </div>
