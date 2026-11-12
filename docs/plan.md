@@ -6,13 +6,15 @@ All resume branches start from the integration revision that includes this plan.
 
 | Node | Role | Worktree / branch | Depends on | Owned write scope |
 | --- | --- | --- | --- | --- |
-| baseline | baseline | `/Users/t/Projects/macro/wt-resume-baseline`, detached | none | handoff only; no product edits |
-| frontend | build | `/Users/t/Projects/macro/wt-resume-frontend`, `resume/rox-frontend` | none | `apps/web` except generated service clients, `apps/marketing`, `apps/docs`, display assets, frontend tests |
-| mailbox | build | `/Users/t/Projects/macro/wt-resume-mailbox`, `resume/rox-mailbox` | none | mail/auth/identity crates and services, migrations, `.sqlx`, `Cargo.lock`, `packages/sdk`, generated service clients |
-| enterprise-runtimes | build | `/Users/t/Projects/macro/wt-resume-enterprise`, `resume/rox-enterprise-runtimes` | none | enterprise/agent/runtime/team/document crates and agent harness service; no migrations, `.sqlx`, or `Cargo.lock` |
-| review | review | `/Users/t/Projects/macro/wt-resume-review`, detached | none | review handoff only; no product edits |
+| baseline | baseline | Hermes-assigned isolated worktree, recorded at dispatch | none | handoff only; no product edits |
+| frontend | build | Hermes-assigned isolated worktree/branch, recorded at dispatch | none | `apps/web` except generated service clients, `apps/marketing`, `apps/docs`, display assets, frontend tests |
+| mailbox | build | Hermes-assigned isolated worktree/branch, recorded at dispatch | none | mail/auth/identity crates and services, migrations, `.sqlx`, `Cargo.lock`, `packages/sdk` |
+| enterprise-runtimes | build | Hermes-assigned isolated worktree/branch, recorded at dispatch | none | enterprise/agent/runtime/team/document crates and agent harness service; no migrations, `.sqlx`, or `Cargo.lock` |
+| review | review | Hermes-assigned isolated worktree, recorded at dispatch | none | review handoff only; no product edits |
 | integrate | build | `/Users/t/Projects/macro/wt-integration`, `integration/rox-enterprise` | frontend, mailbox, enterprise-runtimes, review | merge accepted owned paths, conflict resolution, integration commit |
 | verify | verify | fresh detached worktree at integrated HEAD | baseline, integrate | verification handoff and disposable test artifacts only |
+
+Shared interfaces have exactly one writer: mailbox owns migrations, `.sqlx`, `Cargo.lock`, and `packages/sdk`; frontend owns `apps/docs/AI/bring-your-own.mdx`; integration owns generated app service clients and any cross-lane repair after all producers finish. Other lanes consume those files read-only and describe required changes in their handoffs. Hermes' native `delegation.worktree_isolation` supplies each child's actual worktree and `hermes-subagent/*` branch; each child must verify and report its real root and branch.
 
 ## Execution rules
 
