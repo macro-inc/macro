@@ -97,6 +97,18 @@ export interface CacheWorkerCoreOptions {
   wallClockNow?: () => number;
   queueDiagnosticsIntervalMs?: number;
   queueDiagnosticsTimeoutMs?: number;
+  /** Calls `resume` once the messages already delivered have been handled. */
+  afterArrivedMessages?: (resume: () => void) => void;
+}
+
+/** A message posted now is handled after the ones already waiting. */
+function afterArrivedMessages(resume: () => void): void {
+  const { port1, port2 } = new MessageChannel();
+  port1.onmessage = () => {
+    port1.close();
+    resume();
+  };
+  port2.postMessage(undefined);
 }
 
 // Backfill hydration is cache warming, so foreground reads may overtake it.
@@ -210,6 +222,9 @@ export class CacheWorkerCore {
   /** Serializes engine calls while allowing safe read prioritization. */
   private readonly queue: QueuedEngineRequest[] = [];
   private running = false;
+  /** Between two requests, while arrivals join the queue. */
+  private yielding = false;
+  private readonly afterArrivedMessages: (resume: () => void) => void;
   private acceptingRequests = true;
   private activeRequestHandlers = 0;
   private readonly drainWaiters = new Set<() => void>();
@@ -236,6 +251,8 @@ export class CacheWorkerCore {
     this.queueDiagnosticsIntervalMs =
       options.queueDiagnosticsIntervalMs ?? 60_000;
     this.queueDiagnosticsTimeoutMs = options.queueDiagnosticsTimeoutMs ?? 250;
+    this.afterArrivedMessages =
+      options.afterArrivedMessages ?? afterArrivedMessages;
   }
 
   addPort(port: PortLike): void {
@@ -431,7 +448,7 @@ export class CacheWorkerCore {
    * may observe the newer state, which is linearizable and avoids stale work.
    */
   private drainQueue(): void {
-    if (this.running || this.queue.length === 0) return;
+    if (this.running || this.yielding || this.queue.length === 0) return;
 
     let segmentEnd = this.queue.findIndex((queued) =>
       isOrderingBarrier(queued.request)
@@ -501,8 +518,21 @@ export class CacheWorkerCore {
       )
       .finally(() => {
         this.running = false;
-        this.drainQueue();
-        this.resolveDrainWaitersIfIdle();
+        if (this.queue.length === 0) {
+          this.resolveDrainWaitersIfIdle();
+          return;
+        }
+
+        // Engine calls can run to completion without returning to the event
+        // loop, so requests that arrived meanwhile are not in the queue yet.
+        // Picking the next one now would run the whole backlog in arrival
+        // order whatever their priority.
+        this.yielding = true;
+        this.afterArrivedMessages(() => {
+          this.yielding = false;
+          this.drainQueue();
+          this.resolveDrainWaitersIfIdle();
+        });
       });
   }
 

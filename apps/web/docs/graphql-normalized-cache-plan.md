@@ -276,7 +276,12 @@ query) reaches a new engine first and, inside the engine worker, runs ahead of
 list rereads and past generation checks and operation teardowns. It registers
 nothing and writes nothing, so those fences do not order it; it never passes
 `init` or `clear`. It can run before a write queued ahead of it, returning rows
-that are only older; that write's cache change then refreshes the list. A visible consumer starts a one-second read budget
+that are only older; that write's cache change then refreshes the list.
+The engine worker hands control back to its event loop between two requests.
+Engine calls usually run to completion without yielding, so a request that
+arrives during a busy stretch is otherwise still an undelivered message when
+the next one is picked, and the backlog runs in arrival order whatever its
+priorities. A visible consumer starts a one-second read budget
 covering drain/startup/resume; changes of candidate do not extend it. If everyone
 hides again, cancel that budget. On expiry, `blocked` allows ordinary query network
 fallback (`cache-only` still never forwards) without repeatedly paying ten seconds.

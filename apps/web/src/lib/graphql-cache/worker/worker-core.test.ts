@@ -1068,6 +1068,84 @@ describe('CacheWorkerCore', () => {
     ]);
   });
 
+  it('lets a request that arrived while the engine was busy join the queue before the next one is picked', async () => {
+    const order: string[] = [];
+    const blocker = Promise.withResolvers<void>();
+    const started = Promise.withResolvers<void>();
+    const resumes: (() => void)[] = [];
+    const yielded = { next: Promise.withResolvers<void>() };
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({
+        readQuery: async (opId: string) => {
+          order.push(`read:${opId}`);
+          if (opId === 'blocker') {
+            started.resolve();
+            await blocker.promise;
+          }
+          return { kind: 'miss' };
+        },
+        search: async (request: { query: string }) => {
+          order.push(`search:${request.query}`);
+          return { documents: [], nextCursor: null };
+        },
+      }),
+    });
+    const port = { postMessage: vi.fn() };
+    let holdArrivals = false;
+    const core = new CacheWorkerCore({
+      afterArrivedMessages: (resume) => {
+        if (!holdArrivals) {
+          queueMicrotask(resume);
+          return;
+        }
+        resumes.push(resume);
+        yielded.next.resolve();
+      },
+    });
+    await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+    const running = core.handleRequest(port, {
+      id: 2,
+      kind: 'read',
+      opId: 'blocker',
+      query: 'query Blocker { blocker }',
+    });
+    await started.promise;
+    holdArrivals = true;
+    const replayed = core.handleRequest(port, {
+      id: 3,
+      kind: 'read',
+      opId: 'replayed',
+      query: 'query Replayed { replayed }',
+      priority: 'user-visible',
+    });
+
+    // The blocker finishes; the search is still an undelivered message.
+    blocker.resolve();
+    await running;
+    await yielded.next.promise;
+    expect(order).toEqual(['read:blocker']);
+
+    const search = core.handleRequest(port, {
+      id: 4,
+      kind: 'search',
+      request: {
+        profile: 'quick-access-v1',
+        buckets: ['document'],
+        query: 'todo',
+        limit: 20,
+        nowMs: 1,
+      },
+    });
+    yielded.next = Promise.withResolvers<void>();
+    resumes.shift()?.();
+    await search;
+    await yielded.next.promise;
+    resumes.shift()?.();
+    await replayed;
+
+    expect(order).toEqual(['read:blocker', 'search:todo', 'read:replayed']);
+  });
+
   it('coalesces queued affected rereads and runs them ahead of incidental reads', async () => {
     const order: string[] = [];
     let releaseBlocker!: () => void;
