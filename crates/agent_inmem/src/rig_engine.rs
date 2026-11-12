@@ -331,12 +331,11 @@ struct NativeTools {
 impl NativeTools {
     /// The code-mode toolset: the SDK in place of every direct tool it covers.
     fn new() -> Self {
-        let build = ai_tools::tools_for_agent_code_mode;
-        let tools = build();
+        let tools = ai_tools::tools_for_agent_code_mode();
         let base_tools = Arc::into_inner(tools.toolset)
-            .expect("tools_for should return a fresh, uniquely owned collection");
-        let other_tools = Arc::into_inner(build().toolset)
-            .expect("tools_for should return a fresh, uniquely owned collection");
+            .expect("tools_for_agent_code_mode should return a fresh, uniquely owned collection");
+        let other_tools = Arc::into_inner(ai_tools::tools_for_agent_code_mode().toolset)
+            .expect("tools_for_agent_code_mode should return a fresh, uniquely owned collection");
         let with_user_input = tools_for_turn(base_tools, true);
         let tool_names = with_user_input
             .tools

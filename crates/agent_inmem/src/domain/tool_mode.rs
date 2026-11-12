@@ -1,4 +1,4 @@
-//! Which tools a turn presents.
+//! Which tools the public MCP presents a request.
 
 /// Tool presentation for one request.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

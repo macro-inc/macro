@@ -76,7 +76,7 @@ Reviewed user tools retain the selection through confirmation and execute with
 that account. Billing, memory, and session lifecycle remain owner-scoped. Model-context replay
 retains notification ACP inputs and their replies; the transcript fold separately
 omits system input from its message projection. PresentReview, GetReview and
-DecideReview are eager internal tools in both standard and code modes.
+DecideReview are eager internal tools.
 
 Every conversation turn of a user's session runs code mode
 (`tools_for_agent_code_mode`); there is no direct-tools fallback. A turn whose
