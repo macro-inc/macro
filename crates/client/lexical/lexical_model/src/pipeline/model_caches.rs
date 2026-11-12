@@ -6,6 +6,8 @@ pub(crate) fn apply(tx: &mut Transaction<'_>) -> Result<(), Error> {
     if tx.editor.mode() != EditorMode::ViewAttached || !tx.pending.registry.derive_view_caches {
         return Ok(());
     }
+    #[cfg(test)]
+    let _count_scope = crate::test_work::enter(crate::test_work::Phase::ModelCaches);
     // Reconciliation writes the root text cache through getWritable. Keep its
     // record identity distinct even though the cache itself lives on the state.
     let root_changed = root_text_changed(tx);

@@ -34,6 +34,8 @@ pub use state::*;
 pub use transaction::*;
 #[cfg(test)]
 mod test;
+#[cfg(test)]
+mod test_work;
 
 mod collections;
 pub mod json;

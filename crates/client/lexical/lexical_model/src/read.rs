@@ -743,6 +743,8 @@ impl<'state> StateRef<'state> {
         let Some(slot) = self.slot(key) else {
             return Cow::Borrowed("");
         };
+        #[cfg(test)]
+        crate::test_work::record_text_visit();
         match &slot.base {
             BaseData::Text(data) => Cow::Borrowed(data.text.as_str()),
             BaseData::LineBreak => Cow::Borrowed("\n"),
