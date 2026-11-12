@@ -1,6 +1,7 @@
 //! Bot service implementation.
 
 mod agent_dm;
+mod harness_agents;
 
 use super::{
     events::{BotCreatedMetadata, BotDeletedMetadata, BotMacroEvent, BotUpdatedMetadata},
@@ -8,10 +9,10 @@ use super::{
         Agent, AgentChannelScope, AgentMcpServer, AgentMcpServers, AuthenticatedBot, Bot,
         BotChannel, BotChannelListCaller, BotId, BotKind, BotOwner, BotOwnerProfile, BotToken,
         BotTokenCandidate, CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest,
-        CreateChannelScopedBotRequest, CreateChannelScopedBotResponse, HarnessId, HarnessOwner,
+        CreateChannelScopedBotRequest, CreateChannelScopedBotResponse, HarnessFacts, HarnessId,
         MAX_BOT_OWNER_PROFILE_IDS, PatchAgentRequest, PatchBotRequest, UpdateAgentRequest,
     },
-    ports::{BotError, BotRepo, BotService, McpAppCatalog},
+    ports::{BotError, BotRepo, BotService, HarnessRemoved, McpAppCatalog},
     tokens,
 };
 use bot_token::HashedBotToken;
@@ -303,21 +304,20 @@ where
         })
     }
 
-    /// Ensure the resolved agent owner may run agents on a registered harness.
+    /// Ensure the resolved agent owner may run agents on a registered harness,
+    /// returning the harness's facts when one is chosen.
     ///
-    /// A team agent must run on its own team's harness - never on a private
-    /// one, so a teammate's mention can never execute on a machine only one
-    /// person controls. A private agent may run on the caller's own harness
-    /// or on a team harness of a team the caller belongs to.
+    /// A team agent must run on a harness open to its whole team, so a
+    /// teammate's mention can never execute on a machine shared only with some
+    /// of them. A private agent may run on any harness its owner may use.
     async fn ensure_harness_usable(
         &self,
-        caller: MacroUserIdStr<'static>,
         owner: &BotOwner,
         harness_id: Option<HarnessId>,
         auto_accept_permissions: Option<bool>,
-    ) -> Result<(), BotError> {
+    ) -> Result<Option<HarnessFacts>, BotError> {
         let Some(harness_id) = harness_id else {
-            return Ok(());
+            return Ok(None);
         };
         let harness_owner = self
             .repo
@@ -330,35 +330,22 @@ where
             harness_owner.allow_permission_bypass,
             auto_accept_permissions,
         )?;
-        let usable = match (owner, harness_owner.owner) {
-            (
-                BotOwner::Team { team_id },
-                HarnessOwner::Team {
-                    team_id: harness_team,
-                },
-            ) => *team_id == harness_team,
-            (BotOwner::Team { .. }, HarnessOwner::User { .. }) => false,
-            (
-                BotOwner::User { user_id },
-                HarnessOwner::User {
-                    user_id: harness_user,
-                },
-            ) => *user_id == harness_user,
-            (
-                BotOwner::User { .. },
-                HarnessOwner::Team {
-                    team_id: harness_team,
-                },
-            ) => self
+        let usable = match owner {
+            BotOwner::Team { team_id } => self
                 .repo
-                .user_has_team(caller, harness_team)
+                .harness_granted_to_team(harness_id, *team_id)
+                .await
+                .map_err(|err| BotError::Repo(err.into()))?,
+            BotOwner::User { user_id } => self
+                .repo
+                .user_may_use_harness(harness_id, user_id)
                 .await
                 .map_err(|err| BotError::Repo(err.into()))?,
         };
         if !usable {
             return Err(BotError::Unauthorized);
         }
-        Ok(())
+        Ok(Some(harness_owner))
     }
 
     async fn owner_for_agent_update(
@@ -447,13 +434,8 @@ where
         let owner = self
             .owner_for_agent_update(caller.clone(), current, req.team_id)
             .await?;
-        self.ensure_harness_usable(
-            caller.clone(),
-            &owner,
-            req.harness_id,
-            req.auto_accept_permissions,
-        )
-        .await?;
+        self.ensure_harness_usable(&owner, req.harness_id, req.auto_accept_permissions)
+            .await?;
         let requested_name = req.name.clone();
         let requested_handle = req.handle.clone();
         let requested_description = req.description.clone();
@@ -462,7 +444,7 @@ where
             .repo
             .update_agent(current.id, owner, req)
             .await
-            .map_err(|err| BotError::Repo(err.into()))?
+            .map_err(binding_error)?
             .ok_or_else(|| BotError::NotFound("agent not found".to_string()))?;
 
         self.publish_bot_event(&BotMacroEvent::updated(BotUpdatedMetadata {
@@ -534,19 +516,23 @@ where
         let owner = self
             .agent_owner_for_request(caller.clone(), req.team_id)
             .await?;
-        self.ensure_harness_usable(
-            caller.clone(),
-            &owner,
-            req.harness_id,
-            req.auto_accept_permissions,
-        )
-        .await?;
+        let harness = self
+            .ensure_harness_usable(&owner, req.harness_id, req.auto_accept_permissions)
+            .await?;
+        let mut req = req;
+        // A Macro computer is a sandbox the team bought for its agents, so an
+        // agent on one runs without asking unless the request says otherwise.
+        if req.auto_accept_permissions.is_none()
+            && harness.is_some_and(|facts| facts.on_computer && facts.allow_permission_bypass)
+        {
+            req.auto_accept_permissions = Some(true);
+        }
         let created_by_user_id = caller.clone();
         let agent = self
             .repo
             .create_agent(owner, caller, req)
             .await
-            .map_err(|err| BotError::Repo(err.into()))?;
+            .map_err(binding_error)?;
 
         self.publish_bot_event(&BotMacroEvent::created(BotCreatedMetadata {
             bot_id: agent.bot.id,
@@ -1029,6 +1015,16 @@ async fn reject_unknown_mcp_apps<C: McpAppCatalog>(
 }
 
 /// A persona cannot override its harness operator's permission policy.
+/// A failed agent write, as a bad request when its harness was deleted while
+/// it was being bound.
+fn binding_error(err: impl Into<anyhow::Error>) -> BotError {
+    let err = err.into();
+    if err.is::<HarnessRemoved>() {
+        return BotError::BadRequest(HarnessRemoved.to_string());
+    }
+    BotError::Repo(err)
+}
+
 fn validate_permission_bypass(allowed: bool, requested: Option<bool>) -> Result<(), BotError> {
     if requested == Some(true) && !allowed {
         return Err(BotError::BadRequest(

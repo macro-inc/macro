@@ -116,6 +116,16 @@ export type AutoReloadSnapshot = {
 };
 
 /**
+ * How often the team subscription bills.
+ */
+export type BillingInterval = 'month' | 'year';
+
+/**
+ * Where a computer's billing stands, as its team sees it.
+ */
+export type BillingStatus = 'purchasing' | 'active' | 'past_due' | 'ending' | 'ended' | 'comped';
+
+/**
  * Request body for switching plans
  */
 export type ChangePlanRequest = {
@@ -275,6 +285,112 @@ export type CodexLoginStart = {
  * Device authorization state visible to its initiating user.
  */
 export type CodexLoginState = 'pending' | 'connected' | 'expired' | 'failed';
+
+/**
+ * A size a team can buy.
+ */
+export type ComputerSize = 'standard' | 'large' | 'xl';
+
+/**
+ * A computer as its team sees it.
+ */
+export type ComputerStatus = {
+    /**
+     * Agents bound to the computer's live harness, teammates' private ones
+     * included: the ones releasing it deletes.
+     */
+    agentCount: number;
+    billing?: null | BillingStatus;
+    /**
+     * Whether the computer can be restored (`POST .../restore`): billing
+     * ended and the disk is still retained.
+     */
+    canRestore: boolean;
+    /**
+     * Whether a cancel at period end can still be undone (until `cancelsAt`).
+     */
+    canUndoCancel: boolean;
+    /**
+     * When billing stops, for a computer canceled at period end.
+     */
+    cancelsAt?: string | null;
+    /**
+     * Versioned catalog entry saved at purchase.
+     */
+    catalogEntry: string;
+    /**
+     * Present for a comped purchase, including after release.
+     */
+    compReason?: string | null;
+    /**
+     * Time the computer was reserved.
+     */
+    createdAt: string;
+    /**
+     * Bot id of the coding agent the computer came with; null until macrod
+     * first connects. It can name an agent the team since deleted.
+     */
+    defaultAgentId?: string | null;
+    /**
+     * Root disk limit saved at purchase.
+     */
+    diskGib: number;
+    /**
+     * Harness claimed by this guest.
+     */
+    harnessId?: string | null;
+    /**
+     * Stable resource identity.
+     */
+    id: string;
+    /**
+     * Memory limit saved at purchase.
+     */
+    memoryGib: number;
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * Since when the team subscription is past due.
+     */
+    pastDueSince?: string | null;
+    /**
+     * Whether validated state requests power on; false for quarantined records.
+     */
+    poweredOn: boolean;
+    /**
+     * The Macro user who bought it. The team's owner and admins, not the
+     * buyer, finish its setup and manage its Claude account.
+     */
+    purchasedBy: string;
+    /**
+     * When the disk is destroyed, for a computer whose billing ended.
+     */
+    retainedUntil?: string | null;
+    setup?: null | SetupProgress;
+    /**
+     * When the team finished the guided setup; null while it is unfinished.
+     */
+    setupCompletedAt?: string | null;
+    /**
+     * Purchased catalog size.
+     */
+    size: ComputerSize;
+    /**
+     * Observed guest status.
+     */
+    status: ComputerStatusKind;
+    /**
+     * Virtual CPU count.
+     */
+    vcpus: number;
+};
+
+/**
+ * The coarse status the team sees.
+ */
+export type ComputerStatusKind = 'setting_up' | 'needs_attention' | 'waiting_for_capacity' | 'ready' | 'starting' | 'stopping' | 'stopped' | 'failed' | 'purchasing' | 'released';
 
 export type CreateAccountMergeRequest = {
     /**
@@ -469,6 +585,11 @@ export type CreditPurchaseStatus = 'paid' | 'declined' | 'payment_method_require
  * The status every user sees, without who set it.
  */
 export type CurrentSystemStatus = SystemStatus & {
+    /**
+     * The id of the update that set it; absent when no status was ever set.
+     * Clients remember dismissed banners by this id.
+     */
+    id?: string | null;
     /**
      * When it was set; absent when no status was ever set. Clients keep the
      * newest status they have seen, whether fetched or pushed.
@@ -1557,6 +1678,16 @@ export type PostGetNamesRequestBody = {
     user_ids: Array<string>;
 };
 
+/**
+ * Body of a power change.
+ */
+export type PowerBody = {
+    /**
+     * Requested power state.
+     */
+    on: boolean;
+};
+
 export type ProfilePictureQueryParams = {
     url: string;
 };
@@ -1595,6 +1726,44 @@ export type PublicGtmInviteLink = {
      * Whether the link can still be used.
      */
     status: GtmInviteLinkStatus;
+};
+
+/**
+ * Body of a team purchase.
+ */
+export type PurchaseBody = {
+    /**
+     * Display name.
+     */
+    name?: string | null;
+    /**
+     * The client's key for this purchase: one per Buy dialog, sent again
+     * when the purchase is retried, so a retry never charges twice.
+     */
+    purchaseKey: string;
+    /**
+     * Purchased catalog size.
+     */
+    size: ComputerSize;
+};
+
+/**
+ * Where a purchase stands when its request returns.
+ */
+export type PurchaseState = 'ready' | 'confirming';
+
+/**
+ * Answer of a purchase.
+ */
+export type Purchased = {
+    /**
+     * Computer this operation addresses.
+     */
+    computerId: string;
+    /**
+     * Whether the computer exists yet.
+     */
+    state: PurchaseState;
 };
 
 /**
@@ -1653,6 +1822,32 @@ export type PutUserNameQueryParams = {
 };
 
 /**
+ * What one computer of a size costs the team.
+ */
+export type Quote = {
+    /**
+     * In the currency's smallest unit.
+     */
+    amount: number;
+    /**
+     * Billing currency code.
+     */
+    currency: string;
+    /**
+     * Subscription billing interval.
+     */
+    interval: BillingInterval;
+    /**
+     * Stripe price saved for billing replay.
+     */
+    priceId: string;
+    /**
+     * Purchased catalog size.
+     */
+    size: ComputerSize;
+};
+
+/**
  * Request body to redeem a link.
  */
 export type RedeemGtmInviteLinkRequest = {
@@ -1660,6 +1855,16 @@ export type RedeemGtmInviteLinkRequest = {
      * The token from the link URL.
      */
     token: string;
+};
+
+/**
+ * Body of a release.
+ */
+export type ReleaseBody = {
+    /**
+     * The computer's name, typed to confirm.
+     */
+    confirmName: string;
 };
 
 export type ResendFusionauthVerifyUserEmailRequest = {
@@ -1805,6 +2010,59 @@ export type SetGithubPullRequestStateResponse = {
     state: GithubPullRequestState;
 };
 
+/**
+ * Setup progress, for invite and purchase flows to show.
+ */
+export type SetupProgress = {
+    /**
+     * 1-based position of `step`.
+     */
+    position: number;
+    /**
+     * Current setup stage.
+     */
+    step: SetupStep;
+    /**
+     * Number of setup stages.
+     */
+    total: number;
+};
+
+/**
+ * Steps a new computer goes through, in order.
+ */
+export type SetupStep = 'creating' | 'booting' | 'connecting' | 'ready';
+
+/**
+ * A size with its resources, price and whether it can be bought now.
+ */
+export type SizeOffer = {
+    /**
+     * Root disk size in GiB.
+     */
+    diskGb: number;
+    /**
+     * Memory in GiB.
+     */
+    memoryGb: number;
+    /**
+     * Price for one computer.
+     */
+    quote: Quote;
+    /**
+     * Purchased catalog size.
+     */
+    size: ComputerSize;
+    /**
+     * Whether no host can currently sell this size.
+     */
+    soldOut: boolean;
+    /**
+     * Virtual CPU count.
+     */
+    vcpus: number;
+};
+
 export type SsoRequiredResponse = {
     /**
      * The idp_id you need to perform sso login with.
@@ -1841,9 +2099,121 @@ export type StripeSessionResponse = {
 };
 
 /**
+ * Actual current recurring items and the provider's next invoice preview.
+ */
+export type SubscriptionBilling = {
+    /**
+     * The subscription's ISO currency, as returned by the provider.
+     */
+    currency: string;
+    /**
+     * Paid seat allocations.
+     */
+    humanSeats: SubscriptionSeatTotal;
+    /**
+     * The actual recurring billing interval shared by these items.
+     */
+    interval: BillingInterval;
+    /**
+     * Real provider line items, allocated only when their ownership is known.
+     */
+    lineItems: Array<SubscriptionBillingLineItem>;
+    nextInvoice?: null | SubscriptionNextInvoice;
+    /**
+     * Recurring item subtotal in minor units, before invoice adjustments.
+     */
+    subscriptionTotal: number;
+};
+
+/**
+ * An allocated provider item or an explicitly included computer.
+ */
+export type SubscriptionBillingLineItem = {
+    /**
+     * Current recurring amount for this allocated quantity, in minor units.
+     */
+    amount: number;
+    /**
+     * Identified computer, absent for aggregate or unattributed items.
+     */
+    computerId?: string | null;
+    /**
+     * Included without a subscription charge.
+     */
+    included: boolean;
+    /**
+     * Actual billing category; unmatched quantities stay `other`.
+     */
+    kind: SubscriptionBillingLineKind;
+    /**
+     * Entity name or provider item description.
+     */
+    name: string;
+    plan?: null | SeatPlan;
+    /**
+     * Actual subscription quantity allocated to this row.
+     */
+    quantity: number;
+    size?: null | ComputerSize;
+    status?: null | ComputerStatusKind;
+    /**
+     * Provider price per unit in minor units, when fixed.
+     */
+    unitAmount?: number | null;
+};
+
+/**
+ * What an actual subscription item pays for.
+ */
+export type SubscriptionBillingLineKind = 'human_seat' | 'computer' | 'other';
+
+/**
+ * A Stripe price and how many of it to add to the team subscription.
+ */
+export type SubscriptionItem = {
+    /**
+     * Stripe price saved for billing replay.
+     */
+    priceId: string;
+    /**
+     * Added to the item's current quantity.
+     */
+    quantity: number;
+};
+
+/**
+ * Provider-confirmed next invoice, including its adjustments and credits.
+ */
+export type SubscriptionNextInvoice = {
+    /**
+     * Actual upcoming invoice amount due in minor units.
+     */
+    amount: number;
+    /**
+     * Provider's next payment or due date, when supplied.
+     */
+    date?: string | null;
+};
+
+/**
+ * Billed seat quantity and current recurring amount in minor units.
+ */
+export type SubscriptionSeatTotal = {
+    /**
+     * Actual recurring price times allocated quantity, in minor units.
+     */
+    amount: number;
+    /**
+     * Actual billed quantity allocated to this seat kind.
+     */
+    quantity: number;
+};
+
+/**
  * Current renewal and scheduled change; empty for accounts without a subscription.
  */
 export type SubscriptionStatus = {
+    billing?: null | SubscriptionBilling;
     /**
      * Provider-confirmed subscription renewal date.
      */
@@ -4005,6 +4375,7 @@ export type CreateTeamData = {
 export type CreateTeamErrors = {
     400: ErrorResponse;
     403: ErrorResponse;
+    409: ErrorResponse;
     500: ErrorResponse;
 };
 
@@ -4038,6 +4409,199 @@ export type ToggleTeamAutoJoinDomainResponses = {
 };
 
 export type ToggleTeamAutoJoinDomainResponse = ToggleTeamAutoJoinDomainResponses[keyof ToggleTeamAutoJoinDomainResponses];
+
+export type ListTeamComputersData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/team/computers';
+};
+
+export type ListTeamComputersErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+};
+
+export type ListTeamComputersError = ListTeamComputersErrors[keyof ListTeamComputersErrors];
+
+export type ListTeamComputersResponses = {
+    200: Array<ComputerStatus>;
+};
+
+export type ListTeamComputersResponse = ListTeamComputersResponses[keyof ListTeamComputersResponses];
+
+export type PurchaseTeamComputerData = {
+    body: PurchaseBody;
+    path?: never;
+    query?: never;
+    url: '/team/computers';
+};
+
+export type PurchaseTeamComputerErrors = {
+    402: ErrorResponse;
+    409: ErrorResponse;
+    503: ErrorResponse;
+};
+
+export type PurchaseTeamComputerError = PurchaseTeamComputerErrors[keyof PurchaseTeamComputerErrors];
+
+export type PurchaseTeamComputerResponses = {
+    200: Purchased;
+    202: Purchased;
+};
+
+export type PurchaseTeamComputerResponse = PurchaseTeamComputerResponses[keyof PurchaseTeamComputerResponses];
+
+export type ListTeamComputerOffersData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/team/computers/offers';
+};
+
+export type ListTeamComputerOffersErrors = {
+    503: ErrorResponse;
+};
+
+export type ListTeamComputerOffersError = ListTeamComputerOffersErrors[keyof ListTeamComputerOffersErrors];
+
+export type ListTeamComputerOffersResponses = {
+    200: Array<SizeOffer>;
+};
+
+export type ListTeamComputerOffersResponse = ListTeamComputerOffersResponses[keyof ListTeamComputerOffersResponses];
+
+export type UndoCancelTeamComputerData = {
+    body?: never;
+    path: {
+        computer_id: string;
+    };
+    query?: never;
+    url: '/team/computers/{computer_id}/cancel';
+};
+
+export type UndoCancelTeamComputerResponses = {
+    200: ComputerStatus;
+};
+
+export type UndoCancelTeamComputerResponse = UndoCancelTeamComputerResponses[keyof UndoCancelTeamComputerResponses];
+
+export type CancelTeamComputerData = {
+    body?: never;
+    path: {
+        computer_id: string;
+    };
+    query?: never;
+    url: '/team/computers/{computer_id}/cancel';
+};
+
+export type CancelTeamComputerResponses = {
+    200: ComputerStatus;
+};
+
+export type CancelTeamComputerResponse = CancelTeamComputerResponses[keyof CancelTeamComputerResponses];
+
+export type SetTeamComputerPowerData = {
+    body: PowerBody;
+    path: {
+        computer_id: string;
+    };
+    query?: never;
+    url: '/team/computers/{computer_id}/power';
+};
+
+export type SetTeamComputerPowerResponses = {
+    200: ComputerStatus;
+};
+
+export type SetTeamComputerPowerResponse = SetTeamComputerPowerResponses[keyof SetTeamComputerPowerResponses];
+
+export type ReleaseTeamComputerData = {
+    body: ReleaseBody;
+    path: {
+        computer_id: string;
+    };
+    query?: never;
+    url: '/team/computers/{computer_id}/release';
+};
+
+export type ReleaseTeamComputerErrors = {
+    400: ErrorResponse;
+};
+
+export type ReleaseTeamComputerError = ReleaseTeamComputerErrors[keyof ReleaseTeamComputerErrors];
+
+export type ReleaseTeamComputerResponses = {
+    200: ComputerStatus;
+};
+
+export type ReleaseTeamComputerResponse = ReleaseTeamComputerResponses[keyof ReleaseTeamComputerResponses];
+
+export type RestoreTeamComputerData = {
+    body?: never;
+    path: {
+        computer_id: string;
+    };
+    query?: never;
+    url: '/team/computers/{computer_id}/restore';
+};
+
+export type RestoreTeamComputerErrors = {
+    402: ErrorResponse;
+    409: ErrorResponse;
+};
+
+export type RestoreTeamComputerError = RestoreTeamComputerErrors[keyof RestoreTeamComputerErrors];
+
+export type RestoreTeamComputerResponses = {
+    200: ComputerStatus;
+};
+
+export type RestoreTeamComputerResponse = RestoreTeamComputerResponses[keyof RestoreTeamComputerResponses];
+
+export type RetryTeamComputerData = {
+    body?: never;
+    path: {
+        computer_id: string;
+    };
+    query?: never;
+    url: '/team/computers/{computer_id}/retry';
+};
+
+export type RetryTeamComputerErrors = {
+    404: ErrorResponse;
+    409: ErrorResponse;
+};
+
+export type RetryTeamComputerError = RetryTeamComputerErrors[keyof RetryTeamComputerErrors];
+
+export type RetryTeamComputerResponses = {
+    200: ComputerStatus;
+};
+
+export type RetryTeamComputerResponse = RetryTeamComputerResponses[keyof RetryTeamComputerResponses];
+
+export type CompleteTeamComputerSetupData = {
+    body?: never;
+    path: {
+        computer_id: string;
+    };
+    query?: never;
+    url: '/team/computers/{computer_id}/setup-complete';
+};
+
+export type CompleteTeamComputerSetupErrors = {
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type CompleteTeamComputerSetupError = CompleteTeamComputerSetupErrors[keyof CompleteTeamComputerSetupErrors];
+
+export type CompleteTeamComputerSetupResponses = {
+    200: ComputerStatus;
+};
+
+export type CompleteTeamComputerSetupResponse = CompleteTeamComputerSetupResponses[keyof CompleteTeamComputerSetupResponses];
 
 export type PatchTeamCrmSettingsData = {
     body: PatchTeamCrmSettingsRequest;
@@ -4768,6 +5332,10 @@ export type PutProfilePictureData = {
 
 export type PutProfilePictureErrors = {
     401: string;
+    /**
+     * Picture changed less than a second ago
+     */
+    429: ErrorResponse;
     500: ErrorResponse;
 };
 
@@ -4828,6 +5396,10 @@ export type PutProfilePictureFileErrors = {
      * The caller has no such file
      */
     404: ErrorResponse;
+    /**
+     * Picture changed less than a second ago
+     */
+    429: ErrorResponse;
     500: ErrorResponse;
 };
 

@@ -3,7 +3,7 @@ import { useCodexAgentsAccess } from '@core/codex/flag';
 import { toast } from '@core/component/Toast/Toast';
 import { MACRO_HARNESS_NAME } from '@core/constant/macroAgent';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { ThrownResultError } from '@core/util/result';
+import { ThrownResultError, thrownResultErrorHasCode } from '@core/util/result';
 import HardDrivesIcon from '@icon/system/regular/hard-drives.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import CursorIcon from '@icon/wide-cursor-ide.svg';
@@ -13,18 +13,25 @@ import {
   useSaveCursorApiKey,
 } from '@queries/auth/cursor-api-key';
 import {
+  invalidateHarnesses,
   useDeleteHarnessMutation,
   useHarnessesQuery,
   usePatchHarnessMutation,
 } from '@queries/harnesses/harnesses';
+import { useIsTeamOwner } from '@queries/team/teams';
 import type { Harness as RegisteredHarness } from '@service-storage/client';
 import { useSearchParams } from '@solidjs/router';
 import { ApiKeyInput, Button, confirmDialog, Dialog, Input, Panel } from '@ui';
-import { createSignal, onMount, Show } from 'solid-js';
+import { createEffect, createSignal, on, onMount, Show } from 'solid-js';
 import { CodexHarness } from './codex/views/CodexHarness';
 import { ConnectedRuntimesSection } from './components/connected-runtimes-section';
 import { CursorDefaultModel } from './components/cursor-default-model';
 import { LocalRuntimeCard } from './components/local-runtime-card';
+import { PendingRequestsSection } from './components/pending-requests-section';
+import { SettingsSearchTarget } from './components/settings-search-target';
+import { TeammateRuntimesSection } from './components/teammate-runtimes-section';
+import { useTeamComputers } from './computers/primitives/team-computers';
+import { MacroComputers } from './computers/views/MacroComputers';
 import {
   CURSOR_KEY_FORMAT_ERROR,
   CURSOR_KEY_PREFIX,
@@ -33,6 +40,10 @@ import {
 import { HarnessIcon } from './integration-ui';
 import { SettingsCard, SettingsPage } from './primitives';
 import { RuntimePairingPage } from './RuntimePairingPage';
+import {
+  consumeRuntimeShareRequest,
+  runtimeShareRequest,
+} from './runtimeSettingsState';
 
 function failureMessage(error: unknown, fallback: string): string {
   return (error instanceof ThrownResultError && error.message) || fallback;
@@ -50,6 +61,15 @@ export function Harness(
   const cursorRegistered = () =>
     cursorStatus.isSuccess ? cursorStatus.data.registered : false;
   const harnessesQuery = useHarnessesQuery();
+  const harnesses = () => (harnessesQuery.isSuccess ? harnessesQuery.data : []);
+  const teamComputers = useTeamComputers();
+  const computerHarnessIds = () =>
+    new Set(
+      teamComputers
+        .computers()
+        .flatMap((computer) => (computer.harnessId ? [computer.harnessId] : []))
+    );
+  const isTeamOwner = useIsTeamOwner();
   const deleteHarnessMutation = useDeleteHarnessMutation();
   const [pairingDialog, setPairingDialog] = createSignal<
     | {
@@ -66,6 +86,20 @@ export function Harness(
     createSignal<RegisteredHarness>();
   const [searchParams, setSearchParams] = useSearchParams();
 
+  // The runtime the page points out, and the one whose Share menu is open.
+  const [highlight, setHighlight] = createSignal<{ target: string }>();
+  const [sharing, setSharing] = createSignal<string>();
+  // Opened from an access-request notification: point out that runtime and,
+  // for a request, open its Share menu, where the request waits.
+  createEffect(
+    on(runtimeShareRequest, (request) => {
+      if (!request) return;
+      setHighlight({ target: `runtime-${request.harnessId}` });
+      if (request.share) setSharing(request.harnessId);
+      consumeRuntimeShareRequest(request.id);
+    })
+  );
+
   onMount(() => {
     const pair = searchParams.pair;
     if (typeof pair === 'string' && pair.length > 0) {
@@ -74,16 +108,27 @@ export function Harness(
     }
   });
 
+  // Set synchronously, before the mutation's own pending state renders, so a
+  // second click cannot send a second DELETE for a row that is already gone.
+  const [removing, setRemoving] = createSignal(false);
   const removeHarness = async () => {
     const current = removingHarness();
-    if (!current) return;
-
+    if (!current || removing()) return;
+    setRemoving(true);
     try {
       await deleteHarnessMutation.mutateAsync({ harnessId: current.id });
       setRemovingHarness(undefined);
-      toast.success('Runtime removed');
+      toast.success('Machine removed');
     } catch (error) {
-      toast.failure(failureMessage(error, 'Failed to remove runtime'));
+      if (thrownResultErrorHasCode(error, 'NOT_FOUND')) {
+        // Already gone, e.g. removed elsewhere: the list just needs to catch up.
+        setRemovingHarness(undefined);
+        fireAndForget(invalidateHarnesses(), 'harness-settings');
+        return;
+      }
+      toast.failure(failureMessage(error, 'Failed to remove machine'));
+    } finally {
+      setRemoving(false);
     }
   };
 
@@ -126,173 +171,200 @@ export function Harness(
   return (
     <>
       <Show when={!pairingDialog()}>
-        <SettingsPage
-          title="Runtimes"
-          description="Providers and machines your agents can run on."
-          signpost={<TutorialPill tutorial="macrod" class="mt-1 self-start" />}
-          onBack={props.onBack}
-          backLabel={props.backLabel ?? 'Agents'}
-          actions={
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => setPairingDialog({})}
-            >
-              <PlusIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
-              New runtime
-            </Button>
-          }
-        >
-          <ConnectedRuntimesSection
-            harnesses={harnessesQuery.isSuccess ? harnessesQuery.data : []}
-            error={harnessesQuery.isError}
-            onRename={setRenamingHarness}
-            onRemove={setRemovingHarness}
-          />
-          <LocalRuntimeCard />
-          <div>
-            <h2 class="mb-3 px-6 text-sm font-semibold text-ink">
-              Built-in runtimes
-            </h2>
-            <SettingsCard>
-              <section class="flex gap-4 px-6 py-5">
-                <HarnessIcon>
-                  <HardDrivesIcon />
-                </HarnessIcon>
-                <div class="min-w-0 flex-1">
-                  <div class="flex min-h-5 items-start justify-between gap-3">
-                    <h2 class="min-w-0 text-sm/5 font-medium text-ink">
-                      {MACRO_HARNESS_NAME}
-                    </h2>
-                    <span class="inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-md bg-success-bg px-2 text-[11px]/none font-medium text-success">
-                      Built in
-                    </span>
-                  </div>
-                  <p class="mt-1 text-sm text-ink-muted">
-                    Macro in house fast and powerful agent. Uses official Macro
-                    tools and MCPs to get the job done.
-                  </p>
-                </div>
-              </section>
-
-              <section class="flex gap-4 px-6 py-5">
-                <HarnessIcon>
-                  <CursorIcon />
-                </HarnessIcon>
-                <div class="min-w-0 flex-1">
-                  <div class="flex min-h-5 items-start justify-between gap-3">
-                    <h2 class="min-w-0 text-sm/5 font-medium text-ink">
-                      Cursor
-                    </h2>
-                    <Show when={cursorRegistered()}>
+        <SettingsSearchTarget result={highlight()}>
+          <SettingsPage
+            title="Machines"
+            description="Providers and machines your agents can run on."
+            signpost={
+              <TutorialPill tutorial="macrod" class="mt-1 self-start" />
+            }
+            onBack={props.onBack}
+            backLabel={props.backLabel ?? 'Agents'}
+            actions={
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => setPairingDialog({})}
+              >
+                <PlusIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
+                New machine
+              </Button>
+            }
+          >
+            <PendingRequestsSection />
+            <ConnectedRuntimesSection
+              harnesses={
+                harnessesQuery.isSuccess
+                  ? harnessesQuery.data.filter(
+                      // A Macro computer is listed once, under Macro computers;
+                      // with that section off it stays an ordinary machine.
+                      (harness) =>
+                        harness.access === 'owner' &&
+                        !(
+                          teamComputers.enabled() &&
+                          (harness.computer_id ||
+                            computerHarnessIds().has(harness.id))
+                        )
+                    )
+                  : []
+              }
+              error={harnessesQuery.isError}
+              onRename={setRenamingHarness}
+              onRemove={setRemovingHarness}
+              sharing={sharing()}
+              onSharingChange={setSharing}
+            />
+            <TeammateRuntimesSection
+              canRemoveShared={isTeamOwner()}
+              onRemove={setRemovingHarness}
+            />
+            <MacroComputers harnesses={harnesses()} />
+            <LocalRuntimeCard />
+            <div>
+              <h2 class="mb-3 px-6 text-sm font-semibold text-ink">
+                Built-in machines
+              </h2>
+              <SettingsCard>
+                <section class="flex gap-4 px-6 py-5">
+                  <HarnessIcon>
+                    <HardDrivesIcon />
+                  </HarnessIcon>
+                  <div class="min-w-0 flex-1">
+                    <div class="flex min-h-5 items-start justify-between gap-3">
+                      <h2 class="min-w-0 text-sm/5 font-medium text-ink">
+                        {MACRO_HARNESS_NAME}
+                      </h2>
                       <span class="inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-md bg-success-bg px-2 text-[11px]/none font-medium text-success">
-                        Connected
+                        Built in
                       </span>
-                    </Show>
+                    </div>
+                    <p class="mt-1 text-sm text-ink-muted">
+                      Macro in house fast and powerful agent. Uses official
+                      Macro tools and MCPs to get the job done.
+                    </p>
                   </div>
-                  <p class="mt-1 text-sm text-ink-muted">
-                    Bring your own Cursor subscription to Macro. Manage Cursor
-                    Cloud sessions directly in the app.
-                  </p>
+                </section>
 
-                  <Show
-                    when={
-                      cursorStatus.isSuccess && !cursorStatus.isPlaceholderData
-                    }
-                    fallback={
-                      <p class="mt-4 text-xs text-ink-muted">
-                        {cursorStatus.isError
-                          ? 'Could not load your Cursor connection. Try refreshing this page.'
-                          : 'Loading…'}
-                      </p>
-                    }
-                  >
+                <section class="flex gap-4 px-6 py-5">
+                  <HarnessIcon>
+                    <CursorIcon />
+                  </HarnessIcon>
+                  <div class="min-w-0 flex-1">
+                    <div class="flex min-h-5 items-start justify-between gap-3">
+                      <h2 class="min-w-0 text-sm/5 font-medium text-ink">
+                        Cursor
+                      </h2>
+                      <Show when={cursorRegistered()}>
+                        <span class="inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-md bg-success-bg px-2 text-[11px]/none font-medium text-success">
+                          Connected
+                        </span>
+                      </Show>
+                    </div>
+                    <p class="mt-1 text-sm text-ink-muted">
+                      Bring your own Cursor subscription to Macro. Manage Cursor
+                      Cloud sessions directly in the app.
+                    </p>
+
                     <Show
-                      when={cursorRegistered()}
+                      when={
+                        cursorStatus.isSuccess &&
+                        !cursorStatus.isPlaceholderData
+                      }
                       fallback={
-                        <div class="mt-4 flex flex-col gap-1.5">
-                          <label
-                            for="cursor-harness-api-key"
-                            class="text-xs text-ink"
-                          >
-                            API key
-                          </label>
-                          <div class="flex items-center gap-2 mobile:flex-col mobile:items-stretch">
-                            <ApiKeyInput
-                              id="cursor-harness-api-key"
-                              class="flex-1"
-                              size="sm"
-                              prefix={CURSOR_KEY_PREFIX}
-                              value={cursorApiKey()}
-                              onValueChange={setCursorApiKey}
-                              onSubmit={() =>
-                                fireAndForget(
-                                  handleSaveCursorApiKey(),
-                                  'cursor-connect'
-                                )
-                              }
-                            />
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              size="sm"
-                              disabled={
-                                cursorApiKey().trim().length === 0 ||
-                                saveCursorApiKey.isPending
-                              }
-                              onClick={handleSaveCursorApiKey}
-                            >
-                              Save
-                            </Button>
-                          </div>
-                          <p class="text-xs text-ink-extra-muted">
-                            Create an API key in Cursor and paste it here. Macro
-                            stores it encrypted.
-                          </p>
-                        </div>
+                        <p class="mt-4 text-xs text-ink-muted">
+                          {cursorStatus.isError
+                            ? 'Could not load your Cursor connection. Try refreshing this page.'
+                            : 'Loading…'}
+                        </p>
                       }
                     >
-                      <div class="mt-4 flex flex-col gap-3">
-                        <div class="flex w-full max-w-60 flex-col gap-1.5">
-                          <span class="text-xs font-medium text-ink">
-                            Default model
-                          </span>
-                          <CursorDefaultModel />
+                      <Show
+                        when={cursorRegistered()}
+                        fallback={
+                          <div class="mt-4 flex flex-col gap-1.5">
+                            <label
+                              for="cursor-harness-api-key"
+                              class="text-xs text-ink"
+                            >
+                              API key
+                            </label>
+                            <div class="flex items-center gap-2 mobile:flex-col mobile:items-stretch">
+                              <ApiKeyInput
+                                id="cursor-harness-api-key"
+                                class="flex-1"
+                                size="sm"
+                                prefix={CURSOR_KEY_PREFIX}
+                                value={cursorApiKey()}
+                                onValueChange={setCursorApiKey}
+                                onSubmit={() =>
+                                  fireAndForget(
+                                    handleSaveCursorApiKey(),
+                                    'cursor-connect'
+                                  )
+                                }
+                              />
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                disabled={
+                                  cursorApiKey().trim().length === 0 ||
+                                  saveCursorApiKey.isPending
+                                }
+                                onClick={handleSaveCursorApiKey}
+                              >
+                                Save
+                              </Button>
+                            </div>
+                            <p class="text-xs text-ink-extra-muted">
+                              Create an API key in Cursor and paste it here.
+                              Macro stores it encrypted.
+                            </p>
+                          </div>
+                        }
+                      >
+                        <div class="mt-4 flex flex-col gap-3">
+                          <div class="flex w-full max-w-60 flex-col gap-1.5">
+                            <span class="text-xs font-medium text-ink">
+                              Default model
+                            </span>
+                            <CursorDefaultModel />
+                          </div>
+                          <p class="text-xs text-ink-extra-muted">
+                            The model new `@cursor` sessions start on.
+                            Recommended models stay up top; everything else is
+                            behind More models.
+                          </p>
                         </div>
-                        <p class="text-xs text-ink-extra-muted">
-                          The model new `@cursor` sessions start on. Recommended
-                          models stay up top; everything else is behind More
-                          models.
-                        </p>
-                      </div>
 
-                      <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
-                        <p class="flex-1 basis-56 text-xs text-ink-extra-muted">
-                          Disconnecting removes Macro's copy of the key but does
-                          not revoke it in Cursor.
-                        </p>
-                        <Button
-                          type="button"
-                          variant="danger"
-                          size="sm"
-                          class="shrink-0"
-                          disabled={disconnectCursor.isPending}
-                          onClick={handleDisconnectCursor}
-                        >
-                          Disconnect
-                        </Button>
-                      </div>
+                        <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
+                          <p class="flex-1 basis-56 text-xs text-ink-extra-muted">
+                            Disconnecting removes Macro's copy of the key but
+                            does not revoke it in Cursor.
+                          </p>
+                          <Button
+                            type="button"
+                            variant="danger"
+                            size="sm"
+                            class="shrink-0"
+                            disabled={disconnectCursor.isPending}
+                            onClick={handleDisconnectCursor}
+                          >
+                            Disconnect
+                          </Button>
+                        </div>
+                      </Show>
                     </Show>
-                  </Show>
-                </div>
-              </section>
+                  </div>
+                </section>
 
-              <Show when={canUseCodex()}>
-                <CodexHarness />
-              </Show>
-            </SettingsCard>
-          </div>
-        </SettingsPage>
+                <Show when={canUseCodex()}>
+                  <CodexHarness />
+                </Show>
+              </SettingsCard>
+            </div>
+          </SettingsPage>
+        </SettingsSearchTarget>
       </Show>
 
       <Show when={pairingDialog()} keyed>
@@ -315,7 +387,7 @@ export function Harness(
         {(harness) => (
           <HarnessRemoveDialog
             harnessName={harness.name}
-            pending={deleteHarnessMutation.isPending}
+            pending={removing() || deleteHarnessMutation.isPending}
             onClose={() => setRemovingHarness(undefined)}
             onConfirm={() => fireAndForget(removeHarness(), 'harness-settings')}
           />
@@ -345,7 +417,7 @@ function HarnessRenameDialog(props: {
       });
       props.onClose();
     } catch (error) {
-      toast.failure(failureMessage(error, 'Failed to rename runtime'));
+      toast.failure(failureMessage(error, 'Failed to rename machine'));
     }
   };
 
@@ -362,7 +434,7 @@ function HarnessRenameDialog(props: {
       <Panel depth={2} class="rounded-xl text-ink">
         <Panel.Header class="px-5 py-3">
           <Dialog.Title class="text-sm font-semibold">
-            Rename runtime
+            Rename machine
           </Dialog.Title>
         </Panel.Header>
         <form
@@ -431,8 +503,8 @@ function HarnessRemoveDialog(props: {
         </Panel.Header>
         <Panel.Body class="p-5">
           <Dialog.Description class="text-sm leading-5 text-ink-muted">
-            Agents using this runtime will stop running until it's reconnected.
-            macrod on that machine will need to pair again.
+            Agents using this machine will stop running until it's reconnected.
+            macrod on it will need to pair again.
           </Dialog.Description>
         </Panel.Body>
         <Panel.Footer class="justify-end gap-2 px-5 py-3">
@@ -452,7 +524,7 @@ function HarnessRemoveDialog(props: {
             disabled={props.pending}
             onClick={props.onConfirm}
           >
-            {props.pending ? 'Removing…' : 'Remove runtime'}
+            {props.pending ? 'Removing…' : 'Remove machine'}
           </Button>
         </Panel.Footer>
       </Panel>

@@ -69,6 +69,13 @@ web app and uses it like any other key. It can set up its profile with
 `macro.me.update({ name, profilePicture: await macro.me.uploadProfilePicture(bytes, options) })`
 and mint more keys with `macro.apiKeys.create(name)`.
 
+Switch between earlier uploads with `macro.me.update({ profilePicture: macro.images.byId(savedId) })`,
+and read pictures with `macro.me.profilePicture()`, `user.profilePicture()` or
+`macro.users.profilePictures(users)`. Pictures set through Macro are a
+`StaticImage`; legacy URL pictures are an `ExternalProfilePicture` (`{ url }`).
+Setting a picture is throttled to once a second per user and uploads to 20 an
+hour; both fail with 429 beyond that.
+
 #### Account managers
 
 An agent account can manage a person's account: either side asks in their DM, and
@@ -177,14 +184,17 @@ await doc.delete(); // soft delete; doc.restore() brings it back
 ```
 
 Documents, projects, calls and chats change their link and channel sharing with
-`updateSharePermissions`; omitted fields are left as they are. A calendar event
-is shared with a channel's members through `shareWithChannel`:
+`updateSharePermissions`; omitted fields are left as they are. Any item a
+channel message can carry (a document or task, project, database, form, call,
+email thread, agent session, external chat or calendar event) is shared with a
+channel's current members, as posting it there does, through `shareWithChannel`:
 
 ```ts
 await project.updateSharePermissions({
   linkShareAccessLevel: 'view',
   channelSharePermissions: [{ channel, accessLevel: 'comment', operation: 'add' }],
 });
+await doc.shareWithChannel(channel);
 await event.shareWithChannel(channel);
 ```
 
@@ -564,6 +574,36 @@ with `setImportant` and `delete`. Omit the inbox to select the caller's primary.
 caller-persisted operation IDs. `email.reminders({ inboxes })` auto-paginates and
 returns thread handles alongside reminder snapshots.
 
+### Saved views
+
+```ts
+const view = await macro.savedViews.create({
+  name: 'Invoices',
+  config: {
+    kind: 'email',
+    version: 1,
+    filters: {
+      inboxIds: [], participants: [{ type: 'domain', domain: 'example.com' }],
+      participantFields: ['from'], subject: ['invoice'], starred: false,
+      attachments: [], calendarInvite: false, tags: [],
+    },
+  },
+});
+await view.edit({ name: 'Bills', team: macro.teams.byId(teamId) });
+for await (const each of macro.savedViews.list({ kind: 'email' })) {
+  console.log(await each.name());
+}
+await macro.savedViews.reorder('email', [view]);
+await view.remove();
+```
+
+A saved view is a named filter definition the app shows in a surface's sidebar
+(`kind` picks the surface, such as Email). `edit` and `remove` are checked
+against the revision the handle last saw: a write made elsewhere since then
+fails with a 409 conflict instead of being overwritten, and `view.refresh()`
+picks up the current revision. Order is personal; `reorder` sets yours for one
+kind.
+
 ### CRM contact fields
 
 `macro.crm.contactById(id).setEmail(address)` adds an address only when absent;
@@ -783,13 +823,17 @@ replay if you disconnect.
 Handlers receive the same hydrated payloads as webhook deliveries — ORM
 handles for every entity the event names.
 
-Four families are delivered: `document.*`, `channel.*`, `message.*`, and
-`agent_session.*`. Message events (`posted`, `patched`, `deleted`, `mentioned`,
+Five families are delivered: `document.*`, `channel.*`, `message.*`, `user.*`,
+and `agent_session.*`. Message events (`posted`, `patched`, `deleted`, `mentioned`,
 `attachment_created`, `attachment_removed`) cover channel messages and document
 comments alike: `metadata.parent` names the channel or document, and the
 hydrated `target` carries a `Channel` plus `Message` (and the `Thread` for a
 reply) or a `Document` plus `Comment`. `macro.events.onSelfMention` subscribes to
 `message.mentioned` deliveries that name the caller.
+`user.picture_changed` tells you a user's own profile picture changed (set or
+removed) and is delivered only to the changed user's own workspaces; it hydrates
+to the `User` and, when the picture is a static file, its `StaticImage` (`image`
+is undefined when the picture was removed or set by URL).
 Agent-session events describe a coding agent's life: `opened`, `turn_started`,
 `turn_ended`, `settled` (a turn ended with nothing queued behind it),
 `waiting_for_input` (the agent asked its owner a question), `input_received`,
@@ -910,9 +954,10 @@ the build.
 
 You can add exceptions for stuff OpenAPI covers that we don't want the sdk to
 support by adding them to the `src/coverage/skipped.ts`. You can implement
-support by adding a wrapper to the appropriate model. There is CI to ensure that
-we don't forget to add coverage or explicitly skip coverage for new generated
-functions (endpoints).
+support by adding a wrapper to the appropriate model. Every wrapped generated
+method also needs a hand-assigned display verb in `src/utils/verbs.ts`; choose a
+read verb for a POST that only reads. Coverage fails for missing or stale verb
+entries as well as uncovered endpoints.
 
 ## Events
 

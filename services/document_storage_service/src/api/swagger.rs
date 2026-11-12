@@ -3,6 +3,10 @@
     reason = "Just to allow GetActivitiesResponse and UserActivitiesResponse"
 )]
 
+use crate::api::saved_views::definitions::{
+    CreateSavedViewDefinitionRequest, ReorderSavedViewDefinitionsRequest, SavedViewDefinition,
+    SavedViewDefinitionPage, SavedViewSharingRequest, UpdateSavedViewDefinitionRequest,
+};
 use crate::api::saved_views::{
     CreateViewRequest, ExcludeDefaultViewRequest, ExcludedDefaultView, View, ViewPatch,
 };
@@ -226,6 +230,30 @@ use utoipa::OpenApi;
     ),
     modifiers(&FormsApiAddon),
     paths(
+        passwords::inbound::router::teams,
+        passwords::inbound::router::list,
+        passwords::inbound::router::create,
+        passwords::inbound::router::detail,
+        passwords::inbound::router::username,
+        passwords::inbound::router::copy_username,
+        passwords::inbound::router::update,
+        passwords::inbound::router::patch,
+        passwords::inbound::router::remove,
+        passwords::inbound::router::reveal,
+        passwords::inbound::router::copy,
+        passwords::inbound::router::history,
+        passwords::inbound::router::activity,
+        passwords::inbound::router::grants,
+        passwords::inbound::router::share,
+        passwords::inbound::router::folders,
+        passwords::inbound::router::create_folder,
+        passwords::inbound::router::remove_folder,
+        passwords::inbound::router::rename_folder,
+        passwords::inbound::router::move_folder,
+        passwords::inbound::router::set_totp,
+        passwords::inbound::router::remove_totp,
+        passwords::inbound::router::totp,
+
         dictation::inbound::axum_router::transcribe_handler,
         health::health_handler,
         calendar_events::inbound::axum_router::list_occurrences,
@@ -386,6 +414,9 @@ use utoipa::OpenApi;
         harnesses::inbound::axum_router::claim_pairing_handler,
         harnesses::inbound::axum_router::list_harnesses_handler,
         harnesses::inbound::axum_router::patch_harness_handler,
+        harnesses::inbound::axum_router::list_directory_handler,
+        harnesses::inbound::axum_router::set_team_access_handler,
+        harnesses::inbound::axum_router::list_residents_handler,
         harnesses::inbound::axum_router::delete_harness_handler,
         harnesses::inbound::axum_router::list_bound_agents_handler,
         harnesses::inbound::axum_router::get_self_harness_handler,
@@ -498,6 +529,14 @@ use utoipa::OpenApi;
         channel_labels::inbound::axum_router::rename_channel_label_handler,
         channel_labels::inbound::axum_router::delete_channel_label_handler,
         channel_labels::inbound::axum_router::set_channel_label_handler,
+
+        // channel sections
+        channel_labels::inbound::axum_router::list_channel_sections_handler,
+        channel_labels::inbound::axum_router::preview_channel_section_handler,
+        channel_labels::inbound::axum_router::create_channel_section_handler,
+        channel_labels::inbound::axum_router::update_channel_section_handler,
+        channel_labels::inbound::axum_router::delete_channel_section_handler,
+        channel_labels::inbound::axum_router::set_channel_section_handler,
 
         // user api keys
         account_manager::inbound::axum_router::request_account_manager_handler,
@@ -614,6 +653,12 @@ use utoipa::OpenApi;
         saved_views::delete_view_handler,
         saved_views::patch_view_handler,
         saved_views::exclude_default_view_handler,
+        saved_views::definitions::list_handler,
+        saved_views::definitions::get_handler,
+        saved_views::definitions::create_handler,
+        saved_views::definitions::update_handler,
+        saved_views::definitions::delete_handler,
+        saved_views::definitions::reorder_handler,
 
         // /github
         github::inbound::github_sync_router::install_sync_handler,
@@ -675,6 +720,8 @@ use utoipa::OpenApi;
     ),
     components(
         schemas(
+            passwords::inbound::router::Failure,
+            passwords::inbound::router::FailureCode,
             access_requests::domain::models::ShareEntity,
             DocumentStorageServiceApiVersion,
             GenericResponse,
@@ -1040,6 +1087,9 @@ use utoipa::OpenApi;
             // Harnesses
             harnesses::domain::models::Harness,
             harnesses::domain::models::HarnessOwner,
+            harnesses::domain::models::HarnessAccess,
+            harnesses::domain::models::HarnessResident,
+            harnesses::domain::models::SetHarnessTeamAccessRequest,
             harnesses::domain::models::HarnessAgent,
             harnesses::domain::models::HarnessSession,
             harnesses::domain::models::CreatePairingRequest,
@@ -1178,6 +1228,12 @@ use utoipa::OpenApi;
 
             CreateViewRequest,
             ExcludeDefaultViewRequest,
+            SavedViewDefinition,
+            SavedViewDefinitionPage,
+            CreateSavedViewDefinitionRequest,
+            UpdateSavedViewDefinitionRequest,
+            SavedViewSharingRequest,
+            ReorderSavedViewDefinitionsRequest,
             BranchNameResponse,
             ShortIdResponse,
             documents_hex::domain::models::GithubPullRequest,

@@ -13,10 +13,12 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use agent_client_protocol::schema::v1::SessionId;
+use agent_harness::domain::model::RuntimeAccessFacts;
 use agent_harness::domain::ports::{HarnessBindings, HarnessPresence, RuntimeConnectionId};
 use agent_session::domain::model::{AgentSessionId, ReplicaId};
 use bot_id::BotId;
 use harness_id::HarnessId;
+use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 use tracing::Instrument as _;
 
@@ -46,19 +48,46 @@ impl PgHarnessBindings {
 
 impl HarnessBindings for PgHarnessBindings {
     async fn harness_for(&self, bot: BotId) -> anyhow::Result<Option<HarnessId>> {
-        let harness_id = sqlx::query_scalar!(
+        use bots::domain::ports::HarnessAssignments;
+        use harnesses::domain::ports::HarnessRepo;
+
+        let assignment = bots::outbound::pg_bots_repo::PgBotsRepo::new(self.pool.clone());
+        let Some(harness) = assignment.harness_for(bot).await? else {
+            return Ok(None);
+        };
+        let repo = harnesses::outbound::pg_harness_repo::PgHarnessRepo::new(self.pool.clone());
+        Ok(repo.get_harness(harness).await?.map(|harness| harness.id))
+    }
+
+    async fn access_facts(
+        &self,
+        bot: BotId,
+        actor: Option<&MacroUserIdStr<'static>>,
+    ) -> anyhow::Result<Option<RuntimeAccessFacts>> {
+        let actor_id: Option<&str> = actor.map(|actor| actor.as_ref());
+        let row = sqlx::query!(
             r#"
-            SELECT ac.harness_id
+            SELECT
+                h.name AS runtime_name,
+                NOT ac.is_coding AS "resident!",
+                agent_owner_can_run(ac.bot_id) AS "agent_owner_may_use!",
+                harness_can_run(ac.harness_id, $2) AS "actor_may_use!"
             FROM agent_configs ac
             JOIN harnesses h ON h.id = ac.harness_id
             WHERE ac.bot_id = $1 AND h.deleted_at IS NULL
             "#,
             bot.as_uuid(),
+            actor_id,
         )
         .fetch_optional(&self.pool)
         .await?;
 
-        Ok(harness_id.flatten().map(HarnessId::new_from_uuid))
+        Ok(row.map(|row| RuntimeAccessFacts {
+            runtime_name: row.runtime_name,
+            resident: row.resident,
+            agent_owner_may_use: row.agent_owner_may_use,
+            actor_may_use: actor.map(|_| row.actor_may_use),
+        }))
     }
 
     async fn sessions_on_harness(
@@ -66,27 +95,19 @@ impl HarnessBindings for PgHarnessBindings {
         harness: HarnessId,
         acp_sessions: &[SessionId],
     ) -> anyhow::Result<Vec<AgentSessionId>> {
-        let acp_sessions: Vec<String> = acp_sessions
-            .iter()
-            .map(|session| session.to_string())
-            .collect();
-        let ids = sqlx::query_scalar!(
-            r#"
-            SELECT s.id
-            FROM agent_session s
-            JOIN agent_configs ac ON ac.bot_id = s.bot_id
-            JOIN harnesses h ON h.id = ac.harness_id
-            WHERE ac.harness_id = $1
-              AND h.deleted_at IS NULL
-              AND s.acp_session_id = ANY($2)
-            "#,
-            harness.as_uuid(),
-            &acp_sessions,
-        )
-        .fetch_all(&self.pool)
-        .await?;
+        use agent_session::domain::ports::RuntimeSessionLookup;
+        use bots::domain::ports::HarnessAssignments;
+        use harnesses::domain::ports::HarnessRepo;
 
-        Ok(ids.into_iter().map(AgentSessionId::new_from_uuid).collect())
+        let repo = harnesses::outbound::pg_harness_repo::PgHarnessRepo::new(self.pool.clone());
+        if repo.get_harness(harness).await?.is_none() {
+            return Ok(Vec::new());
+        }
+        let assignments = bots::outbound::pg_bots_repo::PgBotsRepo::new(self.pool.clone());
+        let bots = assignments.bots_on_harness(harness).await?;
+        let sessions =
+            agent_session::outbound::runtime_sessions::PgRuntimeSessions(self.pool.clone());
+        Ok(sessions.sessions_for_bots(&bots, acp_sessions).await?)
     }
 }
 

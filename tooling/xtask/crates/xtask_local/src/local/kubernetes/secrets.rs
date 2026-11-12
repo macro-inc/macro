@@ -70,11 +70,18 @@ pub(super) fn create(state: &Path, args: &InstanceArgs, params: &mut Value) -> R
     let resolved = super::super::env_layer::resolve(
         super::super::Mode::Local,
         &instance,
-        args.no_doppler,
-        args.env_file.as_deref(),
-        true,
-        super::super::local_env::Tunnels::default(),
-        false,
+        super::super::env_layer::ResolveOptions {
+            no_doppler: args.no_doppler,
+            env_file: args.env_file.as_deref(),
+            static_frontend: true,
+            tunnels: super::super::local_env::Tunnels::default(),
+            wire_otel: false,
+            computers: &super::super::computers::Computers::new(
+                super::super::Mode::Local,
+                super::super::computers::Fleet::Off,
+                &instance,
+            ),
+        },
     )?;
     let mut env = resolved.merged;
     normalize(&mut env);

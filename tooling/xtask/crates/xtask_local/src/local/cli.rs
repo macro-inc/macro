@@ -29,14 +29,14 @@ enum Cmd {
     /// Build the minimal runtime image.
     RuntimeImage(ForceArg),
     /// Render the per-instance compose override and print its path.
-    GenCompose(InstanceArgs),
+    GenCompose(ComposeArgs),
     /// Run the parallel Nix-declared Kubernetes local stack.
     #[command(subcommand)]
     KubeLocal(super::kubernetes::Cmd),
     /// Print the inventoried backend path prefixes for an external Vite launcher.
     FrontendProxyRoutes,
     /// Render merged compose and assert the no-build / runtime-image invariants.
-    ValidateLocalCompose(InstanceArgs),
+    ValidateLocalCompose(ComposeArgs),
     /// Resolve env layers and assert mode-appropriate invariants.
     ValidateLocalEnv(ValidateEnvArgs),
     /// Create the declared Kafka event topics on the instance's local broker.
@@ -101,6 +101,15 @@ pub struct InstanceArgs {
     pub port_base: Option<u16>,
 }
 
+/// An instance plus the computers fleet its compose is rendered for.
+#[derive(Args, Clone, Default)]
+pub struct ComposeArgs {
+    #[command(flatten)]
+    pub instance: InstanceArgs,
+    #[command(flatten)]
+    pub computers: super::computers::ComputersArgs,
+}
+
 #[derive(Args, Clone, Default)]
 pub struct EnvArgs {
     /// Skip the optional Doppler layer entirely.
@@ -132,6 +141,8 @@ pub struct RunArgs {
     pub env: EnvArgs,
     #[command(flatten)]
     pub build: BuildArgs,
+    #[command(flatten)]
+    pub computers: super::computers::ComputersArgs,
     /// Do not start or serve the frontend.
     #[arg(long)]
     pub no_frontend: bool,
@@ -274,8 +285,16 @@ fn run(cli: Cli) -> Result<()> {
             Ok(())
         }
         Cmd::ValidateLocalCompose(a) => {
-            let instance = super::instance::Instance::resolve(a.instance.as_deref(), a.port_base)?;
-            super::validate::local_compose(&instance, Mode::Local)
+            let instance = super::instance::Instance::resolve(
+                a.instance.instance.as_deref(),
+                a.instance.port_base,
+            )?;
+            let computers = super::computers::Computers::new(
+                Mode::Local,
+                a.computers.fleet(super::computers::Fleet::Docker),
+                &instance,
+            );
+            super::validate::local_compose(&instance, Mode::Local, &computers)
         }
         Cmd::ValidateLocalEnv(a) => {
             let instance = super::instance::Instance::resolve(

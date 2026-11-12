@@ -625,6 +625,7 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
           fields={state.recipients}
           values={form.recipients}
           options={props.session.recipientOptions}
+          createRecipientSource={composeContext.createRecipientSource}
           inboxes={composeContext.accounts.inboxes}
           activeInboxId={activeInboxId}
           senderEmail={activeInboxEmail}
@@ -710,7 +711,10 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
             <MarkdownShell
               config={editorConfig}
               class={cn(
-                'ph-no-capture cursor-text wrap-break-word text-base text-ink h-auto overflow-visible',
+                // shrink-0: the editor's min-h-8 otherwise lets this capped
+                // flex column squeeze its box below its text, and the
+                // watermark after the box is then drawn over the reply.
+                'ph-no-capture cursor-text wrap-break-word text-base text-ink h-auto overflow-visible shrink-0',
                 // Quoted thread collapses behind the "⋯" pill below
                 // (rule lives in LexicalMarkdown/styles.css — Tailwind arbitrary
                 // variants turn the underscore in .macro_quote into a space)

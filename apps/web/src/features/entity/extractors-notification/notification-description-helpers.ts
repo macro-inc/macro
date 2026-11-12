@@ -106,6 +106,7 @@ export function getActionVerb(type: NotificationType): string {
       .with('initiative_discussion', () => 'commented')
       .with('entity_access_requested', () => 'requested access')
       .with('entity_access_granted', () => 'granted access')
+      .with('runtime_access_removed', () => 'removed access')
       .with('commented_on_document', 'crm_discussion', () => 'commented')
       .with('channel_message_reply', () => 'replied')
       .with(
@@ -136,6 +137,7 @@ export function getActionVerb(type: NotificationType): string {
       .with('agent_session_waiting_for_input', () => 'needs your answer')
       .with('agent_session_mentioned', () => 'mentioned you')
       .with('routine_run_finished', () => 'ran')
+      .with('agent_sign_in_expiry', () => 'needs a new sign-in')
       .exhaustive(() => 'updated')
   );
 }
@@ -170,6 +172,9 @@ export function getTypeNoun(type: NotificationType, count: number): string {
     )
     .with('entity_access_granted', () =>
       count === 1 ? 'access grant' : 'access grants'
+    )
+    .with('runtime_access_removed', () =>
+      count === 1 ? 'access removal' : 'access removals'
     )
     .with('commented_on_document', 'crm_discussion', () =>
       count === 1 ? 'comment' : 'comments'
@@ -209,6 +214,9 @@ export function getTypeNoun(type: NotificationType, count: number): string {
     )
     .with('routine_run_finished', () =>
       count === 1 ? 'routine run' : 'routine runs'
+    )
+    .with('agent_sign_in_expiry', () =>
+      count === 1 ? 'agent sign-in' : 'agent sign-ins'
     )
     .exhaustive(() => (count === 1 ? 'notification' : 'notifications'));
 }

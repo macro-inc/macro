@@ -6,6 +6,7 @@ import {
   screen,
   waitFor,
 } from '@solidjs/testing-library';
+import { Dropdown } from '@ui';
 import { createSignal, type ParentProps, Show } from 'solid-js';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { SYSTEM_PROPERTY_IDS } from '../../constants';
@@ -36,12 +37,21 @@ vi.mock('@core/user/util', () => ({
   },
 }));
 vi.mock('@core/component/UserIcon', () => ({ UserIcon: () => <span /> }));
+vi.mock('@queries/contacts/use-directory', () => ({
+  usePinnedContactUsers: () => () => [],
+}));
 vi.mock('@core/context/quickAccess', () => ({
   useQuickAccess: () => ({
     isLoading: () => false,
-    useList: (...buckets: string[]) => ({
+    useList: (options: { buckets: string[]; searchTerm?: () => string }) => ({
+      isLoading: () => false,
+      isLoadingMore: () => false,
+      hasMore: () => false,
+      error: () => undefined,
+      windowKey: () => undefined,
+      loadMore: async () => {},
       items: () =>
-        buckets.includes('initiative')
+        (options.buckets.includes('initiative')
           ? [
               {
                 kind: 'initiative',
@@ -72,7 +82,12 @@ vi.mock('@core/context/quickAccess', () => ({
                   email: 'outside@example.com',
                 },
               },
-            ],
+            ]
+        ).filter((item) =>
+          item.data.name
+            .toLowerCase()
+            .includes(options.searchTerm?.().toLowerCase() ?? '')
+        ),
     }),
   }),
 }));
@@ -194,6 +209,37 @@ afterEach(() => {
   cleanup();
 });
 
+describe('popover keyboard dismissal', () => {
+  it('leaves composing Escape to the IME and closes on ordinary Escape', async () => {
+    const { EditorPopover } =
+      await vi.importActual<typeof import('./EditorPopover')>(
+        './EditorPopover'
+      );
+    const onClose = vi.fn();
+    render(() => (
+      <Dropdown defaultOpen>
+        <EditorPopover onClose={onClose}>
+          <input aria-label="Picker search" />
+        </EditorPopover>
+      </Dropdown>
+    ));
+    const input = screen.getByRole('textbox');
+    for (const composition of [{ isComposing: true }, { keyCode: 229 }]) {
+      const event = new KeyboardEvent('keydown', {
+        key: 'Escape',
+        bubbles: true,
+        cancelable: true,
+        ...composition,
+      });
+      input.dispatchEvent(event);
+      expect(onClose).not.toHaveBeenCalled();
+      expect(event.defaultPrevented).toBe(false);
+    }
+    fireEvent.keyDown(input, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+});
+
 describe('assigning an agent through task and project properties', () => {
   it.each([
     { Editor: EntityEditor, search: false },
@@ -213,6 +259,19 @@ describe('assigning an agent through task and project properties', () => {
       fireEvent.keyDown(screen.getByRole('textbox'), {
         key: 'ArrowDown',
       });
+      // Confirming an IME candidate must not select the highlighted assignee.
+      for (const composition of [{ isComposing: true }, { keyCode: 229 }]) {
+        expect(
+          fireEvent.keyDown(screen.getByRole('textbox'), {
+            key: 'Enter',
+            ...composition,
+          })
+        ).toBe(true);
+        expect(screen.getByRole('textbox')).toHaveProperty(
+          'value',
+          search ? 'research' : ''
+        );
+      }
       fireEvent.keyDown(screen.getByRole('textbox'), {
         key: 'Enter',
       });
@@ -373,6 +432,33 @@ describe('team-first assignees', () => {
     }
   );
   it.each([EntityEditor, EntitySheetEditor])(
+    'keeps a removed assignee searchable for re-adding in the same editor',
+    async (Editor) => {
+      const assigned: EntityProperty = {
+        ...property,
+        value: [
+          { entity_id: 'macro|outside@example.com', entity_type: 'USER' },
+        ],
+      };
+      const onSave = setup(undefined, assigned, Editor);
+      fireEvent.click(screen.getByText('Outside'));
+
+      const input = screen.getByRole('textbox');
+      fireEvent.input(input, { target: { value: 'outside' } });
+      const option = await screen.findByText('Outside');
+      fireEvent.click(option);
+      expect(
+        option.closest('[data-entity-index]')?.querySelector('input')
+      ).toHaveProperty('checked', true);
+
+      fireEvent.click(
+        screen.getByText(Editor === EntitySheetEditor ? 'Done' : 'Dismiss')
+      );
+      expect(onSave).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each([EntityEditor, EntitySheetEditor])(
     'does not assign a non-team contact through search or Enter',
     async (Editor) => {
       const onSave = setup(undefined, property, Editor);
@@ -397,7 +483,12 @@ describe('team-first assignees', () => {
     };
     const onSave = setup(undefined, assigned);
     fireEvent.click(screen.getByText('former@example.com'));
-    expect(screen.queryByText('former@example.com')).toBeNull();
+    expect(
+      screen
+        .getByText('former@example.com')
+        .closest('[data-entity-index]')
+        ?.querySelector('input')
+    ).toHaveProperty('checked', false);
     fireEvent.click(screen.getByText('Dismiss'));
     await waitFor(() =>
       expect(onSave).toHaveBeenCalledWith(

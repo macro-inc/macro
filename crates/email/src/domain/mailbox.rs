@@ -347,6 +347,7 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
             mailbox.sync_generation = lease.mailbox.sync_generation,
             outlook.stream_kind = "folder_catalog",
             outlook.folders = tracing::field::Empty,
+            outlook.provider_item_count = tracing::field::Empty,
             outlook.outcome = tracing::field::Empty,
             outlook.defer_reason = tracing::field::Empty,
             outlook.defer_seconds = tracing::field::Empty,
@@ -365,6 +366,16 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
         let result = match outcome {
             Ok(folders) => {
                 span.record("outlook.folders", span_int(folders.len()));
+                span.record(
+                    "outlook.provider_item_count",
+                    span_int(
+                        folders
+                            .iter()
+                            .filter_map(|folder| folder.total_items)
+                            .map(u64::from)
+                            .sum::<u64>(),
+                    ),
+                );
                 self.repo.commit_catalog(lease, &folders).await
             }
             Err(MailboxError::Provider(error)) => {
@@ -412,11 +423,12 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
             mailbox.link_id = %lease.mailbox.link_id,
             mailbox.sync_generation = lease.mailbox.sync_generation,
             outlook.stream_kind = "mail_folder",
+            outlook.stream_id = %lease.id,
             outlook.page_items = tracing::field::Empty,
             outlook.rows_queued = tracing::field::Empty,
-            outlook.delta_advanced = false,
-            outlook.folder_initial_complete = lease.initial_complete,
-            outlook.cursor_reset = false,
+            outlook.delta_advanced = tracing::field::Empty,
+            outlook.folder_initial_complete = tracing::field::Empty,
+            outlook.cursor_reset = tracing::field::Empty,
             outlook.notification_wait_ms = lease
                 .notification
                 .as_ref()
@@ -442,6 +454,9 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
             || self.repo.renew(SyncLease::Stream(lease)),
         )
         .await;
+        let mut delta_advanced = false;
+        let mut folder_initial_complete = lease.initial_complete;
+        let mut cursor_reset = false;
         let result = match outcome {
             Ok(page) => {
                 span.record(
@@ -451,21 +466,19 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
                 let checkpoint = matches!(page.position, StreamPosition::Checkpoint(_));
                 self.repo.commit_page(lease, &page).await.map(|committed| {
                     span.record("outlook.rows_queued", span_int(committed.queued));
-                    span.record("outlook.delta_advanced", true);
-                    span.record(
-                        "outlook.folder_initial_complete",
-                        lease.initial_complete || checkpoint,
-                    );
+                    delta_advanced = true;
+                    folder_initial_complete |= checkpoint;
                     committed.import_completed
                 })
             }
             Err(MailboxError::Provider(EmailApiError::OutdatedCursor)) => {
-                span.record("outlook.cursor_reset", true);
+                cursor_reset = true;
                 self.repo.reset_stream(lease).await.map(|()| None)
             }
             Err(MailboxError::Provider(error)) => {
                 let delay = retry_seconds(&error);
                 let error = MailboxError::from(error);
+                record_stream(&span, delta_advanced, folder_initial_complete, cursor_reset);
                 self.repo
                     .release_stream(lease, delay)
                     .await
@@ -477,6 +490,7 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
             }
             Err(error) => Err(error),
         };
+        record_stream(&span, delta_advanced, folder_initial_complete, cursor_reset);
         match result {
             Ok(import_completed) => {
                 record_done(&span, "imported");
@@ -698,4 +712,16 @@ fn retry_seconds(error: &EmailApiError) -> u32 {
         EmailApiError::Permanent { .. } => 600,
         _ => 30,
     }
+}
+
+/// What one enumerated page did to its folder's stream, recorded once.
+fn record_stream(
+    span: &Span,
+    delta_advanced: bool,
+    folder_initial_complete: bool,
+    cursor_reset: bool,
+) {
+    span.record("outlook.delta_advanced", delta_advanced);
+    span.record("outlook.folder_initial_complete", folder_initial_complete);
+    span.record("outlook.cursor_reset", cursor_reset);
 }

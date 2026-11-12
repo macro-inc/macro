@@ -12,12 +12,15 @@ use document_storage_service_client::DocumentStorageServiceClient;
 use entity_registry::{EntityRecord, EntityRegistryService, Owner, RegisteredEntityType};
 use macro_authorization::INTERNAL_API_KEY_HEADER;
 use rootcause::{Report, compat::ReportAsError, prelude::*};
-use teams::domain::owned_entity_cleanup::{OwnedEntityCleanup, OwnedEntityRef, TeamDeletionOwner};
+use teams::domain::owned_entity_cleanup::{
+    OwnedEntityCleanup, OwnedEntityRef, TeamDeletionGuard, TeamDeletionOwner,
+};
 use uuid::Uuid;
 
 /// [`OwnedEntityCleanup`] over the bot roster and the entity registry.
 #[derive(Clone)]
 pub struct TeamOwnedEntityCleanupAdapter<B, R> {
+    vault_metadata: Arc<dyn passwords::domain::ports::Repository>,
     bots: B,
     registry: R,
     documents: Arc<DocumentStorageServiceClient>,
@@ -25,6 +28,7 @@ pub struct TeamOwnedEntityCleanupAdapter<B, R> {
     internal_key: String,
     harness_url: String,
     scheduled_action_url: String,
+    computers: Arc<dyn crate::domain::computer_billing::TeamComputers>,
 }
 
 impl<B, R> TeamOwnedEntityCleanupAdapter<B, R> {
@@ -33,15 +37,22 @@ impl<B, R> TeamOwnedEntityCleanupAdapter<B, R> {
     ///
     /// `internal_key` is the fleet-wide internal service key that the agent
     /// harness and scheduled-action services validate.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "one client per service whose team-owned entities are cleaned up"
+    )]
     pub fn new(
+        vault_metadata: Arc<dyn passwords::domain::ports::Repository>,
         bots: B,
         registry: R,
         documents: Arc<DocumentStorageServiceClient>,
         internal_key: String,
         harness_url: String,
         scheduled_action_url: String,
+        computers: Arc<dyn crate::domain::computer_billing::TeamComputers>,
     ) -> Result<Self, Report> {
         Ok(Self {
+            vault_metadata,
             bots,
             registry,
             documents,
@@ -52,6 +63,7 @@ impl<B, R> TeamOwnedEntityCleanupAdapter<B, R> {
             internal_key,
             harness_url,
             scheduled_action_url,
+            computers,
         })
     }
 
@@ -83,12 +95,60 @@ impl<B, R> TeamOwnedEntityCleanupAdapter<B, R> {
     }
 }
 
+struct PasswordsTeamDeletionGuard {
+    _lease: Box<dyn passwords::domain::ports::ItemLock>,
+}
+impl std::fmt::Debug for PasswordsTeamDeletionGuard {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("PasswordsTeamDeletionGuard")
+    }
+}
+impl TeamDeletionGuard for PasswordsTeamDeletionGuard {}
+
 impl<B, R> OwnedEntityCleanup for TeamOwnedEntityCleanupAdapter<B, R>
 where
     B: TeamBotRoster + Clone,
     R: EntityRegistryService,
 {
     type Err = ReportAsError;
+
+    #[tracing::instrument(skip_all, err, name = "team.delete.passwords", fields(team_id=%team_id))]
+    async fn prepare_team_deletion(
+        &self,
+        team_id: Uuid,
+    ) -> Result<Option<Box<dyn TeamDeletionGuard>>, Self::Err> {
+        use passwords::domain::models::{ItemId, TeamId};
+        let team = TeamId(team_id);
+        if !self
+            .vault_metadata
+            .has_team_data(team)
+            .await
+            .map_err(|error| Report::new(error).into_dynamic())?
+        {
+            let lease = self
+                .vault_metadata
+                .lock(team, ItemId(Uuid::nil()))
+                .await
+                .map_err(|error| Report::new(error).into_dynamic())?;
+            // Serialize the empty proof with first creation. Retain its lease through
+            // ordinary team deletion; a waiting create then sees missing membership.
+            if !self
+                .vault_metadata
+                .has_team_data(team)
+                .await
+                .map_err(|error| Report::new(error).into_dynamic())?
+            {
+                return Ok(Some(Box::new(PasswordsTeamDeletionGuard { _lease: lease })));
+            }
+            // DSS takes this same lease and closes its permanent team fence.
+            drop(lease);
+        }
+        self.documents
+            .purge_team_vault(team_id)
+            .await
+            .map_err(|error| Report::new(error).into_dynamic())?;
+        Ok(None)
+    }
 
     #[tracing::instrument(skip(self), err)]
     async fn team_bots(&self, team_id: Uuid) -> Result<Vec<BotId>, Self::Err> {
@@ -141,6 +201,13 @@ where
                 .map_err(Report::into_dynamic)?,
         }
         Ok(())
+    }
+    #[tracing::instrument(skip(self), err)]
+    async fn release_computers(&self, team_id: Uuid) -> Result<(), Self::Err> {
+        self.computers
+            .release_team(team_id)
+            .await
+            .map_err(ReportAsError::from)
     }
 }
 

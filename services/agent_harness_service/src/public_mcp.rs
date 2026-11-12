@@ -1,5 +1,6 @@
 //! Public workspace MCP and OAuth, hosted on the harness's public listener.
 mod analytics;
+mod macro_api_tokens;
 mod markdown_images;
 #[cfg(test)]
 mod test;
@@ -15,6 +16,7 @@ use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use mcp_auth_proxy::{
     domain::{
         redirect_uri::RedirectUriPolicy,
+        resource::McpResources,
         service::{McpAuthProxyService, McpAuthProxyServiceDeps, McpAuthProxyServiceImpl},
     },
     outbound::{
@@ -31,30 +33,6 @@ use rmcp::transport::streamable_http_server::{
 use secretsmanager_client::LocalOrRemoteSecret;
 use std::sync::Arc;
 use tool_service::{AuthenticatedToolService, CodeModeSurface};
-
-/// Accept only configured OAuth and transport hosts, including local DNS names.
-fn http_config(
-    public_url: &url::Url,
-    service_url: &url::Url,
-) -> anyhow::Result<StreamableHttpServerConfig> {
-    let mut config = StreamableHttpServerConfig::default().with_allowed_hosts([
-        public_url
-            .host_str()
-            .context("public MCP URL has no host")?
-            .to_owned(),
-        service_url
-            .host_str()
-            .context("MCP service URL has no host")?
-            .to_owned(),
-        "localhost".into(),
-        "127.0.0.1".into(),
-        "gateway.macro.com".into(),
-        "dev-gateway.macro.com".into(),
-    ]);
-    config.legacy_session_mode = false;
-    config.json_response = true;
-    Ok(config)
-}
 
 /// User-scoped code execution.
 pub struct PublicCodeMode {
@@ -88,16 +66,29 @@ pub async fn router(
     code_mode: Option<PublicCodeMode>,
 ) -> anyhow::Result<axum::Router> {
     let public_url = macro_service_urls::McpPublicUrl::new()?;
-    let (auth_proxy, backfill) =
-        build_auth_proxy(config, secrets, &public_url, db.clone(), kms).await?;
+    let (auth_proxy, backfill) = build_auth_proxy(
+        config,
+        secrets,
+        &public_url,
+        db.clone(),
+        kms,
+        jwt_args.clone(),
+    )
+    .await?;
     let analytics = build_analytics(config, db);
     let item_base_url = macro_service_urls::AppServiceUrl::new()?.to_string();
     let static_file_base_url =
         url::Url::parse(macro_service_urls::StaticFileServiceUrl::new()?.as_ref())?;
-    let http_config = http_config(
-        &public_url.parse_url()?,
-        &macro_service_urls::McpServiceUrl::new()?.parse_url()?,
-    )?;
+    let mcp_public_host = public_url
+        .parse_url()?
+        .host_str()
+        .context("public MCP URL has no host")?
+        .to_owned();
+    let service_host = macro_service_urls::McpServiceUrl::new()?
+        .parse_url()?
+        .host_str()
+        .context("MCP service URL has no host")?
+        .to_owned();
     // Built once: the factory runs per request in stateless mode.
     let tools = ai_tools::tools_for(ai_tools::AiHost::Mcp).toolset;
     let code_mode = code_mode.map(|code_mode| {
@@ -123,7 +114,7 @@ pub async fn router(
             })
         },
         Arc::new(LocalSessionManager::default()),
-        http_config,
+        server_config(mcp_public_host, service_host),
     );
 
     background_tasks.spawn(backfill);
@@ -169,6 +160,7 @@ async fn build_auth_proxy(
     public_url: &macro_service_urls::McpPublicUrl,
     db: sqlx::PgPool,
     kms: aws_sdk_kms::Client,
+    jwt_args: JwtValidationArgs,
 ) -> anyhow::Result<(
     McpAuthProxyServiceImpl<RedisCutoverAuthStore>,
     impl Future<Output = ()> + Send + 'static,
@@ -224,6 +216,14 @@ async fn build_auth_proxy(
     let redis_client = redis::Client::open(config.redis_uri.as_ref().to_owned())
         .context("failed to initialize redis client for MCP auth proxy")?;
     let legacy_clients = Arc::new(RedisClientRegistry::new(redis_client.clone()));
+    let macro_api_tokens = macro_api_tokens::SignedMacroApiTokens {
+        signer: agent_egress::outbound::macro_mcp::MacroApiTokenSigner::new(
+            db.clone(),
+            config.macro_api_token_issuer.as_ref(),
+            config.macro_api_token_private_secret_key.as_ref(),
+        ),
+        jwt_args,
+    };
     let postgres = PostgresAuthStore::new(
         db,
         Arc::new(AwsKmsCiphertexts::new(
@@ -250,6 +250,11 @@ async fn build_auth_proxy(
         "initialized MCP OAuth redirect URI policy"
     );
 
+    // The ChatGPT MCP server is its own Worker that the broker signs in for.
+    let resources = McpResources::new(
+        format!("{mcp_public_url}/mcp"),
+        format!("{}/mcp", macro_service_urls::McpChatgptServiceUrl::new()?),
+    );
     let auth_proxy = McpAuthProxyServiceImpl::new(McpAuthProxyServiceDeps {
         public_url: mcp_public_url,
         redirect_uri_policy,
@@ -258,6 +263,8 @@ async fn build_auth_proxy(
         refresh_token_bindings: store,
         oauth_provider: Arc::new(auth_provider),
         email_codes: Arc::new(email_codes),
+        resources,
+        macro_api_tokens: Arc::new(macro_api_tokens),
     });
     Ok((auth_proxy, backfill))
 }
@@ -294,4 +301,19 @@ fn build_redirect_uri_policy(config: &Config) -> RedirectUriPolicy {
         Some(hosts) => RedirectUriPolicy::new(hosts.split(',')),
         None => RedirectUriPolicy::new(DEFAULT_MCP_ALLOWED_REDIRECT_HOSTS),
     }
+}
+
+/// Public and typed service origins share this authenticated MCP transport.
+fn server_config(public_host: String, service_host: String) -> StreamableHttpServerConfig {
+    let mut config = StreamableHttpServerConfig::default().with_allowed_hosts([
+        public_host,
+        service_host,
+        "localhost".into(),
+        "127.0.0.1".into(),
+        "gateway.macro.com".into(),
+        "dev-gateway.macro.com".into(),
+    ]);
+    config.legacy_session_mode = false;
+    config.json_response = true;
+    config
 }

@@ -11,11 +11,13 @@ import CheckIcon from '@icon/system/regular/check.svg';
 import ClockIcon from '@icon/system/regular/clock-clockwise.svg';
 import EnvelopeIcon from '@icon/system/regular/envelope.svg';
 import FilesIcon from '@icon/system/regular/files.svg';
+import HardDrivesIcon from '@icon/system/regular/hard-drives.svg';
 import PhoneIcon from '@icon/system/regular/phone-call.svg';
 import QuestionIcon from '@icon/system/regular/question.svg';
 import SmileyIcon from '@icon/system/regular/smiley.svg';
 import AgentIcon from '@icon/system/regular/sparkle.svg';
 import UserPlusIcon from '@icon/system/regular/user-plus.svg';
+import WarningIcon from '@icon/system/regular/warning.svg';
 import type { NotificationStack } from '@notifications';
 import { isEntityDiscussionEvent } from '@notifications/entity-discussion';
 import { cn } from '@ui';
@@ -56,6 +58,7 @@ export function getNotificationIcon(
     .with('new_email', () => EnvelopeIcon)
     .with('entity_access_requested', () => UserPlusIcon)
     .with('entity_access_granted', () => CheckIcon)
+    .with('runtime_access_removed', () => WarningIcon)
     .with('channel_invite', () => UserPlusIcon)
     .with('channel_access_requested', () => UserPlusIcon)
     .with('invite_to_team', () => UserPlusIcon)
@@ -81,6 +84,7 @@ export function getNotificationIcon(
     .with('agent_session_waiting_for_input', () => QuestionIcon)
     .with('agent_session_mentioned', () => AtIcon)
     .with('routine_run_finished', () => ClockIcon)
+    .with('agent_sign_in_expiry', () => HardDrivesIcon)
     .exhaustive(() => BellIcon);
 }
 

@@ -7,7 +7,10 @@ import {
   Telemetry,
 } from '@macro-inc/observability';
 import { invoke } from '@tauri-apps/api/core';
-import type { BundleReloadDiagnostics } from './generated/bundle-reloads';
+import type {
+  BundleReloadDiagnostics,
+  BundleStartup,
+} from './generated/bundle-updater';
 import type { EventSnapshot } from './generated/native-diagnostics';
 
 export type ProcessMemory = {
@@ -45,6 +48,8 @@ export type DesktopSnapshot = {
     | (Pick<BundleReloadDiagnostics, 'dispatches' | 'lastSource'> &
         Partial<BundleReloadDiagnostics>)
     | null;
+  /** Absent on older binaries; null when startup skipped bundle storage. */
+  bundleStartup?: BundleStartup | null;
   /** Absent on older native binaries; also gates the diagnostic write command. */
   recentEvents?: EventSnapshot;
 };

@@ -28,6 +28,10 @@ export type AccessRequest = {
      */
     id: string;
     /**
+     * The agent that asked on the requester's behalf, when one did.
+     */
+    requestedByAgent?: string | null;
+    /**
      * Requested upgrade.
      */
     requestedLevel: AccessLevel;
@@ -282,7 +286,7 @@ export type AddFavoriteRequest = {
     /**
      * The type of the entity to favorite.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
 };
 
 /**
@@ -351,6 +355,7 @@ export type Agent = {
      * Which MCP servers sessions of this agent are handed.
      */
     mcp: AgentMcpServers;
+    stopped_reason?: null | AgentStoppedReason;
 };
 
 /**
@@ -478,7 +483,7 @@ export type AgentSessionFilters = {
      */
     include?: boolean;
     /**
-     * Filter by session owner principal — a user ('macro|user1@user.com'), a bot
+     * Filter by session owner principal — a user ('macro|user@example.com'), a bot
      * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every
      * owner.
      */
@@ -572,6 +577,11 @@ export type AgentSessionSource = 'user' | 'agent' | 'routine';
  * `agent_session.visibility` column's.
  */
 export type AgentSessionVisibility = 'listed' | 'unlisted' | 'hidden';
+
+/**
+ * Why an agent cannot run right now.
+ */
+export type AgentStoppedReason = 'no_runtime_access';
 
 /**
  * An agent session typing through its bot.
@@ -1375,7 +1385,7 @@ export type ApprovePairingRequest = {
      */
     name?: string | null;
     /**
-     * Owning team. Omit for a private, user-owned harness.
+     * Team to open the harness to. Omit to keep it to the approving user.
      */
     team_id?: string | null;
 };
@@ -3393,6 +3403,10 @@ export type ChangesetSourceDto = 'github_pull_request';
  */
 export type Channel = {
     /**
+     * Whether members of the channel's team join it automatically.
+     */
+    auto_join_team?: boolean;
+    /**
      * Channel type.
      */
     channel_type: ChannelType;
@@ -3604,23 +3618,28 @@ export type ChannelJoinCodeResponse = {
 /**
  * A shared or account-private label grouping chat channels in the sidebar.
  *
- * `channel_ids` is viewer-relative: it lists only the labelled channels the
- * requesting user participates in. `channel_count` counts every channel in
- * the label so clients can warn accurately before a delete.
+ * `channel_ids` is viewer-relative: legacy labels include joined channels;
+ * sections also include viewable unjoined channels in the verified team.
+ * Legacy manual counts include every assignment; section counts reflect
+ * effective channels visible to the viewer.
  */
 export type ChannelLabel = {
     /**
-     * All assignments for a manual label; visible matches for a smart tag.
+     * Legacy assignments or smart matches; visible effective channels for sections.
      */
     channelCount: number;
     /**
-     * Channels in this label that the requesting user participates in.
+     * Effective channels visible to the viewer in this label or section.
      */
     channelIds: Array<string>;
     /**
      * When the label was created.
      */
     createdAt: string;
+    /**
+     * Explicit picks visible to the viewer (section responses only).
+     */
+    explicitChannelIds?: Array<string> | null;
     /**
      * Stable label id.
      */
@@ -4079,9 +4098,9 @@ export type ChatFilters = {
      */
     notification_filters?: NotificationFilters;
     /**
-     * Filter by chat owner principal — a user ('macro|user1@user.com'), a bot
+     * Filter by chat owner principal — a user ('macro|user@example.com'), a bot
      * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:
-     * ['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to
+     * ['macro|user@example.com'], ['macro|user@example.com', 'bot|0199...']. Empty to
      * search all owners.
      */
     owners?: Array<string>;
@@ -4135,6 +4154,12 @@ export type ClaimedPairing = {
     token: string;
 };
 
+/**
+ * How Claude Code on a Macro computer is paid for: its own Claude account
+ * when it has an active Claude login, otherwise Macro credits.
+ */
+export type ClaudeMode = 'macro_credits' | 'own_account';
+
 export type CloudStorageItemType = 'document' | 'chat' | 'project';
 
 /**
@@ -4152,7 +4177,7 @@ export type CollabSurfaceResponse = {
     /**
      * Type of the parent entity.
      */
-    parentEntityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
+    parentEntityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
     /**
      * Lifecycle state (`ready` for every surface visible via the API).
      */
@@ -4651,6 +4676,8 @@ export type CompleteUploads = {
      */
     uploads: Array<UploadId>;
 };
+
+export type ComputerId = string;
 
 /**
  * The conferencing system backing an event's join URL.
@@ -5515,6 +5542,27 @@ export type CreateProjectResponse = {
     error: boolean;
 };
 
+export type CreateSavedViewDefinitionRequest = {
+    /**
+     * Consumer configuration with its `kind` and `version`, at most 32 KiB.
+     */
+    config: {
+        [key: string]: unknown;
+    };
+    /**
+     * Client-chosen ID, reused to retry the same creation; generated when absent.
+     */
+    id?: string | null;
+    /**
+     * Nonempty display name, at most 120 characters.
+     */
+    name: string;
+    /**
+     * Team to share with, which the creator must belong to.
+     */
+    sharedTeamId?: string | null;
+};
+
 /**
  * Request body for creating a skill — a markdown document containing
  * instructions that AI reads and follows when the skill is referenced in an
@@ -5848,7 +5896,7 @@ export type CreatedPairing = {
     /**
      * Pairing id used to poll for the claim.
      */
-    pairing_id: string;
+    pairing_id: PairingId;
     /**
      * Suggested delay between claim polls.
      */
@@ -6752,9 +6800,9 @@ export type DocumentFilters = {
      */
     notification_filters?: NotificationFilters;
     /**
-     * Filter by document owner principal — a user ('macro|user1@user.com'), a bot
+     * Filter by document owner principal — a user ('macro|user@example.com'), a bot
      * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:
-     * ['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to
+     * ['macro|user@example.com'], ['macro|user@example.com', 'bot|0199...']. Empty to
      * search all owners.
      */
     owners?: Array<string>;
@@ -9206,7 +9254,7 @@ export type EnsureCollabSurfaceRequest = {
     /**
      * Type of the parent entity access derives from.
      */
-    parentEntityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
+    parentEntityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
 };
 
 /**
@@ -10412,7 +10460,7 @@ export type Favorite = {
     /**
      * The type of the favorited entity.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
     /**
      * File type of the favorited document, when applicable.
      */
@@ -10434,7 +10482,7 @@ export type FavoriteEntityRef = {
     /**
      * The type of the favorited entity.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
 };
 
 /**
@@ -12354,9 +12402,20 @@ export type GuideSpec = {
  */
 export type Harness = {
     /**
+     * What the caller may do with it. Reported as `none` where no caller is
+     * in question, such as to the daemon itself.
+     */
+    access?: HarnessAccess;
+    /**
      * Whether agents may bypass ACP permission requests on this harness.
      */
     allow_permission_bypass?: boolean;
+    /**
+     * How Claude Code on this machine is paid for, derived from whether
+     * it has an active Claude login. Only meaningful for Macro computers.
+     */
+    claude_mode?: ClaudeMode;
+    computer_id?: null | ComputerId;
     /**
      * Whether the daemon currently holds a runtime connection.
      */
@@ -12390,10 +12449,19 @@ export type Harness = {
      */
     owner: HarnessOwner;
     /**
+     * Teams it is a team machine for: their every member is a user of it.
+     */
+    shared_team_ids?: Array<string>;
+    /**
      * Update timestamp.
      */
     updated_at: string;
 };
+
+/**
+ * What one caller may do with a machine.
+ */
+export type HarnessAccess = 'owner' | 'user' | 'read' | 'none';
 
 /**
  * An agent bound to a harness, as listed for the daemon.
@@ -12416,10 +12484,7 @@ export type HarnessAgent = {
 export type HarnessId = string;
 
 /**
- * Harness owner.
- *
- * Exactly one of a user or a team, mirroring the bots owner pattern. There
- * are no system harnesses.
+ * The person whose machine this is.
  */
 export type HarnessOwner = {
     type: 'user';
@@ -12427,12 +12492,30 @@ export type HarnessOwner = {
      * Owner user id.
      */
     user_id: string;
-} | {
+};
+
+/**
+ * An agent that lives on a machine, as opposed to a coding agent directed
+ * there turn by turn. Anyone who can reach it can talk to it; it stays up only
+ * while its own owner can use the machine.
+ */
+export type HarnessResident = {
     /**
-     * Owner team id.
+     * Bot id.
      */
-    team_id: string;
-    type: 'team';
+    bot_id: BotId;
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * The user owning the agent, when a person does.
+     */
+    owner_user_id?: string | null;
+    /**
+     * The team owning the agent, when a team does.
+     */
+    team_id?: string | null;
 };
 
 /**
@@ -14967,6 +15050,8 @@ export type PairingDetails = {
     requested_name: string;
 };
 
+export type PairingId = string;
+
 /**
  * Paragraph formatting changes.
  */
@@ -15026,6 +15111,426 @@ export type Params = {
  * The role a user has within a channel.
  */
 export type ParticipantRole = 'owner' | 'admin' | 'member';
+
+/**
+ * Only fixed event names enter the audit index.
+ */
+export type PasswordAction = 'create' | 'update' | 'delete' | 'reveal' | 'copy' | 'share' | 'totp_setup' | 'totp_remove' | 'totp_code';
+
+/**
+ * Bounded audit entry, correlated by opaque item/event IDs.
+ */
+export type PasswordActivity = {
+    /**
+     * Fixed operation category; never derived from secret contents.
+     */
+    action: PasswordAction;
+    /**
+     * Identity of this resource within its team.
+     */
+    id: string;
+    /**
+     * Item associated with this activity.
+     */
+    itemId: PasswordItemId;
+    /**
+     * Time this activity was recorded.
+     */
+    occurredAt: string;
+    /**
+     * Authenticated Macro user identity; never a provider credential.
+     */
+    userId: string;
+};
+
+/**
+ * New folder, at the top level or inside another folder of the team.
+ */
+export type PasswordCreateFolderBody = {
+    /**
+     * Folder display name.
+     */
+    name: string;
+    /**
+     * Containing folder; absent or null for a top-level folder.
+     */
+    parentId?: string | null;
+};
+
+/**
+ * Closed, payload-free failure codes exposed by the human vault API.
+ */
+export type PasswordErrorCode = 'not_found' | 'forbidden' | 'invalid_request' | 'version_conflict' | 'vault_busy' | 'folder_missing' | 'vault_unavailable';
+
+/**
+ * Sanitized vault failure shared with generated HTTP clients.
+ */
+export type PasswordFailure = {
+    /**
+     * Machine-readable category; never contains request or secret values.
+     */
+    code: PasswordErrorCode;
+};
+
+/**
+ * Folder names are metadata only.
+ */
+export type PasswordFolder = {
+    /**
+     * Identity of this resource within its team.
+     */
+    id: string;
+    /**
+     * Searchable display name; must not contain credential values.
+     */
+    name: string;
+    /**
+     * Containing folder in the same team; absent for a top-level folder.
+     */
+    parentId?: string | null;
+    /**
+     * Team namespace and authorization boundary.
+     */
+    teamId: PasswordTeamId;
+};
+
+/**
+ * Validated folder display-name request.
+ */
+export type PasswordFolderBody = {
+    /**
+     * Folder display name.
+     */
+    name: string;
+};
+
+/**
+ * Explicit grant within a team vault.
+ */
+export type PasswordGrant = {
+    /**
+     * Identity of this resource within its team.
+     */
+    id: string;
+    /**
+     * Item template or grantee category.
+     */
+    kind: PasswordGranteeKind;
+    /**
+     * Maximum capability granted to the named recipient.
+     */
+    permission: PasswordPermission;
+};
+
+/**
+ * Future principals can extend this without exposing agent controls in v1.
+ */
+export type PasswordGranteeKind = 'user' | 'team';
+
+/**
+ * Searchable display fields, without any credential values.
+ */
+export type PasswordItemFields = {
+    /**
+     * Resource creation timestamp.
+     */
+    createdAt: string;
+    /**
+     * Whether the item is marked as a favorite.
+     */
+    favorite: boolean;
+    /**
+     * Optional folder belonging to this same team.
+     */
+    folderId?: string | null;
+    /**
+     * Whether the item has an enrolled verification-code seed.
+     */
+    hasTotp: boolean;
+    /**
+     * Identity of this resource within its team.
+     */
+    id: PasswordItemId;
+    /**
+     * Item template or grantee category.
+     */
+    kind: PasswordItemKind;
+    /**
+     * Most recent protected disclosure timestamp, when available.
+     */
+    lastUsedAt?: string | null;
+    /**
+     * Searchable display name; must not contain credential values.
+     */
+    name: string;
+    /**
+     * Number of distinct explicitly shared recipients; a team grant counts once.
+     */
+    shareCount: number;
+    /**
+     * Whether the item currently has explicit grants.
+     */
+    shared: boolean;
+    /**
+     * Team namespace and authorization boundary.
+     */
+    teamId: PasswordTeamId;
+    /**
+     * Most recent metadata modification timestamp.
+     */
+    updatedAt: string;
+    url?: null | PasswordLoginUrl;
+    /**
+     * Committed provider value version.
+     */
+    version: number;
+};
+
+/**
+ * Vault item identity, UUIDv7 for new items.
+ */
+export type PasswordItemId = string;
+
+/**
+ * Product template. Values use the same protected representation for every template.
+ */
+export type PasswordItemKind = 'login' | 'card' | 'note' | 'identity' | 'api' | 'verification_code';
+
+/**
+ * Actor-specific response capabilities, never part of persisted metadata or write intents.
+ */
+export type PasswordItemMetadata = PasswordItemFields & {
+    /**
+     * Whether this caller may edit item fields or verification-code enrollment now.
+     */
+    canEdit: boolean;
+    /**
+     * Whether this caller may change grants or delete the team item now.
+     */
+    canManage: boolean;
+    /**
+     * Whether the team has an explicit grant, independent of direct recipients.
+     */
+    sharedWithTeam: boolean;
+};
+
+/**
+ * A public HTTP(S) login URL; credentials and userinfo are rejected before indexing.
+ */
+export type PasswordLoginUrl = string;
+
+/**
+ * New containing folder for an existing folder.
+ */
+export type PasswordMoveFolderBody = {
+    /**
+     * Containing folder; null moves the folder to the top level.
+     */
+    parentId?: string | null;
+};
+
+/**
+ * A metadata-only change never reads or writes a secret value.
+ */
+export type PasswordPatchItem = {
+    /**
+     * Version observed by the editor; absent only for creation.
+     */
+    expectedVersion: number;
+    /**
+     * Whether the item is marked as a favorite.
+     */
+    favorite: boolean;
+    /**
+     * Optional folder belonging to this same team.
+     */
+    folderId?: string | null;
+    /**
+     * Item template or grantee category.
+     */
+    kind: PasswordItemKind;
+    /**
+     * Searchable display name; must not contain credential values.
+     */
+    name: string;
+    url?: null | PasswordLoginUrl;
+};
+
+/**
+ * Grant capability.
+ */
+export type PasswordPermission = 'view' | 'edit';
+
+/**
+ * Explicit historical version selection for protected disclosure.
+ */
+export type PasswordRevealBody = {
+    /**
+     * Requested historic version, or the currently committed version.
+     */
+    version?: number | null;
+};
+
+/**
+ * Secret response used only by explicit reveal/copy routes.
+ */
+export type PasswordRevealed = {
+    /**
+     * Private payload; never serialize into the metadata repository.
+     */
+    values: PasswordSecretValues;
+    /**
+     * Committed provider value version.
+     */
+    version: number;
+};
+
+/**
+ * One private custom field.
+ */
+export type PasswordSecretField = {
+    /**
+     * Private field label, stored alongside its value in OpenBao.
+     */
+    label: string;
+    /**
+     * Private field content.
+     */
+    value: PasswordSecretString;
+};
+
+/**
+ * Owned sensitive text. Deliberately does not implement Debug or Display.
+ */
+export type PasswordSecretString = string;
+
+/**
+ * Secret payload; never persisted in the metadata database or traced.
+ */
+export type PasswordSecretValues = {
+    /**
+     * Additional private fields, including their labels.
+     */
+    fields: Array<PasswordSecretField>;
+    /**
+     * Private free-form notes, stored only by the secret provider.
+     */
+    notes: PasswordSecretString;
+    /**
+     * Private credential, zeroized when the owned buffer is dropped.
+     */
+    password: PasswordSecretString;
+    /**
+     * Account identifier; authorized humans may resolve it separately from confidential values.
+     */
+    username: PasswordSecretString;
+};
+
+/**
+ * Owner-requested replacement of the explicit grant set.
+ */
+export type PasswordShareBody = {
+    /**
+     * Complete desired recipient set; an empty list revokes sharing.
+     */
+    grants: Array<PasswordGrant>;
+};
+
+/**
+ * Team isolation boundary.
+ */
+export type PasswordTeamId = string;
+
+/**
+ * Private seed submitted only to the verification-code provider.
+ */
+export type PasswordTotpBody = {
+    /**
+     * Confidential base32 verification-code seed.
+     */
+    key: PasswordSecretString;
+};
+
+/**
+ * Current TOTP output is confidential, just like a password.
+ */
+export type PasswordTotpCode = {
+    /**
+     * Current confidential verification code.
+     */
+    code: PasswordSecretString;
+    /**
+     * Verification-code period in seconds.
+     */
+    period: number;
+};
+
+/**
+ * Current account identifier, without confidential credentials or custom fields.
+ */
+export type PasswordUsername = {
+    /**
+     * Account identifier stored only in the provider and resolved for authorized humans.
+     */
+    username: PasswordSecretString;
+    /**
+     * Committed version used to resolve this identifier.
+     */
+    version: number;
+};
+
+/**
+ * Immutable provider version metadata, without historic values.
+ */
+export type PasswordVersion = {
+    /**
+     * Resource creation timestamp.
+     */
+    createdAt: string;
+    /**
+     * Committed provider value version.
+     */
+    version: number;
+};
+
+/**
+ * Mutation without provider-specific representations.
+ */
+export type PasswordWriteItem = {
+    /**
+     * Version observed by the editor; absent only for creation.
+     */
+    expectedVersion?: number | null;
+    /**
+     * Whether the item is marked as a favorite.
+     */
+    favorite: boolean;
+    /**
+     * Optional folder belonging to this same team.
+     */
+    folderId?: string | null;
+    /**
+     * Item template or grantee category.
+     */
+    kind: PasswordItemKind;
+    /**
+     * Searchable display name; must not contain credential values.
+     */
+    name: string;
+    /**
+     * UUIDv7 identifying one logical save across uncertain retries.
+     */
+    operationId: string;
+    /**
+     * Create without the default team edit grant. Updates preserve existing grants.
+     */
+    private?: boolean;
+    url?: null | PasswordLoginUrl;
+    /**
+     * Private payload; never serialize into the metadata repository.
+     */
+    values: PasswordSecretValues;
+};
 
 /**
  * Request to change part of a persisted agent's instructions or settings.
@@ -15880,9 +16385,9 @@ export type ProjectFilters = {
      */
     notification_filters?: NotificationFilters;
     /**
-     * Filter by project owner principal — a user ('macro|user1@user.com'), a bot
+     * Filter by project owner principal — a user ('macro|user@example.com'), a bot
      * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:
-     * ['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to
+     * ['macro|user@example.com'], ['macro|user@example.com', 'bot|0199...']. Empty to
      * search all owners.
      */
     owners?: Array<string>;
@@ -16377,6 +16882,18 @@ export type ReorderPinRequest = {
     pinnedItemType: string;
 };
 
+export type ReorderSavedViewDefinitionsRequest = {
+    /**
+     * Visible definitions of that kind in their new order, at most 200;
+     * definitions left out follow them by creation time.
+     */
+    ids: Array<string>;
+    /**
+     * Consumer kind whose order is replaced, such as `email`.
+     */
+    kind: string;
+};
+
 /**
  * The event that ends a repeating animation.
  */
@@ -16708,6 +17225,12 @@ export type RowId = string;
  * A write to a table's rows.
  */
 export type RowsChange = {
+    /**
+     * The new rows' ids, minted by the client (UUIDv7), one per row in
+     * order, so later ops of the request and a retry can name them;
+     * left out, the server mints them.
+     */
+    ids?: Array<string>;
     kind: 'insert';
     /**
      * One entry per new row: the cells it starts with. Columns left out
@@ -16932,6 +17455,62 @@ export type SavedQuery = {
      * Identifier.
      */
     id: string;
+};
+
+/**
+ * A saved filter definition, not a snapshot of matching entities.
+ */
+export type SavedViewDefinition = {
+    /**
+     * Versioned configuration interpreted by the consuming feature, with its
+     * `kind` (such as `email` or `task`) and `version`.
+     */
+    config: {
+        [key: string]: unknown;
+    };
+    createdAt: string;
+    /**
+     * Stable identity of this definition.
+     */
+    id: string;
+    /**
+     * Display name chosen by the owner.
+     */
+    name: string;
+    /**
+     * User who owns and can edit this definition.
+     */
+    ownerId: string;
+    /**
+     * Current revision, required by updates and deletion.
+     */
+    revision: number;
+    /**
+     * Team with access, or absent when the definition is private.
+     */
+    sharedTeamId?: string | null;
+    updatedAt: string;
+};
+
+/**
+ * A page in the viewer's own order, then by creation time and ID.
+ */
+export type SavedViewDefinitionPage = {
+    /**
+     * Opaque cursor for the next page, absent when the listing is complete.
+     */
+    nextCursor?: string | null;
+    /**
+     * Definitions the viewer can currently access.
+     */
+    views: Array<SavedViewDefinition>;
+};
+
+/**
+ * An explicit sharing change: a team, or `null` to make the definition private.
+ */
+export type SavedViewSharingRequest = {
+    teamId?: string | null;
 };
 
 /**
@@ -17241,6 +17820,20 @@ export type SetEmailSyncRequest = {
 };
 
 /**
+ * Request to open or close a machine to one of the owner's teams.
+ */
+export type SetHarnessTeamAccessRequest = {
+    /**
+     * Whether every member of the team may use the machine.
+     */
+    enabled: boolean;
+    /**
+     * The team, which the owner must belong to.
+     */
+    team_id: string;
+};
+
+/**
  * How a cell's options or references relate to a set of them. The first
  * two fit a column holding one value, the last three one holding several.
  */
@@ -17317,7 +17910,7 @@ export type ShareEntity = {
 /**
  * An entity type with an existing Share surface.
  */
-export type ShareEntityType = 'document' | 'chat' | 'project' | 'initiative' | 'database' | 'call' | 'email_thread' | 'agent_session' | 'external_chat';
+export type ShareEntityType = 'document' | 'chat' | 'project' | 'initiative' | 'database' | 'call' | 'email_thread' | 'agent_session' | 'external_chat' | 'harness';
 
 export type SharePermissionV2 = {
     /**
@@ -17623,6 +18216,10 @@ export type SmartTagChannelMatch = {
      */
     id: string;
     /**
+     * Whether the viewer actively participates in this channel (section previews only).
+     */
+    isParticipant?: boolean | null;
+    /**
      * Channel display name.
      */
     name: string;
@@ -17637,7 +18234,7 @@ export type SmartTagPreview = {
      */
     channels: Array<SmartTagChannelMatch>;
     /**
-     * Number of matching channels the caller participates in, including overflow.
+     * Number of visible matches, including overflow; legacy previews count participants.
      */
     totalCount: number;
 };
@@ -17659,6 +18256,24 @@ export type SortKey = {
      * Which way.
      */
     direction: SortDirection;
+};
+
+/**
+ * The persona of a viewer's private conversation with an agent.
+ */
+export type SoupAgentDmProfile = {
+    /**
+     * Persona avatar, when supplied.
+     */
+    avatar_url?: string | null;
+    /**
+     * Persona id.
+     */
+    bot_id: string;
+    /**
+     * Persona display name.
+     */
+    name: string;
 };
 
 /**
@@ -18063,6 +18678,7 @@ export type SoupCallRecordSoupPropertiesField = {
  * A channel as displayed in Soup.
  */
 export type SoupChannel = ChannelWithParticipants & LatestMessage & {
+    agent_dm?: null | SoupAgentDmProfile;
     /**
      * Timestamp when the requesting user last interacted with this channel.
      */
@@ -18638,6 +19254,34 @@ export type SoupForeignEntity = {
 };
 
 /**
+ * A paired runtime (a macrod machine), listed only by attention feeds: its
+ * access requests and removals are notifications filed under it, and it has
+ * no page of its own, so Settings → Machines opens it.
+ */
+export type SoupHarness = {
+    /**
+     * When the machine was paired.
+     */
+    createdAt: string;
+    /**
+     * The harness uuid.
+     */
+    id: string;
+    /**
+     * The machine's display name.
+     */
+    name: string;
+    /**
+     * The person or team that owns the machine.
+     */
+    ownerId: string;
+    /**
+     * When the machine was last changed.
+     */
+    updatedAt: string;
+};
+
+/**
  * An initiative (called a project in the frontend) in the Soup feed.
  */
 export type SoupInitiativeSoupPropertiesField = {
@@ -18759,6 +19403,12 @@ export type SoupItem = {
      */
     data: SoupDatabaseRowSoupPropertiesField;
     tag: 'databaseRow';
+} | {
+    /**
+     * Paired runtime, listed only by attention feeds.
+     */
+    data: SoupHarness;
+    tag: 'harness';
 };
 
 /**
@@ -20436,6 +21086,12 @@ export type TakenId = {
      */
     id: string;
     kind: 'view';
+} | {
+    /**
+     * A row's.
+     */
+    id: string;
+    kind: 'row';
 };
 
 /**
@@ -21513,6 +22169,24 @@ export type UpdateMeetingRequest = {
 
 export type UpdateOperation = 'add' | 'remove' | 'replace';
 
+export type UpdateSavedViewDefinitionRequest = {
+    /**
+     * Complete replacement configuration; absent keeps the current one.
+     */
+    config?: {
+        [key: string]: unknown;
+    } | null;
+    /**
+     * Revision that must still be current when the update commits.
+     */
+    expectedRevision: number;
+    /**
+     * Replacement name; absent keeps the current one.
+     */
+    name?: string | null;
+    sharing?: null | SavedViewSharingRequest;
+};
+
 export type UpdateSharePermissionRequestV2 = {
     /**
      * Any channel share permissions to be created/updated/removed
@@ -21716,11 +22390,41 @@ export type UserDocumentsResponse = {
     total: number;
 };
 
+/**
+ * Metadata for [`UserTopicEvent::PictureChanged`].
+ */
+export type UserPictureChangedMetadata = {
+    /**
+     * Static file id of the new picture; `None` when it is not a static file
+     * (set by URL) or the picture was removed.
+     */
+    file_id?: string | null;
+    /**
+     * URL of the new picture; `None` when the picture was removed.
+     */
+    url?: string | null;
+    /**
+     * User whose profile picture changed.
+     */
+    user_id: MacroUserIdStr;
+};
+
 export type UserPinsResponse = {
     /**
      * The pins returned from the query
      */
     recent: Array<PinnedItem>;
+};
+
+/**
+ * A user's profile picture changed or was removed.
+ */
+export type UserTopicEvent = {
+    event_type: 'user.picture_changed';
+    /**
+     * A user's profile picture changed or was removed.
+     */
+    metadata: UserPictureChangedMetadata;
 };
 
 export type UserViewsResponse = {
@@ -22122,7 +22826,7 @@ export type Webhook = {
  * with the event payload. Endpoint validation additionally sends a
  * `WebhookValidationTestEvent`, which is not part of this union.
  */
-export type WebhookEvent = DocumentTopicEvent | ChannelTopicEvent | CallNotificationEvent | MessageTopicEvent | AgentSessionLifecycleEvent;
+export type WebhookEvent = DocumentTopicEvent | ChannelTopicEvent | CallNotificationEvent | MessageTopicEvent | AgentSessionLifecycleEvent | UserTopicEvent;
 
 /**
  * Event and optional entity-id constraints used to match webhook deliveries.
@@ -24746,6 +25450,187 @@ export type RenameChannelLabelResponses = {
 };
 
 export type RenameChannelLabelResponse = RenameChannelLabelResponses[keyof RenameChannelLabelResponses];
+
+export type ListChannelSectionsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * `personal` selects private labels; `team` requires team membership.
+         */
+        scope?: ChannelLabelScopeSelection;
+    };
+    url: '/channel-sections';
+};
+
+export type ListChannelSectionsErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListChannelSectionsError = ListChannelSectionsErrors[keyof ListChannelSectionsErrors];
+
+export type ListChannelSectionsResponses = {
+    200: ChannelLabelsList;
+};
+
+export type ListChannelSectionsResponse = ListChannelSectionsResponses[keyof ListChannelSectionsResponses];
+
+export type CreateChannelSectionData = {
+    body: CreateChannelLabelRequest;
+    path?: never;
+    query?: {
+        /**
+         * `personal` selects private labels; `team` requires team membership.
+         */
+        scope?: ChannelLabelScopeSelection;
+    };
+    url: '/channel-sections';
+};
+
+export type CreateChannelSectionErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateChannelSectionError = CreateChannelSectionErrors[keyof CreateChannelSectionErrors];
+
+export type CreateChannelSectionResponses = {
+    200: ChannelLabel;
+};
+
+export type CreateChannelSectionResponse = CreateChannelSectionResponses[keyof CreateChannelSectionResponses];
+
+export type SetChannelSectionData = {
+    body: SetChannelLabelRequest;
+    path: {
+        /**
+         * The channel id.
+         */
+        channel_id: string;
+    };
+    query?: {
+        /**
+         * `personal` selects private labels; `team` requires team membership.
+         */
+        scope?: ChannelLabelScopeSelection;
+    };
+    url: '/channel-sections/channels/{channel_id}';
+};
+
+export type SetChannelSectionErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SetChannelSectionError = SetChannelSectionErrors[keyof SetChannelSectionErrors];
+
+export type SetChannelSectionResponses = {
+    204: void;
+};
+
+export type SetChannelSectionResponse = SetChannelSectionResponses[keyof SetChannelSectionResponses];
+
+export type PreviewChannelSectionData = {
+    body: ChannelLabelRule;
+    path?: never;
+    query?: {
+        /**
+         * `personal` selects private labels; `team` requires team membership.
+         */
+        scope?: ChannelLabelScopeSelection;
+    };
+    url: '/channel-sections/preview';
+};
+
+export type PreviewChannelSectionErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type PreviewChannelSectionError = PreviewChannelSectionErrors[keyof PreviewChannelSectionErrors];
+
+export type PreviewChannelSectionResponses = {
+    200: SmartTagPreview;
+};
+
+export type PreviewChannelSectionResponse = PreviewChannelSectionResponses[keyof PreviewChannelSectionResponses];
+
+export type DeleteChannelSectionData = {
+    body?: never;
+    path: {
+        /**
+         * The label id.
+         */
+        label_id: string;
+    };
+    query?: {
+        /**
+         * `personal` selects private labels; `team` requires team membership.
+         */
+        scope?: ChannelLabelScopeSelection;
+    };
+    url: '/channel-sections/{label_id}';
+};
+
+export type DeleteChannelSectionErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type DeleteChannelSectionError = DeleteChannelSectionErrors[keyof DeleteChannelSectionErrors];
+
+export type DeleteChannelSectionResponses = {
+    204: void;
+};
+
+export type DeleteChannelSectionResponse = DeleteChannelSectionResponses[keyof DeleteChannelSectionResponses];
+
+export type UpdateChannelSectionData = {
+    body: RenameChannelLabelRequest;
+    path: {
+        /**
+         * The label id.
+         */
+        label_id: string;
+    };
+    query?: {
+        /**
+         * `personal` selects private labels; `team` requires team membership.
+         */
+        scope?: ChannelLabelScopeSelection;
+    };
+    url: '/channel-sections/{label_id}';
+};
+
+export type UpdateChannelSectionErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type UpdateChannelSectionError = UpdateChannelSectionErrors[keyof UpdateChannelSectionErrors];
+
+export type UpdateChannelSectionResponses = {
+    200: ChannelLabel;
+};
+
+export type UpdateChannelSectionResponse = UpdateChannelSectionResponses[keyof UpdateChannelSectionResponses];
 
 export type CreateChannelData = {
     body: CreateChannelRequest;
@@ -30306,7 +31191,7 @@ export type ListFavoritesData = {
         /**
          * Restrict to favorites whose entity is one of these types.
          */
-        entityType?: Array<'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat'>;
+        entityType?: Array<'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat'>;
         /**
          * Restrict to favorites whose entity is one of these ids.
          */
@@ -30375,7 +31260,7 @@ export type RemoveFavoriteByEntityData = {
         /**
          * The type of an entity in Macro
          */
-        entity_type: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
+        entity_type: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
         /**
          * The id of the favorited entity.
          */
@@ -31035,7 +31920,7 @@ export type ClaimHarnessPairingData = {
         /**
          * Pairing ID
          */
-        pairing_id: string;
+        pairing_id: PairingId;
     };
     query?: never;
     url: '/harness-pairings/{pairing_id}/claim';
@@ -31076,6 +31961,26 @@ export type ListHarnessesResponses = {
 };
 
 export type ListHarnessesResponse = ListHarnessesResponses[keyof ListHarnessesResponses];
+
+export type ListHarnessDirectoryData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/harnesses/directory';
+};
+
+export type ListHarnessDirectoryErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListHarnessDirectoryError = ListHarnessDirectoryErrors[keyof ListHarnessDirectoryErrors];
+
+export type ListHarnessDirectoryResponses = {
+    200: Array<Harness>;
+};
+
+export type ListHarnessDirectoryResponse = ListHarnessDirectoryResponses[keyof ListHarnessDirectoryResponses];
 
 export type DeleteSelfHarnessData = {
     body?: never;
@@ -31211,6 +32116,56 @@ export type PatchHarnessResponses = {
 };
 
 export type PatchHarnessResponse = PatchHarnessResponses[keyof PatchHarnessResponses];
+
+export type ListHarnessResidentsData = {
+    body?: never;
+    path: {
+        /**
+         * Harness ID
+         */
+        harness_id: HarnessId;
+    };
+    query?: never;
+    url: '/harnesses/{harness_id}/residents';
+};
+
+export type ListHarnessResidentsErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListHarnessResidentsError = ListHarnessResidentsErrors[keyof ListHarnessResidentsErrors];
+
+export type ListHarnessResidentsResponses = {
+    200: Array<HarnessResident>;
+};
+
+export type ListHarnessResidentsResponse = ListHarnessResidentsResponses[keyof ListHarnessResidentsResponses];
+
+export type SetHarnessTeamAccessData = {
+    body: SetHarnessTeamAccessRequest;
+    path: {
+        /**
+         * Harness ID
+         */
+        harness_id: HarnessId;
+    };
+    query?: never;
+    url: '/harnesses/{harness_id}/team-access';
+};
+
+export type SetHarnessTeamAccessErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SetHarnessTeamAccessError = SetHarnessTeamAccessErrors[keyof SetHarnessTeamAccessErrors];
+
+export type SetHarnessTeamAccessResponses = {
+    204: void;
+};
+
+export type SetHarnessTeamAccessResponse = SetHarnessTeamAccessResponses[keyof SetHarnessTeamAccessResponses];
 
 export type HealthHandlerData = {
     body?: never;
@@ -32021,6 +32976,625 @@ export type EntityMessageTypingResponses = {
 
 export type EntityMessageTypingResponse = EntityMessageTypingResponses[keyof EntityMessageTypingResponses];
 
+export type PasswordsTeamsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/passwords/teams';
+};
+
+export type PasswordsTeamsErrors = {
+    403: PasswordFailure;
+    409: PasswordFailure;
+};
+
+export type PasswordsTeamsError = PasswordsTeamsErrors[keyof PasswordsTeamsErrors];
+
+export type PasswordsTeamsResponses = {
+    200: Array<PasswordTeamId>;
+};
+
+export type PasswordsTeamsResponse = PasswordsTeamsResponses[keyof PasswordsTeamsResponses];
+
+export type PasswordsFoldersData = {
+    body?: never;
+    path: {
+        team: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/folders';
+};
+
+export type PasswordsFoldersErrors = {
+    403: PasswordFailure;
+    409: PasswordFailure;
+};
+
+export type PasswordsFoldersError = PasswordsFoldersErrors[keyof PasswordsFoldersErrors];
+
+export type PasswordsFoldersResponses = {
+    200: Array<PasswordFolder>;
+};
+
+export type PasswordsFoldersResponse = PasswordsFoldersResponses[keyof PasswordsFoldersResponses];
+
+export type PasswordsCreateFolderData = {
+    body: PasswordCreateFolderBody;
+    headers: {
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/folders';
+};
+
+export type PasswordsCreateFolderErrors = {
+    403: PasswordFailure;
+    409: PasswordFailure;
+};
+
+export type PasswordsCreateFolderError = PasswordsCreateFolderErrors[keyof PasswordsCreateFolderErrors];
+
+export type PasswordsCreateFolderResponses = {
+    200: PasswordFolder;
+};
+
+export type PasswordsCreateFolderResponse = PasswordsCreateFolderResponses[keyof PasswordsCreateFolderResponses];
+
+export type PasswordsRemoveFolderData = {
+    body?: never;
+    headers: {
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        folder: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/folders/{folder}';
+};
+
+export type PasswordsRemoveFolderErrors = {
+    403: PasswordFailure;
+    409: PasswordFailure;
+};
+
+export type PasswordsRemoveFolderError = PasswordsRemoveFolderErrors[keyof PasswordsRemoveFolderErrors];
+
+export type PasswordsRemoveFolderResponses = {
+    204: void;
+};
+
+export type PasswordsRemoveFolderResponse = PasswordsRemoveFolderResponses[keyof PasswordsRemoveFolderResponses];
+
+export type PasswordsRenameFolderData = {
+    body: PasswordFolderBody;
+    headers: {
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        folder: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/folders/{folder}';
+};
+
+export type PasswordsRenameFolderErrors = {
+    403: PasswordFailure;
+    409: PasswordFailure;
+};
+
+export type PasswordsRenameFolderError = PasswordsRenameFolderErrors[keyof PasswordsRenameFolderErrors];
+
+export type PasswordsRenameFolderResponses = {
+    200: PasswordFolder;
+};
+
+export type PasswordsRenameFolderResponse = PasswordsRenameFolderResponses[keyof PasswordsRenameFolderResponses];
+
+export type PasswordsMoveFolderData = {
+    body: PasswordMoveFolderBody;
+    headers: {
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        folder: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/folders/{folder}/parent';
+};
+
+export type PasswordsMoveFolderErrors = {
+    400: PasswordFailure;
+    403: PasswordFailure;
+    404: PasswordFailure;
+    409: PasswordFailure;
+};
+
+export type PasswordsMoveFolderError = PasswordsMoveFolderErrors[keyof PasswordsMoveFolderErrors];
+
+export type PasswordsMoveFolderResponses = {
+    200: PasswordFolder;
+};
+
+export type PasswordsMoveFolderResponse = PasswordsMoveFolderResponses[keyof PasswordsMoveFolderResponses];
+
+export type PasswordsListData = {
+    body?: never;
+    path: {
+        team: string;
+    };
+    query?: {
+        /**
+         * Optional metadata search text; never a value search.
+         */
+        search?: string | null;
+    };
+    url: '/passwords/teams/{team}/items';
+};
+
+export type PasswordsListErrors = {
+    403: PasswordFailure;
+    409: PasswordFailure;
+};
+
+export type PasswordsListError = PasswordsListErrors[keyof PasswordsListErrors];
+
+export type PasswordsListResponses = {
+    200: Array<PasswordItemMetadata>;
+};
+
+export type PasswordsListResponse = PasswordsListResponses[keyof PasswordsListResponses];
+
+export type PasswordsCreateData = {
+    body: PasswordWriteItem;
+    headers: {
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/items';
+};
+
+export type PasswordsCreateErrors = {
+    403: PasswordFailure;
+    409: PasswordFailure;
+};
+
+export type PasswordsCreateError = PasswordsCreateErrors[keyof PasswordsCreateErrors];
+
+export type PasswordsCreateResponses = {
+    200: PasswordItemMetadata;
+};
+
+export type PasswordsCreateResponse = PasswordsCreateResponses[keyof PasswordsCreateResponses];
+
+export type PasswordsRemoveData = {
+    body?: never;
+    headers: {
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/items/{item}';
+};
+
+export type PasswordsRemoveErrors = {
+    403: PasswordFailure;
+    409: PasswordFailure;
+};
+
+export type PasswordsRemoveError = PasswordsRemoveErrors[keyof PasswordsRemoveErrors];
+
+export type PasswordsRemoveResponses = {
+    204: void;
+};
+
+export type PasswordsRemoveResponse = PasswordsRemoveResponses[keyof PasswordsRemoveResponses];
+
+export type PasswordsDetailData = {
+    body?: never;
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/items/{item}';
+};
+
+export type PasswordsDetailErrors = {
+    403: PasswordFailure;
+    409: PasswordFailure;
+};
+
+export type PasswordsDetailError = PasswordsDetailErrors[keyof PasswordsDetailErrors];
+
+export type PasswordsDetailResponses = {
+    200: PasswordItemMetadata;
+};
+
+export type PasswordsDetailResponse = PasswordsDetailResponses[keyof PasswordsDetailResponses];
+
+export type PasswordsPatchData = {
+    body: PasswordPatchItem;
+    headers: {
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/items/{item}';
+};
+
+export type PasswordsPatchErrors = {
+    403: PasswordFailure;
+    409: PasswordFailure;
+};
+
+export type PasswordsPatchError = PasswordsPatchErrors[keyof PasswordsPatchErrors];
+
+export type PasswordsPatchResponses = {
+    200: PasswordItemMetadata;
+};
+
+export type PasswordsPatchResponse = PasswordsPatchResponses[keyof PasswordsPatchResponses];
+
+export type PasswordsUpdateData = {
+    body: PasswordWriteItem;
+    headers: {
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/items/{item}';
+};
+
+export type PasswordsUpdateErrors = {
+    403: PasswordFailure;
+    409: PasswordFailure;
+};
+
+export type PasswordsUpdateError = PasswordsUpdateErrors[keyof PasswordsUpdateErrors];
+
+export type PasswordsUpdateResponses = {
+    200: PasswordItemMetadata;
+};
+
+export type PasswordsUpdateResponse = PasswordsUpdateResponses[keyof PasswordsUpdateResponses];
+
+export type PasswordsActivityData = {
+    body?: never;
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/items/{item}/activity';
+};
+
+export type PasswordsActivityErrors = {
+    403: PasswordFailure;
+    409: PasswordFailure;
+};
+
+export type PasswordsActivityError = PasswordsActivityErrors[keyof PasswordsActivityErrors];
+
+export type PasswordsActivityResponses = {
+    200: Array<PasswordActivity>;
+};
+
+export type PasswordsActivityResponse = PasswordsActivityResponses[keyof PasswordsActivityResponses];
+
+export type PasswordsCopyData = {
+    body: PasswordRevealBody;
+    headers: {
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/items/{item}/copy';
+};
+
+export type PasswordsCopyErrors = {
+    403: PasswordFailure;
+    409: PasswordFailure;
+};
+
+export type PasswordsCopyError = PasswordsCopyErrors[keyof PasswordsCopyErrors];
+
+export type PasswordsCopyResponses = {
+    200: PasswordRevealed;
+};
+
+export type PasswordsCopyResponse = PasswordsCopyResponses[keyof PasswordsCopyResponses];
+
+export type PasswordsHistoryData = {
+    body?: never;
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/items/{item}/history';
+};
+
+export type PasswordsHistoryErrors = {
+    403: PasswordFailure;
+    409: PasswordFailure;
+};
+
+export type PasswordsHistoryError = PasswordsHistoryErrors[keyof PasswordsHistoryErrors];
+
+export type PasswordsHistoryResponses = {
+    200: Array<PasswordVersion>;
+};
+
+export type PasswordsHistoryResponse = PasswordsHistoryResponses[keyof PasswordsHistoryResponses];
+
+export type PasswordsRevealData = {
+    body: PasswordRevealBody;
+    headers: {
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/items/{item}/reveal';
+};
+
+export type PasswordsRevealErrors = {
+    403: PasswordFailure;
+    409: PasswordFailure;
+};
+
+export type PasswordsRevealError = PasswordsRevealErrors[keyof PasswordsRevealErrors];
+
+export type PasswordsRevealResponses = {
+    200: PasswordRevealed;
+};
+
+export type PasswordsRevealResponse = PasswordsRevealResponses[keyof PasswordsRevealResponses];
+
+export type PasswordsGrantsData = {
+    body?: never;
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/items/{item}/share';
+};
+
+export type PasswordsGrantsErrors = {
+    403: PasswordFailure;
+    409: PasswordFailure;
+};
+
+export type PasswordsGrantsError = PasswordsGrantsErrors[keyof PasswordsGrantsErrors];
+
+export type PasswordsGrantsResponses = {
+    200: Array<PasswordGrant>;
+};
+
+export type PasswordsGrantsResponse = PasswordsGrantsResponses[keyof PasswordsGrantsResponses];
+
+export type PasswordsShareData = {
+    body: PasswordShareBody;
+    headers: {
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/items/{item}/share';
+};
+
+export type PasswordsShareErrors = {
+    403: PasswordFailure;
+    409: PasswordFailure;
+};
+
+export type PasswordsShareError = PasswordsShareErrors[keyof PasswordsShareErrors];
+
+export type PasswordsShareResponses = {
+    204: void;
+};
+
+export type PasswordsShareResponse = PasswordsShareResponses[keyof PasswordsShareResponses];
+
+export type PasswordsRemoveTotpData = {
+    body?: never;
+    headers: {
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/items/{item}/totp';
+};
+
+export type PasswordsRemoveTotpErrors = {
+    403: PasswordFailure;
+    409: PasswordFailure;
+};
+
+export type PasswordsRemoveTotpError = PasswordsRemoveTotpErrors[keyof PasswordsRemoveTotpErrors];
+
+export type PasswordsRemoveTotpResponses = {
+    204: void;
+};
+
+export type PasswordsRemoveTotpResponse = PasswordsRemoveTotpResponses[keyof PasswordsRemoveTotpResponses];
+
+export type PasswordsSetTotpData = {
+    body: PasswordTotpBody;
+    headers: {
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/items/{item}/totp';
+};
+
+export type PasswordsSetTotpErrors = {
+    403: PasswordFailure;
+    409: PasswordFailure;
+};
+
+export type PasswordsSetTotpError = PasswordsSetTotpErrors[keyof PasswordsSetTotpErrors];
+
+export type PasswordsSetTotpResponses = {
+    204: void;
+};
+
+export type PasswordsSetTotpResponse = PasswordsSetTotpResponses[keyof PasswordsSetTotpResponses];
+
+export type PasswordsTotpData = {
+    body?: never;
+    headers: {
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/items/{item}/totp/code';
+};
+
+export type PasswordsTotpErrors = {
+    403: PasswordFailure;
+    409: PasswordFailure;
+};
+
+export type PasswordsTotpError = PasswordsTotpErrors[keyof PasswordsTotpErrors];
+
+export type PasswordsTotpResponses = {
+    200: PasswordTotpCode;
+};
+
+export type PasswordsTotpResponse = PasswordsTotpResponses[keyof PasswordsTotpResponses];
+
+export type PasswordsUsernameData = {
+    body?: never;
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/items/{item}/username';
+};
+
+export type PasswordsUsernameErrors = {
+    403: PasswordFailure;
+    409: PasswordFailure;
+};
+
+export type PasswordsUsernameError = PasswordsUsernameErrors[keyof PasswordsUsernameErrors];
+
+export type PasswordsUsernameResponses = {
+    200: PasswordUsername;
+};
+
+export type PasswordsUsernameResponse = PasswordsUsernameResponses[keyof PasswordsUsernameResponses];
+
+export type PasswordsCopyUsernameData = {
+    body?: never;
+    headers: {
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/items/{item}/username/copy';
+};
+
+export type PasswordsCopyUsernameErrors = {
+    403: PasswordFailure;
+    409: PasswordFailure;
+};
+
+export type PasswordsCopyUsernameError = PasswordsCopyUsernameErrors[keyof PasswordsCopyUsernameErrors];
+
+export type PasswordsCopyUsernameResponses = {
+    200: PasswordUsername;
+};
+
+export type PasswordsCopyUsernameResponse = PasswordsCopyUsernameResponses[keyof PasswordsCopyUsernameResponses];
+
 export type GetPinsHandlerData = {
     body?: never;
     path?: never;
@@ -32640,6 +34214,173 @@ export type CreateViewHandlerResponses = {
 };
 
 export type CreateViewHandlerResponse = CreateViewHandlerResponses[keyof CreateViewHandlerResponses];
+
+export type ListSavedViewDefinitionsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Only definitions of this consumer kind, such as `email`.
+         */
+        kind?: string;
+        /**
+         * Page size, 1 to 50; defaults to 25.
+         */
+        first?: number;
+        /**
+         * `nextCursor` from the previous page.
+         */
+        after?: string;
+    };
+    url: '/saved_views/definitions';
+};
+
+export type ListSavedViewDefinitionsErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListSavedViewDefinitionsError = ListSavedViewDefinitionsErrors[keyof ListSavedViewDefinitionsErrors];
+
+export type ListSavedViewDefinitionsResponses = {
+    200: SavedViewDefinitionPage;
+};
+
+export type ListSavedViewDefinitionsResponse = ListSavedViewDefinitionsResponses[keyof ListSavedViewDefinitionsResponses];
+
+export type CreateSavedViewDefinitionData = {
+    body: CreateSavedViewDefinitionRequest;
+    path?: never;
+    query?: never;
+    url: '/saved_views/definitions';
+};
+
+export type CreateSavedViewDefinitionErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateSavedViewDefinitionError = CreateSavedViewDefinitionErrors[keyof CreateSavedViewDefinitionErrors];
+
+export type CreateSavedViewDefinitionResponses = {
+    201: SavedViewDefinition;
+};
+
+export type CreateSavedViewDefinitionResponse = CreateSavedViewDefinitionResponses[keyof CreateSavedViewDefinitionResponses];
+
+export type ReorderSavedViewDefinitionsData = {
+    body: ReorderSavedViewDefinitionsRequest;
+    path?: never;
+    query?: never;
+    url: '/saved_views/definitions/order';
+};
+
+export type ReorderSavedViewDefinitionsErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ReorderSavedViewDefinitionsError = ReorderSavedViewDefinitionsErrors[keyof ReorderSavedViewDefinitionsErrors];
+
+export type ReorderSavedViewDefinitionsResponses = {
+    200: Array<SavedViewDefinition>;
+};
+
+export type ReorderSavedViewDefinitionsResponse = ReorderSavedViewDefinitionsResponses[keyof ReorderSavedViewDefinitionsResponses];
+
+export type DeleteSavedViewDefinitionData = {
+    body?: never;
+    path: {
+        /**
+         * The saved view to delete
+         */
+        saved_view_id: string;
+    };
+    query: {
+        /**
+         * Revision that must still be current when the deletion commits.
+         */
+        expectedRevision: number;
+    };
+    url: '/saved_views/definitions/{saved_view_id}';
+};
+
+export type DeleteSavedViewDefinitionErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type DeleteSavedViewDefinitionError = DeleteSavedViewDefinitionErrors[keyof DeleteSavedViewDefinitionErrors];
+
+export type DeleteSavedViewDefinitionResponses = {
+    204: void;
+};
+
+export type DeleteSavedViewDefinitionResponse = DeleteSavedViewDefinitionResponses[keyof DeleteSavedViewDefinitionResponses];
+
+export type GetSavedViewDefinitionData = {
+    body?: never;
+    path: {
+        /**
+         * The saved view to read
+         */
+        saved_view_id: string;
+    };
+    query?: never;
+    url: '/saved_views/definitions/{saved_view_id}';
+};
+
+export type GetSavedViewDefinitionErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetSavedViewDefinitionError = GetSavedViewDefinitionErrors[keyof GetSavedViewDefinitionErrors];
+
+export type GetSavedViewDefinitionResponses = {
+    200: SavedViewDefinition;
+};
+
+export type GetSavedViewDefinitionResponse = GetSavedViewDefinitionResponses[keyof GetSavedViewDefinitionResponses];
+
+export type UpdateSavedViewDefinitionData = {
+    body: UpdateSavedViewDefinitionRequest;
+    path: {
+        /**
+         * The saved view to update
+         */
+        saved_view_id: string;
+    };
+    query?: never;
+    url: '/saved_views/definitions/{saved_view_id}';
+};
+
+export type UpdateSavedViewDefinitionErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type UpdateSavedViewDefinitionError = UpdateSavedViewDefinitionErrors[keyof UpdateSavedViewDefinitionErrors];
+
+export type UpdateSavedViewDefinitionResponses = {
+    200: SavedViewDefinition;
+};
+
+export type UpdateSavedViewDefinitionResponse = UpdateSavedViewDefinitionResponses[keyof UpdateSavedViewDefinitionResponses];
 
 export type ExcludeDefaultViewHandlerData = {
     body: ExcludeDefaultViewRequest;

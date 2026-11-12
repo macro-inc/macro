@@ -79,6 +79,8 @@ function getEntitySplitContent(data: EntityDragEvent['draggable']['data']):
       }))
       // Reminders open their referenced entity rather than a block of their own.
       .with({ type: 'foreign' }, () => undefined)
+      // A runtime opens in Settings → Machines, not a block of its own.
+      .with({ type: 'harness' }, () => undefined)
       // The full calendar opening path supplies the event range to focus.
       .with({ type: 'calendar_event' }, () => ({
         type: 'component',
@@ -366,7 +368,9 @@ export function SplitHeader(props: {
     return (
       isListViewID(content.id) ||
       (content.type === 'component' &&
-        (content.id === 'booking-links' || content.id === 'external'))
+        (content.id === 'booking-links' ||
+          content.id === 'external' ||
+          content.id === 'passwords'))
     );
   };
 

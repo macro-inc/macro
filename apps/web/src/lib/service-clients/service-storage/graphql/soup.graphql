@@ -319,6 +319,12 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 			...SoupPropertyFields
 		}
 	}
+	... on GraphqlSoupHarness {
+		harnessName: name
+		ownerId
+		createdAt
+		updatedAt
+	}
 	... on GraphqlSoupForeignEntity {
 		foreignEntityId
 		foreignEntitySource
@@ -556,6 +562,13 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 		entityAccessGrantedFileType: fileType
 		entityAccessGrantedAccessLevel: accessLevel
 	}
+	... on GraphqlRuntimeAccessRemovedMetadata {
+		runtimeAccessRemovedRuntimeName: runtimeName
+		runtimeAccessRemovedAgents: agents {
+			botId
+			name
+		}
+	}
 	... on GraphqlCommentedOnDocumentMetadata {
 		commentedOnDocumentDocumentName: documentName
 		commentedOnDocumentOwner: owner
@@ -638,6 +651,13 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 		routineRunFinishedRoutineId: routineId
 		routineRunFinishedRoutineName: routineName
 		routineRunFinishedSucceeded: succeeded
+	}
+	... on GraphqlAgentSignInExpiryMetadata {
+		agentSignInExpiryAgent: agent
+		agentSignInExpiryHarnessId: harnessId
+		agentSignInExpiryComputerName: computerName
+		agentSignInExpiryStage: stage
+		agentSignInExpiryExpiresAt: expiresAt
 	}
 	... on GraphqlInviteToTeamMetadata {
 		inviteToTeamTeamName: teamName

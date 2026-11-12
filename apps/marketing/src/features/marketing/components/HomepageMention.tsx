@@ -1,11 +1,11 @@
-import SpreadsheetIcon from '@icon/wide-spreadsheet.svg';
-import CalendarIcon from '@phosphor/calendar.svg';
-import EmailIcon from '@phosphor/envelope.svg';
-import FileIcon from '@phosphor/file.svg';
-import PdfIcon from '@phosphor/file-pdf.svg';
-import ChannelIcon from '@phosphor/hash-straight.svg';
-import TaskIcon from '@phosphor/list-checks.svg';
-import CallIcon from '@phosphor/phone-call.svg';
+import CalendarIcon from '@icon/system/regular/calendar.svg';
+import EmailIcon from '@icon/system/regular/envelope.svg';
+import FileIcon from '@icon/system/regular/file.svg';
+import PdfIcon from '@icon/system/regular/file-pdf.svg';
+import ChannelIcon from '@icon/system/regular/hash-straight.svg';
+import TaskIcon from '@icon/system/regular/list-checks.svg';
+import CallIcon from '@icon/system/regular/phone-call.svg';
+import SpreadsheetIcon from '@icon/system/regular/table.svg';
 import { Dynamic } from 'solid-js/web';
 
 // Direct icon imports keep the authenticated block registry/editor runtimes

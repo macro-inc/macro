@@ -4,6 +4,7 @@ import {
   isCoderHarness,
 } from '@app/features/agents-view/core/agent-kind';
 import { AGENTS_TOUR } from '@app/features/agents-view/tour';
+import { t } from '@app/lib/i18n';
 import { ModelCatalogPicker } from '@core/component/AI/component/input/ModelCatalogPicker';
 import { MODEL_PRETTYNAME, Model } from '@core/component/AI/constant/model';
 import { modelLabel } from '@core/component/AI/constant/model-label';
@@ -86,6 +87,10 @@ import { AgentInstructionsEditor } from './components/instructions-editor';
 import { SettingsSelect } from './components/settings-select';
 import { WhereItRunsOption } from './components/where-it-runs-option';
 import {
+  ComputerWhereItRuns,
+  RunOnComputerRow,
+} from './computers/views/agent-computer-entry';
+import {
   type ApiKeyProvider,
   apiKeyProviderName,
   apiKeyProviderOf,
@@ -125,6 +130,8 @@ type ConnectedHarness = {
   allowPermissionBypass: boolean;
   target: AgentModelTarget;
   connected?: boolean;
+  /** A team's Macro computer rather than a machine someone paired. */
+  computer?: boolean;
 };
 
 type ChannelOption = ReturnType<typeof botAssignableChannelOptions>[number];
@@ -205,13 +212,30 @@ export function Agents(props: {
         const harness = harnesses.find(
           (candidate) => candidate.id === target.harnessId
         );
+        if (harness?.computer_id) {
+          // A computer away is turned off; its agents start once it is on.
+          return {
+            id: harness.id,
+            name: [
+              harness.name,
+              harness.connected ? undefined : t('computers.stopped'),
+            ]
+              .filter(Boolean)
+              .join(' · '),
+            kind: 'macrod',
+            allowPermissionBypass: harness.allow_permission_bypass ?? false,
+            target,
+            connected: harness.connected,
+            computer: true,
+          };
+        }
         return {
           id: target.harnessId ?? '',
           // Offline runtimes stay selectable: binding an agent to a machine
-          // that is merely asleep is normal, and the label says what to expect.
+          // that is turned off is normal, and the label says what to expect.
           name: [
             harness?.name ?? 'macrod',
-            harness?.owner.type === 'team' ? 'Team' : undefined,
+            harness?.shared_team_ids.length ? 'Team machine' : undefined,
             harness && !harness.connected ? 'Offline' : undefined,
           ]
             .filter(Boolean)
@@ -389,6 +413,7 @@ export function Agents(props: {
                     />
                   )}
                 </For>
+                <RunOnComputerRow />
                 <Show when={agentsQuery.isPending}>
                   <p class="px-6 py-4 text-sm text-ink-muted">
                     Loading agents…
@@ -489,7 +514,9 @@ function whereItRunsLabel(id: string, harness?: ConnectedHarness): string {
   if (id === 'cursor') return 'In Cursor';
   // Any other id is a registered macrod harness uuid; if it is not in the
   // connected list any more, the harness has been removed.
-  return harness ? `In your harness · ${harness.name}` : 'Disconnected runtime';
+  if (harness?.computer)
+    return `${t('computers.onComputer')} · ${harness.name}`;
+  return harness ? `On your machine · ${harness.name}` : 'Disconnected machine';
 }
 
 function AgentRow(props: {
@@ -784,9 +811,14 @@ function AgentEditorPage(props: {
     rememberedMcpServers = servers;
     setMcp({ scope: 'selected', servers });
   };
-  const [autoAcceptChoice, setAutoAcceptChoice] = createSignal(
-    props.agent?.auto_accept_permissions === true
-  );
+  // A Macro computer is the team's own sandbox, so its agents bypass
+  // permission prompts unless someone chooses otherwise.
+  const [autoAcceptPick, setAutoAcceptChoice] = createSignal<boolean>();
+  const autoAcceptChoice = () =>
+    autoAcceptPick() ??
+    (props.agent
+      ? props.agent.auto_accept_permissions === true
+      : selectedHarness()?.computer === true);
   const allowPermissionBypass = () =>
     selectedHarness()?.allowPermissionBypass === true;
   const autoAcceptPermissions = () =>
@@ -811,7 +843,11 @@ function AgentEditorPage(props: {
   const cursorHarness = () =>
     props.connectedHarnesses.find((harness) => harness.id === 'cursor');
   const macrodHarnesses = () =>
-    props.connectedHarnesses.filter((harness) => harness.kind === 'macrod');
+    props.connectedHarnesses.filter(
+      (harness) => harness.kind === 'macrod' && !harness.computer
+    );
+  const computerHarnesses = () =>
+    props.connectedHarnesses.filter((harness) => harness.computer);
   // Back from a setup guide, land on what was just set up.
   const finishSetup = () => {
     const finished = setup();
@@ -864,30 +900,43 @@ function AgentEditorPage(props: {
             <Show
               when={!query.isError}
               fallback={
-                <div class="flex items-center gap-2">
-                  <p class="min-w-0 flex-1 text-xs text-negative">
-                    Could not load models for{' '}
-                    {selectedHarness()?.name ?? 'this runtime'}.
-                  </p>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    aria-label={`Retry models for ${selectedHarness()?.name ?? 'this runtime'}`}
-                    onClick={() =>
-                      fireAndForget(query.refetch(), 'agent-settings')
-                    }
-                  >
-                    Retry
-                  </Button>
-                </div>
+                <Show
+                  when={
+                    !computerHarnesses().some(
+                      (harness) => harness.id === harnessId()
+                    )
+                  }
+                  fallback={
+                    <p class="settings-input text-ink-muted">
+                      {t('computers.modelsWhenOn')}
+                    </p>
+                  }
+                >
+                  <div class="flex items-center gap-2">
+                    <p class="min-w-0 flex-1 text-xs text-negative">
+                      Could not load models for{' '}
+                      {selectedHarness()?.name ?? 'this machine'}.
+                    </p>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      aria-label={`Retry models for ${selectedHarness()?.name ?? 'this machine'}`}
+                      onClick={() =>
+                        fireAndForget(query.refetch(), 'agent-settings')
+                      }
+                    >
+                      Retry
+                    </Button>
+                  </div>
+                </Show>
               }
             >
               <Show
                 when={selectedModelData()?.status === 'available'}
                 fallback={
                   <p class="settings-input text-ink-muted">
-                    Model selection is unsupported by this runtime.
+                    Model selection is unsupported by this machine.
                   </p>
                 }
               >
@@ -895,7 +944,7 @@ function AgentEditorPage(props: {
                   when={selectedModelOptions().length > 0}
                   fallback={
                     <p class="settings-input text-ink-muted">
-                      This runtime did not return any models.
+                      This machine did not return any models.
                     </p>
                   }
                 >
@@ -1323,10 +1372,12 @@ function AgentEditorPage(props: {
                   </WhereItRunsOption>
                   <WhereItRunsOption
                     value="harness"
-                    title="In your harness"
+                    title="On your machine"
                     description="Your own agent on your own machine. Local Claude Code, Codex, or other harness, via Macrod."
                     icon={<TerminalIcon />}
-                    checked={selectedHarness()?.kind === 'macrod'}
+                    checked={macrodHarnesses().some(
+                      (harness) => harness.id === harnessId()
+                    )}
                     disabled={macrodHarnesses().length === 0}
                     action={
                       <Show when={macrodHarnesses().length === 0}>
@@ -1335,7 +1386,7 @@ function AgentEditorPage(props: {
                           variant="ghost"
                           size="sm"
                           class="text-ink"
-                          aria-label="Set up your own harness"
+                          aria-label="Set up your own machine"
                           disabled={busy()}
                           onClick={() => setSetup('pairing')}
                         >
@@ -1351,10 +1402,10 @@ function AgentEditorPage(props: {
                     <div class="grid grid-cols-1 gap-3 @min-[440px]:grid-cols-[repeat(2,minmax(0,280px))]">
                       <div class="flex min-w-0 flex-col gap-1.5">
                         <span class="text-xs font-medium text-ink-muted">
-                          Harness
+                          Machine
                         </span>
                         <SettingsSelect
-                          label="Harness"
+                          label="Machine"
                           options={macrodHarnesses()}
                           value={harnessId()}
                           onChange={handleHarnessChange}
@@ -1363,6 +1414,16 @@ function AgentEditorPage(props: {
                       {modelPicker()}
                     </div>
                   </WhereItRunsOption>
+                  <ComputerWhereItRuns
+                    computers={computerHarnesses()}
+                    harnessId={harnessId()}
+                    checked={computerHarnesses().some(
+                      (harness) => harness.id === harnessId()
+                    )}
+                    busy={busy()}
+                    modelPicker={modelPicker()}
+                    onSelect={handleHarnessChange}
+                  />
                 </fieldset>
                 <Show when={!keyProvider() ? savedApiKey() : undefined}>
                   {(saved) => (
@@ -1484,8 +1545,9 @@ function AgentEditorPage(props: {
                           when={allowPermissionBypass()}
                           fallback={
                             <p class="text-xs text-ink-muted">
-                              This runtime requires permission prompts. Allow
-                              bypass in its Runtimes settings.
+                              This machine requires permission prompts. Turn on
+                              Don't ask before acting in its Options in Machines
+                              settings.
                             </p>
                           }
                         >

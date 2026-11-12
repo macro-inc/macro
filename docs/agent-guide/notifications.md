@@ -53,7 +53,9 @@ morning**, **Yesterday**, and so on), by each row's newest notification; `j`/`k`
 skip them.
 
 Click a row or press Enter to preview it beside the list, opened at the
-notification's message, thread, or comment. The shown row and stacked
+notification's message, thread, or comment. A conversation's composer takes
+focus, and Esc returns to the row; see
+[composer focus and Esc](channels.md#composer-focus-and-esc). The shown row and stacked
 notification live in the URL (`sN.inbox.row`, `sN.inbox.item`), so each opened
 row is a history entry and browser or split back returns to the previous one;
 stepping with `j`/`k` and moving on from a done row replace the entry instead.
@@ -365,16 +367,38 @@ Desktop and mobile share this scale, with accessibility text scaling preserved.
 
 Desktop channel and AI composers use an `Attach files` paperclip that opens the file picker directly, without a plus menu. Comment composers open the image picker directly. Channels and DMs always open in message mode; create tasks through the task creation dialog. Shift+Enter, including an empty new line, expands channel and AI inputs so text starts above the toolbar at the left inset. Sent AI message bubbles use the ink fill with a contrasting foreground in each theme.
 
+### Macro computer agent sign-ins
+
+`agent_sign_in_expiry` notifications (inbox, browser, and phone push) carry the
+agent (`claude` for now) and warn the person who signed a team computer in to
+it, plus the team's owner and
+admins, that the sign-in expires soon (three days out), expires today (its last
+day), or expired (passed). They name the computer and
+open **Settings → Runtimes**, where the computer's **Sign in with Claude** runs
+the paste-the-code flow; see the
+[Macro computers walkthrough](settings.md#macro-computers). To check one
+without waiting days, set the computer's active `harness_account_logins` row's
+`expires_at` to within three days on a local stack: the notice arrives within a
+minute.
+
 ## Notification sounds
 
 **Settings → Notifications → Sounds** turns on an in-app sound for incoming
 notifications. It is off by default and saved per person on each device
-(user-scoped localStorage), so a laptop and a phone choose separately. With
-sounds on, it shows a volume slider and one row per type (Messages, Mentions,
-Thread replies, Email, Meetings & reminders, Tasks, AI & agents, Everything
-else), each with its own on/off switch, sound picker, and play button. Picking
-a sound previews it. Email, AI & agents, and Everything else start off.
+(user-scoped localStorage), so a laptop and a phone choose separately. The
+volume slider appears when notification sounds or Call sounds are on. Turning
+notification sounds on reveals one row per type (Messages, Mentions, Thread
+replies, Email, Meetings & reminders, Tasks, AI & agents, Everything else), each
+with its own on/off switch, sound picker, and play button. Picking a sound
+previews it. Email, AI & agents, and Everything else start off.
 Channel join requests use Everything else, alongside sharing and invitations.
+
+**Call sounds** is a separate, default-on toggle with Join and Leave preview
+buttons. Browser calls use fixed ascending/descending cues for deliberate
+participation changes, including your own. They share this volume and quiet
+hours but do not require notification sounds to be on. See
+[join and leave sounds](calls.md#join-and-leave-sounds) for recovery and platform
+limits.
 
 Sounds are synthesized with Web Audio (`features/notification-sounds`); there
 are no audio files. Event types map to rows in `core/categories.ts`; a new
@@ -382,9 +406,11 @@ backend event type stays quiet until it is mapped there. Incoming calls keep
 their own ring and never use these sounds. Only unseen notifications play,
 notifications within 1.5 s of a sound share it, and only the Macro tab the
 person last focused or touched plays, so several tabs ding once. Closing that
-tab hands sound back to the others until one is focused. Browsers keep
-audio suspended until the page has had a gesture; a notification before that
-stays silent rather than playing late.
+tab hands sound back to the others until one is focused. Mouse, touch, Enter,
+and Space activation unlock audio even while sounds are off, so enabling a
+sound setting also unlocks playback. A cue that cannot resume audio within
+250 ms stays silent rather than playing on a later gesture. Notification sounds
+use the system-default output; call cues follow the selected call speaker.
 
 When Macro plays a sound for a notification, its browser or macOS alert is
 sent silent so the person hears one sound. macOS builds older than the

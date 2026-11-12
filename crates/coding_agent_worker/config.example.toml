@@ -5,10 +5,11 @@
 # shows a code for approval in the web app, then adds a `[credentials]` table
 # containing a bearer token to this file. Keep the resulting config private.
 #
-# The runtime's name, ownership (private or team), and permission bypass are
-# not set here: change them on the web at Settings → Agents → Runtimes.
+# The machine's name, ownership (private or team), and permission bypass are
+# not set here: change them on the web at Settings → Machines.
 
 # Optional development overrides. Every key defaults to production.
+# Macro computer enrollment may set egress_url to its fleet-reachable gateway.
 # [macro]
 # # Base URL of the agent-harness service. Its ws(s) twin hosts the runtime
 # # gateway the daemon connects to on startup.

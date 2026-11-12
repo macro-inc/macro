@@ -1,5 +1,6 @@
 import { promptActionOf } from '@app/features/block-agent/component/prompt-action';
 import { createRecentAgentSelections } from '@app/features/block-agent/context/recent-agent-selections';
+import { requestRuntimeAccess } from '@app/features/runtime-sharing/core/request-access';
 import { LocalRuntimePrompt } from '@app/features/settings/components/local-runtime-prompt';
 import {
   createInputAttachmentTracker,
@@ -31,7 +32,14 @@ import { useAiBillingSummaryQuery } from '@queries/auth/ai-billing';
 import type { PromptAttachment } from '@service-agent-harness/generated/schemas';
 import { Tabs } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
-import { createMemo, createSignal, type JSX, Show } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  type JSX,
+  on,
+  Show,
+} from 'solid-js';
 import { AgentUpdatesStack } from '../../agent-updates/views/AgentUpdatesStack';
 import { EffortSelector } from '../../block-agent/component/EffortSelector';
 import {
@@ -99,6 +107,8 @@ export function NewChatPage(props: {
    */
   mode?: ComposerMode;
   onModeChange?: (mode: ComposerMode) => void;
+  /** An agent to select, e.g. one just set up on a Macro computer. */
+  requestedAgentId?: string;
   rosterLoading: boolean;
   /** Agents are listed but whether they can start is still unknown. */
   availabilityLoading?: boolean;
@@ -127,6 +137,14 @@ export function NewChatPage(props: {
     props.roster.filter((agent) => agent.kind === kindForMode(kind));
   const options = () => optionsFor(agentsMode());
   const [agentId, setAgentId] = createSignal<string>();
+  createEffect(
+    on(
+      () => props.requestedAgentId,
+      (requested) => {
+        if (requested) setAgentId(requested);
+      }
+    )
+  );
   /** One-shot model from a coding agent's submenu; Macro uses {@link preferredInmem}. */
   const [modelOverride, setModelOverride] = createSignal<string>();
   const [effortPickerOpen, setEffortPickerOpen] = createSignal(false);
@@ -286,6 +304,13 @@ export function NewChatPage(props: {
   };
 
   const connect = (agent: RosterAgent) => {
+    if (agent.needsRuntimeAccess && agent.harnessId) {
+      fireAndForget(
+        requestRuntimeAccess(agent.harnessId),
+        'runtime-sharing.request'
+      );
+      return;
+    }
     // Both land on Settings → Runtimes: Cursor to save an API key, macrod to
     // restart the local runtime (one click on desktop) or re-pair it.
     if (agent.harness === 'cursor' || agent.harness === 'macrod') {

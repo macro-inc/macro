@@ -248,47 +248,65 @@
         }
       ];
 
+      # A binary of the root workspace (not the nested Tauri one), built
+      # natively for this platform.
+      workspaceBinary =
+        {
+          pname,
+          package,
+        }:
+        craneLib.mkCargoDerivation {
+          inherit pname;
+          version = appVersion;
+          src = jsSrc;
+          cargoArtifacts = null;
+          cargoVendorDir = rootCargoVendorDir;
+          nativeBuildInputs = [
+            # aws-lc-sys (rustls' crypto provider) and bundled librdkafka build
+            # their C sources with cmake; see the matching notes on `libraries`
+            # in cloud-storage.nix.
+            pkgs.cmake
+            pkgs.git
+            pkgs.perl
+            pkgs.pkg-config
+          ];
+          buildInputs = [
+            pkgs.openssl
+            pkgs.openssl.dev
+            # librdkafka 2.12's bundled cmake-build needs curl headers even with
+            # WITH_CURL=0 (headers only; nothing links against libcurl).
+            pkgs.curl.dev
+            pkgs.libclang
+            pkgs.xz.out
+          ]
+          ++ lib.optionals pkgs.stdenv.isDarwin [ pkgs.libiconv ];
+          LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
+          OPENSSL_NO_VENDOR = "1";
+          doCheck = false;
+          SQLX_OFFLINE = "true";
+          buildPhaseCargoCommand = ''
+            cargo build --release --package ${package} --bin ${pname}
+          '';
+          installPhaseCommand = ''
+            install -Dm0755 target/release/${pname} "$out/bin/${pname}"
+          '';
+          doInstallCargoArtifacts = false;
+        };
+
       # The macrod agent daemon, bundled with the desktop app as a Tauri
       # sidecar so "run agents on this computer" needs no separate download.
-      # Built from the root workspace (not the nested Tauri one), natively for
-      # the bundle's platform; the standalone release tarballs keep their own
-      # musl/darwin pipeline in build_agent_daemon_on_tag.yml.
-      macrodBinary = craneLib.mkCargoDerivation {
+      # The standalone release tarballs keep their own musl/darwin pipeline in
+      # build_agent_daemon_on_tag.yml.
+      macrodBinary = workspaceBinary {
         pname = "macrod";
-        version = appVersion;
-        src = jsSrc;
-        cargoArtifacts = null;
-        cargoVendorDir = rootCargoVendorDir;
-        nativeBuildInputs = [
-          # aws-lc-sys (rustls' crypto provider) and bundled librdkafka build
-          # their C sources with cmake; see the matching notes on `libraries`
-          # in cloud-storage.nix.
-          pkgs.cmake
-          pkgs.git
-          pkgs.perl
-          pkgs.pkg-config
-        ];
-        buildInputs = [
-          pkgs.openssl
-          pkgs.openssl.dev
-          # librdkafka 2.12's bundled cmake-build needs curl headers even with
-          # WITH_CURL=0 (headers only; nothing links against libcurl).
-          pkgs.curl.dev
-          pkgs.libclang
-          pkgs.xz.out
-        ]
-        ++ lib.optionals pkgs.stdenv.isDarwin [ pkgs.libiconv ];
-        LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
-        OPENSSL_NO_VENDOR = "1";
-        doCheck = false;
-        SQLX_OFFLINE = "true";
-        buildPhaseCargoCommand = ''
-          cargo build --release --package coding_agent_worker --bin macrod
-        '';
-        installPhaseCommand = ''
-          install -Dm0755 target/release/macrod "$out/bin/macrod"
-        '';
-        doInstallCargoArtifacts = false;
+        package = "coding_agent_worker";
+      };
+
+      # The agent sign-in daemon baked into the Macro computer image
+      # (nix/macro-box).
+      harnessdBinary = workspaceBinary {
+        pname = "harnessd";
+        package = "harnessd";
       };
 
       # Tauri sidecar sources carry the target triple in the file name; the
@@ -428,6 +446,8 @@
         # Non-Cargo inputs must be added explicitly to crane's app fileset.
         extraFileset = lib.fileset.unions [
           ../static_assets/schema.graphql
+          # cache-turso embeds its SQL with `include_str!`.
+          (lib.fileset.fileFilter (file: file.hasExt "sql") ../crates/client/cache-turso/src)
           ../apps/web/tauri/src-tauri/tauri.macos.conf.json
         ];
         inherit frontend;
@@ -1013,6 +1033,12 @@
         root = ../.;
         fileset = lib.fileset.unions [
           cefCargoSources
+          # Crates `include_str!` their SQL, JSON and Markdown (cache-turso's
+          # contact_search.sql); commonCargoSources keeps only Rust and Cargo
+          # files, so the build died on the first one it could not read. A
+          # flake source holds tracked files only, so these are not build output.
+          ../crates
+          ../apps/web/tauri
           ../static_assets/schema.graphql
           ../apps/web/tauri/desktop-cef/tauri.conf.json
           ../apps/web/tauri/desktop-cef/entitlements.plist
@@ -1475,6 +1501,7 @@
       packages = {
         js-node-modules = nodeModules;
         macrod = macrodBinary;
+        harnessd = harnessdBinary;
       }
       // lib.optionalAttrs isLinux {
         tauri-frontend = frontend;

@@ -435,6 +435,12 @@ const graphqlSoupClient = createClient({
   preferGetMethod: false,
 });
 
+/** Fetch-only transport for callers that must validate scope/cancellation before
+ * explicitly admitting a response to the normalized cache. */
+export function getGraphqlSoupNetworkClient(): Client {
+  return graphqlSoupClient;
+}
+
 const reconnectListeners = new Set<() => void>();
 
 /**
@@ -1305,6 +1311,20 @@ function mapGraphqlNotificationMetadata(
         }) satisfies NotifEventMember<'entity_access_granted'>
     )
     .with(
+      { __typename: 'GraphqlRuntimeAccessRemovedMetadata' },
+      (metadata) =>
+        ({
+          tag: 'runtime_access_removed',
+          content: {
+            runtimeName: metadata.runtimeAccessRemovedRuntimeName,
+            agents: metadata.runtimeAccessRemovedAgents.map((agent) => ({
+              botId: agent.botId,
+              name: agent.name,
+            })),
+          },
+        }) satisfies NotifEventMember<'runtime_access_removed'>
+    )
+    .with(
       { __typename: 'GraphqlCommentedOnDocumentMetadata' },
       (metadata) =>
         ({
@@ -1505,6 +1525,28 @@ function mapGraphqlNotificationMetadata(
               : 'failed',
           },
         }) satisfies NotifEventMember<'routine_run_finished'>
+    )
+    .with(
+      { __typename: 'GraphqlAgentSignInExpiryMetadata' },
+      (metadata) =>
+        ({
+          tag: 'agent_sign_in_expiry',
+          content: {
+            agent: match(metadata.agentSignInExpiryAgent)
+              .with('CLAUDE', () => 'claude' as const)
+              // Claude is the only agent this build signs in.
+              .exhaustive(() => 'claude' as const),
+            harnessId: metadata.agentSignInExpiryHarnessId,
+            computerName: metadata.agentSignInExpiryComputerName,
+            stage: match(metadata.agentSignInExpiryStage)
+              .with('EXPIRES_SOON', () => 'expires_soon' as const)
+              .with('EXPIRES_TODAY', () => 'expires_today' as const)
+              .with('EXPIRED', () => 'expired' as const)
+              // A stage this build doesn't know still asks for a new sign-in.
+              .exhaustive(() => 'expires_soon' as const),
+            expiresAt: metadata.agentSignInExpiryExpiresAt,
+          },
+        }) satisfies NotifEventMember<'agent_sign_in_expiry'>
     )
     .with(
       { __typename: 'GraphqlInviteToTeamMetadata' },
@@ -2235,6 +2277,23 @@ export function mapGraphqlSoupItem(
               createdAt: entity.createdAt,
             })),
             properties: mapGraphqlProperties(entity.properties),
+            notifications: mapGraphqlNotifications(entity.notifications),
+          },
+        }) as SoupApiItem
+    )
+    .with(
+      { __typename: 'GraphqlSoupHarness' },
+      (entity) =>
+        ({
+          tag: 'harness',
+          frecency_score: frecency,
+          is_favorited: entity.isFavorited,
+          data: {
+            id: entity.id,
+            name: entity.harnessName,
+            ownerId: entity.ownerId,
+            createdAt: entity.createdAt,
+            updatedAt: entity.updatedAt,
             notifications: mapGraphqlNotifications(entity.notifications),
           },
         }) as SoupApiItem

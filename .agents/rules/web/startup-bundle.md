@@ -15,6 +15,15 @@ alwaysApply: false
   import one into a shared hub (`Root`, `Layout`, `AppProviders`,
   `componentRegistry`, `app-router-view`, `routes/shells.tsx`, block
   `definition.ts`, Lexical `init.ts`).
+- A `route-views.tsx` imports the view it renders statically. The warm-up and
+  the router preload only the route's own chunk, so a view behind a second
+  `lazy()` stays cold and its first open shows the route skeleton however long
+  the app has been running. Keep a `lazy()` there only for a view the route
+  rarely picks, with an `ast-grep-ignore` comment that says why. Enforced by
+  ast-grep `tsx-route-views-static-view`, CI error.
+- Web warms `LIKELY_NEXT_VIEWS` at idle. The native apps read chunks from their
+  own bundle, so they also warm `OTHER_APP_VIEWS`; add a new app view to one of
+  the two lists in `routes/lazy-route-views.ts`.
 - Each top-level route picks its shell in `app-router-view.tsx`
   (`routes/shells.tsx`): `authRoute` pages and booking links render without app
   chrome, and `appRoute` renders `AppShell` — the app's providers

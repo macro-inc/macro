@@ -26,11 +26,7 @@ async fn configured_transport_hosts_pass_rebinding_checks_but_unrelated_hosts_do
     impl rmcp::ServerHandler for Server {}
 
     for service_host in ["agent_harness_service", "agent-harness-service"] {
-        let config = http_config(
-            &url::Url::parse("https://localhost:32443/mcp").unwrap(),
-            &url::Url::parse(&format!("http://{service_host}:8080")).unwrap(),
-        )
-        .unwrap();
+        let config = server_config("mcp.example.test".into(), service_host.into());
         let service = StreamableHttpService::new(
             || Ok(Server),
             Arc::new(LocalSessionManager::default()),
@@ -40,6 +36,7 @@ async fn configured_transport_hosts_pass_rebinding_checks_but_unrelated_hosts_do
         for (host, expected) in [
             (format!("{service_host}:8080"), 200),
             ("localhost:32443".to_owned(), 200),
+            ("mcp.example.test:443".to_owned(), 200),
             (format!("{service_host}.example.com:8080"), 403),
             ("untrusted.example.com:8080".to_owned(), 403),
         ] {

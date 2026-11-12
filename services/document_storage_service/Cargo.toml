@@ -44,6 +44,7 @@ local_auth = ["macro_authorization/local_auth"]
 location_check = []
 
 [dependencies]
+passwords = { path = "../../crates/passwords" }
 agent_correlation = { path = "../../crates/agent_correlation", features = ["http", "postgres"] }
 access_requests = { path = "../../crates/access_requests" }
 async-trait = { workspace = true }
@@ -105,7 +106,7 @@ connection = { path = "../../crates/connection", default-features = false, featu
   "outbound",
 ] }
 connection_gateway_client = { path = "../../crates/connection_gateway_client" }
-contacts = { path = "../../crates/contacts" }
+contacts = { path = "../../crates/contacts", features = ["directory-names", "picture-fanout"] }
 channel_labels = { path = "../../crates/channel_labels", features = [
   "inbound",
   "postgres",
@@ -172,6 +173,7 @@ graphql_initiative = { path = "../../crates/graphql_initiative" }
 graphql_databases = { path = "../../crates/graphql_databases" }
 
 graphql_calendar = { path = "../../crates/graphql_calendar" }
+graphql_contacts = { path = "../../crates/graphql_contacts" }
 graphql_scheduled_action = { path = "../../crates/graphql_scheduled_action" }
 harnesses = { path = "../../crates/harnesses" }
 hex = { workspace = true }

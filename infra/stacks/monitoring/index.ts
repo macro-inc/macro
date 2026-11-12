@@ -19,10 +19,15 @@ import './synthetics';
 // Declared here first.
 import './goalert';
 import './monitors/ai-editing';
+import './monitors/ai-providers';
 import './monitors/calls';
+import './monitors/computer-capacity';
+import './monitors/computers';
 import './monitors/graphql-soup';
 import './monitors/harness-presence';
+import './monitors/harness-runtimes';
 import './monitors/macrodb';
+import './monitors/oauth';
 import './monitors/outlook-sync';
 import './monitors/queues';
 import './monitors/redis';

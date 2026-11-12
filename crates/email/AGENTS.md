@@ -56,6 +56,29 @@ tools — hexagonal, heavily feature-gated.
 
 ## Gotchas
 
+- `Subject` is a message-level filter literal. With a top-level subject term,
+  each owned inbox gets a bound (not `unnest`) two-step subscan: threads in
+  order with only the trigram-indexed subject match, then the full match
+  (mailbox facts) per thread until LIMIT. Keep the `OFFSET 0` fences and the
+  absence of an outer sort, or the planner joins every hit to its facts first;
+  binding the inbox gives it that inbox's statistics instead of the average
+  one. Spam and Trash skip the subscan (it can't read their folder date), and
+  a subscan never picks its preview in the candidate stage
+  (`uses_subject_subscans`). Subscan queries run with parallel workers off
+  (`SET LOCAL max_parallel_workers_per_gather = 0`): workers ran far past the
+  page LIMIT and read 15 times the buffers. Other subject trees keep the
+  `has_thread_literals` mirror, so a page's LIMIT never counts threads the
+  lateral drops. Match the bare `subject` column so the planner keeps its
+  statistics. `Attachment(kind)` reads the denormalized thread flags
+  `email_db_client` maintains.
+- A requested sender may be a verified Gmail send-as alias, not just an inbox
+  address: `resolve_sending_inbox` (AI tools) picks the inbox that owns it, and
+  `resolve_sender` (drafts, REST `from`) checks it against the chosen inbox.
+  Both read `EmailSenderProvider`, so a host that skips `with_sender_provider`
+  refuses every alias. Outlook inboxes have no aliases here. The alias's
+  display name is stored on the draft row (`from_name`), not only on the
+  shared sender contact, which keeps an existing name and drops names for
+  role addresses such as `support@`.
 - The send route refuses an agent's program (`refuse_program_send`, 403), and
   the schedule route admits one only with a quoted `user_confirmation`: a
   program sends through a session review, the harness's confirmed send
@@ -220,6 +243,15 @@ tools — hexagonal, heavily feature-gated.
   Throttling and token refusals give their claim back to `attempts`.
 - Outlook sync claims (catalog, folder streams, messages, contacts) skip a
   link with `needs_reauth`; clearing the flag resumes them.
+- Process deleted-user bindings in the domain by link id, custodian before
+  owner, then actor id, retaining one binding per link and actor; the repository
+  returns each binding's kind so custody cleanup runs before an owner disconnect
+  can suppress it without processing a self-custodian twice.
+- `email_mailbox_folders.total_item_count` is Graph's `totalItemCount` from the
+  latest catalog discovery (every 5 minutes, from the listing discovery already
+  makes), and the discover span sums it as `outlook.provider_item_count`. It
+  counts what the folder holds at the provider, imported or not, so an import
+  is checked against it.
 - Import counts for the health snapshot stay in memory (`ImportTally`) and are
   flushed once a minute to `email_mailbox_import_minutes`; never write per
   imported message for telemetry.

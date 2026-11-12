@@ -57,6 +57,7 @@ fn malformed_bearer_token_is_not_valid() {
     let credentials = HarnessCredentials {
         harness_id: harness_id::HarnessId::TEST_A,
         token: "not-a-harness-token".to_owned(),
+        pairing_id: None,
     };
 
     assert!(!credentials.is_valid());
@@ -83,11 +84,7 @@ fn web_settings_in_the_file_fail_naming_where_they_live_now() {
             ..
         }
     ));
-    assert!(
-        identity
-            .to_string()
-            .contains("Settings → Agents → Runtimes")
-    );
+    assert!(identity.to_string().contains("Settings → Machines"));
 
     let scope = load(&format!(
         "{EXAMPLE}\n[credentials]\nharness_id = \"{}\"\ntoken = \"mhns_secret\"\nscope = \"team\"\n",
@@ -156,6 +153,7 @@ fn harness_env_is_optional() {
 #[test]
 fn the_gateway_url_is_the_api_base_with_a_websocket_scheme() {
     let local = MacroApi {
+        egress_url: None,
         api_url: "http://localhost:50009/agent-harness".to_owned(),
         storage_url: "http://localhost:50009/dss".to_owned(),
         web_url: "http://localhost:3000/app".to_owned(),
@@ -166,6 +164,7 @@ fn the_gateway_url_is_the_api_base_with_a_websocket_scheme() {
     );
 
     let secure = MacroApi {
+        egress_url: None,
         api_url: "https://gateway.macro.com/agent-harness/".to_owned(),
         storage_url: "https://gateway.macro.com/dss".to_owned(),
         web_url: "https://macro.com/app/".to_owned(),

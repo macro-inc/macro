@@ -106,15 +106,17 @@ export function ExternalView() {
           WhatsApp
         </h1>
       </ViewShell.TopBar>
-      <ViewShell.Content class="overflow-y-auto pb-4 mobile:pt-(--mobile-content-inset-top) mobile:pb-(--mobile-content-inset-bottom)">
-        {/* The top bar is desktop chrome; touch layouts title the page here. */}
-        <h1 class="hidden px-4 pt-2 text-lg font-semibold text-ink touch:block">
-          WhatsApp
-        </h1>
+      <ViewShell.Header class="hidden touch:block touch:pb-2">
+        <h1 class="text-lg font-semibold text-ink">WhatsApp</h1>
+      </ViewShell.Header>
+      <ViewShell.Content
+        class="overflow-y-auto pb-4 touch:pb-(--mobile-content-inset-bottom)"
+        style={{ '--mobile-content-inset-top': '0px' }}
+      >
         {/* Above the chats, so people who haven't linked WhatsApp see it too.
             Its rows are sidebar-style items, so the entry is one, inset to
-            line up with the rows below it (In Macro on touch, chats on desktop). */}
-        <div class="px-2 pt-2 empty:hidden not-touch:px-4">
+            line up with the chats below it. Touch devices show no tutorial. */}
+        <div class="px-4 pt-2 empty:hidden">
           <TutorialSidebarItem tutorial="whatsapp" />
         </div>
         {/* Touch has no sidebar: the chats in Macro lead the page. */}
