@@ -22,9 +22,16 @@ use crate::error::{SlackError, SlackErrorCode};
 use crate::ids::TeamId;
 use crate::method::SlackMethod;
 
+#[cfg(test)]
+mod test;
+
 /// Where a login stands. Serialize it between steps; it holds secrets.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "step", rename_all = "snake_case")]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "one short-lived state per sign-in, serialized between steps"
+)]
 pub enum LoginState {
     /// Waiting for the email address.
     AwaitingEmail,
@@ -91,6 +98,12 @@ pub struct LoginWorkspace {
     pub sso_required: bool,
     /// Needs a two-factor code.
     pub two_factor_required: bool,
+    /// The workspace icon.
+    #[serde(default)]
+    pub icon_url: Option<String>,
+    /// The Enterprise Grid org it belongs to, by name.
+    #[serde(default)]
+    pub enterprise_name: Option<String>,
     /// Single-use magic login code.
     magic_login_code: Option<Secret>,
     /// Single-use magic login link.
@@ -233,6 +246,8 @@ struct FoundWorkspace {
     sso_required: bool,
     #[serde(default)]
     two_factor_required: bool,
+    #[serde(default)]
+    icon: Option<crate::models::TeamIcon>,
 }
 
 #[derive(Deserialize)]
@@ -757,12 +772,15 @@ fn flatten_workspaces(found: FoundWorkspaces) -> Vec<LoginWorkspace> {
         .current_teams
         .into_iter()
         .flat_map(|group| group.teams);
-    let orgs = found
-        .current_orgs
-        .into_iter()
-        .flat_map(|org| org.org.into_iter().chain(org.teams));
+    let orgs = found.current_orgs.into_iter().flat_map(|org| {
+        let enterprise = org.org.as_ref().map(|org| org.name.clone());
+        org.org
+            .into_iter()
+            .chain(org.teams)
+            .map(move |team| (team, enterprise.clone()))
+    });
     let mut workspaces: Vec<LoginWorkspace> = Vec::new();
-    for found in grouped.chain(orgs) {
+    for (found, enterprise_name) in grouped.map(|team| (team, None)).chain(orgs) {
         if workspaces.iter().any(|known| known.team_id == found.id) {
             continue;
         }
@@ -773,6 +791,10 @@ fn flatten_workspaces(found: FoundWorkspaces) -> Vec<LoginWorkspace> {
             url: found.url.and_then(|url| Url::parse(&url).ok()),
             sso_required: found.sso_required,
             two_factor_required: found.two_factor_required,
+            icon_url: found
+                .icon
+                .and_then(|icon| icon.image_88.or(icon.image_230).or(icon.image_original)),
+            enterprise_name,
             magic_login_code: found
                 .magic_login_code
                 .filter(|code| !code.is_empty())

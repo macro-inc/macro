@@ -158,6 +158,7 @@ pub(crate) fn call(
                         "magic_login_url": link,
                         "sso_required": workspace.sso_required,
                         "two_factor_required": workspace.two_factor_pin.is_some(),
+                        "icon": { "image_88": format!("{}icons/{}.png", state.base_url, workspace.team_id) },
                     })
                 })
                 .collect();

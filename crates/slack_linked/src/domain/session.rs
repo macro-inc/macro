@@ -263,6 +263,11 @@ impl SessionService {
         self.repository.waiting_logins(limit).await
     }
 
+    /// The teams the person has an active account for.
+    pub async fn connected_teams(&self, user_id: &str) -> ExternalChatResult<Vec<String>> {
+        self.repository.connected_teams(user_id).await
+    }
+
     /// The account id to seal a workspace's credentials for.
     pub async fn account_id_for(&self, user_id: &str, team_id: &str) -> ExternalChatResult<Uuid> {
         self.repository.account_id_for(user_id, team_id).await

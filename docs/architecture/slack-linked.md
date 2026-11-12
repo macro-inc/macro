@@ -406,6 +406,6 @@ sent from Macro is uploaded with `files.getUploadURLExternal` + the upload +
 message's `ts`, so the send is stored under it with the staged upload as its
 attachment, and Slack's echo converges on the same message.
 
-## Follow-ups
-
-- `rich_text` blocks for messages whose `text` is empty.
+A message whose `text` is empty (Slack's newer clients send only blocks) is
+stored as its `rich_text` blocks rendered to mrkdwn
+(`slack_linked::domain::blocks`), so mentions and links read the same.

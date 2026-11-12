@@ -211,12 +211,12 @@ impl<Connector: SlackConnector, Keys: Secrets> Logins<Connector, Keys> {
             }) => {
                 match self.sign_in(work, &credentials).await? {
                     Ok(signed) => progress.done.push(signed),
-                    Err(_) => progress.skipped.push(workspace_view(&workspace)),
+                    Err(_) => progress.skipped.push(workspace_view(&workspace, &[])),
                 }
                 Box::pin(self.next_workspace(work, progress)).await
             }
             Ok(SlackStep::BrowserRequired { workspace, .. }) => {
-                progress.skipped.push(workspace_view(&workspace));
+                progress.skipped.push(workspace_view(&workspace, &[]));
                 Box::pin(self.next_workspace(work, progress)).await
             }
             Err(error) => {
@@ -259,6 +259,9 @@ impl<Connector: SlackConnector, Keys: Secrets> Logins<Connector, Keys> {
         progress: Progress,
         retry: bool,
     ) -> Option<LoginAdvance> {
+        // A storage failure leaves the claim to expire, and the step retries.
+        let connected = self.sessions.connected_teams(&work.user_id).await.ok()?;
+        let view = |workspace: &SlackWorkspace| workspace_view(workspace, &connected);
         let step = match &progress.login {
             LoginState::AwaitingEmail => {
                 return Some(LoginAdvance::Failed(LoginFailure::SlackUnavailable));
@@ -273,10 +276,10 @@ impl<Connector: SlackConnector, Keys: Secrets> Logins<Connector, Keys> {
                 retry,
             },
             LoginState::ChoosingWorkspace { workspaces, .. } => LoginStep::PickWorkspaces {
-                workspaces: workspaces.iter().map(workspace_view).collect(),
+                workspaces: workspaces.iter().map(view).collect(),
             },
             LoginState::AwaitingTwoFactor { workspace, .. } => LoginStep::TwoFactor {
-                team: workspace_view(workspace),
+                team: view(workspace),
                 retry,
             },
         };
@@ -369,13 +372,13 @@ impl<Connector: SlackConnector, Keys: Secrets> Logins<Connector, Keys> {
 }
 
 /// A Slack sign-in workspace as the web shows it.
-fn workspace_view(workspace: &SlackWorkspace) -> LoginWorkspace {
+fn workspace_view(workspace: &SlackWorkspace, connected: &[String]) -> LoginWorkspace {
     LoginWorkspace {
         team_id: workspace.team_id.to_string(),
         name: workspace.name.clone(),
         domain: workspace.domain.clone().unwrap_or_default(),
-        icon_url: None,
-        enterprise_name: None,
+        icon_url: workspace.icon_url.clone(),
+        enterprise_name: workspace.enterprise_name.clone(),
         sign_in: if workspace.sso_required {
             WorkspaceSignIn::Sso
         } else if workspace.two_factor_required {
@@ -383,6 +386,8 @@ fn workspace_view(workspace: &SlackWorkspace) -> LoginWorkspace {
         } else {
             WorkspaceSignIn::Ready
         },
-        already_connected: false,
+        already_connected: connected
+            .iter()
+            .any(|team| team == workspace.team_id.as_str()),
     }
 }

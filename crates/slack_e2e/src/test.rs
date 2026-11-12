@@ -441,3 +441,147 @@ async fn a_slack_connect_channel_syncs_both_ways_until_slack_ends_the_session(po
     assert!(state.wiped);
     assert_eq!(service.ended_accounts(10).await.unwrap().len(), 1);
 }
+
+/// Email sign-in through a real replica: the code step, then the workspace
+/// list with icons, SSO workspaces and the ones already connected, then
+/// signing in to the chosen workspaces (SSO ones are skipped).
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_email_sign_in_lists_workspaces_and_signs_in_to_the_chosen_ones(pool: PgPool) {
+    use slack_fake_server::{LoginAccount, LoginMagic, LoginWorkspace};
+    use slack_linked::domain::models::{LoginInput, LoginStepName, WorkspaceSignIn};
+    watch_tables(&pool).await;
+    user(&pool, ALICE).await;
+    let alice: macro_user_id::user_id::MacroUserIdStr<'static> =
+        ALICE.to_owned().try_into().unwrap();
+    let slack = FakeSlack::start().await.unwrap();
+    fake_slack(&slack);
+    let workspace = |team_id: &str, name: &str, sso_required: bool| LoginWorkspace {
+        team_id: team_id.to_owned(),
+        name: name.to_owned(),
+        domain: name.to_lowercase(),
+        token: TOKEN.to_owned(),
+        cookie: COOKIE.to_owned(),
+        magic: LoginMagic::Code,
+        sso_required,
+        two_factor_pin: None,
+    };
+    slack.add_login_account(LoginAccount {
+        email: "alice@example.com".to_owned(),
+        code: "ABC123".to_owned(),
+        captcha: None,
+        workspaces: vec![
+            workspace(OWN_TEAM, "Own", false),
+            workspace("T0SSOTEAM1", "Sso", true),
+        ],
+    });
+    let kms = Arc::new(FakeKms::new("e2e-slack-key"));
+    let repository = Arc::new(PgSlackRepository::new(pool.clone()));
+    let service = SlackService::new(
+        repository,
+        Arc::new(SlackLoginInputSealer::new(kms.clone())),
+    );
+    let _replica = Replica::start(&pool.connect_options(), &slack, kms).await;
+    let step_after = |id: Uuid, name: LoginStepName| {
+        let service = &service;
+        let alice = &alice;
+        async move {
+            let login = service
+                .login(alice, id, SendAuthority::Human)
+                .await
+                .unwrap();
+            (login.step.name() == name).then_some(login.step)
+        }
+    };
+
+    // A first sign-in (pasted) connects the own workspace.
+    let pasted = service
+        .submit_session(
+            &alice,
+            &SessionSubmission {
+                source: SessionSource::Desktop,
+                cookie: COOKIE.to_owned(),
+                cookie_ds: None,
+                tokens: vec![SessionTokenInput {
+                    token: TOKEN.to_owned(),
+                    team_id: None,
+                }],
+            },
+            SendAuthority::Human,
+        )
+        .await
+        .unwrap();
+    wait_for_rows(&pool, WAIT, || step_after(pasted.id, LoginStepName::Done))
+        .await
+        .expect("the pasted session signs in");
+
+    let login = service
+        .start_email_login(&alice, "alice@example.com", SendAuthority::Human)
+        .await
+        .unwrap();
+    wait_for_rows(&pool, WAIT, || {
+        step_after(login.id, LoginStepName::EmailCode)
+    })
+    .await
+    .expect("Slack emails a code");
+    service
+        .submit_login_input(
+            &alice,
+            login.id,
+            LoginStepName::EmailCode,
+            LoginInput::Code {
+                code: "abc-123".to_owned(),
+            },
+            SendAuthority::Human,
+        )
+        .await
+        .unwrap();
+    let LoginStep::PickWorkspaces { workspaces } = wait_for_rows(&pool, WAIT, || {
+        step_after(login.id, LoginStepName::PickWorkspaces)
+    })
+    .await
+    .expect("the workspaces are listed") else {
+        unreachable!("waited for the workspace list");
+    };
+    let listed: Vec<(&str, WorkspaceSignIn, bool, bool)> = workspaces
+        .iter()
+        .map(|workspace| {
+            (
+                workspace.team_id.as_str(),
+                workspace.sign_in,
+                workspace.already_connected,
+                workspace.icon_url.is_some(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        listed,
+        vec![
+            (OWN_TEAM, WorkspaceSignIn::Ready, true, true),
+            ("T0SSOTEAM1", WorkspaceSignIn::Sso, false, true),
+        ]
+    );
+
+    service
+        .submit_login_input(
+            &alice,
+            login.id,
+            LoginStepName::PickWorkspaces,
+            LoginInput::Workspaces {
+                team_ids: vec![OWN_TEAM.to_owned(), "T0SSOTEAM1".to_owned()],
+            },
+            SendAuthority::Human,
+        )
+        .await
+        .unwrap();
+    let LoginStep::Done { accounts, skipped } =
+        wait_for_rows(&pool, WAIT, || step_after(login.id, LoginStepName::Done))
+            .await
+            .expect("the chosen workspaces sign in")
+    else {
+        unreachable!("waited for done");
+    };
+    assert_eq!(accounts.len(), 1);
+    assert_eq!(accounts[0].team_id, OWN_TEAM);
+    assert_eq!(skipped.len(), 1);
+    assert_eq!(skipped[0].team_id, "T0SSOTEAM1");
+}

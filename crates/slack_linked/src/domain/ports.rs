@@ -463,6 +463,8 @@ pub trait SessionRepository: Send + Sync {
     ) -> ExternalChatResult<Option<super::events::LoginWork>>;
     /// Attempts with input no replica claimed (missed signals).
     async fn waiting_logins(&self, limit: i64) -> ExternalChatResult<Vec<Uuid>>;
+    /// The teams the person has an active account for.
+    async fn connected_teams(&self, user_id: &str) -> ExternalChatResult<Vec<String>>;
     /// The person's account id for a team: the existing one, else a new id
     /// to seal credentials for.
     async fn account_id_for(&self, user_id: &str, team_id: &str) -> ExternalChatResult<Uuid>;

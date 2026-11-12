@@ -560,6 +560,16 @@ impl SessionRepository for PgSlackRepository {
         super::logins::waiting_logins(&self.pool, limit).await
     }
 
+    async fn connected_teams(&self, user_id: &str) -> ExternalChatResult<Vec<String>> {
+        sqlx::query_scalar!(
+            "SELECT team_id FROM slack_account WHERE user_id = $1 AND state IN ('connecting', 'connected')",
+            user_id
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(failure)
+    }
+
     async fn account_id_for(&self, user_id: &str, team_id: &str) -> ExternalChatResult<Uuid> {
         super::logins::account_id_for(&self.pool, user_id, team_id).await
     }
