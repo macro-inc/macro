@@ -24,7 +24,7 @@ production sources, including Vite map `sourcesContent`, not package versions al
 | Historical 0395 / 3b | `03958990475e7cfe6b316fe1ebfca5964d96962f` | `3b1907cb9900ac633d198c17512e91774a0fcc45` / `1424d8634496b8309b763eeacb3283c9c772b6cfeb65be9d3e8ca6cf11ab8def` | Ordinary `bebop-owned-all`, no dev-probes |
 | 4ddec / 3488 | `4ddecff20a9dd985df9d2634f0f99703e003f174` | `3488ef763b87f83b269d6ead88429032bece50f3` / `047b41bca6da595b5efcc4e2c20d2023158c51fb85e08720c3de7191883c6750` | **Preview** `bebop-owned-all,dev-probes` |
 | 50a2 production | `50a2b9b575d8f8755dc63c4d0460f20b5c4e0e8b` | Same source / `b1bffd2594df6ac9a47d08eb5d7a0d35aee4cb68508168c598398a4da293a98b` | Production `--no-default-features --features bebop-owned-all`; no dev-probes |
-| 5cf / d732 | `5cfb2571fb74d4b5f4520750619dc0eb74748da7` | `d7326a3f9dfc55f70a3adc5debf356641fa71dd9` / unmeasured here | Source-counter diagnostic only; 80d absent |
+| 5cf / d732 | `5cfb2571fb74d4b5f4520750619dc0eb74748da7` | `d7326a3f9dfc55f70a3adc5debf356641fa71dd9` / `418b87d31680c7add0b6edc53cf2ad87508f76081b55f4952d7328e94d1263f3` | Preview `bebop-owned-all,dev-probes` for quick selection; counter scratch separate; 80d absent |
 
 The 50a2 preview package is a different artifact; do not substitute it for
 `b1bffd25`. In particular, 4ddec and 50a2 are not a controlled test of one change.
@@ -108,6 +108,42 @@ first-Enter trace method to distinguish WASM, view, DOM and thread CPU, but seal
 an exact workload and endpoint before collecting. A DOM deletion witness is not
 presentation. Preserve exact final model, caret, Undo and OFF controls. Do not
 infer a value from first-Enter or held-selection profiles.
+
+### Quick selection profiles (5cf)
+
+SELECT5 records one native-only Shift+ArrowRight x16 sequence and one drag on
+5000 paragraphs. The exact producer is
+`/home/wolf/tmp/lexical-port/selection-perf-5cf-01/quick-selection.mjs`, SHA-256
+`26386952e4cc8b82e265b27a26c820d6e0f8011e439fa09aed7268caff68b0be`.
+Run from its owned producer directory under Node 24/devshell:
+`node quick-selection.mjs OWN_CONFIG.json`. Each operation creates an owned
+backend document from the pinned cbfb paragraph text. Its generated graph/IDs are
+not the cbfb snapshot. Both actual DOM and cached native selection are checked
+outside profiling: first text key 2, offsets 12/12 before and 12/28 afterward.
+
+Only CDP Profiler/Tracing instruments the operation. There are no injected page
+listeners, wrappers, preloads or marks. Static asset routing is outside the page;
+fulfilled bytes must match the sealed 5cf manifest. Real backend WebSockets remain.
+The host action sequence includes controller/CDP overhead; the capture also has a
+separate 250 ms tail. Neither is native-only completion or presentation latency.
+
+Observed-sequence sample ancestry identifies
+`published → formats → clipboard → clipboardDom` at the eager request
+`apps/web/src/features/block-md/component/format-host/native.ts:224`.
+Shift has 5718/8018 samples (71.31%) under that binding; drag 8377/11040 (75.88%).
+These overlapping ancestry counts are not CPU percentages or calls. Signed CDP
+sample deltas are retained without clamping. Internal
+418b frames remain numeric; no pre-optimization proxy indices were transferred.
+Shift has one GC self sample and no complete GC trace event; drag has 13 GC self
+samples, one MinorGC (1.783 ms wall/1.339 ms CPU) and separate WASM code GC
+(.474/.470 ms). Nested trace records are not separate collections.
+
+Long Tasks are unavailable: no complete RunTask events were captured and no page
+observer was installed. Two generic 404 console messages lack request association
+in each case; abort diagnostics are retained, so there is no clean-app-health
+assertion. The first setup was refused above load 150 before any browser, and is
+not pooled. No OFF ratio, 500-paragraph growth, exact crossing count or acceptance
+verdict is established. The rigorous selection producer remains separate.
 
 ### Historical plain-text paste block
 
@@ -267,16 +303,16 @@ All numbers below are diagnostics. `—` means no bound measurement. Dates are U
 See the evidence registry for complete paths and SHA-256s. Cross-row subtraction
 is not a matched causal experiment.
 
-| Candidate / date | First Enter OFF → ON ms (Chrome) | keyDown CPU / wall | Paste | Bind / fixed work / H probes | Size raw / brotli | Evidence |
-| --- | --- | --- | --- | --- | --- | --- |
-| 0395 / 3b, 2026-11-12 | p50 60.20 → 92.90; ratio 1.543 [1.268,2.267]. p95 149.875 → 220.80; 1.473 [1.102,2.246] | Marked 24.078 / 52.678 ms; lazy compile 12.830 ms CPU, 459 indices | Historical baseline median 2412.25 ms | LOCAL callbacks 12/20/24; PROBE baseline on 3b source plus scratch patch, not the 0395 WASM | — | ENTER3, FUNCTIONS, LOCAL, PROBE, PASTE |
-| 4ddec / 3488 preview, 2026-11-12 | p50 68.60 → 112.25; 1.636 [1.155,2.188]. p95 205.15 → 261.75; 1.276 [1.147,2.098] | Single marked 22.803 / 33.978 ms; actual clipboard calls 0 | — | — | 9526725 / 2151522 B (q11) | ENTER4, PHASE4, SIZE |
-| 50a2 production, 2026-11-12 | p50 25.60 → 37.10; 1.449 [1.404,1.512]. p95 29.10 → 77.20; 2.653 [1.423,5.484] | — | — | 80d absent; no bound counter run | — | ENTER50 |
-| 5cf / d732, 2026-11-12 | — | — | — | Each of six rows: 23 with_txn; Map/Insert/Delete 19/3/1; selected clone attempts/returns 50/50; 80d absent | — | FIXED |
-| 80d isolated kernel, 2026-11-12 | — | — | — | 5000p mean bind 50.2433 → 47.8329 ms; ratio .9520 [.9152,.9858]. 100/1000p CIs include 1 | — | BIND |
-| Historical d1fca7a8 / e622, 2026-11-12 | — | — | 2294.70 ms vs 2412.25 baseline; descriptive ratio .9513, n=2/arm, no CI | — | — | PASTE |
-| H1 ecd5 / H23 source checkpoints, 2026-11-12 | — | — | — | H1 visits 10 all six; H2 1/1/1; H3 52/502/5002 (only H1 uses a different fixture; H23 uses PROBE) | — | H1, H23 |
-| Local environment attachment, 2026-11-12 | — | — | — | /health median 3484.090 → 3.824 ms, n=5 each; after app WS 101: 39.247/60.511/13.569 ms | — | ENV |
+| Candidate / date | First Enter OFF → ON ms (Chrome) | keyDown CPU / wall | Paste | Bind / fixed work / H probes | Size raw / brotli | Evidence | Selection quick diagnostic |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 0395 / 3b, 2026-11-12 | p50 60.20 → 92.90; ratio 1.543 [1.268,2.267]. p95 149.875 → 220.80; 1.473 [1.102,2.246] | Marked 24.078 / 52.678 ms; lazy compile 12.830 ms CPU, 459 indices | Historical baseline median 2412.25 ms | LOCAL callbacks 12/20/24; PROBE baseline on 3b source plus scratch patch, not the 0395 WASM | — | ENTER3, FUNCTIONS, LOCAL, PROBE, PASTE | — |
+| 4ddec / 3488 preview, 2026-11-12 | p50 68.60 → 112.25; 1.636 [1.155,2.188]. p95 205.15 → 261.75; 1.276 [1.147,2.098] | Single marked 22.803 / 33.978 ms; actual clipboard calls 0 | — | — | 9526725 / 2151522 B (q11) | ENTER4, PHASE4, SIZE | — |
+| 50a2 production, 2026-11-12 | p50 25.60 → 37.10; 1.449 [1.404,1.512]. p95 29.10 → 77.20; 2.653 [1.423,5.484] | — | — | 80d absent; no bound counter run | — | ENTER50 | — |
+| 5cf / d732, 2026-11-12 | — | — | — | Each of six rows: 23 with_txn; Map/Insert/Delete 19/3/1; selected clone attempts/returns 50/50; 80d absent | — | FIXED | n1/operation: Shift16 host 1175.761 ms; drag 1875.578 ms; clipboardDom 71.31%/75.88% samples (SELECT5) |
+| 80d isolated kernel, 2026-11-12 | — | — | — | 5000p mean bind 50.2433 → 47.8329 ms; ratio .9520 [.9152,.9858]. 100/1000p CIs include 1 | — | BIND | — |
+| Historical d1fca7a8 / e622, 2026-11-12 | — | — | 2294.70 ms vs 2412.25 baseline; descriptive ratio .9513, n=2/arm, no CI | — | — | PASTE | — |
+| H1 ecd5 / H23 source checkpoints, 2026-11-12 | — | — | — | H1 visits 10 all six; H2 1/1/1; H3 52/502/5002 (only H1 uses a different fixture; H23 uses PROBE) | — | H1, H23 | — |
+| Local environment attachment, 2026-11-12 | — | — | — | /health median 3484.090 → 3.824 ms, n=5 each; after app WS 101: 39.247/60.511/13.569 ms | — | ENV | — |
 
 Timing02 Firefox (same 0395 epoch): p50 OFF 306 / ON 291.5 ms,
 ratio .953 [.647,1.539]; p95 653 / 1080.25 ms, 1.654 [.524,3.052].
@@ -320,6 +356,9 @@ these files and their referenced assets together when moving the ledger.
   SHA-256 `2c3d8fa3e419af693c85577754522067085196dc1ef4d1c5b6f425be78bb62e0`.
 - **ENV**: `/home/wolf/tmp/silky-profile/ws101-local-latency-01/environment-change-handoff-v2.json`
   SHA-256 `a1ba1853bd4e6e20ef0585f5df53ee03494ba3bfcb45079fb58d4d33dfdf7b42`.
+
+- **SELECT5**: `/home/wolf/tmp/lexical-port/selection-perf-5cf-01/quick-final-qualified-receipt.json`
+  SHA-256 `bebd37a6b2a907b95aaca172a450b4177e298b7c8760ae81ea77252d5a4815b4`.
 
 ## Add a candidate row
 
