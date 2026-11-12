@@ -90,4 +90,17 @@ describe('Message.context', () => {
 
     expect(selections).toEqual([{ around: 'root-3', limit: 7 }]);
   });
+
+  test('each side keeps only the messages asked for', async () => {
+    const { client, selections } = contextClient(record('root-3'));
+
+    const context = await Message.byId(client, 'channel-1', 'root-3').context({
+      channelBefore: 0,
+      channelAfter: 1,
+    });
+
+    expect(selections).toEqual([{ around: 'root-3', limit: 3 }]);
+    expect(context.before).toEqual([]);
+    expect(context.after.map((m) => m.id)).toEqual(['root-4']);
+  });
 });

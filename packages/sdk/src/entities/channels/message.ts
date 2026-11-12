@@ -15,9 +15,9 @@ export type MessageData = MessageRecord;
 
 /** How much surrounds a message in {@link Message.context}. */
 export interface MessageContextOptions {
-  /** Top-level messages before the root, roughly; defaults to 3, at most 25. */
+  /** Top-level messages before the root; defaults to 3, at most 25. */
   channelBefore?: number;
-  /** Top-level messages after the root, roughly; defaults to 3, at most 25. */
+  /** Top-level messages after the root; defaults to 3, at most 25. */
   channelAfter?: number;
   /** For a reply, replies before it; defaults to 10, at most 50. */
   threadBefore?: number;
@@ -197,7 +197,8 @@ export class Message extends FavoritableEntity<MessageRecord> {
         query: {
           selection: JSON.stringify({
             around: this.id,
-            limit: channelBefore + channelAfter + 1,
+            // The server splits the window evenly; ask for the larger side twice.
+            limit: 2 * Math.max(channelBefore, channelAfter) + 1,
           } satisfies MessageTimelineQuery),
         },
       }),
@@ -213,8 +214,8 @@ export class Message extends FavoritableEntity<MessageRecord> {
     const context: MessageContext = {
       message: this,
       root,
-      before: roots.slice(0, rootIndex),
-      after: roots.slice(rootIndex + 1),
+      before: roots.slice(Math.max(0, rootIndex - channelBefore), rootIndex),
+      after: roots.slice(rootIndex + 1, rootIndex + 1 + channelAfter),
     };
     if (!record.thread_id) return context;
     const replies = await root.thread().replies();
