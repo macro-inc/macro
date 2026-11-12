@@ -422,7 +422,11 @@ fn dss_upgrade_replaces_a_stored_null_or_missing_url_only_when_captured_as_store
                 assert_eq!(handled, Handled::Yes, "{stored_name} captured as stored");
                 assert_eq!(video.media.url, Maybe::Value("blob:fresh".into()));
             } else {
-                assert_eq!(handled, Handled::No, "{stored_name} captured as {captured_name}");
+                assert_eq!(
+                    handled,
+                    Handled::No,
+                    "{stored_name} captured as {captured_name}"
+                );
                 assert_eq!(&video.media.url, stored_url);
             }
         }
