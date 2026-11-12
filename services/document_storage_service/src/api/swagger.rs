@@ -3,6 +3,10 @@
     reason = "Just to allow GetActivitiesResponse and UserActivitiesResponse"
 )]
 
+use crate::api::saved_views::definitions::{
+    CreateSavedViewDefinitionRequest, ReorderSavedViewDefinitionsRequest, SavedViewDefinition,
+    SavedViewDefinitionPage, SavedViewSharingRequest, UpdateSavedViewDefinitionRequest,
+};
 use crate::api::saved_views::{
     CreateViewRequest, ExcludeDefaultViewRequest, ExcludedDefaultView, View, ViewPatch,
 };
@@ -135,6 +139,10 @@ use initiative::domain::models::{
     CreateInitiativeRequest, InitialPropertyValue, InitiativeDetail, InitiativeId, InitiativeList,
     InitiativeSummary, UpdateInitiativeRequest,
 };
+use initiative::domain::reads::{
+    InitiativePage, InitiativePageRow, InitiativePropertySnapshot, InitiativeSort,
+};
+use initiative::inbound::axum_router::description::InitiativeDescription;
 use model::document::response::{
     CreateDocumentRequest, CreateDocumentResponse, CreateDocumentResponseData,
     DocumentResponseMetadata,
@@ -231,6 +239,7 @@ use utoipa::OpenApi;
         calendar_events::inbound::join_request_router::list_join_requests,
         calendar_events::inbound::axum_router::list_team_out_of_office,
         calendar_events::inbound::team_router::list_team_calendar,
+        calendar_events::inbound::team_router::get_team_availability,
 
         // annotations
         annotations::get::get_document_anchors_handler,
@@ -261,6 +270,9 @@ use utoipa::OpenApi;
         documents_hex::inbound::axum_router::get_location::get_location_v3_handler,
         documents_hex::inbound::axum_router::get_text::get_text_handler,
         documents_hex::inbound::axum_router::ai_edit::ai_edit_handler,
+        documents_hex::inbound::axum_router::markdown_body::get_markdown_handler,
+        documents_hex::inbound::axum_router::markdown_body::write_markdown_handler,
+        documents_hex::inbound::axum_router::comment_on_text::comment_on_text_handler,
         documents_hex::inbound::axum_router::canvas::canvas_scene_handler,
         documents_hex::inbound::axum_router::canvas::render_canvas_handler,
         documents_hex::inbound::axum_router::canvas::apply_canvas_edits_handler,
@@ -378,6 +390,9 @@ use utoipa::OpenApi;
         harnesses::inbound::axum_router::claim_pairing_handler,
         harnesses::inbound::axum_router::list_harnesses_handler,
         harnesses::inbound::axum_router::patch_harness_handler,
+        harnesses::inbound::axum_router::list_directory_handler,
+        harnesses::inbound::axum_router::set_team_access_handler,
+        harnesses::inbound::axum_router::list_residents_handler,
         harnesses::inbound::axum_router::delete_harness_handler,
         harnesses::inbound::axum_router::list_bound_agents_handler,
         harnesses::inbound::axum_router::get_self_harness_handler,
@@ -491,6 +506,14 @@ use utoipa::OpenApi;
         channel_labels::inbound::axum_router::delete_channel_label_handler,
         channel_labels::inbound::axum_router::set_channel_label_handler,
 
+        // channel sections
+        channel_labels::inbound::axum_router::list_channel_sections_handler,
+        channel_labels::inbound::axum_router::preview_channel_section_handler,
+        channel_labels::inbound::axum_router::create_channel_section_handler,
+        channel_labels::inbound::axum_router::update_channel_section_handler,
+        channel_labels::inbound::axum_router::delete_channel_section_handler,
+        channel_labels::inbound::axum_router::set_channel_section_handler,
+
         // user api keys
         account_manager::inbound::axum_router::request_account_manager_handler,
         account_manager::inbound::axum_router::list_account_managers_handler,
@@ -552,8 +575,11 @@ use utoipa::OpenApi;
         reminders::inbound::axum_router::email_collection::list_email_reminders_handler,
         // initiatives
         initiative::inbound::axum_router::list::list_initiatives_handler,
+        initiative::inbound::axum_router::page::page_initiatives_handler,
+        initiative::inbound::axum_router::description::get_initiative_description_handler,
         initiative::inbound::axum_router::create::create_initiative_handler,
         initiative::inbound::axum_router::get::get_initiative_handler,
+        initiative::inbound::axum_router::activity::get_initiative_activity_handler,
         initiative::inbound::axum_router::update::update_initiative_handler,
         initiative::inbound::axum_router::delete::delete_initiative_handler,
         // databases
@@ -603,6 +629,12 @@ use utoipa::OpenApi;
         saved_views::delete_view_handler,
         saved_views::patch_view_handler,
         saved_views::exclude_default_view_handler,
+        saved_views::definitions::list_handler,
+        saved_views::definitions::get_handler,
+        saved_views::definitions::create_handler,
+        saved_views::definitions::update_handler,
+        saved_views::definitions::delete_handler,
+        saved_views::definitions::reorder_handler,
 
         // /github
         github::inbound::github_sync_router::install_sync_handler,
@@ -626,6 +658,17 @@ use utoipa::OpenApi;
         crm::inbound::pipelines::permissions,
         crm::inbound::pipelines::update_permissions,
         crm::inbound::pipelines::trash,
+        crm::inbound::pipeline_workflows::find_entries,
+        crm::inbound::pipeline_workflows::record_entries,
+        crm::inbound::pipeline_workflows::search_entries,
+        crm::inbound::pipeline_workflows::add_entries,
+        crm::inbound::pipeline_workflows::update_entries,
+        crm::inbound::pipeline_workflows::remove_entries,
+        crm::inbound::pipeline_workflows::edit,
+        crm::inbound::pipeline_workflows::import_pipeline,
+        crm::inbound::pipeline_workflows::import_companies,
+        crm::inbound::pipeline_workflows::pipeline_csv,
+        crm::inbound::pipeline_workflows::export_pipeline,
         crm::inbound::axum_router::set_email_sync::handler,
         crm::inbound::axum_router::email_privacy::get_handler,
         crm::inbound::axum_router::email_privacy::update_handler,
@@ -746,6 +789,12 @@ use utoipa::OpenApi;
             calendar_events::inbound::axum_router::TeamOutOfOfficeItem,
             calendar_events::inbound::axum_router::TeamOutOfOfficeResponse,
             calendar_events::domain::team::TeamCalendarPage,
+            calendar_events::inbound::team_router::TeamAvailabilityRequest,
+            calendar_events::domain::team_availability::TeamAvailability,
+            calendar_events::domain::team_availability::TeamMemberAvailability,
+            calendar_events::domain::team_availability::AvailabilityInterval,
+            calendar_events::domain::team_availability::AvailabilityCoverage,
+            calendar_events::domain::team_availability::AvailabilityUnknownReason,
             calendar_events::domain::team::TeamCalendarItem,
             calendar_events::domain::team::TeamCalendarContent,
             calendar_events::domain::team::TeamCalendarDetails,
@@ -887,7 +936,15 @@ use utoipa::OpenApi;
             InitiativeId,
             InitiativeSummary,
             InitiativeDetail,
+            initiative::domain::history::InitiativeActivityPage,
+            initiative::domain::history::InitiativeActivityRecord,
+            initiative::domain::history::InitiativeActivityCursor,
             InitiativeList,
+            InitiativePage,
+            InitiativePageRow,
+            InitiativePropertySnapshot,
+            InitiativeSort,
+            InitiativeDescription,
             CreateInitiativeRequest,
             InitialPropertyValue,
             UpdateInitiativeRequest,
@@ -1004,6 +1061,9 @@ use utoipa::OpenApi;
             // Harnesses
             harnesses::domain::models::Harness,
             harnesses::domain::models::HarnessOwner,
+            harnesses::domain::models::HarnessAccess,
+            harnesses::domain::models::HarnessResident,
+            harnesses::domain::models::SetHarnessTeamAccessRequest,
             harnesses::domain::models::HarnessAgent,
             harnesses::domain::models::HarnessSession,
             harnesses::domain::models::CreatePairingRequest,
@@ -1142,6 +1202,12 @@ use utoipa::OpenApi;
 
             CreateViewRequest,
             ExcludeDefaultViewRequest,
+            SavedViewDefinition,
+            SavedViewDefinitionPage,
+            CreateSavedViewDefinitionRequest,
+            UpdateSavedViewDefinitionRequest,
+            SavedViewSharingRequest,
+            ReorderSavedViewDefinitionsRequest,
             BranchNameResponse,
             ShortIdResponse,
             documents_hex::domain::models::GithubPullRequest,

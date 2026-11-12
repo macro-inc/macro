@@ -1,0 +1,8 @@
+{
+  "name": "macro-swagger2openapi",
+  "version": "7.0.8",
+  "private": true,
+  "dependencies": {
+    "swagger2openapi": "7.0.8"
+  }
+}

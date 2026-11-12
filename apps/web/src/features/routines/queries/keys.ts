@@ -3,7 +3,15 @@ import { createQueryKeys } from '@lukemorales/query-key-factory';
 export const scheduledActionKeys = createQueryKeys('scheduledAction', {
   all: null,
   list: null,
-  starters: null,
+  /** Every active routine another routine's run created. */
+  subRoutines: null,
+  /** What one routine's runs created, finished one-time ones included. */
+  children: (params: { scheduleId: string }) => ({
+    queryKey: [params.scheduleId],
+  }),
+  catalog: (params: { timezone: string }) => ({
+    queryKey: [params.timezone],
+  }),
   detail: (params: { scheduleId: string }) => ({
     queryKey: [params.scheduleId],
   }),

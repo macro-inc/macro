@@ -86,14 +86,15 @@ works on it) shows a persistent `Email access required`
 prompt whose `Try again` reopens `Connect email`, and anything else shows a
 failure toast.
 
-## Temporary open signup in Develop
+## Signup in Develop
 
-Once the temporary authentication-service override is deployed, Develop accepts
-new accounts with any email address regardless of signup allowlist membership or
-the configured bypass flag. Verify with an authorized test account outside
-`macro.com` that is absent from the allowlist. Email verification and provider
-sign-in still apply. See the [authentication-service configuration guide](../../services/authentication_service/README.md#temporary-open-signup-override)
-for restoring allowlist enforcement.
+With `DEVELOPMENT_BYPASS_SIGNUP_ALLOWLIST` off (the default), Develop creates new
+accounts only for `@macro.com` addresses and the addresses on the Develop signup
+allowlist; turning the bypass on admits every address. With the bypass off, a
+code request for any other new address gets a
+generic `403`, and FusionAuth aborts any other provider sign-up. Existing
+accounts still sign in. See the
+[authentication-service configuration guide](../../services/authentication_service/README.md#development-signup-allowlist).
 
 ## GraphQL cache session lifecycle
 
@@ -142,6 +143,8 @@ sign-in navigates the browser to `/__macro_dev/gateway/auth/login/sso` with
 `is_mobile=true` to request the session-code handoff. The `original_url`
 remains the browser destination (including its query and hash). Returning
 from the provider redeems the session code to establish cookies locally.
+A code redeems once: a second redemption, or a reload of a page still
+carrying `?token=`, answers 400.
 This browser flow must not open a native authentication session. Verify the
 redirect separately from provider completion; arbitrary development hostnames
 are not on the hosted OAuth redirect allowlist.
@@ -237,9 +240,19 @@ page should remain stable after the session check returns
 401; it must not alternate with the loading screen or reset a selected color.
 Verify that Continue advances without signing in. Below the color
 picker, "Already have an account? Sign in instead" opens `/app/login`. At the work-email
-step, Connect work email uses Google sign-up to create the Macro account and link
-the primary inbox. This step offers Google sign-up only, with no alternate email
-button. The chosen accent and work step survive the OAuth
+step, Continue with Google creates the Macro account and links the primary
+inbox; Continue with Microsoft below it (behind the `enable-microsoft-signup`
+flag, on only in Vite development-mode builds) creates the account through the
+FusionAuth `microsoft` identity provider (work, school, and personal accounts;
+it accepts only an email whose domain Microsoft verified, the `xms_edov` claim),
+then the signed-in work step continues straight into Outlook consent (mail and
+calendar) when `enable-outlook` admits the user. Declining or a tenant that
+needs admin approval leaves the account on the work step, which offers Google,
+Microsoft, or Skip. A provider sign-in that FusionAuth returns without a code
+comes back with `?sso_error=` and opens email-code sign-up with the reason; a
+refusal by the provider itself or by a reconcile lambda stays on FusionAuth's
+own error page. There is no alternate email
+button. The sign-in picker also offers Continue with Microsoft. The chosen accent and work step survive the OAuth
 redirect; after authentication the accent is saved to the user's theme and setup
 resumes at work email. Regular `/app/login` retains the direct sign-in screen.
 
@@ -259,6 +272,9 @@ Pearl and centers the remaining five swatches. A selected Pearl falls back to Mi
 when entering cream mode; Pearl stays available in dark mode. Cream slab headings use weight 330
 (15 above dark mode) with the same sizing and line breaks. Interests are visual
 preferences only. Security and Google steps have a Read more section below the fold.
+Where the work step offers Microsoft, its Read more adds Continuing with
+Microsoft: sign-in shares only name, email, and account ID, and Outlook mail and
+calendar access is a separate consent that follows.
 
 Work and personal account buttons use the existing Gmail linking flow. Skipping
 work email skips the secondary-account prompt. Verify that a Google return
@@ -415,8 +431,11 @@ fully recoverable: click the dialog's `Home` button, then wait for the sidebar t
 
 ## Session persistence
 
-The session lives in cookies (`local-macro-access-token`, `local-macro-refresh-token`). It
-survives page reloads but not a browser-profile restart — if the shared Chromium is restarted
+The session lives in cookies. Services use `local-macro-access-token` and
+`local-macro-refresh-token`; the local proxy stores them in the browser as
+`macro-<instance>--local-macro-access-token`, so stacks on one machine don't share sessions
+([details](../development/running-locally.md#run-more-than-one-stack)). When copying cookies
+into a browser context, copy the names the proxy returned. The session survives page reloads but not a browser-profile restart — if the shared Chromium is restarted
 with a fresh profile you must log in again. Workspace data (docs, channels, tasks) persists on
 the backend across logins for the same email.
 

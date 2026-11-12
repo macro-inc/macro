@@ -193,6 +193,10 @@ pub enum CloseReason {
     /// The shell could not persist a log entry, and an unlogged session may
     /// not keep running: the log stream is the session's history.
     LogFailed,
+    /// The service released an idle connection to free its memory. Nothing
+    /// was open and nothing is written: a later attach picks the session up
+    /// where its log left it.
+    Released,
 }
 
 impl std::fmt::Display for CloseReason {
@@ -204,6 +208,7 @@ impl std::fmt::Display for CloseReason {
             Self::SendFailed => "an action could not be sent",
             Self::HandshakeTimedOut => "the ACP handshake timed out",
             Self::LogFailed => "a log entry could not be persisted",
+            Self::Released => "the idle connection was released",
         })
     }
 }

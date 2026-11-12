@@ -64,6 +64,10 @@ document's database card opens the full database at that row, and keeps the pane
 where there are no splits (call chat). Records the view opens itself, such as one
 just created, keep the panel.
 
+`renderTextValue` and `renderLinkValue` let a host show text and URL values with
+its own links. A click on a link inside a cell opens the link instead of
+editing the cell.
+
 `editRows` and `editColumns` enable their respective controls. Optional record-view
 props supply persisted board positions, conversion previews, relationships,
 presence, and stored-view changes. Omit an unsupported action. A board can render

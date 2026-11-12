@@ -32,6 +32,7 @@ import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component
 import { toast } from '@core/component/Toast/Toast';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
+import { isModality } from '@core/mobile/inputModality';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import EmptyStateInboxTrayGraphic from '@design/empty-state-inbox-tray.svg';
@@ -98,6 +99,7 @@ import {
   dateHeaderLabel,
   type InboxListItem,
   type InboxStackItemPlace,
+  inboxSectionEnds,
   isInboxNotification,
   isInboxRow,
   isInboxStackItem,
@@ -115,6 +117,7 @@ import {
 } from '../primitives/notification-location';
 import { createRowActions, rowButtons } from '../primitives/row-actions';
 import { rowEntity } from '../primitives/row-entity';
+import { InboxRowAvatar } from './inbox-row-avatar';
 import { NotificationsNoneSelected } from './notifications-none-selected';
 
 type ActivationMetadata = { event?: MouseEvent; newSplit?: boolean };
@@ -174,7 +177,9 @@ const decisionFailure = (decision: InboxDecision) =>
 const previewSelection = (
   entity: EntityData
 ): PreviewPanelSelection | undefined =>
-  entity.type === 'calendar_event' || entity.type === 'initiative'
+  entity.type === 'calendar_event' ||
+  entity.type === 'initiative' ||
+  entity.type === 'harness'
     ? undefined
     : entity;
 
@@ -239,10 +244,10 @@ function ListStatus(props: { children: JSX.Element }) {
 }
 
 /**
- * The unified notifications list beside a preview of the chosen row: one card
+ * The unified notifications list beside a preview of the chosen row: one row
  * per thing that needs the viewer, newest first under Home's date dividers.
  * Several notifications about one thing show as a stack; its button, or the
- * right arrow, unfolds them below the card, and each opens at its own location.
+ * right arrow, unfolds them below the row, and each opens at its own location.
  * All and Unread switch the list, and the choice is kept between visits.
  * `j`/`k` move through rows and unfolded notifications (and follow in an open
  * preview), Enter previews, `e` marks the focused row done. Touch shows the list
@@ -331,6 +336,7 @@ export function NotificationsView(props: NotificationsViewProps) {
   // and a stack stays open through it.
   const stacks = createDisclosureState();
   const listItems = createInboxListItems(rows, stacks.isExpanded);
+  const sectionEnds = createMemo(() => inboxSectionEnds(listItems()));
   const anyStackOpen = createMemo(() =>
     rows().some((row) => row.count > 1 && stacks.isExpanded(row.id))
   );
@@ -426,12 +432,36 @@ export function NotificationsView(props: NotificationsViewProps) {
   /** Leave what the content area shows for the list. */
   const closePreview = (history: HistoryOptions = {}) =>
     selection.clear(history);
+  // A click or Enter on a conversation's row hands its composer focus, also
+  // when the preview already shows it; browsing the list keeps focus here.
+  const [composerFocus, setComposerFocus] = createSignal<{
+    blockId: string;
+    id: number;
+  }>();
+  let lastComposerFocusId = 0;
+  const previewComposerFocus = () => {
+    const request = composerFocus();
+    return request && request.blockId === previewTarget()?.blockId
+      ? request.id
+      : 0;
+  };
   const previewAfterMove = debounce(
-    (row: NotificationInboxRow, notification?: UnifiedNotification) =>
-      preview(row, notification, { replace: true }),
+    (row: NotificationInboxRow, notification?: UnifiedNotification) => {
+      setComposerFocus(undefined);
+      preview(row, notification, { replace: true });
+    },
     150
   );
   onCleanup(() => previewAfterMove.clear());
+
+  // Esc from a previewed conversation returns to its row, which stays the
+  // list's focused row while the preview shows it.
+  let listRoot: HTMLDivElement | undefined;
+  const focusList = () => {
+    if (!listRoot?.isConnected) return false;
+    listRoot.focus({ preventScroll: true });
+    return true;
+  };
 
   const list = createListController<InboxListItem, ActivationMetadata>({
     items: listItems,
@@ -454,6 +484,12 @@ export function NotificationsView(props: NotificationsViewProps) {
         props.onOpen(row, { newSplit: true, notification });
         return;
       }
+      const target = previewTargetFor(row, notification);
+      setComposerFocus(
+        target?.blockType === 'channel' && !isModality('touch')
+          ? { blockId: target.blockId, id: ++lastComposerFocusId }
+          : undefined
+      );
       preview(row, notification);
     },
   });
@@ -687,14 +723,7 @@ export function NotificationsView(props: NotificationsViewProps) {
       <SwipeToDone id={card.row().id}>
         <NotificationRow
           id={card.row().id}
-          icon={
-            <InboxSenderAvatar
-              notification={card.row().content.notifications[0]}
-              kind={inboxCardKind(card.row())}
-              entity={card.row().content.entity}
-              badged
-            />
-          }
+          icon={<InboxRowAvatar row={card.row()} />}
           who={display().who}
           what={display().what}
           body={display().body}
@@ -703,6 +732,7 @@ export function NotificationsView(props: NotificationsViewProps) {
           unfolded={stacks.isExpanded(card.row().id)}
           unseen={card.row().unseen}
           highlighted={highlighted()}
+          endsSection={sectionEnds().has(card.row().id)}
           receded={
             anyStackOpen() &&
             !stacks.isExpanded(card.row().id) &&
@@ -763,6 +793,8 @@ export function NotificationsView(props: NotificationsViewProps) {
           text={item().text}
           time={formatTimestamp(item().at)}
           last={isLast()}
+          count={entry.row().count}
+          endsSection={sectionEnds().has(entry.place.id)}
           more={
             isLast()
               ? entry.row().count - entry.row().content.notifications.length
@@ -781,6 +813,11 @@ export function NotificationsView(props: NotificationsViewProps) {
             })
           }
           onDone={() => markNotificationDone(entry.row(), entry.notification())}
+          onToggleStack={() => {
+            // Hide leaves with the item; focus returns to its stack's row.
+            list.focus.set(entry.row().id, { reason: 'pointer' });
+            stacks.toggle(entry.row().id);
+          }}
         />
       </SwipeToDone>
     );
@@ -791,14 +828,14 @@ export function NotificationsView(props: NotificationsViewProps) {
       <Match when={!filters.showsNothing() && view().t === 'loading'}>
         <ListSkeleton.Root
           label={t('notificationsInbox.loading')}
-          class="px-3 touch:pt-(--mobile-content-inset-top)"
+          class="touch:pt-(--mobile-content-inset-top)"
         >
-          <div class="flex h-7 items-center px-[13px]">
+          <div class="flex h-7 items-center pr-4 pl-6 mobile:pl-7">
             <ListSkeleton.Bar class="h-2 w-16" />
           </div>
           <For each={[0, 1, 2, 3, 4]}>
             {() => (
-              <ListSkeleton.Row class="mb-2.5 h-[83px] gap-3 rounded-xl px-[13px] mobile:mb-3 mobile:h-[89px]">
+              <ListSkeleton.Row class="h-[81px] items-start gap-3 py-3 pr-4 pl-6 touch:h-[81px] mobile:h-[87px] mobile:pl-7">
                 <ListSkeleton.Bar class="size-6 shrink-0 rounded-full mobile:size-10" />
                 <div class="flex min-w-0 flex-1 flex-col gap-2">
                   <ListSkeleton.Bar class="w-1/3" />
@@ -1043,6 +1080,7 @@ export function NotificationsView(props: NotificationsViewProps) {
                     />
                   </div>
                   <div
+                    ref={listRoot}
                     role="grid"
                     aria-label={t('nav.notifications')}
                     aria-activedescendant={list.focus.key()}
@@ -1069,6 +1107,8 @@ export function NotificationsView(props: NotificationsViewProps) {
                             <PreviewPanel
                               target={previewTarget()}
                               navigationRequest={selection.navigationRequest()}
+                              focusRequest={previewComposerFocus()}
+                              onEscapeToList={focusList}
                               orchestrator={orchestrator}
                               splitPanelContext={panel}
                             />
