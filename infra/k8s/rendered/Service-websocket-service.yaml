@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: websocket-service
+    app.kubernetes.io/name: websocket-service
+    app.kubernetes.io/part-of: macro
+    macro.com/instance: reference
+    macro.com/tier: app
+    macro.local/managed: "true"
+  name: websocket-service
+  namespace: macro-kube-reference
+spec:
+  ports:
+    - name: p6969
+      port: 6969
+      protocol: TCP
+      targetPort: 6969
+  publishNotReadyAddresses: false
+  selector:
+    app: websocket-service
