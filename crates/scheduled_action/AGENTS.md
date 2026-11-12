@@ -64,7 +64,9 @@ each run.
   whole log); the first passing check ends the draft, else the turn ending
   does (all bounded by `DRAFT_TIMEOUT`). It turns the last
   passing check (else the last check) into the draft, then stops and deletes
-  the session and the row, also when the request is dropped mid-draft;
+  the session and the row, also once it sees the request dropped mid-draft
+  (the web composer, given no answer, sends the draft once more,
+  `compose-routine.ts`);
   `RoutineDrafts::sweep` (every minute in the harness) cleans up drafts
   older than `STALE_DRAFT`, from the rows alone. Saving checks every id
   again. The `routine.draft` span records the session id, checks, items
@@ -178,12 +180,14 @@ each run.
   ID routes take a `ScheduledActionAccessExtractor` receipt and the domain
   loads the routine only for its owner (`granted_action`). Without a grant
   they answer 401; with a grant but not the owner, 404.
+- Appearance writes atomically record history through the activity adapter without changing configuration revisions, scheduling state, or content timestamps; routine deletion removes that history in the same transaction.
 - Templates: the owner shares a snapshot of a routine (keyed by the routine's
   ID) with its references marked as variables; publishing, reading, and activation
   require the caller's `enable-routine-sharing` PostHog flag. Missing flags,
   missing configuration, and failed evaluations return 404. Owner unsharing
   stays available. Activating creates the caller's own routine with `template_id`
-  pointing back. Filling variables happens in the client.
+  pointing back and the published appearance snapshot. Filling variables happens
+  in the client.
 - Not here: the target being run (an agent turn, a routine's tool logic) →
   `crates/agent_session`, `ai_tools`; Jev condition evaluation → `crates/jev`.
 

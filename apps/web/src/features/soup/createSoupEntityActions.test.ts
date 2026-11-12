@@ -89,6 +89,9 @@ vi.mock('@app/signal/tabLayout', () => ({
 vi.mock('@components/app/GlobalAppState', () => ({
   useGlobalNotificationSource: () => mocks.source,
 }));
+vi.mock('../entity-appearance/queries/access', () => ({
+  useAppearanceEditAccess: () => () => false,
+}));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'user' }));
 vi.mock('@queries/team/teams', () => ({ useIsTeamAdmin: () => () => false }));
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => false }));

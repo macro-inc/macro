@@ -1,4 +1,5 @@
 mod admission;
+mod appearance;
 mod check;
 mod owned_purge;
 mod sub_routines;
@@ -41,6 +42,7 @@ const FOREIGN_USER: &str = "macro|other@macro.com";
 #[derive(Default)]
 pub(crate) struct FakeRepo {
     actions: Mutex<Vec<ScheduledAction>>,
+    activities: Mutex<Vec<activity::Activity>>,
     records: Mutex<Vec<ActionExecutionRecord>>,
     /// Runs in progress, as claims would show them.
     running: Mutex<Vec<RunningRun>>,
@@ -140,6 +142,25 @@ impl SubRoutines for FakeRepo {
 }
 
 impl ScheduledActionRepo for FakeRepo {
+    async fn set_appearance(
+        &self,
+        change: crate::domain::appearance::ChangeAppearance,
+    ) -> Result<Option<model_entity::EntityAppearance>> {
+        let mut actions = self.actions.lock().unwrap();
+        let action = actions
+            .iter_mut()
+            .find(|action| action.id == Some(change.id))
+            .ok_or_else(|| anyhow::anyhow!("scheduled action not found"))?;
+        let Some(activity) = change.activity(&action.appearance) else {
+            return Ok(None);
+        };
+        self.activities.lock().unwrap().push(activity);
+        Ok(Some(std::mem::replace(
+            &mut action.appearance,
+            change.appearance,
+        )))
+    }
+
     async fn create_action(&self, mut action: ScheduledAction) -> Result<ScheduledAction> {
         action.id = Some(generate_uuid_v7());
         self.actions.lock().unwrap().push(action.clone());
@@ -186,10 +207,17 @@ impl ScheduledActionRepo for FakeRepo {
     }
 
     async fn delete_action(&self, id: &Uuid) -> Result<()> {
-        self.actions
+        let mut actions = self.actions.lock().unwrap();
+        let deleted: Vec<_> = actions
+            .iter()
+            .filter(|action| action.id == Some(*id) || action.parent_id() == Some(*id))
+            .filter_map(|action| action.id.map(|id| id.to_string()))
+            .collect();
+        actions.retain(|action| action.id != Some(*id) && action.parent_id() != Some(*id));
+        self.activities
             .lock()
             .unwrap()
-            .retain(|a| a.id != Some(*id) && a.parent_id() != Some(*id));
+            .retain(|activity| !deleted.contains(&activity.entity_id));
         Ok(())
     }
 
@@ -1074,6 +1102,7 @@ fn claim_expiry_instant_still_blocks_replacement() {
         enabled: true,
         run_visibility: RunVisibility::Unlisted,
         template_id: None,
+        appearance: model_entity::EntityAppearance::default(),
         suggestion_id: None,
         description: String::new(),
         sub_routine: None,
@@ -1144,6 +1173,7 @@ fn seeded(
         enabled: true,
         run_visibility: RunVisibility::Unlisted,
         template_id: None,
+        appearance: model_entity::EntityAppearance::default(),
         suggestion_id: None,
         description: String::new(),
         sub_routine: None,
