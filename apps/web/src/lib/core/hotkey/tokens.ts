@@ -223,6 +223,8 @@ export const TOKENS = {
     },
     focusSplitRight: 'window.focusSplitRight',
     focusSplitLeft: 'window.focusSplitLeft',
+    focusSplitDown: 'window.focusSplitDown',
+    focusSplitUp: 'window.focusSplitUp',
   },
 
   // canvas

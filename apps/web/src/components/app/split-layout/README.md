@@ -26,6 +26,11 @@ A Shift-click that also holds Option (Alt) opens below the split it came from:
 `split-below-intent.ts` remembers the click, as `tab-layout/open-in-tab-intent.ts`
 does for Cmd-click. Moving panes (swap left/right, mobile bring-to-front)
 keeps the tiles and their sizes and changes which split shows where.
+Directional focus (`Shift+H/J/K/L`, `Shift+Arrow`) picks its target from the
+tiles, not the pane order: `split-direction.ts` returns to the previously
+active split when it borders that side, else the one level with the focused
+split's centre, wrapping past the edge. A focused control marked
+`data-owns-arrow-keys` (the database grid) keeps `Shift+Arrow`.
 
 Opening or closing a split changes its neighbours' widths, and their text
 rewraps under an unchanged scrollTop. WebKit (Safari, iOS) has no CSS scroll
