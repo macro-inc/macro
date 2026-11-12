@@ -99,3 +99,78 @@ test('closing a stacked pane gives its column back and leaves the others mounted
   await expect(drive).toHaveAttribute('data-mount', driveMount!);
   expect(await url(page)).toBe('/home/~/drive');
 });
+
+type ReadingMark = { paragraph: number; offset: number };
+
+// The text at the top edge of a document's scroll container: which paragraph,
+// and which character of it.
+const textAtTop = (reader: Locator) =>
+  reader.evaluate((scroller): ReadingMark => {
+    const bounds = scroller.getBoundingClientRect();
+    const caret = document.caretRangeFromPoint(
+      bounds.left + 4,
+      bounds.top + 4
+    )!;
+    const paragraphs = [...scroller.querySelectorAll('p')];
+    return {
+      paragraph: paragraphs.indexOf(caret.startContainer.parentElement!),
+      offset: caret.startOffset,
+    };
+  });
+
+// How far below the container's top edge that text now sits.
+const distanceFromTop = (reader: Locator, mark: ReadingMark) =>
+  reader.evaluate((scroller, { paragraph, offset }) => {
+    const text = scroller.querySelectorAll('p')[paragraph]!.firstChild!;
+    const range = document.createRange();
+    range.setStart(text, offset);
+    range.setEnd(text, offset + 1);
+    return Math.round(
+      range.getBoundingClientRect().top - scroller.getBoundingClientRect().top
+    );
+  }, mark);
+
+// The text the reader was at stays on the top line, within a line's height.
+const expectStillAtTop = (reader: Locator, mark: ReadingMark) =>
+  expect
+    .poll(async () => Math.abs(await distanceFromTop(reader, mark)))
+    .toBeLessThanOrEqual(LINE_HEIGHT);
+
+const LINE_HEIGHT = 17;
+
+test('closing the splits beside a document keeps the reader at the same text', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const home = pane(page, 'home');
+  // Each split opens right of home: home, document, mail, drive.
+  for (let i = 0; i < 3; i++) {
+    await home.getByRole('button', { name: 'Split right' }).click();
+  }
+  const document = pane(page, 'block');
+  const reader = document.locator('[data-reading]');
+  await expect(page.locator('section.pane')).toHaveCount(4);
+  expect((await box(document)).x).toBeGreaterThan((await box(home)).x);
+  expect((await box(document)).x).toBeLessThan(
+    (await box(pane(page, 'mail'))).x
+  );
+
+  await reader.hover();
+  await page.mouse.wheel(0, 2400);
+  await expect.poll(() => reader.evaluate((el) => el.scrollTop)).toBe(2400);
+  const mark = await textAtTop(reader);
+  expect(mark.paragraph).toBeGreaterThan(10);
+
+  // The split to its left closes.
+  await home.getByRole('button', { name: 'Close' }).click();
+  await expect(home).toHaveCount(0);
+  await expectStillAtTop(reader, mark);
+
+  // Then the splits to its right.
+  for (const label of ['mail', 'drive']) {
+    await pane(page, label).getByRole('button', { name: 'Close' }).click();
+    await expect(pane(page, label)).toHaveCount(0);
+    await expectStillAtTop(reader, mark);
+  }
+  expect((await box(document)).width).toBe(1200);
+});

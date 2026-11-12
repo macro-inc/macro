@@ -1,6 +1,9 @@
 /**
  * A point in the document whose on-screen position should survive a reflow.
- * `top` is its viewport offset when captured; `measure` reads it again.
+ * `top` is its offset from the scroller's top edge when captured; `measure`
+ * reads it again. Measuring from the scroller rather than the viewport keeps
+ * the anchor valid when the scroller itself moves, as a split does when the
+ * split above it closes.
  */
 export type ScrollAnchor = {
   top: number;
@@ -10,6 +13,24 @@ export type ScrollAnchor = {
 function rangeTop(range: Range): number | undefined {
   const rect = range.getClientRects()[0];
   return rect?.top;
+}
+
+/** An anchor at viewport offset `top`, measured from the scroller's top edge. */
+function relativeTo(
+  scroller: HTMLElement,
+  view: DOMRect,
+  top: number,
+  measure: () => number | undefined
+): ScrollAnchor {
+  return {
+    top: top - view.top,
+    measure: () => {
+      const current = measure();
+      return current === undefined
+        ? undefined
+        : current - scroller.getBoundingClientRect().top;
+    },
+  };
 }
 
 function caretRangeAt(doc: Document, x: number, y: number): Range | undefined {
@@ -32,6 +53,8 @@ export function captureScrollAnchor(
 ): ScrollAnchor | undefined {
   const view = scroller.getBoundingClientRect();
   const isOnScreen = (top: number) => top >= view.top && top <= view.bottom;
+  const anchorAt = (top: number, measure: () => number | undefined) =>
+    relativeTo(scroller, view, top, measure);
 
   const selection = editorRoot.ownerDocument.getSelection();
   if (selection && selection.rangeCount > 0) {
@@ -40,7 +63,7 @@ export function captureScrollAnchor(
       ? rangeTop(range)
       : undefined;
     if (top !== undefined && isOnScreen(top)) {
-      return { top, measure: () => rangeTop(range) };
+      return anchorAt(top, () => rangeTop(range));
     }
   }
 
@@ -58,14 +81,12 @@ export function captureScrollAnchor(
       );
       if (range && block.contains(range.startContainer)) {
         const top = rangeTop(range);
-        if (top !== undefined) return { top, measure: () => rangeTop(range) };
+        if (top !== undefined) return anchorAt(top, () => rangeTop(range));
       }
     }
-    return {
-      top: rect.top,
-      measure: () =>
-        block.isConnected ? block.getBoundingClientRect().top : undefined,
-    };
+    return anchorAt(rect.top, () =>
+      block.isConnected ? block.getBoundingClientRect().top : undefined
+    );
   }
   return undefined;
 }
@@ -115,11 +136,9 @@ export function captureElementScrollAnchor(
 
   return {
     scroller,
-    anchor: {
-      top,
-      measure: () =>
-        element.isConnected ? element.getBoundingClientRect().top : undefined,
-    },
+    anchor: relativeTo(scroller, view, top, () =>
+      element.isConnected ? element.getBoundingClientRect().top : undefined
+    ),
   };
 }
 
@@ -166,4 +185,46 @@ export function holdScrollAnchor(scroller: HTMLElement, anchor: ScrollAnchor) {
   activeHolds.set(scroller, release);
 
   restore();
+}
+
+/**
+ * Keeps the reader's place when the scroller changes width. Text rewraps under
+ * an unchanged scrollTop when a neighbouring split closes or opens, and
+ * browsers without CSS scroll anchoring (WebKit) or with it suppressed by the
+ * width change leave the reader somewhere else in the document. The anchor is
+ * taken as the reader scrolls, because by the time a resize is observed the
+ * content has already reflowed. Returns the cleanup.
+ */
+export function keepScrollAnchorOnResize(
+  scroller: HTMLElement,
+  capture: () => ScrollAnchor | undefined
+): () => void {
+  let anchor: ScrollAnchor | undefined;
+  let frame: number | undefined;
+  let width = scroller.getBoundingClientRect().width;
+
+  const onScroll = () => {
+    if (frame !== undefined) return;
+    frame = requestAnimationFrame(() => {
+      frame = undefined;
+      anchor = capture();
+    });
+  };
+
+  const observer = new ResizeObserver(() => {
+    const next = scroller.getBoundingClientRect().width;
+    // A hidden split measures zero; keep the anchor for when it comes back.
+    if (next === 0 || next === width) return;
+    width = next;
+    if (anchor && scroller.scrollTop > 0) holdScrollAnchor(scroller, anchor);
+  });
+
+  scroller.addEventListener('scroll', onScroll, { passive: true });
+  observer.observe(scroller);
+
+  return () => {
+    scroller.removeEventListener('scroll', onScroll);
+    observer.disconnect();
+    if (frame !== undefined) cancelAnimationFrame(frame);
+  };
 }

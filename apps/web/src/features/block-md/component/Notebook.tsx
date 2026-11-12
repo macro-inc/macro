@@ -16,6 +16,7 @@ import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
   captureScrollAnchor,
+  keepScrollAnchorOnResize,
   restoreScrollAnchor,
   type ScrollAnchor,
 } from '@core/util/scrollAnchor';
@@ -175,6 +176,23 @@ export function Notebook(props: {
       { defer: true }
     )
   );
+
+  // Closing or opening a neighbouring split changes the document's width and
+  // rewraps its text under an unchanged scrollTop. WebKit has no CSS scroll
+  // anchoring, so without this the reader lands somewhere else in the document.
+  createEffect(() => {
+    const scroller = md.scrollContainer;
+    const editor = md.editor;
+    if (!scroller || !editor) return;
+    onCleanup(
+      keepScrollAnchorOnResize(scroller, () => {
+        const editorRoot = editor.getRootElement();
+        return editorRoot
+          ? captureScrollAnchor(scroller, editorRoot)
+          : undefined;
+      })
+    );
+  });
 
   // Set the refs on the block store.
   onMount(() => {

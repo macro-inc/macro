@@ -230,7 +230,9 @@ It exercises the real resize solver, scroll container, and Lexical layout primit
 
 Stacked splits have a backend-free browser regression over the real split
 router and tiled layout: splitting keeps the pane mounted, stacked gutters drag
-and nudge to the minimum height, and closing hands the column back:
+and nudge to the minimum height, closing hands the column back, and a document
+keeps its reading position as the splits beside it close (WebKit has no CSS
+scroll anchoring; see `keepScrollAnchorOnResize`):
 `bunx playwright test --config src/components/app/split-layout/browser-test/playwright.config.ts`.
 Keep panes in one keyed list positioned by the layout tree; nesting a
 `Resize.Zone` per split remounts a pane whenever its split changes.
