@@ -12,6 +12,12 @@ const baselineOverlay = fileURLToPath(
 const baselinePanel = fileURLToPath(
   new URL('../../chat/components/__main_CallChatPanel.tsx', import.meta.url)
 );
+const baselineChat = fileURLToPath(
+  new URL('../../chat/__main_CallChat.tsx', import.meta.url)
+);
+const baselineGuestChat = fileURLToPath(
+  new URL('../../chat/__main_GuestCallChat.tsx', import.meta.url)
+);
 export default defineConfig(async (env) => {
   const base = await createAppViteConfig()(env);
   const config: UserConfig = {
@@ -27,6 +33,10 @@ export default defineConfig(async (env) => {
             id === './chat/components/CallChatPanel'
           )
             return baselinePanel;
+          if (importer === baselineOverlay && id === './chat/CallChat')
+            return baselineChat;
+          if (importer === baselineOverlay && id === './chat/GuestCallChat')
+            return baselineGuestChat;
           if (!importer) return;
           if (
             importer.includes('/features/channel/Call/') &&
@@ -40,12 +50,16 @@ export default defineConfig(async (env) => {
             return mock;
         },
         load(id) {
+          // Baseline comparisons exercise member layout; legacy guest chat was removed.
+          if (id === baselineGuestChat) return 'export default () => null;';
           const path =
             id === baselineOverlay
               ? 'CallOverlay.tsx'
               : id === baselinePanel
                 ? 'chat/components/CallChatPanel.tsx'
-                : undefined;
+                : id === baselineChat
+                  ? 'chat/CallChat.tsx'
+                  : undefined;
           if (path)
             return execFileSync(
               'git',

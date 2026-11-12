@@ -387,6 +387,23 @@ anonymous access to saved transcripts and recordings. Guest names are preserved 
 the host's call history. Signed-in attendees receive access to that session's saved
 call without gaining access to the channel.
 
+Live call discussion follows the call's stored type: a channel thread opens the
+channel call panel, while `call_chat` opens the call's own chat. Quick and
+scheduled calls use `call_chat` for both signed-in participants and guests.
+Guests can send text, quote replies, react, and edit or delete their own
+messages in the same chat as signed-in participants.
+Deleting the first call-chat message leaves later replies and the chat available.
+The guest composer is the shared `ChannelInput`: its text posts and quoted
+replies appear in the same `MessageThread` as signed-in messages. Guests cannot
+add mentions, attachments, or anchors. A guest's reactions and edits appear to
+signed-in participants; a guest can edit or delete only their own messages.
+Quoted account messages show the sender's profile name on both sides. Guests
+see account senders and reactors as call-scoped `guest|` stand-ins with the
+account display name and initials; real guests retain the `(Guest)` label.
+Signed-in quotes retain normal account IDs. Keep a signed-in chat open while a guest sends, reacts, edits, or
+deletes; the changes should appear live. Closing and reopening the chat refreshes
+the thread.
+
 The join screen, in-call participant tiles, and incoming direct-call badges use
 profile pictures; initials are the fallback when no photo is available.
 In-call grid tiles fill their cell but are never wider than 16:9. A staged camera
@@ -551,6 +568,8 @@ avatars, microphone and camera state, and a speaking indicator. Off microphones
 and cameras use the failure color. Known users use the shared user icon:
 hover it on desktop or tap it on touch to open the profile card; guests use
 the shared avatar fallback.
+Signed-out meeting guests see initials for all participants, including account
+participants, without account profile-picture requests.
 This is the current call roster, not the channel member list. Participant media
 controls remain read-only. The roster remains available when chat is unavailable,
 without starting message queries.

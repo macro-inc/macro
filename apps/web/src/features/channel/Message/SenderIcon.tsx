@@ -39,12 +39,16 @@ export function SenderIcon(props: SenderIconProps) {
     return current;
   };
 
-  // Someone outside Macro, such as a WhatsApp participant, has no principal.
+  // Call account stand-ins and imported authors without sender ids have no profile.
   const externalAuthor = () => {
     const name = message().imported_author?.name?.trim();
-    return !message().sender_id && name
-      ? { name, avatar_url: null }
-      : undefined;
+    if (
+      name &&
+      (!message().sender_id ||
+        (sender().type !== 'bot' && message().sender_id.startsWith('guest|')))
+    )
+      return { name, avatar_url: null };
+    return undefined;
   };
 
   // An agent's avatar hovers like a person's, with the card that leads to its

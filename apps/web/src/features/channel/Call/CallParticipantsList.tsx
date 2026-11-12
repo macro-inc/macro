@@ -21,6 +21,7 @@ import { CallParticipantVolume } from './views/CallParticipantVolume';
 function ParticipantRow(props: {
   name: string;
   userId?: string;
+  accessMode?: 'guest' | 'member';
   local?: boolean;
   compact?: boolean;
   isProgram: boolean;
@@ -45,7 +46,7 @@ function ParticipantRow(props: {
         )}
       >
         <Show
-          when={props.userId}
+          when={props.accessMode === 'guest' ? undefined : props.userId}
           fallback={
             <Avatar size="fill">
               <Avatar.Fallback>
@@ -134,6 +135,7 @@ function ParticipantRow(props: {
 function RemoteParticipantRow(props: {
   participant: RemoteParticipant;
   compact?: boolean;
+  accessMode?: 'guest' | 'member';
 }) {
   const call = useCallContext();
   const volumes = useCallVolumeOptional();
@@ -152,6 +154,7 @@ function RemoteParticipantRow(props: {
       participant={props.participant}
       name={name()}
       compact={props.compact}
+      accessMode={props.accessMode}
       userId={userId()}
       isProgram={isProgramParticipant(props.participant.attributes)}
       speaking={call.isParticipantSpeaking(props.participant)}
@@ -166,6 +169,7 @@ function RemoteParticipantRow(props: {
 export function CallParticipantsList(props: {
   localName?: string;
   compact?: boolean;
+  accessMode?: 'guest' | 'member';
 }) {
   const call = useCallContext();
   const author = useAuthor();
@@ -193,6 +197,7 @@ export function CallParticipantsList(props: {
       <ParticipantRow
         name={localName()}
         compact={props.compact}
+        accessMode={props.accessMode}
         userId={localUserId()}
         local
         isProgram={isProgramParticipant(
@@ -207,6 +212,7 @@ export function CallParticipantsList(props: {
           <RemoteParticipantRow
             participant={participant}
             compact={props.compact}
+            accessMode={props.accessMode}
           />
         )}
       </For>

@@ -252,6 +252,7 @@ function ParticipantAvatar(props: {
 }
 
 export function LocalParticipantTile(props: {
+  accessMode?: 'guest' | 'member';
   identity?: string;
   isSpeaking: boolean;
   isConnecting: boolean;
@@ -325,6 +326,7 @@ export function LocalParticipantTile(props: {
 }
 
 export function ParticipantTile(props: {
+  accessMode?: 'guest' | 'member';
   participant: RemoteParticipant;
   stage?: boolean;
   avatarSize?: 'sm' | 'md';
@@ -435,6 +437,7 @@ export function ParticipantTile(props: {
 }
 
 export function ScreenShareTile(props: {
+  accessMode?: 'guest' | 'member';
   participant: RemoteParticipant;
   isPinned: boolean;
   inStrip: boolean;
@@ -474,7 +477,7 @@ export function ScreenShareTile(props: {
         </Show>
         <span data-call-stage-chip="share" class="flex items-center gap-1.5">
           <Screencast class="size-3.5 shrink-0" />
-          <Show when={macroId()}>
+          <Show when={props.accessMode === 'guest' ? undefined : macroId()}>
             {(id) => (
               <span
                 class={cn(

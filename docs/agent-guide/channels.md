@@ -1575,9 +1575,10 @@ indicators live on conversation rows; the separate `Live` list is only for
 standalone quick calls. See [Calls](calls.md) for controls and sharing semantics.
 
 Signed-in participants in channel, quick, and scheduled calls use the same chat
-panel. Guest chat is turned off for now: a guest in a quick or scheduled call
-sees only the participants list, with the **Chat** tab disabled, and cannot read
-or send messages. Each call session has one persistent message thread;
+panel. Guests with call credentials can read and send in quick and scheduled
+calls through the same chat interface. Members appear to guests by display name
+and initials; guests appear as `Name (Guest)`. Quotes and mentions render for
+both. Each call session has one persistent message thread;
 signed-in participants use the
 shared message composer, attachments, reactions, and message actions. The `@`
 menu offers Macro and available owned and team agents. Mention an agent and send

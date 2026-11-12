@@ -132,12 +132,12 @@ impl<'a> ChannelSender<'a> {
         ChannelSender(InnerVal::Bot(bot_id.into_storage_id()))
     }
 
-    /// Author identity only; callers must separately authorize active call membership.
+    /// Guest-form identity only; callers must separately authorize active call membership.
     pub fn new_from_guest(id: uuid::Uuid) -> ChannelSender<'static> {
         ChannelSender(InnerVal::Guest(Cow::Owned(format!("guest|{id}"))))
     }
 
-    /// Whether this is a non-account guest, never a user or bot principal.
+    /// Whether this has guest form, including a guest-visible account stand-in.
     pub fn is_guest(&self) -> bool {
         matches!(self.0, InnerVal::Guest(_))
     }

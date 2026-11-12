@@ -25,6 +25,7 @@ type CallPanelTab = 'chat' | 'participants' | 'work';
 
 /** The Work state of a call: who has work, and what its panel should show. */
 export function createCallWork(options: {
+  enabled?: Accessor<boolean>;
   accountIds: Accessor<readonly (string | undefined)[]>;
   selectedTab: Accessor<CallPanelTab>;
   panelOpen: Accessor<boolean>;
@@ -34,7 +35,7 @@ export function createCallWork(options: {
   const work = createRegisteredWork({
     client: useWorkClient(),
     accountIds: () => callWorkAccounts(options.accountIds()),
-    enabled: () => flag().enabled,
+    enabled: () => flag().enabled && (options.enabled?.() ?? true),
     onReconnected: subscribeGraphqlSoupReconnected,
   });
   const hasWork = () => work.accountsWithWork().length > 0;

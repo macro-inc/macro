@@ -530,7 +530,20 @@ for (const readingHistory of [false, true]) {
       await page.mouse.wheel(0, -300);
       await expect(latest).not.toBeInViewport();
     }
-    const previous = await scroll.evaluate((el) => el.scrollTop);
+    const anchor = readingHistory
+      ? await scroll.evaluate((el) => {
+          const scrollRect = el.getBoundingClientRect();
+          const message = Array.from(el.querySelectorAll('p')).find((item) => {
+            const rect = item.getBoundingClientRect();
+            return (
+              /^Message \d+$/.test(item.textContent ?? '') &&
+              rect.top >= scrollRect.top &&
+              rect.bottom <= scrollRect.bottom
+            );
+          });
+          return message?.textContent;
+        })
+      : undefined;
     await page.getByText(/^Participants$/).click();
     await expect(
       page.getByRole('radio', { name: /^Participants/ })
@@ -565,10 +578,13 @@ for (const readingHistory of [false, true]) {
       });
     }
     await expect(page.getByText('Message 41', { exact: true })).toBeAttached();
-    const current = await scroll.evaluate((el) => el.scrollTop);
-    console.log(JSON.stringify({ readingHistory, previous, current }));
-    if (readingHistory) expect(Math.abs(current - previous)).toBeLessThan(2);
-    else
+    if (readingHistory) {
+      expect(anchor).toBeDefined();
+      await expect(
+        page.getByText(anchor ?? '', { exact: true })
+      ).toBeInViewport();
+      await expect(latest).not.toBeInViewport();
+    } else
       await expect(
         page.getByText('Message 41', { exact: true })
       ).toBeInViewport();

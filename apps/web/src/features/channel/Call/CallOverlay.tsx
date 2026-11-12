@@ -32,13 +32,9 @@ import {
   createUniqueId,
   For,
   type JSXElement,
-  lazy,
-  Match,
   on,
   onCleanup,
   Show,
-  Suspense,
-  Switch,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { useCallContext } from './CallContext';
@@ -72,21 +68,17 @@ import {
   useCallFullscreenOptional,
 } from './views/call-fullscreen-host';
 
-const CallChat = lazy(() => import('./chat/CallChat'));
-const GuestCallChat = lazy(() => import('./chat/GuestCallChat'));
-
 export function CallOverlay(props: {
   onLeave: () => void;
   showTeamSharing?: boolean;
   sharingChannelName?: string;
   sharedWithTeam?: boolean;
   localName?: string;
+  accessMode?: 'guest' | 'member';
   /** The host may hide chat until account or guest session credentials are ready. */
   showChat?: boolean;
   /** Host-owned action aligned to the left of the media controls. */
   footerLeading?: JSXElement;
-  /** Narrow RTC credential for a guest; never an account bearer. */
-  guestChatSession?: { token: string; participantId: string };
   /** The host's own discussion, in place of the call's chat. */
   discussion?: {
     /** Names the panel's discussion tab. */
@@ -212,6 +204,7 @@ export function CallOverlay(props: {
     Array.from(callCtx.remoteParticipants().values()).filter((p) => !p.isAgent);
 
   const callWork = createCallWork({
+    enabled: () => props.accessMode !== 'guest',
     accountIds: () =>
       participants().map((participant) => tryMacroId(participant.identity)),
     selectedTab,
@@ -407,6 +400,7 @@ export function CallOverlay(props: {
       isVideoMuted={callCtx.isVideoMuted()}
       track={localVideoTrack()}
       userId={localUserId()}
+      accessMode={props.accessMode}
       identity={callCtx.room()?.localParticipant.identity}
       fallbackName={
         props.localName ||
@@ -572,6 +566,7 @@ export function CallOverlay(props: {
                             >
                               <ScreenShareTile
                                 participant={participant}
+                                accessMode={props.accessMode}
                                 isPinned={pinnedShare() === participant}
                                 inStrip={
                                   staged() && !isStage({ share: participant })
@@ -592,7 +587,11 @@ export function CallOverlay(props: {
                             <CallWaveform class="size-4 shrink-0" />
                             <span class="size-6 shrink-0 rounded-full outline-2 -outline-offset-2 outline-success">
                               <Show
-                                when={talkingId()}
+                                when={
+                                  props.accessMode === 'guest'
+                                    ? undefined
+                                    : talkingId()
+                                }
                                 fallback={
                                   <Avatar size="fill">
                                     <Avatar.Fallback>
@@ -690,6 +689,7 @@ export function CallOverlay(props: {
                             >
                               <ParticipantTile
                                 participant={participant}
+                                accessMode={props.accessMode}
                                 stage={
                                   staged() && stagePerson() === participant
                                 }
@@ -882,7 +882,10 @@ export function CallOverlay(props: {
               chatAvailable={canChat()}
               participantCount={participants().length + 1}
               participants={
-                <CallParticipantsList localName={props.localName} />
+                <CallParticipantsList
+                  localName={props.localName}
+                  accessMode={props.accessMode}
+                />
               }
               work={workTab()}
               workDot={callWork.showTabDot()}
@@ -890,46 +893,18 @@ export function CallOverlay(props: {
               overlayMount={overlayMount()}
               returnFocus={panelButton}
             >
-              <Show when={canChat() && callCtx.activeCallId()} keyed>
-                {(callId) => (
-                  <Suspense>
-                    <Switch
-                      fallback={
-                        <CallChat
-                          callId={callId}
-                          open={panelOpen() && activeTab() === 'chat'}
-                          focusOnOpen={focusChatOnOpen()}
-                          onClose={closePanel}
-                        />
-                      }
-                    >
-                      <Match when={props.discussion}>
-                        {(discussion) =>
-                          discussion().render({
-                            get open() {
-                              return panelOpen() && activeTab() === 'chat';
-                            },
-                            get focusOnOpen() {
-                              return focusChatOnOpen();
-                            },
-                            onClose: closePanel,
-                          })
-                        }
-                      </Match>
-                      <Match when={props.guestChatSession} keyed>
-                        {(session) => (
-                          <GuestCallChat
-                            callId={callId}
-                            session={session}
-                            open={panelOpen() && activeTab() === 'chat'}
-                            focusOnOpen={focusChatOnOpen()}
-                            onClose={closePanel}
-                          />
-                        )}
-                      </Match>
-                    </Switch>
-                  </Suspense>
-                )}
+              <Show when={canChat() && props.discussion}>
+                {(discussion) =>
+                  discussion().render({
+                    get open() {
+                      return panelOpen() && activeTab() === 'chat';
+                    },
+                    get focusOnOpen() {
+                      return focusChatOnOpen();
+                    },
+                    onClose: closePanel,
+                  })
+                }
               </Show>
             </CallChatPanel>
           </Show>

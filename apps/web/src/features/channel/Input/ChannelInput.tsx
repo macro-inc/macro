@@ -105,7 +105,7 @@ import { hasSendableInputContent } from './utils/sendable-content';
  * What the composer offers beyond text, formatting and file attachments.
  * Hosts that carry only those, such as a WhatsApp group, switch the rest off.
  */
-type ChannelInputFeatures = {
+export type ChannelInputFeatures = {
   /**
    * `@` mentions of people, agents and Macro items, including Ask Macro.
    * `'participants'` offers only the `participants` prop: no agents, items,
@@ -117,6 +117,8 @@ type ChannelInputFeatures = {
   gifs: boolean;
   /** Blocks plain-text hosts can't carry: headings, checklists, tables, math, embeds. */
   richBlocks: boolean;
+  attachments: boolean;
+  dictation: boolean;
 };
 
 const ALL_FEATURES: ChannelInputFeatures = {
@@ -124,6 +126,17 @@ const ALL_FEATURES: ChannelInputFeatures = {
   createItems: true,
   gifs: true,
   richBlocks: true,
+  attachments: true,
+  dictation: true,
+};
+
+export const GUEST_INPUT_FEATURES: ChannelInputFeatures = {
+  mentions: false,
+  createItems: false,
+  gifs: false,
+  richBlocks: false,
+  attachments: false,
+  dictation: false,
 };
 
 /** Slash actions behind each switchable feature. */
@@ -191,6 +204,7 @@ export type ChannelInputProps = InputCallbacks & {
 function WebDefaultActions(props: {
   input: InputData;
   dictation: DictationController;
+  showDictation: boolean;
   addMenu: JSX.Element;
 }) {
   return (
@@ -202,7 +216,9 @@ function WebDefaultActions(props: {
         </Show>
       </Input.Layout.ActionsLeft>
       <Input.Layout.ActionsRight>
-        <DictationButton dictation={props.dictation} />
+        <Show when={props.showDictation}>
+          <DictationButton dictation={props.dictation} />
+        </Show>
         <Input.SendAction />
       </Input.Layout.ActionsRight>
     </>
@@ -229,6 +245,7 @@ function IosDefaultActions(props: { input: InputData; addMenu: JSX.Element }) {
 function DefaultActions(props: {
   input: InputData;
   dictation: DictationController;
+  showDictation: boolean;
   addMenu: JSX.Element;
 }) {
   return (
@@ -238,6 +255,7 @@ function DefaultActions(props: {
         <WebDefaultActions
           input={props.input}
           dictation={props.dictation}
+          showDictation={props.showDictation}
           addMenu={props.addMenu}
         />
       }
@@ -278,6 +296,7 @@ export function ChannelInput(props: ChannelInputProps) {
     restoreEditor: (snapshot) => restoreFailedSend(snapshot),
     trackTyping: () => acceptTyping,
     attachFiles: async (files) => {
+      if (!features().attachments) return;
       await uploadInputAttachments({
         files,
         tracker: attachmentTracker,
@@ -360,26 +379,27 @@ export function ChannelInput(props: ChannelInputProps) {
     });
   };
 
+  // The editor is configured once, at mount.
+  const initialFeatures = features();
   const parentBots =
-    !props.bots && props.parent
+    initialFeatures.mentions !== false && !props.bots && props.parent
       ? useMessageBotMentionUsers(() => props.parent!)
       : () => [];
   const parentParticipants =
-    !props.participants && props.parent
+    initialFeatures.mentions !== false && !props.participants && props.parent
       ? useMessageParticipants(() => props.parent!)
       : () => [];
   // Connection-prompt behavior for the built-in agents lives in
   // useAgentMentionUserTransform; it decorates only the current directory
   // window or the explicit participant roster.
-  // The editor is configured once, at mount.
-  const initialFeatures = features();
   const participantsOnly = initialFeatures.mentions === 'participants';
   const mentionUsers = participantsOnly
     ? () => props.participants?.() ?? []
     : () => props.participants?.() ?? parentParticipants();
-  const withAgents = participantsOnly
-    ? undefined
-    : useAgentMentionUserTransform();
+  const withAgents =
+    participantsOnly || initialFeatures.mentions === false
+      ? undefined
+      : useAgentMentionUserTransform();
   const transformUsers = withAgents
     ? (users: readonly IUser[]) =>
         withAgents([...users, ...(props.bots?.() ?? parentBots())])
@@ -418,6 +438,7 @@ export function ChannelInput(props: ChannelInputProps) {
     },
     sendMessage: () => fireAndForget(commands.send(), 'channel-input'),
     onPasteFilesAndDirs: (files, directories) => {
+      if (!features().attachments) return;
       fireAndForget(
         handleFileFolderDrop(files, directories, (entries) =>
           inputState.commands.attachFiles(entries.map((entry) => entry.file))
@@ -425,7 +446,11 @@ export function ChannelInput(props: ChannelInputProps) {
         'channel-input'
       );
     },
-    onAttachFromDisk: (files) => inputState.commands.attachFiles(files),
+    onAttachFromDisk: (files) => {
+      if (features().attachments) {
+        fireAndForget(inputState.commands.attachFiles(files), 'channel-input');
+      }
+    },
   });
   const markdownHandle = markdownEditor.buildHandle();
   const lexicalEditor = () => markdownHandle.lexical;
@@ -554,12 +579,16 @@ export function ChannelInput(props: ChannelInputProps) {
                 },
               ]
             : []),
-          {
-            id: 'attach',
-            label: t('channelComposer.attachFiles'),
-            icon: <PaperclipIcon class="size-5" />,
-            onSelect: () => collapsedInput.attach(),
-          },
+          ...(features().attachments
+            ? [
+                {
+                  id: 'attach',
+                  label: t('channelComposer.attachFiles'),
+                  icon: <PaperclipIcon class="size-5" />,
+                  onSelect: () => collapsedInput.attach(),
+                },
+              ]
+            : []),
           ...gif(),
         ],
       },
@@ -743,7 +772,9 @@ export function ChannelInput(props: ChannelInputProps) {
       focusEditor(options?.when);
     },
     send: commands.send,
-    attachFiles: (files) => inputState.commands.attachFiles(files),
+    attachFiles: async (files) => {
+      if (features().attachments) await inputState.commands.attachFiles(files);
+    },
     insertEntityMention,
     previewEntityMentionInsertion,
     clearEntityMentionInsertionPreview,
@@ -782,6 +813,7 @@ export function ChannelInput(props: ChannelInputProps) {
   const renderSurfaceContent = () => {
     return (
       <Input.DropZone
+        enabled={features().attachments}
         onDragStart={(valid) => inputState.setIsDraggedOver(valid)}
         onDragEnd={() => inputState.setIsDraggedOver(false)}
       >
@@ -791,7 +823,9 @@ export function ChannelInput(props: ChannelInputProps) {
           inert={dictation.active()}
           classList={{ invisible: dictation.active() }}
         >
-          <Input.DropOverlay />
+          <Show when={features().attachments}>
+            <Input.DropOverlay />
+          </Show>
           <Input.Layout.Body>
             <Input.FormatRibbon
               class="overflow-x-auto"
@@ -842,8 +876,10 @@ export function ChannelInput(props: ChannelInputProps) {
                 />
               </Input.Editor>
             </Input.Layout.Editor>
-            <Input.Attachments kind="media" />
-            <Input.Attachments kind="document" />
+            <Show when={features().attachments}>
+              <Input.Attachments kind="media" />
+              <Input.Attachments kind="document" />
+            </Show>
           </Input.Layout.Body>
           <Switch>
             <Match when={props.children}>
@@ -855,6 +891,7 @@ export function ChannelInput(props: ChannelInputProps) {
               <DefaultActions
                 input={inputState.view()}
                 dictation={dictation}
+                showDictation={features().dictation}
                 // The collapsed pill carries the + while collapsed; one + at
                 // a time, so the menu never anchors to a hidden one.
                 addMenu={<Show when={!isCollapsed()}>{addMenu()}</Show>}
@@ -889,6 +926,7 @@ export function ChannelInput(props: ChannelInputProps) {
         accept={props.fileAccept ?? CHANNEL_FILE_PICKER_ACCEPT}
         onChange={collapsedInput.onFilePickerChange}
         data-collapsed-input-file-picker
+        disabled={!features().attachments}
       />
       <Show when={isCollapsed()}>
         <CollapsedInput
@@ -937,9 +975,13 @@ export function ChannelInput(props: ChannelInputProps) {
         )}
       >
         {renderSurfaceContent()}
-        <DictationPanel dictation={dictation} />
+        <Show when={features().dictation}>
+          <DictationPanel dictation={dictation} />
+        </Show>
       </Dynamic>
-      <DictationFeedback dictation={dictation} />
+      <Show when={features().dictation}>
+        <DictationFeedback dictation={dictation} />
+      </Show>
     </Input.Root>
   );
 }

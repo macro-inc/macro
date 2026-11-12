@@ -5,10 +5,7 @@ import type {
   MessageSender,
 } from '@service-storage/messages';
 
-/**
- * A reaction as the row shows it; `names` names reactors outside Macro
- * (an external chat's people), by their id in `users`.
- */
+/** Names of reactors outside Macro, keyed by their id in `users`. */
 export type MessageReaction = CountedReaction & {
   names?: Record<string, string>;
 };

@@ -9,6 +9,10 @@ import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useMaybeBlockId, useMaybeBlockName } from '@core/block';
 import { MessageReferenceNavigation } from '@core/messages/message-reference-navigation';
+import {
+  useMessageSenderName,
+  useMessageViewerOverride,
+} from '@core/messages/message-transport';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import type { ReplyTargetDecoratorProps } from '@macro-inc/lexical-core';
@@ -25,16 +29,19 @@ import { QuoteReplyPreview } from './QuoteReplyPreview';
 /** Single-line message reply reference rendered by a ReplyTargetNode. */
 export function ReplyTarget(props: ReplyTargetDecoratorProps) {
   const navigateReference = useContext(MessageReferenceNavigation);
+  const guest = !!useMessageViewerOverride();
+  const senderNameForId = useMessageSenderName();
   const currentBlockId = useMaybeBlockId();
   const currentBlockName = useMaybeBlockName();
   const channelBots = useChannelBotsQuery(() =>
     props.parent.type === 'channel' ? props.parent.id : ''
   );
-  const bots = useBotsQuery();
+  const bots = useBotsQuery(() => !guest);
   const document = useDocumentMetadataQuery(() =>
     props.parent.type === 'document' ? props.parent.id : ''
   );
   const senderName = () =>
+    senderNameForId?.(props.senderId, props.targetMessageId) ||
     getBotDisplayName(
       props.senderId,
       undefined,

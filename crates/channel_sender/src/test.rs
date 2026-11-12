@@ -18,6 +18,7 @@ fn guest_identity_is_distinct_and_round_trips() {
         "guest|macro|alice@example.com",
         "guest|not-a-uuid",
         "guest|00000000000000000000000000000001",
+        "participant:00000000-0000-5000-8000-000000000001",
     ] {
         assert!(ChannelSender::try_from(invalid).is_err());
     }

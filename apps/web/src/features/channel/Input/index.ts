@@ -1,7 +1,7 @@
 export { InputActionButton } from './ActionButton';
 export { Attachments } from './Attachments';
 export { createInputAttachmentTracker } from './attachment-tracker';
-export { ChannelInput } from './ChannelInput';
+export { ChannelInput, GUEST_INPUT_FEATURES } from './ChannelInput';
 export { createConfiguredChannelMarkdownEditor } from './configured-markdown-editor';
 export { InputProvider, useInput, useInputCommands } from './context';
 export { createCollapsedInputState } from './create-collapsed-input-state';

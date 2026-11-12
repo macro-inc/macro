@@ -1,5 +1,6 @@
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
+import { useMessageViewerOverride } from '@core/messages/message-transport';
 import { isMobile } from '@core/mobile/isMobile';
 import { isPlatform } from '@core/util/platform';
 import type { MessageParent } from '@service-storage/messages';
@@ -8,6 +9,7 @@ import { Show } from 'solid-js';
 import {
   ChannelInput,
   createInputAttachmentTracker,
+  GUEST_INPUT_FEATURES,
   Input,
   type InputHandle,
 } from '../Input';
@@ -32,8 +34,12 @@ type MessageEditorContentProps = {
  * differ in the chrome around it.
  */
 export function MessageEditorContent(props: MessageEditorContentProps) {
+  const viewerId = useMessageViewerOverride()?.();
+  const guestViewer = /^guest[|:]/.test(viewerId ?? '');
   const snapshot = () => props.messageEditor.state()?.snapshot;
-  const channelBotMentionUsers = useMessageBotMentionUsers(() => props.parent);
+  const channelBotMentionUsers = guestViewer
+    ? () => []
+    : useMessageBotMentionUsers(() => props.parent);
   const attachmentTracker = createInputAttachmentTracker({
     initialAttachments: snapshot()?.attachments,
   });
@@ -67,6 +73,7 @@ export function MessageEditorContent(props: MessageEditorContentProps) {
         autofocus={props.autofocus}
         attachmentTracker={attachmentTracker}
         bots={channelBotMentionUsers}
+        features={guestViewer ? GUEST_INPUT_FEATURES : undefined}
         markdownNamespace={`edit-message-${props.parent.type}:${props.parent.id}-${props.message.id}`}
         onReady={props.onReady}
         onChange={(nextSnapshot) =>
@@ -85,13 +92,19 @@ export function MessageEditorContent(props: MessageEditorContentProps) {
                 fallback={
                   <Show
                     when={isPlatform('ios')}
-                    fallback={<Input.AttachFilesAction />}
+                    fallback={
+                      <Show when={!guestViewer}>
+                        <Input.AttachFilesAction />
+                      </Show>
+                    }
                   >
-                    <Input.AttachNativeMediaAction />
+                    <Show when={!guestViewer}>
+                      <Input.AttachNativeMediaAction />
+                    </Show>
                   </Show>
                 }
               >
-                {addMenu}
+                <Show when={!guestViewer}>{addMenu}</Show>
               </Show>
               <Input.DiscardDraftAction />
             </Input.Layout.ActionsLeft>
