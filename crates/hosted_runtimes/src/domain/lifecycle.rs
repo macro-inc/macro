@@ -486,6 +486,8 @@ pub fn transition(
                 }
             } else {
                 next.phase = Phase::Stopped;
+                // Nothing boots to clear the mark, so a later give-up pages.
+                next.retried_by_team = false;
                 effects.push(Effect::Stop { host });
             }
         }

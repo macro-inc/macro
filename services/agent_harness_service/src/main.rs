@@ -1395,7 +1395,7 @@ async fn run() -> anyhow::Result<()> {
     let anthropic_gateway = anthropic_gateway::router(
         anthropic_gateway::GatewayState::new(
             Arc::new(session_repo.clone()),
-            anthropic_gateway::PgBotComputers(pool.clone()),
+            PgHarnessRepo::new(pool.clone()),
             admission.clone(),
             recorder.clone(),
             anthropic_gateway::ANTHROPIC_API_URL,

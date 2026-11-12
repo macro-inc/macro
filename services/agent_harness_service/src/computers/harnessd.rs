@@ -178,11 +178,18 @@ impl<Harnesses: HarnessService> Harnessd<Harnesses> {
     #[tracing::instrument(name = "computer.harnessd.refresh_all", skip_all, fields(computers = computers.len()))]
     pub async fn refresh_each(&self, computers: &[(HarnessId, ComputerId)]) {
         for &(harness_id, computer_id) in computers {
-            if let Err(error) = self
+            match self
                 .refresh(harness_id, computer_id, AgentProvider::Claude)
                 .await
             {
-                tracing::warn!(%computer_id, error = ?error, "could not refresh a computer's sign-in");
+                Ok(_) => {}
+                // A request is using it; the next pass reads it.
+                Err(HarnessdError::Busy) => {
+                    tracing::debug!(%computer_id, "computer busy; skipping its sign-in refresh");
+                }
+                Err(error) => {
+                    tracing::warn!(%computer_id, error = ?error, "could not refresh a computer's sign-in");
+                }
             }
         }
     }
@@ -204,12 +211,6 @@ impl<Harnesses: HarnessService> Harnessd<Harnesses> {
         signed_in_by: Option<MacroUserIdStr<'static>>,
     ) -> Result<Response, HarnessdError> {
         let agent = request.agent();
-        if matches!(request, Request::SignInCancel { .. }) {
-            let answer = self.transport.round_trip(computer_id, request).await?;
-            self.refresh(harness_id, computer_id, agent).await?;
-            return Ok(answer);
-        }
-
         let _lock = self.locks.lock(computer_id).await?;
         let completes = matches!(request, Request::SignInComplete { .. });
         let answer = self.transport.round_trip(computer_id, request).await?;
@@ -355,39 +356,37 @@ impl HarnessdTransport for NoFleet {
 const LOCK_CONNECTIONS: u32 = 4;
 /// How long a request waits for one of those connections.
 const LOCK_ACQUIRE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
-/// How long a request waits for a computer another request holds.
-const LOCK_WAIT: &str = "30s";
 
-/// [`ComputerLocks`] as a session-level Postgres advisory lock, each on a
-/// connection from a small pool of its own: a sign-in can hold it for over a
-/// minute while Claude answers, and a burst of requests must neither starve
-/// the service's pool nor open unbounded connections. A held lock closes its
-/// connection when dropped, which releases it. Every wait is bounded and
-/// answers [`HarnessdError::Busy`].
+/// [`ComputerLocks`] as a session-level Postgres advisory lock, following the
+/// agent-session lock's pattern (session advisory locks), each on a connection
+/// from a small pool of its own: a sign-in can hold it for over a minute
+/// while Claude answers, and a burst of requests must neither starve the
+/// service's pool nor open unbounded connections. The lock is only tried, so
+/// nothing waits on a held computer while holding a lock connection: a busy
+/// computer, or a pool with no free connection after
+/// [`LOCK_ACQUIRE_TIMEOUT`], answers [`HarnessdError::Busy`]. A held lock
+/// closes its connection when dropped, which releases it.
 pub struct PgComputerLocks {
     pool: sqlx::PgPool,
-    lock_wait: &'static str,
 }
 
 impl PgComputerLocks {
     /// Lock on connections made like `pool`'s.
     pub fn new(pool: &sqlx::PgPool) -> Self {
-        Self::with_limits(pool, LOCK_CONNECTIONS, LOCK_ACQUIRE_TIMEOUT, LOCK_WAIT)
+        Self::with_limits(pool, LOCK_CONNECTIONS, LOCK_ACQUIRE_TIMEOUT)
     }
 
-    /// Lock with explicit bounds; `lock_wait` is a Postgres `lock_timeout`.
-    pub fn with_limits(
+    /// Lock with explicit bounds.
+    pub(crate) fn with_limits(
         pool: &sqlx::PgPool,
         connections: u32,
         acquire_timeout: std::time::Duration,
-        lock_wait: &'static str,
     ) -> Self {
         Self {
             pool: sqlx::postgres::PgPoolOptions::new()
                 .max_connections(connections)
                 .acquire_timeout(acquire_timeout)
                 .connect_lazy_with(pool.connect_options().as_ref().clone()),
-            lock_wait,
         }
     }
 }
@@ -397,15 +396,13 @@ impl ComputerLocks for PgComputerLocks {
         &self,
         computer_id: ComputerId,
     ) -> Pin<Box<dyn Future<Output = Result<ComputerLock, HarnessdError>> + Send + '_>> {
-        Box::pin(lock_computer(&self.pool, self.lock_wait, computer_id))
+        Box::pin(lock_computer(&self.pool, computer_id))
     }
 }
 
-/// Take `computer_id`'s advisory lock on a connection from `pool`, waiting
-/// at most `lock_wait`.
+/// Try `computer_id`'s advisory lock on a connection from `pool`.
 async fn lock_computer(
     pool: &sqlx::PgPool,
-    lock_wait: &'static str,
     computer_id: ComputerId,
 ) -> Result<ComputerLock, HarnessdError> {
     let mut connection = pool.acquire().await.map_err(|error| match error {
@@ -415,27 +412,15 @@ async fn lock_computer(
     // The session lock outlives any transaction, so the connection must not
     // go back to the pool holding it.
     connection.close_on_drop();
-    sqlx::query("SELECT set_config('lock_timeout', $1, false)")
-        .bind(lock_wait)
-        .execute(&mut *connection)
-        .await
-        .map_err(|error| HarnessdError::Lock(error.to_string()))?;
-    sqlx::query!(
-        "SELECT pg_advisory_lock(hashtext('harnessd'), hashtext($1::text))",
+    let locked = sqlx::query_scalar!(
+        r#"SELECT pg_try_advisory_lock(hashtext('harnessd'), hashtext($1::text)) AS "locked!""#,
         computer_id.to_string(),
     )
-    .execute(&mut *connection)
+    .fetch_one(&mut *connection)
     .await
-    .map_err(|error| match &error {
-        sqlx::Error::Database(database)
-            if database.code().as_deref() == Some(LOCK_NOT_AVAILABLE) =>
-        {
-            HarnessdError::Busy
-        }
-        _ => HarnessdError::Lock(error.to_string()),
-    })?;
+    .map_err(|error| HarnessdError::Lock(error.to_string()))?;
+    if !locked {
+        return Err(HarnessdError::Busy);
+    }
     Ok(Box::new(connection))
 }
-
-/// Postgres's `lock_not_available`, raised when `lock_timeout` runs out.
-const LOCK_NOT_AVAILABLE: &str = "55P03";
