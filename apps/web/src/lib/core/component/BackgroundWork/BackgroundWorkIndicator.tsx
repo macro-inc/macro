@@ -1,40 +1,29 @@
 import { Spinner, Surface } from '@ui';
 import { cn } from '@ui/utils/classname';
-import { Index, type JSX, Show } from 'solid-js';
+import { Index, Show } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import { type BackgroundWorkSummary, backgroundWork } from './backgroundWork';
 
-const PILL = 'flex min-w-0 items-center gap-2 rounded-full px-3 py-1.5';
-
 function Pill(props: { work: BackgroundWorkSummary }) {
-  const content = (): JSX.Element => (
-    <>
-      <Spinner size="sm" decorative />
-      <span class="min-w-0 truncate font-medium">{props.work.label}</span>
-      <Show when={props.work.detail}>
-        <span class="shrink-0 text-ink-muted">{props.work.detail}</span>
-      </Show>
-    </>
-  );
   return (
     <Surface
       hideBorder
       role="status"
       class="pointer-events-auto flex size-auto max-w-xs rounded-full glass bg-toast text-sm text-ink"
     >
-      <Show
-        when={props.work.onOpen}
-        fallback={<div class={PILL}>{content()}</div>}
+      {/* A summary that can be opened is a button; the rest only say. */}
+      <Dynamic
+        component={props.work.onOpen ? 'button' : 'div'}
+        type={props.work.onOpen ? 'button' : undefined}
+        class="flex min-w-0 items-center gap-2 rounded-full px-3 py-1.5 text-left outline-none focus-visible:ring-2"
+        onClick={() => props.work.onOpen?.()}
       >
-        {(open) => (
-          <button
-            type="button"
-            class={cn(PILL, 'text-left outline-none focus-visible:ring-2')}
-            onClick={() => open()()}
-          >
-            {content()}
-          </button>
-        )}
-      </Show>
+        <Spinner size="sm" decorative />
+        <span class="min-w-0 truncate font-medium">{props.work.label}</span>
+        <Show when={props.work.detail}>
+          <span class="shrink-0 text-ink-muted">{props.work.detail}</span>
+        </Show>
+      </Dynamic>
     </Surface>
   );
 }

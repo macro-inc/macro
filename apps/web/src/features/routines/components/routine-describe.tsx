@@ -81,7 +81,7 @@ export function RoutineDescribe(props: {
       </Card>
       <Show when={error()}>
         {(message) => (
-          <span role="alert" class="px-1 text-xs text-failure">
+          <span role="alert" class="px-1 pt-3 text-xs text-failure">
             {message()}
           </span>
         )}

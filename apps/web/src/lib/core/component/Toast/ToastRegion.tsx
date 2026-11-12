@@ -41,7 +41,7 @@ export function ToastRegion() {
     <Portal>
       {/*
         Desktop stack, bottom-right. Persistent prompts get their own region
-        capped at one visible card. Ordinary notices form an expandable three-card stack. Background work, then upload progress, sit nearest the corner.
+        capped at one visible card. Ordinary notices form an expandable three-card stack. Upload progress, then background work, sit nearest the corner.
       */}
       <div class="fixed bottom-5 right-5 m-0 w-[380px] max-w-[calc(100vw-32px)] list-none outline-none pointer-events-none z-toast-region flex flex-col items-stretch gap-4">
         <Toast.Region
@@ -75,8 +75,8 @@ export function ToastRegion() {
           <Toast.List class="macro-toast-list" data-stack />
         </Toast.Region>
         <Show when={!isMobile()}>
-          <BackgroundWorkIndicator align="end" />
           <UploadProgressIndicator />
+          <BackgroundWorkIndicator align="end" />
         </Show>
       </div>
 
@@ -145,10 +145,10 @@ export function ToastRegion() {
             <Toast.List class="macro-toast-list" />
           </Toast.Region>
           <Show when={isMobile()}>
-            <BackgroundWorkIndicator align="center" />
             <div class="flex justify-center">
               <UploadProgressIndicator />
             </div>
+            <BackgroundWorkIndicator align="center" />
           </Show>
         </MobileToastStack>
       </div>
