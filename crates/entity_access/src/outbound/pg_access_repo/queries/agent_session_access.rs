@@ -1,10 +1,13 @@
 //! Query for agent session access level.
 
 #[cfg(feature = "explain_binary")]
+use crate::outbound::pg_access_repo::queries::SourceIds;
+#[cfg(feature = "explain_binary")]
 use crate::{
     domain::models::AccessGrant, outbound::pg_access_repo::queries::list_entity_access_grants,
 };
-use crate::{domain::models::AccessLevel, outbound::pg_access_repo::queries::SourceIds};
+use crate::{domain::models::AccessLevel, outbound::pg_access_repo::queries::Viewer};
+use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 #[cfg(feature = "explain_binary")]
 use model_entity::EntityType;
 use sqlx::PgPool;
@@ -13,12 +16,12 @@ use std::str::FromStr;
 #[cfg(test)]
 mod test;
 
-/// List agent sessions granted to the caller's current user/channel/team sources.
+/// List agent sessions granted to the user's current user/channel/team sources.
 /// Optional requested IDs narrow the allowlist before it reaches OpenSearch.
-#[tracing::instrument(err, skip(pool, source_ids, requested_ids))]
+#[tracing::instrument(err, skip(pool, user_id, requested_ids))]
 pub async fn accessible_session_ids(
     pool: &PgPool,
-    source_ids: &SourceIds,
+    user_id: &MacroUserId<Lowercase<'_>>,
     requested_ids: &[uuid::Uuid],
 ) -> Result<Vec<uuid::Uuid>, sqlx::Error> {
     sqlx::query_scalar!(
@@ -26,7 +29,7 @@ pub async fn accessible_session_ids(
         SELECT DISTINCT entity_id
         FROM entity_access
         WHERE entity_type = 'agent_session'
-          AND source_id = ANY($1)
+          AND source_id = ANY(ARRAY(SELECT s.source FROM entity_access_viewer_sources($1, NULL) s(source)))
           AND (cardinality($2::uuid[]) = 0 OR entity_id = ANY($2))
           -- Hidden sessions (thread-started, DM contexts) stay out of search
           -- unless asked for by id. A grant with no session row (tests, a deleted session) is
@@ -40,7 +43,7 @@ pub async fn accessible_session_ids(
               )
           )
         "#,
-        &source_ids.0,
+        user_id.as_ref(),
         requested_ids,
     )
     .fetch_all(pool)
@@ -53,16 +56,16 @@ pub async fn accessible_session_ids(
 /// owner, and - when the session was opened by a mention - the channel that
 /// mention was posted in, as editor, or as viewer when the bot is a user's
 /// private agent. Channel membership is not copied into
-/// `entity_access`; it arrives here through `source_ids`, so adding someone
-/// to that channel gives them the session on their next request.
+/// `entity_access`; the grant matches the viewer's current channels, so adding
+/// someone to that channel gives them the session on their next request.
 ///
-/// Public links also work without source IDs. Team links require membership in
+/// Public links also work for an anonymous viewer. Team links require membership in
 /// the owner's current team, while explicit team shares use canonical grants.
-#[tracing::instrument(err, skip(pool, source_ids))]
-pub async fn get_agent_session_access(
+#[tracing::instrument(err, skip(pool, viewer))]
+pub(crate) async fn get_agent_session_access(
     pool: &PgPool,
     agent_session_id: &uuid::Uuid,
-    source_ids: &SourceIds,
+    viewer: Viewer<'_>,
 ) -> Result<Option<AccessLevel>, sqlx::Error> {
     let all_level_strings: Vec<Option<String>> = sqlx::query_scalar!(
         r#"
@@ -70,7 +73,7 @@ pub async fn get_agent_session_access(
         FROM entity_access
         WHERE entity_id = $1
         AND entity_type = 'agent_session'
-        AND source_id = ANY($2)
+        AND EXISTS (SELECT FROM entity_access_source_matches(source_id, $2, $3))
 
         UNION ALL
 
@@ -86,13 +89,14 @@ pub async fn get_agent_session_access(
                   AND EXISTS (
                       SELECT 1 FROM team_user owner_team
                       WHERE owner_team.user_id = s.owner_id
-                        AND owner_team.team_id::text = ANY($2)
+                        AND EXISTS (SELECT FROM entity_access_source_matches(owner_team.team_id::text, $2, $3))
                   )
               )
           )
         "#,
         agent_session_id,
-        &source_ids.0,
+        viewer.id(),
+        viewer.scope_team(),
     )
     .fetch_all(pool)
     .await?;
