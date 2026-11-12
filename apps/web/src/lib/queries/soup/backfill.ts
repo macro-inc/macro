@@ -30,8 +30,8 @@ import { useMailAccountsQuery } from '../email/mail-accounts';
 
 // Bump when a default backfill input or completion guarantee changes so
 // persisted cursors cannot retain an older hydration contract.
-// Restart old cursors whose filters did not include CRM contacts.
-const BACKFILL_VERSION = 18;
+// Restart old cursors whose core lane still included channels.
+const BACKFILL_VERSION = 19;
 const PAGE_LIMIT = 100;
 // Five threads × twenty messages reaches the backend's 100-message cap.
 const EMAIL_CONTENT_PAGE_LIMIT = 5;
@@ -85,7 +85,35 @@ export type SoupBackfillParams = {
   emailRecency?: readonly EmailRecencyWindow[];
 };
 
-/** Backfills the entities used most often by Quick Access and primary views. */
+/**
+ * Every channel the viewer can see, ahead of the mixed core lane, so the cache
+ * holds the whole channel list soon after login rather than once documents and
+ * chats have paged through with it.
+ */
+export const CHANNEL_SOUP_BACKFILL_LANE: SoupBackfillParams = {
+  checkpointId: 'channels',
+  // One request per 100 channels: 2 s spacing takes minutes on a large account.
+  pageDelayMs: 250,
+  input: {
+    limit: PAGE_LIMIT,
+    expand: true,
+    sortMethod: 'VIEWED_UPDATED',
+    emailView: 'ALL',
+    filters: {
+      calendarEventFilter: { literal: { id: EXCLUDED_ENTITY_ID } },
+      documentFilter: { literal: { id: EXCLUDED_ENTITY_ID } },
+      projectFilter: { literal: { projectIdSelf: EXCLUDED_ENTITY_ID } },
+      chatFilter: { literal: { chatId: EXCLUDED_ENTITY_ID } },
+      emailFilter: { tree: { literal: { threadId: EXCLUDED_ENTITY_ID } } },
+      channelThreadFilter: { literal: { threadId: EXCLUDED_ENTITY_ID } },
+      callFilter: { literal: { callId: EXCLUDED_ENTITY_ID } },
+      crmCompanyFilter: { literal: { id: EXCLUDED_ENTITY_ID } },
+      foreignEntityFilter: { literal: { id: EXCLUDED_ENTITY_ID } },
+    },
+  },
+};
+
+/** Backfills documents, chats, and folders for Quick Access and primary views. */
 export const CORE_SOUP_BACKFILL_LANE: SoupBackfillParams = {
   checkpointId: 'core-entities',
   // Quick Access waits on this lane, and every other lane waits behind it.
@@ -98,6 +126,7 @@ export const CORE_SOUP_BACKFILL_LANE: SoupBackfillParams = {
     filters: {
       calendarEventFilter: { literal: { id: EXCLUDED_ENTITY_ID } },
       emailFilter: { tree: { literal: { threadId: EXCLUDED_ENTITY_ID } } },
+      channelFilter: { literal: { channelId: EXCLUDED_ENTITY_ID } },
       channelThreadFilter: { literal: { threadId: EXCLUDED_ENTITY_ID } },
       callFilter: { literal: { callId: EXCLUDED_ENTITY_ID } },
       crmCompanyFilter: { literal: { id: EXCLUDED_ENTITY_ID } },
@@ -240,6 +269,7 @@ export const AUXILIARY_SOUP_BACKFILL_LANE: SoupBackfillParams = {
 
 /** Independently checkpointed backfills run serially in priority order. */
 export const DEFAULT_SOUP_BACKFILL_LANES = [
+  CHANNEL_SOUP_BACKFILL_LANE,
   CORE_SOUP_BACKFILL_LANE,
   INITIATIVE_SOUP_BACKFILL_LANE,
   SIGNAL_EMAIL_FILTER_BACKFILL_LANE,
