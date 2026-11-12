@@ -2157,8 +2157,9 @@ pub struct ToolServiceContext {
     pub schedule_tool_context: RoutineToolContext,
     #[from_ref(skip)]
     pub anthropic_tool_context: AnthropicToolContext,
-    /// User-scoped code execution for chat's code mode; `None` where this
-    /// process has no code runner, which keeps chat on its direct tools.
+    /// User-scoped code execution behind chat's `ExecuteCode`; `None` on hosts
+    /// that do not run chat's toolset, whose code tools then report
+    /// [`agent_code_mode::domain::UnconfiguredCodeMode`]'s "not configured".
     #[from_ref(skip)]
     pub user_code_mode: Option<Arc<dyn agent_code_mode::domain::UserCodeMode>>,
     /// The web search vendor behind `WebSearch` and `WebFetch`.

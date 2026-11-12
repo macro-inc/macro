@@ -59,8 +59,9 @@ pub trait UserCodeMode: Send + Sync + 'static {
 }
 
 /// Code mode where this process has no code runner: every execution fails
-/// with [`CodeModeError::Unavailable`]. Hosts advertise no code tools then, so
-/// only a call by name reaches it.
+/// with [`CodeModeError::Unavailable`]. Hosts that run chat's toolset are
+/// given a real runner at startup, so this answers only a host wired without
+/// one.
 pub struct UnconfiguredCodeMode;
 
 #[async_trait]
