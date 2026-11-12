@@ -1,5 +1,6 @@
 import { t } from '@app/lib/i18n';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import type { BlockTool } from '@components/app/ResponsiveBlockToolbar';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
 import {
@@ -8,13 +9,15 @@ import {
 } from '@components/app/split-layout/components/SplitLabel';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { EntityIcon, getIconConfig } from '@core/component/EntityIcon';
+import { EntityIcon } from '@core/component/EntityIcon';
 import { Permissions } from '@core/component/SharePermissions';
 import { toast } from '@core/component/Toast/Toast';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import PriorityIcon from '@icon/system/regular/chart-bar.svg';
+import StatusIcon from '@icon/system/regular/circle-dashed.svg';
 import RenameIcon from '@icon/system/regular/note-pencil.svg';
 import ShareIcon from '@icon/system/regular/share-network.svg';
 import SquaresFourIcon from '@icon/system/regular/squares-four.svg';
@@ -71,6 +74,7 @@ export function ProjectTitleMenu(props: {
           current.propertyDefinitionId === property.propertyDefinitionId
       ) ?? property;
   const setOption = async (property: Property, optionId: string) => {
+    if (!canEditProject(props.project)) return;
     try {
       await props.commands.saveProperty(props.project.id, ownValue(property), {
         valueType: 'SELECT_STRING',
@@ -94,17 +98,24 @@ export function ProjectTitleMenu(props: {
       );
     }
   };
-  const optionTool = (property: Property | undefined, label: string) =>
-    property && {
-      label,
-      group: 'file' as const,
-      action: () => {},
-      icon: getIconConfig('initiative').icon,
-      children: (property.options ?? []).map((option) => ({
+  const optionTool = (propertyId: string, label: string): BlockTool => ({
+    label,
+    group: 'file',
+    action: () => {},
+    icon: propertyId === SYSTEM_PROPERTY_IDS.STATUS ? StatusIcon : PriorityIcon,
+    condition: () =>
+      canEditProject(props.project) && Boolean(definition(propertyId)),
+    get children() {
+      const property = definition(propertyId);
+      return (property?.options ?? []).map((option) => ({
         label: formatOptionValue(option),
-        action: () => fireAndForget(setOption(property, option.id), 'projects'),
-      })),
-    };
+        action: () => {
+          if (property)
+            fireAndForget(setOption(property, option.id), 'projects');
+        },
+      }));
+    },
+  });
   const openTitleMenu = (event: MouseEvent) => {
     if (!isTouchDevice()) return;
     const trigger = panel.titleFileMenuTrigger();
@@ -184,18 +195,14 @@ export function ProjectTitleMenu(props: {
               action: () => setRenaming(true),
               condition: () => canEditProject(props.project),
             },
-            ...(canEditProject(props.project)
-              ? [
-                  optionTool(
-                    definition(SYSTEM_PROPERTY_IDS.STATUS),
-                    t('entityActions.setStatus')
-                  ),
-                  optionTool(
-                    definition(SYSTEM_PROPERTY_IDS.PRIORITY),
-                    t('entityActions.setPriority')
-                  ),
-                ].filter((tool) => tool !== undefined)
-              : []),
+            optionTool(
+              SYSTEM_PROPERTY_IDS.STATUS,
+              t('entityActions.setStatus')
+            ),
+            optionTool(
+              SYSTEM_PROPERTY_IDS.PRIORITY,
+              t('entityActions.setPriority')
+            ),
             {
               label: () => t('entityActions.share'),
               icon: ShareIcon,

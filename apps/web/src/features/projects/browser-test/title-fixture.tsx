@@ -15,6 +15,7 @@ import {
   ProjectsProvider,
 } from '../context/projects-context';
 import type { ProjectDetail, ProjectSection } from '../core/project';
+import { priority, status } from './collection-data';
 
 const unavailable = (): never => {
   throw new Error(
@@ -24,7 +25,12 @@ const unavailable = (): never => {
 
 function Fixture() {
   const params = new URLSearchParams(location.search);
-  const access = params.get('access') === 'view' ? 'view' : 'owner';
+  const [access, setAccess] = createSignal<ProjectDetail['access']>(
+    params.get('access') === 'view' ? 'view' : 'owner'
+  );
+  const [definitionsLoaded, setDefinitionsLoaded] = createSignal(
+    !params.has('lateDefinitions')
+  );
   const [section, setSection] = createSignal<ProjectSection>('overview');
   const [name, setName] = createSignal('Launch');
   const [shared, setShared] = createSignal(0);
@@ -45,7 +51,7 @@ function Fixture() {
     ownerId: 'owner',
     memberIds: [],
     taskIds: [],
-    access,
+    access: access(),
     createdAt: '',
     updatedAt: '',
   });
@@ -77,7 +83,7 @@ function Fixture() {
     createCollectionSource: unavailable,
     createProjectSource: () => source,
     createPropertyDefinitionsSource: () => ({
-      properties: () => [],
+      properties: () => (definitionsLoaded() ? [status, priority] : []),
       loading: () => false,
       error: () => undefined,
     }),
@@ -137,6 +143,10 @@ function Fixture() {
           <output data-testid="name">{name()}</output>
           <output data-testid="shares">{shared()}</output>
           <output data-testid="deletes">{deleted()}</output>
+          <button onClick={() => setDefinitionsLoaded(true)}>
+            Load definitions
+          </button>
+          <button onClick={() => setAccess('view')}>Revoke edit access</button>
           <FloatRegionHost />
         </main>
       </SplitPanelContext.Provider>
