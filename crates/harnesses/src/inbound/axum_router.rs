@@ -11,8 +11,9 @@ use axum::{
 };
 use harness_id::HarnessId;
 use macro_authorization::{
-    AccountHolderOrInternal, HarnessOnly, MacroAuthorizationExtractor, MacroAuthorizationService,
-    MacroAuthorizationState, UserOnly, UserOrInternal,
+    AccountHolderOrInternal, HarnessOnly, MacroAuthorizationExtractor, MacroAuthorizationRejection,
+    MacroAuthorizationService, MacroAuthorizationState, UserOnly, UserOrInternal,
+    refuse_agent_run,
 };
 use model_error_response::ErrorResponse;
 use serde::Serialize;
@@ -195,7 +196,12 @@ pub async fn get_pairing_handler<S: HarnessService, Auth: MacroAuthorizationServ
     Ok(Json(state.service.get_pairing(&path.code).await?))
 }
 
-/// Handler for `POST /harness-pairings/{code}/approve`.
+/// Why an agent's program may not approve a pairing: the paired device gets
+/// a lasting harness token that acts as the user.
+pub const PROGRAM_PAIRING_REFUSAL: &str = "An agent's program cannot approve device pairings. Ask the user to approve the pairing in Macro.";
+
+/// Handler for `POST /harness-pairings/{code}/approve`. An agent's program
+/// is refused (403).
 #[utoipa::path(
     post,
     tag = "harnesses",
@@ -207,6 +213,7 @@ pub async fn get_pairing_handler<S: HarnessService, Auth: MacroAuthorizationServ
         (status = 200, body = Harness),
         (status = 400, body = ErrorResponse),
         (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
         (status = 404, body = ErrorResponse),
         (status = 410, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
@@ -215,9 +222,15 @@ pub async fn get_pairing_handler<S: HarnessService, Auth: MacroAuthorizationServ
 pub async fn approve_pairing_handler<S: HarnessService, Auth: MacroAuthorizationService>(
     State(state): State<HarnessesRouterState<S, Auth>>,
     authorization: MacroAuthorizationExtractor<Auth, AccountHolderOrInternal>,
+    headers: HeaderMap,
     Path(path): Path<PairingCodePath>,
     Json(req): Json<ApprovePairingRequest>,
 ) -> Result<Json<Harness>, HarnessesHandlerErr> {
+    refuse_agent_run(
+        authorization.authorization.user.agent_id.is_some(),
+        &headers,
+        PROGRAM_PAIRING_REFUSAL,
+    )?;
     let harness = state
         .service
         .approve_pairing(
@@ -563,11 +576,17 @@ pub enum HarnessesHandlerErr {
     /// Domain error.
     #[error(transparent)]
     Harness(#[from] HarnessError),
+    /// The caller may not use this route, e.g. an agent's program.
+    #[error(transparent)]
+    Refused(#[from] MacroAuthorizationRejection),
 }
 
 impl IntoResponse for HarnessesHandlerErr {
     fn into_response(self) -> Response {
-        let Self::Harness(error) = &self;
+        let error = match &self {
+            Self::Harness(error) => error,
+            Self::Refused(rejection) => return rejection.clone().into_response(),
+        };
         let status = match error {
             HarnessError::BadRequest(_) => StatusCode::BAD_REQUEST,
             HarnessError::NotFound(_) => StatusCode::NOT_FOUND,

@@ -26,8 +26,9 @@ use entity_access::{
     inbound::axum_extractors::ChannelAccessLevelExtractor,
 };
 use macro_authorization::{
-    BOT_TOKEN_HEADER, BotAuthentication, BotOnly, MacroAuthorizationRejection,
-    MacroAuthorizationService, MacroAuthorizationState, OptionalMacroAuthorizationExtractor,
+    AnyPrincipal, BOT_TOKEN_HEADER, BotAuthentication, BotOnly, MacroAuthorizationExtractor,
+    MacroAuthorizationRejection, MacroAuthorizationService, MacroAuthorizationState,
+    OptionalMacroAuthorizationExtractor, refuse_agent_run,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use messages::domain::{
@@ -185,7 +186,8 @@ fn caller_from_receipt(
         .map_err(|_| ChannelBotWebhookHandlerErr::BadRequest("authenticated user required"))
 }
 
-/// Handler for `POST /channels/{channel_id}/bots/scoped`.
+/// Handler for `POST /channels/{channel_id}/bots/scoped`. It returns the new
+/// bot's token, so an agent's program is refused (403) like a token mint.
 #[utoipa::path(
     post,
     tag = "bots",
@@ -199,6 +201,7 @@ fn caller_from_receipt(
         (status = 201, body = CreateChannelScopedBotResponse),
         (status = 400, body = ErrorResponse),
         (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
         (status = 404, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
     )
@@ -207,6 +210,8 @@ fn caller_from_receipt(
 pub async fn create_channel_scoped_bot_handler<BotSvc, AccessSvc, Auth>(
     State(state): State<ChannelBotWebhookRouterState<BotSvc, AccessSvc, Auth>>,
     access: ChannelAccessLevelExtractor<MemberParticipantRole, AccessSvc, Auth>,
+    authorization: MacroAuthorizationExtractor<Auth, AnyPrincipal>,
+    headers: HeaderMap,
     Path(path): Path<ChannelPath>,
     Json(req): Json<CreateChannelScopedBotRequest>,
 ) -> Result<(StatusCode, Json<CreateChannelScopedBotResponse>), ChannelBotWebhookHandlerErr>
@@ -215,6 +220,14 @@ where
     AccessSvc: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
+    refuse_agent_run(
+        authorization
+            .authorization
+            .acting_user()
+            .is_some_and(|user| user.agent_id.is_some()),
+        &headers,
+        super::axum_router::PROGRAM_BOT_TOKEN_REFUSAL,
+    )?;
     let caller = caller_from_receipt(&access.entity_access_receipt)?;
     let response = state
         .bot_service
@@ -385,6 +398,9 @@ pub enum ChannelBotWebhookHandlerErr {
     /// Shared message error.
     #[error(transparent)]
     Message(#[from] MessageError),
+    /// The caller may not use this route, e.g. an agent's program.
+    #[error(transparent)]
+    Refused(#[from] MacroAuthorizationRejection),
 }
 
 impl IntoResponse for ChannelBotWebhookHandlerErr {
@@ -403,6 +419,7 @@ impl IntoResponse for ChannelBotWebhookHandlerErr {
             Self::Bot(BotError::Repo(_)) | Self::Message(MessageError::Repository(_)) => {
                 StatusCode::INTERNAL_SERVER_ERROR
             }
+            Self::Refused(rejection) => rejection.status,
         };
 
         if matches!(

@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use axum::body::Bytes;
 use axum::extract::{FromRef, Path, State};
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
 use axum::routing::{delete, post};
 use axum::{Json, Router};
@@ -17,7 +17,10 @@ use chrono::{DateTime, Utc};
 use entity_access::domain::models::EditAccessLevel;
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::DatabaseAccessLevelExtractor;
-use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
+use macro_authorization::{
+    AnyPrincipal, MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+    refuse_agent_run,
+};
 use model_error_response::ErrorResponse;
 use models_databases::{DatabaseId, RowId, TableId};
 use serde::{Deserialize, Serialize};
@@ -276,6 +279,10 @@ impl IntoResponse for DatabaseWebhookError {
     }
 }
 
+/// Why an agent's program may not create a database webhook: its secret URL
+/// would let whoever the program hands it to write into the table.
+pub const PROGRAM_DATABASE_WEBHOOK_REFUSAL: &str = "An agent's program cannot create database webhooks. Ask the user to create one from the database in Macro.";
+
 /// Create a webhook: a secret URL whose calls insert rows into one of the
 /// database's tables, writing with the creator's access.
 #[utoipa::path(
@@ -288,7 +295,7 @@ impl IntoResponse for DatabaseWebhookError {
     responses(
         (status = 201, body = CreatedDatabaseWebhookResponse),
         (status = 401, description = "Missing or invalid credentials", body = ErrorResponse),
-        (status = 403, description = "No edit access to the database", body = ErrorResponse),
+        (status = 403, description = "No edit access to the database, or an agent's program", body = ErrorResponse),
         (status = 404, description = "No such table in the database", body = ErrorResponse),
         (status = 500, body = ErrorResponse),
     )
@@ -296,6 +303,8 @@ impl IntoResponse for DatabaseWebhookError {
 #[tracing::instrument(err, skip_all)]
 pub async fn create_webhook_handler<Service, EntityAccess, Authorization>(
     access: DatabaseAccessLevelExtractor<EditAccessLevel, EntityAccess, Authorization>,
+    caller: MacroAuthorizationExtractor<Authorization, AnyPrincipal>,
+    headers: HeaderMap,
     State(state): State<DatabaseWebhooksRouterState<Service, EntityAccess, Authorization>>,
     Json(request): Json<CreateDatabaseWebhookRequest>,
 ) -> Result<(StatusCode, Json<CreatedDatabaseWebhookResponse>), DatabaseWebhookError>
@@ -304,6 +313,15 @@ where
     EntityAccess: EntityAccessService,
     Authorization: MacroAuthorizationService,
 {
+    refuse_agent_run(
+        caller
+            .authorization
+            .acting_user()
+            .is_some_and(|user| user.agent_id.is_some()),
+        &headers,
+        PROGRAM_DATABASE_WEBHOOK_REFUSAL,
+    )
+    .map_err(|_| DatabaseWebhookError::Forbidden(PROGRAM_DATABASE_WEBHOOK_REFUSAL))?;
     let created = state
         .service
         .create_webhook(access.entity_access_receipt, request.table_id)

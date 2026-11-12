@@ -90,11 +90,12 @@ pub async fn invite<S: CallService, Svc: EntityAccessService, Auth: MacroAuthori
     headers: HeaderMap,
     Json(request): Json<InviteMeetingRequest>,
 ) -> Result<StatusCode, CallError> {
-    if is_agent_run(actor.authorization.user.agent_id.is_some(), &headers) {
-        return Err(CallError::Forbidden(
-            PROGRAM_MEETING_INVITE_REFUSAL.to_string(),
-        ));
-    }
+    macro_authorization::refuse_agent_run(
+        actor.authorization.user.agent_id.is_some(),
+        &headers,
+        PROGRAM_MEETING_INVITE_REFUSAL,
+    )
+    .map_err(|refusal| CallError::Forbidden(refusal.message.into_owned()))?;
     state
         .service
         .invite_to_meeting(

@@ -1014,3 +1014,35 @@ async fn invite_to_team_refuses_an_agents_program() {
         assert!(service.invite_calls().is_empty());
     }
 }
+
+#[tokio::test]
+async fn invite_links_refuse_an_agents_program() {
+    for method in ["GET", "POST"] {
+        for (bearer, code_mode) in [("agent", false), ("valid", true)] {
+            let request = Request::builder()
+                .method(method)
+                .uri("/invite-link")
+                .header(header::AUTHORIZATION, format!("Bearer {bearer}"));
+            let request = if code_mode {
+                request.header(macro_authorization::CODE_EXECUTION_HEADER, "1")
+            } else {
+                request
+            };
+            // The fake service panics if a refused request reaches it.
+            let response = router(
+                FakeTeamService::default(),
+                FakeEntityAccessService::with_membership(USER_ID, TeamRole::Member),
+            )
+            .oneshot(request.body(Body::empty()).expect("request should be valid"))
+            .await
+            .expect("router should respond");
+            let (status, _, body) = response_parts(response).await;
+
+            assert_eq!(status, StatusCode::FORBIDDEN, "{method} {bearer}");
+            assert_eq!(
+                body["message"],
+                super::invite_link::PROGRAM_INVITE_LINK_REFUSAL
+            );
+        }
+    }
+}

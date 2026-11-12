@@ -20,7 +20,8 @@ use entity_access::{
 };
 use macro_authorization::{
     CredentialOrigin, MacroAuthorizationExtractor, MacroAuthorizationService,
-    MacroAuthorizationState, MacroUserAuthentication, UserOnly, refuse_agent_run,
+    MacroAuthorizationRejection, MacroAuthorizationState, MacroUserAuthentication, UserOnly,
+    refuse_agent_run,
 };
 use models_permissions::share_permission::{SharePermissionV2, UpdateSharePermissionRequestV2};
 use serde::Deserialize;
@@ -407,13 +408,12 @@ pub async fn send<P: ChatProvider, Eas: EntityAccessService, Auth: MacroAuthoriz
     headers: HeaderMap,
     access: ExternalChatAccessLevelExtractor<ViewAccessLevel, Eas, Auth>,
     Json(body): Json<SendReply>,
-) -> Result<Json<SendProgress>, Response> {
+) -> Result<Json<SendProgress>, SendError> {
     refuse_agent_run(
         auth.authorization.agent_id.is_some(),
         &headers,
         PROGRAM_EXTERNAL_SEND_REFUSAL,
-    )
-    .map_err(IntoResponse::into_response)?;
+    )?;
     Ok(Json(
         state
             .service
@@ -423,8 +423,37 @@ pub async fn send<P: ChatProvider, Eas: EntityAccessService, Auth: MacroAuthoriz
                 authority(&auth.authorization),
             )
             .await
-            .map_err(|error| ApiError::from(error).into_response())?,
+            .map_err(ApiError::from)?,
     ))
+}
+
+/// Why a send was not made.
+pub enum SendError {
+    /// An agent's program asked to send.
+    Refused(MacroAuthorizationRejection),
+    /// The chat service refused or failed.
+    Chat(ApiError),
+}
+
+impl From<MacroAuthorizationRejection> for SendError {
+    fn from(rejection: MacroAuthorizationRejection) -> Self {
+        Self::Refused(rejection)
+    }
+}
+
+impl From<ApiError> for SendError {
+    fn from(error: ApiError) -> Self {
+        Self::Chat(error)
+    }
+}
+
+impl IntoResponse for SendError {
+    fn into_response(self) -> Response {
+        match self {
+            Self::Refused(rejection) => rejection.into_response(),
+            Self::Chat(error) => error.into_response(),
+        }
+    }
 }
 
 /// Multipart body of the attachments route.

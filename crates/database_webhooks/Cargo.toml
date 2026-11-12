@@ -46,4 +46,6 @@ databases = { path = "../databases", features = ["postgres"] }
 entity_access = { path = "../entity_access", default-features = false, features = ["outbound"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
 macro_event_broker = { path = "../macro_event_broker", default-features = false }
+model_user = { path = "../model_user" }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tower = { workspace = true }

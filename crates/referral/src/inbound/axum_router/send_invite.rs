@@ -50,7 +50,7 @@ pub const PROGRAM_REFERRAL_REFUSAL: &str =
         (status = 500, body = model_error_response::ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(state, authorization, headers))]
+#[tracing::instrument(skip_all, err)]
 pub async fn post_referral_invite_handler<
     T: ReferralService,
     R,
@@ -60,17 +60,35 @@ pub async fn post_referral_invite_handler<
     Cached(authorization): Cached<MacroAuthorizationExtractor<Auth, UserOrInternal>>,
     headers: HeaderMap,
     Json(SendInviteBody { recipient }): Json<SendInviteBody>,
-) -> Result<StatusCode, Response> {
+) -> Result<StatusCode, SendInviteError> {
     let user = authorization.authorization.user;
-    refuse_agent_run(user.agent_id.is_some(), &headers, PROGRAM_REFERRAL_REFUSAL)
-        .map_err(IntoResponse::into_response)?;
+    refuse_agent_run(user.agent_id.is_some(), &headers, PROGRAM_REFERRAL_REFUSAL)?;
     let () = state
         .service
         .send_referral_invite(user.macro_user_id.clone(), recipient)
-        .await
-        .map_err(|error: ReferralError| error.into_response())?;
+        .await?;
 
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// Why a referral invite was not sent.
+#[derive(Debug, thiserror::Error)]
+pub enum SendInviteError {
+    /// An agent's program asked to send it.
+    #[error(transparent)]
+    Refused(#[from] MacroAuthorizationRejection),
+    /// The referral service refused or failed.
+    #[error(transparent)]
+    Referral(#[from] ReferralError),
+}
+
+impl IntoResponse for SendInviteError {
+    fn into_response(self) -> Response {
+        match self {
+            Self::Refused(rejection) => rejection.into_response(),
+            Self::Referral(error) => error.into_response(),
+        }
+    }
 }
 
 /// the rate limit definition for the per-user rate limit on referring new users

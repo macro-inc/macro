@@ -572,7 +572,7 @@ pub async fn delete_bot_handler<
 
 /// Why an agent's program may not mint a bot token: its secret would be in
 /// the program's hands.
-pub const PROGRAM_BOT_TOKEN_REFUSAL: &str = "An agent's program cannot mint bot tokens; the user mints them in the app (in code mode, present a botCredential view).";
+pub const PROGRAM_BOT_TOKEN_REFUSAL: &str = "An agent's program cannot mint bot tokens. The user mints them in Macro, from the bot's settings or a bot credential card.";
 
 /// Handler for `POST /bots/{bot_id}/tokens`. An agent's program is refused (403).
 #[utoipa::path(

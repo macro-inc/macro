@@ -11,7 +11,7 @@ use axum::{
 };
 use macro_authorization::{
     AccountHolderOrInternal, MacroAuthorizationExtractor, MacroAuthorizationService,
-    MacroAuthorizationState, refuse_agent_run,
+    MacroAuthorizationRejection, MacroAuthorizationState, refuse_agent_run,
 };
 use model_error_response::ErrorResponse;
 use serde::{Deserialize, Serialize};
@@ -106,6 +106,26 @@ pub struct DeleteUserApiKeyParams {
 pub const PROGRAM_API_KEY_REFUSAL: &str =
     "An agent's program cannot create API keys. Ask the user to create one in Macro's settings.";
 
+/// Why a key was not minted.
+#[derive(Debug, thiserror::Error)]
+pub enum CreateUserApiKeyError {
+    /// An agent's program asked for it.
+    #[error(transparent)]
+    Refused(#[from] MacroAuthorizationRejection),
+    /// The key service refused or failed.
+    #[error(transparent)]
+    Key(#[from] UserApiKeyError),
+}
+
+impl IntoResponse for CreateUserApiKeyError {
+    fn into_response(self) -> Response {
+        match self {
+            Self::Refused(rejection) => rejection.into_response(),
+            Self::Key(error) => error.into_response(),
+        }
+    }
+}
+
 /// Mint a new API key for the caller. An agent's program is refused (403).
 #[utoipa::path(
     post,
@@ -121,13 +141,13 @@ pub const PROGRAM_API_KEY_REFUSAL: &str =
         (status = 500, body = ErrorResponse),
     )
 )]
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(err, skip_all)]
 pub async fn create_user_api_key_handler<S, Auth>(
     State(state): State<UserApiKeyRouterState<S, Auth>>,
     user: MacroAuthorizationExtractor<Auth, AccountHolderOrInternal>,
     headers: HeaderMap,
     Json(body): Json<CreateUserApiKeyRequest>,
-) -> Result<(StatusCode, Json<CreatedUserApiKey>), Response>
+) -> Result<(StatusCode, Json<CreatedUserApiKey>), CreateUserApiKeyError>
 where
     S: UserApiKeyService,
     Auth: MacroAuthorizationService,
@@ -136,13 +156,11 @@ where
         user.authorization.user.agent_id.is_some(),
         &headers,
         PROGRAM_API_KEY_REFUSAL,
-    )
-    .map_err(IntoResponse::into_response)?;
+    )?;
     let created = state
         .service
         .create_key(&user.authorization.user.macro_user_id, &body.name)
-        .await
-        .map_err(IntoResponse::into_response)?;
+        .await?;
     Ok((StatusCode::CREATED, Json(created)))
 }
 

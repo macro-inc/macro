@@ -34,7 +34,12 @@ confirm what a person picks by opening something read it; the calendar
 mutation routes demand the copy's `inbox` from such requests, the calendar
 create route refuses them, and the email send and schedule routes refuse
 them unless the schedule quotes the user's approval
-(`macro_authorization::is_agent_run`).
+(`macro_authorization::is_agent_run`). Routes that mint a credential, give
+account access away or reach people outside the workspace refuse them
+outright with `macro_authorization::refuse_agent_run`: API key, bot token,
+webhook and database webhook creation, webhook changes, external chat sends,
+account manager requests, answers and claims, and team, referral and meeting
+invites.
 
 `RunEnvironment::endpoints` carries the SDK's hosts and the web app origin; the
 host fills both from `macro_service_urls`. Leaving `webAppUrl` out of
