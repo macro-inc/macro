@@ -386,6 +386,13 @@ It runs the real queries and service client over a scripted network. The warning
 opens under an owner from inside the sheet; one captured outside it closes the
 menu on the first tap.
 
+Every agent session composer (the Agents view and a session opened as a split
+block) uses `AgentComposerAddMenu` (`features/block-agent/ui`) for its plus
+button, so connections stay one tap away; don't give a session input its own
+attachments-only menu. The block composer's plus menu has a backend-free
+browser regression on desktop and phone:
+`bunx playwright test --config src/features/block-agent/browser-test/playwright.config.ts composer.browser.e2e.ts`.
+
 Composer `/` menus list Connections between Skills and Pull requests. Keep native
 and hosted providers aligned with `mcp_select::select_connections`, prefer native
 credentials per provider, and preserve editor focus on pointer and touch selection.

@@ -13,10 +13,10 @@ import PlusIcon from '@icon/system/regular/plus.svg';
 import BooksIcon from '@phosphor/books.svg';
 import { Button, Dialog } from '@ui';
 import { createSignal, lazy, Show, Suspense } from 'solid-js';
-import { agentAttachmentItems } from '../../block-agent/ui/attachment-menu';
 import type { ProviderId } from '../../settings/connections/model';
 import { providerIcon } from '../../settings/connections/provider-meta';
 import { useConnectionsModel } from '../../settings/connections/use-connections-model';
+import { agentAttachmentItems } from './attachment-menu';
 
 const IntegrationsView = lazy(async () => ({
   default: (await import('../../settings/connections/integrations-view'))
