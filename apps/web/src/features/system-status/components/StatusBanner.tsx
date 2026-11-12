@@ -12,7 +12,10 @@ import { type BannerStatus, STATUS_LABELS } from '../core/status';
  * the top safe area. With `onDismiss`, it shows a close button on the right.
  */
 export function StatusBanner(
-  props: BannerStatus & { class?: string; onDismiss?: () => void }
+  props: Pick<BannerStatus, 'level' | 'message'> & {
+    class?: string;
+    onDismiss?: () => void;
+  }
 ) {
   const isOutage = () => props.level === 'major_outage';
   return (

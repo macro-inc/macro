@@ -1,6 +1,6 @@
 ---
 name: sqlx-query-validator
-description: Inspect Rust changes for SQLx queries. Use after modifying Rust code that adds or changes SQLx queries to ensure compile-time SQLx macros are used, run `just prepare_db` for offline query cache, and review queries for performance and security issues.
+description: Inspect Rust changes for SQLx queries. Use after modifying Rust code that adds or changes SQLx queries to ensure compile-time SQLx macros are used, run `just prepare_db` for offline query cache, and review queries for security issues. Writing a query and measuring its plan is the query-writing skill; reviewing a diff's query cost is query-review.
 allowed-tools: Bash Read Edit Glob Grep
 ---
 
@@ -71,17 +71,13 @@ just prepare_db
 
 If it fails, inspect the error. Fix in-scope query/cache issues and rerun `just prepare_db`. If it still fails for environmental reasons, stop and report the failure clearly.
 
-## Performance Review Checklist
+## Performance
 
-For each changed query, inspect the SQL and surrounding code for likely performance problems:
-
-- Avoid unbounded result sets; prefer explicit `LIMIT`, pagination, or keyset pagination where applicable.
-- Ensure filters and joins are likely backed by appropriate indexes for high-cardinality or frequently queried columns.
-- Avoid `SELECT *` in production queries; select only needed columns.
-- Avoid N+1 query patterns in loops; prefer batching or joins.
-- Watch for leading-wildcard `LIKE` / `ILIKE` searches, broad JSON scans, or functions on indexed columns that may prevent index use.
-- Check joins for accidental cross joins or missing join predicates.
-- Prefer stable ordering for paginated queries.
+This skill does not check query cost. The author writes and measures each
+query with the [`query-writing`](../query-writing/SKILL.md) skill before
+committing it, and the [`query-review`](../query-review/SKILL.md) skill checks
+it before the push (through the [`review`](../review/SKILL.md) skill). If a
+changed query has no measured plan yet, run `query-writing` on it now.
 
 ## Security Review Checklist
 
@@ -101,4 +97,5 @@ Briefly summarize:
 - Which changed SQLx queries were reviewed.
 - Whether all changed queries use SQLx macros, or why any direct function call remains justified.
 - Whether `just prepare_db` passed, failed, or was skipped because no SQLx queries changed.
-- Any performance or security concerns found and fixed, or that none were found.
+- Any security concerns found and fixed, or that none were found.
+- Whether each changed query has a measured plan from `query-writing`.

@@ -489,6 +489,7 @@ async fn a_date_becomes_its_calendar_day_as_text_unless_it_has_a_time() {
                             value: CellValue::Date(afternoon),
                         }],
                     ],
+                    ids: None,
                 },
             }]),
         )
@@ -719,6 +720,7 @@ async fn a_text_column_converts_into_a_new_number_column_beside_it() {
                             value: CellValue::Text("soon".into()),
                         }],
                     ],
+                    ids: None,
                 },
             }]),
         )
@@ -901,6 +903,7 @@ async fn a_text_column_converts_into_a_new_select_column_with_its_labels_as_opti
                             value: CellValue::Text("Vegan".into()),
                         }],
                     ],
+                    ids: None,
                 },
             }]),
         )

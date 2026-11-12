@@ -19,7 +19,11 @@ export class HarnessNamespace {
     return Harness.byId(this.client, id);
   }
 
-  /** The hosts the caller may run agents on. */
+  /**
+   * The hosts the caller may run agents on.
+   *
+   * @readonly
+   */
   async list(): Promise<Harness[]> {
     return unwrap(await this.client.storage.listHarnesses()).map((h) =>
       Harness.from(this.client, h),
@@ -29,6 +33,8 @@ export class HarnessNamespace {
   /**
    * Every host of the caller's teammates, including ones the caller cannot use
    * yet. `Harness.callerAccess()` says which, and `Harness.requestAccess()` asks.
+   *
+   * @readonly
    */
   async directory(): Promise<Harness[]> {
     return unwrap(await this.client.storage.listHarnessDirectory()).map((h) =>
@@ -36,7 +42,13 @@ export class HarnessNamespace {
     );
   }
 
-  /** The currently authenticated host. */
+  /**
+   * The currently authenticated host.
+   *
+   * @readonly
+   * @mcp-exclude Requires host credentials
+   * MCP calls authenticate as a user.
+   */
   async me(): Promise<Harness> {
     return Harness.from(
       this.client,
@@ -44,31 +56,60 @@ export class HarnessNamespace {
     );
   }
 
-  /** Revoke the currently authenticated host. */
+  /**
+   * Revoke the currently authenticated host.
+   *
+   * @destructive
+   * @idempotent
+   * @mcp-exclude Requires host credentials
+   * MCP calls authenticate as a user.
+   */
   async deleteSelf(): Promise<void> {
     unwrap(await this.client.storage.deleteSelfHarness());
   }
 
-  /** Agent handles for the currently authenticated host. */
+  /**
+   * Agent handles for the currently authenticated host.
+   *
+   * @readonly
+   * @mcp-exclude Requires host credentials
+   * MCP calls authenticate as a user.
+   */
   async agents(): Promise<Agent[]> {
     return unwrap(await this.client.storage.listHarnessAgents()).map((a) =>
       Agent.byId(this.client, a.bot_id),
     );
   }
 
-  /** Session handles for the currently authenticated host. */
+  /**
+   * Session handles for the currently authenticated host.
+   *
+   * @readonly
+   * @mcp-exclude Requires host credentials
+   * MCP calls authenticate as a user.
+   */
   async sessions(): Promise<AgentSession[]> {
     return unwrap(await this.client.storage.listHarnessSessions()).map((s) =>
       AgentSession.byId(this.client, s.session_id),
     );
   }
 
-  /** Construct a lazy pairing from its displayed code. */
+  /**
+   * Construct a lazy pairing from its displayed code.
+   *
+   * @readonly
+   */
   pairing(code: string): HarnessPairing {
     return HarnessPairing.byId(this.client, code);
   }
 
-  /** Start pairing a device; persist the secret separately from the handles. */
+  /**
+   * Start pairing a device; persist the secret separately from the handles.
+   *
+   * @write
+   * @mcp-exclude Device-side pairing step
+   * returns a device secret meant for the host process.
+   */
   async createPairing(options: CreatePairingRequest) {
     const record = unwrap(
       await this.client.storage.createHarnessPairing({ body: options }),

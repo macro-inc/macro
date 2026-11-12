@@ -715,6 +715,7 @@ async fn a_redial_dispatches_the_queue_an_earlier_attach_failed_to_load() {
         announce: None,
         context: None,
         announced: None,
+        client: None,
         created_at: chrono::Utc::now(),
     };
     repo.replace_queued_actions(session, &[waiting.to_stored().unwrap()])

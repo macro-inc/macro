@@ -6,7 +6,9 @@ import {
   describeInboxCard,
   describeInboxRow,
   describeStackItem,
+  groupChatId,
   inboxCardKind,
+  isGroupChatRow,
 } from './describe-row';
 
 const taskAssigned = {
@@ -354,6 +356,64 @@ describe('describeInboxCard', () => {
       body: 'Sam: Message 0',
     });
     expect(itemsOf(row).map((item) => item.text)).toContain('Message 3');
+  });
+
+  it('shows a group chat stack the chat and who wrote its newest line', () => {
+    const row = stack(
+      'channel_messages',
+      ['Sam', 'Noor', 'Mara'].map((sender, index) =>
+        sent(String(index), 'channel_message_send', sender, {
+          channelType: 'private',
+          // Named for its sender, so it lists the reader and not the sender.
+          channelName: 'Ana, Leo, Mara, Noor, Reader',
+          messageContent: `Message ${index}`,
+        })
+      )
+    );
+    row.content.entity = {
+      type: 'channel',
+      id: 'entity',
+      name: 'Ana, Leo, Mara, Noor, Sam',
+    } as never;
+    expect(describeInboxCard(row, people)).toEqual({
+      who: 'Ana, Leo and 3 others',
+      what: undefined,
+      body: 'Sam: Message 0',
+    });
+    expect(isGroupChatRow(row)).toBe(true);
+  });
+
+  it('shows a named group chat its name, even for one message', () => {
+    const row = stack('channel_messages', [
+      sent('1', 'channel_message_send', 'Sam', {
+        channelType: 'private',
+        channelName: 'remote',
+        messageContent: 'Working from home',
+      }),
+    ]);
+    row.content.entity = {
+      type: 'channel',
+      id: 'entity',
+      name: 'remote',
+    } as never;
+    expect(describeInboxCard(row, people)).toEqual({
+      who: 'remote',
+      what: undefined,
+      body: 'Sam: Working from home',
+    });
+    expect(groupChatId(row)).toBe('entity');
+  });
+
+  it('keeps a reaction in a group chat about the person', () => {
+    const row = stack('channel_messages', [
+      sent('1', 'channel_message_reaction', 'Sam', {
+        channelType: 'private',
+        channelName: 'remote',
+        messageContent: 'Working from home',
+      }),
+    ]);
+    expect(isGroupChatRow(row)).toBe(false);
+    expect(groupChatId(row)).toBeUndefined();
   });
 
   it('shows a direct message stack the person and the newest message', () => {

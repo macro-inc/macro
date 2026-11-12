@@ -5,6 +5,8 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
+activity = { path = "../activity", default-features = false, features = ["realtime"] }
+agent_correlation = { path = "../agent_correlation", features = ["postgres"] }
 serde_json = { workspace = true }
 chrono = { workspace = true }
 anyhow = { workspace = true }
@@ -57,6 +59,7 @@ soup-filter-projection = { path = "../soup_filter_projection", default-features 
 soup_realtime = { path = "../soup_realtime", default-features = false, features = [
   "ports",
 ] }
+sqlx = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
@@ -70,8 +73,8 @@ bot_id = { path = "../bot_id" }
 crm = { path = "../crm", default-features = false, features = ["ports"] }
 databases = { path = "../databases", default-features = false, features = ["ports"] }
 databases_sql = { path = "../databases_sql" }
+macro_db_migrator = { path = "../macro_db_migrator" }
 models_databases = { path = "../models_databases" }
-activity = { path = "../activity", default-features = false, features = ["realtime"] }
 attention_feed = { path = "../attention_feed", features = ["inbound"] }
 notification_inbox = { path = "../notification_inbox" }
 work_feed = { path = "../work_feed" }

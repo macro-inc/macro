@@ -519,12 +519,6 @@ export function UniversalInputFixture(
     rosterLoading: () => false,
     connectAgent: (agent) => setAgentAction(`connect:${agent.id}`),
     createAgent: () => setAgentAction('create'),
-    agentsEnabled: () => !params.has('legacy'),
-    models: () => [
-      { id: 'claude-sonnet-4-5', label: 'Sonnet 4.5' },
-      { id: 'gpt-5', label: 'GPT-5' },
-    ],
-    model: () => '',
     attachmentCount: () => 0,
     clearAttachments: () => {},
   };

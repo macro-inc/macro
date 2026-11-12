@@ -144,7 +144,11 @@ export type CalendarEventRole = 'organizer' | 'guest';
  * - For a prompt from a channel or document thread, where no card is seen: write the whole event into your reply (title, date and time with its time zone, duration, guests, location, conference or Macro call, recurrence), ask whether to create it, and stop. Only once the user replies approving that event, call `createConfirmed` with their reply quoted in `userConfirmation`. Being asked to schedule something is a request to draft the event, never the approval.
  */
 export class CalendarNamespace {
-  /** Calendar availability settings, each referring to a typed calendar. */
+  /**
+   * Calendar availability settings, each referring to a typed calendar.
+   *
+   * @readonly
+   */
   async availabilityCalendars() {
     return unwrap(
       await this.client.calendar.getAvailabilityCalendars(),
@@ -156,12 +160,21 @@ export class CalendarNamespace {
     }));
   }
 
-  /** Current sharing preference for the team calendar. */
+  /**
+   * Current sharing preference for the team calendar.
+   *
+   * @readonly
+   */
   async teamSharing(): Promise<TeamCalendarSharing> {
     return unwrap(await this.client.calendar.getTeamSharing()).sharing;
   }
 
-  /** Replace the team calendar sharing preference. */
+  /**
+   * Replace the team calendar sharing preference.
+   *
+   * @write
+   * @idempotent
+   */
   async setTeamSharing(
     sharing: TeamCalendarSharing,
   ): Promise<TeamCalendarSharing> {
@@ -202,7 +215,10 @@ export class CalendarNamespace {
    * `inbox` to its `update`, `inviteGuests` or `delete`; without it the call
    * is refused with `copy_choice_required`, which names each copy's inbox and
    * event and gives the question to ask. An occurrence whose calendar is no
-   * longer listed has no `inbox`; take it from that refusal. */
+   * longer listed has no `inbox`; take it from that refusal.
+   *
+   * @readonly
+   */
   occurrences(options: Omit<ListOccurrencesData['query'], 'cursor'>) {
     let calendars: Promise<Map<string, VisibleCalendar>> | undefined;
     return paginate(async (cursor) => {
@@ -232,7 +248,11 @@ export class CalendarNamespace {
     });
   }
 
-  /** A page of team availability, including its roster and continuation cursor. */
+  /**
+   * A page of team availability, including its roster and continuation cursor.
+   *
+   * @readonly
+   */
   async teamPage(options: NonNullable<ListTeamCalendarData['query']>) {
     const page = unwrap(
       await this.client.storage.listTeamCalendar({ query: options }),
@@ -251,7 +271,11 @@ export class CalendarNamespace {
     };
   }
 
-  /** Teammates' out-of-office occurrences in a bounded viewport. Check hasMore for truncation. */
+  /**
+   * Teammates' out-of-office occurrences in a bounded viewport. Check hasMore for truncation.
+   *
+   * @readonly
+   */
   async teamOutOfOffice(
     options: NonNullable<ListTeamOutOfOfficeData['query']>,
   ) {
@@ -284,6 +308,8 @@ export class CalendarNamespace {
    * busy blocks. Always includes the user; omit `members` for the whole team,
    * or pass `[]` for only the user. Busy blocks carry no event titles, and
    * working hours are not applied.
+   *
+   * @readonly
    */
   async teamAvailability(opts: {
     /** Inclusive start, RFC 3339 UTC. */
@@ -321,22 +347,38 @@ export class CalendarNamespace {
     };
   }
 
-  /** The calendars the caller can see, some possibly not theirs, primaries and writable first. */
+  /**
+   * The calendars the caller can see, some possibly not theirs, primaries and writable first.
+   *
+   * @readonly
+   */
   calendars(): Promise<Calendar[]> {
     return Calendar.list(this.client);
   }
 
-  /** A handle to a calendar by id. Detail loads on first access. */
+  /**
+   * A handle to a calendar by id. Detail loads on first access.
+   *
+   * @readonly
+   */
   calendar(id: string): Calendar {
     return Calendar.byId(this.client, id);
   }
 
-  /** A handle to a calendar event by id, for driving mutations. */
+  /**
+   * A handle to a calendar event by id, for driving mutations.
+   *
+   * @readonly
+   */
   event(id: string): CalendarEvent {
     return CalendarEvent.byId(this.client, id);
   }
 
-  /** Recover a saved replacement, including after its original event was retired. */
+  /**
+   * Recover a saved replacement, including after its original event was retired.
+   *
+   * @readonly
+   */
   replacement(operationId: string): CalendarReplacement {
     return new CalendarReplacement(this.client, operationId);
   }
@@ -345,6 +387,9 @@ export class CalendarNamespace {
    * Create a calendar event and return a handle to its synced record; an
    * agent's program is refused (403) and creates through a review or
    * {@link createConfirmed} instead.
+   *
+   * @destructive
+   * @openworld
    */
   async createEvent(options: CreateEventOptions): Promise<CalendarEvent> {
     const record = unwrap(
@@ -367,6 +412,9 @@ export class CalendarNamespace {
    * out-of-office and guest policy, and the calendar to write to. The event
    * is written to the provider at once and guests receive invitations; on an
    * error, look for the event before creating it again.
+   *
+   * @destructive
+   * @openworld
    */
   async createConfirmed(
     options: ConfirmedEventOptions,
