@@ -114,6 +114,30 @@ export interface FileDetail {
   path: string;
 }
 
+/** Folders zipped at once; the rest of a large drop waits its turn. */
+const MAX_CONCURRENT_ZIPS = 3;
+let runningZips = 0;
+const waitingZips: (() => void)[] = [];
+
+/**
+ * Runs `work` once fewer than `MAX_CONCURRENT_ZIPS` folders are zipping. A
+ * finished folder hands its slot straight to the next waiting one.
+ */
+async function withZipSlot<T>(work: () => Promise<T>): Promise<T> {
+  if (runningZips < MAX_CONCURRENT_ZIPS) {
+    runningZips += 1;
+  } else {
+    await new Promise<void>((resolve) => waitingZips.push(resolve));
+  }
+  try {
+    return await work();
+  } finally {
+    const next = waitingZips.shift();
+    if (next) next();
+    else runningZips -= 1;
+  }
+}
+
 /**
  * Zips one folder in a worker of its own, created on first use (iOS deadlocks
  * on module workers built at load) and ended when the folder is done. A worker
@@ -348,10 +372,14 @@ async function writeFolderZip(
     span.setAttr('folder_upload.folders', folderPaths.length);
     span.setAttr('folder_upload.bytes', totalBytes);
 
-    const result = await runZipWorker(
-      { action: 'zipFiles', files, fileDetails, folderPaths },
-      ({ processedBytes, totalBytes }) =>
-        progress.preparing(totalBytes > 0 ? processedBytes / totalBytes : null)
+    const result = await withZipSlot(() =>
+      runZipWorker(
+        { action: 'zipFiles', files, fileDetails, folderPaths },
+        ({ processedBytes, totalBytes }) =>
+          progress.preparing(
+            totalBytes > 0 ? processedBytes / totalBytes : null
+          )
+      )
     );
     span.setAttr('folder_upload.zip_bytes', result.zipBlob.size);
 
