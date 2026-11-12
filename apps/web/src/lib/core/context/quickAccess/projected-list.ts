@@ -49,6 +49,10 @@ type Request = {
   awaitingEngine: boolean;
 };
 
+function isRefusedFirstAnswer(request: Request, error: unknown): boolean {
+  return !request.answered && isOwnerHandoffBlockedError(error);
+}
+
 /** A paginated, cache-only search. Refreshes replay the loaded browse window
  * rather than shrinking a scrolled list back to its first page. */
 export function createProjectedList<T extends { id: string }>(options: {
@@ -94,6 +98,9 @@ export function createProjectedList<T extends { id: string }>(options: {
   const finishRequest = (request: Request) => {
     if (current !== request) return;
     request.busy = false;
+    // A read refused while the cache moves between owners is replayed when
+    // the replacement engine arrives, so the query is still unanswered.
+    if (!request.awaitingEngine) setSearching(false);
     if (request.refreshPending) {
       // Publish the completed window before replaying changes received during
       // search/materialization (or a load-more operation).
@@ -191,8 +198,7 @@ export function createProjectedList<T extends { id: string }>(options: {
     } catch (error) {
       span.error('Quick Access cache search failed');
       if (current !== request) return;
-      request.awaitingEngine =
-        !request.answered && isOwnerHandoffBlockedError(error);
+      request.awaitingEngine = isRefusedFirstAnswer(request, error);
       setError(error);
       // Rows and their continuation are a committed window. A failed replay
       // (or append) must leave both intact so normal pagination can retry.
@@ -201,9 +207,6 @@ export function createProjectedList<T extends { id: string }>(options: {
       console.warn('Quick Access cache search failed', error);
     } finally {
       span.end();
-      // A read refused while the cache moves between owners is replayed when
-      // the replacement engine arrives, so the query is still unanswered.
-      if (current === request && !request.awaitingEngine) setSearching(false);
       finishRequest(request);
     }
   };
