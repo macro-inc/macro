@@ -319,6 +319,7 @@ dependencies = [
  "tauri-plugin-haptics",
  "tauri-plugin-http",
  "tauri-plugin-input-accessory",
+ "tauri-plugin-layout",
  "tauri-plugin-log",
  "tauri-plugin-network-status",
  "tauri-plugin-notification",
@@ -8509,6 +8510,14 @@ dependencies = [
 
 [[package]]
 name = "tauri-plugin-input-accessory"
+version = "0.1.0"
+dependencies = [
+ "tauri",
+ "tauri-plugin",
+]
+
+[[package]]
+name = "tauri-plugin-layout"
 version = "0.1.0"
 dependencies = [
  "tauri",

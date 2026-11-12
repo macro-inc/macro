@@ -179,7 +179,7 @@ function MoreViewsDrawer(props: {
  * layout (see MobileDockRow); the current view's button stays at full ink
  * while the rest dim.
  */
-function MobileNavigationDockRow() {
+function MobileNavigationDockRow(props: { vertical?: boolean }) {
   const navigate = useMobileNavNavigate();
   const foregroundView = useForegroundMobileView();
   const availableViews = useMobileDockViews();
@@ -202,7 +202,9 @@ function MobileNavigationDockRow() {
   const navSize = createElementSize(navRef);
   // The measured island already excludes Search and gutters; reserve More.
   const visibleCount = () =>
-    dockVisibleCount(navSize.width, navSize.height, dockViews().length);
+    props.vertical
+      ? dockVisibleCount(navSize.height, navSize.width, dockViews().length)
+      : dockVisibleCount(navSize.width, navSize.height, dockViews().length);
   const move = (from: number, to: number) => {
     const span = Telemetry.span('mobile.dock.reorder');
     try {
@@ -221,12 +223,23 @@ function MobileNavigationDockRow() {
   };
 
   return (
-    <div class="flex w-full justify-between gap-(--mobile-chrome-gutter)">
+    <div
+      class={cn(
+        'flex w-full justify-between gap-(--mobile-chrome-gutter)',
+        props.vertical && 'h-full min-h-0 flex-col justify-end'
+      )}
+    >
       <MobileDockIsland
         ref={setNavRef}
-        class="h-(--mobile-chrome-button-size) min-w-0 flex-1 justify-between"
+        class={cn(
+          'min-w-0 flex-1 justify-between',
+          props.vertical
+            ? 'w-(--mobile-chrome-button-size) min-h-0 flex-col'
+            : 'h-(--mobile-chrome-button-size)'
+        )}
         style={{
-          'max-width': `calc(${dockViews().length + 1} * var(--mobile-chrome-button-size))`,
+          [props.vertical ? 'max-height' : 'max-width']:
+            `calc(${dockViews().length + 1} * var(--mobile-chrome-button-size))`,
         }}
       >
         <For each={dockViews().slice(0, visibleCount())}>
@@ -275,6 +288,7 @@ function MobileNavigationDockRow() {
 
 type MobileDockRowProps = {
   class?: string;
+  vertical?: boolean;
 };
 
 /**
@@ -289,11 +303,17 @@ export function MobileDockRow(props: MobileDockRowProps) {
     <div
       class={cn(
         'flex items-center gap-(--mobile-chrome-gap) px-(--mobile-chrome-gutter)',
+        props.vertical && 'h-full min-h-0 flex-col px-0',
         props.class
       )}
     >
-      <MobileBottomEdgeFade />
-      <Show when={SearchState.isOpen()} fallback={<MobileNavigationDockRow />}>
+      <Show when={!props.vertical}>
+        <MobileBottomEdgeFade />
+      </Show>
+      <Show
+        when={SearchState.isOpen()}
+        fallback={<MobileNavigationDockRow vertical={props.vertical} />}
+      >
         <MobileSearchInput />
       </Show>
     </div>

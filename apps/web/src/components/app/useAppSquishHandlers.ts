@@ -2,6 +2,7 @@ import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import {
   setVirtualKeyboardHeight,
   setVirtualKeyboardVisible,
+  virtualKeyboardHeight,
   virtualKeyboardVisible,
 } from '@core/mobile/virtualKeyboard';
 import { isEditableInput } from '@core/util/isEditableInput';
@@ -91,18 +92,22 @@ export function useAppSquishHandlers() {
       resetNativeVirtualKeyboardState
     );
 
+    const syncNativeViewport = () => {
+      if (!virtualKeyboardVisible()) return;
+      // A fold or rotation can resize the view without another keyboard event.
+      const height = Math.max(0, getViewportHeight() - virtualKeyboardHeight());
+      document.documentElement.style.setProperty('--dvh', `${height * 0.01}px`);
+    };
+
     const handleKeyboardWillShow = (event: VirtualKeyboardEvent) => {
       activeElementPolling.start();
-      const newViewportHeight =
-        (window.visualViewport?.height ?? 0) - (event.detail?.height ?? 0);
-      const dvh = newViewportHeight * 0.01;
-      document.documentElement.style.setProperty('--dvh', `${dvh}px`);
       document.documentElement.style.setProperty(
         '--virtual-keyboard-height',
         `${event.detail?.height ?? 0}px`
       );
       setVirtualKeyboardVisible(true);
       setVirtualKeyboardHeight(event.detail?.height ?? 0);
+      syncNativeViewport();
     };
 
     const handleKeyboardWillHide = () => {
@@ -126,12 +131,19 @@ export function useAppSquishHandlers() {
       document.documentElement.style.setProperty('--dvh', '1dvh');
       window.addEventListener('keyboardWillShow', handleKeyboardWillShow);
       window.addEventListener('keyboardWillHide', handleKeyboardWillHide);
+      window.addEventListener('resize', syncNativeViewport);
+      window.visualViewport?.addEventListener('resize', syncNativeViewport);
       document.addEventListener('visibilitychange', handleVisibilityChange);
 
       onCleanup(() => {
         activeElementPolling.stop();
         window.removeEventListener('keyboardWillShow', handleKeyboardWillShow);
         window.removeEventListener('keyboardWillHide', handleKeyboardWillHide);
+        window.removeEventListener('resize', syncNativeViewport);
+        window.visualViewport?.removeEventListener(
+          'resize',
+          syncNativeViewport
+        );
         document.removeEventListener(
           'visibilitychange',
           handleVisibilityChange
