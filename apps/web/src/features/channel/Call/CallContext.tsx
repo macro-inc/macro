@@ -44,6 +44,7 @@ import {
 import { type CallLifecycleState, createCallLifecycle } from './call-lifecycle';
 import { traceCallMedia } from './call-media-telemetry';
 import { publishCallResolution } from './call-resolution';
+import { createCallSoundPlayer } from './call-sound-player';
 import { CallVolumeProvider } from './context/call-volume';
 import { createLatestAsyncRequestQueue } from './latest-async-request-queue';
 import {
@@ -522,6 +523,10 @@ function createCallState() {
     backgroundEffect: persistedBackgroundEffect(),
     noiseSuppressionMode: persistedNoiseSuppressionMode(),
   });
+  const playCallSound = createCallSoundPlayer(
+    userId,
+    () => store.activeAudioOutputDeviceId
+  );
   const [krispFilter, setKrispFilter] = createSignal<ReturnType<
     typeof KrispNoiseFilter
   > | null>(null);
@@ -1465,6 +1470,7 @@ function createCallState() {
     bumpTrackVersion,
     bumpSpeakerVersion: () => setStore('speakerVersion', (v) => v + 1),
     setScreenSharing: (value) => setStore('isScreenSharing', value),
+    playSound: playCallSound,
   };
 
   const callSession = createCallSessionController({
@@ -1481,14 +1487,14 @@ function createCallState() {
         if (!handedOff) stopPrejoinTracks(metadata?.localTracks);
       }
     },
-    jsDisconnect: async () => {
+    jsDisconnect: async (disconnectOptions) => {
       // Cancel a connect that is still waiting on its dynamic import. This is
       // also reached by timeout/error recovery in the call lifecycle.
       browserConnectGeneration += 1;
       if (!livekitJsPromise) return;
       const controller = await getLivekitJsController();
       if (disposed) return;
-      return controller.disconnect();
+      return controller.disconnect(disconnectOptions?.endNativeCall !== false);
     },
     clearOptimisticJoin: () => {
       setStore('optimisticJoinChannelId', null);
@@ -1746,11 +1752,12 @@ function createCallState() {
     shouldRequestToken: callSession.shouldRequestToken,
     prepareToken: prepareNativeCallJoin,
     requestToken: requestCallToken,
-    connect: (token) =>
+    connect: (token, source) =>
       callSession.connectWithToken(token, {
         channelTitle: token.channelId
           ? (channels.channelsById()[token.channelId]?.name ?? null)
           : null,
+        recovery: source === 'auto_rejoin' || source === 'restore',
       }),
     disconnect: callSession.disconnect,
     leave: (id) => leaveMutation.mutateAsync(id),
