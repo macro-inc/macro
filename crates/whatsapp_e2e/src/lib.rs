@@ -21,12 +21,12 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
+use kms_envelope::kms::{EnvelopeKms, FakeKms, GeneratedDataKey, KmsError};
 use sqlx::postgres::{PgConnectOptions, PgListener, PgPool, PgPoolOptions};
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 use whatsapp_fake_server::{FakeWhatsApp, test_signal};
 use whatsapp_session_service::replica::{self, ReplicaDeps, Timings};
-use kms_envelope::kms::{EnvelopeKms, FakeKms, GeneratedDataKey, KmsError};
 use whatsmeow::{Dialer, WebSocketDialer};
 use zeroize::Zeroizing;
 

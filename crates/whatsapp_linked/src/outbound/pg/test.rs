@@ -11,7 +11,10 @@ use entity_access::domain::models::{
     Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
 };
 use external_chat::domain::{
-    ports::{ChatEffect, ChatProvider, ChatProviders, ChatPublisher, EffectsRepository, Origin, SendRateLimiter},
+    ports::{
+        ChatEffect, ChatProviders, ChatPublisher, EffectsRepository, Origin, SendRateLimiter,
+        UnconfiguredProvider,
+    },
     service::ExternalChatService,
     timeline::TimelineRepository,
 };
@@ -60,13 +63,9 @@ fn services(pool: &PgPool) -> (Linked, SessionService, Arc<PgWhatsAppRepository>
         Linked {
             whatsapp: WhatsAppService::new(repository.clone()),
             chats: ExternalChatService::new(
-                {
-                    let whatsapp: Arc<dyn ChatProvider> = Arc::new(WhatsAppProvider::new(repository.clone()));
-                    // Only WhatsApp chats exist in these tests.
-                    ChatProviders {
-                        whatsapp: whatsapp.clone(),
-                        slack: whatsapp,
-                    }
+                ChatProviders {
+                    whatsapp: Arc::new(WhatsAppProvider::new(repository.clone())),
+                    slack: Arc::new(UnconfiguredProvider),
                 },
                 store.clone(),
                 Arc::new(Allow),
@@ -1117,13 +1116,9 @@ async fn rate_limited_send_never_creates_a_dispatchable_intent(pool: PgPool) {
 
     let (linked, session, repository, binding, alice, _) = adopted(&pool).await;
     let chats = ExternalChatService::new(
-        {
-            let whatsapp: Arc<dyn ChatProvider> = Arc::new(WhatsAppProvider::new(repository));
-            // Only WhatsApp chats exist in these tests.
-            ChatProviders {
-                whatsapp: whatsapp.clone(),
-                slack: whatsapp,
-            }
+        ChatProviders {
+            whatsapp: Arc::new(WhatsAppProvider::new(repository)),
+            slack: Arc::new(UnconfiguredProvider),
         },
         linked.store,
         Arc::new(Denied),
