@@ -128,7 +128,12 @@ function submitLogin(input: SlackLoginInput) {
       client.submitTwoFactor(loginId, code)
     )
     .with({ step: 'cancel' }, ({ loginId }) => client.cancelLogin(loginId))
-    .exhaustive();
+    .exhaustive((unknown) => {
+      // The page builds these inputs, so an unknown step is a bug here.
+      throw new Error(
+        `Unsupported Slack sign-in step: ${JSON.stringify(unknown)}`
+      );
+    });
 }
 
 /** Starts or answers a sign-in step; inputs never reach telemetry. */

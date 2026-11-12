@@ -348,5 +348,10 @@ export const externalChatApi: ExternalChatApi = {
       .with('slack', () =>
         throwOnErr(() => slackLinkedClient.importHistory(id))
       )
-      .exhaustive(),
+      .exhaustive((unknown) =>
+        // The chat's provider comes from DSS: fail the import, don't guess.
+        Promise.reject(
+          new Error(`No history import for provider ${String(unknown)}`)
+        )
+      ),
 };
