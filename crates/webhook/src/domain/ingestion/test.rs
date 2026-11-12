@@ -2078,3 +2078,84 @@ async fn user_event_workspace_resolution_failure_is_transient() {
 
     assert!(error.is_transient());
 }
+
+/// A resolved agent access request is a private hint for the requesting agent:
+/// it streams to that one user, never to teammates or entity accessors, and the
+/// delivered payload carries exactly the four agreed fields.
+#[tokio::test]
+async fn a_resolved_password_request_reaches_only_the_requesting_agent() {
+    use crate::domain::ingestion::stream::password_stream_candidate;
+    use crate::domain::stream::StreamAudience;
+    use password_events::{
+        AccessRequestResolution, AccessRequestResolvedMetadata, PasswordTopicEvent,
+    };
+
+    let agent = "macro|agent@example.com";
+    let item = uuid::Uuid::from_u128(2);
+    let event = Event::new(PasswordTopicEvent::AccessRequestResolved(
+        AccessRequestResolvedMetadata {
+            recipient_user_id: user_id(agent),
+            team_id: uuid::Uuid::from_u128(1),
+            item_id: item,
+            request_id: uuid::Uuid::from_u128(3),
+            status: AccessRequestResolution::Approved,
+        },
+    ));
+
+    let candidate = password_stream_candidate(&event).expect("the resolution streams");
+    assert_eq!(
+        candidate.audience,
+        StreamAudience::User {
+            user_id: agent.to_owned(),
+        },
+    );
+    assert_eq!(
+        candidate.event.event_name,
+        "passwords.access_request.resolved"
+    );
+    assert_eq!(candidate.event.entity_type, "password_item");
+    assert_eq!(candidate.event.entity_id, item.to_string());
+    assert_eq!(
+        candidate.event.broker_envelope["metadata"],
+        serde_json::json!({
+            "teamId": "00000000-0000-0000-0000-000000000001",
+            "itemId": "00000000-0000-0000-0000-000000000002",
+            "requestId": "00000000-0000-0000-0000-000000000003",
+            "status": "approved",
+        }),
+    );
+
+    // Durable webhooks: only the agent's own workspace is matched; no entity
+    // access is resolved, so teammates' workspaces are never consulted.
+    let access = MockAccessService::with_users(vec![user_id("macro|teammate@example.com")]);
+    let repository = MockRepository::new(
+        vec![agent.to_string(), TEAM_WORKSPACE_ID.to_string()],
+        vec![webhook("wh_agent", agent)],
+    );
+    let enqueuer = MockEnqueuer::default();
+    let service = service(access.clone(), repository.clone(), enqueuer.clone());
+    service
+        .ingest_password_event(event)
+        .await
+        .expect("the resolution is ingested");
+
+    assert!(lock(&access.calls).is_empty());
+    let repository_state = lock(&repository.state);
+    assert!(repository_state.workspace_calls.is_empty());
+    assert_eq!(
+        repository_state.match_calls,
+        vec![MatchCall {
+            workspace_ids: vec![agent.to_string()],
+            event_name: "passwords.access_request.resolved".to_string(),
+            entity_id: item.to_string(),
+        }]
+    );
+    drop(repository_state);
+    let enqueuer_state = lock(&enqueuer.state);
+    assert_eq!(enqueuer_state.attempted_messages.len(), 1);
+    assert!(
+        enqueuer_state.attempted_messages[0].event.broker_envelope["metadata"]
+            .get("recipientUserId")
+            .is_none()
+    );
+}
