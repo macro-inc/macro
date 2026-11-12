@@ -53,28 +53,6 @@ async fn purchase_for_team_refuses_flag_off_before_reserving_or_billing() {
 }
 
 #[tokio::test]
-async fn team_quote_refuses_flag_off_before_billing() {
-    let service = ComputerService::new(
-        FakeRepo::default(),
-        FakeBilling::default(),
-        FixedClock,
-        StaticFleetAttachment(FleetAttachment::Attached),
-    )
-    .with_rollout(disabled_rollout());
-    assert!(matches!(
-        service
-            .quote_for_team(
-                &MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
-                TEAM,
-                ComputerSize::Standard
-            )
-            .await,
-        Err(ComputerError::RolloutDisabled)
-    ));
-    assert!(service.billing.calls.lock().unwrap().is_empty());
-}
-
-#[tokio::test]
 async fn offers_refuse_flag_off_before_billing() {
     let service = ComputerService::new(
         FakeRepo::default(),
@@ -229,15 +207,6 @@ async fn release_remains_available_with_flag_off() {
             .status,
         crate::domain::models::ComputerStatusKind::Released
     );
-}
-
-#[tokio::test]
-async fn internal_quote_and_purchase_remain_available_with_flag_off() {
-    let (service, _) = existing_computer_with_flag_off().await;
-    service
-        .quote(TEAM, ComputerSize::Standard, &PurchaseBilling::Stripe)
-        .await
-        .unwrap();
 }
 
 #[tokio::test]

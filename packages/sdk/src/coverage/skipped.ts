@@ -156,12 +156,10 @@ export const authExcluded = [
 export const authBacklog = [
   'cancelTeamComputer', // Computer billing and lifecycle controls belong to the app.
   'completeTeamComputerSetup', // The guided computer setup is an app flow.
-  'getTeamComputer', // Computer billing and lifecycle controls belong to the app.
   'listTeamComputerOffers', // Computer checkout offers belong to the app.
   'listTeamComputers', // Computer billing and lifecycle controls belong to the app.
   'restoreTeamComputer', // Computer billing and lifecycle controls belong to the app.
   'purchaseTeamComputer', // Computer checkout belongs to the app.
-  'quoteTeamComputer', // Computer checkout belongs to the app.
   'releaseTeamComputer', // Computer billing and lifecycle controls belong to the app.
   'retryTeamComputer', // Computer provisioning recovery belongs to the app.
   'setTeamComputerPower', // Computer lifecycle controls belong to the app.

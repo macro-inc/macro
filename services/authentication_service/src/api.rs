@@ -137,12 +137,7 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
                 inner: state.native_app_service.clone(),
             },
         ))
-        .nest(
-            "/internal",
-            internal::router().merge(hosted_runtimes::inbound::axum_router::internal_router(
-                computer_router_state(&state),
-            )),
-        )
+        .nest("/internal", internal::router())
         .nest("/permissions", permissions::router())
         .nest("/login", login::router(state.clone()))
         .nest("/logout", logout::router())
