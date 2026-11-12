@@ -21,8 +21,10 @@ through `rmcp`, returning the result to the caller's tool-calling loop.
 - `src/domain/service/`: connection/tool-execution orchestration
   (`toolset.rs`, `server_access.rs`, `persisting_credential_store.rs`), and
   `server_directory.rs` for adding servers.
-- `src/domain/ports.rs`: `McpServerStore`, `OAuthStateStore`, and the OAuth
-  port the outbound adapters implement.
+- `src/domain/ports.rs`: `McpServerStore`, `OAuthStateStore`, the OAuth
+  port, and `McpServerHttp` (the guarded HTTP clients) that the outbound
+  adapters implement. The address policy itself is pure domain code
+  (`src/domain/models/address_policy.rs`).
 - `src/domain/provider_registry.rs` (feature `providers`): pre-registered
   OAuth credentials for known MCP providers, keyed off `macro_env_var`.
 - `src/domain/service/linked_github.rs`: `WithLinkedGithub`, the store

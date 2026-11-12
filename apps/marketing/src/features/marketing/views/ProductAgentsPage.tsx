@@ -89,8 +89,8 @@ export function RouteAgents() {
         demo={{
           tone: 'agents',
         }}
-        title="Give agents your team’s context."
-        description="Macro builds memory from your files, email, tasks, team channels, and calls. It develops a shared understanding of what everyone on your team is working on and who is responsible for what."
+        title="Unified memory, across your whole team."
+        description="ChatGPT and Claude build up memory from your chats. Macro builds memory from your files, your email, your tasks, everything your team is talking about in channels, and all of your calls. It works across your team too, so agents know what everyone is working on and who is responsible for what."
       >
         <DemoInteractionBoundary
           class="feature-page-visual"
@@ -98,25 +98,12 @@ export function RouteAgents() {
         />
       </FeaturePageSection>
       <FeaturePageSection
-        id="agent-actions"
-        demo={{
-          tone: 'agents',
-        }}
-        title="Search your workspace with an agent."
-        description="We put the same effort into our tools and MCP as the app itself. An agent can use one search tool across your files, email, tasks, messages, and calls."
-      >
-        <DemoInteractionBoundary
-          class="feature-page-visual"
-          render={() => <AgentDeliverableStory />}
-        />
-      </FeaturePageSection>
-      <FeaturePageSection
         id="agent-collaboration"
         demo={{
           tone: 'agents',
         }}
-        title="Let agents work while you’re away."
-        description="Put your agents to work on a task in Macro Tasks. Hosted agents keep working after you close the app; pick up the same conversation on another device."
+        title="First-class citizens, just like people."
+        description="Agents work right inside your channels. @mention one to get it working on something with the whole conversation as context, or assign it a task in Macro Tasks, just like a teammate. Hosted agents keep working after you close the app; pick up the same conversation on another device."
       >
         <DemoInteractionBoundary
           class="feature-page-visual"
@@ -124,9 +111,22 @@ export function RouteAgents() {
         />
       </FeaturePageSection>
       <FeaturePageSection
+        id="agent-actions"
+        demo={{
+          tone: 'agents',
+        }}
+        title="One search tool across everything."
+        description="We put the same effort into our tools and MCP as the app itself. Connected to separate apps, an agent has to search each one, then deduplicate and work out what happened. In Macro it uses one search tool across your files, email, tasks, messages, and calls."
+      >
+        <DemoInteractionBoundary
+          class="feature-page-visual"
+          render={() => <AgentDeliverableStory />}
+        />
+      </FeaturePageSection>
+      <FeaturePageSection
         id="existing-agents"
-        title="Bring your favorite agents."
-        description="Your team’s memory and Macro’s tools work across model providers. You’re not locked into any single one."
+        title="Bring your own agents."
+        description="Point Claude Code, Codex, or any MCP client at your workspace, or run agents on your own machine with macrod. Your team’s memory and Macro’s tools work with all the latest models from every provider, so you’re never locked into one."
       >
         <div class="agents-connections">
           <div class="agents-connection-paths">

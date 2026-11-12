@@ -26,6 +26,7 @@ import {
   unwrap,
 } from '../../utils';
 import type { MacroClient } from '../../utils/client';
+import { rejectUnknownOptions } from '../../utils/options';
 import { Canvas } from '../canvases/canvas';
 import { PropertiedEntity } from '../entity';
 import {
@@ -270,6 +271,12 @@ export class Document
     client: MacroClient,
     opts: { name: string; markdown?: string; project?: Project },
   ): Promise<Document> {
+    rejectUnknownOptions('documents.create', opts, {
+      name: true,
+      markdown: true,
+      project: true,
+    });
+
     const { documentId } = unwrap(
       await client.storage.createMarkdownHandler({
         body: {
@@ -290,6 +297,12 @@ export class Document
     client: MacroClient,
     opts: { name: string; markdown?: string; project?: Project },
   ): Promise<Document> {
+    rejectUnknownOptions('documents.createSnippet', opts, {
+      name: true,
+      markdown: true,
+      project: true,
+    });
+
     const { documentId } = unwrap(
       await client.storage.createSnippetHandler({
         body: {
@@ -316,6 +329,13 @@ export class Document
       project?: Project;
     },
   ): Promise<Document> {
+    rejectUnknownOptions('documents.createSkill', opts, {
+      name: true,
+      description: true,
+      markdown: true,
+      project: true,
+    });
+
     const { documentId } = unwrap(
       await client.storage.createSkillHandler({
         body: {
