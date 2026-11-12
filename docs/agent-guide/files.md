@@ -157,8 +157,8 @@ search remains available. Right-click any Drive view, the Drive folder overview,
 or a folder at any depth for **Open in new split**, **Open in current split**, and
 **Open fullscreen** (when multiple splits are open). Opening a location in a new
 split clears search and filters in the destination, leaving the original split
-unchanged. Folder menus also offer Favorite/Unfavorite, Snooze notifications…,
-Mute/Unmute notifications, Duplicate, Copy Link, Copy ID, Share, and
+unchanged. Folder menus also offer Favorite/Unfavorite, Mute/Unmute notifications
+with the shared timed-mute presets and custom time picker, Duplicate, Copy Link, Copy ID, Share, and
 owner-only Rename, Move to folder, and Delete, matching the folder's row menu in the Drive list.
 **Duplicate** on a folder (also in its "…" menu and row menu) makes "<name> copy"
 beside it (or at the top level without edit access to its parent), copying its
@@ -173,6 +173,13 @@ and **Created by** submenus alongside **Files** for Default, All files, and Emai
 attachments. Options within a group match any selected option; different groups
 combine to narrow the results. Created by is hidden while My Files
 is restricted to your own files. Recent offers only file-scope filtering.
+Created by uses a bounded searchable contact window on desktop and in the mobile
+drawer, with Me and persisted selections resolved independently of that window.
+Next options replaces the page; selected and unavailable IDs remain selected,
+and Only clears off-page selections in this group without changing other facets.
+Partial/offline cache data is labeled rather than treated as an empty directory.
+The source stays idle until the creator submenu/drawer section opens. Regression:
+`src/lib/core/internal/browser-test/list-filters.browser.e2e.ts` (stand-in data).
 The desktop Filter trigger shows the number of active filters, matching the
 mobile drawer; clearing all filters removes the badge. Use the left checkboxes
 (or Space) to combine Type options without closing. Row activation adds and

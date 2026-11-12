@@ -449,7 +449,7 @@ impl BotDirectory for OneBotDirectory {
 
 /// What a requester says when no runtime creates the session.
 const RUNTIME_UNAVAILABLE_REASON: &str =
-    "this agent's runtime did not open the session; make sure macrod is running and up to date";
+    "this agent's machine did not open the session; make sure macrod is running and up to date";
 
 /// Stands in for the bot's runtime: records what was asked and answers with
 /// a session under the requested id, as macrod would have created it.
@@ -1461,6 +1461,7 @@ fn an_unnamed_control_request_omits_the_field() {
         action_id: None,
         action: AgentAction::Stop,
         context: None,
+        client_id: None,
     })
     .expect("a control request serializes");
 
@@ -1591,4 +1592,48 @@ async fn internal_notifications_use_the_session_mount_once() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+/// An agent's program using a person's credential is a `Program`, which may
+/// not name an app tab; the app itself, on a session or a bearer token, is the
+/// `User`.
+#[test]
+fn an_agents_program_is_not_a_user_principal() {
+    use crate::domain::control::ControlPrincipal;
+    use macro_authorization::{CODE_EXECUTION_HEADER, CredentialOrigin};
+
+    let user = |origin: CredentialOrigin, agent: bool| {
+        UserBotOrHarnessAuthorization::User(MacroUserAuthentication {
+            origin,
+            agent_id: agent.then_some(BotId::TEST_A),
+            agent_via: None,
+            macro_user_id: MacroUserIdStr::try_from_email("owner@example.com").unwrap(),
+            user_context: model_user::UserContext {
+                user_id: "macro|owner@example.com".to_owned(),
+                fusion_user_id: "fusion-owner".to_owned(),
+                permissions: None,
+                organization_id: None,
+            },
+        })
+    };
+    let plain = axum::http::HeaderMap::new();
+    let mut program = axum::http::HeaderMap::new();
+    program.insert(CODE_EXECUTION_HEADER, "1".parse().unwrap());
+
+    for origin in [CredentialOrigin::Session, CredentialOrigin::MacroApiJwt] {
+        assert!(matches!(
+            control_principal(&user(origin, false), &plain),
+            ControlPrincipal::User
+        ));
+    }
+    for (caller, headers) in [
+        (user(CredentialOrigin::Session, false), &program),
+        (user(CredentialOrigin::MacroApiJwt, false), &program),
+        (user(CredentialOrigin::MacroApiJwt, true), &plain),
+    ] {
+        assert!(matches!(
+            control_principal(&caller, headers),
+            ControlPrincipal::Program
+        ));
+    }
 }

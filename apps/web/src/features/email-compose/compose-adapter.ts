@@ -17,7 +17,6 @@ import { useEmail, useUserContext, useUserId } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { trackMention } from '@core/signal/mention';
-import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { deviceLooksOffline } from '@core/util/connectivity';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -27,6 +26,7 @@ import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.
 import ExclamationIcon from '@icon/system/regular/exclamation-mark.svg?component-solid';
 import { Telemetry } from '@macro-inc/observability';
 import { queryClient } from '@queries/client';
+import { useContactRecipientSource } from '@queries/contacts/recipient-source';
 import {
   completeDraftAttachment,
   useAddForwardedAttachmentsMutation,
@@ -178,7 +178,6 @@ export function createEmailComposeContext(
   const removeAttachment = useRemoveDraftAttachmentMutation();
   const removeForwarded = useRemoveForwardedAttachmentMutation();
   const unschedule = useUnscheduleMessageMutation();
-  const { users } = useCombinedRecipients();
   const notice = (options?: ComposeNoticeOptions) => {
     const hasUndo = options?.actions?.some(({ kind }) => kind === 'undo');
     const hasNavigation = options?.actions?.some(({ kind }) => kind === 'open');
@@ -263,7 +262,8 @@ export function createEmailComposeContext(
     },
     connectivity: { looksOffline: deviceLooksOffline },
     viewerEmail,
-    recipients: users,
+    recipients: () => [],
+    createRecipientSource: useContactRecipientSource,
     hasPaidAccess: useHasPaidAccess(),
     presentation: {
       viewerLoading: user.isLoading,
