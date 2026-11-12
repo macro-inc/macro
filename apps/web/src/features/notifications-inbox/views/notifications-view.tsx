@@ -93,6 +93,7 @@ import {
   describeInboxCard,
   describeStackItem,
   inboxCardKind,
+  isGroupChatRow,
 } from '../primitives/describe-row';
 import {
   createInboxListItems,
@@ -724,7 +725,12 @@ export function NotificationsView(props: NotificationsViewProps) {
           id={card.row().id}
           icon={
             <InboxSenderAvatar
-              notification={card.row().content.notifications[0]}
+              // A group chat shows itself, not whoever wrote in it last.
+              notification={
+                isGroupChatRow(card.row())
+                  ? undefined
+                  : card.row().content.notifications[0]
+              }
               kind={inboxCardKind(card.row())}
               entity={card.row().content.entity}
               badged
