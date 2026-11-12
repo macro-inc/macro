@@ -19,8 +19,8 @@ pub const MAX_SCHEMA_BYTES: usize = 16 * 1024;
 
 /// Jev reads at most this much of the newest user message.
 const MAX_LATEST_CHARS: usize = 8000;
-/// A follow-up needs only the gist of the message before it; the smaller cap
-/// keeps both inside one decision request.
+/// A follow-up needs only the gist of the message before it, and the smaller
+/// cap leaves the questions more of the decision request's size limit.
 const MAX_PREVIOUS_CHARS: usize = 2000;
 
 /// The user's words a turn answers, for routing what the turn loads.

@@ -10,9 +10,9 @@ use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
-use cognition::domain::RoutingRequest;
 use cognition::domain::{
     Cognition, DecisionRequest, DecisionResponse, GenerateObjectRequest, GenerateObjectResponse,
+    RoutingRequest,
 };
 use jev::domain::{JevProvider as _, YesNoQuestion};
 use macro_user_id::user_id::MacroUserIdStr;
