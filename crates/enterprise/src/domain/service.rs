@@ -179,7 +179,7 @@ impl<R> MemberAccessService<R> {
 
 impl<R: EnterpriseRepository> MemberAccess for MemberAccessService<R> {
     async fn ensure_active(&self, user: &MacroUserIdStr<'_>) -> Result<()> {
-        if self.repository.member_disabled(user).await? {
+        if self.0.member_disabled(user).await? {
             return Err(EnterpriseError::MemberDisabled);
         }
         Ok(())
