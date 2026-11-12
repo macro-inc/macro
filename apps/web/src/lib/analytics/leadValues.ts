@@ -19,3 +19,17 @@ export const SIGNUP_LEAD_VALUE_BY_TIER: Record<string, number> = {
 
 /** Fallback used when the tier query param is unrecognized. */
 export const SIGNUP_LEAD_VALUE_DEFAULT = SIGNUP_LEAD_VALUE_BY_TIER.free;
+
+/**
+ * Google Ads value of a confirmed subscription start, per plan. Pro starts as
+ * a trial; Max is paid up front at five times the price, so bidding should
+ * favor it.
+ */
+export const SUBSCRIPTION_START_VALUE_BY_TIER: Record<string, number> = {
+  premium: SIGNUP_LEAD_VALUE_BY_TIER.premium,
+  max: 1000,
+};
+
+/** Fallback when the returning checkout didn't say which plan was bought. */
+export const SUBSCRIPTION_START_VALUE_DEFAULT =
+  SUBSCRIPTION_START_VALUE_BY_TIER.premium;
