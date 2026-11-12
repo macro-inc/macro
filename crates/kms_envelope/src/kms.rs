@@ -195,3 +195,23 @@ impl EnvelopeKms for AwsKms {
         Ok(Zeroizing::new(plaintext.into_inner()))
     }
 }
+
+/// A shared KMS, such as one fake behind several processes in a test.
+impl<Kms: EnvelopeKms> EnvelopeKms for std::sync::Arc<Kms> {
+    fn generate_data_key(
+        &self,
+        encryption_context: HashMap<String, String>,
+    ) -> impl Future<Output = Result<GeneratedDataKey, KmsError>> + Send {
+        self.as_ref().generate_data_key(encryption_context)
+    }
+
+    fn decrypt(
+        &self,
+        kms_key_id: &str,
+        ciphertext: &[u8],
+        encryption_context: HashMap<String, String>,
+    ) -> impl Future<Output = Result<Zeroizing<Vec<u8>>, KmsError>> + Send {
+        self.as_ref()
+            .decrypt(kms_key_id, ciphertext, encryption_context)
+    }
+}

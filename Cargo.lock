@@ -19089,6 +19089,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "slack_e2e"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "entity_access",
+ "external_chat",
+ "kms_envelope",
+ "macro_db_migrator",
+ "macro_user_id",
+ "serde_json",
+ "slack_client",
+ "slack_fake_server",
+ "slack_linked",
+ "slack_session_service",
+ "sqlx",
+ "tokio",
+ "tokio-util",
+ "url",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "slack_fake_server"
 version = "0.1.0"
 dependencies = [
