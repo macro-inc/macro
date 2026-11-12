@@ -1090,7 +1090,8 @@ fn log_read_error(error: &MessageError) {
         MessageError::NotFound
         | MessageError::Forbidden
         | MessageError::Invalid(_)
-        | MessageError::Conflict => tracing::info!(error = %error),
+        | MessageError::Conflict
+        | MessageError::Busy => tracing::info!(error = %error),
     }
 }
 

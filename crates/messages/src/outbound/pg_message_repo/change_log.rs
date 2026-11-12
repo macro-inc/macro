@@ -21,10 +21,11 @@ mod test;
 const KIND_MESSAGE: i16 = 1;
 const KIND_HISTORY_IMPORTED: i16 = 2;
 const KIND_ACTIVITY: i16 = 3;
-/// How long a write waits for another write to the same channel to commit
-/// before it fails. Without it, one stalled transaction would park every
-/// later writer to its channel on a pool connection until the database
-/// ended the stalled session.
+/// How long a write waits in the database for the writes to its channel
+/// ahead of it. The write gate keeps that queue a few writers long, so only a
+/// stalled transaction makes a writer wait this long; without the bound it
+/// would park every later writer to its channel on a pool connection until
+/// the database ended the stalled session.
 const COUNTER_LOCK_TIMEOUT: &str = "5s";
 
 fn internal(message: &'static str) -> MessageError {
@@ -116,17 +117,26 @@ pub(super) async fn append(
         root_ids.push(root_id);
         activity_ids.push(activity_id);
     }
-    // One statement: the lock wait is bounded, the counter row is locked,
-    // then the rows take the numbers it handed out. The counter insert reads
-    // from `bounded`, so the timeout is set before it can wait.
+    // One statement: the wait is bounded, the channel's turn is taken, then
+    // the counter moves and the rows take the numbers it handed out. Each
+    // step reads from the one before, so they run in this order.
+    //
+    // The turn is an advisory lock because its queue is one wait the timeout
+    // covers. Writers queued on the counter row alone re-queue after every
+    // commit ahead of them, so a row-lock timeout never bounds their total
+    // wait, and a flooded channel holds every pool connection.
     let seqs = sqlx::query_scalar!(
         r#"
         WITH bounded AS MATERIALIZED (
             SELECT set_config('lock_timeout', $7, true) AS lock_timeout
         ),
+        turn AS MATERIALIZED (
+            SELECT pg_advisory_xact_lock(hashtextextended('channel_change:' || $1::uuid::text, 0))
+            FROM bounded
+        ),
         bumped AS (
             INSERT INTO comms_channel_change_counters (channel_id, seq)
-            SELECT $1, $2 FROM bounded
+            SELECT $1::uuid, $2::bigint FROM turn
             ON CONFLICT (channel_id) DO UPDATE
             SET seq = comms_channel_change_counters.seq + EXCLUDED.seq,
                 updated_at = now()
@@ -262,6 +272,7 @@ impl ChannelActivityLog for PgMessageRepository {
             .iter()
             .map(|id| ChannelChangeOp::Activity(*id))
             .collect();
+        let _turn = self.gate.enter_channel(channel_id).await?;
         let mut tx = self.pool.begin().await.map_err(database_error)?;
         // A fact can arrive after its channel was deleted. Holding the
         // channel row, as a message write does, also keeps a concurrent

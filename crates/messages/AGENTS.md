@@ -93,11 +93,18 @@ keep no log.
   waiting for the counter. A transaction that inserted a reply calls
   `check_thread_references` first, because the reply's deferred foreign key
   would otherwise lock the root at commit.
-- A writer waits at most 5 s for another writer to the same channel
-  (`COUNTER_LOCK_TIMEOUT`, set for the rest of its transaction); past that the
-  write fails and takes no number. Keep work after the append to the commit:
-  the Slack import still updates the channel and its checkpoint after it, and
-  every live writer to that channel waits for those statements.
+- A channel's writes commit one at a time, in two queues. In the process,
+  `write_gate` lets 4 writes per channel hold a connection and makes the rest
+  wait up to 2 s before a connection is taken, so a burst into one channel
+  cannot take the pool from the others. In the database, the append takes the
+  channel's advisory lock under a 5 s `lock_timeout`
+  (`COUNTER_LOCK_TIMEOUT`), which only a stalled transaction reaches. Either
+  wait running out is `MessageError::Busy`: nothing was written, HTTP answers
+  503 with `Retry-After`. Every new write path to channel messages enters the
+  gate before `pool.begin()`.
+- Keep work after the append to the commit: the Slack import still updates
+  the channel and its checkpoint after it, and every live writer to that
+  channel waits for those statements.
 - Sequence numbers follow commit order, so a reader never sees `n` before
   `n - 1`. `concurrent_writers_never_expose_a_gap_to_a_reader` holds this.
 - Historical import logs one `HistoryImported` row per batch; readers behind

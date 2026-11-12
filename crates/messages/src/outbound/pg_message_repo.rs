@@ -11,6 +11,7 @@ use uuid::Uuid;
 mod change_log;
 mod historical;
 mod timeline;
+mod write_gate;
 
 #[cfg(test)]
 mod test;
@@ -21,6 +22,8 @@ pub struct PgMessageRepository {
     pool: PgPool,
     initiatives: Option<std::sync::Arc<dyn initiative::domain::lookup::InitiativeReader>>,
     crm: Option<std::sync::Arc<dyn CrmParentReader>>,
+    /// Shared by every clone, so one process has one limit per channel.
+    gate: write_gate::ChannelWriteGate,
 }
 
 #[derive(Deserialize)]
@@ -60,6 +63,9 @@ fn database_error(error: sqlx::Error) -> MessageError {
             Some("23514") => {
                 return MessageError::Invalid("invalid message parent, thread, or anchor");
             }
+            // Only the channel's turn in `change_log::append` waits under a
+            // lock timeout: the writer ahead of this one did not commit.
+            Some("55P03") => return MessageError::Busy,
             _ => {}
         }
     }
@@ -81,6 +87,7 @@ impl PgMessageRepository {
             pool,
             initiatives: None,
             crm: None,
+            gate: write_gate::ChannelWriteGate::default(),
         }
     }
 
@@ -748,6 +755,7 @@ impl MessageRepository for PgMessageRepository {
             .input
             .id
             .unwrap_or_else(macro_uuid::generate_uuid_v7);
+        let _turn = self.gate.enter(&command.parent).await?;
         let mut tx = self.pool.begin().await.map_err(database_error)?;
         if let Some(root_id) = command.canonical_root_id {
             // Serialize the first writers, and coordinate with parent cleanup. A
@@ -872,6 +880,7 @@ impl MessageRepository for PgMessageRepository {
         id: Uuid,
         command: EditMessage,
     ) -> Result<Sequenced<Message>, MessageError> {
+        let _turn = self.gate.enter(parent).await?;
         let mut tx = self.pool.begin().await.map_err(database_error)?;
         let actor = Self::lock_message(&mut tx, parent, id).await?;
         // Attachment-only patches keep the message unedited, as the channel writer did.
@@ -914,6 +923,7 @@ impl MessageRepository for PgMessageRepository {
         parent: &MessageParent,
         id: Uuid,
     ) -> Result<Sequenced<Message>, MessageError> {
+        let _turn = self.gate.enter(parent).await?;
         let mut tx = self.pool.begin().await.map_err(database_error)?;
         Self::lock_message(&mut tx, parent, id).await?;
         sqlx::query!("UPDATE comms_messages SET content = '', deleted_at = now(), updated_at = now() WHERE id = $1", id)
@@ -935,6 +945,7 @@ impl MessageRepository for PgMessageRepository {
         emoji: &str,
         add: bool,
     ) -> Result<ReactionResult, MessageError> {
+        let _turn = self.gate.enter(parent).await?;
         let mut tx = self.pool.begin().await.map_err(database_error)?;
         Self::lock_message(&mut tx, parent, id).await?;
         let result = if add {

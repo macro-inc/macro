@@ -311,7 +311,7 @@ async fn a_writer_stops_waiting_for_a_stalled_writer(pool: PgPool) {
     .unwrap();
 
     let waited = repo.create(post(channel_id, None, "waits")).await;
-    assert!(matches!(waited, Err(MessageError::Repository(_))));
+    assert!(matches!(waited, Err(MessageError::Busy)));
 
     // The failed write left nothing, and the bound does not outlive it.
     stalled.rollback().await.unwrap();

@@ -25,6 +25,10 @@ pub enum MessageError {
     /// A client-supplied message id is already taken.
     #[error("message id already exists")]
     Conflict,
+    /// The parent is taking more writes than it can commit in time. Nothing
+    /// was written; the caller may retry.
+    #[error("too many writes to this conversation at once; retry shortly")]
+    Busy,
     /// Persistence or delivery failed.
     #[error("message operation failed: {0}")]
     Repository(rootcause::Report),
