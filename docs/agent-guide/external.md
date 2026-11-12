@@ -136,10 +136,10 @@ and "Owned by <owner>". The layout supports phone-width panes.
 
 Where the provider has threads (`limits.threads` on the detail; WhatsApp has
 none), a message that starts a thread shows the channel thread's reply chip
-("N replies", with a dot while unread) under it, and other messages a **Reply
-in thread** button. Either expands the thread inline under the message, like a
-channel thread: its replies, **Hide replies**, and a **Reply in thread**
-composer that sends in that thread. Opening a thread marks it read. Thread
+("N replies", with a dot while unread) under it, and a row's **Reply** opens
+that message's thread instead of quoting it. Either expands the thread inline
+under the message, like a channel thread: its replies, **Hide replies**, and a
+**Reply in thread** composer that sends in that thread. Opening a thread marks it read. Thread
 replies stay out of the chat timeline and its unread count unless they were
 also sent to the chat.
 

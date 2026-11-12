@@ -38,7 +38,7 @@ belong to `features/external-view`. Architecture:
   `features/external-view/provider-flags.ts`) for routed and restored panes.
 - `views/external-chat-thread.tsx`: a root's thread, inline under it like a
   channel thread (`Thread.CollapsedIndicator`, `Thread.RepliesContainer`), with
-  its own composer; only where `limits.threads`. Replies come from
+  its own composer; only where `limits.threads`, where a row's Reply opens it. Replies come from
   `ExternalChatCapabilities.thread` (a query under the timeline's key);
   `conversation.submit(draft, root)` sends in the thread.
 - `lib/queries/external-chats`: isolated query keys, reads, share permissions
