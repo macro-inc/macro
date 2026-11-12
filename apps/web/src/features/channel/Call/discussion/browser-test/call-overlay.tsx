@@ -169,6 +169,7 @@ function Fixture() {
                                             params.get('unread') === 'true',
                                           render: (panel) => (
                                             <CallDiscussionContent
+                                              access={{ kind: 'member' }}
                                               discussion={() => ({
                                                 kind: 'channel_thread',
                                                 channel_id:

@@ -4,17 +4,10 @@ import {
   usePageViewTracking,
   withAuth,
 } from '@components/app/split-layout/split-router/app-route-shell';
-import { lazy, Show } from 'solid-js';
+import { Show } from 'solid-js';
+import { NotificationsInbox } from './notifications-inbox';
 import { useUnifiedNotificationsFlag } from './use-unified-notifications-flag';
-
-const NotificationsInbox = lazy(async () => ({
-  default: (await import('./notifications-inbox')).NotificationsInbox,
-}));
-
-const NotificationsCalendarPane = lazy(async () => ({
-  default: (await import('./views/notifications-calendar-pane'))
-    .NotificationsCalendarPane,
-}));
+import { NotificationsCalendarPane } from './views/notifications-calendar-pane';
 
 /** A calendar notification's event, in the view's content area. */
 export function NotificationsCalendarRouteView() {

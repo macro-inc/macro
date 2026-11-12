@@ -37,6 +37,11 @@ startup loudly.
   `XServiceUrl::new()`. Never declare a `FOO_SERVICE_URL` env var or match on
   `Environment` to build a URL. Queue names follow the same pattern in
   `crates/macro_queues`.
+- Third-party hosts our code calls are typed the same way when a test double
+  exists for them (`GmailApiUrl`, `GooglePeopleApiUrl`, `GoogleOauthCertsUrl`
+  for `crates/gmail_emulator`): the provider's host in every environment, with
+  the override as the only way to point elsewhere. They are not part of the
+  hand-copied table below.
 - The only override is `OVERRIDE_<SNAKE_NAME>`, read from the process
   environment, not from Doppler. Local in-network overrides live in
   `xtask_local`'s `local_env.rs`; `local` defaults are host ports and do not

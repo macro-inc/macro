@@ -10,11 +10,6 @@
   scroll-margin-top: 112px;
 }
 .feature-comparison-anchor { position: absolute; top: 0; scroll-margin-top: 112px; }
-.feature-comparisons .feature-comparison-heading {
-  margin: 0 0 16px;
-  font: 600 20px/1.4 var(--font-sans);
-  letter-spacing: -.02em;
-}
 .feature-comparison-scroll { width: 100%; overflow-x: auto; }
 .feature-comparison-scroll:focus-visible { outline: 2px solid var(--color-ink-muted); outline-offset: 4px; }
 .feature-comparison-table {
@@ -40,7 +35,7 @@
   .feature-page .feature-comparisons { width: calc(100% - 48px); margin-bottom: 48px; }
   .feature-page .product-page .feature-comparisons { width: calc(100% - 16px); }
   .feature-comparison-table { font-size: 12px; line-height: 18px; }
-  .feature-comparison-table :is(th, td) { padding: 8px 5px; }
+  .feature-comparison-table :is(th, td) { padding: 8px 4px; }
   .feature-comparison-table thead th { white-space: nowrap; }
-  .feature-comparison-table tbody th { min-width: 110px; }
+  .feature-comparison-table tbody th { min-width: 96px; }
 }

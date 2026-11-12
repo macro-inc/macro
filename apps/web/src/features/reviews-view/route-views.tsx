@@ -7,17 +7,9 @@ import {
 } from '@components/app/split-layout/split-router/app-route-shell';
 import { useViewRestoration } from '@components/app/split-layout/view-restoration';
 import { enableTasksReviews } from '@core/constant/featureFlags';
-import { lazy, onMount, Show } from 'solid-js';
+import { onMount, Show } from 'solid-js';
+import { ReviewsView } from './reviews-view';
 import { ReviewsViewSkeleton } from './reviews-view-skeleton';
-
-const ReviewsView = lazy(async () => ({
-  default: (await import('./reviews-view')).ReviewsView,
-}));
-
-export const ReviewsPrDetailRouteView = lazy(async () => ({
-  default: (await import('./components/ReviewsPrDetail'))
-    .ReviewsPrDetailRouteView,
-}));
 
 function DisabledReviewsRoute() {
   const navigate = useNavigate();
