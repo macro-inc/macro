@@ -10,6 +10,18 @@ export const ActivityRouteView = lazyNamed(
   () => import('@app/features/activity/route-views'),
   'ActivityRouteView'
 );
+export const BookingLinksRouteView = lazyNamed(
+  () => import('@app/features/scheduling/route-views'),
+  'BookingLinksRouteView'
+);
+export const ExternalRouteView = lazyNamed(
+  () => import('@app/features/external-view/route-views'),
+  'ExternalRouteView'
+);
+export const ExternalChatRouteView = lazyNamed(
+  () => import('@app/features/external-view/route-views'),
+  'ExternalChatRouteView'
+);
 export const AgentsRouteView = lazyNamed(
   () => import('@app/features/agents-view/route-views'),
   'AgentsRouteView'
@@ -177,4 +189,7 @@ export const OTHER_APP_VIEWS = [
   ActivityRouteView,
   CompaniesRouteView,
   SettingsRouteView,
+  BookingLinksRouteView,
+  ExternalRouteView,
+  ExternalChatRouteView,
 ];
