@@ -171,6 +171,15 @@ impl Tracker {
             _ => {
                 let mut updates = Vec::with_capacity(split.len());
                 for &new_leaf_idx in split {
+                    // A range update can report one final leaf repeatedly.
+                    // Skip identical adjacent assignments before expanding them
+                    // over the ID fragments; retain all other assignment order.
+                    if updates
+                        .last()
+                        .is_some_and(|(_, leaf)| *leaf == new_leaf_idx)
+                    {
+                        continue;
+                    }
                     let leaf = self.rope.tree().get_elem(new_leaf_idx).unwrap();
                     updates.push((leaf.id_span(), new_leaf_idx));
                 }
@@ -855,5 +864,96 @@ mod test {
             "perf_update_insert_by_split_quadratic_unknown: doc_len={}, fragments={}, elapsed={:?}",
             doc_len, fragments, elapsed
         );
+    }
+    #[test]
+    fn contiguous_checkout_reports_the_same_final_leaf_for_each_fragment() {
+        const FRAGMENTS: usize = 16;
+        const FRAGMENT_LEN: usize = 256;
+        let len = FRAGMENTS * FRAGMENT_LEN;
+        let mut tracker = Tracker::new_empty();
+        tracker.insert(
+            IdFull::new(1, 0, 0),
+            0,
+            RichtextChunk::new_text(0..len as u32),
+        );
+        let leaf = tracker.id_to_cursor.get_insert(ID::new(1, 0)).unwrap();
+        let updates = (0..FRAGMENTS)
+            .map(|index| crdt_rope::LeafUpdate {
+                leaf,
+                id_span: IdSpan::new(
+                    1,
+                    (index * FRAGMENT_LEN) as Counter,
+                    ((index + 1) * FRAGMENT_LEN) as Counter,
+                ),
+                set_future: Some(true),
+                delete_times_diff: 0,
+            })
+            .collect();
+        let split = tracker.rope.update(updates, false);
+        assert_eq!(split.len(), FRAGMENTS - 1);
+        assert!(split.iter().all(|leaf| *leaf == split[0]));
+        tracker.update_insert_by_split(&split);
+        tracker.current_vv = Default::default();
+        for counter in 0..len {
+            assert_eq!(
+                tracker
+                    .id_to_cursor
+                    .get_insert(ID::new(1, counter as Counter)),
+                Some(split[0])
+            );
+        }
+        tracker.check();
+        assert_eq!(tracker.len(), 0);
+        tracker.checkout(&vv!(1 => len as Counter));
+        tracker.check();
+        assert_eq!(tracker.len(), len);
+    }
+
+    #[test]
+    fn duplicate_runs_preserve_mappings_for_distinct_final_leaves() {
+        const LEN: usize = 16 * 256;
+        let mut tracker = Tracker::new_empty();
+        let mut updates = Vec::new();
+        for peer in [1, 2] {
+            tracker.insert(
+                IdFull::new(peer, 0, 0),
+                tracker.len(),
+                RichtextChunk::new_text(0..LEN as u32),
+            );
+            let leaf = tracker.id_to_cursor.get_insert(ID::new(peer, 0)).unwrap();
+            for start in (0..LEN).step_by(256) {
+                updates.push(crdt_rope::LeafUpdate {
+                    leaf,
+                    id_span: IdSpan::new(peer, start as Counter, (start + 256) as Counter),
+                    set_future: Some(true),
+                    delete_times_diff: 0,
+                });
+            }
+        }
+        let mut split = tracker.rope.update(updates, false);
+        let repeated = split[0];
+        let distinct = *split.iter().find(|leaf| **leaf != repeated).unwrap();
+        // Include both adjacent and non-adjacent repetitions of distinct leaves.
+        split.extend_from_slice(&[repeated, repeated, distinct, distinct, repeated]);
+        tracker.update_insert_by_split(&split);
+        tracker.current_vv = Default::default();
+        for peer in [1, 2] {
+            for counter in 0..LEN {
+                let id = ID::new(peer, counter as Counter);
+                let leaf = tracker.id_to_cursor.get_insert(id).unwrap();
+                assert!(tracker
+                    .rope
+                    .tree()
+                    .get_elem(leaf)
+                    .unwrap()
+                    .id_span()
+                    .contains(id));
+            }
+        }
+        tracker.check();
+        assert_eq!(tracker.len(), 0);
+        tracker.checkout(&vv!(1 => LEN as Counter, 2 => LEN as Counter));
+        tracker.check();
+        assert_eq!(tracker.len(), 2 * LEN);
     }
 }
