@@ -50,14 +50,12 @@ fn is_blocked_ipv6(ip: Ipv6Addr) -> bool {
     }
 
     let segments = ip.segments();
-    segments[0] == 0 // ::/16: unspecified, loopback, deprecated IPv4-compatible
-        || ip.is_multicast()
-        || ip.is_unique_local() // includes fd00:ec2::254 metadata
-        || (segments[0] & 0xffc0) == 0xfe80 // link-local fe80::/10
-        || (segments[0] & 0xffc0) == 0xfec0 // site-local fec0::/10
-        || segments[..4] == [0x0100, 0, 0, 0] // discard 100::/64
-        || segments[..3] == [0x0064, 0xff9b, 0x0001] // local-use NAT64 64:ff9b:1::/48
+    // Only global unicast 2000::/3 is public. Outside it are ::/16, multicast,
+    // unique-local (including fd00:ec2::254 metadata), link-local, local-use
+    // NAT64, SRv6 5f00::/16 and the unassigned space.
+    (segments[0] & 0xe000) != 0x2000
         || segments[..2] == [0x2001, 0] // Teredo 2001::/32
+        || segments[..3] == [0x2001, 0x0002, 0] // benchmarking 2001:2::/48
         || segments[..2] == [0x2001, 0x0db8] // documentation 2001:db8::/32
         || (segments[0] == 0x3fff && segments[1] & 0xf000 == 0) // documentation 3fff::/20
 }
