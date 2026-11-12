@@ -19,6 +19,7 @@ use whatsapp_linked::domain::session::SessionService;
 
 use super::inbound::InboundGate;
 use super::media::{MEDIA_LIMIT_BYTES, MediaImports, TRANSFERS_PER_ACCOUNT};
+use super::pictures::{PictureChecks, PicturePacing};
 use super::ports::{
     AccountControl, AccountExit, AccountRunner, AccountSignal, SendFailure, SessionConnector,
     SessionError, SessionEvent, Traced, UploadedMedia, WhatsAppSession,
@@ -61,6 +62,8 @@ pub struct AccountConfig {
     pub groups_refresh_interval: Duration,
     /// [`BACKFILL_TIMEOUT`] in production.
     pub backfill_timeout: Duration,
+    /// Pacing of profile-picture queries.
+    pub pictures: PicturePacing,
 }
 
 /// Runs leased accounts against the linked-devices domain.
@@ -176,6 +179,21 @@ impl<Connector: SessionConnector> AccountRunner for AccountSessions<Connector> {
         let media_wake = Arc::new(Notify::new());
         let (connected, connected_receiver) = watch::channel(false);
         let media_stop = CancellationToken::new();
+        let picture_wake = Arc::new(Notify::new());
+        // Aborted if this runner is, like the import loop.
+        let picture_checks = tokio_util::task::AbortOnDropHandle::new(tokio::spawn(
+            PictureChecks {
+                sessions: self.sessions.clone(),
+                scope: lease.scope,
+                session: Arc::clone(&session),
+                wake: Arc::clone(&picture_wake),
+                connected: connected_receiver.clone(),
+                every: self.config.tick_every,
+                pacing: self.config.pictures,
+                fenced: gate.fenced.clone(),
+            }
+            .run(media_stop.clone()),
+        ));
         // Aborted if this runner is: the import loop never outlives it.
         let imports = tokio_util::task::AbortOnDropHandle::new(tokio::spawn(
             MediaImports {
@@ -198,6 +216,7 @@ impl<Connector: SessionConnector> AccountRunner for AccountSessions<Connector> {
             gate,
             transfers,
             media_wake,
+            picture_wake,
             connected,
             pairing,
             reconnecting: false,
@@ -209,6 +228,12 @@ impl<Connector: SessionConnector> AccountRunner for AccountSessions<Connector> {
         media_stop.cancel();
         if exit == AccountExit::Stopped {
             imports.abort();
+            picture_checks.abort();
+        }
+        if let Err(error) = picture_checks.await
+            && error.is_panic()
+        {
+            tracing::error!(error = %error, "The WhatsApp picture check loop panicked");
         }
         match imports.await {
             Err(error) if error.is_panic() => {
@@ -301,6 +326,8 @@ struct Running<'service, Session> {
     transfers: Arc<Semaphore>,
     /// Wakes the import loop after ingestion.
     media_wake: Arc<Notify>,
+    /// Wakes the picture check loop when a picture changed.
+    picture_wake: Arc<Notify>,
     connected: watch::Sender<bool>,
     pairing: Option<PairingWork>,
     reconnecting: bool,
@@ -439,6 +466,17 @@ impl<Session: WhatsAppSession> Running<'_, Session> {
             }
             SessionEvent::GroupChanged { group_jid, info } => {
                 let result = self.group_changed(&group_jid, info.map(|info| *info)).await;
+                self.exit_on(result)
+            }
+            SessionEvent::PictureChanged { jids, picture_id } => {
+                let result = survive(
+                    self.sessions
+                        .picture_changed(self.scope, &jids, picture_id.as_deref())
+                        .await,
+                    "picture_changed",
+                )
+                .map(drop);
+                self.picture_wake.notify_one();
                 self.exit_on(result)
             }
         }

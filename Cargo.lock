@@ -22536,6 +22536,7 @@ dependencies = [
  "macro_env",
  "macro_service_urls",
  "nom 8.0.0",
+ "reqwest 0.13.4",
  "rootcause",
  "rustls",
  "serde",
