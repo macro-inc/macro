@@ -12,7 +12,8 @@
  * swaps the preview for the editor in the same place; only one row is open
  * at a time. Enter saves the edit through `onEdit`, Escape restores the last
  * saved text, and both close the row and hand focus back to the composer
- * (`onNavigateBelow`). Focus leaving the editor any other way also saves.
+ * (`onNavigateBelow`). Focus moving to another control outside the row saves
+ * and closes it too.
  * Non-prompt entries (compact) are read-only text but keep their remove
  * affordance, which is always visible.
  * While a turn is in flight, each row offers Steer: that message jumps the
@@ -195,12 +196,17 @@ function QueuedRow(props: QueuedRowProps) {
     focusBody?.();
   };
   // Focus moves first, so the editor's focus-out save runs while it is
-  // still shown; then the row closes. Without a composer to land on, the
+  // still shown, and the row's focus-out closes it; the explicit close
+  // covers focus that did not move. Without a composer to land on, the
   // closed preview takes focus so the keyboard never loses its place.
   const close = () => {
-    if (props.onLeave) props.onLeave();
-    else preview?.focus();
-    props.onExpandedChange(false);
+    if (props.onLeave) {
+      props.onLeave();
+      props.onExpandedChange(false);
+    } else {
+      props.onExpandedChange(false);
+      preview?.focus();
+    }
   };
 
   onMount(() => {
@@ -217,12 +223,19 @@ function QueuedRow(props: QueuedRowProps) {
           'items-center': !props.expanded,
           'items-start': props.expanded,
         }}
-        // Focus landing somewhere else (the composer, another row) closes
-        // the row; the editor's own focus-out has saved by then. A touch
-        // keyboard has no Escape, so this is how a tapped row closes.
+        // Focus moving to another control (the composer, another row)
+        // closes the row; the editor's own focus-out has saved by then. A
+        // touch keyboard has no Escape, so this is how a tapped row closes.
+        // The editor's own floating menus (links) are portaled outside the
+        // row and keep it open.
         onFocusOut={(event) => {
           const next = event.relatedTarget;
-          if (props.expanded && next instanceof Node && !row?.contains(next))
+          if (
+            props.expanded &&
+            next instanceof Element &&
+            !row?.contains(next) &&
+            !next.closest('.menu-surface')
+          )
             props.onExpandedChange(false);
         }}
         onKeyDown={(event) => {

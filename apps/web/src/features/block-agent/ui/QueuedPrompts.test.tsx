@@ -314,6 +314,15 @@ describe('queued prompt keys', () => {
       relatedTarget: screen.getByRole('button', { name: 'Steer' }),
     });
     expect(screen.getByRole('textbox')).toBe(textbox);
+    // The editor's floating link menu lives outside the row but belongs to
+    // the edit.
+    const menu = document.createElement('div');
+    menu.className = 'menu-surface';
+    const editLink = document.createElement('button');
+    menu.appendChild(editLink);
+    document.body.appendChild(menu);
+    fireEvent.focusOut(textbox, { relatedTarget: editLink });
+    expect(screen.getByRole('textbox')).toBe(textbox);
 
     fireEvent.focusOut(textbox, { relatedTarget: composer });
     expect(onEdit).toHaveBeenCalledExactlyOnceWith('first', 'Updated request');
