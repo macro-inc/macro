@@ -1,12 +1,12 @@
 import { isViewerAddress } from '@app/features/email-message/core/email-user';
 import { useEmail } from '@core/context/user';
 import type { EntityData } from '@entity';
-import { queryReadyGate } from '@queries/gate';
 import {
   useEmailLinksQuery,
   useNonPrimaryEmailLinkIdHeader,
 } from '@queries/email/link';
 import { blockSenderWithToast } from '@queries/email/thread';
+import { queryReadyGate } from '@queries/gate';
 import type { EntityActionListState } from './entity-action-context';
 
 export const makeBlockSenderAction = () => {

@@ -150,9 +150,7 @@ describe('makeBlockSenderAction', () => {
       expect(
         action.canExecute(emailEntity({ senderEmail: 'login@example.com' }))
       ).toBe(false);
-      expect(action.canExecute({ type: 'document' } as EntityData)).toBe(
-        false
-      );
+      expect(action.canExecute({ type: 'document' } as EntityData)).toBe(false);
       dispose();
     });
   });
