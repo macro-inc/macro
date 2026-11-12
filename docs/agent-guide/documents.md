@@ -332,6 +332,22 @@ Markdown also needs a successful `/sync/document/.../connect` WebSocket upgrade.
 A 403 there indicates the sync origin check, which the local proxy handles for
 HTTPS machine hostnames; verify the proxy configuration before retrying.
 
+## Collapsible sections
+
+Any top-level heading with content under it folds that content away, up to the
+next heading of the same or a higher level. Hover the heading to show a chevron
+in the left gutter (the drag handle steps one column further left, or, in a
+gutter too narrow for both, is not shown on that heading); the chevron
+stays while the section is folded and is always shown on touch. Mod+Enter in a
+heading toggles it. Folding is per person and per device (localStorage, keyed by
+the headings' node ids): it changes no document content, collaborators never see
+it, and it survives a reload. Hidden blocks carry the `md-folded` class, which
+applies only on screen, so copy, export, and print include them. Find, outline
+clicks, node and location links, and a caret moving into a folded section unfold
+it; folding the section holding the caret moves the caret to the heading. Code:
+`LexicalMarkdown/plugins/heading-folds`, controls in
+`component/misc/HeadingFoldControls.tsx`.
+
 ## Databases in documents
 
 Opening the slash menu with `/` lists Normal Text, headings, and the other

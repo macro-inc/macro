@@ -15,6 +15,7 @@ import crm from './en/crm';
 import emailViews from './en/email-views';
 import entityActions from './en/entity-actions';
 import localRuntime from './en/local-runtime';
+import markdownEditor from './en/markdown-editor';
 import mobile from './en/mobile';
 import nav from './en/nav';
 import notificationsInbox from './en/notifications-inbox';
@@ -51,6 +52,7 @@ export default {
   emailViews,
   entityActions,
   localRuntime,
+  markdownEditor,
   mobile,
   nav,
   notificationsInbox,
