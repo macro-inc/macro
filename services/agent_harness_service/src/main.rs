@@ -1817,6 +1817,7 @@ async fn run() -> anyhow::Result<()> {
                 session_repo.clone(),
             ),
         ),
+        harness.clone(),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
         non_user_owners,
     );

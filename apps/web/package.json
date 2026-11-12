@@ -141,7 +141,7 @@
     "@tauri-apps/plugin-os": "~2",
     "@thisbeyond/solid-dnd": "^0.7.5",
     "@urql/core": "^6.0.3",
-    "@vitest/ui": "5.0.1",
+    "@vitest/ui": "5.1.0",
     "@zoompinch/core": "^0.0.38",
     "async-mutex": "^0.5.0",
     "codemirror": "^6.0.2",
@@ -239,7 +239,7 @@
     "vite-plugin-solid": "^2.11.8",
     "vite-plugin-solid-svg": "^0.8.1",
     "vite-tsconfig-paths": "^5.1.4",
-    "vitest": "5.0.1",
+    "vitest": "5.1.0",
     "webdriverio": "9.29.1"
   }
 }
