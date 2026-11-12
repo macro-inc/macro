@@ -17,6 +17,9 @@ use std::collections::BTreeMap;
 use std::pin::Pin;
 use std::sync::Arc;
 
+#[cfg(test)]
+mod test;
+
 /// Errors from MCP tool dispatch.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -26,6 +29,9 @@ pub enum Error {
     /// A tool invocation failed.
     #[error("tool call failed: {0}")]
     ToolCall(String),
+    /// The request was cancelled before the server answered.
+    #[error("the tool call was cancelled")]
+    Cancelled,
 }
 
 /// One live server and the name its tools are exposed under.
@@ -270,7 +276,7 @@ impl<Context: Send + Sync + 'static> ToolSet<Context> for RemoteMcpToolSet {
     fn dispatch_tool_call<'a>(
         &'a self,
         _context: Context,
-        _request_context: RequestContext,
+        request_context: RequestContext,
         tool_name: &'a str,
         json: &'a serde_json::Value,
     ) -> Pin<
@@ -282,7 +288,15 @@ impl<Context: Send + Sync + 'static> ToolSet<Context> for RemoteMcpToolSet {
                 _ => serde_json::Map::new(),
             };
 
-            let result = match self.call_tool(tool_name, arguments).await {
+            // The agent loop waits for running tools on cancel, and a server
+            // may hold a call indefinitely (owner approval). Dropping the call
+            // sends `notifications/cancelled`, so the server stops too.
+            let call = tokio::select! {
+                biased;
+                () = request_context.cancel.cancelled() => Err(Error::Cancelled),
+                result = self.call_tool(tool_name, arguments) => result,
+            };
+            let result = match call {
                 Ok(result) => result,
                 Err(Error::UnknownTool(name)) => {
                     return Err(ToolSetError::NotFound(name));
