@@ -95,7 +95,7 @@ remote call occurs under the counter on the live paths above.
 | Other statements and COMMIT | Write sites above; counter read `crates/messages/src/outbound/pg_message_repo/changes.rs:13` | No new timeout. Inherit database/role/connection settings. The append restores the saved value before subsequent work, including the historical completion exceptions and COMMIT. |
 | Reference-repair maintenance: outer future | `crates/slack_integration/src/inbound/worker.rs:45`, `:234`, `:245` | The whole reconciliation pass has a 30-second Tokio timeout. Expiry drops the pass, returns `ImportError::Retryable`, and the maintenance loop waits ten seconds before its next pass (`:238`). This is not a PostgreSQL statement timeout. |
 | Main historical import: outer future | `crates/slack_integration/src/inbound/worker.rs:182`, `:194`, `:202`, `:207` | `work.import` has no fixed total-duration timeout. Independent lease and queue heartbeats run every 60 seconds; each heartbeat attempt is bounded by 30 seconds. Heartbeat failure drops the import future. On shutdown, the worker grants a 110-second drain window before dropping remaining work (`:48`, `:88`). |
-| Message/call HTTP routes in DSS: outer future | `services/document_storage_service/src/api.rs:58`; `crates/messages/src/inbound/axum_router.rs:48` | No request timeout layer found in the checked-in route composition or message service. The 200 ms tracing-layer argument is a warning threshold, not a deadline (`crates/macro_tower_layers/src/lib.rs:269`). External caller/proxy timeouts were not inspected. |
+| Message/call HTTP routes in DSS: outer future | `services/document_storage_service/src/api.rs:58`; `crates/messages/src/inbound/axum_router.rs:52` | No request timeout layer found in the checked-in route composition or message service. The 200 ms tracing-layer argument is a warning threshold, not a deadline (`crates/macro_tower_layers/src/lib.rs:269`). External caller/proxy timeouts were not inspected. |
 
 The SQLx 0.8.6 default was verified in the installed dependency's
 `sqlx-core/src/pool/options.rs:160`. Pool acquisition limits do **not** cancel a
@@ -138,9 +138,9 @@ connection limit.
 | Caller | Failure propagation |
 | --- | --- |
 | Message allocation | SQLSTATE `55P03`, or `57014` with the exact English statement-timeout message, from the append helper is classified as `MessageError::Contended` in `crates/messages/src/outbound/pg_message_repo/change_log.rs:13`. The message HTTP adapter returns status 503 with a safe retry message and `Retry-After: 1` (`crates/messages/src/inbound/axum_router.rs:172`). No sequence or success push is returned before repository COMMIT succeeds. |
-| Bot webhook message allocation | The same domain failure produces status 503 and `Retry-After: 1` (`crates/bots/src/inbound/channel_webhook_router.rs:401`, `:430`). `Contended` has a stable message that omits the underlying database details. |
+| Bot webhook message allocation | The same domain failure produces status 503 and `Retry-After: 1` (`crates/bots/src/inbound/channel_webhook_router.rs:402`, `:438`). `Contended` has a stable message that omits the underlying database details. |
 | Other message failures | Unrecognized `57014` (including user cancellation or translated timeout text), `40P01` (deadlock), pool errors, and `55P03` outside the append retain `MessageError::Repository` through `crates/messages/src/outbound/pg_message_repo.rs:46`. The HTTP adapter returns status 500 (`crates/messages/src/inbound/axum_router.rs:179`). |
-| Call write | Plain repository operations propagate `sqlx::Error`; call service mapping and `From<sqlx::Error>` produce `CallError::Internal` (`crates/call/src/outbound/pg_call_repo/team_share.rs:30`, `crates/call/src/domain/service.rs:2038`). The HTTP adapter returns status 500 with `internal server error` (`crates/call/src/inbound/axum_router.rs:1231`). |
+| Call write | Plain repository operations propagate `sqlx::Error`; call service mapping and `From<sqlx::Error>` produce `CallError::Internal` (`crates/call/src/outbound/pg_call_repo/team_share.rs:30`, `crates/call/src/domain/service.rs:2040`). The HTTP adapter returns status 500 with `internal server error` (`crates/call/src/inbound/axum_router.rs:1231`). |
 | Activity ingestion | Repository error propagates before realtime publication. The consumer exits without committing that source offset (`crates/activity/src/inbound/kafka_consumer.rs:140`); DSS restarts it after five seconds (`services/document_storage_service/src/server.rs:1131`). Replayed deterministic activity ids can receive another log sequence, preserving the at-least-once log guarantee. |
 | Historical import/reconciliation | Repository errors are wrapped as `ImportError::Retryable` (`services/slack_import_worker/src/composition.rs:31`, `channel_sink.rs:194`, `reference_reconciliation.rs:62`); neither checkpoint nor successful body completion commits. |
 | Retention | Error returns from the batch without commit; the scheduler logs it and tries again at its next retention interval (`services/calendar_service/src/calendar_outbox.rs:85`). |
@@ -250,7 +250,7 @@ the exact primary message `canceling statement due to statement timeout`: HTTP *
 `{"message":"channel is busy; retry the request"}`. The adapter classifies only
 these recognized append timeouts as `MessageError::Contended`, retaining the database
 report internally
-([change_log.rs:8](../src/outbound/pg_message_repo/change_log.rs#L8),
+([change_log.rs:13](../src/outbound/pg_message_repo/change_log.rs#L13),
 [ports.rs:27](../src/domain/ports.rs#L27)). Both HTTP adapters set the header
 and keep the underlying cause out of that body
 ([message HTTP:166](../src/inbound/axum_router.rs#L166),
@@ -263,7 +263,7 @@ and channel bot webhook both answer **500**, with **no `Retry-After` header**,
 and JSON `{"message":"message operation failed"}`. They log the underlying
 report for diagnosis without returning it
 ([message HTTP:179](../src/inbound/axum_router.rs#L179),
-[webhook logging/body:413](../../bots/src/inbound/channel_webhook_router.rs#L413)).
+[webhook logging/body:424](../../bots/src/inbound/channel_webhook_router.rs#L424)).
 The webhook regression test asserts both this safe body and the absent header
 ([tests.rs:59](../../bots/src/inbound/channel_webhook_router/tests.rs#L59)).
 
@@ -282,7 +282,7 @@ Neither request path retries either failure on the server. Repository creation
 uses `?` on the append immediately before commit
 ([pg_message_repo.rs:753](../src/outbound/pg_message_repo.rs#L753)); the service
 propagates failure before success publication
-([service.rs:433](../src/domain/service.rs#L433)). The HTTP and webhook handlers
+([service.rs:435](../src/domain/service.rs#L435)). The HTTP and webhook handlers
 each await one service post
 ([message handler:269](../src/inbound/axum_router.rs#L269),
 [webhook handler:287](../../bots/src/inbound/channel_webhook_router.rs#L287)).
@@ -291,14 +291,14 @@ and import workers have the separate retry behavior described above.
 
 The current **web sender does not retry 503 or 500** and does not consume the
 header or server JSON explanation. Its message client passes no retry setting
-([messages.ts:90](../../../apps/web/src/lib/service-clients/service-storage/messages.ts#L90));
+([messages.ts:93](../../../apps/web/src/lib/service-clients/service-storage/messages.ts#L93));
 `safeFetch` defaults to one attempt, maps 503 to `HTTP_ERROR`, and returns it
 immediately
 ([safeFetch.ts:116](../../../apps/web/src/lib/core/util/safeFetch.ts#L116),
 [safeFetch.ts:290](../../../apps/web/src/lib/core/util/safeFetch.ts#L290),
 [safeFetch.ts:318](../../../apps/web/src/lib/core/util/safeFetch.ts#L318)). The
 send mutation only handles a 409 by reading its already-stored id
-([mutations.ts:434](../../../apps/web/src/lib/queries/messages/mutations.ts#L434));
+([mutations.ts:448](../../../apps/web/src/lib/queries/messages/mutations.ts#L448));
 the application configures retries for queries, not mutations
 ([client.ts:15](../../../apps/web/src/lib/queries/client.ts#L15)), and the
 installed TanStack Query mutation default is zero retries
@@ -308,13 +308,13 @@ refresh retries concern 401, not these failures
 On failure the web shows `Failed to send message`, removes the optimistic row,
 and restores the sent draft if it has not been replaced by newer input
 ([mutations.ts:539](../../../apps/web/src/lib/queries/messages/mutations.ts#L539),
-[Channel.tsx:824](../../../apps/web/src/features/channel/Channel/Channel.tsx#L824),
-[thread composer:155](../../../apps/web/src/features/channel/Thread/ThreadReplyChannelInput.tsx#L155)).
+[Channel.tsx:825](../../../apps/web/src/features/channel/Channel/Channel.tsx#L825),
+[thread composer:163](../../../apps/web/src/features/channel/Thread/ThreadReplyChannelInput.tsx#L163)).
 
 The **SDK also does not automatically retry**. Its channel send chooses one
 message-API or webhook call
 ([post.ts:42](../../../packages/sdk/src/entities/channels/post.ts#L42),
-[post.ts:84](../../../packages/sdk/src/entities/channels/post.ts#L84)); the
+[post.ts:86](../../../packages/sdk/src/entities/channels/post.ts#L86)); the
 generated client executes one fetch
 ([client.gen.ts:101](../../../packages/sdk/generated/storage/client/client.gen.ts#L101)),
 and its configured interceptor adds authorization only
