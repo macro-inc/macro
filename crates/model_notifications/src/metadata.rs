@@ -9,7 +9,6 @@ pub use access_request::{
 };
 pub use agent_sign_in::{AgentSignInExpiryMetadata, AgentSignInExpiryStage};
 pub use calendar_join_request::CalendarEventJoinRequestMetadata;
-pub use password_access_request::PasswordAccessRequestedMetadata;
 use chrono::{DateTime, NaiveDate, Utc};
 pub use harnessd_protocol::AgentProvider;
 pub use invite_email::{
@@ -28,6 +27,7 @@ use notification::domain::models::{
         APNSPushNotification, Alert, AlertDictionary, Aps, InterruptionLevel, PushNotificationData,
     },
 };
+pub use password_access_request::PasswordAccessRequestedMetadata;
 use rootcause::Report;
 use rootcause::report;
 use serde::{Deserialize, Serialize};

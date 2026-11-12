@@ -14,7 +14,6 @@ pub use metadata::{
     AgentSessionOriginParent, AgentSessionSettledMetadata, AgentSessionWaitingForInputMetadata,
     AgentSignInExpiryMetadata, AgentSignInExpiryStage, AiResponseMetadata,
     CalendarEventJoinRequestMetadata, CalendarEventReminderMetadata, CallStartedMetadata,
-    PasswordAccessRequestedMetadata,
     ChannelAccessRequestedMetadata, ChannelInviteMetadata, ChannelMentionMetadata,
     ChannelMessageReactionMetadata, ChannelMessageSendMetadata, ChannelReplyMetadata, ChannelType,
     ColleagueJoinedMacro, CommentedOnDocumentMetadata, CommonChannelMetadata,
@@ -26,9 +25,9 @@ pub use metadata::{
     GithubReviewRequested, InboxReauthRequiredMetadata, InitiativeDiscussionMetadata,
     InitiativeDiscussionReason, InviteToTeamMetadata, InviteePlan, ItemSharedMetadata,
     MentionedInDocumentCommentMetadata, NewEmailMetadata, NotificationDocumentSubType,
-    NotificationTitle, ReminderMetadata, RepliedToDocumentCommentThreadMetadata,
-    RequestedAccessLevel, RoutineRunFinishedMetadata, RoutineRunOutcome,
-    RuntimeAccessRemovedMetadata, StoppedAgent, TaskAssignedMetadata,
+    NotificationTitle, PasswordAccessRequestedMetadata, ReminderMetadata,
+    RepliedToDocumentCommentThreadMetadata, RequestedAccessLevel, RoutineRunFinishedMetadata,
+    RoutineRunOutcome, RuntimeAccessRemovedMetadata, StoppedAgent, TaskAssignedMetadata,
 };
 pub use unsubscribe::UserUnsubscribe;
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
