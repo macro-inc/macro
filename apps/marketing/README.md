@@ -353,7 +353,7 @@ Integrated documentation below for content ownership and navigation behavior.
 The product entry preloads the requested lazy route and its CSS before replacing
 prerendered HTML, avoiding a header-only flash on first load. Run this preload
 inside the asynchronous startup function, never with a module-level await:
-Rollup can place route dependencies in the entry chunk, which must finish
+the bundler can place route dependencies in the entry chunk, which must finish
 evaluating before those routes can load.
 
 Person and agent mentions use `--marketing-mention` with a soft tint in both
