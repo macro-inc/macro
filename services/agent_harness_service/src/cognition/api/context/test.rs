@@ -717,7 +717,6 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     let user_permissions_service = Arc::new(
         roles_and_permissions::domain::service::UserRolesAndPermissionsServiceImpl::new(
             roles_and_permissions::outbound::pgpool::MacroDB::new(pool.clone()),
-            roles_and_permissions::outbound::pgpool::MacroDB::new(pool.clone()),
         ),
     );
 

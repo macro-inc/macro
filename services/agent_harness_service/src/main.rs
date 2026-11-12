@@ -1023,7 +1023,6 @@ async fn run() -> anyhow::Result<()> {
     let inmem_model_access: Arc<dyn agent_inmem::domain::model_access::InMemModelAccess> = Arc::new(
         agent_inmem::domain::model_access::PermissionModelAccess::new(
             roles_and_permissions::domain::service::UserRolesAndPermissionsServiceImpl::new(
-                permissions_repo.clone(),
                 permissions_repo,
             ),
         ),

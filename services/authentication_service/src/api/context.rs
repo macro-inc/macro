@@ -91,7 +91,7 @@ pub(crate) type ChannelServiceType = ChannelServiceImpl<
 /// resolved through roles + teams and collected through Stripe.
 pub(crate) type AiBillingServiceType = ai_billing::domain::BillingServiceImpl<
     ai_billing::outbound::RolesTeamsEntitlementSource<
-        UserRolesAndPermissionsServiceImpl<MacroDB, MacroDB>,
+        UserRolesAndPermissionsServiceImpl<MacroDB>,
         teams::outbound::team_repo::TeamRepositoryImpl,
     >,
     ai_billing::outbound::PgUsageReader,
@@ -108,7 +108,7 @@ pub(crate) type StripePlanGatewayType = crate::outbound::subscription_plan::Stri
 pub(crate) type SubscriptionStatusServiceType =
     crate::service::subscription_status::SubscriptionStatusService<
         ai_billing::outbound::RolesTeamsEntitlementSource<
-            UserRolesAndPermissionsServiceImpl<MacroDB, MacroDB>,
+            UserRolesAndPermissionsServiceImpl<MacroDB>,
             teams::outbound::team_repo::TeamRepositoryImpl,
         >,
         StripePlanGatewayType,
@@ -128,7 +128,7 @@ pub(crate) type TeamsServiceType = teams::domain::team_service::TeamServiceImpl<
     teams::outbound::team_repo::TeamRepositoryImpl,
     teams::outbound::customer_repo::CustomerRepositoryImpl,
     ChannelServiceType,
-    UserRolesAndPermissionsServiceImpl<MacroDB, MacroDB>,
+    UserRolesAndPermissionsServiceImpl<MacroDB>,
     NotificationIngressType,
     teams::outbound::crm_enqueuer::SqsCrmEnqueuer,
     teams::outbound::team_crm_settings_repo::TeamCrmSettingsRepositoryImpl,
@@ -148,7 +148,7 @@ pub(crate) type RateLimiter = RateLimitServiceImpl<RedisRateLimitAdapter<redis::
 
 pub(crate) type InviteRewardsType = crate::outbound::invite_rewards::BillingInviteRewards<
     ai_billing::outbound::RolesTeamsEntitlementSource<
-        UserRolesAndPermissionsServiceImpl<MacroDB, MacroDB>,
+        UserRolesAndPermissionsServiceImpl<MacroDB>,
         teams::outbound::team_repo::TeamRepositoryImpl,
     >,
     ai_billing::outbound::PgCreditGrantRepo,
@@ -195,7 +195,7 @@ pub(crate) type AgentApiKeysType = agent_api_keys::domain::AgentKeyService<
     agent_api_keys::outbound::KmsAgentKeyCipher<cursor_api_key::cipher::AwsKmsCiphertexts>,
     agent_api_keys::outbound::EntitlementKeyPlans<
         ai_billing::outbound::RolesTeamsEntitlementSource<
-            UserRolesAndPermissionsServiceImpl<MacroDB, MacroDB>,
+            UserRolesAndPermissionsServiceImpl<MacroDB>,
             teams::outbound::team_repo::TeamRepositoryImpl,
         >,
     >,
@@ -255,7 +255,7 @@ pub(crate) struct ApiContext {
     pub internal_api_key: InternalApiKey,
     pub stripe_webhook_secret: LocalOrRemoteSecret<StripeWebhookSecretKey>,
     pub user_roles_and_permissions_service:
-        Arc<UserRolesAndPermissionsServiceImpl<MacroDB, MacroDB>>, // Note: since FromRef doesn't support generics we have to specify the concrete types here
+        Arc<UserRolesAndPermissionsServiceImpl<MacroDB>>, // Note: since FromRef doesn't support generics we have to specify the concrete types here
     pub teams_service: Arc<TeamsServiceType>,
     pub domain_notice_service: Arc<DomainNoticeServiceType>,
     pub channel_service: Arc<ChannelServiceType>,

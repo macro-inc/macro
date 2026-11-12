@@ -406,10 +406,8 @@ async fn run_server() -> anyhow::Result<()> {
 
     let user_roles_and_permissions_macro_db = MacroDB::new(db.clone());
 
-    let user_roles_and_permissions_service = UserRolesAndPermissionsServiceImpl::new(
-        user_roles_and_permissions_macro_db.clone(),
-        user_roles_and_permissions_macro_db,
-    );
+    let user_roles_and_permissions_service =
+        UserRolesAndPermissionsServiceImpl::new(user_roles_and_permissions_macro_db);
 
     let stripe_prices = api::StripePrices {
         premium: config.stripe_price_id.to_string(),
