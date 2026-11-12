@@ -9,6 +9,7 @@ Portable ISO date labeling shared by mention_utils and Macro editor imports.
 - Label the calendar fields as written, without converting the timestamp zone.
 - Keep this client crate free of workspace-hack and host clock access.
 - Reuse this function instead of duplicating the calendar validation.
+- Parse with the byte cursor, not a regex crate: `regex` costs about 160 KB brotli in the document session WASM.
 
 ## Checks
 
