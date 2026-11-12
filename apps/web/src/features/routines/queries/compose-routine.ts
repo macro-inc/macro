@@ -85,12 +85,14 @@ function requestFailure(
  * ended, never the request.
  *
  * A draft holds its request open until it's done. When the connection
- * drops first, the server stops that draft, so it is sent once more.
+ * drops first, the server stops that draft once it sees the drop, so it is
+ * sent once more, unless `left` says nobody waits for it any more.
  */
 export async function requestDraft(
   draft: DraftRequest,
   context: ComposerContext,
-  failure: string
+  failure: string,
+  left?: AbortSignal
 ): Promise<Exclude<Draft, { outcome: 'failed' }> | string> {
   return await Telemetry.span('routine.draft', async (span) => {
     span.setAttr('routine.draft.kind', draft.type);
@@ -101,8 +103,11 @@ export async function requestDraft(
     let attempts = 1;
     if (response.isErr() && unanswered(response.error)) {
       await sleep(RETRY_DELAY_MS);
-      response = await send();
-      attempts = 2;
+      // A draft nobody will open would still cost a session, so it isn't redone.
+      if (!left?.aborted) {
+        response = await send();
+        attempts = 2;
+      }
     }
     span.setAttr('routine.draft.attempts', attempts);
     if (response.isErr()) {
@@ -148,15 +153,20 @@ export function draftFromRoutine(
     : { ...base, steps: drafted };
 }
 
-/** Draft a routine from a description; a string explains a failure. */
+/**
+ * Draft a routine from a description; a string explains a failure. `left`
+ * aborts once nobody waits for the draft.
+ */
 export async function composeRoutine(
   description: string,
-  context: ComposerContext
+  context: ComposerContext,
+  left?: AbortSignal
 ): Promise<ScheduleDraft | string> {
   const drafted = await requestDraft(
     { type: 'routine', description },
     context,
-    COMPOSE_FAILED
+    COMPOSE_FAILED,
+    left
   );
   if (typeof drafted === 'string') return drafted;
   return drafted.outcome === 'routine'

@@ -149,7 +149,7 @@ describe('composeRoutine', () => {
   });
 
   it('sends the draft again when its connection drops, and opens that draft', async () => {
-    // The server stops a draft whose request it loses, 30 seconds in or so.
+    // The connection drops mid-draft, before the server answers.
     draftRoutine
       .mockResolvedValueOnce(err([DROPPED]))
       .mockResolvedValueOnce(ok(routine()));
@@ -171,6 +171,20 @@ describe('composeRoutine', () => {
       'Lost the connection while drafting. Check your connection and try again.'
     );
     expect(draftRoutine).toHaveBeenCalledTimes(2);
+  });
+
+  it('doesn’t send a draft again once nobody waits for it', async () => {
+    draftRoutine.mockResolvedValueOnce(err([DROPPED]));
+    vi.useFakeTimers();
+    const left = new AbortController();
+
+    const composed = composeRoutine(BUG_REPORTS, context, left.signal);
+    // The user leaves the dialog, then the connection drops.
+    left.abort();
+    await vi.runAllTimersAsync();
+    await composed;
+
+    expect(draftRoutine).toHaveBeenCalledTimes(1);
   });
 
   it('sends a draft the server answered only once', async () => {
