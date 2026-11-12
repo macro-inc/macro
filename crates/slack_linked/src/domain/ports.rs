@@ -84,8 +84,11 @@ pub trait LoginRepository: Send + Sync {
         input: LoginInput,
     ) -> ExternalChatResult<Login>;
     /// Cancel a live attempt and drop its secrets. Idempotent.
-    async fn cancel_login(&self, user: &MacroUserIdStr<'_>, attempt: Uuid)
-    -> ExternalChatResult<Login>;
+    async fn cancel_login(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        attempt: Uuid,
+    ) -> ExternalChatResult<Login>;
 }
 
 /// Owner-scoped accounts.
@@ -166,7 +169,8 @@ pub struct VisibleAdoption {
 #[async_trait]
 pub trait CatalogueRepository: Send + Sync {
     /// Every catalogue row of the person's active accounts.
-    async fn catalogue(&self, user: &MacroUserIdStr<'_>) -> ExternalChatResult<Vec<CatalogueEntry>>;
+    async fn catalogue(&self, user: &MacroUserIdStr<'_>)
+    -> ExternalChatResult<Vec<CatalogueEntry>>;
     /// Ask these accounts' replicas to refresh (`slack_catalogue_requested`);
     /// returns whether any was asked (the last refresh is older than
     /// [`CATALOGUE_REFRESH_SECONDS`]).
@@ -398,8 +402,10 @@ pub trait SessionRepository: Send + Sync {
         exhausted: bool,
     ) -> ExternalChatResult<()>;
     /// Claim a sign-in attempt that has input (for a minute).
-    async fn claim_login(&self, attempt: Uuid)
-    -> ExternalChatResult<Option<super::events::LoginWork>>;
+    async fn claim_login(
+        &self,
+        attempt: Uuid,
+    ) -> ExternalChatResult<Option<super::events::LoginWork>>;
     /// Attempts with input no replica claimed (missed signals).
     async fn waiting_logins(&self, limit: i64) -> ExternalChatResult<Vec<Uuid>>;
     /// The person's account id for a team: the existing one, else a new id

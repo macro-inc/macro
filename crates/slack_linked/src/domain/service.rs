@@ -46,8 +46,7 @@ impl SlackService {
     ) -> ExternalChatResult<Login> {
         human(authority)?;
         let email = email.trim();
-        if !lazy_regex::regex_is_match!(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email) || email.len() > 320
-        {
+        if !lazy_regex::regex_is_match!(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email) || email.len() > 320 {
             return Err(ExternalChatError::Invalid("enter a valid email address").into());
         }
         let login = self
@@ -252,7 +251,11 @@ fn merge_catalogue(
                     .then_with(|| b.last_activity_at.cmp(&a.last_activity_at))
             });
             let accounts = seen.iter().map(|entry| entry.account_id).collect();
-            let unread_count = seen.iter().map(|entry| entry.unread_count).max().unwrap_or(0);
+            let unread_count = seen
+                .iter()
+                .map(|entry| entry.unread_count)
+                .max()
+                .unwrap_or(0);
             let entry = seen.into_iter().next()?;
             let (added, shared) = adoption_of(user, adoptions, &id);
             let reason = if entry.frozen_reason.is_some() {
@@ -321,7 +324,9 @@ fn adoption_of(
         adoptions
             .iter()
             .filter(|_| !conversation.starts_with('D'))
-            .find(|adoption| adoption.remote_id == conversation && adoption.owner_id != user.as_ref())
+            .find(|adoption| {
+                adoption.remote_id == conversation && adoption.owner_id != user.as_ref()
+            })
             .map(|adoption| SharedChatReference {
                 id: adoption.id,
                 name: adoption.name.clone(),
@@ -350,7 +355,9 @@ fn validate_submission(submission: &SessionSubmission) -> ExternalChatResult<()>
         .iter()
         .any(|token| !lazy_regex::regex_is_match!(r"^xox[cd]-[A-Za-z0-9-]{10,500}$", &token.token))
     {
-        return Err(ExternalChatError::Invalid("a token is not a Slack xoxc- session token").into());
+        return Err(
+            ExternalChatError::Invalid("a token is not a Slack xoxc- session token").into(),
+        );
     }
     if submission.cookie.trim().is_empty() || submission.cookie.len() > 4096 {
         return Err(ExternalChatError::Invalid("the d cookie is missing").into());

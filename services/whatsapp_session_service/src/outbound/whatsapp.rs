@@ -7,6 +7,7 @@ use std::time::Duration;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use external_chat::domain::models::{MediaKind, MediaShape};
+use kms_envelope::kms::EnvelopeKms;
 use sqlx::PgPool;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
@@ -18,7 +19,6 @@ use whatsapp_linked::domain::events::{
 };
 use whatsapp_linked::domain::jid::PhoneNumber;
 use whatsapp_linked::domain::models::{GroupInfo, Identity, Participant};
-use kms_envelope::kms::EnvelopeKms;
 use whatsapp_store_pg::{PgWhatsAppStore, WhatsAppStoreError};
 use whatsmeow::download::{DownloadError, MediaType};
 use whatsmeow::proto::wa_e2e;

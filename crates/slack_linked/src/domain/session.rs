@@ -67,7 +67,11 @@ impl SessionService {
 
     /// The session booted.
     #[tracing::instrument(name = "slack.session.connected", skip_all, err, fields(account_id = %scope.account_id))]
-    pub async fn connected(&self, scope: SessionScope, facts: &BootFacts) -> ExternalChatResult<()> {
+    pub async fn connected(
+        &self,
+        scope: SessionScope,
+        facts: &BootFacts,
+    ) -> ExternalChatResult<()> {
         self.repository.connected(scope, facts).await
     }
 
@@ -97,7 +101,10 @@ impl SessionService {
     }
 
     /// The added chats the account observes.
-    pub async fn observed_chats(&self, scope: SessionScope) -> ExternalChatResult<Vec<ObservedChat>> {
+    pub async fn observed_chats(
+        &self,
+        scope: SessionScope,
+    ) -> ExternalChatResult<Vec<ObservedChat>> {
         self.repository.observed_chats(scope).await
     }
 
@@ -164,12 +171,19 @@ impl SessionService {
     }
 
     /// Read marks to send to Slack.
-    pub async fn pending_read_marks(&self, scope: SessionScope) -> ExternalChatResult<Vec<ReadMark>> {
+    pub async fn pending_read_marks(
+        &self,
+        scope: SessionScope,
+    ) -> ExternalChatResult<Vec<ReadMark>> {
         self.repository.pending_read_marks(scope).await
     }
 
     /// A read mark went to Slack.
-    pub async fn read_mark_done(&self, scope: SessionScope, mark: &ReadMark) -> ExternalChatResult<()> {
+    pub async fn read_mark_done(
+        &self,
+        scope: SessionScope,
+        mark: &ReadMark,
+    ) -> ExternalChatResult<()> {
         self.repository.read_mark_done(scope, mark).await
     }
 
@@ -284,15 +298,13 @@ pub fn catalogue_conversation(
         is_private: conversation.is_private,
         is_archived: conversation.is_archived,
         is_member: conversation.is_member || kind == ConversationKind::DirectMessage,
-        frozen_reason: conversation
-            .is_frozen
-            .then(|| {
-                conversation
-                    .frozen_reason
-                    .clone()
-                    .map(String::from)
-                    .unwrap_or_else(|| "frozen".to_owned())
-            }),
+        frozen_reason: conversation.is_frozen.then(|| {
+            conversation
+                .frozen_reason
+                .clone()
+                .map(String::from)
+                .unwrap_or_else(|| "frozen".to_owned())
+        }),
         connected_team_ids,
         direct_user_id,
         last_activity_at: conversation

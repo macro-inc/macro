@@ -5,6 +5,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use external_chat::domain::models::{AttachmentRef, MediaKind, MediaShape};
+use kms_envelope::kms::FakeKms;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sha2::{Digest, Sha256};
 use sqlx::PgPool;
@@ -18,7 +19,6 @@ use whatsapp_linked::domain::events::{
 };
 use whatsapp_linked::domain::session::SessionService;
 use whatsapp_linked::outbound::pg::PgWhatsAppRepository;
-use kms_envelope::kms::FakeKms;
 
 use super::WhatsmeowConnector;
 use crate::domain::account::{AccountConfig, AccountSessions};

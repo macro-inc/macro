@@ -71,8 +71,8 @@ pub async fn seal(
         .generate_data_key(context(purpose, user_id, scope))
         .await
         .map_err(kms_failure)?;
-    let key = DataKey::from_plaintext(&generated.plaintext)
-        .map_err(|_| ExternalChatError::Internal)?;
+    let key =
+        DataKey::from_plaintext(&generated.plaintext).map_err(|_| ExternalChatError::Internal)?;
     let ciphertext = ValueCipher::new(scope, &key)
         .seal_blob(&[purpose.label().as_bytes()], plaintext)
         .map_err(|_| ExternalChatError::Internal)?;

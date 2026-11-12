@@ -129,7 +129,14 @@ impl AdoptionRepository for PgSlackRepository {
             if adopted.created {
                 notify(&mut tx, signals::HISTORY_REQUESTED, *account).await?;
             }
-            notify_change(&mut tx, Change::Chats { provider: ExternalChatProvider::Slack, account_id: *account }).await?;
+            notify_change(
+                &mut tx,
+                Change::Chats {
+                    provider: ExternalChatProvider::Slack,
+                    account_id: *account,
+                },
+            )
+            .await?;
         }
         tx.commit().await.map_err(failure)?;
         Ok(adopted)
@@ -164,7 +171,14 @@ impl AdoptionRepository for PgSlackRepository {
             .map_err(failure)?;
         for account in observers {
             notify(&mut tx, signals::ACCOUNT_CHANGED, account).await?;
-            notify_change(&mut tx, Change::Chats { provider: ExternalChatProvider::Slack, account_id: account }).await?;
+            notify_change(
+                &mut tx,
+                Change::Chats {
+                    provider: ExternalChatProvider::Slack,
+                    account_id: account,
+                },
+            )
+            .await?;
         }
         notify_change(&mut tx, Change::Chat { chat_id: chat.id }).await?;
         tx.commit().await.map_err(failure)

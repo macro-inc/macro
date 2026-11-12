@@ -574,4 +574,3 @@ fn composite_key(parts: &[&str]) -> Result<String, WhatsAppStoreError> {
 }
 
 const KEY_SEPARATOR: &str = "|";
-

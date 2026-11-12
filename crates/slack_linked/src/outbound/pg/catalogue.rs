@@ -62,7 +62,10 @@ async fn people_by_id(
                 name: person_name(row.display_name, row.real_name)
                     .unwrap_or_else(|| row.slack_user_id.clone()),
                 avatar_url: row.avatar_url,
-                team: row.team_id.as_ref().and_then(|team| teams.get(team).cloned()),
+                team: row
+                    .team_id
+                    .as_ref()
+                    .and_then(|team| teams.get(team).cloned()),
                 slack_user_id: row.slack_user_id.clone(),
             };
             (row.slack_user_id, person)
@@ -72,7 +75,10 @@ async fn people_by_id(
 
 #[async_trait]
 impl CatalogueRepository for PgSlackRepository {
-    async fn catalogue(&self, user: &MacroUserIdStr<'_>) -> ExternalChatResult<Vec<CatalogueEntry>> {
+    async fn catalogue(
+        &self,
+        user: &MacroUserIdStr<'_>,
+    ) -> ExternalChatResult<Vec<CatalogueEntry>> {
         let rows = sqlx::query!(
             r#"SELECT c.account_id, c.conversation_id, c.kind, c.name, c.topic, c.is_private, c.is_archived,
                 c.is_member, c.frozen_reason, c.connected_team_ids, c.direct_user_id, c.last_activity_at,
@@ -89,7 +95,10 @@ impl CatalogueRepository for PgSlackRepository {
             .flat_map(|row| row.connected_team_ids.iter().cloned())
             .collect();
         let teams = teams(&self.pool, &team_ids).await?;
-        let user_ids: Vec<String> = rows.iter().filter_map(|row| row.direct_user_id.clone()).collect();
+        let user_ids: Vec<String> = rows
+            .iter()
+            .filter_map(|row| row.direct_user_id.clone())
+            .collect();
         let people = people_by_id(&self.pool, &user_ids).await?;
         rows.into_iter()
             .map(|row| {
@@ -114,17 +123,14 @@ impl CatalogueRepository for PgSlackRepository {
                             })
                         })
                         .collect(),
-                    direct_person: row
-                        .direct_user_id
-                        .as_ref()
-                        .map(|id| {
-                            people.get(id).cloned().unwrap_or_else(|| Person {
-                                slack_user_id: id.clone(),
-                                name: id.clone(),
-                                avatar_url: None,
-                                team: None,
-                            })
-                        }),
+                    direct_person: row.direct_user_id.as_ref().map(|id| {
+                        people.get(id).cloned().unwrap_or_else(|| Person {
+                            slack_user_id: id.clone(),
+                            name: id.clone(),
+                            avatar_url: None,
+                            team: None,
+                        })
+                    }),
                     last_activity_at: row.last_activity_at,
                     unread_count: u32::try_from(row.unread_count).unwrap_or(0),
                     conversation_id: row.conversation_id,
@@ -219,7 +225,10 @@ impl CatalogueRepository for PgSlackRepository {
         let people = people_by_id(&self.pool, &ids).await?;
         Ok(Some(ChatMembers {
             name: row.name,
-            people: ids.iter().filter_map(|id| people.get(id).cloned()).collect(),
+            people: ids
+                .iter()
+                .filter_map(|id| people.get(id).cloned())
+                .collect(),
             observed_at: row.observed_at,
         }))
     }

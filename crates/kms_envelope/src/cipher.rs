@@ -102,7 +102,12 @@ impl ValueCipher {
     }
 
     /// Decrypts a value sealed under the same scope and `labels`.
-    pub fn open(&self, labels: &[&[u8]], nonce: &[u8], value: &[u8]) -> Result<Vec<u8>, CipherError> {
+    pub fn open(
+        &self,
+        labels: &[&[u8]],
+        nonce: &[u8],
+        value: &[u8],
+    ) -> Result<Vec<u8>, CipherError> {
         let nonce: [u8; NONCE_LENGTH] = nonce.try_into().map_err(|_| CipherError::Decrypt)?;
         self.aead
             .decrypt(

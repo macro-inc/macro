@@ -111,7 +111,14 @@ impl SessionRepository for PgSlackRepository {
         .execute(&mut *tx)
         .await
         .map_err(failure)?;
-        notify_change(&mut tx, Change::Chats { provider: ExternalChatProvider::Slack, account_id: account.id }).await?;
+        notify_change(
+            &mut tx,
+            Change::Chats {
+                provider: ExternalChatProvider::Slack,
+                account_id: account.id,
+            },
+        )
+        .await?;
         tx.commit().await.map_err(failure)
     }
 
@@ -123,8 +130,14 @@ impl SessionRepository for PgSlackRepository {
         let mut tx = self.pool.begin().await.map_err(failure)?;
         let account = fence_in(&mut tx, scope, true).await?;
         if account.state.is_active() {
-            end_consent_in(&mut tx, account.id, AccountState::LoggedOut, Some(reason), false)
-                .await?;
+            end_consent_in(
+                &mut tx,
+                account.id,
+                AccountState::LoggedOut,
+                Some(reason),
+                false,
+            )
+            .await?;
         } else {
             // Ended after a disconnect: nothing left to sign out.
             self.wipe_in(&mut tx, account.id).await?;
@@ -223,7 +236,14 @@ impl SessionRepository for PgSlackRepository {
             .await
             .map_err(failure)?;
         }
-        notify_change(&mut tx, Change::Chats { provider: ExternalChatProvider::Slack, account_id: account.id }).await?;
+        notify_change(
+            &mut tx,
+            Change::Chats {
+                provider: ExternalChatProvider::Slack,
+                account_id: account.id,
+            },
+        )
+        .await?;
         tx.commit().await.map_err(failure)
     }
 
@@ -314,8 +334,7 @@ impl SessionRepository for PgSlackRepository {
     ) -> ExternalChatResult<Ingested> {
         let mut tx = self.pool.begin().await.map_err(failure)?;
         let account = fence_in(&mut tx, scope, false).await?;
-        let chats =
-            ingest::observing_chats_in(&mut tx, &account, change.conversation_id()).await?;
+        let chats = ingest::observing_chats_in(&mut tx, &account, change.conversation_id()).await?;
         let mut outcome = Ingested::Ignored;
         for chat in &chats {
             match ingest::apply_in(&mut tx, &account, chat, change).await? {
@@ -500,11 +519,7 @@ impl SessionRepository for PgSlackRepository {
         super::logins::account_id_for(&self.pool, user_id, team_id).await
     }
 
-    async fn advance_login(
-        &self,
-        attempt: Uuid,
-        advance: &LoginAdvance,
-    ) -> ExternalChatResult<()> {
+    async fn advance_login(&self, attempt: Uuid, advance: &LoginAdvance) -> ExternalChatResult<()> {
         super::logins::advance_login(&self.pool, attempt, advance).await
     }
 }

@@ -71,7 +71,11 @@ fn the_associated_data_is_the_scope_then_length_prefixed_labels() {
 fn labels_are_length_prefixed_so_splits_differ() {
     let sealed = cipher(SCOPE).seal(&[b"ab", b"c"], b"secret").unwrap();
     for labels in [[b"a".as_slice(), b"bc".as_slice()].as_slice(), &[b"abc"]] {
-        assert!(cipher(SCOPE).open(labels, &sealed.nonce, &sealed.value).is_err());
+        assert!(
+            cipher(SCOPE)
+                .open(labels, &sealed.nonce, &sealed.value)
+                .is_err()
+        );
     }
 }
 
@@ -79,11 +83,19 @@ fn labels_are_length_prefixed_so_splits_differ() {
 fn another_data_key_or_a_tampered_value_does_not_open() {
     let sealed = cipher(SCOPE).seal(&[b"key"], b"value").unwrap();
     let other_key = ValueCipher::new(SCOPE, &DataKey::from_plaintext(&[43; 32]).unwrap());
-    assert!(other_key.open(&[b"key"], &sealed.nonce, &sealed.value).is_err());
+    assert!(
+        other_key
+            .open(&[b"key"], &sealed.nonce, &sealed.value)
+            .is_err()
+    );
 
     let mut tampered = sealed.value.clone();
     tampered[0] ^= 1;
-    assert!(cipher(SCOPE).open(&[b"key"], &sealed.nonce, &tampered).is_err());
+    assert!(
+        cipher(SCOPE)
+            .open(&[b"key"], &sealed.nonce, &tampered)
+            .is_err()
+    );
     assert!(
         cipher(SCOPE)
             .open(&[b"key"], &sealed.nonce[..11], &sealed.value)
@@ -102,7 +114,11 @@ fn a_blob_opens_only_in_its_format_and_labels() {
     assert!(cipher(SCOPE).open_blob(&[b"other"], &blob).is_err());
     let mut wrong_format = blob.clone();
     wrong_format[0] = 0x02;
-    assert!(cipher(SCOPE).open_blob(&[b"purpose"], &wrong_format).is_err());
+    assert!(
+        cipher(SCOPE)
+            .open_blob(&[b"purpose"], &wrong_format)
+            .is_err()
+    );
     assert!(cipher(SCOPE).open_blob(&[b"purpose"], &[]).is_err());
 }
 

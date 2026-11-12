@@ -142,6 +142,9 @@ fn only_slack_connect_conversations_enter_the_catalogue() {
         serde_json::json!({"id": "C0INTERNAL", "name": "general", "is_channel": true, "is_member": true}),
         serde_json::json!({"id": "D0INTDM123", "is_im": true, "user": "U0COLLEAGU"}),
     ] {
-        assert_eq!(catalogue_conversation(&conversation(internal), "T0OWNTEAM1", team_of), None);
+        assert_eq!(
+            catalogue_conversation(&conversation(internal), "T0OWNTEAM1", team_of),
+            None
+        );
     }
 }

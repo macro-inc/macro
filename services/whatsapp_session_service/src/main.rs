@@ -5,6 +5,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use kms_envelope::kms::AwsKms;
 use macro_entrypoint::{MacroEntrypoint, shutdown_signal};
 use macro_env::Environment;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
@@ -12,7 +13,6 @@ use tokio_util::sync::CancellationToken;
 use whatsapp_session_service::config::{Config, SessionKmsKey};
 use whatsapp_session_service::inbound::health;
 use whatsapp_session_service::replica::{self, ReplicaDeps, Timings};
-use kms_envelope::kms::AwsKms;
 use whatsmeow::{Dialer, WebSocketDialer};
 
 /// Test-only: point every client at a fake WhatsApp server.

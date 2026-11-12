@@ -5,6 +5,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use kms_envelope::kms::EnvelopeKms;
 use sqlx::PgPool;
 use sqlx::postgres::PgConnectOptions;
 use tokio::sync::mpsc;
@@ -13,7 +14,6 @@ use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 use whatsapp_linked::domain::session::SessionService;
 use whatsapp_linked::outbound::pg::PgWhatsAppRepository;
-use kms_envelope::kms::EnvelopeKms;
 use whatsmeow::{Dialer, Signal};
 
 use crate::domain::account::{

@@ -52,7 +52,11 @@ pub(super) async fn person_in(
             slack_user_id,
             team_id,
             display_name,
-        } => (slack_user_id.as_str(), display_name.as_deref(), team_id.as_deref()),
+        } => (
+            slack_user_id.as_str(),
+            display_name.as_deref(),
+            team_id.as_deref(),
+        ),
         Sender::Bot {
             bot_id,
             display_name,
@@ -222,7 +226,15 @@ pub(super) async fn store_message_in(
     }
     // A later edit of this message arrived first: Slack's newest text wins.
     if let Some(edited) = &message.edited_ts {
-        revise_in(tx, chat, &message.ts, &message.body, ts_micros(edited), message.sent_at).await?;
+        revise_in(
+            tx,
+            chat,
+            &message.ts,
+            &message.body,
+            ts_micros(edited),
+            message.sent_at,
+        )
+        .await?;
     }
     if row.created {
         notify(tx, external_chat::signals::CHAT_EFFECTS, row.id).await?;
@@ -289,7 +301,15 @@ pub(super) async fn apply_in(
                 return Ok(Ingested::Deferred);
             }
             let revision = message.edited_ts.as_deref().map_or(1, ts_micros);
-            revise_in(tx, chat.id, &message.ts, &message.body, revision, message.sent_at).await?;
+            revise_in(
+                tx,
+                chat.id,
+                &message.ts,
+                &message.body,
+                revision,
+                message.sent_at,
+            )
+            .await?;
             Ingested::Applied
         }
         InboundChange::Deleted { ts, at, .. } => {

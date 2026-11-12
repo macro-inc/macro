@@ -4,11 +4,11 @@
 
 use super::*;
 use crate::domain::ports::SendRepository;
+use crate::domain::session::ts_time;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use external_chat::domain::ports::{MutationTarget, SendIntent, StoredSend};
 use external_chat::outbound::pg::lock_chat_in;
-use crate::domain::session::ts_time;
 use macro_user_id::user_id::MacroUserIdStr;
 
 struct SendRow {
@@ -571,7 +571,13 @@ pub(super) async fn record_send_outcome(
             }
         }
     }
-    notify_change(&mut tx, Change::Chat { chat_id: row.chat_id }).await?;
+    notify_change(
+        &mut tx,
+        Change::Chat {
+            chat_id: row.chat_id,
+        },
+    )
+    .await?;
     tx.commit().await.map_err(failure)
 }
 

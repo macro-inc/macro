@@ -123,7 +123,11 @@ pub fn encryption_context(
         ("encryption-version", encryption_version.to_string()),
     ]
     .into_iter()
-    .chain(fields.iter().map(|(name, value)| (*name, (*value).to_owned())))
+    .chain(
+        fields
+            .iter()
+            .map(|(name, value)| (*name, (*value).to_owned())),
+    )
     .map(|(name, value)| (format!("macro:{name}"), value))
     .collect()
 }

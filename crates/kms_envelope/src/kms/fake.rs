@@ -7,7 +7,7 @@ use aes_gcm::aead::{Aead, Payload};
 use aes_gcm::{Aes256Gcm, KeyInit, Nonce};
 use zeroize::Zeroizing;
 
-use super::{GeneratedDataKey, EnvelopeKms, KmsError};
+use super::{EnvelopeKms, GeneratedDataKey, KmsError};
 
 const NONCE_LENGTH: usize = 12;
 

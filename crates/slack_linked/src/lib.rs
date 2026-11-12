@@ -10,6 +10,9 @@
 
 /// Models, ports and use cases.
 pub mod domain;
+/// DSS HTTP routes.
+#[cfg(feature = "inbound")]
+pub mod inbound;
 /// Postgres and KMS adapters.
 #[cfg(feature = "outbound")]
 pub mod outbound;

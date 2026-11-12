@@ -172,7 +172,10 @@ async fn cancel_open_in(tx: &mut Transaction<'_, Postgres>, user: &str) -> Exter
 }
 
 /// Claim a live attempt that waits in `working` with input.
-pub(super) async fn claim_login(pool: &PgPool, attempt: Uuid) -> ExternalChatResult<Option<LoginWork>> {
+pub(super) async fn claim_login(
+    pool: &PgPool,
+    attempt: Uuid,
+) -> ExternalChatResult<Option<LoginWork>> {
     let Some(row) = sqlx::query!(
         r#"UPDATE slack_login_attempt SET claimed_until = now() + make_interval(secs => $2), updated_at = now()
         WHERE id = $1 AND step = 'working' AND expires_at > now()

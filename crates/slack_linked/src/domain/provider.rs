@@ -35,11 +35,8 @@ impl SlackProvider {
     /// Wire adapters at the composition root.
     pub fn new<Repository>(repository: Arc<Repository>) -> Self
     where
-        Repository: AccountRepository
-            + CatalogueRepository
-            + AdoptionRepository
-            + SendRepository
-            + 'static,
+        Repository:
+            AccountRepository + CatalogueRepository + AdoptionRepository + SendRepository + 'static,
     {
         Self {
             accounts: repository.clone(),

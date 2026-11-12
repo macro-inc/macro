@@ -5,7 +5,9 @@
 use crate::domain::{events::*, models::*};
 pub(crate) use external_chat::{
     domain::{models::*, ports::ExternalChatResult},
-    outbound::pg::{ChatRow, chat_ref, corrupt, decode, failure, helper_failure, notify, notify_change},
+    outbound::pg::{
+        ChatRow, chat_ref, corrupt, decode, failure, helper_failure, notify, notify_change,
+    },
     signals::Change,
 };
 use sqlx::{PgPool, Postgres, Transaction};
@@ -37,7 +39,10 @@ impl PgSlackRepository {
 }
 
 /// A stored enum spelling, or a corruption report.
-pub(crate) fn parse<Value: std::str::FromStr>(value: &str, what: &str) -> ExternalChatResult<Value> {
+pub(crate) fn parse<Value: std::str::FromStr>(
+    value: &str,
+    what: &str,
+) -> ExternalChatResult<Value> {
     value
         .parse()
         .map_err(|_| corrupt(format_args!("{what} {value:?}")))
@@ -81,8 +86,7 @@ pub(crate) async fn fence_in(
         .map_err(failure)?
         .map(|row| (row.id, row.user_id, row.slack_user_id, row.state, row.generation))
     };
-    let (id, user_id, slack_user_id, state, generation) =
-        row.ok_or(ExternalChatError::Fenced)?;
+    let (id, user_id, slack_user_id, state, generation) = row.ok_or(ExternalChatError::Fenced)?;
     Ok(Fenced {
         id,
         user_id,
@@ -140,7 +144,14 @@ pub(crate) async fn end_consent_in(
         .await
         .map_err(failure)?;
     notify(tx, signals::ACCOUNT_CHANGED, account).await?;
-    notify_change(tx, Change::Chats { provider: ExternalChatProvider::Slack, account_id: account }).await
+    notify_change(
+        tx,
+        Change::Chats {
+            provider: ExternalChatProvider::Slack,
+            account_id: account,
+        },
+    )
+    .await
 }
 
 /// The stored secret in its four columns, when present.
