@@ -1,4 +1,7 @@
-import type { Message as MessageRecord } from '../../../generated/storage/types.gen';
+import type {
+  Message as MessageRecord,
+  MessageTimelineQuery,
+} from '../../../generated/storage/types.gen';
 import { type RichMessage, type SimpleMention, toBody } from '../../mentions';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
@@ -9,6 +12,59 @@ import { Thread } from './thread';
 
 /** The API's representation of a message; the same record the document comment API returns. */
 export type MessageData = MessageRecord;
+
+/** How much surrounds a message in {@link Message.context}. */
+export interface MessageContextOptions {
+  /** Top-level messages before the root; defaults to 3, at most 25. */
+  channelBefore?: number;
+  /** Top-level messages after the root; defaults to 3, at most 25. */
+  channelAfter?: number;
+  /** For a reply, replies before it; defaults to 10, at most 50. */
+  threadBefore?: number;
+  /** For a reply, replies after it; defaults to 10, at most 50. */
+  threadAfter?: number;
+}
+
+/** The replies around a reply, in {@link MessageContext}. */
+export interface ReplyContext {
+  /** Replies before the message, oldest first. */
+  before: Message[];
+  /** Replies after the message, oldest first. */
+  after: Message[];
+  /** Earlier replies left out. */
+  omittedBefore: number;
+  /** Later replies left out. */
+  omittedAfter: number;
+}
+
+/** A channel message with the conversation around it. */
+export interface MessageContext {
+  /** The message asked about. */
+  message: Message;
+  /** Its top-level message: the message itself, or the root of the thread it replies in. */
+  root: Message;
+  /** Top-level messages before `root`, oldest first. */
+  before: Message[];
+  /** Top-level messages after `root`, oldest first. */
+  after: Message[];
+  /** For a reply, the replies around it; absent for a top-level message. */
+  thread?: ReplyContext;
+}
+
+const CONTEXT_CHANNEL_DEFAULT = 3;
+const CONTEXT_CHANNEL_MAX = 25;
+const CONTEXT_THREAD_DEFAULT = 10;
+const CONTEXT_THREAD_MAX = 50;
+
+function contextCount(
+  value: number | undefined,
+  fallback: number,
+  max: number,
+): number {
+  const count =
+    value !== undefined && Number.isFinite(value) ? value : fallback;
+  return Math.min(Math.max(Math.trunc(count), 0), max);
+}
 
 /**
  * A message in a channel. A thin handle: `id` and `channelId` are known up
@@ -81,6 +137,22 @@ export class Message extends FavoritableEntity<MessageRecord> {
   }
 
   /**
+   * The message's URL in the Macro web app: its channel, scrolled to it. Pass
+   * the message to `macro.ui.open` to show it to the user.
+   *
+   * @readonly
+   */
+  webUrl(): string {
+    const query = new URLSearchParams({ channel_message_id: this.id });
+    return `${this.client.webAppUrl}/app/channel/${this.channelId}?${query}`;
+  }
+
+  /** Identity, loaded detail and {@link webUrl}, so serialized handles carry their link. */
+  override toJSON() {
+    return { ...super.toJSON(), url: this.webUrl() };
+  }
+
+  /**
    * The channel this message is in.
    *
    * @readonly
@@ -96,6 +168,88 @@ export class Message extends FavoritableEntity<MessageRecord> {
    */
   thread(): Thread {
     return new Thread(this.client, this.channelId, this.id);
+  }
+
+  /**
+   * The conversation around this message: nearby top-level messages and, when
+   * it is a thread reply, its thread's root and the replies around it. Use it
+   * to read what a message (from a mention, search hit or notification)
+   * answers before acting on it.
+   *
+   * @readonly
+   */
+  async context(options: MessageContextOptions = {}): Promise<MessageContext> {
+    const channelBefore = contextCount(
+      options.channelBefore,
+      CONTEXT_CHANNEL_DEFAULT,
+      CONTEXT_CHANNEL_MAX,
+    );
+    const channelAfter = contextCount(
+      options.channelAfter,
+      CONTEXT_CHANNEL_DEFAULT,
+      CONTEXT_CHANNEL_MAX,
+    );
+    const record = await this.detail.get();
+    const rootId = record.thread_id ?? this.id;
+    const page = unwrap(
+      await this.client.storage.messageTimeline({
+        path: { parent_type: 'channel', parent_id: this.channelId },
+        query: {
+          selection: JSON.stringify({
+            around: this.id,
+            // The server splits the window evenly; ask for the larger side twice.
+            limit: 2 * Math.max(channelBefore, channelAfter) + 1,
+          } satisfies MessageTimelineQuery),
+        },
+      }),
+    );
+    // The timeline is newest first; context reads oldest first.
+    const roots = page.items
+      .map((item) => Message.from(this.client, this.channelId, item))
+      .reverse();
+    const rootIndex = roots.findIndex((m) => m.id === rootId);
+    if (rootIndex < 0)
+      throw new Error('The timeline around this message did not include it');
+    const root = roots[rootIndex] as Message;
+    const context: MessageContext = {
+      message: this,
+      root,
+      before: roots.slice(Math.max(0, rootIndex - channelBefore), rootIndex),
+      after: roots.slice(rootIndex + 1, rootIndex + 1 + channelAfter),
+    };
+    if (!record.thread_id) return context;
+    const replies = await root.thread().replies();
+    const index = replies.findIndex((m) => m.id === this.id);
+    if (index < 0) throw new Error('This reply was not found in its thread');
+    const start =
+      index -
+      Math.min(
+        index,
+        contextCount(
+          options.threadBefore,
+          CONTEXT_THREAD_DEFAULT,
+          CONTEXT_THREAD_MAX,
+        ),
+      );
+    const end = Math.min(
+      replies.length,
+      index +
+        1 +
+        contextCount(
+          options.threadAfter,
+          CONTEXT_THREAD_DEFAULT,
+          CONTEXT_THREAD_MAX,
+        ),
+    );
+    return {
+      ...context,
+      thread: {
+        before: replies.slice(start, index),
+        after: replies.slice(index + 1, end),
+        omittedBefore: start,
+        omittedAfter: replies.length - end,
+      },
+    };
   }
 
   /**

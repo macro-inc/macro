@@ -1,0 +1,39 @@
+id: email-inbound-no-raw-state-access
+valid:
+  - |
+    async fn process(ctx: Context) { ctx.service.process().await; }
+  - |
+    async fn process(ctx: Context) { ctx.sqs_worker.receive_messages().await; }
+  - |
+    struct Context { service: Service, sqs_worker: Worker }
+  - |
+    fn process(ctx: Context) { ctx.macro_event_broker.publish(); }
+  - |
+    fn process() { tracing::info!("ctx.db and ctx.email_api"); }
+  - |
+    struct Context { pool_service: Service }
+    async fn process(ctx: Context) { ctx.pool_service.acquire().await; }
+invalid:
+  - |
+    async fn process(ctx: Context) { ctx.db.begin().await; }
+  - |
+    fn process(ctx: Context) { let db = &ctx.db; }
+  - |
+    async fn process(state: Context) { state.email_api.send().await; }
+  - |
+    fn process(state: Context) { let _ = state.redis_client; }
+  - |
+    async fn process(sqs_client: Queue) { sqs_client.send_message().await; }
+  - |
+    async fn process(db: Pool) { db.begin().await; }
+  - |
+    struct Context { db: Pool }
+  - |
+    struct Context { email_api: Provider }
+  - |
+    async fn context(ctx: Context) { ctx.db.begin().await; }
+  - |
+    struct Context { pool: PgPool }
+    async fn process(ctx: Context) { ctx.pool.acquire().await; }
+  - |
+    async fn process(pool: PgPool) { pool.acquire().await; }

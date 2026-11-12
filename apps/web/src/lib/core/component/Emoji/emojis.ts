@@ -34,12 +34,18 @@ export function resolveEmoji(key: string): string | undefined {
   return loaded.resolveEmoji(key);
 }
 
-export const useEmojiData = () => {
+export const useEmojiData = (
+  options: { minimumSearchLength?: number } = {}
+) => {
   const [query, setQuery] = createSignal('');
 
-  const emojis = createMemo(
-    (): SimpleEmoji[] => catalog()?.emojisForQuery(query()) ?? []
-  );
+  const emojis = createMemo((): SimpleEmoji[] => {
+    const loaded = catalog();
+    if (!loaded) return [];
+    return query().trim().length >= (options.minimumSearchLength ?? 2)
+      ? loaded.searchEmojis(query())
+      : loaded.emojisForQuery(query());
+  });
   const groups = createMemo(() => catalog()?.emojiGroups() ?? []);
 
   return {

@@ -349,6 +349,45 @@ where
         self.change_facts(&receipt, update).await
     }
 
+    #[tracing::instrument(skip_all, err)]
+    async fn set_appearance(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        appearance: model_entity::EntityAppearance,
+    ) -> Result<model_entity::EntityAppearance, FormError> {
+        appearance
+            .validate()
+            .map_err(FormError::InvalidAppearance)?;
+        let id = receipt_form_id(&receipt)?;
+        self.live_stored_form(id).await?;
+        let attribution = receipt_attribution(&receipt);
+        let update = activity::AppearanceUpdate {
+            appearance: appearance.clone(),
+            attribution: attribution.as_ref().map(|value| {
+                activity::Attribution::new(value.actor.clone(), value.on_behalf_of.clone())
+            }),
+            event_id: uuid::Uuid::now_v7(),
+            occurred_at: chrono::Utc::now(),
+        };
+        if let Some(previous) = self
+            .repository
+            .set_appearance(id, update)
+            .await
+            .map_err(repository_error)?
+        {
+            self.announce(id).await;
+            self.emit(FormTopicEvent::AppearanceChanged {
+                form_id: id,
+                attribution,
+                change: activity::AppearanceChange {
+                    from: (!previous.is_default()).then_some(previous),
+                    to: (!appearance.is_default()).then(|| appearance.clone()),
+                },
+            });
+        }
+        Ok(appearance)
+    }
+
     #[tracing::instrument(skip(self, receipt, layout), err)]
     async fn put_layout(
         &self,

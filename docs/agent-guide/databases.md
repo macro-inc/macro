@@ -67,7 +67,8 @@ never automatically retry a write statement.
 `POST /databases/queries` saves a question; the service compiles it against the
 caller's databases, refuses anything but one `SELECT`, and, when the request names
 chart columns, refuses columns the `SELECT` does not return. The SDK's
-`database.saveQuery({ sql, title, display })` (or `table.saveQuery`) returns a
+`database.saveQuery({ sql, title, display })` (or `table.saveQuery`, or
+`macro.databases.saveQuery` for a question whose tables span databases) returns a
 `SavedQuery` whose `toBlock()` is the `<m-db-query>` block to put in a document,
 and whose `withView()` restyles the answer without saving a new question.
 
@@ -104,7 +105,7 @@ PostHog unless the variable was set when it was built. With the flag off:
   the slash menu's **Database** and **Query** actions are absent, and no starter database is
   created.
 - The sidebar, mentions, search and Quick Access list no databases; Activity
-  and the ReadActivity tool leave out database rows.
+  and `macro.activity.mine()` leave out database rows.
 - A document's database answer shows its title (or "Database answer") as a
   plain label, keeps the node unchanged, and never loads the SQL engine.
 - Database tool calls in a chat render as a muted "Database tool" line.
@@ -180,6 +181,8 @@ row (within the five-second poll) and the company page's **Pipelines** card both
 show the new stage. The company's own Stage, Owner and Revenue properties in the
 side panel are a separate field these tools do not change. A pipeline created or
 renamed from chat appears in the CRM sidebar as soon as the tool finishes.
+In code mode every pipeline tool, `CreatePipeline` included, runs through
+`macro.crm.pipelines` in `ExecuteCode`, shown as an ExecuteCode row.
 
 ## Properties and records
 
@@ -321,7 +324,11 @@ toast. A database's only table cannot be deleted: the item is disabled there.
 An editable empty row always follows the records. Enter a value in any of its
 cells to create a record; the next empty row appears immediately. Merely focusing
 or tabbing through an empty row does not save an empty record.
-Click a cell to edit, or focus it with the arrow keys and start typing. The
+Click a cell to edit, or focus it with the arrow keys and start typing. A link
+in a text or URL cell opens like a link in a document (hover shows its preview,
+right-click shows the browser's link menu); clicking anywhere else in the cell,
+Enter, or typing edits it. A URL value that names no domain, such as `TBD`,
+stays plain text. The
 whole cell takes the click, including the space below its value when wrapped
 pills make the row taller; values sit vertically centered in such rows. Enter
 saves and immediately edits the same column in the next row, including the empty

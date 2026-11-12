@@ -1477,7 +1477,7 @@ describe('code execution results', () => {
     };
   });
 
-  it('hides source and folds observed SDK ops into the peek window', () => {
+  it('hides the program and lists its observed steps as rows', () => {
     codeQuery.record = {
       ...codeQuery.record!,
       activity: [
@@ -1496,34 +1496,25 @@ describe('code execution results', () => {
     expect(rendered.container.textContent).not.toContain(
       'return { count: 1 };'
     );
-    const group = rendered.getByRole('button', { name: /Called 3 tools/ });
-    expect(group.getAttribute('aria-expanded')).toBe('false');
-    expect(
-      rendered
-        .queryAllByTestId('tool-card')
-        .filter((row) =>
-          /Classify content|Read documents/.test(row.textContent ?? '')
-        )
-    ).toHaveLength(0);
-
-    group.click();
-    expect(group.getAttribute('aria-expanded')).toBe('true');
-    const activity = rendered
+    expect(rendered.queryByRole('button', { name: /tools/ })).toBeNull();
+    const steps = rendered
       .getAllByTestId('tool-card')
       .filter((row) =>
         /Classify content|Read documents/.test(row.textContent ?? '')
       );
-    expect(activity).toHaveLength(3);
-    expect(activity[0].textContent).toContain('Classify content');
-    expect(activity[0].dataset.status).toBe('completed');
-    expect(activity[1].textContent).toContain('Outcome unknown');
-    expect(activity[2].dataset.status).toBe('failed');
-    expect(rendered.container.textContent).not.toContain('API calls');
-    expect(rendered.container.textContent).toContain('first 128 requests');
+    expect(steps).toHaveLength(3);
+    expect(steps[0].dataset.status).toBe('completed');
+    expect(steps[1].textContent).toContain('Outcome unknown');
+    expect(steps[2].dataset.status).toBe('failed');
+    expect(rendered.container.textContent).toContain(
+      'Only the first 128 steps are listed.'
+    );
+    expect(rendered.container.textContent).not.toMatch(
+      /requests|Workspace activity|API calls/
+    );
   });
 
-  it('opens the peek window for live SDK operations', () => {
-    vi.useFakeTimers();
+  it('lists live steps without a group of its own', () => {
     codeQuery.record = {
       ...codeQuery.record!,
       status: 'running',
@@ -1539,32 +1530,23 @@ describe('code execution results', () => {
     const rendered = render(() => (
       <ToolCallPart part={part} context={context(true)} />
     ));
-    const group = rendered.getByRole('button');
-    expect(group.textContent).toContain('Calling 2 tools');
+    expect(rendered.queryByRole('button')).toBeNull();
     expect(rendered.container.textContent).not.toContain('Workspace activity');
-    vi.advanceTimersByTime(150);
-    expect(group.getAttribute('aria-expanded')).toBe('true');
     const rows = rendered.getAllByTestId('tool-card');
     expect(rows).toHaveLength(2);
     expect(rows[0].textContent).toContain('Browse workspace');
-    expect(rows[0].dataset.status).toBe('completed');
     expect(rows[1].textContent).toContain('Search email');
     expect(rows[1].dataset.status).toBe('running');
-    vi.useRealTimers();
   });
 
-  it('loads trusted records and keeps custom components after a script failure', () => {
+  it('loads trusted records and keeps custom components after a failed run', () => {
     const part = codePart('macro_internal');
     const rendered = render(() => (
       <ToolCallPart part={part} context={context(false)} />
     ));
     expect(codeQuery.read).toHaveBeenCalledWith('session', executionId);
-    expect(rendered.getAllByTestId('tool-card')[0].dataset.status).toBe(
-      'failed'
-    );
-    expect(rendered.getAllByTestId('tool-card')[0].textContent).toContain(
-      'Failed'
-    );
+    // The failure the agent recovered from stays on the step, not the program.
+    expect(rendered.container.textContent).not.toContain('Failed');
     expect(rendered.container.textContent).toContain('Outcome unknown');
     expect(rendered.getByTestId('macro-tool').textContent).toBe('ReadContent');
     expect(
@@ -1629,9 +1611,6 @@ describe('code execution results', () => {
     ));
     expect(codeQuery.read).toHaveBeenCalledWith('session', id);
     expect(rendered.getByTestId('macro-tool').textContent).toBe('ReadContent');
-    expect(rendered.getAllByTestId('tool-card')[0].textContent).toContain(
-      'Failed'
-    );
   });
 
   it('does not let an external MCP server select the code-mode record view', () => {
@@ -1685,5 +1664,36 @@ describe('ACP review presentations', () => {
       <ToolCallPart part={part('external')} context={context(false)} />
     ));
     expect(view.queryByTestId('persisted-review')).toBeNull();
+  });
+});
+
+describe('code-mode lookups', () => {
+  const lookup = (name: ToolUsePart['name']): ToolUsePart => ({
+    kind: 'tool_use',
+    id: 'lookup-1',
+    status: 'completed',
+    name,
+    detail: {
+      kind: 'other',
+      acpKind: 'other',
+      input: { query: 'documents' },
+      output: null,
+      result: { tools: [] },
+      error: null,
+    },
+  });
+  it('renders nothing for the agent finding its way around its own tools', () => {
+    for (const name of [
+      { kind: 'mcp', server: 'macro_internal', tool: 'DescribeCodeTools' },
+      { kind: 'mcp', server: 'macro_internal', tool: 'ReadCodeDocs' },
+      { kind: 'mcp', server: 'macro', tool: 'SearchTools' },
+      { kind: 'native', name: 'LoadTools' },
+    ] as const) {
+      const view = render(() => (
+        <ToolCallPart part={lookup(name)} context={context(false)} />
+      ));
+      expect(view.container.textContent).toBe('');
+      view.unmount();
+    }
   });
 });

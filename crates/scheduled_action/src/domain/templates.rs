@@ -9,10 +9,11 @@ use std::sync::Arc;
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use chrono_tz::Tz;
-use entity_access::domain::models::{EntityAccessReceipt, EntityType, OwnerAccessLevel};
+use entity_access::domain::models::{EntityAccessReceipt, OwnerAccessLevel};
 use feature_flags::FeatureFlags;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use model_entity::EntityAppearance;
 use model_owner::{CreationPrincipal, Owner};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -94,6 +95,7 @@ pub struct RoutineTemplate {
     #[schema(value_type = routine_program::RoutineTask)]
     pub task: Value,
     pub variables: Vec<TemplateVariable>,
+    pub appearance: EntityAppearance,
     /// Routines activated from this template, including stopped ones.
     pub active_count: u32,
     pub created_at: DateTime<Utc>,
@@ -109,6 +111,7 @@ pub struct TemplateSnapshot {
     pub trigger: ActionTrigger,
     pub task: Value,
     pub variables: Vec<TemplateVariable>,
+    pub appearance: EntityAppearance,
 }
 
 /// Rejected template input.
@@ -141,6 +144,7 @@ impl ShareRoutineTemplate {
             trigger: action.trigger.clone(),
             task,
             variables: self.variables,
+            appearance: action.appearance.clone(),
         })
     }
 }
@@ -192,21 +196,10 @@ impl<Actions: ScheduledActionService, Templates, Flags>
         &self,
         receipt: &EntityAccessReceipt<OwnerAccessLevel>,
     ) -> Result<(Uuid, ScheduledAction)> {
-        if receipt.entity().entity_type != EntityType::ScheduledAction {
-            anyhow::bail!("scheduled action receipt has the wrong entity type");
-        }
-        let id = receipt
-            .entity()
-            .entity_id
-            .parse::<Uuid>()
-            .map_err(|_| ActionPolicyError::NotFound)?;
-        let action = self.actions.get_action(id).await?;
-        let owned = receipt
-            .acting_user_id()
-            .is_some_and(|user| action.owner.is_user(user));
-        if !owned {
-            return Err(ActionPolicyError::NotFound.into());
-        }
+        let action = self.actions.get_action(receipt).await?;
+        let Some(id) = action.id else {
+            anyhow::bail!("stored scheduled action has no id");
+        };
         Ok((id, action))
     }
 }
@@ -254,11 +247,13 @@ where
         input: ActionConfiguration,
     ) -> Result<ScheduledAction> {
         self.require_sharing(principal.user()).await?;
-        if self.templates.get_template(&template_id).await?.is_none() {
-            return Err(ActionPolicyError::NotFound.into());
-        }
+        let template = self
+            .templates
+            .get_template(&template_id)
+            .await?
+            .ok_or(ActionPolicyError::NotFound)?;
         self.actions
-            .create_action_from_template(principal, input, template_id)
+            .create_action_from_template(principal, input, template_id, template.appearance)
             .await
     }
 }

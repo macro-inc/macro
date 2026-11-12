@@ -287,6 +287,7 @@ fn seed_rsvp(world: &Shared, audience: Audience) {
     let now = world.now;
     world.forms.push(StoredForm {
         form: Form {
+            appearance: None,
             id: RSVP_FORM,
             name: "Q4 offsite RSVP".into(),
             description: "".into(),

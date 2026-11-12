@@ -132,6 +132,7 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 		properties { ...SoupPropertyFields }
 	}
 	... on GraphqlSoupInitiative {
+        appearance
 		metadata { ownerId createdAt updatedAt viewedAt }
 		viewerPermission {
 			__typename
@@ -140,6 +141,7 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 		properties { ...SoupPropertyFields }
 	}
 	... on GraphqlSoupDocument {
+        appearance
 		documentName: name
 		ownerId
 		fileType
@@ -651,6 +653,13 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 		routineRunFinishedRoutineId: routineId
 		routineRunFinishedRoutineName: routineName
 		routineRunFinishedSucceeded: succeeded
+	}
+	... on GraphqlAgentSignInExpiryMetadata {
+		agentSignInExpiryAgent: agent
+		agentSignInExpiryHarnessId: harnessId
+		agentSignInExpiryComputerName: computerName
+		agentSignInExpiryStage: stage
+		agentSignInExpiryExpiresAt: expiresAt
 	}
 	... on GraphqlInviteToTeamMetadata {
 		inviteToTeamTeamName: teamName

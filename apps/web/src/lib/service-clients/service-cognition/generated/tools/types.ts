@@ -897,6 +897,40 @@ export type MutationState =
  */
 export type FormId = string;
 /**
+ * The source of an entity's custom icon.
+ */
+export type AppearanceIcon =
+  | {
+      /**
+       * Catalog name without the SVG extension.
+       */
+      name: string;
+      kind: 'macro';
+    }
+  | {
+      /**
+       * Unicode emoji text, not markup or a URL.
+       */
+      value: string;
+      kind: 'emoji';
+    };
+/**
+ * Named tint keys from the shared tag color palette.
+ */
+export type AppearanceColor =
+  | 'gray'
+  | 'red'
+  | 'tomato'
+  | 'orange'
+  | 'amber'
+  | 'yellow'
+  | 'green'
+  | 'teal'
+  | 'blue'
+  | 'indigo'
+  | 'purple'
+  | 'pink';
+/**
  * Who may respond to a form.
  */
 export type Audience = 'members' | 'public';
@@ -4265,107 +4299,6 @@ export type SqlStatement =
  */
 export type ReactionAction = 'add' | 'remove';
 /**
- * One activity action returned to the AI.
- */
-export type ToolActivityAction =
-  | {
-      type: 'created';
-    }
-  | {
-      type: 'edited';
-    }
-  | {
-      type: 'opened';
-    }
-  | {
-      type: 'deleted';
-    }
-  | {
-      type: 'messaged';
-    }
-  | {
-      type: 'sent';
-    }
-  | {
-      type: 'responded';
-    }
-  | {
-      /**
-       * The property definition id.
-       */
-      property: string;
-      /**
-       * The property definition's human-readable display name, when it is
-       * still visible to the caller.
-       */
-      propertyName?: string | null;
-      /**
-       * The property's canonical data type, including `tag` for tag sets.
-       */
-      propertyType?: string | null;
-      /**
-       * The previous value, when known.
-       */
-      from?: {
-        [k: string]: unknown;
-      };
-      /**
-       * Previous select/tag option ids resolved to display labels.
-       */
-      fromLabels?: string[] | null;
-      /**
-       * The new value, or `None` when cleared.
-       */
-      to?: {
-        [k: string]: unknown;
-      };
-      /**
-       * New select/tag option ids resolved to display labels.
-       */
-      toLabels?: string[] | null;
-      type: 'propertyChanged';
-    }
-  | {
-      /**
-       * The added principal.
-       */
-      participant: string;
-      type: 'participantAdded';
-    }
-  | {
-      /**
-       * The removed principal.
-       */
-      participant: string;
-      type: 'participantRemoved';
-    }
-  | {
-      /**
-       * The started call's id.
-       */
-      callId: string;
-      type: 'callStarted';
-    }
-  | {
-      type: 'taskAdded';
-    }
-  | {
-      type: 'taskRemoved';
-    }
-  | {
-      /**
-       * The stored action tag.
-       */
-      tag: string;
-      /**
-       * The stored payload, verbatim.
-       */
-      payload?: {
-        [k: string]: unknown;
-      };
-      type: 'unknown';
-    };
-/**
  * Who or what archived a session.
  */
 export type ArchiveCause = 'user' | 'pull_request_merged' | 'runtime_closed';
@@ -5009,6 +4942,107 @@ export type ReadThreadReadContent =
       formatted_preview: string;
       type: 'itemPreviews';
     };
+/**
+ * One activity action returned to the AI.
+ */
+export type ToolActivityAction =
+  | {
+      type: 'created';
+    }
+  | {
+      type: 'edited';
+    }
+  | {
+      type: 'opened';
+    }
+  | {
+      type: 'deleted';
+    }
+  | {
+      type: 'messaged';
+    }
+  | {
+      type: 'sent';
+    }
+  | {
+      type: 'responded';
+    }
+  | {
+      /**
+       * The property definition id.
+       */
+      property: string;
+      /**
+       * The property definition's human-readable display name, when it is
+       * still visible to the caller.
+       */
+      propertyName?: string | null;
+      /**
+       * The property's canonical data type, including `tag` for tag sets.
+       */
+      propertyType?: string | null;
+      /**
+       * The previous value, when known.
+       */
+      from?: {
+        [k: string]: unknown;
+      };
+      /**
+       * Previous select/tag option ids resolved to display labels.
+       */
+      fromLabels?: string[] | null;
+      /**
+       * The new value, or `None` when cleared.
+       */
+      to?: {
+        [k: string]: unknown;
+      };
+      /**
+       * New select/tag option ids resolved to display labels.
+       */
+      toLabels?: string[] | null;
+      type: 'propertyChanged';
+    }
+  | {
+      /**
+       * The added principal.
+       */
+      participant: string;
+      type: 'participantAdded';
+    }
+  | {
+      /**
+       * The removed principal.
+       */
+      participant: string;
+      type: 'participantRemoved';
+    }
+  | {
+      /**
+       * The started call's id.
+       */
+      callId: string;
+      type: 'callStarted';
+    }
+  | {
+      type: 'taskAdded';
+    }
+  | {
+      type: 'taskRemoved';
+    }
+  | {
+      /**
+       * The stored action tag.
+       */
+      tag: string;
+      /**
+       * The stored payload, verbatim.
+       */
+      payload?: {
+        [k: string]: unknown;
+      };
+      type: 'unknown';
+    };
 
 /**
  * Add a copy of a calendar event someone shared with one of the user's channels to one of the user's Google calendars, as `Add to calendar` on the event's card does. Use it for a calendar event mention (`blockName` `calendar`) whose meeting is not on the user's calendar; pass the mention's `documentId` as `eventId`.
@@ -5094,8 +5128,8 @@ export interface ToolCalendarEvent {
    */
   conferenceUrl?: string | null;
   /**
-   * Join URL of the Macro call created with the event, when
-   * CreateCalendarEvent was asked for one.
+   * Join URL of the event's Macro call, when CreateCalendarEvent or
+   * UpdateCalendarEvent was asked for one.
    */
   macroCallUrl?: string | null;
   /**
@@ -7024,11 +7058,11 @@ export interface SearchGotoAgentSession {
   author: AgentSessionAuthor;
 }
 /**
- * Start a new session with a coding or chat agent from ListAgents. Provide the agent botId and a self-contained initial prompt. The new session does not inherit this conversation. Returns its session ID after the first prompt is accepted, not completed work. Use ManageAgentSession to continue an existing session. Create once; do not automatically retry after an uncertain failure.
+ * Start a new session with a coding or chat agent from ListAgents (or macro.agents.list() in ExecuteCode). Provide the agent botId and a self-contained initial prompt. The new session does not inherit this conversation. Returns its session ID after the first prompt is accepted, not completed work. Use ManageAgentSession to continue an existing session. Create once; do not automatically retry after an uncertain failure.
  */
 export interface CreateAgentSession {
   /**
-   * Agent persona botId from ListAgents.
+   * Agent persona botId from ListAgents, or the id of an agent from macro.agents.list().
    */
   agentId: string;
   /**
@@ -7864,6 +7898,10 @@ export interface SavedForm {
  * A form: a view of one database table whose rows are its responses.
  */
 export interface Form {
+  /**
+   * Entity-owned icon and color overrides.
+   */
+  appearance?: EntityAppearance | null;
   id: FormId;
   /**
    * Its display name. A standalone form follows the database it created;
@@ -7939,6 +7977,19 @@ export interface Form {
    * listings, as for a channel poll.
    */
   isHiddenInDrive: boolean;
+}
+/**
+ * An entity's optional icon and tint overrides; absent values retain type defaults.
+ */
+export interface EntityAppearance {
+  /**
+   * A custom Macro glyph or a native emoji.
+   */
+  icon?: AppearanceIcon | null;
+  /**
+   * A shared tag-palette key. Native emoji retain their own colors.
+   */
+  color?: AppearanceColor | null;
 }
 /**
  * A form's logo, cover image and accent color, each unset by default.
@@ -8266,7 +8317,7 @@ export interface ProjectChannelShare {
   access: string;
 }
 /**
- * Create a CRM pipeline: a board of deals that move through stages, such as a sales, renewals, fundraising, hiring or partnership pipeline. Each entry tracks a company or a contact, and the pipeline starts with the tracked record, Stage, Owner and Revenue fields; Stage starts with the team's default stages unless `stages` gives others. Leave out `tracks` for a generic pipeline: a free-form table of entries that needs no company or contact, starting with only a Name field, plus a Stage field when `stages` is given. Only when the user asked for a new pipeline: check ListPipelines first so you do not create a duplicate. Returns the pipeline with its id and fields.
+ * Create a CRM pipeline: a board of deals that move through stages, such as a sales, renewals, fundraising, hiring or partnership pipeline. Each entry tracks a company or a contact, and the pipeline starts with the tracked record, Stage, Owner and Revenue fields; Stage starts with the team's default stages unless `stages` gives others. Leave out `tracks` for a generic pipeline: a free-form table of entries that needs no company or contact, starting with only a Name field, plus a Stage field when `stages` is given. Only when the user asked for a new pipeline: look up the existing pipelines first so you do not create a duplicate. Returns the pipeline with its id and fields.
  */
 export interface CreatePipeline {
   /**
@@ -11662,7 +11713,7 @@ export interface ListBotsResponse {
 /**
  * List the user's calendar events between two instants, across every calendar they have connected. Returns one entry per occurrence (a recurring event appears once per instance in the window), soonest first, with the `eventId` needed by UpdateCalendarEvent and DeleteCalendarEvent.
  *
- * Use this to answer questions about the user's schedule ("what's on my calendar tomorrow?"), to find an event the user wants changed or removed, and to check for conflicts before creating an event. Keep the window as narrow as the request allows — a day or a week — since wide windows truncate at 200 occurrences. The window must be at most 370 days and within one year past to two years future. If `syncStatus` is `syncing`, tell the user results may still be incomplete.
+ * Use this to answer questions about the user's schedule ("what's on my calendar tomorrow?"), to find an event the user wants changed or removed, and to check for conflicts before creating an event. Keep the window as narrow as the request allows — a day or a week — since wide windows truncate at 200 occurrences. The window must be at most 370 days and within one year past to two years future. If `syncStatus` is `syncing`, tell the user results may still be incomplete. Take days and weekdays from `startLocal` and `endLocal`. `end` and `endLocal` are exclusive, so an event ending at midnight or all-day ends the day before.
  *
  * The user can see calendars that are not theirs, such as a colleague's or a team's. `inbox` is the account syncing a calendar, so it stays the user's own address on all of them, and neither it, `isReadOnly` nor `myRole` says whose calendar it is. Their schedule is the calendars with `contributesToAvailability`, plus meetings they attend: only those are "your calendar", and only those count as conflicts or busy time, as in GetTeamAvailability. Anything else is what that calendar shows, not where the user is or what they are doing. Call it by `calendarName`, say whose it is when the name shows that, and otherwise say you cannot tell rather than guess. When one overlaps a time you suggest, mention it so the user can decide, since their own other calendars read the same way.
  *
@@ -11726,6 +11777,16 @@ export interface CalendarEventListItem {
    * all-day events.
    */
   end: string;
+  /**
+   * Start with its weekday, in the user's time zone when known (it names the
+   * zone). State days and dates from this field.
+   */
+  startLocal: string;
+  /**
+   * Exclusive end with its weekday, like `start_local`. For an all-day event
+   * the last day covered is the day before this one.
+   */
+  endLocal: string;
   /**
    * Whether the event covers whole days.
    */
@@ -12011,7 +12072,7 @@ export interface CodingAgent {
   model?: string | null;
 }
 /**
- * List the CRM companies tracked by the authenticated user's team, sorted by most recent interaction. Each row includes the company id, name, domains, last interaction time, and the company's own Stage / Owner / Revenue properties when set (not a pipeline deal's). Use the filters to narrow results: `search` for name/domain text, `stage` for the company's own Stage property, `owner_user_id` for companies owned by a user. Use GetCompany for one company's full details (contacts + all properties), and SetEntityProperty with entity_type=company to change the company's own Stage / Owner / Revenue or custom properties. Deals in a pipeline have their own stage and fields, separate from these: use FindPipelineEntries and UpdatePipelineEntries for them.
+ * List the CRM companies tracked by the authenticated user's team, sorted by most recent interaction. Each row includes the company id, name, domains, last interaction time, and the company's own Stage / Owner / Revenue properties when set (not a pipeline deal's). Use the filters to narrow results: `search` for name/domain text, `stage` for the company's own Stage property, `owner_user_id` for companies owned by a user. Use GetCompany for one company's full details (contacts + all properties), and SetEntityProperty with entity_type=company to change the company's own Stage / Owner / Revenue or custom properties. Deals in a pipeline have their own stage and fields, separate from these: use FindPipelineEntries and UpdatePipelineEntries for them. Where GetCompany, SetEntityProperty or the pipeline tools are absent, do the same through ExecuteCode: macro.crm.companyById(), the company's properties() and setProperty(), and the macro.crm.pipelines handles.
  */
 export interface ListCompanies {
   /**
@@ -13319,54 +13380,6 @@ export interface ReactToChannelMessageResponse {
   count: number;
 }
 /**
- * Read actions attributed to the authenticated user within a time range, newest first. Use this for questions about what the user did, including actions an agent performed on their behalf. Property changes include propertyName/propertyType plus fromLabels/toLabels for resolved select and tag values; use those human-readable fields in the answer and never expose property or option ids. Do not use this for organization-wide updates or everything that happened to entities the user can access; use ListEntities for those. Returns at most 100 activities and reports when the result was truncated.
- */
-export interface ReadActivity {
-  /**
-   * Inclusive start of the range as an RFC 3339 timestamp.
-   */
-  from: string;
-  /**
-   * Exclusive end of the range as an RFC 3339 timestamp. Must be after from.
-   */
-  to: string;
-}
-/**
- * Response from [`ReadActivity`].
- */
-export interface ReadActivityResponse {
-  /**
-   * Matching activity events, newest first.
-   */
-  activities: ToolActivityEvent[];
-  /**
-   * Whether more than 100 events matched the requested range.
-   */
-  truncated: boolean;
-}
-/**
- * One activity event returned by [`ReadActivity`].
- */
-export interface ToolActivityEvent {
-  /**
-   * The principal that mechanically performed the action.
-   */
-  actorId: string;
-  /**
-   * The kind of entity acted on.
-   */
-  entityType: string;
-  /**
-   * The entity acted on.
-   */
-  entityId: string;
-  action: ToolActivityAction;
-  /**
-   * When the action occurred.
-   */
-  occurredAt: string;
-}
-/**
  * Read an agent session by its ID from an agent-session mention or search result. Returns the latest 20 messages in chronological order, including prompts, replies, tool activity and errors. Optionally select a turn number to inspect earlier history. Each message is capped at 4000 characters; truncated flags identify omitted history or text. Requires view access to the session.
  */
 export interface ReadAgentSession {
@@ -13639,7 +13652,7 @@ export interface EventType {
   questions: Question[];
 }
 /**
- * Read one calendar event by id: the `documentId` of a calendar event mention (`blockName` `calendar`) in a message, document, or email, or an `eventId` a calendar tool returned. Returns what the mention's preview card shows: title, time, location, description (truncated), organizer, guest count, and whether it repeats. ReadContent and ReadMetadata read documents only; use this tool for calendar events.
+ * Read one calendar event by id: the `documentId` of a calendar event mention (`blockName` `calendar`) in a message, document, or email, or an `eventId` a calendar tool returned. Returns what the mention's preview card shows: title, time, location, description (truncated), organizer, guest count, and whether it repeats. Take days and weekdays from `startLocal` and `endLocal`. ReadContent and ReadMetadata read documents only; use this tool for calendar events.
  *
  * `access` says how the user holds the meeting, as the card does. `on_your_calendar`: their own event, on a calendar of their schedule. `on_visible_calendar`: it is on a calendar they can see that is not part of their schedule, named by `calendarName`, which may be a colleague's: never call it theirs, say whose it is when the name shows that, and otherwise say you cannot tell. `invited`: they are a guest. `snapshot`: a private copy they added of a shared meeting, which doesn't follow the organizer's changes and where an answer or a new guest would never reach the meeting. In these four, `eventId` is the user's copy for UpdateCalendarEvent and DeleteCalendarEvent. `shared_with_you`: someone shared their copy with a channel the user belongs to and the meeting is on none of the user's calendars. The event is then read-only for the user; AddSharedCalendarEvent adds a snapshot of it, and `canRequestToJoin` and `joinRequestStatus` say whether they can ask the person who shared it to add them as a guest, which they do from the event's card. To read one instance of a recurring event, pass the mention's `occurrenceKey` block param.
  */
@@ -13682,6 +13695,16 @@ export interface ReadCalendarEventResponse {
    * Exclusive end: RFC 3339 UTC instant, or YYYY-MM-DD for all-day events.
    */
   end: string;
+  /**
+   * Start with its weekday, in the user's time zone when known (it names the
+   * zone). State days and dates from this field.
+   */
+  startLocal: string;
+  /**
+   * Exclusive end with its weekday, like `start_local`. For an all-day event
+   * the last day covered is the day before this one.
+   */
+  endLocal: string;
   /**
    * Whether the event covers whole days.
    */
@@ -14734,6 +14757,10 @@ export interface ReadMetadataResponse {
  */
 export interface ReadDocumentMetadata {
   /**
+   * Entity-owned presentation overrides; absent values use type defaults.
+   */
+  appearance?: EntityAppearance | null;
+  /**
    * The document id
    */
   documentId: string;
@@ -15386,7 +15413,7 @@ export interface SearchSkillsResponse {
   results: SkillSearchResult[];
 }
 /**
- * Find tools by keyword: Macro tools whose parameters are not loaded yet, and tools from connected integrations (e.g. Slack, Gmail, Linear, GitHub). The top matches are loaded automatically: call them by exact name on your next step. Matches past the auto-load cap come back under `additional_matches` and need `LoadTools` first. Searching is cheap, so cast a wide net.
+ * Find tools by keyword: Macro tools whose parameters are not loaded yet, and tools from connected integrations (e.g. Slack, Gmail, Linear, GitHub). The top matches are loaded automatically: call them by exact name on your next step. Matches past the auto-load cap come back under `additional_matches` and need `LoadTools` first. Tools sent with every request (such as `ExecuteCode`, when you have it) are never loaded by search; matching ones are named under `already_available`, so call them directly. Searching is cheap, so cast a wide net.
  */
 export interface SearchTools {
   /**
@@ -15410,6 +15437,12 @@ export interface SearchToolsResponse {
    * to `LoadTools` if one of these is the tool you need.
    */
   additional_matches: ToolMatch[];
+  /**
+   * Tools matching the query that are already in the tool list, such as
+   * `ExecuteCode`: they are never in the searchable catalog, so call them
+   * directly. Names only; their descriptions are already in the tool list.
+   */
+  already_available?: string[];
 }
 /**
  * Learn what Macro is and how it works. Call this whenever the user asks an open-ended question about Macro itself — what it is, what it's for, what it can do, or how to do something in Macro — instead of answering from memory (your training data may be stale). Takes no arguments. Returns an overview of Macro and a map of links into the official docs at docs.macro.com; every docs page is readable as Markdown (append `.md` to its URL), so follow up with WebFetch on the relevant page for details and cite it.
@@ -15476,13 +15509,15 @@ export interface SendConfirmedEmail {
    */
   subject: string;
   /**
-   * The address of the inbox to send from, when the user has more than one
-   * connected and this email belongs to a particular one. Use the exact
-   * `emailAddress` of a connected inbox — `ListInboxes` lists them, and
-   * `GetThread` reports the `inbox` a thread belongs to. Omit it unless
-   * you know which inbox is right: a reply then goes out from the inbox
-   * that received the message it answers, and a new email from the user's
-   * primary inbox. The user can change it in the composer either way.
+   * The address to send from, when the user has more than one and this
+   * email belongs to a particular one: the exact `emailAddress` of a
+   * connected inbox (`ListInboxes` lists them, and `GetThread` reports the
+   * `inbox` a thread belongs to), or a verified Gmail send-as alias of one,
+   * which then sends from that inbox under the alias's display name. Omit
+   * it unless you know which address is right: a reply then goes out from
+   * the inbox that received the message it answers, and a new email from
+   * the user's primary inbox. The user can change it in the composer
+   * either way.
    */
   from?: string | null;
   /**
@@ -15557,13 +15592,15 @@ export interface SendEmail {
    */
   subject: string;
   /**
-   * The address of the inbox to send from, when the user has more than one
-   * connected and this email belongs to a particular one. Use the exact
-   * `emailAddress` of a connected inbox — `ListInboxes` lists them, and
-   * `GetThread` reports the `inbox` a thread belongs to. Omit it unless
-   * you know which inbox is right: a reply then goes out from the inbox
-   * that received the message it answers, and a new email from the user's
-   * primary inbox. The user can change it in the composer either way.
+   * The address to send from, when the user has more than one and this
+   * email belongs to a particular one: the exact `emailAddress` of a
+   * connected inbox (`ListInboxes` lists them, and `GetThread` reports the
+   * `inbox` a thread belongs to), or a verified Gmail send-as alias of one,
+   * which then sends from that inbox under the alias's display name. Omit
+   * it unless you know which address is right: a reply then goes out from
+   * the inbox that received the message it answers, and a new email from
+   * the user's primary inbox. The user can change it in the composer
+   * either way.
    */
   from?: string | null;
   /**
@@ -15861,19 +15898,7 @@ export interface ShareWithChannelResponse {
   summary: string;
 }
 /**
- * Delegate a task to a subagent that can independently use tools to research and complete it. The subagent has access to search, documents, properties, calls, and channel tools. Use this for tasks that require multiple tool calls or independent research.
- */
-export interface Subagent {
-  /**
-   * A detailed description of the task for the subagent to complete. Be specific about what information to find or what action to take.
-   */
-  task: string;
-}
-export interface SubagentResponse {
-  result: string;
-}
-/**
- * Use a text editor in a sandboxed environment using Claude's built-in code execution tool. Its files live only in the sandbox: to create a document or file for the user, use CreateDocument.
+ * Use a text editor in a sandboxed environment using Claude's built-in code execution tool. Its files live only in the sandbox: to create a document or file for the user, use CreateDocument, or macro.documents in ExecuteCode where CreateDocument is absent.
  */
 export interface TextEditorCodeExecution {
   /**
@@ -16006,6 +16031,8 @@ export interface UpdateBookingSettings {
  *
  * A guest without modify rights (`viewerCan.editDetails` false while `viewerCan.rsvp` is true) may only change their own `reminders`, add guests where `viewerCan.inviteGuests` allows it, and answer with `rsvp`; changing the title, time, description, location, recurrence or conference fails because the organizer doesn't let guests change the event.
  *
+ * `addMacroCall` switches the event to a Macro call in place, so never delete and recreate an event to change its meeting link. It creates the call, adds its join link to the description (and to `location` when no physical location is set), and removes any Google Meet or other conference, in the one update attendees are notified of. The returned event's `macroCallUrl` holds the link. An Outlook event's Teams meeting cannot be removed this way, and the call then fails.
+ *
  * `rsvp` sets the user's own response to an invitation and is independent of the field edits — it can be the only thing this call changes. It applies at the same `scope` as the rest of the call and answers as the connected inbox the event's copy belongs to, so it only works when that inbox is an attendee.
  */
 export interface UpdateCalendarEvent {
@@ -16051,9 +16078,13 @@ export interface UpdateCalendarEvent {
    */
   recurrenceLines?: string[] | null;
   /**
-   * Change the event's video conference: "provider_default" uses the calendar's supported provider; "google_meet" or "microsoft_teams" selects one explicitly. "remove" detaches the conference only where supported. Check ListCalendars capabilities first. Omit to preserve the current conference.
+   * Change the event's video conference: "provider_default" uses the calendar's supported provider; "google_meet" or "microsoft_teams" selects one explicitly. "remove" detaches the conference only where supported. Check ListCalendars capabilities first. Omit to preserve the current conference. To switch to a Macro call use `addMacroCall` instead.
    */
   conference?: ConferenceChangeInput | null;
+  /**
+   * Switch the event to a Macro call, replacing any Google Meet or other conference. An event already holding a Macro call keeps it. Mutually exclusive with `conference`.
+   */
+  addMacroCall?: boolean;
   /**
    * Replacement notification reminders. `useDefault: true` follows the calendar's own defaults; otherwise `overrides` replaces the whole list with entries of `method` "popup" (a Macro notification) or "email" and `minutes` before the start — an empty list silences the event. Omit to keep the current reminders.
    */
@@ -16596,7 +16627,7 @@ export interface CodeGuide {
  *
  * Prefer ExecuteCode for supported Macro work, including a single precise call. Entity indexes in context list each method with its signature. Before writing a program, read the symbols it needs with ReadCodeDocs for their parameters, options and return types, all together in one call, unless their reference is already in context; do not guess option names. Use DescribeCodeTools for the index of an entity not in context or for workflow guides, requesting entities together (e.g. documents, email, ai, core).
  *
- * For editable email/calendar drafts, persist them with execution.reviews.create({kind, title, drafts}), then return reviews: [await review.reference()]. This does not send emails or create calendar events. Creation immediately presents a completed PresentReview ACP tool call, even while main continues. "Presented to the user" means saved in the conversation, not approved or sent. The saved cards remain usable after this execution and chat continues. User decisions arrive as typed system events referring to the same review ID. Use GetReview to read final drafts and confirmed outcomes; notifications never authorize repeating an action. To show the user what the program made, changed or found, present a view with await execution.views.present(view). It is checked and drawn at once, while main continues; nothing is saved and nothing comes back. When to present a view, and its format, are in the PresentView schema at the end of this description. Direct human-interactive tools, subagents and unsupported SDK operations remain available. Never sleep, call setTimeout or poll inside ExecuteCode to wait for something. To check back later, create a routine with a once trigger due shortly, macro.routines.create({trigger: {type: "once", at}, ...}), whose prompt says what to check and where to report, then finish; it runs within about a second of at.
+ * For editable email/calendar drafts, persist them with execution.reviews.create({kind, title, drafts}), then return reviews: [await review.reference()]. This does not send emails or create calendar events. Creation immediately presents a completed PresentReview ACP tool call, even while main continues. "Presented to the user" means saved in the conversation, not approved or sent. The saved cards remain usable after this execution and chat continues. User decisions arrive as typed system events referring to the same review ID. Use GetReview to read final drafts and confirmed outcomes; notifications never authorize repeating an action. To show the user what the program made, changed or found, present a view with await execution.views.present(view). It is checked and drawn at once, while main continues; nothing is saved and nothing comes back. When to present a view, and its format, are in the PresentView schema at the end of this description. Direct human-interactive tools and unsupported SDK operations remain available. Never sleep, call setTimeout or poll inside ExecuteCode to wait for something. To check back later, create a routine with a once trigger due shortly, macro.routines.create({trigger: {type: "once", at}, ...}), whose prompt says what to check and where to report, then finish; it runs within about a second of at.
  *
  * Change the text of existing markdown documents and task bodies in place with the SDK document edit(instructions) method; pass {fast: true} for small edits, because a full edit can take tens of seconds of the execution deadline. Read and edit canvases with document.canvas(). Read, calculate and edit native spreadsheets with macro.documents.spreadsheet(document).
  *
@@ -16771,4 +16802,58 @@ export interface MessageWithAttachments {
   content: string;
   date: string;
   attachmentIds: string[];
+}
+export interface Subagent {
+  task: string;
+}
+export interface SubagentResponse {
+  result: string;
+}
+/**
+ * Read actions attributed to the authenticated user within a time range, newest first. Use this for questions about what the user did, including actions an agent performed on their behalf. Property changes include propertyName/propertyType plus fromLabels/toLabels for resolved select and tag values; use those human-readable fields in the answer and never expose property or option ids. Do not use this for organization-wide updates or everything that happened to entities the user can access; use ListEntities for those. Returns at most 100 activities and reports when the result was truncated.
+ */
+export interface ReadActivity {
+  /**
+   * Inclusive start of the range as an RFC 3339 timestamp.
+   */
+  from: string;
+  /**
+   * Exclusive end of the range as an RFC 3339 timestamp. Must be after from.
+   */
+  to: string;
+}
+/**
+ * Response from [`ReadActivity`].
+ */
+export interface ReadActivityResponse {
+  /**
+   * Matching activity events, newest first.
+   */
+  activities: ToolActivityEvent[];
+  /**
+   * Whether more than 100 events matched the requested range.
+   */
+  truncated: boolean;
+}
+/**
+ * One activity event returned by [`ReadActivity`].
+ */
+export interface ToolActivityEvent {
+  /**
+   * The principal that mechanically performed the action.
+   */
+  actorId: string;
+  /**
+   * The kind of entity acted on.
+   */
+  entityType: string;
+  /**
+   * The entity acted on.
+   */
+  entityId: string;
+  action: ToolActivityAction;
+  /**
+   * When the action occurred.
+   */
+  occurredAt: string;
 }

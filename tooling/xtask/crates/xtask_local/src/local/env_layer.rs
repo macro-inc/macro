@@ -22,6 +22,7 @@ use std::process::Command;
 
 use anyhow::{Context, Result, bail};
 
+use super::computers::Computers;
 use super::instance::Instance;
 use super::local_env::Tunnels;
 use super::{Mode, local_env};
@@ -37,6 +38,16 @@ pub struct ResolvedEnv {
     pub generated_path: PathBuf,
 }
 
+/// Options controlling environment layers and local runtime wiring.
+pub struct ResolveOptions<'a> {
+    pub no_doppler: bool,
+    pub env_file: Option<&'a Path>,
+    pub static_frontend: bool,
+    pub tunnels: Tunnels<'a>,
+    pub wire_otel: bool,
+    pub computers: &'a Computers,
+}
+
 /// Resolve and materialize the environment for `mode`/`instance`.
 // The process-env layer reads the host environment directly (xtask is tooling,
 // not a service reading APP_SECRETS_JSON).
@@ -44,12 +55,17 @@ pub struct ResolvedEnv {
 pub fn resolve(
     mode: Mode,
     instance: &Instance,
-    no_doppler: bool,
-    env_file: Option<&Path>,
-    static_frontend: bool,
-    tunnels: Tunnels<'_>,
-    wire_otel: bool,
+    options: ResolveOptions<'_>,
 ) -> Result<ResolvedEnv> {
+    let ResolveOptions {
+        no_doppler,
+        env_file,
+        static_frontend,
+        tunnels,
+        wire_otel,
+        computers,
+    } = options;
+
     // Base = Doppler (`lcl_personal`/`dev_personal`); it supplies the
     // integration/secret config services require. For local we then overlay the
     // typed `LocalEnv` ON TOP, so code is the AUTHORITATIVE source for local
@@ -77,6 +93,7 @@ pub fn resolve(
         for (k, v) in local.to_env() {
             env.insert(k, v);
         }
+        computers.write_env(&mut env)?;
         // Persistent per-instance SSH host identity; never reuse a production key in local stacks.
         let key_path = instance.ensure_artifact_dir()?.join("preview_ssh_host_key");
         if !key_path.exists() {
@@ -101,6 +118,46 @@ pub fn resolve(
         env.insert(
             "PREVIEW_SSH_HOST_KEY".into(),
             std::fs::read_to_string(key_path).context("reading preview host key")?,
+        );
+        // Keep Passwords signing identity private and stable across local restarts.
+        let passwords_key_path = instance
+            .ensure_artifact_dir()?
+            .join("passwords-jwt.private.pem");
+        if !passwords_key_path.exists() {
+            let status = Command::new("openssl")
+                .args([
+                    "genpkey",
+                    "-algorithm",
+                    "RSA",
+                    "-pkeyopt",
+                    "rsa_keygen_bits:2048",
+                    "-out",
+                ])
+                .arg(&passwords_key_path)
+                .stderr(std::process::Stdio::null())
+                .status()
+                .context("generating local Passwords signing key")?;
+            if !status.success() {
+                bail!("openssl failed generating local Passwords signing key");
+            }
+        }
+        let passwords_public_key_path = instance
+            .ensure_artifact_dir()?
+            .join("passwords-jwt.public.pem");
+        let status = Command::new("openssl")
+            .args(["pkey", "-in"])
+            .arg(&passwords_key_path)
+            .args(["-pubout", "-out"])
+            .arg(&passwords_public_key_path)
+            .status()
+            .context("deriving local Passwords verification key")?;
+        if !status.success() {
+            bail!("openssl failed deriving local Passwords verification key");
+        }
+        env.insert(
+            "PASSWORDS_JWT_SIGNING_KEY".into(),
+            std::fs::read_to_string(passwords_key_path)
+                .context("reading local Passwords signing key")?,
         );
         // Local telemetry export: point services at the local OTLP collector
         // (docker-network alias `otel-collector`) only when the run asked for
@@ -145,6 +202,11 @@ pub fn resolve(
         pull_aws_credentials(&mut env);
     }
 
+    // Worker OTLP uses HTTP rather than the other services' gRPC endpoint.
+    // Apply the run's tracing policy after env overlays so traces-off cannot
+    // inherit an enabled worker exporter from a shared environment.
+    configure_sync_service_telemetry(&mut env, wire_otel, super::summary::port_open(4318));
+
     let generated_path = instance.ensure_artifact_dir()?.join("local.generated.env");
     write_dotenv(&generated_path, &env)
         .with_context(|| format!("writing {}", generated_path.display()))?;
@@ -155,6 +217,22 @@ pub fn resolve(
         env_file: env_file.map(Path::to_path_buf),
         generated_path,
     })
+}
+
+fn configure_sync_service_telemetry(
+    env: &mut BTreeMap<String, String>,
+    wire_otel: bool,
+    collector_ready: bool,
+) {
+    let endpoint = if wire_otel && collector_ready {
+        "http://otel-collector:4318"
+    } else {
+        ""
+    };
+    env.insert(
+        "SYNC_SERVICE_OTEL_EXPORTER_OTLP_ENDPOINT".into(),
+        endpoint.into(),
+    );
 }
 
 fn should_overlay_process_env(key: &str, value: &str) -> bool {

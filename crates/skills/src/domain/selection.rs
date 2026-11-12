@@ -13,7 +13,9 @@ mod test;
 use std::sync::Arc;
 use std::time::Duration;
 
-use cognition::domain::{Answer, BatchedOutcome, Cognition, MAX_QUESTIONS, decide_in_batches};
+use cognition::domain::{
+    Answer, BatchedOutcome, Cognition, MAX_QUESTIONS, RoutingRequest, decide_in_batches,
+};
 use futures::future::join_all;
 use macro_user_id::user_id::MacroUserIdStr;
 use tokio_util::sync::CancellationToken;
@@ -40,19 +42,8 @@ const LOAD_LIMIT: usize = 2;
 const UNDESCRIBED_LOAD_THRESHOLD: f32 = 0.95;
 /// Skills scoring at least this, but not loaded, are recorded as suggested.
 const SUGGEST_THRESHOLD: f32 = 0.5;
-/// Jev's limits on one question and on the request text it reads.
+/// Jev's limit on one question.
 const MAX_QUESTION_CHARS: usize = 500;
-const MAX_REQUEST_CHARS: usize = 8000;
-
-/// The user's words the turn answers.
-#[derive(Debug, Clone, Copy)]
-pub struct SkillRequest<'a> {
-    /// The newest user message.
-    pub latest: &'a str,
-    /// The user message before it, so a follow-up such as "now do it for Q3"
-    /// keeps the skill the conversation is using.
-    pub previous: Option<&'a str>,
-}
 
 /// A skill chosen for a turn, with its instructions.
 #[derive(Debug, Clone, PartialEq)]
@@ -147,7 +138,7 @@ pub async fn select_skills<Svc: SkillService>(
     service: &Svc,
     cognition: Option<&Arc<dyn Cognition>>,
     user: &MacroUserIdStr<'static>,
-    request: SkillRequest<'_>,
+    request: RoutingRequest<'_>,
     already_loaded: &[Uuid],
     cancel: &CancellationToken,
 ) -> SkillSelection {
@@ -191,7 +182,7 @@ async fn select<Svc: SkillService>(
     service: &Svc,
     cognition: Option<&Arc<dyn Cognition>>,
     user: &MacroUserIdStr<'static>,
-    request: SkillRequest<'_>,
+    request: RoutingRequest<'_>,
     already_loaded: &[Uuid],
     cancel: &CancellationToken,
 ) -> SkillSelection {
@@ -249,7 +240,7 @@ async fn select<Svc: SkillService>(
 /// (most recently updated first), up to what [`MAX_CALLS`] can ask about.
 fn candidates(
     skills: Vec<SkillSummary>,
-    request: SkillRequest<'_>,
+    request: RoutingRequest<'_>,
     already_loaded: &[Uuid],
 ) -> Vec<SkillSummary> {
     let mut candidates: Vec<SkillSummary> = skills
@@ -266,13 +257,10 @@ fn candidates(
 async fn score(
     cognition: &dyn Cognition,
     user: &MacroUserIdStr<'static>,
-    request: SkillRequest<'_>,
+    request: RoutingRequest<'_>,
     candidates: &[SkillSummary],
 ) -> Result<Vec<(SkillSummary, f32)>, SelectionStatus> {
-    let mut input = serde_json::json!({ "request": clip(request.latest, MAX_REQUEST_CHARS) });
-    if let Some(previous) = request.previous {
-        input["previousRequest"] = clip(previous, MAX_REQUEST_CHARS).into();
-    }
+    let input = request.decision_input("request");
     let questions: Vec<String> = candidates.iter().map(question).collect();
     let decision = decide_in_batches(&input, &questions, DECISION_DEADLINE, |request| {
         cognition.decide(user, request)

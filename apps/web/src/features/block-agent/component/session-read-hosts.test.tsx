@@ -130,10 +130,15 @@ vi.mock('@app/features/changes/changes', () => ({
 }));
 vi.mock('@components/app/side-panel', () => ({
   SidePanel: {
+    FLOATING_CLEARANCE_PX: 344,
     Layout: (props: { children: JSX.Element }) => props.children,
     Root: (props: { children: JSX.Element }) => props.children,
     Toggle: () => null,
   },
+  useSidePanel: () => null,
+}));
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({ enabled: false }),
 }));
 vi.mock('@components/app/split-layout/components/SplitFileMenu', () => ({
   SplitFileMenu: () => null,
