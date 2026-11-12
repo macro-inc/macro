@@ -1,5 +1,7 @@
 import { setPageSeo } from '../../../app/utils/utilSeo';
 import {
+  ChannelAgentDemo,
+  ChannelInboxDemo,
   ChannelPermissionsDemo,
   ChannelThreadDemo,
 } from '../components/channels/ChannelStories';
@@ -7,7 +9,6 @@ import { FeatureComparisons } from '../components/comparisons/FeatureComparisons
 import { DemoInteractionBoundary } from '../components/DemoInteractionBoundary';
 import { FeaturePageFaq, FeaturePageSection } from '../components/FeaturePage';
 import { HomepageClosing } from '../components/HomepageClosing';
-import { PaperChatCall } from '../components/paper/PaperChatCall';
 import { PaperChatCreate } from '../components/paper/PaperChatCreate';
 import { PaperFeatureGraphic } from '../components/paper/PaperFeatureGraphic';
 import { ProductHero, ProductPage } from '../components/product/ProductPage';
@@ -31,8 +32,8 @@ export function RouteChannels() {
       />
       <FeaturePageSection
         id="shared-work"
-        title="Share emails, docs, and tasks in chat."
-        description="@mention an email, doc, or task to share it with the channel. Create a task from a message without leaving the conversation."
+        title="Integrated with everything else."
+        description="Channels are already the lifeblood of your company. Macro makes that a feature rather than an anti-pattern: @mention an email, doc, or task, create a task right from any message, or ask Macro, without leaving the conversation."
       >
         <PaperFeatureGraphic label="Create a task, share a document, or ask Macro from the channel composer.">
           <PaperChatCreate />
@@ -43,8 +44,8 @@ export function RouteChannels() {
         demo={{
           tone: 'chat',
         }}
-        title="Share access with channel members."
-        description="Anything you @mention in a channel is automatically shared with its members. Join a channel, gain access; leave, lose it."
+        title="@mention to share with the right people."
+        description="Anything you @mention in a channel is automatically shared with its members. Join a channel, gain access; leave, lose it. No permission-request dance."
       >
         <DemoInteractionBoundary
           class="feature-page-visual"
@@ -53,26 +54,42 @@ export function RouteChannels() {
       </FeaturePageSection>
       <FeaturePageSection
         id="channel-agents"
-        title="Bring Macro Agents into the conversation."
-        description="Mention the Macro Agent and ask it to create tasks or update a document from the conversation."
-      >
-        <PaperFeatureGraphic label="Ask Macro in a channel and see its completed work in the conversation.">
-          <PaperChatCall />
-        </PaperFeatureGraphic>
-      </FeaturePageSection>
-      <FeaturePageSection
-        id="catch-up"
         demo={{
           tone: 'chat',
         }}
-        title="Mark conversations done as you go."
-        description="Keep messages waiting in your inbox until you’re ready to reply, then mark them done. The first couple of replies show inline, so you don’t have to open a side panel to read every thread."
+        title="Macro Agents are first-class, like humans."
+        description="@mention an agent to get it working on something, with the whole conversation as context. Or let it listen in and reply when it’s needed, like a teammate would, without @mentioning."
       >
-        <span id="channel-threads" />
-        <span id="chat-inbox" />
+        <DemoInteractionBoundary
+          class="feature-page-visual"
+          render={() => <ChannelAgentDemo />}
+        />
+      </FeaturePageSection>
+      <FeaturePageSection
+        id="channel-threads"
+        demo={{
+          tone: 'chat',
+        }}
+        title="Built for focused technical conversations."
+        description="The first couple of replies show inline and the rest collapse into a thread, so a busy channel stays readable. Slack’s side panel is nice for organization but can make it hard to find things; iMessage and Discord are good for casual conversations, but not deep technical ones."
+      >
         <DemoInteractionBoundary
           class="feature-page-visual"
           render={() => <ChannelThreadDemo />}
+        />
+      </FeaturePageSection>
+      <FeaturePageSection
+        id="chat-inbox"
+        demo={{
+          tone: 'chat',
+        }}
+        title="A real inbox, like Macro Mail."
+        description="Slack has no real inbox, only read and unread. Macro keeps messages waiting for later, so you don’t have to remember to reply, and you mark them done as you go. Mark a channel as Signal or Noise to decide what reaches your main inbox."
+      >
+        <span id="catch-up" />
+        <DemoInteractionBoundary
+          class="feature-page-visual"
+          render={() => <ChannelInboxDemo />}
         />
       </FeaturePageSection>
       <FeatureComparisons

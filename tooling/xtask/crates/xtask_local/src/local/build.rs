@@ -11,7 +11,7 @@ mod dep_cache;
 mod runtime_image;
 
 pub use binaries_dir::{Adoption, BinariesDir};
-pub use runtime_image::{RUNTIME_IMAGE_TAG, ensure_runtime_image};
+pub use runtime_image::{ensure_runtime_image, runtime_image_tag};
 
 use anyhow::Result;
 

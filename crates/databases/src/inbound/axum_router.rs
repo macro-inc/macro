@@ -153,6 +153,10 @@ where
             get(get_database_handler::<Service, EntityAccess, Authorization>),
         )
         .route(
+            "/{id}/appearance",
+            put(set_database_appearance::<Service, EntityAccess, Authorization>),
+        )
+        .route(
             "/{id}/duplicate",
             post(duplicate::duplicate_database_handler::<Service, EntityAccess, Authorization>),
         )
@@ -341,6 +345,33 @@ where
     Ok(Json(detail))
 }
 
+/// Replace a database's icon and color without changing its content timestamp.
+#[utoipa::path(put, tag = "databases", operation_id = "set_database_appearance",
+    path = "/databases/{id}/appearance",
+    params(("id" = Uuid, Path, description = "Database id")),
+    request_body = model_entity::EntityAppearance,
+    responses((status = 200, body = model_entity::EntityAppearance),
+        (status = 400, body = ErrorResponse), (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse), (status = 404, body = ErrorResponse)))]
+#[tracing::instrument(err, skip_all)]
+pub async fn set_database_appearance<Service, EntityAccess, Authorization>(
+    access: DatabaseAccessLevelExtractor<EditAccessLevel, EntityAccess, Authorization>,
+    State(state): State<DatabasesRouterState<Service, EntityAccess, Authorization>>,
+    Json(appearance): Json<model_entity::EntityAppearance>,
+) -> Result<Json<model_entity::EntityAppearance>, DatabaseError>
+where
+    Service: DatabasesService,
+    EntityAccess: EntityAccessService,
+    Authorization: MacroAuthorizationService,
+{
+    Ok(Json(
+        state
+            .service
+            .set_appearance(access.entity_access_receipt, appearance)
+            .await?,
+    ))
+}
+
 /// Tell a database's other viewers where the caller is.
 #[utoipa::path(
     put,
@@ -448,6 +479,7 @@ impl IntoResponse for DatabaseError {
             DatabaseError::InvalidSchemaOperation(_)
             | DatabaseError::InvalidSharing(_)
             | DatabaseError::InvalidOp(_) => StatusCode::BAD_REQUEST,
+            DatabaseError::InvalidAppearance(_) => StatusCode::BAD_REQUEST,
             DatabaseError::Repo(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
         let message = match self {

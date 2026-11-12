@@ -8,7 +8,6 @@
 import type {
   ActionConfiguration,
   ActionConfigurationUpdate,
-  ActionExecutionRecord,
   AiAdmissionErrorBody,
   CatalogEntry,
   CheckRoutineRequest,
@@ -17,6 +16,8 @@ import type {
   Draft,
   DraftRoutineRequest,
   EmptyResponse,
+  EntityAppearance,
+  ExecutionRecordResponse,
   GenerateRoutineSuggestionsParams,
   InProgressExecution,
   ListRoutineSuggestionsParams,
@@ -144,6 +145,16 @@ export const listScheduledActions = async (
   } as listScheduledActionsResponse;
 };
 
+/**
+ * @summary Create a routine. A create made by a routine's run, from its code step
+or its Ask AI step's session, makes that routine's sub-routine: the
+caller's credential says so, never the body.
+ */
+export type createScheduledActionResponse200 = {
+  data: ScheduledActionResponse;
+  status: 200;
+};
+
 export type createScheduledActionResponse201 = {
   data: ScheduledActionResponse;
   status: 201;
@@ -164,19 +175,27 @@ export type createScheduledActionResponse403 = {
   status: 403;
 };
 
+export type createScheduledActionResponse409 = {
+  data: string;
+  status: 409;
+};
+
 export type createScheduledActionResponse500 = {
   data: string;
   status: 500;
 };
 
-export type createScheduledActionResponseSuccess =
-  createScheduledActionResponse201 & {
-    headers: Headers;
-  };
+export type createScheduledActionResponseSuccess = (
+  | createScheduledActionResponse200
+  | createScheduledActionResponse201
+) & {
+  headers: Headers;
+};
 export type createScheduledActionResponseError = (
   | createScheduledActionResponse400
   | createScheduledActionResponse401
   | createScheduledActionResponse403
+  | createScheduledActionResponse409
   | createScheduledActionResponse500
 ) & {
   headers: Headers;
@@ -922,6 +941,70 @@ export const deleteScheduledAction = async (
   } as deleteScheduledActionResponse;
 };
 
+export type setScheduledActionAppearanceResponse200 = {
+  data: EntityAppearance;
+  status: 200;
+};
+
+export type setScheduledActionAppearanceResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type setScheduledActionAppearanceResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type setScheduledActionAppearanceResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type setScheduledActionAppearanceResponseSuccess =
+  setScheduledActionAppearanceResponse200 & {
+    headers: Headers;
+  };
+export type setScheduledActionAppearanceResponseError = (
+  | setScheduledActionAppearanceResponse400
+  | setScheduledActionAppearanceResponse401
+  | setScheduledActionAppearanceResponse404
+) & {
+  headers: Headers;
+};
+
+export type setScheduledActionAppearanceResponse =
+  | setScheduledActionAppearanceResponseSuccess
+  | setScheduledActionAppearanceResponseError;
+
+export const getSetScheduledActionAppearanceUrl = (id: string) => {
+  return `/scheduled-actions/${id}/appearance`;
+};
+
+export const setScheduledActionAppearance = async (
+  id: string,
+  entityAppearance: EntityAppearance,
+  options?: RequestInit
+): Promise<setScheduledActionAppearanceResponse> => {
+  const res = await fetch(getSetScheduledActionAppearanceUrl(id), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(entityAppearance),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: setScheduledActionAppearanceResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as setScheduledActionAppearanceResponse;
+};
+
 export type listScheduledActionCodeUpgradesResponse200 = {
   data: CodeUpgrade[];
   status: 200;
@@ -981,6 +1064,77 @@ export const listScheduledActionCodeUpgrades = async (
     status: res.status,
     headers: res.headers,
   } as listScheduledActionCodeUpgradesResponse;
+};
+
+/**
+ * @summary Keep a sub-routine as the owner's own routine: it moves to the main list
+and no longer follows the routine whose run created it.
+ */
+export type detachScheduledActionResponse200 = {
+  data: ScheduledActionResponse;
+  status: 200;
+};
+
+export type detachScheduledActionResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type detachScheduledActionResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type detachScheduledActionResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type detachScheduledActionResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type detachScheduledActionResponseSuccess =
+  detachScheduledActionResponse200 & {
+    headers: Headers;
+  };
+export type detachScheduledActionResponseError = (
+  | detachScheduledActionResponse400
+  | detachScheduledActionResponse401
+  | detachScheduledActionResponse404
+  | detachScheduledActionResponse500
+) & {
+  headers: Headers;
+};
+
+export type detachScheduledActionResponse =
+  | detachScheduledActionResponseSuccess
+  | detachScheduledActionResponseError;
+
+export const getDetachScheduledActionUrl = (id: string) => {
+  return `/scheduled-actions/${id}/detach`;
+};
+
+export const detachScheduledAction = async (
+  id: string,
+  options?: RequestInit
+): Promise<detachScheduledActionResponse> => {
+  const res = await fetch(getDetachScheduledActionUrl(id), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: detachScheduledActionResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as detachScheduledActionResponse;
 };
 
 export type setScheduledActionEnabledResponse200 = {
@@ -1145,7 +1299,7 @@ export const executeScheduledActionNow = async (
 };
 
 export type listScheduledActionHistoryResponse200 = {
-  data: ActionExecutionRecord[];
+  data: ExecutionRecordResponse[];
   status: 200;
 };
 

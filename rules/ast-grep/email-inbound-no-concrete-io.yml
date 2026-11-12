@@ -1,0 +1,187 @@
+id: email-inbound-no-concrete-io
+language: rust
+severity: error
+message: Email handlers and delivery processors must call domain services, not concrete I/O.
+note: |-
+  Tests are exempt because they wire fakes/adapters. API context declarations are checked by email-worker-no-runtime-io.
+  SQS Message, cleanup/receive via sqs_worker, and the exact email envelope/trace metadata are transport.
+  Existing UUID/chrono aliases are I/O-free; InboxPersistenceError is an error translation contract.
+  Only the existing GetThreadError::QueryError and ImportSignatureError::GmailApiError payload types are allowed, not their clients.
+files:
+  - crates/email/src/inbound.rs
+  - crates/email/src/inbound/**
+  - services/email_service/src/api.rs
+  - services/email_service/src/api/**
+  - services/email_service/src/pubsub/**/process.rs
+  - services/email_service/src/pubsub/**/error_handlers.rs
+  - services/email_service/src/pubsub/**/deferral.rs
+  - services/email_service/src/pubsub/worker_lifecycle.rs
+ignores:
+  - '**/test.rs'
+  - '**/tests.rs'
+  - '**/test/**'
+  - '**/tests/**'
+  - '**/*_test.rs'
+  - '**/*_tests.rs'
+  - services/email_service/src/api/context.rs
+rule:
+  all:
+    - any:
+        - all:
+            - regex: ^(::\s*)?(?:(?:email_db_client|sqlx(?:_core)?|sqs_client|redis|reqwest|gmail_client|s3_client|aws_config|aws_sdk_\w+|rdkafka|opensearch|static_file_service_client|document_storage_service_client|authentication_service_client|connection_gateway_client)\b|email_api_client(?:\s+as\s+\w+)?$|email_api_client\s*::\s*(?:(?:GmailApiClientRepository|OutlookApiClientRepository|inbound|outbound)\b|\*)|crate\s*::\s*outbound\b|crate\s*::\s*util\s*::\s*redis\b|(?:email|calendar_events)\s*::\s*outbound\b|crate\s*::\s*(?:calendar_tokens|calendar_request_gate|calendar_refresh)\b|std\s*::\s*(?:env|fs)\b|tokio\s*::\s*fs\b)
+            - any:
+                - any:
+                    - kind: scoped_identifier
+                    - kind: scoped_type_identifier
+                    - kind: scoped_use_list
+                    - kind: use_as_clause
+                    - kind: use_wildcard
+                  not:
+                    any:
+                      - inside:
+                          any:
+                            - kind: scoped_identifier
+                            - kind: scoped_type_identifier
+                            - kind: use_as_clause
+                      - inside:
+                          kind: scoped_use_list
+                          stopBy: end
+                - kind: identifier
+                  inside:
+                    any:
+                      - kind: use_declaration
+                      - kind: use_list
+                  not:
+                    inside:
+                      kind: scoped_use_list
+                      stopBy: end
+        - kind: scoped_use_list
+          not:
+            inside:
+              kind: scoped_use_list
+              stopBy: end
+          all:
+            - has:
+                field: path
+                regex: ^(::\s*)?email_api_client$
+            - has:
+                field: list
+                has:
+                  regex: ^(?:GmailApiClientRepository|OutlookApiClientRepository|inbound|outbound|self)\b|^\*
+        - kind: scoped_use_list
+          not:
+            inside:
+              kind: scoped_use_list
+              stopBy: end
+          all:
+            - has:
+                field: path
+                regex: ^(::\s*)?crate$
+            - has:
+                field: list
+                has:
+                  regex: ^(?:outbound|calendar_tokens|calendar_request_gate|calendar_refresh|util\s*::\s*redis)\b|^\*
+        - kind: scoped_use_list
+          not:
+            inside:
+              kind: scoped_use_list
+              stopBy: end
+          all:
+            - has:
+                field: path
+                regex: ^(::\s*)?email$
+            - has:
+                field: list
+                has:
+                  regex: ^(?:outbound)\b|^\*
+        - kind: scoped_use_list
+          not:
+            inside:
+              kind: scoped_use_list
+              stopBy: end
+          all:
+            - has:
+                field: path
+                regex: ^(::\s*)?calendar_events$
+            - has:
+                field: list
+                has:
+                  regex: ^(?:outbound)\b|^\*
+        - kind: scoped_use_list
+          all:
+            - has:
+                field: path
+                regex: ^(::\s*)?crate$
+            - has:
+                field: list
+                has:
+                  kind: scoped_use_list
+                  all:
+                    - has:
+                        field: path
+                        regex: ^util$
+                    - has:
+                        field: list
+                        has:
+                          regex: ^redis\b
+        - kind: scoped_use_list
+          not:
+            inside:
+              kind: scoped_use_list
+              stopBy: end
+          all:
+            - has:
+                field: path
+                regex: ^(::\s*)?std$
+            - has:
+                field: list
+                has:
+                  regex: ^(?:env|fs)\b|^\*
+        - kind: scoped_use_list
+          not:
+            inside:
+              kind: scoped_use_list
+              stopBy: end
+          all:
+            - has:
+                field: path
+                regex: ^(::\s*)?tokio$
+            - has:
+                field: list
+                has:
+                  regex: ^fs\b|^\*
+    - not:
+        any:
+          - regex: ^(::\s*)?(?:sqlx\s*::\s*types\s*::\s*Uuid|sqlx_core\s*::\s*types\s*::\s*chrono\s*::\s*(?:DateTime|Utc)|aws_sdk_sqs\s*::\s*types\s*::\s*Message|sqs_client\s*::\s*email\s*::\s*(?:SFSDeleteMessage|BACKFILL_DEFERRALS_ATTRIBUTE|trace_context\s*::\s*(?:adopt|ATTRIBUTE))|crate\s*::\s*outbound\s*::\s*persistence_error\s*::\s*InboxPersistenceError)(?:\s+as\s+\w+)?$
+          - regex: ^(::\s*)?aws_sdk_sqs\s*::\s*types\s*::\s*\{\s*(?:Message)(?:\s+as\s+\w+)?(?:\s*,\s*(?:Message)(?:\s+as\s+\w+)?)*\s*,?\s*\}$
+          - regex: ^(::\s*)?sqlx\s*::\s*types\s*::\s*\{\s*(?:Uuid)(?:\s+as\s+\w+)?(?:\s*,\s*(?:Uuid)(?:\s+as\s+\w+)?)*\s*,?\s*\}$
+          - regex: ^(::\s*)?sqlx_core\s*::\s*types\s*::\s*chrono\s*::\s*\{\s*(?:DateTime|Utc)(?:\s+as\s+\w+)?(?:\s*,\s*(?:DateTime|Utc)(?:\s+as\s+\w+)?)*\s*,?\s*\}$
+          - regex: ^(::\s*)?sqs_client\s*::\s*email\s*::\s*trace_context\s*::\s*\{\s*(?:adopt|ATTRIBUTE)(?:\s+as\s+\w+)?(?:\s*,\s*(?:adopt|ATTRIBUTE)(?:\s+as\s+\w+)?)*\s*,?\s*\}$
+          - kind: scoped_type_identifier
+            regex: ^(::\s*)?sqlx\s*::\s*Error$
+            inside:
+              kind: enum_variant
+              has:
+                field: name
+                regex: ^QueryError$
+              inside:
+                kind: enum_item
+                has:
+                  field: name
+                  regex: ^GetThreadError$
+                stopBy: end
+              stopBy: end
+          - kind: scoped_type_identifier
+            regex: ^(::\s*)?gmail_client\s*::\s*GmailApiHttpError$
+            inside:
+              kind: enum_variant
+              has:
+                field: name
+                regex: ^GmailApiError$
+              inside:
+                kind: enum_item
+                has:
+                  field: name
+                  regex: ^ImportSignatureError$
+                stopBy: end
+              stopBy: end

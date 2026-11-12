@@ -186,6 +186,8 @@ export type QuickAccessList<T extends QuickAccessItem = QuickAccessItem> = {
   totalCount: Accessor<number>;
   hasMore: Accessor<boolean>;
   isLoading: Accessor<boolean>;
+  /** The cache has not yet answered the current query; listed rows may be other sources'. */
+  isSearching?: Accessor<boolean>;
   isLoadingMore: Accessor<boolean>;
   error: Accessor<unknown>;
   loadMore: () => Promise<void>;

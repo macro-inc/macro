@@ -11,13 +11,15 @@ use serde::Deserialize;
 
 use super::{
     AttendeeInput, CalendarLabels, CalendarToolContext, CopyChange, EventRemindersInput,
-    EventTimeInput, OutOfOfficeInput, ToolCalendarEvent, confirm_copy, mutation_tool_error,
+    EventTimeInput, OutOfOfficeInput, ToolCalendarEvent, confirm_copy,
+    macro_call_update_tool_error, mutation_tool_error,
 };
 use crate::domain::{
+    meeting_links::first_macro_call_url,
     models::{AttendeeResponseStatus, CalendarEventPatch, ConferenceChange, GuestPolicy},
     ports::{
-        CalendarMutationService, CalendarOccurrenceService, CalendarRsvpScope, CalendarUpdateScope,
-        MeetingLinkProvider,
+        CalendarMacroCallService, CalendarMutationService, CalendarOccurrenceService,
+        CalendarRsvpScope, CalendarUpdateScope, MeetingLinkProvider,
     },
 };
 
@@ -125,6 +127,13 @@ allows it, and answer with `rsvp`; changing the title, time, description, locati
 recurrence or conference fails because the organizer doesn't let guests change the \
 event.\n\
 \n\
+`addMacroCall` switches the event to a Macro call in place, so never delete and recreate an \
+event to change its meeting link. It creates the call, adds its join link to the description \
+(and to `location` when no physical location is set), and removes any Google Meet or other \
+conference, in the one update attendees are notified of. The returned event's `macroCallUrl` \
+holds the link. An Outlook event's Teams meeting cannot be removed this way, and the call \
+then fails.\n\
+\n\
 `rsvp` sets the user's own response to an invitation and is independent of the field \
 edits — it can be the only thing this call changes. It applies at the same `scope` as \
 the rest of the call and answers as the connected inbox the event's copy belongs to, so \
@@ -225,10 +234,20 @@ pub struct UpdateCalendarEvent {
         description = "Change the event's video conference: \"provider_default\" uses the calendar's \
                        supported provider; \"google_meet\" or \"microsoft_teams\" selects one explicitly. \
                        \"remove\" detaches the conference only where supported. Check ListCalendars \
-                       capabilities first. Omit to preserve the current conference."
+                       capabilities first. Omit to preserve the current conference. To switch \
+                       to a Macro call use `addMacroCall` instead."
     )]
     #[serde(default)]
     pub conference: Option<ConferenceChangeInput>,
+
+    /// Whether to switch the event to a Macro call.
+    #[schemars(
+        description = "Switch the event to a Macro call, replacing any Google Meet or other \
+                       conference. An event already holding a Macro call keeps it. Mutually \
+                       exclusive with `conference`."
+    )]
+    #[serde(default)]
+    pub add_macro_call: bool,
 
     /// Replacement reminder configuration.
     #[schemars(
@@ -279,7 +298,7 @@ impl ToolAnnotated for UpdateCalendarEvent {
 #[async_trait]
 impl<M, O, L> AsyncTool<CalendarToolContext<M, O, L>> for UpdateCalendarEvent
 where
-    M: CalendarMutationService,
+    M: CalendarMutationService + CalendarMacroCallService,
     O: CalendarOccurrenceService,
     L: MeetingLinkProvider,
 {
@@ -297,8 +316,20 @@ where
             attendee_count=?self.attendees.as_ref().map(Vec::len),
             rsvp=?self.rsvp,
             inbox_confirmed=self.inbox.is_some(),
+            add_macro_call=self.add_macro_call,
             "Update calendar event"
         );
+
+        if self.add_macro_call && self.conference.is_some() {
+            return Err(ToolCallError {
+                description: "`addMacroCall` and `conference` are mutually exclusive; pick one."
+                    .to_string(),
+                internal_error: anyhow::Error::from_boxed(
+                    rootcause::report!("both Macro call and provider conference requested")
+                        .into_boxed_error(),
+                ),
+            });
+        }
 
         let requester_id = request_context.user_id.to_string();
         let scope = match (self.scope, self.recurrence_id.clone()) {
@@ -352,7 +383,7 @@ where
         // Reminders and the user's own answer belong to one copy; anything
         // else reaches the meeting, so the agent must have chosen the copy
         // when the meeting is on several of the user's inboxes.
-        if patch.reaches_meeting() || self.inbox.is_some() {
+        if patch.reaches_meeting() || self.add_macro_call || self.inbox.is_some() {
             confirm_copy(
                 &*service_context.occurrences,
                 &requester_id,
@@ -368,7 +399,21 @@ where
         // An RSVP is its own provider call, so a call carrying only one runs
         // only that half. Answering after the patch keeps a replaced attendee
         // list from discarding the response that was just recorded.
-        let patched = if patch.is_empty() {
+        let patched = if self.add_macro_call {
+            Some(
+                service_context
+                    .mutations
+                    .update_event_with_macro_call(
+                        &requester_id,
+                        self.event_id,
+                        self.calendar_id,
+                        patch,
+                        scope.clone(),
+                    )
+                    .await
+                    .map_err(macro_call_update_tool_error)?,
+            )
+        } else if patch.is_empty() {
             None
         } else {
             Some(
@@ -425,6 +470,14 @@ where
         };
 
         let labels = CalendarLabels::load(&*service_context.mutations, &requester_id).await;
-        Ok(ToolCalendarEvent::from_event(&event, &labels))
+        let macro_call_url = if self.add_macro_call {
+            first_macro_call_url(event.location.as_deref(), event.description.as_deref())
+        } else {
+            None
+        };
+        Ok(ToolCalendarEvent {
+            macro_call_url,
+            ..ToolCalendarEvent::from_event(&event, &labels)
+        })
     }
 }

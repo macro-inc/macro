@@ -215,7 +215,10 @@ Company-email and email-less contacts keep a read-only company value. The separa
 contacts; Shift-click opens a separate split on desktop.
 
 Pending controls prevent duplicate saves; rejected edits retain their draft for
-retry. The server enforces add-only email and personal-provider eligibility.
+retry. The server accepts more than these controls offer: it adds and removes
+further addresses, changes the primary and unlinks a company (see
+`docs/design/crm-contact-creation.md`); it still enforces personal-provider
+eligibility for link and switch.
 Another contact with the address in the same team rejects the change without
 merging; restricted matches return generic feedback. Foreign-team destinations
 and new links to archived companies are rejected.
@@ -225,7 +228,7 @@ archive state. Restore a visible child through its archived company before
 moving it. Personal-email sync reuses a unique existing contact, preserving its
 chosen company through sent/received refreshes and source cleanup. Ambiguous
 matches are left unchanged. CRM settings and domain admission still apply.
-Existing email replacement and alias/history redesign are outside this version.
+The web controls for several addresses and for unlinking are not built yet.
 
 Company and contact headers group `Copy link` separately from the side-panel toggle.
 Desktop section tabs collapse to icons in narrow panes; each icon keeps a tooltip.
@@ -626,8 +629,12 @@ company. A selected company with email sync disabled suppresses interaction and
 source updates while preserving the manual record. Both paths require the
 mailbox owner's exact-primary contribution consent and eligible stored history.
 Manual add-email and company link/switch remain available without consent and
-never enable sync or enroll a mailbox. Vendor, brand
-and bulk-sender filters still apply. Turning the filter back on stops future
+never enable sync or enroll a mailbox. In the contact company picker, Next
+options (or PageDown on desktop) appends later browse or search pages to the
+visible companies. The control shows loading and page failures with retry, and
+disappears at the end of the results. Selecting a company keeps singleton
+replacement and the separate Go to action unchanged. Vendor, brand and bulk-sender filters still
+apply. Turning the filter back on stops future
 capture without deleting contacts. The existing admin **Blocked domains**
 controls use the same team exclusions as the privacy dialog. Blocking or
 unblocking never archives or restores records. A partially failed multi-domain

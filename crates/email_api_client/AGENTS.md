@@ -104,6 +104,18 @@ Outlook (Microsoft Graph) outbound adapters.
   and its `url.template` comes from `outlook/route.rs`, which keeps only
   known Graph path words so ids and user-chosen names never reach it. Record
   numeric fields as `i64`; unsigned values reach the collector as strings.
+- Graph reads `$top` on a delta request as a cap on the whole round, not a
+  page size: it stops at that many items and returns the deltaLink, so the
+  rest of the folder is never listed and later rounds never return it. Never
+  put `$top` on a delta request; size its pages with
+  `Prefer: odata.maxpagesize` instead. The mail-folder delta reads through
+  `transport::get_delta_page`, which sends it as its own `Prefer` line on
+  every page, since the nextLink does not carry it.
+- Raise `FolderChangeReader::READER_REVISION` with a change that lets a fresh
+  folder delta round list mail an older round missed. Each page carries the
+  revision that read it, the folder stream records the revision its round
+  started at, and `reimport_outlook_folders` restarts streams whose round
+  started at an older one ([runbook](../../docs/runbooks/outlook-folder-reimport.md)).
 - `domain::request_count::counted` counts the Graph requests one unit of work
   sends (the transport calls `record_sent`); Outlook token failures surface
   as `EmailApiError::CredentialsUnavailable`, apart from Graph failures.
