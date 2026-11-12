@@ -48,7 +48,11 @@ export const passes = (grade: Grade) => grade.score >= 4;
 function glossary(draft: DraftResult, names: Map<string, string>): string[] {
   const body = JSON.stringify([draft.trigger, draft.steps, draft.step, draft.task]);
   const found = new Set(body.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g) ?? []);
-  return [...found].map((id) => `${id}: ${names.get(id) ?? 'not one of the person’s items'}`);
+  const created = new Map((draft.created ?? []).map((item) => [item.entityId, item.entityType]));
+  return [...found].map((id) => {
+    const made = created.get(id);
+    return `${id}: ${names.get(id) ?? (made ? `a ${made} made while drafting this routine` : 'not one of the person’s items')}`;
+  });
 }
 
 /** The routine a step case starts from. */
