@@ -448,6 +448,13 @@ Android cannot receive legacy schema 2 updates because their shared minimum
 cannot establish Android compatibility. `MIN_NATIVE_BUILD` remains supported
 for iOS/desktop-only schema 2 releases.
 
+Desktop reads `minNativeBuild` (`MIN_NATIVE_BUILD`) from schema 3 manifests too.
+Its release numbers come from hand-typed tags, so they never gate updater
+capabilities: each check sends `manifest_schema`, the newest manifest schema the
+updater reads, and the endpoint offers desktop no bundle with a newer schema.
+Desktop updaters that predate the parameter reject schema 3 after downloading
+it, so they keep their bundle until a native update.
+
 Every new native command used by shared JS must raise the corresponding
 platform minimum to a binary that implements it. Optional reachability falls
 back to browser connectivity if an older native binary lacks the command.
