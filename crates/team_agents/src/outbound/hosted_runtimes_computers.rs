@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use hosted_runtimes::domain::{
     agent::ComputerAgents,
+    lifecycle::Rejected,
     models::{self, FleetAttachment},
     ports::{Billing, CompPolicy, ComputerRepo, FleetAttachmentSource},
     service::{Clock, ComputerError, ComputerService},
@@ -53,6 +54,30 @@ fn purchase_error(error: ComputerError) -> TeamAgentError {
         ),
         ComputerError::Billing(billing) => TeamAgentError::ComputerUnavailable(billing.to_string()),
         other => TeamAgentError::internal(other),
+    }
+}
+
+/// A roster read that failed: a purchase still confirming is `Purchasing`,
+/// not a failure of the whole list.
+fn roster_error(error: ComputerError) -> Result<ComputerState, TeamAgentError> {
+    match error {
+        ComputerError::NotPurchased => Ok(ComputerState::Purchasing),
+        other => Err(TeamAgentError::internal(other)),
+    }
+}
+
+/// What a release means for removing the agent.
+fn released<Released>(result: Result<Released, ComputerError>) -> Result<(), TeamAgentError> {
+    match result {
+        // Already released: by an earlier removal that stopped part way, or
+        // by an admin on the Computers page. Or never there at all.
+        Ok(_) | Err(ComputerError::NotFound | ComputerError::Rejected(Rejected::Released)) => {
+            Ok(())
+        }
+        // Still confirming, it may yet be charged; removing the agent now
+        // would cascade its reservation away and orphan the billed item.
+        Err(ComputerError::NotPurchased) => Err(TeamAgentError::PurchaseConfirming),
+        Err(error) => Err(TeamAgentError::internal(error)),
     }
 }
 
@@ -143,21 +168,14 @@ where
         team_id: Uuid,
         computer_id: ComputerId,
     ) -> Result<ComputerState, TeamAgentError> {
-        let (status, availability) = self
-            .service
-            .status_for_roster(team_id, computer_id)
-            .await
-            .map_err(TeamAgentError::internal)?;
-        Ok(computer_state(status.status, availability))
+        match self.service.status_for_roster(team_id, computer_id).await {
+            Ok((status, availability)) => Ok(computer_state(status.status, availability)),
+            Err(error) => roster_error(error),
+        }
     }
 
     #[tracing::instrument(skip(self), err)]
     async fn release(&self, team_id: Uuid, computer_id: ComputerId) -> Result<(), TeamAgentError> {
-        match self.service.request_release(team_id, computer_id).await {
-            // A purchase still confirming settles uncharged or becomes a
-            // computer; nothing to release yet.
-            Ok(_) | Err(ComputerError::NotFound | ComputerError::NotPurchased) => Ok(()),
-            Err(error) => Err(TeamAgentError::internal(error)),
-        }
+        released(self.service.request_release(team_id, computer_id).await)
     }
 }

@@ -814,6 +814,10 @@ async fn run() -> anyhow::Result<()> {
         event_broker_tracker.clone(),
         service_shutdown.clone(),
         public_code_mode,
+        feature_flags
+            .clone()
+            .map(anthropic_gateway::brain::BrainRollout::new)
+            .unwrap_or_default(),
     )
     .await
     .context("failed to compose public MCP")?;
@@ -2049,6 +2053,7 @@ async fn run() -> anyhow::Result<()> {
         pool.clone(),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
         agent_git_tasks.clone(),
+        feature_flags.clone(),
     )
     .await?;
     let http_shutdown = service_shutdown.clone();

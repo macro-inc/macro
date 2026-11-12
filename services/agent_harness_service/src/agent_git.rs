@@ -52,6 +52,7 @@ pub(crate) async fn router<Auth>(
     pool: PgPool,
     authorization: MacroAuthorizationState<Auth>,
     git_tasks: TaskTracker,
+    feature_flags: Option<feature_flags::outbound::posthog::PostHogFeatureFlags>,
 ) -> anyhow::Result<Router>
 where
     Auth: MacroAuthorizationService,
@@ -77,6 +78,7 @@ where
             )),
             limiter: PgPushRateLimiter::new(pool, settings.pushes_per_minute),
             backend: GitHttpBackend::new(directories, git_tasks),
+            flags: feature_flags,
         },
         RepoLimits {
             max_repo_size_bytes: settings.max_repo_size_bytes,

@@ -42,3 +42,27 @@ fn without_a_fleet_a_live_computer_is_paused_but_terminal_ones_stay() {
         ComputerState::Released
     );
 }
+
+#[test]
+fn removing_an_agent_whose_computer_is_already_released_succeeds() {
+    assert!(released::<()>(Err(ComputerError::Rejected(Rejected::Released))).is_ok());
+    assert!(released::<()>(Err(ComputerError::NotFound)).is_ok());
+    assert!(released(Ok(())).is_ok());
+}
+
+#[test]
+fn removing_an_agent_while_its_purchase_confirms_is_refused_until_it_settles() {
+    assert!(matches!(
+        released::<()>(Err(ComputerError::NotPurchased)),
+        Err(TeamAgentError::PurchaseConfirming)
+    ));
+}
+
+#[test]
+fn a_purchase_still_confirming_lists_as_purchasing() {
+    assert_eq!(
+        roster_error(ComputerError::NotPurchased).unwrap(),
+        ComputerState::Purchasing
+    );
+    assert!(roster_error(ComputerError::NotFound).is_err());
+}

@@ -6,8 +6,9 @@ use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 use uuid::Uuid;
 
+use crate::domain::admission::AgentAccountFacts;
 use crate::domain::models::{NewAgentAccount, PersonaSeed, TeamAgentRecord};
-use crate::domain::ports::TeamAgentRepository;
+use crate::domain::ports::{AgentAccounts, TeamAgentRepository};
 
 #[cfg(test)]
 mod test;
@@ -174,6 +175,18 @@ impl TeamAgentRepository for PgTeamAgentsRepo {
     }
 
     #[tracing::instrument(skip_all, err)]
+    async fn remove_seat(&self, user_id: &MacroUserIdStr<'_>) -> Result<(), Self::Err> {
+        sqlx::query!(
+            "DELETE FROM team_agents WHERE user_id = $1",
+            user_id.as_ref()
+        )
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    #[tracing::instrument(skip_all, err)]
     async fn get(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -213,5 +226,46 @@ impl TeamAgentRepository for PgTeamAgentsRepo {
         .await?;
 
         rows.into_iter().map(TeamAgentRecord::try_from).collect()
+    }
+}
+
+impl AgentAccounts for PgTeamAgentsRepo {
+    type Err = PgTeamAgentsError;
+
+    #[tracing::instrument(skip_all, err)]
+    async fn account_facts(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+    ) -> Result<Option<AgentAccountFacts>, Self::Err> {
+        let row = sqlx::query!(
+            r#"
+            SELECT ta.team_id,
+                   agent."isAgent" AS is_agent,
+                   EXISTS (
+                       SELECT 1 FROM team_user tu
+                       WHERE tu.team_id = ta.team_id AND tu.user_id = ta.user_id
+                   ) AS "member!",
+                   creator.id AS "created_by?",
+                   COALESCE(creator."isAgent", FALSE) AS "created_by_is_agent!"
+            FROM team_agents ta
+            JOIN "User" agent ON agent.id = ta.user_id
+            LEFT JOIN "User" creator ON creator.id = ta.created_by
+            WHERE ta.user_id = $1
+            "#,
+            agent.as_ref(),
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        row.map(|row| {
+            Ok(AgentAccountFacts {
+                team_id: row.team_id,
+                is_agent: row.is_agent,
+                member: row.member,
+                created_by: row.created_by.map(user_id).transpose()?,
+                created_by_is_agent: row.created_by_is_agent,
+            })
+        })
+        .transpose()
     }
 }

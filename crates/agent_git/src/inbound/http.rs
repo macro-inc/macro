@@ -153,6 +153,7 @@ impl IntoResponse for AgentGitHttpError {
             AgentGitError::TeamMismatch => text(StatusCode::CONFLICT, message),
             AgentGitError::RepoTooLarge { .. } => text(StatusCode::PAYLOAD_TOO_LARGE, message),
             AgentGitError::PushRateLimited => text(StatusCode::TOO_MANY_REQUESTS, message),
+            AgentGitError::RepoBusy => text(StatusCode::CONFLICT, message),
             AgentGitError::Internal(report) => {
                 tracing::error!(error = ?report, "agent git request failed");
                 text(
@@ -205,6 +206,7 @@ async fn serve<Service: AgentGitService>(
                 AgentGitError::Forbidden(_) => "forbidden",
                 AgentGitError::RepoTooLarge { .. } => "repo_too_large",
                 AgentGitError::PushRateLimited => "rate_limited",
+                AgentGitError::RepoBusy => "busy",
                 _ => "internal",
             };
             tracing::Span::current().record("git.rejected_reason", reason);
@@ -232,6 +234,7 @@ async fn serve<Service: AgentGitService>(
                 AgentGitError::Forbidden(_) => "forbidden",
                 AgentGitError::RepoTooLarge { .. } => "repo_too_large",
                 AgentGitError::PushRateLimited => "rate_limited",
+                AgentGitError::RepoBusy => "busy",
                 _ => "internal",
             };
             tracing::Span::current().record("git.rejected_reason", reason);

@@ -435,11 +435,13 @@ where
         receipt: EntityAccessReceipt<AdminTeamRole>,
         agent: &MacroUserIdStr<'_>,
     ) -> Result<(), TeamAgentError> {
-        self.ensure_enabled(&acting_user(&receipt)?).await?;
+        // Not gated: an admin can always remove an agent, so its computer
+        // stops billing even after the rollout is turned off.
         let team_id = team_id(&receipt)?;
         let record = self.team_record(&receipt, agent).await?;
 
         // The computer goes first, so nothing keeps running as the agent.
+        // A purchase still confirming refuses here, before anything else.
         if let Some(computer_id) = self
             .computers
             .computer_for_agent(team_id, &record.user_id)
@@ -447,12 +449,20 @@ where
         {
             self.computers.release(team_id, computer_id).await?;
         }
+        self.api_keys.revoke_all(&record.user_id).await?;
+        // Issuing a fresh token voids the one a lost guest might hold; the
+        // repository itself stays.
+        self.repos
+            .create(&record.user_id, team_id, &record.persona_seed)
+            .await?;
         self.membership
             .remove_agent(receipt, &record.user_id)
             .await?;
-        self.repos.delete(&record.user_id).await?;
+        // Deactivate, never delete: the account keeps what it owns (docs
+        // shared with the team, threads, routines). Without its seat nothing
+        // admits it as an agent.
         self.repository
-            .delete_account(&record.user_id)
+            .remove_seat(&record.user_id)
             .await
             .map_err(TeamAgentError::internal)
     }
@@ -533,6 +543,14 @@ where
                 AgentEnrollmentError::IssuanceFailed
             })?
             .ok_or(AgentEnrollmentError::NotFound)?;
+
+        // With the rollout off for the agent (as its brain checks it), the
+        // computer enrolls as a plain one: no fresh key or repo token, no
+        // agent environment, so the agent doesn't start.
+        if ensure_enabled(self.flags.as_ref(), &agent).await.is_err() {
+            tracing::warn!("agent teammates are off for this agent; enrolling without it");
+            return Ok(None);
+        }
 
         // Each guest creation gets fresh credentials; the previous ones stop
         // working, so a lost earlier guest can no longer act as the agent.

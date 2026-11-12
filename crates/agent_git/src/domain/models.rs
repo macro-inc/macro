@@ -191,6 +191,9 @@ pub enum AgentGitError {
     /// Too many pushes in the current window.
     #[error("too many pushes; retry in a minute")]
     PushRateLimited,
+    /// Another push or a management change holds the repo; retry shortly.
+    #[error("the repository is busy; retry shortly")]
+    RepoBusy,
     /// `main` has no readable `config/voice.json`.
     #[error("the agent's repo has no valid config/voice.json")]
     NoVoice,

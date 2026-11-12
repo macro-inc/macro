@@ -358,7 +358,7 @@ async fn undo_team_agent_join_of_a_missing_membership_is_user_not_in_team() {
 }
 
 #[tokio::test]
-async fn remove_user_from_team_of_an_included_seat_leaves_the_subscription_alone() {
+async fn removing_a_team_agent_leaves_the_subscription_alone() {
     let team_id = uuid::Uuid::from_u128(0x7a_0007);
     let admin_id = MacroUserIdStr::parse_from_str("macro|admin@example.com").unwrap();
     let agent_id = MacroUserIdStr::parse_from_str("macro|agent@example.com").unwrap();
@@ -388,7 +388,7 @@ async fn remove_user_from_team_of_an_included_seat_leaves_the_subscription_alone
     );
 
     service
-        .remove_user_from_team(
+        .remove_team_agent(
             test_team_receipt::<AdminTeamRole>(team_id, &admin_id),
             &agent_id,
         )
@@ -434,7 +434,7 @@ async fn remove_user_from_team_of_an_included_seat_leaves_the_subscription_alone
 }
 
 #[tokio::test]
-async fn remove_user_from_team_rollback_keeps_the_seat_included() {
+async fn removing_a_team_agent_rolls_back_keeping_the_seat_included() {
     let team_id = uuid::Uuid::from_u128(0x7a_0008);
     let admin_id = MacroUserIdStr::parse_from_str("macro|admin@example.com").unwrap();
     let agent_id = MacroUserIdStr::parse_from_str("macro|agent@example.com").unwrap();
@@ -466,7 +466,7 @@ async fn remove_user_from_team_rollback_keeps_the_seat_included() {
     );
 
     service
-        .remove_user_from_team(
+        .remove_team_agent(
             test_team_receipt::<AdminTeamRole>(team_id, &admin_id),
             &agent_id,
         )
@@ -554,4 +554,51 @@ async fn set_team_member_plan_rejects_an_included_seat() {
             .is_empty()
     );
     assert!(roles_service.upsert_calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn the_members_api_refuses_an_agent_and_team_agents_removes_it() {
+    let team_id = uuid::Uuid::from_u128(0x7a_0007);
+    let admin_id = MacroUserIdStr::parse_from_str("macro|admin@example.com").unwrap();
+    let agent_id = MacroUserIdStr::parse_from_str("macro|agent@example.com").unwrap();
+
+    let mut team_repository =
+        MockTeamRepository::new(Vec::new(), "Acme", Arc::new(Mutex::new(Vec::new())));
+    team_repository.seat_included = true;
+    team_repository.removed_member = Some(TeamMember {
+        team_id,
+        user_id: agent_id.clone().into_owned(),
+        role: TeamRole::Member,
+        plan: SeatPlan::Premium,
+    });
+    let service = TeamServiceImpl::new(
+        team_repository.clone(),
+        MockCustomerRepository::default(),
+        RecordingChannelService::default(),
+        MockUserRolesAndPermissionsService::default(),
+        Arc::new(MockNotificationIngress::new(HashSet::new())),
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
+    );
+
+    let refused = service
+        .remove_user_from_team(
+            test_team_receipt::<AdminTeamRole>(team_id, &admin_id),
+            &agent_id,
+        )
+        .await;
+    assert!(matches!(
+        refused,
+        Err(RemoveUserFromTeamError::AgentTeammate)
+    ));
+    assert_eq!(*team_repository.remove_user_calls.lock().unwrap(), 0);
+
+    service
+        .remove_team_agent(
+            test_team_receipt::<AdminTeamRole>(team_id, &admin_id),
+            &agent_id,
+        )
+        .await
+        .unwrap();
+    assert_eq!(*team_repository.remove_user_calls.lock().unwrap(), 1);
 }

@@ -238,6 +238,10 @@ pub enum TeamAgentError {
     /// The workspace repository could not be created; nothing was charged.
     #[error("the workspace repository could not be created; nothing was charged")]
     RepoUnavailable(rootcause::Report),
+    /// The agent's computer purchase is still confirming; try again once it
+    /// settles.
+    #[error("the agent's computer purchase is still confirming; try again in a minute")]
+    PurchaseConfirming,
     /// The agent's repository has no valid `config/voice.json`.
     #[error("the agent has no voice set")]
     NoVoice,

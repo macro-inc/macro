@@ -37,11 +37,12 @@ impl PgRepoRepository {
     }
 }
 
-/// A repo's lock: a Postgres session advisory lock on a connection of its own.
-/// Dropping it closes the session, which releases the lock, also when the
-/// process dies.
+/// A repo's lock: a Postgres session advisory lock on a pool connection, so
+/// it counts against the pool's limit while held. Dropping it closes that
+/// connection rather than returning it (a session lock would outlive the
+/// guard otherwise), which releases the lock, also when the process dies.
 pub struct PgRepoLock {
-    _session: sqlx::PgConnection,
+    _session: sqlx::pool::PoolConnection<sqlx::Postgres>,
 }
 
 impl RepoRepository for PgRepoRepository {
@@ -53,14 +54,36 @@ impl RepoRepository for PgRepoRepository {
         &self,
         agent_user_id: &MacroUserIdStr<'_>,
     ) -> Result<PgRepoLock, PgRepoRepositoryError> {
-        let mut session = self.pool.acquire().await?.detach();
+        let mut session = self.pool.acquire().await?;
+        session.close_on_drop();
         sqlx::query!(
             r#"SELECT true AS "locked!" FROM pg_advisory_lock(hashtextextended('agent_git:' || $1, 0))"#,
             agent_user_id.as_ref(),
         )
-        .fetch_one(&mut session)
+        .fetch_one(&mut *session)
         .await?;
         Ok(PgRepoLock { _session: session })
+    }
+
+    #[tracing::instrument(name = "agent_git.try_lock_repo", skip_all, fields(repo_id = %agent_credentials::telemetry_id(agent_user_id.as_ref()), locked = tracing::field::Empty), err)]
+    async fn try_lock_repo(
+        &self,
+        agent_user_id: &MacroUserIdStr<'_>,
+    ) -> Result<Option<PgRepoLock>, PgRepoRepositoryError> {
+        let mut session = self.pool.acquire().await?;
+        let locked = sqlx::query_scalar!(
+            r#"SELECT pg_try_advisory_lock(hashtextextended('agent_git:' || $1, 0)) AS "locked!""#,
+            agent_user_id.as_ref(),
+        )
+        .fetch_one(&mut *session)
+        .await?;
+        tracing::Span::current().record("locked", locked);
+        if !locked {
+            // Holds nothing, so it can go back to the pool.
+            return Ok(None);
+        }
+        session.close_on_drop();
+        Ok(Some(PgRepoLock { _session: session }))
     }
 
     #[tracing::instrument(skip_all, err)]

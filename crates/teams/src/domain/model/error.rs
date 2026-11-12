@@ -77,6 +77,10 @@ pub enum RemoveUserFromTeamError {
     /// The user is not in the team
     #[error("The user is not in the team")]
     UserNotInTeam,
+    /// The member is an agent teammate: removing it as a person would leave
+    /// its computer billing and its keys working.
+    #[error("agent teammates are removed with the team agents removal, not as members")]
+    AgentTeammate,
     /// Team error
     #[error("Team error")]
     TeamError(#[from] TeamError),

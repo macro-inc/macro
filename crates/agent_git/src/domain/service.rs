@@ -1,5 +1,6 @@
 //! The agent git domain service.
 
+use feature_flags::FeatureFlags;
 use futures::StreamExt;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
@@ -15,7 +16,7 @@ use crate::domain::template::{PersonaSeed, WorkspaceTemplate};
 use crate::domain::voice::{VOICE_PATH, VoiceConfig};
 
 /// The adapters [`AgentGitServiceImpl`] runs on.
-pub struct AgentGitAdapters<Repos, Store, Admins, Limiter, Backend> {
+pub struct AgentGitAdapters<Repos, Store, Admins, Limiter, Backend, Flags> {
     /// Repo rows.
     pub repos: Repos,
     /// Bare repos on disk.
@@ -26,21 +27,24 @@ pub struct AgentGitAdapters<Repos, Store, Admins, Limiter, Backend> {
     pub limiter: Limiter,
     /// Smart-HTTP backend.
     pub backend: Backend,
+    /// The agent teammates rollout, checked for the repo's agent on every
+    /// clone and push. None, or a failed load, refuses (fail closed).
+    pub flags: Option<Flags>,
 }
 
 /// Implements [`AgentGitService`].
-pub struct AgentGitServiceImpl<Repos, Store, Admins, Limiter, Backend> {
-    adapters: AgentGitAdapters<Repos, Store, Admins, Limiter, Backend>,
+pub struct AgentGitServiceImpl<Repos, Store, Admins, Limiter, Backend, Flags> {
+    adapters: AgentGitAdapters<Repos, Store, Admins, Limiter, Backend, Flags>,
     limits: RepoLimits,
     template: WorkspaceTemplate,
 }
 
-impl<Repos, Store, Admins, Limiter, Backend>
-    AgentGitServiceImpl<Repos, Store, Admins, Limiter, Backend>
+impl<Repos, Store, Admins, Limiter, Backend, Flags>
+    AgentGitServiceImpl<Repos, Store, Admins, Limiter, Backend, Flags>
 {
     /// Build the service.
     pub fn new(
-        adapters: AgentGitAdapters<Repos, Store, Admins, Limiter, Backend>,
+        adapters: AgentGitAdapters<Repos, Store, Admins, Limiter, Backend, Flags>,
         limits: RepoLimits,
         template: WorkspaceTemplate,
     ) -> Self {
@@ -55,8 +59,8 @@ impl<Repos, Store, Admins, Limiter, Backend>
 /// Message of the commit a voice change makes.
 const VOICE_COMMIT_MESSAGE: &str = "Set call voice";
 
-impl<Repos: RepoRepository, Store, Admins, Limiter, Backend>
-    AgentGitServiceImpl<Repos, Store, Admins, Limiter, Backend>
+impl<Repos: RepoRepository, Store, Admins, Limiter, Backend, Flags>
+    AgentGitServiceImpl<Repos, Store, Admins, Limiter, Backend, Flags>
 {
     /// The agent's repo row, which must belong to `team_id`.
     async fn team_repo(
@@ -101,14 +105,31 @@ fn limit_body(body: GitBody, limit: u64) -> GitBody {
     }))
 }
 
-impl<Repos, Store, Admins, Limiter, Backend> AgentGitService
-    for AgentGitServiceImpl<Repos, Store, Admins, Limiter, Backend>
+impl<Repos, Store, Admins, Limiter, Backend, Flags: FeatureFlags>
+    AgentGitServiceImpl<Repos, Store, Admins, Limiter, Backend, Flags>
+{
+    async fn rollout_on(&self, agent_user_id: &MacroUserIdStr<'_>) -> bool {
+        let Some(flags) = &self.adapters.flags else {
+            return false;
+        };
+        let loaded = flags.load(agent_user_id).await;
+        #[cfg(any(feature = "inbound", feature = "outbound"))]
+        if let Err(error) = &loaded {
+            tracing::warn!(error = ?error, "could not load feature flags; the agent's repo stays closed");
+        }
+        loaded.is_ok_and(|snapshot| snapshot.is_enabled(agent_credentials::AGENT_TEAMMATES_FLAG))
+    }
+}
+
+impl<Repos, Store, Admins, Limiter, Backend, Flags> AgentGitService
+    for AgentGitServiceImpl<Repos, Store, Admins, Limiter, Backend, Flags>
 where
     Repos: RepoRepository,
     Store: RepoStore,
     Admins: TeamAdmins,
     Limiter: PushRateLimiter,
     Backend: GitBackend,
+    Flags: FeatureFlags + 'static,
 {
     async fn create_repo(
         &self,
@@ -301,6 +322,12 @@ where
             .map_err(internal)?
             .ok_or(AgentGitError::InvalidToken)?;
 
+        // The kill switch: with the rollout off for the agent (as its brain
+        // checks it), its repo looks absent to every credential.
+        if !self.rollout_on(agent_user_id).await {
+            return Err(AgentGitError::NotFound);
+        }
+
         let access = request.endpoint.access();
 
         match credential {
@@ -334,22 +361,9 @@ where
             return Err(AgentGitError::EncodedPush);
         }
 
-        // A push holds the repo's lock until its response ends, so pushes from
-        // any replica, and management, never interleave on disk.
         let receive_pack = request.endpoint == GitEndpoint::Rpc(GitService::ReceivePack);
-        let lock = if receive_pack {
-            Some(
-                self.adapters
-                    .repos
-                    .lock_repo(agent_user_id)
-                    .await
-                    .map_err(internal)?,
-            )
-        } else {
-            None
-        };
-
         let mut max_input_size = None;
+        let mut lock = None;
         if access == GitAccess::Push {
             let size_bytes = self
                 .adapters
@@ -367,6 +381,7 @@ where
             }
 
             if receive_pack {
+                // Rate-limit first, so a flood of pushes never reaches the lock.
                 if !self
                     .adapters
                     .limiter
@@ -376,6 +391,18 @@ where
                 {
                     return Err(AgentGitError::PushRateLimited);
                 }
+
+                // A push holds the repo's lock until its response ends, so
+                // pushes from any replica, and management, never interleave
+                // on disk. One that finds it held is busy: git retries.
+                lock = Some(
+                    self.adapters
+                        .repos
+                        .try_lock_repo(agent_user_id)
+                        .await
+                        .map_err(internal)?
+                        .ok_or(AgentGitError::RepoBusy)?,
+                );
 
                 self.adapters
                     .repos

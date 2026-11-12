@@ -51,7 +51,7 @@ impl<Teams: TeamService> TeamMembership for TeamsMembership<Teams> {
         receipt: EntityAccessReceipt<AdminTeamRole>,
         agent: &MacroUserIdStr<'_>,
     ) -> Result<(), TeamAgentError> {
-        match self.teams.remove_user_from_team(receipt, agent).await {
+        match self.teams.remove_team_agent(receipt, agent).await {
             Ok(()) | Err(RemoveUserFromTeamError::UserNotInTeam) => Ok(()),
             Err(error) => Err(TeamAgentError::internal(error)),
         }

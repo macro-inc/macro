@@ -539,6 +539,14 @@ impl TeamService for FakeTeamService {
     ) -> Result<(), RemoveUserFromTeamError> {
         panic!("unexpected undo_team_agent_join call")
     }
+
+    async fn remove_team_agent(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
+        _agent_user_id: &MacroUserIdStr<'_>,
+    ) -> Result<(), RemoveUserFromTeamError> {
+        panic!("unexpected remove_team_agent call")
+    }
 }
 
 impl TeamInviteLinkService for FakeTeamService {
