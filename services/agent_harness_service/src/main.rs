@@ -891,6 +891,12 @@ async fn run() -> anyhow::Result<()> {
             }),
             execution_store,
             execution_turns,
+            Arc::new(code_mode::images::StaticFileModelImages(
+                static_file_service_client::StaticFileServiceClient::new(
+                    config.internal_api_key.clone(),
+                    macro_service_urls::StaticFileServiceUrl::new()?.to_string(),
+                ),
+            )),
         ));
     let session_metadata_realtime = WorkRegistrationRealtime::new(
         ConnectionGatewayAgentSessionRealtime::new(

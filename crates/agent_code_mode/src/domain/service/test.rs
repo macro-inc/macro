@@ -85,6 +85,20 @@ impl ExecutionCredentials for Credentials {
         })
     }
 }
+/// PNG pixels named after their file; the file `missing` cannot be read.
+struct Pixels;
+#[async_trait]
+impl ModelImages for Pixels {
+    async fn load_png(&self, file: &StaticFileId) -> anyhow::Result<ModelImage> {
+        anyhow::ensure!(file.as_ref() != "missing", "no such file");
+        Ok(ModelImage {
+            r#type: ModelMediaType::Image,
+            media_type: ModelImageMediaType::Png,
+            data: format!("iVBORw0KGgo{}", file.as_ref()),
+        })
+    }
+}
+
 struct Executor;
 #[async_trait]
 impl ProgramExecutor for Executor {
@@ -115,6 +129,7 @@ fn service() -> (
             credentials.clone(),
             store.clone(),
             turns.clone(),
+            Arc::new(Pixels),
         ),
         credentials,
         store,
@@ -339,6 +354,18 @@ async fn optional_reviews_default_to_empty_without_accepting_malformed_results()
         (json!({"data": 42, "reviews": [{}]}), false),
         (json!({"reviews": []}), false),
         (json!({"data": 42, "extra": true}), false),
+        (
+            json!({"data": 42, "images": [{"id": "render-1", "url": "https://x"}]}),
+            true,
+        ),
+        (json!({"data": 42, "images": []}), true),
+        (
+            json!({"data": 42, "images": [{"id": "a"}, {"id": "b"}, {"id": "c"}]}),
+            false,
+        ),
+        (json!({"data": 42, "images": [{"id": "../file"}]}), false),
+        (json!({"data": 42, "images": [{"url": "https://x"}]}), false),
+        (json!({"data": 42, "images": {"id": "a"}}), false),
     ] {
         let store = Arc::new(MemoryStore::default());
         let service = CodeModeService::new(
@@ -346,6 +373,7 @@ async fn optional_reviews_default_to_empty_without_accepting_malformed_results()
             Arc::new(Credentials::default()),
             store.clone(),
             Arc::new(TestTurns::default()),
+            Arc::new(Pixels),
         );
         let session =
             test_agent_session(AgentSessionId::new_from_uuid(macro_uuid::generate_uuid_v7()));
@@ -422,6 +450,7 @@ async fn persists_live_activity_and_marks_unfinished_requests_unknown() {
         Arc::new(Credentials::default()),
         store.clone(),
         Arc::new(TestTurns::default()),
+        Arc::new(Pixels),
     );
     let session = test_agent_session(AgentSessionId::new_from_uuid(macro_uuid::generate_uuid_v7()));
     let id = ExecutionId::mint();
@@ -565,6 +594,7 @@ async fn cancellation_is_not_blocked_by_a_stalled_activity_save() {
         Arc::new(Credentials::default()),
         store.clone(),
         Arc::new(TestTurns::default()),
+        Arc::new(Pixels),
     );
     let session = test_agent_session(AgentSessionId::new_from_uuid(macro_uuid::generate_uuid_v7()));
     let cancel = CancellationToken::new();
@@ -657,4 +687,71 @@ async fn a_delayed_call_cannot_adopt_a_new_turn_or_receive_credentials() {
     assert!(matches!(result, Err(CodeModeError::Forbidden)));
     assert!(credentials.0.lock().unwrap().is_empty());
     assert!(store.0.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn returned_images_reach_the_model_as_pixels() {
+    let service = CodeModeService::new(
+        Some(Arc::new(ValueExecutor(json!({
+            "data": {"link": "https://macro.com/app/canvas/1"},
+            "images": [{"id": "render-1", "url": "https://static/file/render-1", "width": 10}],
+        })))),
+        Arc::new(Credentials::default()),
+        Arc::new(MemoryStore::default()),
+        Arc::new(TestTurns::default()),
+        Arc::new(Pixels),
+    );
+    let session = test_agent_session(AgentSessionId::new_from_uuid(macro_uuid::generate_uuid_v7()));
+    let receipt = service
+        .execute(
+            &session,
+            ExecutionId::mint(),
+            ai_toolset::actor::ToolActor::Owner,
+            macro_uuid::Uuid::from_u128(1),
+            request(),
+            CancellationToken::new(),
+        )
+        .await
+        .unwrap();
+    let json = serde_json::to_value(&receipt).unwrap();
+    assert_eq!(json["status"], "succeeded");
+    assert_eq!(json["error"], serde_json::Value::Null);
+    assert_eq!(
+        json["modelMedia"],
+        json!([{"type": "image", "mediaType": "image/png", "data": "iVBORw0KGgorender-1"}])
+    );
+    assert_eq!(json["result"]["images"][0]["id"], "render-1");
+}
+
+#[tokio::test]
+async fn an_unreadable_returned_image_is_reported_without_pixels() {
+    let service = CodeModeService::new(
+        Some(Arc::new(ValueExecutor(json!({
+            "data": 1,
+            "images": [{"id": "render-1"}, {"id": "missing"}],
+        })))),
+        Arc::new(Credentials::default()),
+        Arc::new(MemoryStore::default()),
+        Arc::new(TestTurns::default()),
+        Arc::new(Pixels),
+    );
+    let session = test_agent_session(AgentSessionId::new_from_uuid(macro_uuid::generate_uuid_v7()));
+    let receipt = service
+        .execute(
+            &session,
+            ExecutionId::mint(),
+            ai_toolset::actor::ToolActor::Owner,
+            macro_uuid::Uuid::from_u128(1),
+            request(),
+            CancellationToken::new(),
+        )
+        .await
+        .unwrap();
+    let json = serde_json::to_value(&receipt).unwrap();
+    assert_eq!(json["status"], "succeeded");
+    assert!(json.get("modelMedia").is_none());
+    assert_eq!(
+        json["error"],
+        "main succeeded, but image missing could not be shown: return a PNG from the SDK, such as await canvas.render()."
+    );
 }

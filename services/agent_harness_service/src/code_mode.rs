@@ -183,6 +183,7 @@ pub fn sdk_endpoints() -> anyhow::Result<SdkEndpoints> {
 }
 
 pub mod connected_apps;
+pub mod images;
 pub mod reviews;
 pub mod ui_commands;
 

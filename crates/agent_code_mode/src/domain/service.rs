@@ -36,6 +36,7 @@ struct Inner {
     credentials: Arc<dyn ExecutionCredentials>,
     store: Arc<dyn ExecutionStore>,
     turns: Arc<dyn ExecutionTurns>,
+    images: Arc<dyn ModelImages>,
     admission: Arc<Semaphore>,
 }
 
@@ -50,6 +51,7 @@ impl CodeModeService {
         credentials: Arc<dyn ExecutionCredentials>,
         store: Arc<dyn ExecutionStore>,
         turns: Arc<dyn ExecutionTurns>,
+        images: Arc<dyn ModelImages>,
     ) -> Self {
         let limits = Limits::default();
         Self(Arc::new(Inner {
@@ -57,8 +59,32 @@ impl CodeModeService {
             credentials,
             store,
             turns,
+            images,
             admission: Arc::new(Semaphore::new(limits.max_running + limits.max_queued)),
         }))
+    }
+
+    /// Load the images a successful result returned, so the model sees them.
+    /// Saved receipts load them again on a retry; records keep only the ids.
+    #[tracing::instrument(name = "code_mode.result_images", skip_all, fields(images = tracing::field::Empty, failed_image = tracing::field::Empty))]
+    async fn attach_images(&self, receipt: &mut ExecutionReceipt) {
+        let images = returned_images(receipt);
+        tracing::Span::current().record("images", images.len());
+        for image in images {
+            match self.0.images.load_png(&image.id).await {
+                Ok(pixels) => receipt.model_media.push(pixels),
+                Err(error) => {
+                    tracing::Span::current().record("failed_image", image.id.as_ref());
+                    tracing::warn!(?error, "could not load a returned image");
+                    receipt.model_media.clear();
+                    receipt.error = Some(format!(
+                        "main succeeded, but image {} could not be shown: return a PNG from the SDK, such as await canvas.render().",
+                        image.id.as_ref()
+                    ));
+                    return;
+                }
+            }
+        }
     }
 
     async fn run(
@@ -390,6 +416,8 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "UpdateInitiative"
                 | "UpdateInitiativeSharing"
                 | "DeleteInitiative"
+                // Canvas.render(), returned in a result's images.
+                | "RenderCanvas"
                 // macro.agents.list() and Agent.update(). ListAgentUpdates
                 // stays: its result renders the cards the user answers on.
                 // CreateAgentSession stays: createManaged refuses a prompt for
@@ -449,7 +477,7 @@ impl SessionCodeMode for CodeModeService {
         );
         // Finish the journal even when the MCP request future is dropped. The drop
         // guard cancels the runner; its final cleanup then persists the outcome.
-        tokio::spawn(
+        let mut receipt = tokio::spawn(
             async move {
                 let _permit = permit;
                 let result = service.run(identity, execution, request, cancel).await;
@@ -471,7 +499,9 @@ impl SessionCodeMode for CodeModeService {
             .instrument(span.or_current()),
         )
         .await
-        .map_err(CodeModeError::Task)?
+        .map_err(CodeModeError::Task)??;
+        self.attach_images(&mut receipt).await;
+        Ok(receipt)
     }
 
     async fn read(
@@ -536,23 +566,31 @@ pub(super) fn settle(
                 };
             }
             if let Some(object) = value.as_object_mut()
-                && object.len() == 1
                 && object.contains_key("data")
+                && object
+                    .keys()
+                    .all(|key| matches!(key.as_str(), "data" | "images"))
             {
                 object.insert("reviews".into(), serde_json::json!([]));
             }
             let valid = value.as_object().is_some_and(|object| {
-                object.len() == 2
-                    && object.contains_key("data")
+                object.contains_key("data")
                     && object.get("reviews").is_some_and(|references| {
                         serde_json::from_value::<Vec<reviews::ReviewReference>>(references.clone())
                             .is_ok()
                     })
+                    && object.get("images").is_none_or(|images| {
+                        serde_json::from_value::<Vec<ReturnedImage>>(images.clone())
+                            .is_ok_and(|images| images.len() <= MAX_RESULT_IMAGES)
+                    })
+                    && object
+                        .keys()
+                        .all(|key| matches!(key.as_str(), "data" | "reviews" | "images"))
             });
             if valid {
                 (ExecutionStatus::Succeeded, Some(value), None)
             } else {
-                (ExecutionStatus::Failed, Some(value), Some("main must return {data: JSON}; optional reviews must be an array of {kind, id} references.".into()))
+                (ExecutionStatus::Failed, Some(value), Some("main must return {data: JSON}; optional reviews must be an array of {kind, id} references; optional images must be an array of at most 2 SDK images, such as await canvas.render().".into()))
             }
         }
         Outcome::Failed { error } => (ExecutionStatus::Failed, None, Some(error.message)),
@@ -588,7 +626,21 @@ fn receipt(record: &ExecutionRecord) -> ExecutionReceipt {
         activity: record.activity.clone(),
         result: record.result.clone(),
         error: execution_error(record),
+        model_media: Vec::new(),
     }
+}
+
+/// The images a succeeded result returned; `settle` already checked them.
+fn returned_images(receipt: &ExecutionReceipt) -> Vec<ReturnedImage> {
+    if receipt.status != ExecutionStatus::Succeeded {
+        return Vec::new();
+    }
+    receipt
+        .result
+        .as_ref()
+        .and_then(|result| result.get("images"))
+        .and_then(|images| serde_json::from_value(images.clone()).ok())
+        .unwrap_or_default()
 }
 
 fn execution_error(record: &ExecutionRecord) -> Option<String> {

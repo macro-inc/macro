@@ -1,4 +1,6 @@
-use super::{CodeModeError, ExecutionId, ExecutionIdentity, ExecutionRecord};
+use super::{
+    CodeModeError, ExecutionId, ExecutionIdentity, ExecutionRecord, ModelImage, StaticFileId,
+};
 use agent_session::domain::model::AgentSessionId;
 use async_trait::async_trait;
 use code_execution::domain::RunEnvironment;
@@ -49,4 +51,11 @@ pub trait ExecutionStore: Send + Sync + 'static {
         session: AgentSessionId,
         execution: ExecutionId,
     ) -> Result<ExecutionRecord, CodeModeError>;
+}
+
+/// Pixels of the static files a program returned in `images`.
+#[async_trait]
+pub trait ModelImages: Send + Sync + 'static {
+    /// Read one static file as a bounded PNG; anything else is an error.
+    async fn load_png(&self, file: &StaticFileId) -> anyhow::Result<ModelImage>;
 }
