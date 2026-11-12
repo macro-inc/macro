@@ -341,7 +341,6 @@ pub fn tools_for(host: AiHost) -> ToolSetWithPrompt {
 /// `ExecuteCode`: only what a program cannot do through the Macro SDK.
 ///
 /// - `RenderCanvas`: an `ExecuteCode` result cannot carry the image it renders.
-/// - `ListAgentUpdates`: its result renders the cards the user answers on.
 /// - `IssueBotCredential`: its card mints the secret without the model
 ///   reading it.
 /// - `ListCompanies`: `macro.crm.searchCompanies()` has no stage or owner
@@ -354,7 +353,6 @@ pub fn tools_for_agent_code_mode() -> ToolSetWithPrompt {
     let toolset = AsyncToolCollection::new()
         .add_tool::<SelfKnowledge, ToolServiceContext>()
         .add_tool::<documents::inbound::toolset::RenderCanvas, ToolDocumentToolContext>()
-        .add_tool::<agent_session::inbound::toolset::ListAgentUpdates, ToolCodingAgentToolContext>()
         .add_tool::<bots::inbound::toolset::IssueBotCredential, ToolBotToolContext>()
         .add_tool::<crm::inbound::toolset::ListCompanies, ToolCrmToolContext>()
         .add_tool::<import::inbound::toolset::ImportFromNotion, ToolImportToolContext>()
