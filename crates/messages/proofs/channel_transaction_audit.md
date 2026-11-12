@@ -1,329 +1,173 @@
-# Channel sequence transaction and timeout audit
+# Channel sequence admission and transaction audit
 
-Static audit of the implementation against base `354da677b5`. Source locations
-below identify the production transaction boundaries. The append statements
-temporarily change their transaction-local statement timeout; no server or pool
-configuration is changed.
+The current implementation admits at most four writes per typed message parent
+per process, waiting at most two seconds **before** borrowing a write connection.
+The counter append has a separate five-second PostgreSQL lock-wait guard. The
+previous 50 ms statement deadline is historical and is not the current policy.
 
-## Counter lock and commit boundaries
+## Admission and database boundaries
 
-`channel_change_db_utils::append_in` increments the counter and inserts the log
-row in one statement (`crates/channel_change_db_utils/src/append.rs:48`). Its
-row lock remains held until the caller's transaction ends. The batch equivalent
-locks counters in channel-id order and allocates each channel's sequences in
-input order (`crates/channel_change_db_utils/src/append.rs:98`). The new tables
-have no foreign keys or triggers that acquire another domain's row lock
-(`crates/macro_db_client/migrations/20261110150956_channel_change_log.sql:3`).
+The process-wide registry is shared across repository instances and pools. Its
+key is `(parent_type, parent_id)`; channels use `("channel", channel_uuid)`.
+The limits are defined in
+[`message_write_gate/src/lib.rs:19`](../../message_write_gate/src/lib.rs#L19).
+Admission includes pending waiters in its registry lifetime accounting and
+removes an entry when its final waiter or permit drops
+([`:87`](../../message_write_gate/src/lib.rs#L87)). This is a concurrency limit,
+not a requests-per-second limit or a cross-process quota.
 
-Each nonempty append now uses two SQL statements. A preflight saves the
-inherited `statement_timeout` and sets the smaller nonzero value of that
-timeout and 50 ms (`crates/channel_change_db_utils/src/append.rs:14`). This
-extra round trip occurs before counter acquisition. The final statement
-allocates sequences and log rows, consumes all inserted log rows, and restores
-the saved setting. No round trip follows counter acquisition. The restoration
-barriers are at `crates/channel_change_db_utils/src/append.rs:59` for a scalar
-and `:121` for a batch. Empty or invalid-length activity batches return before
-the preflight. Neither statement changes `lock_timeout`.
+A successful permit remains in scope through COMMIT. On an error, Rust drops the
+transaction before its earlier-declared permit; SQLx queues rollback before
+reusing the connection. This does not mean dropping a future synchronously
+acknowledges rollback on the server. Four admitted operations can also hold more
+than four connections when an operation has a journal lease plus a nested
+message write.
 
-| Channel write | Work completed before counter acquisition | Append and commit | Work while holding the counter |
+All current message parents use admission, including document comments; only
+channel parents append a sequence. The non-channel SQL branch remains unchanged
+([`change_log.rs:54`](../src/outbound/pg_message_repo/change_log.rs#L54)).
+Caller-owned `_in` helpers require their caller to acquire the permit before
+opening the outer transaction; they do not acquire another global permit after
+borrowing a connection.
+
+| Write | Admission / transaction entry | Final channel append and commit | Work after the counter is acquired |
 | --- | --- | --- | --- |
-| Create root/reply | Canonical-root advisory lock when applicable, parent/root validation, insert, thread creation, references, and response hydration | `crates/messages/src/outbound/pg_message_repo.rs:753`, commit `:754` | Only COMMIT, including existing deferred constraints. |
-| Edit | Message/thread `FOR UPDATE`, body and reference writes, response hydration | `crates/messages/src/outbound/pg_message_repo.rs:787`, commit `:788` | Only COMMIT. |
-| Delete message | Message/thread `FOR UPDATE`, tombstone update and its triggers, response hydration | `crates/messages/src/outbound/pg_message_repo.rs:802`, commit `:803` | Only COMMIT. |
-| Add/remove reaction | Message/thread `FOR UPDATE`, reaction mutation, response hydration; no-op reaction does not allocate | `crates/messages/src/outbound/pg_message_repo.rs:834`, commit `:838` | Only COMMIT. |
-| Patch/delete thread | Thread `FOR UPDATE`, message tombstones when deleting, thread-state update, response preparation | `crates/messages/src/outbound/pg_message_repo/threads.rs:103`; wrapper commits at `:50` | Only returning the prepared state and COMMIT. Channel threads cannot carry PDF anchors, so highlight resolution does no SQL. |
-| Activity batch | All activity inserts, including deduplication, complete before the ordered batch append | `services/document_storage_service/src/service/activity/persistence.rs:63`, commit `:65` | Only COMMIT. Receipt mapping happens afterward. Non-channel-only batches retain the existing direct activity path at `:54`. |
-| End/archive call | Shared team guard, call `FOR UPDATE`, archive/participant/transcript writes, discussion lookup, active-call deletion and its triggers | `crates/call/src/outbound/pg_call_repo/lifecycle.rs:251`, commit `:258` | Only COMMIT. The log target is the canonical call/root id. |
-| Delete active call | Read call-owned channel/discussion metadata, delete call and its triggers, delete entity-access rows | `crates/call/src/outbound/pg_call_repo.rs:1064`, commit `:1071` | Only COMMIT; no log row if nothing was deleted or the discussion is not a channel thread. |
-| Delete call record | Read call-owned channel/discussion metadata, delete record and its triggers, delete entity-access rows | `crates/call/src/outbound/pg_call_repo.rs:2267`, commit `:2274` | Only COMMIT; same no-op/non-channel behavior. |
-| Standalone historical batch | Validate and insert all message/reaction/mention rows, locking existing reply roots first | `crates/messages/src/outbound/pg_message_repo/historical.rs:117`; release savepoint `:124`, outer commit `:47` | Savepoint release and COMMIT. Exactly one reset for a nonempty batch. |
-| Importer's historical batch | Same message helper | Append `crates/messages/src/outbound/pg_message_repo/historical.rs:117`; outer commit `services/slack_import_worker/src/composition/channel_sink.rs:209` | **Approved exception:** savepoint release, historical channel activity update (`:204`), fenced checkpoint/counters/search outbox/revision completion (`:208`). |
-| Importer's historical body patch | Guarded message body update; unchanged/invalidated guard allocates nothing | `crates/messages/src/outbound/pg_message_repo/historical.rs:89`; outer commit `services/slack_import_worker/src/composition/reference_reconciliation.rs:69` | **Approved exception:** close reconciliation intent, update dirty-search generation/outbox and recompute job status via `fenced.finish` (`:68`). |
+| Create root/reply | `pg_message_repo.rs:654`, begin `:655`; canonical-root and reply-root validation precede append | append `:754`, commit `:755` | COMMIT, including deferred constraints. |
+| Edit | `pg_message_repo.rs:765`, begin `:766`; message/thread locks, body/references and hydration first | append `:789`, commit `:790` | COMMIT. |
+| Delete message | `pg_message_repo.rs:799`, begin `:800`; locks, tombstone triggers and hydration first | append `:805`, commit `:806` | COMMIT. |
+| React | `pg_message_repo.rs:818`, begin `:819`; locks, reaction change and hydration first | changed-only append `:838`, commit `:842` | COMMIT. No-op reaction allocates no sequence. |
+| Patch/delete thread | `pg_message_repo/threads.rs:49`, begin `:50` | append `:105`, wrapper commit `:52` | Return prepared state and COMMIT. Channel threads have no PDF-anchor lookup. |
+| Standalone historical batch | `pg_message_repo/historical.rs:45`, begin `:46` | reset append `:120`, savepoint release `:127`, outer commit `:48` | Savepoint release and COMMIT. Empty batches append no reset. |
+| Imported historical batch | `channel_sink.rs:113`, begin `:118`; fenced target recheck `:121` | reset in `historical.rs:120`, outer commit `channel_sink.rs:230` | **Approved exception:** savepoint release, historical activity update `:225`, checkpoint/counters/search completion `:229`. |
+| Imported reference repair | `reference_reconciliation.rs:40` discovery, permit `:44`, begin `:52`, identity recheck `:59` | changed-only append `historical.rs:91`, outer commit `reference_reconciliation.rs:96` | **Approved exception:** reference/search/job completion `:95`. |
+| Channel timeline activities | `activity/persistence.rs:65`, begin `:72`; insert all activities `:74` | batch append `:78`, commit `:80` | COMMIT; receipt mapping follows it. |
+| Archive/end call | `pg_call_repo/lifecycle.rs:13`, begin `:14`; archive writes and discussion recheck `:229` first | append `:254`, commit `:261` | COMMIT. |
+| Delete active call | `pg_call_repo.rs:1042`, begin `:1043`, target recheck `:1045`; deletion/access cleanup first | append `:1066`, commit `:1073` | COMMIT; append only for an actual channel deletion. |
+| Delete call record | `pg_call_repo.rs:2247`, begin `:2249`, target recheck `:2251`; deletion/access cleanup first | append `:2272`, commit `:2279` | COMMIT; same no-op/non-channel rule. |
 
-The importer batch completion is defined in
-`crates/slack_integration/src/outbound/pg_slack_import_repo/batches.rs:320`:
-it rechecks the fence (`:329`), updates checkpoint/counters (`:334`), updates
-search outbox state (`:351`, `:361`) and bumps the revision (`:367`). Historical
-body completion is in
-`crates/slack_integration/src/outbound/pg_slack_import_repo/references.rs:150`:
-it closes the reference intent (`:152`), updates search state (`:158`, `:165`,
-`:175`) and calls job recomputation (`:186`). These are real statements under
-the counter lock, not a claim that a savepoint release commits the transaction.
-Both exceptions retain atomic import checkpointing and extend the
-same-channel wait by that completion work.
+Message paths above are in
+[`crates/messages/src/outbound`](../src/outbound/pg_message_repo.rs#L654);
+import paths are in
+[`services/slack_import_worker/src/composition`](../../../services/slack_import_worker/src/composition/channel_sink.rs#L100);
+activity is in
+[`services/document_storage_service/src/service`](../../../services/document_storage_service/src/service/activity/persistence.rs#L47);
+call paths are in
+[`crates/call/src/outbound`](../../call/src/outbound/pg_call_repo/lifecycle.rs#L7).
 
-The public caller-owned `delete_thread_in` helper is used by document annotation
-deletion (`crates/macro_db_client/src/annotations/delete_anchor.rs:36`). The only
-current caller supplies a document parent, so this path acquires no channel
-counter. Channel thread operations use the committing wrapper in the table.
+The historical batch exception retains atomic import checkpointing: its
+completion updates checkpoint/counters, search state/outbox and revision
+([`batches.rs:320`](../../slack_integration/src/outbound/pg_slack_import_repo/batches.rs#L320)).
+Reference completion closes the intent, updates search generation/outbox and
+recomputes the job
+([`references.rs:222`](../../slack_integration/src/outbound/pg_slack_import_repo/references.rs#L222)).
+Those statements really run while the counter lock is held. Releasing the
+message helper's savepoint does not commit the outer import transaction.
 
-## Deferred checks and lock order
+## Discovery and coverage
 
-The pre-existing reply FK is `DEFERRABLE INITIALLY DEFERRED`
-(`crates/macro_db_client/migrations/20260917175816_messages_parent_aware_schema.sql:62`).
-Channel reply creation acquires `FOR KEY SHARE OF m` on the root before any
-counter lock (`crates/messages/src/outbound/pg_message_repo/threads.rs:14`,
-called at `crates/messages/src/outbound/pg_message_repo.rs:697`). This prevents
-COMMIT's deferred root check from first waiting for a root writer that is
-already waiting for this transaction's counter. It deliberately neither locks
-the thread-state row nor rejects a tombstoned message root; the existing live
-thread-state check remains. Ordinary edit/delete/react first lock the message
-and thread at `crates/messages/src/outbound/pg_message_repo.rs:341`.
-Historical reply validation locks existing roots and thread states before its
-reset append (`crates/messages/src/outbound/pg_message_repo/historical.rs:153`).
-
-Commit order here means successful transaction commit order for a channel,
-not HTTP response arrival order. The next writer cannot advance the same
-counter until its predecessor commits or rolls back. Rollback releases the
-counter increment and log insert together with the message/activity/call work.
-COMMIT still performs PostgreSQL's normal deferred checks and WAL work; it is
-not assumed to have zero duration. No additional explicit application query or
-remote call occurs under the counter on the live paths above.
-
-## Timeout behavior
-
-| Scope | Source | Effective application policy |
+| Caller-owned flow | Before admission | Recheck / lifetime |
 | --- | --- | --- |
-| MacroDB parameter group | `infra/stacks/macrodb/index.ts:95`, `:114` | Declares `idle_in_transaction_session_timeout = 300000` (five minutes). This is an idle-session limit, not an active statement/lock-wait limit. No `lock_timeout` or `statement_timeout` is declared in this parameter list. |
-| DSS primary/read-only pools | `services/document_storage_service/src/server.rs:253`, `:274` | No connection startup override or `after_connect` statement/lock timeout. SQLx pool acquisition uses its default, 30 seconds. |
-| Agent and authentication compositions | `services/agent_trigger_service/src/main.rs:132`, `services/agent_harness_service/src/main.rs:278`, `services/authentication_service/src/server.rs:171` | These also construct message/call repositories with pools that set neither statement/lock timeouts nor a different acquisition timeout. |
-| Import worker pool | `services/slack_import_worker/src/main.rs:56` | Pool acquisition capped at 20 seconds; no statement/lock timeout override. |
-| Calendar/prune pool | `services/calendar_service/src/main.rs:60` | No startup statement/lock timeout override; SQLx acquisition defaults to 30 seconds. |
-| Channel changes log read and message hydration | `crates/messages/src/outbound/pg_message_repo/changes.rs:26`, `:78` | `SET LOCAL statement_timeout = '15s'`, per statement for that transaction. This is not a 15-second aggregate request deadline. |
-| Channel prune batch | `crates/messages/src/outbound/pg_message_repo/changes.rs:148` | `SET LOCAL statement_timeout = '15s'`, including a blocked delete statement. |
-| Counter/log allocation for messages, activities, calls and history | `crates/channel_change_db_utils/src/append.rs:14`, `:48`, `:98` | One preflight sets a transaction-local 50 ms total append statement deadline, retaining any stricter nonzero inherited statement timeout. The final append restores that setting. SQL errors abort the transaction; rollback restores its settings. `lock_timeout` is unchanged. |
-| Other statements and COMMIT | Write sites above; counter read `crates/messages/src/outbound/pg_message_repo/changes.rs:13` | No new timeout. Inherit database/role/connection settings. The append restores the saved value before subsequent work, including the historical completion exceptions and COMMIT. |
-| Reference-repair maintenance: outer future | `crates/slack_integration/src/inbound/worker.rs:45`, `:234`, `:245` | The whole reconciliation pass has a 30-second Tokio timeout. Expiry drops the pass, returns `ImportError::Retryable`, and the maintenance loop waits ten seconds before its next pass (`:238`). This is not a PostgreSQL statement timeout. |
-| Main historical import: outer future | `crates/slack_integration/src/inbound/worker.rs:182`, `:194`, `:202`, `:207` | `work.import` has no fixed total-duration timeout. Independent lease and queue heartbeats run every 60 seconds; each heartbeat attempt is bounded by 30 seconds. Heartbeat failure drops the import future. On shutdown, the worker grants a 110-second drain window before dropping remaining work (`:48`, `:88`). |
-| Message/call HTTP routes in DSS: outer future | `services/document_storage_service/src/api.rs:58`; `crates/messages/src/inbound/axum_router.rs:52` | No request timeout layer found in the checked-in route composition or message service. The 200 ms tracing-layer argument is a warning threshold, not a deadline (`crates/macro_tower_layers/src/lib.rs:269`). External caller/proxy timeouts were not inspected. |
+| Imported batch | Sorted unique channel IDs come from the bounded message plan; no discovery query is needed. | Compare the authoritative fenced channel with admitted IDs before message writes (`channel_sink.rs:119`). Hold permits through checkpoint completion and commit. An empty plan acquires no channel permit. |
+| Reference repair | `references::peek_next` seeks a pending job/message/channel identity and releases its pool connection (`references.rs:94`). | Reacquire the job fence by primary key (`next_for_job_in`, `:152`); compare job, message and channel (`reference_reconciliation.rs:59`) before writing. The worker cursor is locked before any connection, advances past busy/ineligible/changed jobs, drains successful jobs, and resets only at end of keyspace (`:102`). |
+| Call status writes | Reuse the existing primary-key call-discussion query through the pool, releasing that connection before `message_write_gate::acquire` (`lifecycle.rs:281`). | Archive rechecks inside its transaction before logging; delete paths recheck immediately after begin. A changed target aborts without commit (`lifecycle.rs:300`). Non-channel discussions receive no channel permit/log. |
+| Timeline activity | The input batch supplies channel IDs; acquire sorted unique channel permits. | Hold through all activity inserts, sequence allocation and commit. Non-channel-only batches keep the existing direct activity path (`persistence.rs:53`). |
+| Document annotation deletion | The authorized document ID is known; acquire its document-parent permit before begin (`delete_anchor.rs:23`). | Existing `delete_thread_in` runs under that permit (`:39`), through commit (`:50`); it never appends a channel change. |
+| Agent conversation bootstrap | Parent comes from the incoming origin before the delivery lease (`queue.rs:354`). | Recheck durable origin (`:406`) and retain admission around the caller-owned work. |
+| Agent terminal reply reconciliation | Parent comes from the turn before `claim_reply` can retain a journal connection (`deliver.rs:606`). | Recheck the durable saved flight (`:640`); scope surrounds reconciliation and finalization (`:689`). |
+| Agent external reply reconciliation | Read target without retaining a journal lease (`external_replies.rs:184`). | Acquire admission before `claim`, then reread/compare the target (`:210`) before presentation. |
 
-The SQLx 0.8.6 default was verified in the installed dependency's
-`sqlx-core/src/pool/options.rs:160`. Pool acquisition limits do **not** cancel a
-statement already running on an acquired connection. A queued request can
-therefore time out acquiring a connection even while an earlier acquired
-connection continues waiting for a counter. Actual deployed database/role
-settings and connection-URL options were not inspected; the table describes
-checked-in configuration, not a live production `SHOW` result.
+The agent announcer acquires the same process-wide key
+([`channel_announcer.rs:359`](../../agent_harness/src/outbound/channel_announcer.rs#L359)).
+Its task-local scope lets nested same-parent repository writes reuse that outer
+admission with one nested writer at a time
+([`message_write_gate/src/lib.rs:142`](../../message_write_gate/src/lib.rs#L142)).
+It is not inherited by spawned tasks. The scope avoids waiting for a second
+global slot while holding a journal connection; unrelated parents acquire their
+own permits.
 
-The 50 ms value is a **whole append-statement deadline**, including successive
-counter waits in a batch and executor work. It does not reset after each lock
-acquisition. PostgreSQL's statement timer starts before query execution;
-therefore setting the timeout inside the append would not arm a new timer for
-that same statement. The preflight makes the value effective for the next
-command. PostgreSQL disables the previous command's timer at command finish
-and enables the next one from the current setting; changing the setting during
-execution does not itself re-arm or disable the active timer.
-[Command timer boundaries](https://github.com/postgres/postgres/blob/REL_18_4/src/backend/tcop/postgres.c#L2601-L2650),
-[timer activation](https://github.com/postgres/postgres/blob/REL_18_4/src/backend/tcop/postgres.c#L4877-L4899),
-[statement-timeout setting](https://github.com/postgres/postgres/blob/REL_18_4/src/backend/utils/misc/guc_tables.c#L2614-L2623)
-The deadline covers the final statement's initial relation locks as well as
-its counter waits. It is not a transaction or HTTP deadline, nor a hard
-real-time scheduling bound: earlier message/thread locks, the preflight under
-its inherited deadline, and deferred checks or WAL work at COMMIT retain their
-existing behavior. Historical completion work also retains its prior timeout.
+Call-ID-only and reference-maintenance inputs do not contain an authoritative
+channel ID, so their released discovery reads necessarily precede admission.
+They are short reads, not connections parked while waiting for a slot. Call
+status operations now execute the existing metadata read once more for this
+purpose. Discovery is not authorization: the transaction rechecks identity and
+keeps the existing authorization/fence rules.
 
-The production DSS primary pool keeps at least 10 and permits at most 50
-connections (`services/document_storage_service/src/server.rs:247`). As a rough
-steady-arrival estimate,
-200–400 contending writes per second multiplied by a 50 ms wait accounts for
-10–20 parked connections, plus the current holder. At 400 writes per second,
-100 ms would account for 40 parked connections, exceeding half of this pool.
-This estimate motivates 50 ms; it is not a connection-occupancy guarantee.
-It excludes time in other statements, bursts, retries, timer-delivery delay,
-and cancellation/rollback cleanup. This estimate uses the service pool cap, not a deployed database
-connection limit.
+The activity crate remains unaware of channels. DSS supplies the channel-aware
+composition, using `timeline_parent`; selected activities and their log rows
+commit atomically. Replayed deterministic activity IDs may get another sequence,
+providing the required at-least-once log guarantee.
 
-## Caller-visible failures and rollback
+## Counter ordering and timeout scope
 
-| Caller | Failure propagation |
+The scalar append increments the counter and inserts the log in one statement
+([`append.rs:12`](../../channel_change_db_utils/src/append.rs#L12)). The activity
+batch locks channels in sorted order and allocates each channel's sequences in
+input order ([`:68`](../../channel_change_db_utils/src/append.rs#L68)). Both save
+`lock_timeout`, set the smaller nonzero inherited value or five seconds before
+counter allocation, then restore it in the same statement (`:28`, `:85`).
+There is no timeout-setting round trip, and no new statement deadline.
+
+The counter row lock lasts to transaction end. A visible sequence K therefore
+includes every committed change below K; another writer cannot increment that
+channel counter before the earlier transaction commits or rolls back. Counter,
+log and content changes roll back together. Response/push arrival order is not
+used as commit order.
+
+Channel reply creation acquires `FOR KEY SHARE OF m` on its existing root before
+counter acquisition
+([`threads.rs:9`](../src/outbound/pg_message_repo/threads.rs#L9)), so its deferred
+foreign-key check cannot first wait for a root writer already waiting on this
+transaction's counter. It neither locks the thread-state row nor rejects a
+message tombstone if the thread remains live. Historical reply validation also
+locks existing roots before appending its reset.
+
+The two-second limit covers admission waiting only. The five-second database
+limit covers individual lock waits, not total statement/request duration;
+successive waits may cumulatively exceed it. Earlier row locks, the approved
+historical completion work and COMMIT retain their inherited timeout settings.
+Relation locks acquired before the append's configuration CTE also retain the
+inherited setting. Separate processes have separate four-writer limits.
+
+The changes read and prune transactions retain their explicit 15-second
+statement timeouts
+([`changes.rs:26`](../src/outbound/pg_message_repo/changes.rs#L26),
+[`:78`](../src/outbound/pg_message_repo/changes.rs#L78),
+[`:148`](../src/outbound/pg_message_repo/changes.rs#L148)). DSS's production pool
+is 10 minimum / 50 maximum with SQLx's default 30-second acquire timeout
+([`server.rs:247`](../../../services/document_storage_service/src/server.rs#L247)).
+Pool-acquire timeouts do not cancel queries already running on a connection.
+The pre-existing five-minute idle-transaction setting is also not an active
+statement deadline. No live production settings were inspected for this audit.
+
+## Caller-visible failures and retry boundaries
+
+| Caller | Behavior |
 | --- | --- |
-| Message allocation | SQLSTATE `55P03`, or `57014` with the exact English statement-timeout message, from the append helper is classified as `MessageError::Contended` in `crates/messages/src/outbound/pg_message_repo/change_log.rs:13`. The message HTTP adapter returns status 503 with a safe retry message and `Retry-After: 1` (`crates/messages/src/inbound/axum_router.rs:172`). No sequence or success push is returned before repository COMMIT succeeds. |
-| Bot webhook message allocation | The same domain failure produces status 503 and `Retry-After: 1` (`crates/bots/src/inbound/channel_webhook_router.rs:402`, `:438`). `Contended` has a stable message that omits the underlying database details. |
-| Other message failures | Unrecognized `57014` (including user cancellation or translated timeout text), `40P01` (deadlock), pool errors, and `55P03` outside the append retain `MessageError::Repository` through `crates/messages/src/outbound/pg_message_repo.rs:46`. The HTTP adapter returns status 500 (`crates/messages/src/inbound/axum_router.rs:179`). |
-| Call write | Plain repository operations propagate `sqlx::Error`; call service mapping and `From<sqlx::Error>` produce `CallError::Internal` (`crates/call/src/outbound/pg_call_repo/team_share.rs:30`, `crates/call/src/domain/service.rs:2040`). The HTTP adapter returns status 500 with `internal server error` (`crates/call/src/inbound/axum_router.rs:1231`). |
-| Activity ingestion | Repository error propagates before realtime publication. The consumer exits without committing that source offset (`crates/activity/src/inbound/kafka_consumer.rs:140`); DSS restarts it after five seconds (`services/document_storage_service/src/server.rs:1131`). Replayed deterministic activity ids can receive another log sequence, preserving the at-least-once log guarantee. |
-| Historical import/reconciliation | Repository errors are wrapped as `ImportError::Retryable` (`services/slack_import_worker/src/composition.rs:31`, `channel_sink.rs:194`, `reference_reconciliation.rs:62`); neither checkpoint nor successful body completion commits. |
-| Retention | Error returns from the batch without commit; the scheduler logs it and tries again at its next retention interval (`services/calendar_service/src/calendar_outbox.rs:85`). |
+| Messages | Typed `AdmissionTimeout` becomes `MessageError::Contended` before the write connection (`change_log.rs:28`). Only append SQLSTATE `55P03` also maps to that variant (`:14`); unrelated cancellation remains a repository error. HTTP returns safe 503 / `Retry-After: 1` (`axum_router.rs:172`). Success events follow successful COMMIT only. |
+| External bot webhook | The same `Contended` error maps to safe 503 / `Retry-After: 1` (`channel_webhook_router.rs:402`, `:435`). A rejected admission occurs before the write, so a successful retry creates one message. The endpoint still sends no client ID or nonce (`:292`, `:301`): a retry after an unknown commit outcome is not deduplicated, as before. |
+| Calls | Typed admission failure is preserved inside SQLx I/O and mapped to `CallError::Contended` (`team_share.rs:30`). Call HTTP returns safe 503 / `Retry-After: 1` (`axum_router.rs:1231`, `:1255`). Other SQL/I/O failures remain internal errors. The generic entity-mutation surface has no retryable variant and keeps its existing internal-error envelope (`entity_mutation.rs:45`). |
+| Agent replies | Admission failure and message `Contended` become `HarnessError::ReplyBusy` (`channel_announcer.rs:368`, `:669`). Conversation commands stay queued for recovery (`queue.rs:1856`); terminal reconciliation logs the failure without finalizing it (`deliver.rs:689`). This is distinct from a generic announcement failure. |
+| Historical batch | Admission/fence/database failures propagate as `ImportError::Retryable` before successful checkpoint commit. |
+| Reference repair | A busy parent advances the cursor and lets the pass try another job; no connection or write transaction has started (`reference_reconciliation.rs:44`). Fence/identity races similarly roll back and advance. Other failures retain retryable propagation. |
+| Activity | Admission or insert failure occurs before realtime publication and source acknowledgement. The consumer replays; deterministic IDs can receive fresh log sequences. |
+| Retention | A failed batch does not commit; the scheduler logs it and retries at the next retention interval. |
 
-An error before COMMIT drops the SQLx transaction; SQLx queues rollback before
-the connection can be reused (`sqlx-core/src/transaction.rs:260` in the installed
-0.8.6 dependency). Thus a timed-out append does not leave an earlier message
-mutation committed and does not consume a sequence. As with existing writes,
-a connection loss during COMMIT can leave the client uncertain whether the
-server committed; this branch does not add a new retry protocol.
+An explicit admission 503 says this attempt never started its write transaction.
+An append lock timeout rolls back preceding transaction work and consumes no
+sequence. Neither case makes arbitrary network retries idempotent: a connection
+loss during COMMIT can leave the caller unsure whether the server committed.
+This change adds no new retry protocol or webhook idempotency key.
 
-A Tokio timeout drops the Rust future; it does not itself set a PostgreSQL
-deadline or guarantee immediate cancellation of an already-sent statement.
-SQLx 0.8.6 queues rollback in `sqlx-postgres/src/transaction.rs:73`, then flushes
-pending protocol work before returning the connection to the pool
-(`sqlx-core/src/pool/connection.rs:307`, `sqlx-postgres/src/connection/mod.rs:85`).
-That rollback can remain behind a blocked statement. The 30-second reference
-maintenance limit and import cancellation paths therefore bound caller work,
-not the lifetime of an active database lock wait. They must not be treated as
-substitutes for `lock_timeout` or `statement_timeout`.
+## Evidence and remaining scope
 
-## Observed cancellation edge in the earlier 5 ms experiment
+The proof entry points cover gap-free concurrent commit-prefix reads,
+reply/root lock ordering, unchanged non-channel SQL, twenty simultaneous posts
+with normal and 5 ms-held commits, and fixed-arrival flood/neighbor admission.
+See [README.md](README.md) for the current commands and artifact names. Earlier
+5/50 ms per-lock and 50 ms total-deadline experiments are explicitly historical;
+their results do not measure this admission implementation.
 
-The three 5 ms pool-isolation runs produced 22 SQLSTATE `57014` errors
-(2, 8 and 12 by run), alongside 620,970 `55P03` errors. Every one of the 22
-server log entries reported `canceling statement due to user request` on the
-counter append beginning `WITH saved AS MATERIALIZED`; none named ROLLBACK
-or reported a statement timeout. Twenty entries included counter tuple/index
-context; two had no context. The relevant log window was 2026-11-12
-06:42–06:45 UTC. The extracted entries are retained locally in
-`/tmp/channel-seq-cancellation-excerpts.log` from `/tmp/channel-seq-pg.log`.
-A separate connection afterward reported `statement_timeout=0`,
-`lock_timeout=0` and `idle_in_transaction_session_timeout=0`. This checks the
-local default connection, not the precise settings of each benchmark connection.
-
-PostgreSQL 18.4's interrupt handler distinguishes a lock-timeout indicator
-(`55P03`), a statement-timeout indicator (`57014`), and a pending query cancel
-with neither indicator (`57014`, user-request text).
-[PostgreSQL interrupt classification](https://github.com/postgres/postgres/blob/REL_18_4/src/backend/tcop/postgres.c#L3196-L3248)
-The lock-wait code preserves the lock-timeout indicator when leaving a wait,
-but enabling a subsequent timeout clears that timeout's indicator.
-[Lock-wait cleanup](https://github.com/postgres/postgres/blob/REL_18_4/src/backend/storage/lmgr/proc.c#L1548-L1563),
-[timeout initialization](https://github.com/postgres/postgres/blob/REL_18_4/src/backend/utils/misc/timeout.c#L143-L183)
-A plausible interleaving is a timeout arriving as a counter lock is granted,
-followed by another lock wait resetting the indicator before the pending
-interrupt is processed. This is a source-backed inference, **not a proven
-interleaving** in these runs. Restoring `lock_timeout` has no assignment hook
-that clears the indicator, so the setting restoration itself has not been
-shown to cause the error.
-[PostgreSQL lock-timeout setting](https://github.com/postgres/postgres/blob/REL_18_4/src/backend/utils/misc/guc_tables.c#L2624-L2633)
-
-These observations do not establish that every `57014` means contention.
-The observed user-request text remains a repository error: HTTP 500 with no
-`Retry-After`. The current append recognizes only `55P03` or `57014` with the
-exact English statement-timeout text as contention. Other locales fail closed
-to a safe 500; see the sender-response section below. The current statement
-deadline does not re-arm between lock waits, but the 5 ms counts remain
-historical measurements, not proof that any cancellation race is absent.
-
-## Regression evidence and remaining scope
-
-Existing committed tests cover concurrent commit-prefix visibility, uniqueness
-and rollback, plus the deferred-root lock cycle:
-`channel_reply_locks_its_deferred_fk_before_the_counter` and
-`concurrent_channel_replies_and_root_writers_finish_without_deadlocks` in
-`crates/messages/src/outbound/pg_message_repo/test/sequences.rs`.
-
-The prior 50 ms **per-lock** implementation passed all six utility tests and
-198 message tests, with eight benchmarks ignored by default. Those historical
-logs are `/tmp/channel-seq-utils-50ms.log` and `/tmp/channel-seq-messages-50ms.log`;
-they do not validate the current statement-deadline implementation. The current
-utility cases below passed: seven tests, including the aggregate-wait
-regression, in `/tmp/channel-seq-utils-deadline.log`. The full messages suite
-for the statement-deadline implementation passed 201 tests with eight ignored
-benchmarks in `/tmp/channel-seq-messages-deadline.log`.
-
-- `channel_counter_wait_timeout_rolls_back_the_entire_message` in
-  `crates/messages/src/outbound/pg_message_repo/test/sequences.rs` holds the
-  counter while a different message reaches its final append. Cases cover the
-  50 ms statement deadline, an inherited 1 ms lock timeout, and an inherited
-  10 ms statement timeout; they check typed contention, preserved database
-  cause, absent message, unchanged counter and a gap-free successful retry.
-- `channel_counter_wait_is_bounded_with_database_timeouts_disabled` verifies
-  a default-timeout connection still gets the append deadline, returns its
-  pooled setting to zero after rollback, and succeeds after releasing the holder.
-- `append_restores_stricter_disabled_and_longer_timeouts`,
-  `counter_timeout_rolls_back_prior_and_partial_batch_changes`, and
-  `a_later_statement_keeps_the_callers_longer_statement_timeout` in
-  `crates/channel_change_db_utils/src/test/timeout.rs` cover scalar/batch
-  restoration, unchanged lock timeout, atomic rollback and later SQL.
-- `batch_deadline_bounds_the_total_of_multiple_short_counter_waits` in that
-  utility file checks that successive individually short waits still exhaust
-  the batch's one statement deadline and roll back the batch.
-
-The user-deletion `cleanup_user_call_entities` cascade is deliberately outside
-this PR's sequence coverage. A retained channel call root can keep its prior
-call status in an already-populated device cache until that row is next fetched
-or the channel is reset. This path remains excluded to avoid holding channel counter locks through
-the remainder of user deletion.
-
-## Sender response and retry behavior
-
-The message API and channel bot webhook return the same public response for a
-counter append that fails with SQLSTATE `55P03`, or with SQLSTATE `57014` and
-the exact primary message `canceling statement due to statement timeout`: HTTP **503**, header
-**`Retry-After: 1`**, and JSON
-`{"message":"channel is busy; retry the request"}`. The adapter classifies only
-these recognized append timeouts as `MessageError::Contended`, retaining the database
-report internally
-([change_log.rs:13](../src/outbound/pg_message_repo/change_log.rs#L13),
-[ports.rs:27](../src/domain/ports.rs#L27)). Both HTTP adapters set the header
-and keep the underlying cause out of that body
-([message HTTP:166](../src/inbound/axum_router.rs#L166),
-[webhook HTTP:397](../../bots/src/inbound/channel_webhook_router.rs#L397)).
-
-SQLSTATE `57014` with any other primary message, including
-`canceling statement due to user request`, remains `MessageError::Repository`
-([database_error:46](../src/outbound/pg_message_repo.rs#L46)). The message API
-and channel bot webhook both answer **500**, with **no `Retry-After` header**,
-and JSON `{"message":"message operation failed"}`. They log the underlying
-report for diagnosis without returning it
-([message HTTP:179](../src/inbound/axum_router.rs#L179),
-[webhook logging/body:424](../../bots/src/inbound/channel_webhook_router.rs#L424)).
-The webhook regression test asserts both this safe body and the absent header
-([tests.rs:59](../../bots/src/inbound/channel_webhook_router/tests.rs#L59)).
-
-The `57014` discriminator assumes English PostgreSQL primary messages. The
-server's [`lc_messages` setting](https://www.postgresql.org/docs/14/runtime-config-client.html#GUC-LC-MESSAGES)
-controls their language and can inherit the host environment. The dedicated
-PostgreSQL 14 and 18 proof clusters use `C.UTF-8`; no checked-in production
-locale override was found. Unrecognized or translated cancellation text fails
-closed to the safe repository-error 500 response, never misclassifies a user
-cancel as retryable, and does not disable the statement deadline. Outbound-only
-unit tests preserve the original SQLSTATE/message for both recognized timeouts
-and other cancellations
-([change_log/test.rs](../src/outbound/pg_message_repo/change_log/test.rs)).
-
-Neither request path retries either failure on the server. Repository creation
-uses `?` on the append immediately before commit
-([pg_message_repo.rs:753](../src/outbound/pg_message_repo.rs#L753)); the service
-propagates failure before success publication
-([service.rs:435](../src/domain/service.rs#L435)). The HTTP and webhook handlers
-each await one service post
-([message handler:269](../src/inbound/axum_router.rs#L269),
-[webhook handler:287](../../bots/src/inbound/channel_webhook_router.rs#L287)).
-This statement concerns these synchronous message requests; activity ingestion
-and import workers have the separate retry behavior described above.
-
-The current **web sender does not retry 503 or 500** and does not consume the
-header or server JSON explanation. Its message client passes no retry setting
-([messages.ts:93](../../../apps/web/src/lib/service-clients/service-storage/messages.ts#L93));
-`safeFetch` defaults to one attempt, maps 503 to `HTTP_ERROR`, and returns it
-immediately
-([safeFetch.ts:116](../../../apps/web/src/lib/core/util/safeFetch.ts#L116),
-[safeFetch.ts:290](../../../apps/web/src/lib/core/util/safeFetch.ts#L290),
-[safeFetch.ts:318](../../../apps/web/src/lib/core/util/safeFetch.ts#L318)). The
-send mutation only handles a 409 by reading its already-stored id
-([mutations.ts:448](../../../apps/web/src/lib/queries/messages/mutations.ts#L448));
-the application configures retries for queries, not mutations
-([client.ts:15](../../../apps/web/src/lib/queries/client.ts#L15)), and the
-installed TanStack Query mutation default is zero retries
-(`node_modules/@tanstack/query-core/src/mutation.ts:199`). Authentication
-refresh retries concern 401, not these failures
-([fetchWithToken.ts:123](../../../apps/web/src/lib/core/util/fetchWithToken.ts#L123)).
-On failure the web shows `Failed to send message`, removes the optimistic row,
-and restores the sent draft if it has not been replaced by newer input
-([mutations.ts:539](../../../apps/web/src/lib/queries/messages/mutations.ts#L539),
-[Channel.tsx:825](../../../apps/web/src/features/channel/Channel/Channel.tsx#L825),
-[thread composer:163](../../../apps/web/src/features/channel/Thread/ThreadReplyChannelInput.tsx#L163)).
-
-The **SDK also does not automatically retry**. Its channel send chooses one
-message-API or webhook call
-([post.ts:42](../../../packages/sdk/src/entities/channels/post.ts#L42),
-[post.ts:86](../../../packages/sdk/src/entities/channels/post.ts#L86)); the
-generated client executes one fetch
-([client.gen.ts:101](../../../packages/sdk/generated/storage/client/client.gen.ts#L101)),
-and its configured interceptor adds authorization only
-([client.ts:287](../../../packages/sdk/src/utils/client.ts#L287)). `unwrap`
-throws `MacroApiError(status, data)`; that high-level error does not retain
-response headers
-([unwrap.ts:32](../../../packages/sdk/src/utils/unwrap.ts#L32),
-[unwrap.ts:91](../../../packages/sdk/src/utils/unwrap.ts#L91)). A 503 therefore
-throws `Macro API error 503: channel is busy; retry the request`. A sender must
-implement its own delayed retry policy or retry manually; the header advertises
-the delay, but does not cause existing clients to wait and resend. Behavior of
-external webhook programs outside this repository is not established here.
+The user-deletion `cleanup_user_call_entities` cascade remains explicitly
+excluded. A retained channel call root can keep its old cached call status until
+its next fetch or channel reset. Other call mutations that do not change the
+rendered channel call-root status remain outside this log path.

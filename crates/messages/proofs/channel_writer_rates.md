@@ -1,206 +1,142 @@
-# Single-channel writer rates
+# Channel writer rates and admission
 
-The code does **not** establish that a channel stays below 200 contending write
-transactions per second. External webhook posts, ordinary message mutations,
-and agent presentations have no enforced per-channel time limit in the paths
-below. They can submit enough concurrent work to approach a hypothetical 5 ms
-serialized counter service time. This is a source-code finding, not an observed
-production rate or a claim that the measured repository latency equals counter
-lock duration.
+The current process admits at most **four concurrent writes per typed parent**,
+with a **two-second wait before pool acquisition**. The registry is shared by
+repository instances and pools in that process
+([`message_write_gate/src/lib.rs:19`](../../message_write_gate/src/lib.rs#L19),
+[`:207`](../../message_write_gate/src/lib.rs#L207)). This applies to channel
+messages, selected activities, call status writes and import compositions.
+Idle entries disappear when their last permit or waiter drops (`:87`).
 
-At a constant 5 ms **counter-lock occupancy**, the arithmetic ceiling is
-`1 / 0.005 = 200` transactions/s for one channel. Actual occupancy includes the
-append and the time until commit, and must be measured separately. The append
-helper explicitly belongs immediately before commit
-([append.rs:8](../../channel_change_db_utils/src/append.rs#L8)). A transaction
-can allocate multiple sequence numbers: activity batches advance a channel's
-counter once by the batch size
-([append.rs:59](../../channel_change_db_utils/src/append.rs#L59)). Therefore 200
-**sequence rows**/s is not the corresponding batch ceiling.
+This is not a per-channel time-rate limit. Fast transactions can complete many
+times per second, and separate processes have independent gates. With N active
+processes, the code can admit up to 4N operations for a parent; operations can
+also retain more than one connection when they include a journal lease and a
+nested message write. There is still no general code-enforced ceiling of 200
+channel writes/s or sequence rows/s.
 
-| Writer | Enforced bound | What can reach one channel |
+If a transaction occupied the counter lock for exactly 5 ms, its arithmetic
+serialization ceiling would be 200 transactions/s. That is a hypothetical
+service time, not the five-second lock-wait guard or a production measurement.
+Activity transactions can append multiple sequences in one acquisition, so it
+is not a 200-sequence-rows/s bound. The append remains the final statement before
+commit, except for the approved historical completion work described in the
+[transaction audit](channel_transaction_audit.md).
+
+| Writer | Source-level controls | Remaining rate behavior |
 | --- | --- | --- |
-| Message API and external bot webhook | Authorization and input validation; no per-channel request-rate limiter in these routers or their service mount | One sequence per committed mutation; concurrent callers can keep the channel counter contended. No numeric requests/s ceiling can be derived from this code. |
-| Agent reply presentation | One command worker per session; unchanged shapes/content are suppressed; open prose is excluded from progress projection | Writes follow passage/segment changes and finalization, not every token. No wall-clock throttle or cross-session channel cap; several sessions can write the same channel. |
-| Built-in bot response | One initial message, then one final patch per completed response | Normally two sequence changes per invocation. Invocations spawn independently; no per-channel concurrency or time cap here. |
-| Historical import | At most 500 messages and 4 MiB per batch; one or two import lanes per worker process | One `reset` sequence per nonempty committed batch, not one per imported message. Batches run back-to-back without pacing. No numeric batches/s cap. |
-| Imported-reference repair | At most 50 attempts per maintenance pass; at least 10 seconds between completed passes per worker process | At most 50 changed-message sequences in a pass, potentially all in one channel; at most 5/s sustained per process under the configured loop, with an immediate burst of up to 50. Replica count is not bounded by this code. |
-| Channel call end/delete | One active call per channel; append only on actual archive/delete; new-call start route has a per-account 20/hour budget | One root-change sequence per successful archival or deletion, plus a separately materialized call-ended activity. Existing record deletion has no time limiter. The start budget is not a per-channel cap. |
-| Timeline activity materialization | One source event at a time per consumer; no numeric batch length or per-channel time cap in persistence | A participant event can contain many activities for one channel. One transaction allocates a sequence for every selected activity; replay deliberately allocates again. |
+| Message API and external webhook | Authorization/input checks, then four-writer per-parent admission before the write connection; no general per-channel rate limiter. | One sequence per committed mutation. Callers can sustain back-to-back work; excess admission waits up to two seconds, then returns a retryable busy response. |
+| Agent reply presentation | One command worker per session; changed-shape/ready checks coalesce updates; same parent gate covers repository writes and caller-owned journal scopes. | No wall-clock interval between changed replies. Several sessions can target the same channel, subject to the per-process gate. |
+| Built-in bot response | One initial post and one final patch per response, each admitted through the message service. | Invocations spawn independently; the parent gate bounds concurrent writes, not invocations or requests/s. |
+| Historical import | At most 500 messages / 4 MiB per batch, one or two lanes per worker process, sorted parent admission before the import fence. | One reset per nonempty batch. Batches run back-to-back without persistence pacing. |
+| Reference repair | Up to 50 attempts per pass, ten seconds between completed passes, parent admission before the write transaction. | At most 50 changed-body sequences per pass. Busy/ineligible jobs advance a persistent cursor so later jobs can progress. |
+| Call end/delete | One active call per channel, changed-only root logging, parent admission before the write transaction; new-call starts have a separate account budget. | Record deletions have no time-rate limit. The start budget does not limit existing record deletions or other channel writers. |
+| Timeline activities | One source event per consumer at a time; sorted parent admission before the activity transaction. | A batch can append many sequences to one channel, and replay intentionally allocates again. No fixed activity-count or per-channel time-rate cap. |
 
-## Agent presentation is structurally coalesced
+## Agent updates are coalesced, not time-throttled
 
-The fold compares the projected reply shape before emitting `Progressed`
-([lifecycle.rs:97](../../folds/agent_fold/src/domain/lifecycle.rs#L97)); unfinished
-prose is deliberately absent
-([lifecycle.rs:52](../../folds/agent_fold/src/domain/lifecycle.rs#L52)). The
-presenter's `shape` includes content only for sealed segments, so changes to
-steps inside an open segment do not force a message rewrite
-([presenter.rs:89](../../agent_harness/src/domain/presenter.rs#L89)). A segmented
-reply becomes postable after its passage is complete
-([presenter.rs:39](../../agent_harness/src/domain/presenter.rs#L39)).
+The fold omits unfinished prose from its progress shape and emits `Progressed`
+only when the shape changes
+([`lifecycle.rs:52`](../../folds/agent_fold/src/domain/lifecycle.rs#L52),
+[`:97`](../../folds/agent_fold/src/domain/lifecycle.rs#L97)). The presenter keeps
+content in the comparison shape only for sealed segments
+([`presenter.rs:97`](../../agent_harness/src/domain/presenter.rs#L97)). Segmented
+messages must be ready and different before presentation
+([`present.rs:204`](../../agent_harness/src/domain/service/present.rs#L204)); writes
+are awaited sequentially (`:218`), and finalization skips unchanged non-final
+messages (`:287`). Thus token streaming into one unfinished passage does not
+imply one channel write per token, but completed passages and sealed changes
+have no enforced delay between them.
 
-The harness suppresses unchanged turn shapes and requires `ready` plus changed
-shape for segmented replies
-([present.rs:171](../../agent_harness/src/domain/service/present.rs#L171)). It
-then awaits each changed message's presentation
-([present.rs:218](../../agent_harness/src/domain/service/present.rs#L218)); final
-presentation also skips unchanged non-final messages
-([present.rs:282](../../agent_harness/src/domain/service/present.rs#L282)). The
-announcer uses an idempotent post and skips a patch when content is already
-equal or the message was deleted
-([channel_announcer.rs:583](../../agent_harness/src/outbound/channel_announcer.rs#L583)).
-Thus rapid token streaming into one unfinished passage does not mean rapid
-channel writes. A stream of distinct completed passages or changes to sealed
-segments still has no enforced interval between channel writes.
+The session command channel is unbounded
+([`queue.rs:152`](../../agent_harness/src/domain/service/queue.rs#L152)). The
+50-action cap is per-session queued actions
+([`domain/queue.rs:48`](../../agent_harness/src/domain/queue.rs#L48)), not a
+channel-wide rate limit. Repository admission now coordinates writers from
+those sessions within a process. Conversation bootstrap and reply recovery
+acquire it before retaining journal connections; see the transaction audit.
 
-Commands are serialized by a worker keyed by **session**, using an unbounded
-command channel
-([queue.rs:139](../../agent_harness/src/domain/service/queue.rs#L139)); this does
-not cap all sessions in one channel. The 50-action queue cap is a count of
-queued actions per session, not a channel write-rate limit
-([domain/queue.rs:45](../../agent_harness/src/domain/queue.rs#L45)).
+The 1,500 ms / 50 ms timers and 256-frame trigger belong to durable **session
+log** flushing
+([`agent_session/service.rs:1811`](../../agent_session/src/domain/service.rs#L1811)).
+They are not channel-message pacing. The actor forwards fold signals to its
+observer without that flush timer
+([`actors.rs:796`](../../agent_session/src/domain/session/actors.rs#L796)).
 
-The apparent 1,500 ms / 50 ms throttle is for durable **agent-session log**
-flushes, with an additional 256-frame flush trigger
-([service.rs:1811](../../agent_session/src/domain/service.rs#L1811)). It cannot
-be used as a 0.67/s or 20/s channel-message bound: the fold runs before buffering
-([service.rs:2000](../../agent_session/src/domain/service.rs#L2000)), its signals
-are returned on the append
-([service.rs:2143](../../agent_session/src/domain/service.rs#L2143)), and the
-actor immediately forwards those signals to the turn observer
-([actors.rs:763](../../agent_session/src/domain/session/actors.rs#L763)). There
-is no sleep, timer, or rate limiter on that forwarding path.
+## Direct messages and bots
 
-## Bots and direct message requests
+The message routes use the authorized service and repository gate; they do not
+add a per-channel requests/s limiter
+([`axum_router.rs:255`](../src/inbound/axum_router.rs#L255)). Tool callers can also
+post through that service, so human typing speed is not a workload bound.
 
-The message router exposes create/edit/delete/react/thread writes with no
-rate-limit layer
-([axum_router.rs:54](../src/inbound/axum_router.rs#L54)); create directly awaits
-the authorized service post
-([axum_router.rs:239](../src/inbound/axum_router.rs#L239)). The comment tool can
-also post a channel reply through the same service
-([comment.rs:91](../src/inbound/toolset/comment.rs#L91)). These are programmatic
-writers as well as UI writers; no assumption about human typing speed bounds
-them.
+The external webhook still supplies neither a message ID nor a nonce
+([`channel_webhook_router.rs:287`](../../bots/src/inbound/channel_webhook_router.rs#L287)).
+An admission 503 happens before its write starts; a successful retry then
+creates one message. Retrying after an **unknown** commit outcome can create
+another message, as before. The accepted scope keeps that endpoint unchanged;
+this admission change introduces no idempotency key. The 503 response carries
+`Retry-After: 1` (`:402`, `:435`).
 
-The external bot webhook router has no rate limiter
-([channel_webhook_router.rs:161](../../bots/src/inbound/channel_webhook_router.rs#L161)).
-Every accepted request posts a fresh root with no supplied id or nonce
-([channel_webhook_router.rs:278](../../bots/src/inbound/channel_webhook_router.rs#L278)).
-The service mounts that router directly
-([api.rs:418](../../../services/document_storage_service/src/api.rs#L418)); its
-outer application layers are tracing, version validation, CORS, and compression,
-not a channel request-rate limit
-([api.rs:58](../../../services/document_storage_service/src/api.rs#L58)). This
-does not establish anything about external load balancer limits or deployed
-traffic; neither supplies a code-enforced per-channel bound here.
+The built-in bot posts, awaits its responder, then patches once
+([`service.rs:616`](../../channel_bots/src/domain/service.rs#L616),
+[`:639`](../../channel_bots/src/domain/service.rs#L639),
+[`:660`](../../channel_bots/src/domain/service.rs#L660)). Its responder collects
+streamed content before returning
+([`agent_loop_responder.rs:63`](../../channel_bots/src/outbound/agent_loop_responder.rs#L63));
+it does not patch on every chunk. Candidates spawn independently
+([`bot_trigger_router.rs:93`](../../channel_bots/src/inbound/bot_trigger_router.rs#L93)),
+with admission applied when they write.
 
-The built-in response handler posts once, awaits the responder, then patches
-once
-([service.rs:614](../../channel_bots/src/domain/service.rs#L614),
-[service.rs:636](../../channel_bots/src/domain/service.rs#L636),
-[service.rs:658](../../channel_bots/src/domain/service.rs#L658)). The responder
-collects all streamed chunks before returning
-([agent_loop_responder.rs:63](../../channel_bots/src/outbound/agent_loop_responder.rs#L63));
-it does not patch for each chunk. However, each trigger candidate runs in its
-own spawned task from an unbounded receiver
-([bot_trigger_router.rs:87](../../channel_bots/src/inbound/bot_trigger_router.rs#L87)).
-AI admission checks do not make this path a per-channel request-rate limiter.
+## Import and repair bursts
 
-## Imports and repair bursts
+Historical batch limits remain 500 messages and 4 MiB
+([`historical.rs:14`](../src/domain/historical.rs#L14)). The import worker allows
+one or two lanes
+([`worker.rs:34`](../../slack_integration/src/inbound/worker.rs#L34)), and flushes
+full batches without a time-based persistence delay
+([`importer.rs:199`](../../slack_integration/src/domain/importer.rs#L199)). The
+composition admits sorted target channels before acquiring its fence and
+checks the fenced target before writing
+([`channel_sink.rs:100`](../../../services/slack_import_worker/src/composition/channel_sink.rs#L100)).
+A nonempty helper batch logs one reset, not one sequence per imported message
+([`historical.rs:120`](../src/outbound/pg_message_repo/historical.rs#L120)).
 
-Historical bounds are explicitly validated at 500 messages and 4 MiB
-([historical.rs:13](../src/domain/historical.rs#L13),
-[historical.rs:110](../src/domain/historical.rs#L110)). Each nonempty batch adds
-one reset in its savepoint
-([historical.rs:107](../src/outbound/pg_message_repo/historical.rs#L107)), and
-the import composition commits that batch with its checkpoint
-([channel_sink.rs:186](../../../services/slack_import_worker/src/composition/channel_sink.rs#L186)).
-The importer awaits a flush whenever its batch is full and proceeds directly
-to the next records
-([importer.rs:199](../../slack_integration/src/domain/importer.rs#L199)).
+Reference repair attempts at most 50 jobs per pass
+([`reference_reconciliation.rs:102`](../../../services/slack_import_worker/src/composition/reference_reconciliation.rs#L102));
+maintenance waits ten seconds after the pass
+([`worker.rs:240`](../../slack_integration/src/inbound/worker.rs#L240)). This gives
+an upper bound of five attempts/s sustained per worker, but permits a burst of
+50 and does not bound replica count. Each busy admission advances the cursor
+before another job is tried; successful work drains its job before advancing.
+Discovery uses a released read connection, followed by admission and fenced
+identity revalidation (`reference_reconciliation.rs:40`). Only a changed body
+allocates a sequence; unchanged/invalidated guards remain silent.
 
-Each worker process permits one or two import lanes
-([worker.rs:34](../../slack_integration/src/inbound/worker.rs#L34),
-[worker.rs:65](../../slack_integration/src/inbound/worker.rs#L65)); this bounds
-concurrency per process, not transactions/s, replica count, or aggregate channel
-demand. The import notifier's two-second throttle is only for requester progress
-notifications
-([gateway_notifier.rs:25](../../slack_integration/src/outbound/gateway_notifier.rs#L25));
-it does not pace persistence.
+## Calls and activity batches
 
-Reference maintenance requests a page of 50
-([maintenance.rs:10](../../slack_integration/src/domain/maintenance.rs#L10),
-[maintenance.rs:70](../../slack_integration/src/domain/maintenance.rs#L70)). The
-worker repair adapter also clamps the loop to 50 and commits every attempt
-separately
-([reference_reconciliation.rs:37](../../../services/slack_import_worker/src/composition/reference_reconciliation.rs#L37),
-[reference_reconciliation.rs:75](../../../services/slack_import_worker/src/composition/reference_reconciliation.rs#L75)).
-Only an actual changed body appends a message sequence
-([historical.rs:68](../src/outbound/pg_message_repo/historical.rs#L68)). The
-maintenance loop sleeps 10 seconds **after** a completed pass
-([worker.rs:47](../../slack_integration/src/inbound/worker.rs#L47),
-[worker.rs:220](../../slack_integration/src/inbound/worker.rs#L220)). The 5/s
-figure is therefore a long-run per-process upper bound for this path, not a
-short-window bound: its 50 operations can arrive back-to-back.
+Call archival removes a live call and appends one canonical call-root change
+before commit
+([`lifecycle.rs:254`](../../call/src/outbound/pg_call_repo/lifecycle.rs#L254)).
+Deleting active or recorded calls likewise logs only actual deletion
+([`pg_call_repo.rs:1063`](../../call/src/outbound/pg_call_repo.rs#L1063),
+[`:2269`](../../call/src/outbound/pg_call_repo.rs#L2269)). Channel discovery is a
+released primary-key read; admission precedes the transaction and the channel
+is rechecked (`lifecycle.rs:281`). Other call mutations do not enter this
+sequence path. The new-call start budget remains 20/hour **per account**
+([`axum_router.rs:76`](../../call/src/inbound/axum_router.rs#L76)); it is not a
+channel-wide rate limit.
 
-## Call lifecycle
+DSS derives selected activity parents, acquires sorted channel permits, inserts
+the full batch and allocates sequences in one transaction
+([`persistence.rs:52`](../../../services/document_storage_service/src/service/activity/persistence.rs#L52)).
+The activity crate remains channel-agnostic. The batch append groups by channel
+and preserves per-channel input order
+([`append.rs:68`](../../channel_change_db_utils/src/append.rs#L68)). Replayed
+activity IDs deliberately receive new sequences. Consumer serialization
+([`kafka_consumer.rs:140`](../../activity/src/inbound/kafka_consumer.rs#L140))
+does not impose a numeric batch-size or requests/s limit.
 
-Call creation uses `ON CONFLICT (channel_id) DO NOTHING`, enforcing one active
-call per channel
-([pg_call_repo.rs:507](../../call/src/outbound/pg_call_repo.rs#L507)). Archival
-locks the live call row first
-([lifecycle.rs:20](../../call/src/outbound/pg_call_repo/lifecycle.rs#L20)), removes
-that live call, then adds one channel root change before commit
-([lifecycle.rs:228](../../call/src/outbound/pg_call_repo/lifecycle.rs#L228)). A
-replayed completion cannot archive the same live call again. Live-call and
-record deletion only append when the delete actually removed a row
-([pg_call_repo.rs:1061](../../call/src/outbound/pg_call_repo.rs#L1061),
-[pg_call_repo.rs:2264](../../call/src/outbound/pg_call_repo.rs#L2264)). Participant
-and transcript updates do not individually append channel changes here.
-
-The service wires a 20-starts/hour **account** budget
-([server.rs:914](../../../services/document_storage_service/src/server.rs#L914),
-[axum_router.rs:76](../../call/src/inbound/axum_router.rs#L76)), checked by the
-new-call start path
-([service.rs:1177](../../call/src/domain/service.rs#L1177)). It is not a limit
-on deleting previously archived records, not a channel-keyed limit, and not a
-minimum call duration. A completion also produces one channel `CallEnded`
-activity through the separate materializer
-([activity.rs:96](../../call/src/domain/activity.rs#L96)); call-started activity
-is excluded from the channel timeline selection
-([ports.rs:670](../src/domain/ports.rs#L670)).
-
-## Activity batches
-
-Selected timeline activities are inserted and sequenced in one transaction
-([persistence.rs:48](../../../services/document_storage_service/src/service/activity/persistence.rs#L48)).
-The batch helper groups by channel, increments each channel counter by its
-selected activity count, then inserts each log row
-([append.rs:59](../../channel_change_db_utils/src/append.rs#L59)). Duplicate
-activity identities intentionally receive a fresh sequence on replay
-([append.rs:40](../../channel_change_db_utils/src/append.rs#L40)).
-
-Participant changes yield one activity per participant
-([activity.rs:106](../../channels/src/domain/activity.rs#L106)). The add request
-is a set without a numeric member-count validation
-([models.rs:867](../../channels/src/domain/models.rs#L867)); the domain loops
-over that set and dispatches the full recipient list
-([service.rs:556](../../channels/src/domain/service.rs#L556)). The persistence
-adapter likewise has no numeric activity-batch limit. Transport/body-size and
-available resources are finite, but these are not a fixed per-channel rate or
-activity-count bound in this code.
-
-The activity consumer awaits one source event before the next
-([kafka_consumer.rs:111](../../activity/src/inbound/kafka_consumer.rs#L111)), and
-the materializer persists the full decoded batch at once
-([materializer.rs:25](../../activity/src/domain/materializer.rs#L25)). This is
-per-consumer serialization, without a timer or an aggregate channel cap. A
-single large participant event can exceed 200 sequence rows in one commit; its
-counter occupancy and log insertion cost depend on batch size. It must not be
-modeled as 200 independent 5 ms counter acquisitions.
-
-This investigation changed no production code and ran no Cargo or database
-commands. It identifies enforced source bounds and missing bounds; production
-arrival rates and counter-lock occupancy require runtime measurements.
+These are source-level bounds. They do not establish deployed traffic rates,
+replica counts or actual counter-lock occupancy. The current fixed-arrival
+admission proofs and historical experiments remain separate artifacts.

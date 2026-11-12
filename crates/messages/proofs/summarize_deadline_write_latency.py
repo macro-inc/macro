@@ -56,14 +56,15 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("logs", type=Path, nargs="+")
     parser.add_argument("--source-revision", required=True,
-                        help="exact tested deadline implementation revision, including any working-tree qualifier")
+                        help="exact tested implementation revision, including any working-tree qualifier")
     parser.add_argument("--output", type=Path, default=Path(__file__).parent)
+    parser.add_argument("--implementation", choices=("deadline", "admission"), default="deadline")
     args = parser.parse_args()
     assert args.source_revision.strip()
     assert "\n" not in args.source_revision and "`" not in args.source_revision
     rows = read_rows(args.logs)
     args.output.mkdir(parents=True, exist_ok=True)
-    with (args.output / "channel_deadline_write_latency_runs.csv").open("w") as output:
+    with (args.output / f"channel_{args.implementation}_write_latency_runs.csv").open("w") as output:
         writer = csv.DictWriter(output, FIELDS, lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
@@ -82,16 +83,31 @@ def main():
         change = new - old
         return f"{change:+.3f} ms ({100 * change / old:+.1f}%)"
 
+    if args.implementation == "admission":
+        title = "# Repository write latency with per-parent admission"
+        implementation = [
+            "The current channel path admits at most four writers per parent in",
+            "this process. Waiting for admission happens before pool acquisition",
+            "and has a two-second bound. Idle gate entries are cleaned up. The",
+            "database append retains a five-second lock-wait guard, with no",
+            "new total statement deadline or preflight round trip.",
+        ]
+    else:
+        title = "# Historical repository write latency with a total counter deadline"
+        implementation = [
+            "The current channel path adds a preflight round trip before counter",
+            "acquisition to set a total 50 ms statement deadline, preserving a",
+            "stricter inherited deadline. The append restores the prior setting",
+            "within its own statement.",
+        ]
     lines = [
-        "# Repository write latency with a total counter deadline", "",
-        f"The tested deadline implementation source is `{args.source_revision}`.",
+        title, "",
+        f"The tested implementation source is `{args.source_revision}`.",
         f"The old repository is pinned to `{BASELINE_REVISION}`, including its SQL,",
-        "hydration and transaction boundaries. The current channel path adds a",
-        "preflight round trip before counter acquisition to set a total 50 ms",
-        "statement deadline, preserving any stricter inherited deadline. The",
-        "append restores the prior setting within its own statement. These",
-        "numbers compare the full old and current repository implementations;",
-        "their difference is not an isolated measurement of the preflight cost.", "",
+        "hydration and transaction boundaries.",
+        *implementation,
+        "These numbers compare full repository implementations; their difference",
+        "does not isolate the cost of any one mechanism.", "",
         "Release profile, sixteen Tokio workers, one dedicated local PostgreSQL",
         "18.4 server with files on tmpfs, fsync and synchronous_commit enabled.",
         "Both variants use the same database. The pool permits 32 connections;",
@@ -138,7 +154,7 @@ def main():
         "Latency varies across repetitions on this shared host. Read these rows",
         "alongside the aggregate table before attributing a difference to the",
         "implementation. The signed deltas compare complete repository methods;",
-        "they do not isolate the deadline preflight or remove host variability.", "",
+        "they do not isolate admission or deadline costs or remove host variability.", "",
         "| Run | Writers | Channels | Operation | Variant | p50 / p95 / p99 ms | Writes/s |",
         "| ---: | ---: | ---: | --- | --- | ---: | ---: |",
     ]
@@ -153,7 +169,7 @@ def main():
         "[channel_write_latency_results.md](channel_write_latency_results.md).",
         "See [README.md](README.md) for rerun commands.", "",
     ]
-    (args.output / "channel_deadline_write_latency_results.md").write_text("\n".join(lines))
+    (args.output / f"channel_{args.implementation}_write_latency_results.md").write_text("\n".join(lines))
 
 
 if __name__ == "__main__":

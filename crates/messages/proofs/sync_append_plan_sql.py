@@ -13,9 +13,9 @@ PROOF = Path(__file__).with_name("channel_change_append_plans.sql")
 
 def source_queries():
     queries = re.findall(r'sqlx::query(?:_scalar)?!\(\s*r#"(.*?)"#', SOURCE.read_text(), re.S)
-    if len(queries) != 3:
-        raise ValueError("expected the timeout preflight, scalar, and activity queries")
-    return zip(("append_timeout", "append_scalar", "append_activity"), queries)
+    if len(queries) != 2:
+        raise ValueError("expected the scalar and activity append queries")
+    return zip(("append_scalar", "append_activity"), queries)
 
 
 def synchronized(proof):
@@ -39,10 +39,10 @@ def main():
     if args.check:
         if original != expected:
             parser.exit(1, "append proof SQL differs from append.rs; run this script without --check\n")
-        print("PASS: all three append proof queries match append.rs byte-for-byte")
+        print("PASS: both append proof queries match append.rs byte-for-byte")
     else:
         PROOF.write_text(expected)
-        print("Updated all three append proof queries from append.rs")
+        print("Updated both append proof queries from append.rs")
 
 
 if __name__ == "__main__":

@@ -58,14 +58,15 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("logs", type=Path, nargs="+")
     parser.add_argument("--source-revision", required=True,
-                        help="exact tested deadline implementation revision, including any working-tree qualifier")
+                        help="exact tested implementation revision, including any working-tree qualifier")
     parser.add_argument("--output", type=Path, default=Path(__file__).parent)
+    parser.add_argument("--implementation", choices=("deadline", "admission"), default="deadline")
     args = parser.parse_args()
     assert args.source_revision.strip()
     assert "\n" not in args.source_revision and "`" not in args.source_revision
     rows = read_rows(args.logs)
     args.output.mkdir(parents=True, exist_ok=True)
-    with (args.output / "channel_deadline_arrival_latency_runs.csv").open("w") as output:
+    with (args.output / f"channel_{args.implementation}_arrival_latency_runs.csv").open("w") as output:
         writer = csv.DictWriter(output, FIELDS, lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
@@ -80,16 +81,31 @@ def main():
     def latency(key):
         return " / ".join(f"{value(key, f'arrival_p{p}_ms'):.3f}" for p in (50, 95, 99))
 
+    if args.implementation == "admission":
+        title = "# Fixed-arrival writes with per-parent admission"
+        implementation = [
+            "The current process admits at most four writes per parent. Its",
+            "two-second wait happens before pool acquisition, and idle entries",
+            "are cleaned up. The append has a five-second database lock-wait",
+            "guard, with no total statement deadline or preflight round trip.",
+        ]
+    else:
+        title = "# Historical fixed-arrival writes with a total counter deadline"
+        implementation = [
+            "The current path sets a total 50 ms counter-allocation statement",
+            "deadline, preserving a stricter inherited deadline, in one round trip",
+            "before acquiring the counter. The append restores the prior setting",
+            "within its statement.",
+        ]
     lines = [
-        "# Fixed-arrival writes with a total counter deadline", "",
-        f"The tested deadline implementation source is `{args.source_revision}`.",
+        title, "",
+        f"The tested implementation source is `{args.source_revision}`.",
         "The old repository retains the methods, SQL and hydration pinned to",
-        "`354da677b5`. The current path sets a total 50 ms counter-allocation",
-        "statement deadline, preserving a stricter inherited deadline, in one",
-        "round trip before acquiring the counter. The append restores the prior",
-        "setting within its statement. Both variants are measured without an",
-        "artificial hold. This comparison includes the complete repository change,",
-        "not an isolated measurement of deadline configuration cost.", "",
+        "`354da677b5`.",
+        *implementation,
+        "Both variants are measured without an artificial hold. The comparison",
+        "includes the complete repository change, not the isolated cost of one",
+        "mechanism.", "",
         "Release profile, sixteen Tokio workers and sixteen database connections.",
         "One dedicated local PostgreSQL 18.4 server with files on tmpfs, fsync and",
         "synchronous_commit enabled. This worktree's compiler, plan jobs and tests",
@@ -155,7 +171,7 @@ def main():
         "[channel_arrival_latency_results.md](channel_arrival_latency_results.md).",
         "See [README.md](README.md) for current and historical rerun instructions.", "",
     ]
-    (args.output / "channel_deadline_arrival_latency_results.md").write_text("\n".join(lines))
+    (args.output / f"channel_{args.implementation}_arrival_latency_results.md").write_text("\n".join(lines))
 
 
 if __name__ == "__main__":

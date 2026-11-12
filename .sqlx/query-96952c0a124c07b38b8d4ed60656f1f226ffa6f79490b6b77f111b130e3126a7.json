@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT job_id, message_id, channel_id\n           FROM slack_import_message_reference\n           WHERE completed_at IS NULL\n             AND job_id > COALESCE($1::uuid, '00000000-0000-0000-0000-000000000000'::uuid)\n           ORDER BY job_id, message_id LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "job_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "message_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "channel_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "96952c0a124c07b38b8d4ed60656f1f226ffa6f79490b6b77f111b130e3126a7"
+}
