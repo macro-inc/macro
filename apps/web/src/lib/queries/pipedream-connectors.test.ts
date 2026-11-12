@@ -330,12 +330,19 @@ describe('overlaidAppSlug', () => {
 });
 
 describe('apps Macro Connect serves', () => {
-  const popup = { closed: false, close: vi.fn() };
+  const popup = { closed: false, close: vi.fn(), location: { href: '' } };
   const notYet = err([{ code: 'NOT_FOUND', message: 'Resource not found' }]);
+  const blip = err([{ code: 'NETWORK_ERROR', message: 'Failed to fetch' }]);
+  const linear = ok({
+    app_slug: 'linear',
+    server_name: 'Linear',
+    enabled: true,
+  });
 
   beforeEach(() => {
     vi.useFakeTimers();
     popup.closed = false;
+    popup.location.href = '';
     mocks.macroConnect = true;
     mocks.reservePopup.mockReturnValue(popup);
     mocks.token.mockResolvedValue(
@@ -363,6 +370,70 @@ describe('apps Macro Connect serves', () => {
     expect(mocks.completeConnect).toHaveBeenCalledTimes(2);
     expect(mocks.open).not.toHaveBeenCalled();
     expect(mocks.setData).toHaveBeenCalled();
+  });
+
+  it('sends the tab to the page that closes itself once connected', async () => {
+    mocks.completeConnect.mockResolvedValueOnce(linear);
+
+    const pending = connectPipedreamApp({ appSlug: 'linear' });
+    await vi.runAllTimersAsync();
+
+    await expect(pending).resolves.toBe('connected');
+    expect(popup.location.href).toContain(
+      '/pipedream/mcp/connect/callback?status=connected'
+    );
+  });
+
+  it('keeps polling through a failed poll', async () => {
+    mocks.completeConnect
+      .mockResolvedValueOnce(notYet)
+      .mockResolvedValueOnce(blip)
+      .mockResolvedValueOnce(notYet)
+      .mockResolvedValueOnce(linear);
+
+    const pending = connectPipedreamApp({ appSlug: 'linear' });
+    await vi.runAllTimersAsync();
+
+    await expect(pending).resolves.toBe('connected');
+    expect(mocks.completeConnect).toHaveBeenCalledTimes(4);
+  });
+
+  it('still records the app when the poll after the tab closes fails', async () => {
+    popup.closed = true;
+    mocks.completeConnect
+      .mockResolvedValueOnce(blip)
+      .mockResolvedValueOnce(linear);
+
+    const pending = connectPipedreamApp({ appSlug: 'linear' });
+    await vi.runAllTimersAsync();
+
+    await expect(pending).resolves.toBe('connected');
+  });
+
+  it('fails and retires the tab when polls fail until the deadline', async () => {
+    mocks.completeConnect.mockResolvedValue(blip);
+
+    const pending = connectPipedreamApp({ appSlug: 'linear' });
+    const outcome = expect(pending).rejects.toBeDefined();
+    await vi.runAllTimersAsync();
+
+    await outcome;
+    expect(popup.location.href).toContain(
+      '/pipedream/mcp/connect/callback?status=error'
+    );
+    expect(mocks.setData).not.toHaveBeenCalled();
+  });
+
+  it('retires a tab still open at the deadline', async () => {
+    mocks.completeConnect.mockResolvedValue(notYet);
+
+    const pending = connectPipedreamApp({ appSlug: 'linear' });
+    await vi.runAllTimersAsync();
+
+    await expect(pending).resolves.toBe('closed');
+    expect(popup.location.href).toContain(
+      '/pipedream/mcp/connect/callback?status=error'
+    );
   });
 
   it('reports closed when the tab closes before Connect has the app', async () => {
