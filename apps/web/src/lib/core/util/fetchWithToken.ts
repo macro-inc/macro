@@ -129,6 +129,17 @@ export async function fetchWithToken<
       return err(tokenResult.error);
     }
 
+    // The caller may have given up while the session refreshed, for example
+    // because the signed-in account changed; never replay under the new one.
+    if (init?.signal?.aborted)
+      return err([
+        {
+          name: 'AbortError',
+          code: 'NETWORK_ERROR',
+          message: 'Request aborted before retry',
+        },
+      ]);
+
     // Retry the original request
     result = await fetchWithCredentials<T, CustomErrorCode>(input, requestInit);
   }
