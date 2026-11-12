@@ -11,6 +11,8 @@ import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import type { Calendar } from '../calendar/calendar';
 import { CalendarEvent } from '../calendar/event';
+import type { Channel } from '../channels/channel';
+import { shareWithChannel } from '../channels/share';
 import { PropertiedEntity } from '../entity';
 import { Project } from '../projects/project';
 import { entitySearch } from '../search/options';
@@ -189,6 +191,18 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
 
   /** Favorites identify email threads as `email_thread`. */
   readonly entityType = 'email_thread';
+
+  /**
+   * Share this email thread with a channel's current members, as posting it in the
+   * channel does. The caller must be in the channel and able to share the
+   * email thread; sharing again changes nothing.
+   *
+   * @write
+   * @idempotent
+   */
+  async shareWithChannel(channel: Channel): Promise<void> {
+    await shareWithChannel(this.client, channel, 'thread', this.id);
+  }
 
   /** The properties service identifies email threads as `THREAD`. */
   protected readonly propertyEntityType = 'THREAD';

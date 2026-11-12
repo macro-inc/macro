@@ -9,6 +9,7 @@
 # not set here: change them on the web at Settings → Machines.
 
 # Optional development overrides. Every key defaults to production.
+# Macro computer enrollment may set egress_url to its fleet-reachable gateway.
 # [macro]
 # # Base URL of the agent-harness service. Its ws(s) twin hosts the runtime
 # # gateway the daemon connects to on startup.
