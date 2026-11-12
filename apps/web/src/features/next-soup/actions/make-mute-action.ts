@@ -1,14 +1,17 @@
 import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
+import { useUserId } from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { EntityData } from '@entity';
 import { entityIsMuted, muteItemForEntity } from '@entity/utils/notification';
 import type { NotificationSource } from '@notifications';
+import type { NotificationMuteMenuProps } from '@notifications/components/NotificationMuteMenu';
 import { openSnoozeNotifications } from '@notifications/SnoozeNotificationsDialog';
 import {
+  useBulkNotificationPreferencesMutation,
   useMuteItemMutation,
   useUnmuteItemMutation,
 } from '@queries/notification/unsubscribes';
-import type { UserUnsubscribe } from '@service-notification/generated/schemas/userUnsubscribe';
 import type { EntityActionListState } from './entity-action-context';
 
 type MakeMuteActionOptions = {
@@ -26,13 +29,39 @@ export const makeMuteAction = (options: MakeMuteActionOptions) => {
   const muteMutation = useMuteItemMutation();
   const unmuteMutation = useUnmuteItemMutation();
 
-  const snooze = (entities: EntityData[]) => {
-    openSnoozeNotifications(
+  const userId = useUserId();
+  const bulkMutation = useBulkNotificationPreferencesMutation();
+  const itemsFor = (entities: EntityData[]) => [
+    ...new Map(
       entities.flatMap((entity) => {
         const item = muteItemForEntity(entity);
-        return item ? [item] : [];
+        return item
+          ? [[`${item.item_type}:${item.item_id}`, item] as const]
+          : [];
       })
-    );
+    ).values(),
+  ];
+
+  const snooze = (entities: EntityData[], until?: Date) => {
+    const items = itemsFor(entities);
+    if (!until) {
+      openSnoozeNotifications(items);
+      return;
+    }
+    const actorId = userId();
+    if (!actorId || bulkMutation.isPending) return;
+    const save = async () => {
+      const result = await bulkMutation.mutateAsync({
+        actorId,
+        items,
+        muted: true,
+        snoozedUntil: until.toISOString(),
+      });
+      if (userId() === actorId && result.failed.length) {
+        toast.failure(t('channelSections.notificationsFailed'));
+      }
+    };
+    fireAndForget(save(), 'entity-actions');
   };
 
   const canExecute = (entity: EntityData): boolean =>
@@ -41,29 +70,33 @@ export const makeMuteAction = (options: MakeMuteActionOptions) => {
   const isMuted = (entity: EntityData): boolean =>
     entityIsMuted(options.notificationSource().mutedEntities(), entity);
 
-  const execute = async (entities: EntityData[]) => {
+  const setMuted = async (
+    entities: EntityData[],
+    muted: boolean,
+    skipMuted = false
+  ) => {
     // Ignore re-triggers while a toggle is still settling so a rapid
     // double-press can't fire a mute and its own unmute against each other.
-    if (muteMutation.isPending || unmuteMutation.isPending) return;
+    if (
+      muteMutation.isPending ||
+      unmuteMutation.isPending ||
+      bulkMutation.isPending
+    )
+      return;
 
     const muteable = entities.filter(canExecute);
-    const shouldUnmute = muteable.length > 0 && muteable.every(isMuted);
-    // On mute, skip entities already muted so counts reflect real work.
-    const targets = shouldUnmute
-      ? muteable
-      : muteable.filter((entity) => !isMuted(entity));
-
-    // Several rows (threads in one channel) can share a mute target.
-    const items = new Map<string, UserUnsubscribe>();
-    for (const entity of targets) {
-      const item = muteItemForEntity(entity);
-      if (item) items.set(`${item.item_type}:${item.item_id}`, item);
-    }
-    if (items.size === 0) return;
+    const shouldUnmute = !muted;
+    // Toggles preserve existing mutes; an explicit menu choice applies to all targets.
+    const targets =
+      shouldUnmute || !skipMuted
+        ? muteable
+        : muteable.filter((entity) => !isMuted(entity));
+    const items = itemsFor(targets);
+    if (items.length === 0) return;
 
     const mutation = shouldUnmute ? unmuteMutation : muteMutation;
     const results = await Promise.allSettled(
-      [...items.values()].map((item) => mutation.mutateAsync(item))
+      items.map((item) => mutation.mutateAsync(item))
     );
 
     // Each mutation rolls its own optimistic change back on failure, so report
@@ -103,6 +136,23 @@ export const makeMuteAction = (options: MakeMuteActionOptions) => {
     }
   };
 
+  const execute = async (entities: EntityData[]) => {
+    const muteable = entities.filter(canExecute);
+    await setMuted(muteable, !muteable.every(isMuted), true);
+  };
+
+  const menu = (entities: EntityData[]): NotificationMuteMenuProps => ({
+    label: t('entityActions.muteNotifications'),
+    unmuteLabel: t('entityActions.unmuteNotifications'),
+    muted: entities.length > 0 && entities.every(isMuted),
+    disabled:
+      muteMutation.isPending ||
+      unmuteMutation.isPending ||
+      bulkMutation.isPending,
+    onMute: (muted) =>
+      fireAndForget(setMuted(entities, muted), 'entity-actions'),
+    onSnooze: (until) => snooze(entities, until),
+  });
   const executeWithSoup = async (
     entities: EntityData[],
     _soup: EntityActionListState
@@ -110,5 +160,5 @@ export const makeMuteAction = (options: MakeMuteActionOptions) => {
     await execute(entities);
   };
 
-  return { canExecute, isMuted, execute, executeWithSoup, snooze };
+  return { canExecute, isMuted, execute, executeWithSoup, snooze, menu };
 };

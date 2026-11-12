@@ -31,14 +31,19 @@ Home; the `X` or a middle click closes one (the last tab cannot close;
 keep their own `Cmd+1` and `Cmd+7` while they have focus.
 Labels truncate at about 288px.
 Cmd+click (Ctrl elsewhere) on anything that navigates opens the destination in
-a background tab; adding Shift also switches to it. Tabs are not draggable.
+a background tab; adding Shift also switches to it. Every menu that offers
+**Open in new split** (sidebar and favorite rows, list row actions, Chat rail,
+project rows, Reviews) also offers **Open in new tab**, which opens the item in
+a new tab and switches to it; in Cmd+K, `Cmd+Enter` does the same for the
+selected item. Tabs are not draggable.
 Tabs persist per user and restore on launch. In the browser and on other
 platforms the strip does not render.
 
 The same entity can be open in several tabs. Selecting or opening something a
 background tab shows opens it in the current tab, with no toast and no switch,
 and each tab keeps its own instance, scroll, and history. Within one tab an
-entity still has one split: opening it again focuses that split.
+entity still has one split: opening it again focuses that split, while
+Cmd+click or **Open in new tab** on it opens another instance in a new tab.
 
 Reference captures (browser fixture with the desktop gates forced):
 [a three-split tab beside a second tab](media/desktop-tabs/three-split-tab.png)
@@ -1839,8 +1844,12 @@ from the email itself (falling back to the view's tab); when neither says, as
 for some Search rows or an email opened directly, both are offered, with
 **Block Sender**. **Mark Done** (and `e`) works in Home, the triaged
 Email tabs, and Search, where a marked row stays listed as done. On Home,
-right-click **Mark Done** moves the preview to the next item, like the `e` key. A detail view's "…" menu also offers
-**Snooze notifications…** beside Mute.
+right-click **Mark Done** moves the preview to the next item, like the `e` key.
+List and detail menus share **Mute notifications**, with permanent mute,
+timed presets, and **Custom…** for the existing snooze picker. Preset deadlines
+align at the right edge. Muted items offer **Unmute notifications** instead;
+there is no separate Snooze notifications menu row. Mobile menus drill into
+the same choices with a Back row.
 
 ## Entity action dialogs
 

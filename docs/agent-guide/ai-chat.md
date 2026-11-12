@@ -223,6 +223,31 @@ only after `<item>.access.state()` shows edit access. To verify, have a
 view-only user ask an agent to add a task to a project they can only view,
 agree to the request, grant it as the owner, then ask the agent to retry.
 
+## Agents opening items for you
+
+With `enable-agent-navigation` (PostHog on the web and the harness; on in dev
+builds), an agent's program can open an item in the tab you typed the prompt
+in (`macro.ui.open`). It arrives in a new pane beside the agent's
+conversation (a new pane at the end when no pane shows it) and slides in from
+that side while the other panes glide aside; with reduced motion it only fades
+in. Your pane stays active and a composer you were typing in keeps its caret.
+A toast reads **Opened by <agent>** with **Undo**, which slides the pane back
+out and restores the layout. On the phone apps the pane pushes onto the stack.
+When there is no room for another split (a narrow window, a phone browser),
+nothing is replaced: the toast says the agent wants to open something and
+offers **Open**. An item an agent opened is not marked read until you click or
+type in its pane.
+
+Only prompts typed in the agent composer carry the tab: channel and DM
+mentions, routines and triggers answer `no_client`, and the agent links the
+item in its reply instead. Routes are closed to agents unless they opt in
+(`OPEN_TO_AGENTS` in `apps/web/src/routes/routes.ts`), so settings, calls,
+composing mail and debug views are refused on the server and again in the tab.
+
+To verify, ask an agent "create a short document called Launch plan, then open
+it next to this chat", watch the pane arrive, press **Undo**, and repeat with a
+channel message link and a settings page (refused; linked instead).
+
 ## Phones with new agents enabled
 
 **Agents** opens the new conversation list on phones,

@@ -1,3 +1,12 @@
+import IconCompany from '@icon/system/regular/buildings.svg';
+import IconEmail from '@icon/system/regular/envelope.svg';
+import IconDocuments from '@icon/system/regular/file.svg';
+import IconChannels from '@icon/system/regular/hash-straight.svg';
+import IconTasks from '@icon/system/regular/list-checks.svg';
+import IconCall from '@icon/system/regular/phone-call.svg';
+import IconPlus from '@icon/system/regular/plus.svg';
+import IconSidebar from '@icon/system/regular/sidebar-simple.svg';
+import IconAi from '@icon/system/regular/star.svg';
 import {
   type Component,
   createEffect,
@@ -9,15 +18,6 @@ import {
   Show,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import IconPlus from '../../../assets/icons/icon-plus.svg';
-import IconSidebar from '../../../assets/icons/square-sidebar.svg';
-import IconCall from '../../../assets/icons/wide-call.svg';
-import IconChannels from '../../../assets/icons/wide-channel.svg';
-import IconCompany from '../../../assets/icons/wide-company.svg';
-import IconEmail from '../../../assets/icons/wide-email.svg';
-import IconDocuments from '../../../assets/icons/wide-file-md.svg';
-import IconAi from '../../../assets/icons/wide-star.svg';
-import IconTasks from '../../../assets/icons/wide-task.svg';
 import { HeroCallsWindow } from '../featureGraphics/CallsGraphics';
 import { HeroChannelWindow } from '../featureGraphics/ChannelsGraphics';
 import { HeroCompanyWindow } from '../featureGraphics/CrmGraphics';

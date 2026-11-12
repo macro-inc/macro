@@ -16,6 +16,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { ProjectEntity } from '@entity';
+import { NotificationMuteMenu } from '@notifications/components/NotificationMuteMenu';
 import { invalidateProjects } from '@queries/storage/projects';
 import { Show } from 'solid-js';
 import type { DriveFolderMetadata } from './context/drive-source';
@@ -85,18 +86,7 @@ export function DriveFolderActions(props: { folder: DriveFolderMetadata }) {
         }
       />
       <Show when={mute.canExecute(entity())}>
-        <MenuItem
-          text={t('entityActions.snoozeNotifications')}
-          onClick={() => mute.snooze([entity()])}
-        />
-        <MenuItem
-          text={
-            mute.isMuted(entity())
-              ? t('entityActions.unmuteNotifications')
-              : t('entityActions.muteNotifications')
-          }
-          onClick={() => fireAndForget(mute.execute([entity()]), 'drive-view')}
-        />
+        <NotificationMuteMenu {...mute.menu([entity()])} />
       </Show>
       <Show when={entity().ownerId === userId()}>
         <MenuItem
