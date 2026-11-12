@@ -63,7 +63,7 @@ To read the state once, look at the `CI gate` row of `gh pr checks <pr>`:
 | fail, `Failed: <jobs>` | Those called workflows failed | Open the linked run, fix, push, run again |
 | fail, `The PR moved on ...` or `The merge commit did not include ...` | Labelled too soon after a push | Add the label again |
 | fail, `PR CI can't start: ...` | The PR conflicts with `main`, or was last pushed before `PR CI` existed | Merge `main` in, push, add the label again |
-| missing | A fork PR before its first run, or a PR that conflicts with `main` | A maintainer adds the label; or merge `main` in and push |
+| missing | A fork PR before its first run, or a PR that conflicts with `main` (a push then runs only `pull_request_target` checks such as CLA: no PR Privacy Check or Auto Label) | A maintainer adds the label; or merge `main` in and push; re-adding the label alone does nothing |
 
 GitHub takes `PR CI` from the PR's merge commit with `main`, which it rebuilds
 on a push but not when `main` moves, and runs nothing on a conflicting PR. So on

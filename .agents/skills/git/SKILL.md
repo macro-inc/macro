@@ -166,8 +166,6 @@ ready. The `CI gate` passes only after a run requested with the `run-ci` label;
 the [`run-ci` skill](../run-ci/SKILL.md) says when to request one. A PR whose
 `CI gate` is failing, still running, or not run on the latest commit is not done:
 wait on it and fix failures before handing off.
-If only CLA runs and no PR CI appears, the PR likely has merge conflicts (no
-merge ref); merge main first.
 
 ## Updating a PR
 
