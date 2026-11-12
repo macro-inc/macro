@@ -68,3 +68,83 @@ impl<R: InboxCatalogRepository> InboxCatalogService<R> {
             .collect())
     }
 }
+
+/// Basic inbox facts, shared by catalog consumers without loading feature details.
+pub trait InboxAccessRepository: Send + Sync + 'static {
+    /// Original persistence failure, preserved for the caller's existing error handling.
+    type Err: std::error::Error + Send + Sync + 'static;
+    /// Read an inbox without filtering by the caller.
+    fn inbox(&self, link: Uuid) -> impl Future<Output = Result<Option<Link>, Self::Err>> + Send;
+    /// Whether a delegation edge connects this caller to this inbox's owner.
+    fn delegated(
+        &self,
+        caller: &str,
+        owner: &str,
+        link: Uuid,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+    /// Read the caller's owned and delegated inboxes in their existing order.
+    fn accessible_inboxes(
+        &self,
+        caller: &str,
+    ) -> impl Future<Output = Result<Vec<Link>, Self::Err>> + Send;
+}
+
+/// How an authenticated caller reaches an inbox.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InboxAccess {
+    /// The caller owns the inbox.
+    Own,
+    /// The caller has an explicit delegation edge.
+    Delegated,
+}
+
+/// An inbox could not be resolved or accessed.
+#[derive(Debug, thiserror::Error)]
+pub enum InboxAccessError<E> {
+    /// No inbox has this identifier.
+    #[error("inbox not found")]
+    NotFound,
+    /// The caller has neither ownership nor a delegation edge.
+    #[error("not authorized for this inbox")]
+    Forbidden,
+    /// A fact lookup failed.
+    #[error(transparent)]
+    Query(E),
+}
+
+impl<R: InboxAccessRepository> InboxCatalogService<R> {
+    /// Resolve ownership first, querying delegation only for another owner's inbox.
+    pub async fn authorize(
+        &self,
+        caller: &str,
+        link: Uuid,
+    ) -> Result<(Link, InboxAccess), InboxAccessError<R::Err>> {
+        let link = self
+            .0
+            .inbox(link)
+            .await
+            .map_err(InboxAccessError::Query)?
+            .ok_or(InboxAccessError::NotFound)?;
+        if link.macro_id.as_ref() == caller {
+            return Ok((link, InboxAccess::Own));
+        }
+        if self
+            .0
+            .delegated(caller, link.macro_id.as_ref(), link.id)
+            .await
+            .map_err(InboxAccessError::Query)?
+        {
+            Ok((link, InboxAccess::Delegated))
+        } else {
+            Err(InboxAccessError::Forbidden)
+        }
+    }
+
+    /// Collection reads include both owned and delegated inboxes.
+    pub async fn accessible_inboxes(&self, caller: &str) -> Result<Vec<Link>, R::Err> {
+        self.0.accessible_inboxes(caller).await
+    }
+}
+
+#[cfg(test)]
+mod test;

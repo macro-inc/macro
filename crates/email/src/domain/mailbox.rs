@@ -14,6 +14,7 @@ use telemetry::{
 use tracing::{Instrument, Span};
 use uuid::Uuid;
 
+pub mod calendar_disconnect;
 pub mod catalog;
 pub mod commands;
 pub mod contacts;

@@ -1,6 +1,9 @@
 //! Independent address-book synchronization. Missing optional contact consent
 //! must never stop mail delivery, and only a completed scan can retire records.
 
+/// Contact listing across accessible inboxes.
+pub mod list;
+
 use super::*;
 use email_api_client::domain::models::{
     AddressBookContact, AddressBookPage, ContactFolderCatalog, ContactPhoto,

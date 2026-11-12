@@ -219,7 +219,45 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
             access: entity_access_service.as_ref().clone(),
         },
     );
+    let inbox_catalog = Arc::new(email::domain::mailbox::catalog::InboxCatalogService(
+        crate::outbound::inbox_catalog::PgInboxCatalog(db.clone()),
+    ));
+    let signature_sfs_client = Arc::new(sfs_client.clone());
     Ok(ApiContext {
+        backfill_jobs: Arc::new(email::domain::backfill_jobs::BackfillJobService {
+            repository: crate::outbound::backfill_jobs::PgBackfillJobs(db.clone()),
+            queue: crate::outbound::backfill_jobs::BackfillInitializationQueue(
+                sqs_client.as_ref().clone(),
+            ),
+        }),
+        calendar_disconnect: Arc::new(
+            email::domain::mailbox::calendar_disconnect::CalendarDisconnectService {
+                catalog: inbox_catalog.clone(),
+                calendar: crate::outbound::calendar_disconnect::CalendarDisconnect(
+                    calendar_mutation_service.clone(),
+                ),
+            },
+        ),
+        contacts: Arc::new(email::domain::mailbox::contacts::list::ContactListService {
+            catalog: inbox_catalog.clone(),
+            repository: crate::outbound::inbox_contacts::PgInboxContacts(db.clone()),
+        }),
+        scheduled_drafts: Arc::new(email::domain::scheduled::drafts::ScheduledDraftService {
+            repository: crate::outbound::scheduled_drafts::PgScheduledDrafts(db.clone()),
+        }),
+        signature_settings: Arc::new(
+            email::domain::signature_settings::SignatureSettingsService {
+                writer: crate::outbound::signature_settings::PgSignatureSettings(db.clone()),
+                images: crate::outbound::signature_settings::SignatureImageRehoster {
+                    db: db.clone(),
+                    sfs: signature_sfs_client,
+                },
+                provider: crate::outbound::signature_settings::GmailSignatures {
+                    email_api: email_api.clone(),
+                    gmail: gmail_client.clone(),
+                },
+            },
+        ),
         message_labels: Arc::new(email::domain::message_labels::MessageLabelService {
             repository: crate::outbound::message_labels::PgMessageLabels(db.clone()),
             enqueuer: sqs_client.as_ref().clone(),
@@ -259,9 +297,7 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
                 email::outbound::mailbox_pg::PgMailboxSync::new(db.clone()),
             ),
         ),
-        inbox_catalog: Arc::new(email::domain::mailbox::catalog::InboxCatalogService(
-            crate::outbound::inbox_catalog::PgInboxCatalog(db.clone()),
-        )),
+        inbox_catalog,
         inbox_health: Arc::new(crate::composition::inbox_health(
             db.clone(),
             email_api.clone(),

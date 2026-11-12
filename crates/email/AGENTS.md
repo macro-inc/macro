@@ -12,6 +12,16 @@ tools — hexagonal, heavily feature-gated.
   traits its adapters implement.
 - `src/domain/message_reads.rs` (feature `mailbox`): synced message/thread
   reads, access filtering, pagination, and summary-inbox selection.
+- `src/domain/mailbox/calendar_disconnect.rs`, `mailbox/contacts/list.rs`, and
+  `scheduled/drafts.rs` (feature `mailbox`): separate use cases for calendar
+  removal, contact listing, and scheduled-draft pages; ownership/delegation
+  checks are shared through `mailbox/catalog.rs`.
+- `src/domain/signature_settings.rs` (feature `mailbox`): signature preparation
+  and settings patches. `signature_settings/gmail_images.rs` selects public or
+  mailbox image reads, caches message parts for one import, and preserves retryable
+  image failures behind an image-reader port.
+- `src/domain/backfill_jobs.rs` (feature `mailbox`): backfill-job access,
+  cancellation, active-job reuse, and initialization publication.
 - `src/inbound/axum.rs`: HTTP routes (feature `axum`); `src/inbound/toolset.rs`:
   the AI email tools (feature `ai_tools`).
 - `src/outbound/email_pg_repo.rs`, `src/outbound/invitation_pg.rs`: Postgres

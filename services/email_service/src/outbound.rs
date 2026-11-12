@@ -36,3 +36,19 @@ pub mod recent_inbox;
 pub mod message_labels;
 /// Stored facts for the legacy message and thread read use cases.
 pub mod message_reads;
+
+/// Calendar-domain removal of an authorized inbox's calendar.
+pub mod calendar_disconnect;
+/// Basic inbox and delegation facts.
+pub mod inbox_access;
+/// Stored sent-message contacts for an inbox.
+pub mod inbox_contacts;
+/// Original legacy operation errors retained across domain ports.
+pub mod persistence_error;
+/// Stored scheduled drafts for an inbox.
+pub mod scheduled_drafts;
+/// Existing settings, signature image, and Gmail alias effects.
+pub mod signature_settings;
+
+/// Backfill-job persistence and initialization publication.
+pub mod backfill_jobs;
