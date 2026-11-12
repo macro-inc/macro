@@ -125,12 +125,13 @@ html[data-theme-light='true'] .tutorial-video-play:focus-visible { outline-color
   top: 90%;
 }
 @media (max-width: 599px) {
-  .tutorial-video-stage-benefit:has(.benefit-video-poster) { aspect-ratio: auto; padding-bottom: 80px; }
-  .tutorial-video-stage-benefit:has(.benefit-video-poster) video { aspect-ratio: 16 / 9; }
+  .tutorial-video-stage-diagram { aspect-ratio: auto; padding-bottom: 80px; }
+  .tutorial-video-stage-diagram video { aspect-ratio: 16 / 9; }
   .tutorial-video-stage-benefit .benefit-video-poster { height: calc(100% - 80px); }
   .tutorial-video-embed .tutorial-video-stage-benefit .tutorial-video-play { top: auto; bottom: 12px; transform: translateX(-50%); }
 }
 
-.tutorial-video-embed:has(.benefit-video-poster) { border-radius: 0; }
-.tutorial-video-stage-benefit:has(.benefit-video-poster) { background: transparent; }
-.tutorial-video-stage-benefit:has(.benefit-video-poster) video { visibility: hidden; }
+/* Before play the diagram is the poster: no frame, and the empty video stays
+   in place (never hidden) so starting it is not blocked. */
+.tutorial-video-embed-diagram { border-radius: 0; }
+.tutorial-video-stage-diagram { background: transparent; }

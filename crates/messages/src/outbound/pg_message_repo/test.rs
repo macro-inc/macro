@@ -716,7 +716,7 @@ async fn discussion_delivery_context_reads_document_assignees_and_thread_authors
     .unwrap();
     sqlx::query!(
         r#"INSERT INTO entity_properties(id, entity_id, entity_type, property_definition_id, values)
-        VALUES ($1, 'message-doc-a', 'DOCUMENT', $2, $3)"#,
+        VALUES ($1, 'message-doc-a', 'TASK', $2, $3)"#,
         macro_uuid::generate_uuid_v7(),
         system_properties::SystemPropertyKey::Assignees.uuid(),
         serde_json::json!({
