@@ -12,19 +12,22 @@ const DEMO_URL =
   'https://macro.com/app/book/6de4003c-15e4-549f-b5a9-0e930bbf56e4/macro-demo';
 const SUPPORT_EMAIL = 'support@macro.com';
 
-/** The question-mark button in the app's bottom-right corner: ways to reach the Macro team. */
+/** The rail's question-mark button: ways to reach the Macro team. */
 export function HelpMenu() {
   const support = createSupportLink();
 
   return (
-    <Dropdown placement="top-end">
+    <Dropdown placement="right-end" gutter={6}>
       <Dropdown.Trigger
-        size="icon-lg"
-        class="fixed right-4 bottom-4 z-float"
         aria-label={t('nav.help')}
-        tooltip={{ content: t('nav.help'), placement: 'left' }}
+        variant="ghost"
+        size="icon-md"
+        class="size-10 shrink-0 cursor-default rounded-xl"
+        tooltip={{ content: t('nav.help'), placement: 'right' }}
+        draggable={false}
+        data-sidebar-next-item="help"
       >
-        <QuestionIcon class="size-5" />
+        <QuestionIcon class="size-6" />
       </Dropdown.Trigger>
       <Dropdown.Content class="min-w-56">
         <Dropdown.Group>

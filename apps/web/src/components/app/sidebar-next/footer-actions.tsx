@@ -16,6 +16,7 @@ import { isRealNamePart, useOwnUserName } from '@queries/auth/user-name-self';
 import { Button, cn, pressHandlers } from '@ui';
 import { createMemo, Show } from 'solid-js';
 import { useAppUpdate } from './app-update';
+import { HelpMenu } from './help-menu';
 import { NavGlyph } from './nav-glyph';
 import { UpdateButton } from './update-button';
 
@@ -80,9 +81,9 @@ const MobileAppButton = () => {
 };
 
 /**
- * The rail's bottom actions: a ready app update, the mobile app link, then
- * Settings, opened like any other rail view. The gear carries the account photo
- * as a badge, so people with several accounts can tell which one they are in.
+ * The rail's bottom actions: a ready app update, the mobile app link, help,
+ * then Settings, opened like any other rail view. The gear carries the account
+ * photo as a badge, so people with several accounts can tell which one they are in.
  */
 export const FooterActions = (props: {
   onMenuOpenChange?: (open: boolean) => void;
@@ -125,6 +126,7 @@ export const FooterActions = (props: {
         )}
       </Show>
       <MobileAppButton />
+      <HelpMenu />
       <SidebarOpenInSplitMenu
         content={() => SETTINGS_CONTENT}
         // Route through settings state so the menu reuses an open settings

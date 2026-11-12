@@ -565,9 +565,9 @@ External (plug icon, `g x`) appears on the rail only with the
   split (Shift-click for a new split); there is no account menu. Log out lives
   on **Settings → Account**, and the command menu is `Ctrl K`.
 
-On desktop, the question-mark **Help** button at the bottom-right opens a menu:
-**Message support** opens your support channel (hidden when you have none),
-**Book a demo** opens the booking page, and **Email** starts an email to support.
+Above Settings, the question-mark **Help** button opens a menu: **Message
+support** opens your support channel (hidden when you have none), **Book a demo**
+opens the booking page, and **Email** starts an email to support.
 
 The rail highlights the workspace shown by the **active split**, not every app
 named in the multi-split URL. Nested details keep their owning workspace selected
