@@ -13,7 +13,7 @@ import {
 } from '@block-md/queries/markdown-document';
 import { loadMarkdownCachedSnapshot } from '@block-md/queries/markdown-document-operations';
 import type { MarkdownDocumentKind } from '@block-md/types';
-import { MarkdownHeaderActions } from '@block-md/views/desktop-markdown-header-parts';
+import { MarkdownHeaderActions } from '@block-md/views/markdown-header-parts';
 import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,

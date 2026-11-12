@@ -2,7 +2,7 @@ import type { BlockTool } from '@components/app/block-tool';
 import { cleanup, render, screen, within } from '@solidjs/testing-library';
 import { For, type JSX } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
-import { MobileMarkdownHeader } from './mobile-markdown-header';
+import { MobileMarkdownHeader } from './markdown-header';
 
 const device = vi.hoisted(() => ({ phone: true }));
 
@@ -50,19 +50,19 @@ vi.mock('@components/app/split-layout/components/SplitFileMenu', () => ({
 vi.mock('@app/features/chat/ChatWithAgentButton', () => ({
   AskMacroButton: () => <button>Ask Macro</button>,
 }));
-vi.mock('../component/DispatchAgentMenu', () => ({
+vi.mock('../../component/DispatchAgentMenu', () => ({
   DispatchAgentButton: () => <button>Dispatch Agent</button>,
 }));
-vi.mock('../component/MarkdownNameProvider', () => ({
+vi.mock('../../component/MarkdownNameProvider', () => ({
   useMarkdownName: () => ({ displayName: () => 'Ship the release' }),
 }));
-vi.mock('../context/markdown-document-context', () => ({
+vi.mock('../../context/markdown-document-context', () => ({
   useMarkdownDocument: () => ({
     documentId: () => 'task-1',
     kind: () => 'task',
   }),
 }));
-vi.mock('../component/useMarkdownDocumentTools', () => ({
+vi.mock('../../component/useMarkdownDocumentTools', () => ({
   useMarkdownDocumentTools: () => {
     const action = (label: string) => ({
       label,

@@ -2,7 +2,7 @@ import type { BlockTool } from '@components/app/block-tool';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { type Accessor, For, type JSX } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
-import { DesktopMarkdownHeader } from './desktop-markdown-header';
+import { MarkdownHeader } from './markdown-header';
 
 const item = vi.hoisted(() => ({ kind: 'task', share: vi.fn() }));
 
@@ -114,7 +114,7 @@ const menuRows = () =>
     .map((button) => button.textContent);
 
 it('offers Dispatch Agent, Ask Macro and Share on a task', () => {
-  render(() => <DesktopMarkdownHeader collaborationStatus={() => undefined} />);
+  render(() => <MarkdownHeader collaborationStatus={() => undefined} />);
 
   expect(
     screen.getByRole('heading', { name: 'Ship the release' })
@@ -131,7 +131,7 @@ it('offers Dispatch Agent, Ask Macro and Share on a task', () => {
 
 it('leaves Dispatch Agent off a document', () => {
   item.kind = 'document';
-  render(() => <DesktopMarkdownHeader collaborationStatus={() => undefined} />);
+  render(() => <MarkdownHeader collaborationStatus={() => undefined} />);
 
   expect(headerButtons()).toEqual(['Ask Macro', 'Share']);
   expect(screen.queryByText('Skill')).toBeNull();
@@ -139,7 +139,7 @@ it('leaves Dispatch Agent off a document', () => {
 
 it('marks a skill beside its title', () => {
   item.kind = 'skill';
-  render(() => <DesktopMarkdownHeader collaborationStatus={() => undefined} />);
+  render(() => <MarkdownHeader collaborationStatus={() => undefined} />);
 
   expect(screen.getByText('Skill')).toBeTruthy();
 });

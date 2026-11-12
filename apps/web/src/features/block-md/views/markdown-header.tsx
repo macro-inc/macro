@@ -19,11 +19,11 @@ import { type Accessor, Show } from 'solid-js';
 import { useMarkdownName } from '../component/MarkdownNameProvider';
 import { useMarkdownDocumentTools } from '../component/useMarkdownDocumentTools';
 import { useMarkdownDocument } from '../context/markdown-document-context';
-import { MarkdownHeaderActions } from './desktop-markdown-header-parts';
-import { SkillBadge } from './markdown-header-parts';
+import { MarkdownHeaderActions } from './markdown-header-parts';
+import { SkillBadge } from './shared/markdown-header-parts';
 
 /** The Markdown block's header on desktop, where the block shows a preview. */
-export function DesktopMarkdownHeader(props: {
+export function MarkdownHeader(props: {
   collaborationStatus: Accessor<SyncSourceStatus | undefined>;
 }) {
   const { documentId } = useMarkdownDocument();

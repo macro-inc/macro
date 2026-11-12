@@ -332,9 +332,9 @@ references.
 
 A large view can be split in steps, header first. `features/block-md` is at
 that stage: `component/Block.tsx` switches between
-`views/desktop-markdown-header.tsx` and `views/mobile-markdown-header.tsx`,
-while the document body below them is still shared and its files are still in
-the baseline.
+`views/markdown-header.tsx` and `views/mobile/markdown-header.tsx`, while the
+document body below them is still shared and its files are still in the
+baseline.
 
 ### `context/`: the feature's capability contract
 

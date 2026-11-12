@@ -28,8 +28,8 @@ import type { MarkdownData } from '../definition';
 import { createMarkdownRouteNavigation } from '../primitives/create-markdown-route-navigation';
 import { loadMarkdownCachedSnapshot } from '../queries/markdown-document-operations';
 import type { MarkdownDocumentKind, MarkdownDocumentSource } from '../types';
-import { DesktopMarkdownHeader } from '../views/desktop-markdown-header';
-import { MobileMarkdownHeader } from '../views/mobile-markdown-header';
+import { MarkdownHeader } from '../views/markdown-header';
+import { MobileMarkdownHeader } from '../views/mobile/markdown-header';
 import { FindAndReplace } from './FindAndReplace';
 import { MarkdownDocument, MarkdownDocumentContent } from './MarkdownDocument';
 import { ModalsProvider } from './ModalsProvider';
@@ -132,7 +132,7 @@ export default function MarkdownBlockAdapter(props: BlockMarkdownProps) {
                   <Show
                     when={isTouchDevice()}
                     fallback={
-                      <DesktopMarkdownHeader
+                      <MarkdownHeader
                         collaborationStatus={collaborationStatus}
                       />
                     }

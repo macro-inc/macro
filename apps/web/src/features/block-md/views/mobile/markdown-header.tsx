@@ -10,11 +10,11 @@ import { ENABLE_MARKDOWN_SIDE_PANEL } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
 import type { SyncSourceStatus } from '@macro-inc/collaboration/collab/source';
 import { type Accessor, Show } from 'solid-js';
-import { DispatchAgentButton } from '../component/DispatchAgentMenu';
-import { useMarkdownName } from '../component/MarkdownNameProvider';
-import { useMarkdownDocumentTools } from '../component/useMarkdownDocumentTools';
-import { useMarkdownDocument } from '../context/markdown-document-context';
-import { SkillBadge } from './markdown-header-parts';
+import { DispatchAgentButton } from '../../component/DispatchAgentMenu';
+import { useMarkdownName } from '../../component/MarkdownNameProvider';
+import { useMarkdownDocumentTools } from '../../component/useMarkdownDocumentTools';
+import { useMarkdownDocument } from '../../context/markdown-document-context';
+import { SkillBadge } from '../shared/markdown-header-parts';
 
 /**
  * The Markdown block's header on touch, where every document and task opens
