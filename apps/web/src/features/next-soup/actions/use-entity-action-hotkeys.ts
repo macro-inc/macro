@@ -1,7 +1,6 @@
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import { useAllProperties } from '@app/features/property/editor/hooks/useAllProperties';
 import { openPropertyEditor } from '@app/features/property/editor/state/propertyEditor';
-import { isShareableEntityType } from '@app/features/sharing/global-share-modal/shareable-entity';
 import { t } from '@app/lib/i18n';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import type { SplitHandle } from '@components/app/split-layout/layoutManager';
@@ -744,11 +743,14 @@ export const useEntityActionHotkeys = (
   registerHotkey({
     hotkeyToken: TOKENS.entity.action.share,
     scopeId,
-    description: () => t('entityActions.share'),
+    description: () =>
+      t('entityActions.shareCommand', {
+        count: getEntitiesForAction().length,
+      }),
     keyDownHandler: () => {
       const entities = getEntitiesForAction();
       if (entities.length === 0) return false;
-      if (!shareAction.canExecute(entities[0])) return false;
+      if (!entities.every(shareAction.canExecute)) return false;
       fireAndForget(
         shareAction.executeWithSoup(entities, list),
         'entity-actions'
@@ -758,7 +760,7 @@ export const useEntityActionHotkeys = (
     condition: () => {
       if (condition && !condition()) return false;
       const entities = getEntitiesForAction();
-      return entities.length === 1 && isShareableEntityType(entities[0].type);
+      return entities.length > 0 && entities.every(shareAction.canExecute);
     },
     displayPriority: 10,
     tags: [HotkeyTags.SelectionModification],

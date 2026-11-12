@@ -322,7 +322,8 @@ Discussion link scrolling has a backend-free browser regression:
 `bunx playwright test --config src/lib/core/messages/browser-test/playwright.config.ts`.
 
 Phone sheets stacked on each other (Connect email over Settings, Add guests,
-RSVP scope and the delete confirmation over event details) have a backend-free
+RSVP scope and the delete confirmation over event details), and event details
+and the Share drawer over the page, have a backend-free
 browser regression for backdrop taps that must not press what the scrim covers,
 including mixed pointerdown/pointerup dismissal, for taps inside the top
 sheet that must still press its own controls, and for swipes whose owner keeps
