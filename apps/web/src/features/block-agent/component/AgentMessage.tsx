@@ -27,17 +27,19 @@ import {
   Index,
   type JSX,
   Match,
+  mapArray,
   Show,
   Switch,
 } from 'solid-js';
 import { match } from 'ts-pattern';
 import { useOptionalAgentSession } from '../context/AgentSessionContext';
 import { useOpenPromptOrigin } from '../open-prompt-origin';
+import { isCodeModeSupportCall } from '../state/code-mode-support';
 import { isControlMessage } from '../state/control-message';
 import { isNotificationMessage } from '../state/notification-message';
 import { agentContextText, promptOrigin } from '../state/prompt-origin';
 import { thoughtIsStreaming } from '../state/thought-streaming';
-import { segmentParts } from '../state/tool-groups';
+import { isCodeExecution, segmentParts } from '../state/tool-groups';
 import {
   ActionLine,
   FailureNoticeCard,
@@ -45,6 +47,7 @@ import {
   Thought,
   WorkingLine,
 } from '../ui';
+import { useCodeExecutionRecord } from '../views/code-execution-record';
 import { LiveToolGroup } from '../views/LiveToolGroup';
 import { PromptFooter, ReplyFooter } from './PromptFooter';
 import { AttachmentPart } from './parts/AttachmentPart';
@@ -128,11 +131,6 @@ function AgentMessagePart(props: {
               partIndex: props.index,
               inFlight: props.inFlight,
               followedBy: toolUsedAfter(props.message.parts, props.index),
-              current:
-                props.inFlight &&
-                props.message.parts
-                  .slice(props.index + 1)
-                  .every((part) => part.kind === 'thought'),
             }}
           />
         )}
@@ -172,10 +170,35 @@ function ToolGroupPart(props: {
   inFlight: boolean;
 }): JSX.Element {
   const parts = () => props.message.parts.slice(props.start, props.end);
-  const calls = () =>
-    parts().filter((part): part is ToolUsePart => part.kind === 'tool_use');
+  // What the person sees: their steps, not how the agent looked up its tools
+  // or that it wrote programs to run them.
+  const shownCalls = () =>
+    parts().filter(
+      (part): part is ToolUsePart =>
+        part.kind === 'tool_use' &&
+        !isCodeModeSupportCall(part) &&
+        !isCodeExecution(part)
+    );
+  const programs = mapArray(
+    () =>
+      parts().filter(
+        (part): part is ToolUsePart =>
+          part.kind === 'tool_use' && isCodeExecution(part)
+      ),
+    (part) =>
+      useCodeExecutionRecord(
+        () => part,
+        () => props.message.agentSessionId,
+        () => props.inFlight
+      )
+  );
+  const count = () =>
+    programs().reduce(
+      (total, program) => total + program.steps(),
+      shownCalls().length
+    );
   // A call the log left running in a finished turn is over (see
-  // `settledToolStatus`), so a settled turn's run is never "Calling".
+  // `settledToolStatus`), so a settled turn's run is never "Using".
   const activeIndex = () =>
     props.inFlight
       ? parts().findIndex(
@@ -193,28 +216,34 @@ function ToolGroupPart(props: {
       props.message.parts
         .slice(props.end)
         .every((part) => part.kind === 'thought'));
+  const summary = () => (current() ? activity() : undefined);
   const renderParts = () => (
     <Index each={parts()}>
       {(part, offset) => (
-        <div class="min-h-8 shrink-0">
-          <AgentMessagePart
-            part={part()}
-            message={props.message}
-            index={props.start + offset}
-            inFlight={props.inFlight}
-          />
-        </div>
+        <Show when={!isCodeModeSupportCall(part())}>
+          <div class="min-h-8 shrink-0">
+            <AgentMessagePart
+              part={part()}
+              message={props.message}
+              index={props.start + offset}
+              inFlight={props.inFlight}
+            />
+          </div>
+        </Show>
       )}
     </Index>
   );
 
   return (
-    <Show when={calls().length > 0} fallback={renderParts()}>
+    <Show when={count() > 0 || active() || summary()} fallback={renderParts()}>
       <LiveToolGroup
-        count={calls().length}
+        count={count()}
         active={active()}
         activeIndex={active() ? activeIndex() : undefined}
-        summary={current() ? activity() : undefined}
+        summary={summary()}
+        // Programs repeat one generic label per step, and a failed step the
+        // agent recovered from is not news: keep their runs closed.
+        autoOpen={programs().length === 0}
       >
         {renderParts()}
       </LiveToolGroup>

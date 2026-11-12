@@ -48,12 +48,7 @@ const SELF_RENDERING_TOOLS: ReadonlySet<string> = new Set([
  */
 export function rendersOwnView(part: MessagePart | undefined): boolean {
   if (part?.kind !== 'tool_use') return false;
-  if (
-    isCodeExecution(part) ||
-    presentedReviewId(part) ||
-    part.detail.kind === 'view'
-  )
-    return true;
+  if (presentedReviewId(part) || part.detail.kind === 'view') return true;
   const macroTool =
     part.detail.kind === 'macro' ||
     (part.detail.kind === 'other' &&

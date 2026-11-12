@@ -65,11 +65,9 @@ vi.mock('./parts/ToolCallPart', () => ({
       partIndex: number;
       inFlight: boolean;
       followedBy: (name: string) => boolean;
-      current?: boolean;
     };
   }) => (
     <div
-      data-current={String(props.context.current)}
       data-index={props.context.partIndex}
       data-followed-by-save={String(
         props.context.followedBy('SaveDatabaseQuery')
@@ -117,14 +115,22 @@ vi.mock('../ui', () => ({
     </div>
   ),
 }));
+const programSteps = vi.hoisted((): Record<string, number> => ({}));
+vi.mock('../views/code-execution-record', () => ({
+  useCodeExecutionRecord: (part: () => { id: string }) => ({
+    steps: () => programSteps[part().id] ?? 0,
+  }),
+}));
 vi.mock('../views/LiveToolGroup', () => ({
   LiveToolGroup: (props: {
     count: number;
     active: boolean;
     activeIndex?: number;
+    autoOpen?: boolean;
     children: JSX.Element;
   }) => (
     <div
+      data-auto-open={String(props.autoOpen ?? true)}
       data-active={String(props.active)}
       data-count={props.count}
       data-active-index={props.activeIndex}
@@ -542,35 +548,54 @@ describe('Message tool grouping', () => {
   });
 });
 
-describe('Message current step', () => {
-  it('marks the newest call of an open turn, even with thinking after it', () => {
+describe('Message tool runs', () => {
+  const program = (id: string): MessagePart =>
+    tool(id, {
+      name: { kind: 'mcp', server: 'macro_internal', tool: 'ExecuteCode' },
+    });
+  const lookup = (id: string, name: string): MessagePart =>
+    tool(id, { name: { kind: 'mcp', server: 'macro_internal', tool: name } });
+
+  it('counts one group per segment: shown calls and program steps, never lookups or programs', () => {
+    programSteps.first = 5;
+    programSteps.second = 2;
     const view = render(() => (
       <Message
         message={message(
           [
-            tool('first'),
-            text('Next.'),
-            tool('second'),
-            { kind: 'thought', text: 'Hmm' },
+            lookup('search', 'SearchTools'),
+            lookup('load', 'LoadTools'),
+            program('first'),
+            tool('read'),
+            program('second'),
           ],
           null
         )}
-        inFlight
-      />
-    ));
-    expect(
-      view.getAllByTestId('tool').map((row) => row.dataset.current)
-    ).toEqual(['false', 'true']);
-  });
-
-  it('marks no call once the turn has ended', () => {
-    const view = render(() => (
-      <Message
-        message={message([text('Done.'), tool('only')])}
         inFlight={false}
       />
     ));
-    expect(view.getByTestId('tool').dataset.current).toBe('false');
+    expect(view.getAllByTestId('group')).toHaveLength(1);
+    expect(view.getByTestId('group').dataset.count).toBe('8');
+    expect(view.getAllByTestId('tool').map((row) => row.textContent)).toEqual([
+      'first',
+      'read',
+      'second',
+    ]);
+  });
+
+  it('keeps a run with programs from opening on its own', () => {
+    programSteps.only = 3;
+    const view = render(() => (
+      <Message message={message([program('only')], null)} inFlight />
+    ));
+    expect(view.getByTestId('group').dataset.autoOpen).toBe('false');
+  });
+
+  it('lets a run of ordinary calls open as before', () => {
+    const view = render(() => (
+      <Message message={message([tool('a'), tool('b')], null)} inFlight />
+    ));
+    expect(view.getByTestId('group').dataset.autoOpen).toBe('true');
   });
 });
 
