@@ -1,5 +1,4 @@
-use super::{GmailMessageImage, GmailSignatureImages, ImageLocation};
-use crate::util::process_pre_insert::sfs_map::ImageSource;
+use super::GmailImageReader;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
@@ -7,6 +6,7 @@ use axum::routing::get;
 use axum::{Json, Router};
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use email::domain::signature_settings::gmail_images::{GmailSignatureImages, SignatureImageSource};
 use email_api_client::GmailApiClientRepository;
 use email_api_client::domain::models::{AccessToken, EmailApiError, TokenError, TokenFreshness};
 use email_api_client::domain::ports::{AlwaysAllowRateLimiter, ProviderTokenSource};
@@ -41,55 +41,11 @@ fn embedded_url(location: &str, content_id: &str) -> String {
     )
 }
 
-#[test]
-fn parses_message_and_part_from_embedded_url() {
-    assert_eq!(
-        GmailMessageImage::parse(EMBEDDED_URL),
-        Some(GmailMessageImage {
-            location: ImageLocation::Message(MESSAGE_ID.to_string()),
-            content_id: CONTENT_ID.to_string(),
-        })
-    );
-}
-
-#[test]
-fn looks_in_the_thread_without_a_permanent_message_id() {
-    for location in [
-        format!("th={THREAD_ID}"),
-        format!("permmsgid=msg-a:r-1234567890&th={THREAD_ID}"),
-    ] {
-        assert_eq!(
-            GmailMessageImage::parse(&embedded_url(&location, SENT_CONTENT_ID)),
-            Some(GmailMessageImage {
-                location: ImageLocation::Thread(THREAD_ID.to_string()),
-                content_id: SENT_CONTENT_ID.to_string(),
-            }),
-            "{location}"
-        );
-    }
-}
-
-#[test]
-fn ignores_urls_that_are_not_gmail_embedded_images() {
-    for url in [
-        "https://example.com/logo.png",
-        "https://ci3.googleusercontent.com/mail-sig/AIorK4z",
-        // No part to look for.
-        "https://mail.google.com/mail/u/0?ui=2&permmsgid=msg-f:1849112233445566778&view=fimg",
-        // Not over HTTPS.
-        "http://mail.google.com/mail/u/0?permmsgid=msg-f:1849112233445566778&realattid=ii_1",
-        // An id that isn't Gmail's hex id never reaches the API path.
-        "https://mail.google.com/mail/u/0?th=..%2Fdrafts&realattid=ii_1",
-        "https://mail.google.com/mail/u/0?permmsgid=msg-a:r-123&realattid=ii_1",
-    ] {
-        assert_eq!(GmailMessageImage::parse(url), None, "{url}");
-    }
-}
-
 #[tokio::test]
 async fn reads_embedded_image_from_the_inbox_mailbox() {
     let fake = FakeGmail::start().await;
-    let images = GmailSignatureImages::new(&fake.api, Uuid::now_v7());
+    let reader = GmailImageReader::new(&fake.api);
+    let images = GmailSignatureImages::new(&reader, Uuid::now_v7());
 
     let image = images.fetch(EMBEDDED_URL).await.unwrap();
 
@@ -99,7 +55,8 @@ async fn reads_embedded_image_from_the_inbox_mailbox() {
 #[tokio::test]
 async fn reads_a_message_once_for_all_its_images() {
     let fake = FakeGmail::start().await;
-    let images = GmailSignatureImages::new(&fake.api, Uuid::now_v7());
+    let reader = GmailImageReader::new(&fake.api);
+    let images = GmailSignatureImages::new(&reader, Uuid::now_v7());
     let icon_url = embedded_url("permmsgid=msg-f:1849112233445566778", ICON_CONTENT_ID);
 
     let (logo, icon) = tokio::join!(images.fetch(EMBEDDED_URL), images.fetch(&icon_url));
@@ -112,7 +69,8 @@ async fn reads_a_message_once_for_all_its_images() {
 #[tokio::test]
 async fn finds_an_image_in_a_message_the_mailbox_sent() {
     let fake = FakeGmail::start().await;
-    let images = GmailSignatureImages::new(&fake.api, Uuid::now_v7());
+    let reader = GmailImageReader::new(&fake.api);
+    let images = GmailSignatureImages::new(&reader, Uuid::now_v7());
     let url = embedded_url(
         &format!("permmsgid=msg-a:r-1234567890&th={THREAD_ID}"),
         SENT_CONTENT_ID,
@@ -126,7 +84,8 @@ async fn finds_an_image_in_a_message_the_mailbox_sent() {
 #[tokio::test]
 async fn reads_th_as_a_message_when_no_thread_has_that_id() {
     let fake = FakeGmail::start().await;
-    let images = GmailSignatureImages::new(&fake.api, Uuid::now_v7());
+    let reader = GmailImageReader::new(&fake.api);
+    let images = GmailSignatureImages::new(&reader, Uuid::now_v7());
 
     let image = images
         .fetch(&embedded_url(&format!("th={MESSAGE_ID}"), CONTENT_ID))
@@ -139,7 +98,8 @@ async fn reads_th_as_a_message_when_no_thread_has_that_id() {
 #[tokio::test]
 async fn leaves_image_unresolved_when_mailbox_lacks_it() {
     let fake = FakeGmail::start().await;
-    let images = GmailSignatureImages::new(&fake.api, Uuid::now_v7());
+    let reader = GmailImageReader::new(&fake.api);
+    let images = GmailSignatureImages::new(&reader, Uuid::now_v7());
 
     let other_part = EMBEDDED_URL.replace(CONTENT_ID, "ii_other");
     let other_message = embedded_url("permmsgid=msg-f:1849112233445566779", CONTENT_ID);
@@ -153,7 +113,8 @@ async fn leaves_image_unresolved_when_mailbox_lacks_it() {
 async fn reports_a_rate_limited_read_as_retryable() {
     let fake = FakeGmail::start().await;
     fake.state.rate_limited.store(true, Ordering::SeqCst);
-    let images = GmailSignatureImages::new(&fake.api, Uuid::now_v7());
+    let reader = GmailImageReader::new(&fake.api);
+    let images = GmailSignatureImages::new(&reader, Uuid::now_v7());
 
     assert!(images.fetch(EMBEDDED_URL).await.is_err());
     assert!(matches!(
@@ -166,7 +127,8 @@ async fn reports_a_rate_limited_read_as_retryable() {
 async fn stops_reading_gmail_after_a_retryable_failure() {
     let fake = FakeGmail::start().await;
     fake.state.rate_limited.store(true, Ordering::SeqCst);
-    let images = GmailSignatureImages::new(&fake.api, Uuid::now_v7());
+    let reader = GmailImageReader::new(&fake.api);
+    let images = GmailSignatureImages::new(&reader, Uuid::now_v7());
     let icon_url = embedded_url("permmsgid=msg-f:1849112233445566778", ICON_CONTENT_ID);
 
     assert!(images.fetch(EMBEDDED_URL).await.is_err());
@@ -177,7 +139,8 @@ async fn stops_reading_gmail_after_a_retryable_failure() {
 #[tokio::test]
 async fn keeps_gmail_image_copies_out_of_the_shared_mapping() {
     let fake = FakeGmail::start().await;
-    let images = GmailSignatureImages::new(&fake.api, Uuid::now_v7());
+    let reader = GmailImageReader::new(&fake.api);
+    let images = GmailSignatureImages::new(&reader, Uuid::now_v7());
 
     assert!(!images.is_public(EMBEDDED_URL));
     assert!(images.is_public("https://example.com/logo.png"));
@@ -186,7 +149,8 @@ async fn keeps_gmail_image_copies_out_of_the_shared_mapping() {
 #[tokio::test]
 async fn fetches_other_images_over_public_http() {
     let fake = FakeGmail::start().await;
-    let images = GmailSignatureImages::new(&fake.api, Uuid::now_v7());
+    let reader = GmailImageReader::new(&fake.api);
+    let images = GmailSignatureImages::new(&reader, Uuid::now_v7());
 
     let image = images
         .fetch(&format!("{}/public/logo.png", fake.origin))

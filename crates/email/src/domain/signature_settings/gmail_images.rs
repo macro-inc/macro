@@ -1,10 +1,5 @@
-use crate::util::process_pre_insert::sfs_map::{ImageSource, MAX_IMAGE_SIZE_BYTES, PublicImages};
-use bytes::Bytes;
+//! Image selection and read policy for one signature import.
 use email_api_client::domain::models::EmailApiError;
-use email_api_client::domain::ports::{
-    MailboxAttachmentClient, MailboxMessageClient, ProviderRequestGate, ProviderTokenSource,
-};
-use email_api_client::domain::service::EmailApiClientServiceImpl;
 use models_email::email::service::attachment::Attachment;
 use models_email::email::service::message::Message;
 use std::collections::HashMap;
@@ -12,6 +7,57 @@ use std::collections::hash_map::Entry;
 use tokio::sync::Mutex;
 use url::Url;
 use uuid::Uuid;
+
+/// Maximum size of an image that signature import will read.
+pub const MAX_IMAGE_SIZE_BYTES: usize = 10 * 1024 * 1024;
+
+/// Reads bytes for rehosting and identifies publicly shareable sources.
+pub trait SignatureImageSource: Sync {
+    /// Read a selected image, or return no bytes when it is unavailable.
+    fn fetch(&self, url: &str) -> impl Future<Output = anyhow::Result<Option<Vec<u8>>>> + Send;
+    /// Whether a copy can enter the shared URL-to-file mapping.
+    fn is_public(&self, url: &str) -> bool;
+}
+
+/// Provider and public image reads needed by a signature import.
+pub trait SignatureImageReader: Send + Sync {
+    /// Read a public image without mailbox credentials.
+    fn public_image(
+        &self,
+        url: &str,
+    ) -> impl Future<Output = anyhow::Result<Option<Vec<u8>>>> + Send;
+    /// Read one message from the selected mailbox.
+    fn get_message(
+        &self,
+        link: Uuid,
+        id: &str,
+    ) -> impl Future<Output = Result<Option<Message>, EmailApiError>> + Send;
+    /// Read a thread from the selected mailbox.
+    fn get_thread(
+        &self,
+        link: Uuid,
+        id: &str,
+    ) -> impl Future<Output = Result<Vec<Message>, EmailApiError>> + Send;
+    /// Read one attachment from the selected mailbox.
+    fn get_attachment(
+        &self,
+        link: Uuid,
+        message: &str,
+        attachment: &str,
+    ) -> impl Future<Output = Result<Vec<u8>, EmailApiError>> + Send;
+}
+
+/// Public-only image source used when patching settings.
+pub struct PublicSignatureImages<'a, R>(pub &'a R);
+
+impl<R: SignatureImageReader> SignatureImageSource for PublicSignatureImages<'_, R> {
+    async fn fetch(&self, url: &str) -> anyhow::Result<Option<Vec<u8>>> {
+        self.0.public_image(url).await
+    }
+    fn is_public(&self, _: &str) -> bool {
+        true
+    }
+}
 
 /// An image pasted into a Gmail signature from a message. Gmail keeps it as a
 /// `mail.google.com/mail/u/<n>?...&view=fimg&disp=emb&realattid=...` URL, which
@@ -91,8 +137,8 @@ impl GmailMessageImage {
 /// Signature images for one Gmail inbox: images embedded from that mailbox's
 /// own messages are read through the Gmail API, everything else over public
 /// HTTP.
-pub(super) struct GmailSignatureImages<'a, R, T, L> {
-    email_api: &'a EmailApiClientServiceImpl<R, T, L>,
+pub struct GmailSignatureImages<'a, R> {
+    reader: &'a R,
     link_id: Uuid,
     /// Held across each Gmail read, so a signature's images take one of the
     /// mailbox's live request slots at a time; backfill can hold the rest.
@@ -113,10 +159,11 @@ struct ImagePart {
     attachment: Attachment,
 }
 
-impl<'a, R, T, L> GmailSignatureImages<'a, R, T, L> {
-    pub(super) fn new(email_api: &'a EmailApiClientServiceImpl<R, T, L>, link_id: Uuid) -> Self {
+impl<'a, R> GmailSignatureImages<'a, R> {
+    /// Start an image read session for this mailbox.
+    pub fn new(reader: &'a R, link_id: Uuid) -> Self {
         Self {
-            email_api,
+            reader,
             link_id,
             reads: Mutex::default(),
         }
@@ -125,20 +172,15 @@ impl<'a, R, T, L> GmailSignatureImages<'a, R, T, L> {
     /// The first Gmail read that failed in a way retrying the import may fix
     /// (a rate limit or a transient provider error), which left its image
     /// unresolved without saying the mailbox lacks it.
-    pub(super) fn into_retryable_failure(self) -> Option<EmailApiError> {
+    pub fn into_retryable_failure(self) -> Option<EmailApiError> {
         self.reads.into_inner().retryable
     }
 }
 
-impl<R, T, L> ImageSource for GmailSignatureImages<'_, R, T, L>
-where
-    R: MailboxMessageClient + MailboxAttachmentClient,
-    T: ProviderTokenSource,
-    L: ProviderRequestGate,
-{
-    async fn fetch(&self, url: &str) -> anyhow::Result<Option<Bytes>> {
+impl<R: SignatureImageReader> SignatureImageSource for GmailSignatureImages<'_, R> {
+    async fn fetch(&self, url: &str) -> anyhow::Result<Option<Vec<u8>>> {
         let Some(image) = GmailMessageImage::parse(url) else {
-            return PublicImages.fetch(url).await;
+            return self.reader.public_image(url).await;
         };
         let mut reads = self.reads.lock().await;
         // The import answers "try again" once one read failed that way, so
@@ -161,13 +203,9 @@ where
     }
 }
 
-impl<R, T, L> GmailSignatureImages<'_, R, T, L>
-where
-    R: MailboxMessageClient + MailboxAttachmentClient,
-    T: ProviderTokenSource,
-    L: ProviderRequestGate,
-{
+impl<R: SignatureImageReader> GmailSignatureImages<'_, R> {
     #[tracing::instrument(
+        target = "email_service::api::email::settings::import_signature::gmail_images",
         skip(self, parts, image),
         fields(
             link_id = %self.link_id,
@@ -180,7 +218,7 @@ where
         &self,
         parts: &mut HashMap<ImageLocation, Option<Vec<ImagePart>>>,
         image: &GmailMessageImage,
-    ) -> Result<Option<Bytes>, EmailApiError> {
+    ) -> Result<Option<Vec<u8>>, EmailApiError> {
         let span = tracing::Span::current();
         let held = match parts.entry(image.location.clone()) {
             Entry::Occupied(entry) => entry.into_mut(),
@@ -210,11 +248,11 @@ where
         }
 
         let data = self
-            .email_api
+            .reader
             .get_attachment(self.link_id, &part.message_id, attachment_id)
             .await?;
         span.record("outcome", "resolved");
-        Ok(Some(Bytes::from(data)))
+        Ok(Some(data))
     }
 
     async fn read_parts(
@@ -223,8 +261,8 @@ where
     ) -> Result<Option<Vec<ImagePart>>, EmailApiError> {
         let messages = match location {
             ImageLocation::Message(id) => self.read_message(id).await?,
-            ImageLocation::Thread(id) => match self.email_api.get_thread(self.link_id, id).await {
-                Ok(thread) => Some(thread.into_iter().map(|message| message.message).collect()),
+            ImageLocation::Thread(id) => match self.reader.get_thread(self.link_id, id).await {
+                Ok(thread) => Some(thread),
                 Err(EmailApiError::NotFound) => self.read_message(id).await?,
                 Err(error) => return Err(error),
             },
@@ -234,10 +272,10 @@ where
 
     async fn read_message(&self, id: &str) -> Result<Option<Vec<Message>>, EmailApiError> {
         Ok(self
-            .email_api
+            .reader
             .get_message(self.link_id, id)
             .await?
-            .map(|message| vec![message.message]))
+            .map(|message| vec![message]))
     }
 }
 

@@ -27,6 +27,9 @@ pub enum ImportSignatureError {
     /// broken for recipients, so nothing is saved (same rule as `patch.rs`).
     #[error("{0} signature image(s) could not be loaded")]
     UnresolvedSignatureImages(u32),
+    /// A transient mailbox image read failure leaves the import retryable.
+    #[error("Failed to read signature images from Gmail")]
+    MailboxImagesUnavailable(EmailApiError),
 }
 
 impl IntoResponse for ImportSignatureError {
@@ -35,7 +38,9 @@ impl IntoResponse for ImportSignatureError {
             ImportSignatureError::NoSignatureFound => {
                 (StatusCode::NOT_FOUND, self.to_string()).into_response()
             }
-            ImportSignatureError::GmailApiError(_) | ImportSignatureError::TokenError(_) => {
+            ImportSignatureError::GmailApiError(_)
+            | ImportSignatureError::TokenError(_)
+            | ImportSignatureError::MailboxImagesUnavailable(_) => {
                 (StatusCode::BAD_GATEWAY, self.to_string()).into_response()
             }
             ImportSignatureError::DatabaseError(_) => {
@@ -88,6 +93,9 @@ pub async fn import_signature_handler(
             SignatureImportError::Provider(error) => ImportSignatureError::GmailApiError(error),
             SignatureImportError::Database(error) => {
                 ImportSignatureError::DatabaseError(error.into_inner())
+            }
+            SignatureImportError::MailboxImagesUnavailable(error) => {
+                ImportSignatureError::MailboxImagesUnavailable(error)
             }
             SignatureImportError::UnresolvedImages(count) => {
                 ImportSignatureError::UnresolvedSignatureImages(count)

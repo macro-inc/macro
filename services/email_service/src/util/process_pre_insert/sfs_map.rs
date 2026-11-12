@@ -12,7 +12,8 @@ use std::error::Error;
 use std::time::Duration;
 use url::Url;
 
-pub(crate) const MAX_IMAGE_SIZE_BYTES: usize = 10 * 1024 * 1024; // 10 MB
+pub(crate) const MAX_IMAGE_SIZE_BYTES: usize =
+    email::domain::signature_settings::gmail_images::MAX_IMAGE_SIZE_BYTES;
 const REQUEST_TIMEOUT_SECONDS: u64 = 15;
 const CONNECT_TIMEOUT_SECONDS: u64 = 5;
 const MAX_REDIRECTS: usize = 5;

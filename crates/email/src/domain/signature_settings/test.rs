@@ -13,6 +13,7 @@ enum Call {
     Token(Uuid),
     Aliases,
     Images(String),
+    PublicImage(String),
     Write(SettingsPatch),
 }
 
@@ -41,8 +42,42 @@ impl SettingsWriter for Fake {
 }
 impl SignatureImages for Fake {
     type Err = TestError;
-    async fn rehost(&self, html: &str) -> Result<(String, usize), TestError> {
+    async fn rehost(
+        &self,
+        html: &str,
+        source: &impl SignatureImageSource,
+    ) -> Result<(String, usize), TestError> {
         self.calls.lock().unwrap().push(Call::Images(html.into()));
+        if self.fail == Some("public_image") {
+            assert_eq!(
+                source
+                    .fetch("https://mail.google.com/mail/u/0?permmsgid=msg-f:1&realattid=logo")
+                    .await
+                    .unwrap(),
+                Some(vec![1])
+            );
+            return Ok((html.into(), 0));
+        }
+        if matches!(
+            self.fail,
+            Some(
+                "mailbox_images"
+                    | "mailbox_images_zero"
+                    | "mailbox_images_error"
+                    | "mailbox_missing"
+            )
+        ) {
+            let _ = source
+                .fetch("https://mail.google.com/mail/u/0?permmsgid=msg-f:1&realattid=logo")
+                .await;
+            if self.fail == Some("mailbox_images_error") {
+                return Err(TestError);
+            }
+            return Ok((
+                html.into(),
+                usize::from(self.fail != Some("mailbox_images_zero")),
+            ));
+        }
         if self.fail == Some("images") {
             return Err(TestError);
         }
@@ -53,6 +88,9 @@ impl SignatureImages for Fake {
     }
 }
 impl SignatureProvider for Fake {
+    fn image_reader(&self) -> impl SignatureImageReader + '_ {
+        self.clone()
+    }
     type TokenErr = TestError;
     type ReadErr = TestError;
     async fn fresh_token(&self, link: Uuid) -> Result<AccessToken, TestError> {
@@ -357,4 +395,137 @@ async fn import_stops_at_and_preserves_each_effect_failure() {
             }
         }
     }
+}
+
+impl SignatureImageReader for Fake {
+    async fn public_image(&self, url: &str) -> anyhow::Result<Option<Vec<u8>>> {
+        assert_eq!(self.fail, Some("public_image"));
+        self.calls
+            .lock()
+            .unwrap()
+            .push(Call::PublicImage(url.into()));
+        Ok(Some(vec![1]))
+    }
+    async fn get_message(
+        &self,
+        _: Uuid,
+        _: &str,
+    ) -> Result<Option<models_email::email::service::message::Message>, EmailApiError> {
+        if self.fail == Some("mailbox_missing") {
+            return Ok(None);
+        }
+        Err(EmailApiError::RateLimited {
+            retry_after: Some(std::time::Duration::from_secs(60)),
+            origin: email_api_client::domain::models::RateLimitOrigin::Provider {
+                concurrency: false,
+            },
+        })
+    }
+    async fn get_thread(
+        &self,
+        _: Uuid,
+        _: &str,
+    ) -> Result<Vec<models_email::email::service::message::Message>, EmailApiError> {
+        panic!("unexpected thread read")
+    }
+    async fn get_attachment(&self, _: Uuid, _: &str, _: &str) -> Result<Vec<u8>, EmailApiError> {
+        panic!("unexpected attachment read")
+    }
+}
+
+#[tokio::test]
+async fn retryable_mailbox_failure_rejects_unresolved_import_without_a_write() {
+    let fake = Fake {
+        aliases: vec![(ADDRESS, Some("signature"), false)],
+        fail: Some("mailbox_images"),
+        ..Default::default()
+    };
+    let error = service(&fake).import(LINK, ADDRESS).await.unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "Failed to read signature images from Gmail"
+    );
+    assert!(matches!(
+        error,
+        SignatureImportError::MailboxImagesUnavailable(EmailApiError::RateLimited { .. })
+    ));
+    assert_eq!(fake.calls.lock().unwrap().len(), 3);
+}
+
+#[tokio::test]
+async fn missing_mailbox_image_is_unresolved_not_retryable() {
+    let fake = Fake {
+        aliases: vec![(ADDRESS, Some("signature"), false)],
+        fail: Some("mailbox_missing"),
+        ..Default::default()
+    };
+    assert!(matches!(
+        service(&fake).import(LINK, ADDRESS).await,
+        Err(SignatureImportError::UnresolvedImages(1))
+    ));
+    assert_eq!(fake.calls.lock().unwrap().len(), 3);
+}
+
+#[tokio::test]
+async fn mailbox_failure_is_ignored_when_rehost_reports_no_unresolved_images() {
+    let fake = Fake {
+        aliases: vec![(ADDRESS, Some("signature"), false)],
+        fail: Some("mailbox_images_zero"),
+        ..Default::default()
+    };
+    assert_eq!(
+        service(&fake)
+            .import(LINK, ADDRESS)
+            .await
+            .unwrap()
+            .signature
+            .as_deref(),
+        Some("signature")
+    );
+    assert!(matches!(
+        fake.calls.lock().unwrap().last(),
+        Some(Call::Write(_))
+    ));
+}
+
+#[tokio::test]
+async fn top_level_rehost_error_still_imports_after_a_retryable_mailbox_failure() {
+    let fake = Fake {
+        aliases: vec![(ADDRESS, Some("signature"), false)],
+        fail: Some("mailbox_images_error"),
+        ..Default::default()
+    };
+    assert_eq!(
+        service(&fake)
+            .import(LINK, ADDRESS)
+            .await
+            .unwrap()
+            .signature
+            .as_deref(),
+        Some("signature")
+    );
+    assert!(matches!(
+        fake.calls.lock().unwrap().last(),
+        Some(Call::Write(_))
+    ));
+}
+
+#[tokio::test]
+async fn patch_uses_public_reads_even_for_a_mailbox_image_url() {
+    let fake = Fake {
+        fail: Some("public_image"),
+        ..Default::default()
+    };
+    service(&fake)
+        .patch(patch(Some("signature")))
+        .await
+        .unwrap();
+    let calls = fake.calls.lock().unwrap();
+    let [Call::Images(_), Call::PublicImage(url), Call::Write(_)] = calls.as_slice() else {
+        panic!("unexpected calls: {calls:?}")
+    };
+    assert_eq!(
+        url,
+        "https://mail.google.com/mail/u/0?permmsgid=msg-f:1&realattid=logo"
+    );
 }
