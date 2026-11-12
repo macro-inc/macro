@@ -39,7 +39,7 @@ fn only_the_authorization_url_is_addressed_for_a_browser() {
         .filter(|(name, _)| *name != "OVERRIDE_GOOGLE_OAUTH_AUTHORIZATION_URL")
         .map(|(_, value)| value)
         .collect();
-    assert_eq!(in_network.len(), 5);
+    assert_eq!(in_network.len(), 6);
     assert!(
         in_network
             .iter()

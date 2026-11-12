@@ -74,6 +74,10 @@ pub fn env(instance: &Instance) -> BTreeMap<String, String> {
         ("OVERRIDE_GOOGLE_OAUTH_TOKEN_URL", in_network("/token")),
         ("OVERRIDE_GOOGLE_OAUTH_REVOKE_URL", in_network("/revoke")),
         (
+            "OVERRIDE_GOOGLE_OAUTH_TOKEN_INFO_URL",
+            in_network("/oauth2/v3/tokeninfo"),
+        ),
+        (
             "OVERRIDE_GOOGLE_OAUTH_AUTHORIZATION_URL",
             authorization_endpoint(instance),
         ),
