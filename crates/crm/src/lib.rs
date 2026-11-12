@@ -30,3 +30,6 @@ pub mod inbound;
     feature = "call_link"
 ))]
 pub mod outbound;
+
+#[cfg(all(test, feature = "outbound"))]
+mod test_support;

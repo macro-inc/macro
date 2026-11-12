@@ -10,7 +10,7 @@
 mod create_company;
 mod create_contact;
 mod get_company;
-mod list_companies;
+pub mod list_companies;
 pub mod pipelines;
 pub mod transfer;
 
@@ -115,7 +115,7 @@ where
 
 /// A company's own Stage property: the select option id currently set plus its
 /// human-readable label.
-#[derive(Debug, Clone, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, JsonSchema, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ToolCompanyStage {
     /// The stage property option id (usable with SetEntityProperty).

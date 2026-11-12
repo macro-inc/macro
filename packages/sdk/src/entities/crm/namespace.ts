@@ -10,11 +10,47 @@ import type {
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import type { Document } from '../documents/document';
+import { User } from '../users/user';
 import { Company } from './company';
 import { Contact } from './contact';
 import { CrmPipeline } from './pipeline';
 import { type CompanyImport, pipelineImport } from './pipeline-entry';
 import { PipelineNamespace } from './pipelines';
+
+/** Filters for {@link CrmNamespace.listCompanies}. */
+export interface CompanyListOptions {
+  /** Case-insensitive substring of a company name or domain. */
+  search?: string;
+  /**
+   * The company's own Stage property (not a pipeline deal's): a stage label,
+   * matched case-insensitively, or a stage option id. An unknown stage fails
+   * with the team's stage labels.
+   */
+  stage?: string;
+  /** Only companies whose own Owner property is this user. */
+  owner?: User;
+  /** Also include hidden companies; needs the team admin or owner role. */
+  includeHidden?: boolean;
+  /** At most this many companies, 1 through 200; defaults to 50. */
+  limit?: number;
+}
+
+/** A CRM company with its own Stage, Owner and Revenue, as one listing row. */
+export interface CompanyListing {
+  company: Company;
+  name: string | undefined;
+  /** Email domains, primary first. */
+  domains: string[];
+  hidden: boolean;
+  /** The most recent email interaction with the company. */
+  lastInteraction: string;
+  /** The company's own Stage property, separate from any pipeline deal's. */
+  stage: { optionId: string; label: string } | undefined;
+  /** The company's own Owner property. */
+  owner: User | undefined;
+  /** The company's own Revenue property, in dollars. */
+  revenue: number | undefined;
+}
 
 /**
  * @routing Use when working with CRM deals, pipelines, stages, companies or contacts; not generic databases, and not a search that merely names a company.
@@ -234,6 +270,47 @@ export class CrmNamespace {
           )
         : undefined,
     };
+  }
+
+  /**
+   * The team's CRM companies, most recent interaction first, filtered by the
+   * company's own Stage and Owner properties, name or domain text, and whether
+   * hidden companies are included. Each row carries the company's own Stage,
+   * Owner and Revenue; pipeline deals have their own (`crm.pipelines`).
+   *
+   * @example Customers owned by me
+   * ```js
+   * const me = await macro.users.me();
+   * const rows = await macro.crm.listCompanies({stage: 'Customer', owner: me});
+   * return rows.map(row => ({name: row.name, lastInteraction: row.lastInteraction}));
+   * ```
+   *
+   * @readonly
+   */
+  async listCompanies(
+    options: CompanyListOptions = {},
+  ): Promise<CompanyListing[]> {
+    const { companies } = unwrap(
+      await this.client.storage.listCompanies({
+        query: {
+          search: options.search,
+          stage: options.stage,
+          ownerUserId: options.owner?.id,
+          includeHidden: options.includeHidden,
+          limit: options.limit,
+        },
+      }),
+    );
+    return companies.map((row) => ({
+      company: Company.byId(this.client, row.id),
+      name: row.name ?? undefined,
+      domains: row.domains,
+      hidden: row.hidden,
+      lastInteraction: row.lastInteraction,
+      stage: row.stage ?? undefined,
+      owner: row.ownerUserId ? User.byId(this.client, row.ownerUserId) : undefined,
+      revenue: row.revenue ?? undefined,
+    }));
   }
 
   /**

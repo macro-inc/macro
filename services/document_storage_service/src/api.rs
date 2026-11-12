@@ -407,6 +407,9 @@ fn api_router(state: ApiContext) -> Router {
         .nest(
             "/crm",
             crm::inbound::axum_router::crm_router(state.crm_state.clone())
+                .merge(crm::inbound::company_list::router(
+                    state.crm_company_list_state.clone(),
+                ))
                 .nest(
                     "/pipelines",
                     crm::inbound::pipelines::router(state.pipeline_state.clone()),
