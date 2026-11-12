@@ -76,15 +76,12 @@ Reviewed user tools retain the selection through confirmation and execute with
 that account. Billing, memory, and session lifecycle remain owner-scoped. Model-context replay
 retains notification ACP inputs and their replies; the transcript fold separately
 omits system input from its message projection. PresentReview, GetReview and
-DecideReview are eager internal tools in both standard and code modes.
+DecideReview are eager internal tools.
 
-A user's conversation turns run code mode when the turn's MCP catalog lists
-every `mcp__macro_internal__` code tool, and otherwise fall back to the direct
-tools (`tool_mode` in `src/rig_engine.rs`). The owner's
-`ai-session-code-mode-only` PostHog flag (`domain/tool_mode.rs`) removes the
-fallback: a conversation turn without the code tools fails. Summaries advertise
-no tools in either mode and never read the flag. Unset, false or unreadable
-flags keep the fallback.
+Every conversation turn of a user's session runs code mode
+(`tools_for_agent_code_mode`); there is no direct-tools fallback. A turn whose
+MCP catalog lacks any `mcp__macro_internal__` code tool fails
+(`code_tools_listed` in `src/rig_engine.rs`). Summaries advertise no tools.
 
 - Owner memory is composed by the memory domain on each read; daily generation is hosted by cognition, not agent turns.
 
@@ -135,3 +132,7 @@ flags keep the fallback.
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`
+
+The in-process egress MCP client accepts the primary and explicitly configured
+external egress bases, so tool catalogs can inspect paired-runtime sessions.
+Keep route parsing limited to those configured bases.

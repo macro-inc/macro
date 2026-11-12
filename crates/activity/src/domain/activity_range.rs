@@ -131,6 +131,7 @@ impl ToolActivityAction {
             RecordedAction::Known(Action::TaskRemoved(_)) => Self::TaskRemoved,
             RecordedAction::Known(
                 action @ (Action::Renamed(_)
+                | Action::AppearanceChanged(_)
                 | Action::PictureChanged
                 | Action::CallEnded(_)
                 | Action::AccessRequested(_)),

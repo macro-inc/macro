@@ -2,7 +2,7 @@
 
 - Use `bun` as the package manager and script runner (`bun run build`, `bunx tsc`).
 - `bun run test`: run tests 
-- `bun run check`: check typescript changes
+- `bun run check`: check generated entity catalogs, cache contracts, TypeScript, and Biome; `bun run check-entity-icons` runs the catalog guard and generator regression tests.
 - Forward `CacheHost.people` through the app's retiring host, resolving the current host on each call even for captured methods; retired reads return unsupported and context writes reject rather than acknowledge discarded publication.
 - `CacheHost.people` contracts come from cache-core models: `bun run gen-cache-people-schema --rust` regenerates Rust JSON plus Zod/types; `--check --rust` verifies both. `bun run check` verifies JSON-to-frontend generation, while cache-core tests verify Rust-to-JSON drift. Missing native person commands mean unsupported, never permission to issue an unscoped write.
 - `bun run lint`: lint with biome 
@@ -206,6 +206,7 @@ modules through the test's own routes, which limits how many tests can run at
 once. A fixture that depends on dev-only behavior won't work there. CI sets
 `FUNCTIONAL_TEST_WORKERS` and retries a failed test once; locally it defaults to
 one worker and no retries.
+Call `initializeLexical()` before mounting isolated editor fixtures so decorator nodes use the app's renderer registry.
 
 ID-only user mention rendering, name lookup failure, and composer save/reopen
 are covered on desktop/tablet/phone by `user-mentions.browser.e2e.ts` in the
@@ -312,6 +313,8 @@ verify wrapped-thread reading gaps, drafts, fullscreen navigation, and local-vol
 indicators across call surfaces. Verify call-panel changes in the full call host
 with screenshots; list signed-in call checks separately instead of blocking on
 authentication.
+Keep participant-volume fills inside their stationary track and desktop media-permission badges above the device-settings arrow; place avatar microphone-mute badges at bottom-right and personal-volume mute badges at bottom-left, with each bounded to half the avatar width so both stay visible. Verify these in the full call host.
+Keep participant-volume popovers limited to the slider and volume readout, and render inline mute statuses as bare icons so tile labels retain their height.
 New call files use `Call/core/` for pure geometry and payloads, `Call/primitives/` for reactive media and interaction controllers, `Call/components/` for presentation, `Call/views/` for composition, and `Call/context/` for shared capability providers. Keep pre-existing main files at their paths. Call controls compose root-owned state with microphone, camera, screen, leave, layout, and shortcut parts; do not restore configurable monoliths. Shared camera-preview and background persistence logic live under `src/lib/core/media/`.
 Keep the call chat card opaque on `surface-2`; omit docked borders, add its soft shadow only in light mode, and retain the narrow-pane shadow and phone sheet surface.
 Initialize browser fixtures with the app's `data-touch-device` root attribute and
@@ -477,6 +480,8 @@ native round trip. Route iOS photo picks through `pickPhotoLibraryMediaOrFiles`.
 Its phone formatting regression opens the ribbon from the add drawer in the
 production message editor, removes selected strikethrough, and saves; keep
 the ribbon horizontally scrollable and preserve editor focus on its controls.
+The desktop app's channel picker carries no `accept` filter
+(`channelFilePickerAccept`): in the macOS app a filtered picker attached nothing.
 
 Shared GraphQL query metadata has a backend-free desktop and iPhone WebKit regression:
 `bunx playwright test --config src/lib/urql-solid/browser-test/playwright.config.ts`.
@@ -542,6 +547,9 @@ new MutationObserver(() => {
 ```
 
 Then trigger the interaction and read `window.__inst.log`. `'1,2,3' → '' → '1,2,3'` (the same ids coming back) is a `<Suspense>` detach and re-attach. Fresh ids are a true remount. Nothing at all means the subtree never moved and the cause is elsewhere. Re-running the same interaction a second time is the cheapest way to prove a cold-cache cause: a once-per-session query settles after the first attempt, so the second attempt stays clean.
+
+Keep each imperative dialog inside its own Suspense boundary in `ImperativeDialog`;
+lazy popup code and popup queries must never detach the surrounding app.
 
 Remote database selections have a backend-free desktop/phone regression that
 measures every row and cell while collaborators move, share a cell, or select a
@@ -765,6 +773,16 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Settings → Integrations: one searchable list row per integration, styled like
   the Drive/Tasks lists, custom MCP servers then connected ones first,
   described by what each does in Macro; preserve `agent-connections` and `team-connections` as aliases for existing links.
+- Keep Macro computers (`features/settings/computers`) team-only. Gate purchase
+  and Claude account surfaces with `enableMacroComputers`
+  (`enable-macro-computers`); keep existing lists in Runtimes and Billing and
+  management actions available with rollout off. `useTeamComputers` loads by
+  team membership and exposes `canPurchase` separately. Members read; admins
+  buy and manage. Show the exact price before buying, send one `purchaseKey`
+  per Buy dialog on every retry (202 `confirming` is success), offer no power,
+  billing or release while `purchasing`, confirm Restore before billing again,
+  and release only after the computer's name is typed. See the
+  [Macro computers walkthrough](../../docs/agent-guide/settings.md#macro-computers).
 - Keep bot setup focused on the token-and-SDK workflow; Agent and Ownership
   controls live under collapsed Advanced settings. See the
   [Bots walkthrough](../../docs/agent-guide/settings.md#bots).
@@ -874,7 +892,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Mount the mobile search input before focusing it inside the dock tap; keep navigation in that handler so focus does not trigger a second navigation or lose iOS keyboard activation.
 - Preserve focused chrome editors during deferred split insertion/removal/content-change autofocus; explicit return-focus commands may still focus the pane. On desktop, content changes claim focus only for Cmd+K navigation or create-menu arrivals, and only if the destination has not already focused a child. Back/forward and ordinary clicks do not autofocus content, except that a click, Enter or Cmd+K that opens a conversation focuses its composer (see [composer focus and Esc](../../docs/agent-guide/channels.md#composer-focus-and-esc)).
 - Reconcile global focus when focused DOM subtrees are removed; iOS can omit blur events, otherwise floating creation actions stay hidden after search or editor teardown.
-- Mount the floating mobile AI composer only on the Agents view; other views keep their New action or their own reply/comment composer.
+- Mount the floating mobile AI composer only on the Agents view; other views keep their New action or their own reply/comment composer. It mounts a task after the frame that follows the navigation, behind a blank of the collapsed composer's height (`--mobile-chrome-button-size`): Agents becomes the foreground view inside the tap, and the composer's first mount would otherwise hold that tap for longer than the view takes.
 - Keep desktop New actions on `ViewCreateButton`: full width below the inner
   sidebar title and compact in list controls; retain each view's creation
   workflow and mobile controls. Use `ListHeader` for the single-row Email, Drive,
@@ -893,8 +911,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Store iOS OTA bundles and markers in `Application Support/<bundle-identifier>/bundle-updates`, excluded from backup; ignore legacy cache contents rather than migrating them. Other platforms keep the updater's existing cache location. See `tauri/src-tauri/README.md#ota-bundle-storage`.
 - Inline agent steps reuse the session code-execution query for live SDK operation
   names; completed step snapshots come from the shared fold of the tool receipt.
-  Session `ExecuteCode` activity uses the same Calling N tools peek window as
-  ordinary consecutive tool calls.
+  Session `ExecuteCode` calls join their segment's tool group as their SDK
+  operation rows only; never show the program or code-mode wording.
 - Compose multiselect filters with `Dropdown.MultiSelectItem` and the shared
   searchable filters; follow [multiselect dropdowns](../../docs/agent-guide/ui-conventions.md#multiselect-dropdowns)
   for checkbox, row, Only, keyboard, and touch behavior.
@@ -1409,6 +1427,38 @@ phone, and tablet, and checks Space playback on opening and reopening the viewer
 `bunx playwright test --config src/lib/core/component/FileDownload/browser-test/playwright.config.ts`.
 See the [download walkthrough](../../docs/agent-guide/files.md#downloading-files).
 
+## Macro computers
+
+### Claude access
+
+Computer rows show the Claude mode (`Signed in with Claude` on the computer's
+own account, never its email) from `claude-mode` for managers, and the harness list's derived
+`claude_mode` for other members. Sign-in is a dialog
+(`claude-sign-in-flow.tsx`) that starts the sign-in on open, so its Open
+claude.ai control stays a plain `target="_blank"` link; never open it after an
+await. The backend also requires management rights for Claude account changes.
+Focused tests: `bun run test src/features/settings/computers`.
+
+Use the existing Billing route's `SubscriptionStatus.billing` for actual seat,
+computer, total and next-invoice amounts; never calculate a bill from catalog
+quotes. Format provider minor units using currency precision and Stripe's
+ISK/UGX wire-format exceptions.
+`TeamBillingBreakdown` renders provider lines behind `enableMacroComputers`; a
+null breakdown keeps the existing plan and computers UI. With the flag off the
+backend returns no breakdown and the page shows only the plan.
+
+Reuse `PriceBreakdown` for Macro computer purchase and
+subscription billing: item/spec subline/amount, divider, total and billing note.
+Keep included rows visible, use GiB throughout, and size confirmation/release
+dialogs to content. Billing renders each computer once and uses provider amounts;
+show a differing catalog price as context without replacing a subscribed charge.
+
+### Capacity
+
+Computer offers expose `soldOut` availability. Use generated auth types. Show `waiting_for_capacity`
+as a capacity wait with its translated hint in Runtimes and Billing, including
+on mobile; retain power controls and polling while waiting.
+
 ## Interface icons
 - Task rows, property values, document mention pills, and @mention menu rows use `TaskStatusIcon` with the current status property; use the task subtype completion flag only when a recognized status is unavailable. Task lists edit status and priority through leading `TaskPropertyControl` icons before the title, not duplicate columns or trailing pills. Mention pills show status only in that leading icon, not again among the trailing task badges. Keep generic navigation and creation on the custom checked-square task icon, independent of task state.
 - Read [the icon system rules](src/components/icon/system/README.md) before adding or changing interface icons. Reuse the original Macro SVG family via individual `@icon/system/...` imports; do not introduce another icon set.
@@ -1420,6 +1470,7 @@ See the [download walkthrough](../../docs/agent-guide/files.md#downloading-files
 - Reuse `CreateMenuItem` for explanatory New menu entries (`CreateMenuRadioItem` when a create dialog picks a type in a `Dropdown.RadioGroup`): original icons, a title, and muted wrapping descriptions, preserving the existing `ViewCreateButton` trigger and each action's feature gates.
 - Keep transient toasts in their bounded stack and persistent prompts/reminders in separate regions; preserve keyboard dismissal, full mobile descriptions, and remaining-time pause on hover/focus. Mobile toasts dismiss by swiping left or right and have no corner close button. Phone prompts stay in their own stack under the modal layer, never on `z-toast-region`, and never hide with a document-wide `:has()` (#8840).
 - Notification sounds are off by default and saved per user per device; map each new notification event in `features/notification-sounds/core/categories.ts` and keep system alerts silent when Macro plays its own sound. Quiet hours on the same page silence those sounds and skip desktop alerts on a per-device weekly schedule; incoming calls still ring. See the [notification sounds walkthrough](../../docs/agent-guide/notifications.md#notification-sounds).
+- Keep browser-call join/leave cues on explicit visit announcements, never RTC roster diffs; recovery must stay silent. Their fixed two-note chimes use a default-on Call sounds toggle and share notification volume and quiet hours, not the default-off notification switch. See [call sounds](../../docs/agent-guide/calls.md#join-and-leave-sounds).
 
 ### Agent result task lists
 
@@ -1440,7 +1491,9 @@ away leaves focus where the user put it. The backend-free regression is
 ### Assignee people scope
 
 Use only the current team roster and available agents for new Assignee selections.
-Keep existing selected outsiders visible and removable, without contact discovery.
+Keep initially selected outsiders visible and removable, and allow them to be
+re-added during the same editing session without contact discovery. Once the
+editor closes without them, they cannot be added again unless they join the team.
 Reuse the existing selected-first ordering at opening and keep row positions
 stable while selecting. Keep the generic roster hook in `src/lib/queries/team/members.ts`.
 Preserve each picker’s existing placeholder, sizing, and row styling.
@@ -1452,7 +1505,7 @@ Keep entity-picker navigation on its search input, before the enclosing menu han
 
 ### Sidebar tag dragging
 
-Email and Calls sidebar tags can be dragged onto taggable desktop list rows.
+The shared sidebar-tag fixture covers dragging tags onto taggable desktop rows.
 Keep existing tags and apply to the selected rows when the drop row is selected.
 Use the shared scoped drag helpers and overlayIcon for the tag chip.
 The backend-free browser regression is
@@ -1548,3 +1601,23 @@ of posting, multi-paragraph anchors, saved ranges, and cancellation during posti
   dynamic object spread); a spread makes a selection change revisit every
   unrelated layout input. Profile with the
   [entity collection fixture](src/features/entity/browser-test/README.md).
+
+### Passwords
+
+The flag-gated `/passwords` route mounts `features/passwords` with its team-scoped
+source; the rail and phone dock show it only for team members (flag and team).
+Keep field values and drafts outside query caches and browser storage; drafts
+live in the vault primitive's in-memory store, and lock, blur and hidden tabs
+only conceal revealed values, never drafts. The vault is keyed by account,
+sign-in session and team: a scope change remounts it and aborts its requests,
+so drafts and late responses never cross viewers. Load and copy usernames
+through their field-scoped endpoints, and derive sharing counts from metadata.
+Compose the view from `ViewShell`, `ViewSidebar` and Drive's `FolderTree`
+rather than feature-local chrome. Adapt Passwords metadata to the app's existing
+item drag provider and tree drop slots; never coerce vault items into Drive entities
+or install a nested provider. Scope drag cancellation and auto-scroll to the
+current vault's own drag. Register its desktop composable split layout
+and wrap every route state in `SplitPanel.Root` / `SplitPanel.Body` so the
+legacy header does not reserve an empty band. The responsive vault fixture is exercised with
+`bunx playwright test --config src/features/passwords/browser-test/playwright.config.ts`.
+See the [Passwords walkthrough](../../docs/agent-guide/passwords.md).

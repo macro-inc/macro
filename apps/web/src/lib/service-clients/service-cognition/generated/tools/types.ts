@@ -897,6 +897,40 @@ export type MutationState =
  */
 export type FormId = string;
 /**
+ * The source of an entity's custom icon.
+ */
+export type AppearanceIcon =
+  | {
+      /**
+       * Catalog name without the SVG extension.
+       */
+      name: string;
+      kind: 'macro';
+    }
+  | {
+      /**
+       * Unicode emoji text, not markup or a URL.
+       */
+      value: string;
+      kind: 'emoji';
+    };
+/**
+ * Named tint keys from the shared tag color palette.
+ */
+export type AppearanceColor =
+  | 'gray'
+  | 'red'
+  | 'tomato'
+  | 'orange'
+  | 'amber'
+  | 'yellow'
+  | 'green'
+  | 'teal'
+  | 'blue'
+  | 'indigo'
+  | 'purple'
+  | 'pink';
+/**
  * Who may respond to a form.
  */
 export type Audience = 'members' | 'public';
@@ -5094,8 +5128,8 @@ export interface ToolCalendarEvent {
    */
   conferenceUrl?: string | null;
   /**
-   * Join URL of the Macro call created with the event, when
-   * CreateCalendarEvent was asked for one.
+   * Join URL of the event's Macro call, when CreateCalendarEvent or
+   * UpdateCalendarEvent was asked for one.
    */
   macroCallUrl?: string | null;
   /**
@@ -7864,6 +7898,10 @@ export interface SavedForm {
  * A form: a view of one database table whose rows are its responses.
  */
 export interface Form {
+  /**
+   * Entity-owned icon and color overrides.
+   */
+  appearance?: EntityAppearance | null;
   id: FormId;
   /**
    * Its display name. A standalone form follows the database it created;
@@ -7939,6 +7977,19 @@ export interface Form {
    * listings, as for a channel poll.
    */
   isHiddenInDrive: boolean;
+}
+/**
+ * An entity's optional icon and tint overrides; absent values retain type defaults.
+ */
+export interface EntityAppearance {
+  /**
+   * A custom Macro glyph or a native emoji.
+   */
+  icon?: AppearanceIcon | null;
+  /**
+   * A shared tag-palette key. Native emoji retain their own colors.
+   */
+  color?: AppearanceColor | null;
 }
 /**
  * A form's logo, cover image and accent color, each unset by default.
@@ -14706,6 +14757,10 @@ export interface ReadMetadataResponse {
  */
 export interface ReadDocumentMetadata {
   /**
+   * Entity-owned presentation overrides; absent values use type defaults.
+   */
+  appearance?: EntityAppearance | null;
+  /**
    * The document id
    */
   documentId: string;
@@ -15454,13 +15509,15 @@ export interface SendConfirmedEmail {
    */
   subject: string;
   /**
-   * The address of the inbox to send from, when the user has more than one
-   * connected and this email belongs to a particular one. Use the exact
-   * `emailAddress` of a connected inbox — `ListInboxes` lists them, and
-   * `GetThread` reports the `inbox` a thread belongs to. Omit it unless
-   * you know which inbox is right: a reply then goes out from the inbox
-   * that received the message it answers, and a new email from the user's
-   * primary inbox. The user can change it in the composer either way.
+   * The address to send from, when the user has more than one and this
+   * email belongs to a particular one: the exact `emailAddress` of a
+   * connected inbox (`ListInboxes` lists them, and `GetThread` reports the
+   * `inbox` a thread belongs to), or a verified Gmail send-as alias of one,
+   * which then sends from that inbox under the alias's display name. Omit
+   * it unless you know which address is right: a reply then goes out from
+   * the inbox that received the message it answers, and a new email from
+   * the user's primary inbox. The user can change it in the composer
+   * either way.
    */
   from?: string | null;
   /**
@@ -15535,13 +15592,15 @@ export interface SendEmail {
    */
   subject: string;
   /**
-   * The address of the inbox to send from, when the user has more than one
-   * connected and this email belongs to a particular one. Use the exact
-   * `emailAddress` of a connected inbox — `ListInboxes` lists them, and
-   * `GetThread` reports the `inbox` a thread belongs to. Omit it unless
-   * you know which inbox is right: a reply then goes out from the inbox
-   * that received the message it answers, and a new email from the user's
-   * primary inbox. The user can change it in the composer either way.
+   * The address to send from, when the user has more than one and this
+   * email belongs to a particular one: the exact `emailAddress` of a
+   * connected inbox (`ListInboxes` lists them, and `GetThread` reports the
+   * `inbox` a thread belongs to), or a verified Gmail send-as alias of one,
+   * which then sends from that inbox under the alias's display name. Omit
+   * it unless you know which address is right: a reply then goes out from
+   * the inbox that received the message it answers, and a new email from
+   * the user's primary inbox. The user can change it in the composer
+   * either way.
    */
   from?: string | null;
   /**
@@ -15972,6 +16031,8 @@ export interface UpdateBookingSettings {
  *
  * A guest without modify rights (`viewerCan.editDetails` false while `viewerCan.rsvp` is true) may only change their own `reminders`, add guests where `viewerCan.inviteGuests` allows it, and answer with `rsvp`; changing the title, time, description, location, recurrence or conference fails because the organizer doesn't let guests change the event.
  *
+ * `addMacroCall` switches the event to a Macro call in place, so never delete and recreate an event to change its meeting link. It creates the call, adds its join link to the description (and to `location` when no physical location is set), and removes any Google Meet or other conference, in the one update attendees are notified of. The returned event's `macroCallUrl` holds the link. An Outlook event's Teams meeting cannot be removed this way, and the call then fails.
+ *
  * `rsvp` sets the user's own response to an invitation and is independent of the field edits — it can be the only thing this call changes. It applies at the same `scope` as the rest of the call and answers as the connected inbox the event's copy belongs to, so it only works when that inbox is an attendee.
  */
 export interface UpdateCalendarEvent {
@@ -16017,9 +16078,13 @@ export interface UpdateCalendarEvent {
    */
   recurrenceLines?: string[] | null;
   /**
-   * Change the event's video conference: "provider_default" uses the calendar's supported provider; "google_meet" or "microsoft_teams" selects one explicitly. "remove" detaches the conference only where supported. Check ListCalendars capabilities first. Omit to preserve the current conference.
+   * Change the event's video conference: "provider_default" uses the calendar's supported provider; "google_meet" or "microsoft_teams" selects one explicitly. "remove" detaches the conference only where supported. Check ListCalendars capabilities first. Omit to preserve the current conference. To switch to a Macro call use `addMacroCall` instead.
    */
   conference?: ConferenceChangeInput | null;
+  /**
+   * Switch the event to a Macro call, replacing any Google Meet or other conference. An event already holding a Macro call keeps it. Mutually exclusive with `conference`.
+   */
+  addMacroCall?: boolean;
   /**
    * Replacement notification reminders. `useDefault: true` follows the calendar's own defaults; otherwise `overrides` replaces the whole list with entries of `method` "popup" (a Macro notification) or "email" and `minutes` before the start — an empty list silences the event. Omit to keep the current reminders.
    */

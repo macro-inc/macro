@@ -56,6 +56,13 @@ impl SubRoutines for FakeRepo {
 }
 
 impl ScheduledActionRepo for FakeRepo {
+    async fn set_appearance(
+        &self,
+        _change: crate::domain::appearance::ChangeAppearance,
+    ) -> Result<Option<model_entity::EntityAppearance>> {
+        anyhow::bail!("appearance writes are not supported by this cleanup-only adapter")
+    }
+
     async fn get_owned_actions(
         &self,
         owner: &MacroUserIdStr<'static>,
@@ -148,6 +155,7 @@ pub(super) fn action(owner: Owner, events: bool) -> ScheduledAction {
         enabled: true,
         run_visibility: config.run_visibility,
         template_id: None,
+        appearance: model_entity::EntityAppearance::default(),
         suggestion_id: None,
         description: String::new(),
         sub_routine: None,
