@@ -4,6 +4,7 @@ use agent_session::domain::model::{AgentSession, AgentSessionId};
 use async_trait::async_trait;
 use code_execution::domain::{ExecuteRequest, Limits, Outcome, ProgramExecutor};
 use entity_access::domain::models::{EntityAccessReceipt, EntityType, ViewAccessLevel};
+use macro_user_id::user_id::MacroUserIdStr;
 use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
 use tracing::Instrument;
@@ -67,11 +68,22 @@ impl CodeModeService {
     /// Load the images a successful result returned, so the model sees them.
     /// Saved receipts load them again on a retry; records keep only the ids.
     #[tracing::instrument(name = "code_mode.result_images", skip_all, fields(agent_session_id = %session, execution_id = %receipt.execution_id, images = tracing::field::Empty, failed_image = tracing::field::Empty))]
-    async fn attach_images(&self, session: AgentSessionId, receipt: &mut ExecutionReceipt) {
+    async fn attach_images(
+        &self,
+        session: AgentSessionId,
+        acting_user: Option<&MacroUserIdStr<'static>>,
+        receipt: &mut ExecutionReceipt,
+    ) {
         let images = returned_images(receipt);
         tracing::Span::current().record("images", images.len());
         for image in images {
-            match self.0.images.load_png(&image.id).await {
+            let loaded = match acting_user {
+                Some(owner) => self.0.images.load_png(&image.id, owner).await,
+                None => Err(anyhow::anyhow!(
+                    "no acting account to check the image owner against"
+                )),
+            };
+            match loaded {
                 Ok(pixels) => receipt.model_media.push(pixels),
                 Err(error) => {
                     tracing::Span::current().record("failed_image", image.id.as_ref());
@@ -93,7 +105,7 @@ impl CodeModeService {
         execution: ExecutionId,
         request: ExecuteRequest,
         cancel: CancellationToken,
-    ) -> Result<ExecutionReceipt, CodeModeError> {
+    ) -> Result<(ExecutionReceipt, Option<MacroUserIdStr<'static>>), CodeModeError> {
         let mut record = ExecutionRecord {
             execution_id: execution,
             acting_as: Some(identity.acting_as),
@@ -125,7 +137,10 @@ impl CodeModeService {
                     && existing.acting_as == Some(identity.acting_as)
                     && existing.turn_id == Some(identity.turn)
                 {
-                    return Ok(receipt(&existing));
+                    // A saved record keeps no account, only the owner choice.
+                    let acting_user = (identity.acting_as == ai_toolset::actor::ToolActor::Owner)
+                        .then(|| identity.owner.clone());
+                    return Ok((receipt(&existing), acting_user));
                 }
             }
             return Err(error);
@@ -134,15 +149,18 @@ impl CodeModeService {
             record.status = ExecutionStatus::Cancelled;
             record.error = Some("Execution cancelled before authorization.".into());
             self.0.store.save(identity.session, &record).await?;
-            return Ok(receipt(&record));
+            return Ok((receipt(&record), None));
         }
-        let environment = match self
+        let IssuedRun {
+            environment,
+            acting_user,
+        } = match self
             .0
             .credentials
             .issue(&identity, &request.source, cancel.clone())
             .await
         {
-            Ok(environment) => environment,
+            Ok(issued) => issued,
             Err(error) => {
                 record.status = ExecutionStatus::Failed;
                 record.error = Some(error.to_string());
@@ -154,7 +172,7 @@ impl CodeModeService {
             record.status = ExecutionStatus::Cancelled;
             record.error = Some("Execution cancelled before starting.".into());
             self.0.store.save(identity.session, &record).await?;
-            return Ok(receipt(&record));
+            return Ok((receipt(&record), None));
         }
         let (progress, mut updates) = tokio::sync::mpsc::channel(512);
         let execution = self
@@ -217,7 +235,7 @@ impl CodeModeService {
         record.result = result;
         record.error = error;
         self.0.store.save(identity.session, &record).await?;
-        Ok(receipt(&record))
+        Ok((receipt(&record), Some(acting_user)))
     }
 }
 
@@ -497,10 +515,14 @@ impl SessionCodeMode for CodeModeService {
             async move {
                 let _permit = permit;
                 let mut result = service.run(identity, execution, request, cancel).await;
-                // Image reads stay inside the admission budget.
-                if let Ok(receipt) = &mut result {
-                    service.attach_images(session_id, receipt).await;
+                // Image reads stay inside the admission budget, and show only
+                // files the account the execution acted as owns.
+                if let Ok((receipt, acting_user)) = &mut result {
+                    service
+                        .attach_images(session_id, acting_user.as_ref(), receipt)
+                        .await;
                 }
+                let result = result.map(|(receipt, _)| receipt);
                 match &result {
                     Ok(receipt) => {
                         let span = tracing::Span::current();

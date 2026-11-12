@@ -4,6 +4,7 @@ use super::{
 use agent_session::domain::model::AgentSessionId;
 use async_trait::async_trait;
 use code_execution::domain::RunEnvironment;
+use macro_user_id::user_id::MacroUserIdStr;
 use tokio_util::sync::CancellationToken;
 
 /// Current session turn, read from shared state on every replica.
@@ -26,7 +27,15 @@ pub trait ExecutionCredentials: Send + Sync + 'static {
         identity: &ExecutionIdentity,
         source: &str,
         cancel: CancellationToken,
-    ) -> Result<RunEnvironment, CodeModeError>;
+    ) -> Result<IssuedRun, CodeModeError>;
+}
+
+/// A run credential and the account it acts as.
+pub struct IssuedRun {
+    /// What the program runs with.
+    pub environment: RunEnvironment,
+    /// The account the credential was minted for.
+    pub acting_user: MacroUserIdStr<'static>,
 }
 
 /// Durable code execution records, always scoped by the owning session.
@@ -56,6 +65,11 @@ pub trait ExecutionStore: Send + Sync + 'static {
 /// Pixels of the static files a program returned in `images`.
 #[async_trait]
 pub trait ModelImages: Send + Sync + 'static {
-    /// Read one static file as a bounded PNG; anything else is an error.
-    async fn load_png(&self, file: &StaticFileId) -> anyhow::Result<ModelImage>;
+    /// Read one static file `owner` owns as a bounded PNG; a file someone
+    /// else owns, or anything but a PNG, is an error.
+    async fn load_png(
+        &self,
+        file: &StaticFileId,
+        owner: &MacroUserIdStr<'_>,
+    ) -> anyhow::Result<ModelImage>;
 }

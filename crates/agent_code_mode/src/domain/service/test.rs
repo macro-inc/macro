@@ -1,5 +1,6 @@
 use super::*;
 use agent_session::testing::test_agent_session;
+use macro_user_id::user_id::MacroUserIdStr;
 use serde_json::json;
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -74,23 +75,36 @@ impl ExecutionCredentials for Credentials {
         identity: &ExecutionIdentity,
         _: &str,
         _: CancellationToken,
-    ) -> Result<code_execution::domain::RunEnvironment, CodeModeError> {
+    ) -> Result<IssuedRun, CodeModeError> {
         self.0
             .lock()
             .unwrap()
             .push((identity.owner.to_string(), identity.agent_id));
-        Ok(code_execution::domain::RunEnvironment {
-            token: "run-only-secret".into(),
-            ..Default::default()
+        Ok(IssuedRun {
+            environment: code_execution::domain::RunEnvironment {
+                token: "run-only-secret".into(),
+                ..Default::default()
+            },
+            acting_user: identity.owner.clone(),
         })
     }
 }
-/// PNG pixels named after their file; the file `missing` cannot be read.
+/// PNG pixels named after their file, owned by the session owner; the file
+/// `missing` cannot be read.
 struct Pixels;
 #[async_trait]
 impl ModelImages for Pixels {
-    async fn load_png(&self, file: &StaticFileId) -> anyhow::Result<ModelImage> {
+    async fn load_png(
+        &self,
+        file: &StaticFileId,
+        owner: &MacroUserIdStr<'_>,
+    ) -> anyhow::Result<ModelImage> {
         anyhow::ensure!(file.as_ref() != "missing", "no such file");
+        // test_agent_session's owner.
+        anyhow::ensure!(
+            owner.as_ref() == "macro|owner@example.com",
+            "the file belongs to someone else"
+        );
         Ok(ModelImage {
             r#type: ModelMediaType::Image,
             media_type: ModelImageMediaType::Png,

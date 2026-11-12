@@ -33,3 +33,11 @@ fn other_files_truncated_pngs_and_oversized_pngs_are_refused() {
     huge.resize(MAX_PNG_BYTES + 1, 0);
     assert!(png_image(&huge).is_err());
 }
+
+#[test]
+fn only_a_png_the_acting_account_owns_is_shown() {
+    let owner = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
+    assert!(owned_png("macro|owner@example.com", "image/png", &owner).is_ok());
+    assert!(owned_png("macro|someone-else@example.com", "image/png", &owner).is_err());
+    assert!(owned_png("macro|owner@example.com", "image/gif", &owner).is_err());
+}

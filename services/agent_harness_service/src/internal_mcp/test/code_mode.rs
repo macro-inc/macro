@@ -18,6 +18,7 @@ impl agent_code_mode::domain::ModelImages for NoImages {
     async fn load_png(
         &self,
         _: &agent_code_mode::domain::StaticFileId,
+        _: &macro_user_id::user_id::MacroUserIdStr<'_>,
     ) -> anyhow::Result<agent_code_mode::domain::ModelImage> {
         anyhow::bail!("no images in this test")
     }
@@ -42,12 +43,14 @@ struct Credentials;
 impl agent_code_mode::domain::ExecutionCredentials for Credentials {
     async fn issue(
         &self,
-        _: &agent_code_mode::domain::ExecutionIdentity,
+        identity: &agent_code_mode::domain::ExecutionIdentity,
         _: &str,
         _: tokio_util::sync::CancellationToken,
-    ) -> Result<code_execution::domain::RunEnvironment, agent_code_mode::domain::CodeModeError>
-    {
-        Ok(code_execution::domain::RunEnvironment::default())
+    ) -> Result<agent_code_mode::domain::IssuedRun, agent_code_mode::domain::CodeModeError> {
+        Ok(agent_code_mode::domain::IssuedRun {
+            environment: code_execution::domain::RunEnvironment::default(),
+            acting_user: identity.owner.clone(),
+        })
     }
 }
 
