@@ -33,3 +33,6 @@ From `infra/`: `bun run check`, `bunx biome check stacks/openbao`;
   `kms-aws` plugin from ghcr.io into `plugins/`, a sibling of the Raft `data/`
   directory. On a version bump, update both the image digest and the binary
   sha256 from the official openbao/openbao-plugins release.
+- The ALB admits only the document storage service and the OpenBao task's own
+  security group (the operator SSM tunnel, README "Operator tunnel"). Never add
+  CIDR ingress.

@@ -11,7 +11,7 @@ hosted dev vault that QA uses.
 | Seal | `awskms` through the external `kms-aws` plugin (2.7 dropped the built-in), downloaded digest-pinned from ghcr.io into the data volume at startup; key `alias/openbao-dev`, rotation on; only the task role may use it |
 | Backup | AWS Backup vault `openbao-dev`, daily at 05:00 UTC, kept 14 days |
 | TLS | Internal ALB, ACM certificate for `openbao-dev.macro-internal.com`, TLS 1.2+/1.3 policy |
-| Access | ALB ingress 443 only from the document storage service's security group; task port 8200 only from the ALB |
+| Access | ALB ingress 443 only from the document storage service's security group and the OpenBao task's own (the operator tunnel); task port 8200 only from the ALB |
 | Audit | Declared device `passwords`, `file_path = stdout`, `log_raw = false`; FireLens ships it to Datadog as `service:openbao` (and to Grafana in dev) |
 | Alarms | ECS deployment failure; no healthy target for 5 minutes |
 
@@ -60,6 +60,27 @@ timeout (95 s) is longer.
    the upload and the checks; never rerun `operator init`. With KMS auto-unseal
    the vault unseals itself on every restart. The recovery key is only for
    `bao operator generate-root`.
+
+## Operator tunnel
+
+Operators reach the verified HTTPS origin through an SSM port-forward that runs
+inside the OpenBao task and connects to the internal ALB. The ALB admits the
+task's security group for exactly this. TLS is still checked against
+`openbao-dev.macro-internal.com`, so the client knows it is talking to this
+vault:
+
+```sh
+target=<ecs:<cluster>_<task id>_<openbao container runtime id>, as in step 3 above>
+aws ssm start-session --target "$target" \
+  --document-name AWS-StartPortForwardingSessionToRemoteHost \
+  --parameters '{"host":["openbao-dev.macro-internal.com"],"portNumber":["443"],"localPortNumber":["18443"]}'
+# in another shell:
+curl --resolve openbao-dev.macro-internal.com:18443:127.0.0.1 \
+  https://openbao-dev.macro-internal.com:18443/v1/sys/health
+```
+
+Use the tunnel for provisioning and any other administration. The plain
+port-forward to 8200 in step 3 is only for the one-time init.
 
 ## Provisioning (follow-up, not in this stack yet)
 
