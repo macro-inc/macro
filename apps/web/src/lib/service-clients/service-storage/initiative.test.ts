@@ -21,6 +21,7 @@ import { createInitiativeClient, initiativeUpdateInput } from './initiative';
 
 const project = {
   __typename: 'GraphqlSoupInitiative',
+  appearance: null,
   id: 'project-1',
   displayName: 'Launch',
   metadata: {

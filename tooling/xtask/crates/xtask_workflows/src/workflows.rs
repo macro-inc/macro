@@ -46,6 +46,7 @@ mod deploy_sdk_docs;
 mod deploy_sync_service;
 mod deploy_web_app;
 mod deploy_website;
+mod desktop_qa_macos;
 mod ensure_daytona_snapshot;
 mod export_ci_telemetry;
 mod ios_app_store_publish;
@@ -176,6 +177,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "build_dmg_on_tag",
         file_name: "build_dmg_on_tag.yml",
         render_yaml: || render_patched(build_dmg_on_tag::build_dmg, build_dmg_on_tag::patch),
+    },
+    WorkflowFile {
+        slug: "desktop_qa_macos",
+        file_name: "desktop_qa_macos.yml",
+        render_yaml: || render_patched(desktop_qa_macos::desktop_qa_macos, desktop_qa_macos::patch),
     },
     WorkflowFile {
         slug: "build_desktop_on_tag",

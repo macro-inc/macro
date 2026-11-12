@@ -128,6 +128,7 @@ fn named(project: InitiativeId, name: &'static str) -> MockProjects {
         .return_once(move |id| {
             Box::pin(async move {
                 Ok(Some(InitiativeBasic {
+                    appearance: None,
                     id,
                     name: name.to_owned(),
                     owner_id: user(),
