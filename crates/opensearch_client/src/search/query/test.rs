@@ -109,3 +109,79 @@ fn test_generate_terms_must_query_and_combine() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_create_query_partial_single_word_is_bool_prefix() {
+    let result = create_query(CreateQueryParams {
+        query_key: QueryKey::MatchPhrasePrefix,
+        field: "subject",
+        term: "invoice",
+    })
+    .to_json();
+
+    assert_eq!(
+        result,
+        serde_json::json!({ "match_bool_prefix": { "subject": { "query": "invoice" } } })
+    );
+}
+
+#[test]
+fn test_create_query_exact_single_word_stays_match_phrase() {
+    let result = create_query(CreateQueryParams {
+        query_key: QueryKey::MatchPhrase,
+        field: "subject",
+        term: "invoice",
+    })
+    .to_json();
+
+    assert_eq!(
+        result,
+        serde_json::json!({ "match_phrase": { "subject": "invoice" } })
+    );
+}
+
+#[test]
+fn test_is_single_word_accepts_one_standard_token() {
+    for term in [
+        "a",
+        "invoice",
+        "Invoice",
+        "q3",
+        "2026",
+        "snake_case",
+        "don't",
+        "don’t",
+        "e.g",
+        "3.14",
+        "invoice,",
+        "(draft)",
+        "#tag",
+        "@alice",
+        "über",
+        "café",
+        "한국어",
+    ] {
+        assert!(is_single_word(term), "{term:?} should be one token");
+    }
+}
+
+#[test]
+fn test_is_single_word_rejects_terms_that_tokenize_to_several() {
+    for term in [
+        "",
+        "...",
+        "hello world",
+        "foo-bar",
+        "alice@example.com",
+        "a.1",
+        "1.a",
+        "foo/bar",
+        "’tis",
+        "rock’",
+        "東京",
+        "日本語",
+        "テスト",
+    ] {
+        assert!(!is_single_word(term), "{term:?} should not be one token");
+    }
+}

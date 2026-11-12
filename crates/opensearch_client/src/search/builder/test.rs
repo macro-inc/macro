@@ -184,10 +184,9 @@ fn test_build_bool_query() -> anyhow::Result<()> {
                     "minimum_should_match": 1,
                     "should": [
                         {
-                            "match_phrase_prefix": {
+                            "match_bool_prefix": {
                                 "content": {
-                                    "query": "test",
-                                    "max_expansions": 256
+                                    "query": "test"
                                 }
                             }
                         },
@@ -229,10 +228,9 @@ fn test_build_must_term_query() -> anyhow::Result<()> {
     let terms_must_vec = builder.build_must_term_query()?;
 
     let expected = serde_json::json!({
-        "match_phrase_prefix": {
+        "match_bool_prefix": {
             "content": {
-                "query": "test",
-                "max_expansions": 256
+                "query": "test"
             }
         }
     });

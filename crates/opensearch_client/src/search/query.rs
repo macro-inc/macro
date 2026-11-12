@@ -36,6 +36,44 @@ pub(crate) struct CreateQueryParams<'a> {
     pub term: &'a str,
 }
 
+/// Whether the standard tokenizer keeps `term` as one word.
+///
+/// A one-word `match_phrase_prefix` rewrites into a disjunction of every
+/// indexed term with that prefix (up to `max_expansions`), and OpenSearch
+/// counts each of them against its 1024-clause limit, so a few short words
+/// fail the whole search. `match_bool_prefix` on one word is the same prefix
+/// match counted as one clause. It ignores word order, so anything that may
+/// tokenize into several words stays a phrase. Leading and trailing ASCII
+/// punctuation is dropped by the tokenizer, `_` joins, and `.`, `'` and `’`
+/// join only between two letters or two digits. Scripts the tokenizer splits
+/// per character (Han, kana) never count as one word.
+pub(crate) fn is_single_word(term: &str) -> bool {
+    let chars: Vec<char> = term
+        .trim_matches(|c: char| c.is_ascii_punctuation())
+        .chars()
+        .collect();
+    let is_word_char = |c: char| {
+        c.is_alphanumeric()
+            && !matches!(c, '\u{2E80}'..='\u{9FFF}' | '\u{F900}'..='\u{FAFF}' | '\u{20000}'..='\u{3FFFF}')
+    };
+    let joins_neighbors = |index: usize| {
+        let before = index.checked_sub(1).and_then(|before| chars.get(before));
+        match (before, chars.get(index + 1)) {
+            (Some(before), Some(after)) => {
+                (before.is_alphabetic() && after.is_alphabetic())
+                    || (before.is_numeric() && after.is_numeric())
+            }
+            _ => false,
+        }
+    };
+    !chars.is_empty()
+        && chars.iter().enumerate().all(|(index, &c)| match c {
+            '_' => true,
+            '.' | '\'' | '\u{2019}' => joins_neighbors(index),
+            c => is_word_char(c),
+        })
+}
+
 /// Creates a query for a given term
 pub(crate) fn create_query<'a>(params: CreateQueryParams<'a>) -> QueryType<'a> {
     let CreateQueryParams {
@@ -48,6 +86,9 @@ pub(crate) fn create_query<'a>(params: CreateQueryParams<'a>) -> QueryType<'a> {
         QueryKey::MatchPhrase => {
             QueryType::MatchPhrase(MatchPhraseQuery::new(field.to_string(), term.to_string()))
         }
+        QueryKey::MatchPhrasePrefix if is_single_word(term) => QueryType::MatchBoolPrefix(
+            MatchBoolPrefixQuery::new(field.to_string(), term.to_string()),
+        ),
         QueryKey::MatchPhrasePrefix => QueryType::MatchPhrasePrefix(
             MatchPhrasePrefixQuery::new(field.to_string(), term.to_string())
                 .max_expansions(MATCH_PHRASE_PREFIX_MAX_EXPANSIONS),
