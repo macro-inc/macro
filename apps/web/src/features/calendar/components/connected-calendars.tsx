@@ -219,7 +219,7 @@ export function ConnectedCalendars(props: {
                         >
                           <ToggleSwitch
                             size="md"
-                            class="shrink-0 flex-row-reverse"
+                            class="shrink-0 flex-row-reverse touch:min-h-11"
                             labelClass="text-xs text-ink-muted"
                             label={
                               <>
