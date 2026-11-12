@@ -68,6 +68,16 @@ without re-prompting. Keep deduplication inside the serialized command worker.
 Remember successful announcements. After 24 hours, recover replies without a
 persisted completion at most hourly, preserving late answers after lost callbacks.
 Persisted completions bypass this backoff; direct completion handling is immediate.
+Conversation and external reply reconciliation admit the message parent through
+`SessionAnnouncer::with_write_admission` before claiming a journal lease, then
+recheck the durable parent under that lease. Keep the admission scope around
+posting and finalization: nested message writes reuse it, while the existing
+database lease still prevents duplicate replies across replicas. Admission
+failure leaves the durable reply pending for recovery with its reserved IDs.
+Conversation bootstrap also holds parent admission from before its delivery
+lease until startup and initial announcement finish. That scope can outlive a
+single message transaction. `ReplyBusy` keeps the durable prompt queued for
+recovery rather than marking it failed; other parents remain independent.
 
 Prompts to an external runtime pass `authorize_runtime` when accepted and
 `runtime_refusal` again when they dispatch, so a prompt queued before access was

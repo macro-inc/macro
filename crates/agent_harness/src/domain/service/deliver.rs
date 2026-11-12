@@ -606,71 +606,95 @@ where
                 origin.reply_placement == crate::domain::model::ReplyPlacement::Timeline
             })
         });
-        let _reply_lease = if terminal && let Some(store) = conversation_store {
-            match store.claim_reply(turn.action_id).await {
-                Ok(Some(lease)) => Some(lease),
-                Ok(None) => return,
-                Err(error) => {
-                    tracing::error!(?error, %session_id, "could not claim conversation reply reconciliation");
-                    return;
-                }
-            }
-        } else {
-            None
-        };
-        let mut turn = turn.clone();
-        let mut saved_reply = Vec::new();
-        if terminal && let Some(store) = conversation_store {
-            match store.by_action(turn.action_id).await {
-                Ok(Some(record)) if record.reply_finalized => return,
-                Ok(Some(record)) => {
-                    // Another replica may have reserved more reply IDs since
-                    // the caller read this turn. Always use the durable flight
-                    // read under the reply lease, including after a failed post.
-                    let Some(saved_flight) = record.in_flight else {
+        let admitted_parent = terminal
+            .then(|| {
+                conversation_store
+                    .and(turn.announce.as_ref())
+                    .map(|origin| origin.parent.clone())
+            })
+            .flatten();
+        // Admission precedes the journal lease because that lease keeps a pool
+        // connection while the announcer posts through the message service.
+        let resolve = async {
+            let _reply_lease = if terminal && let Some(store) = conversation_store {
+                match store.claim_reply(turn.action_id).await {
+                    Ok(Some(lease)) => Some(lease),
+                    Ok(None) => return,
+                    Err(error) => {
+                        tracing::error!(?error, %session_id, "could not claim conversation reply reconciliation");
                         return;
-                    };
-                    turn = saved_flight;
-                    if let Some(saved) = record.outcome {
-                        outcome = saved;
                     }
-                    saved_reply = record.reply_segments.unwrap_or_default();
                 }
-                Err(error) => {
-                    tracing::error!(?error, %session_id, "could not read the durable conversation reply state");
-                    return;
-                }
-                Ok(None) => return,
-            }
-        }
-        let resolved = if in_segments {
-            self.present_final(session_id, &turn, outcome.clone(), saved_reply)
-                .await
-        } else {
-            let segments = if turn.speaks_as_chip {
-                Vec::new()
             } else {
-                crate::domain::presenter::turn_segments(
-                    &self.reported_segments(session_id, turn.turn),
-                )
+                None
             };
-            self.resolve_announced_reply(
-                session_id,
-                turn.announcement_message_id,
-                turn.announce.as_ref(),
-                turn.actor.as_ref(),
-                outcome.clone(),
-                turn.turn,
-                segments,
-            )
-            .await
+            let mut turn = turn.clone();
+            let mut saved_reply = Vec::new();
+            if terminal && let Some(store) = conversation_store {
+                match store.by_action(turn.action_id).await {
+                    Ok(Some(record)) if record.reply_finalized => return,
+                    Ok(Some(record)) => {
+                        // Another replica may have reserved more reply IDs since
+                        // the caller read this turn. Always use the durable flight
+                        // read under the reply lease, including after a failed post.
+                        let Some(saved_flight) = record.in_flight else {
+                            return;
+                        };
+                        if saved_flight.announce.as_ref().map(|origin| &origin.parent)
+                            != admitted_parent.as_ref()
+                        {
+                            tracing::warn!(%session_id, "conversation reply parent changed before admission");
+                            return;
+                        }
+                        turn = saved_flight;
+                        if let Some(saved) = record.outcome {
+                            outcome = saved;
+                        }
+                        saved_reply = record.reply_segments.unwrap_or_default();
+                    }
+                    Err(error) => {
+                        tracing::error!(?error, %session_id, "could not read the durable conversation reply state");
+                        return;
+                    }
+                    Ok(None) => return,
+                }
+            }
+            let resolved = if in_segments {
+                self.present_final(session_id, &turn, outcome.clone(), saved_reply)
+                    .await
+            } else {
+                let segments = if turn.speaks_as_chip {
+                    Vec::new()
+                } else {
+                    crate::domain::presenter::turn_segments(
+                        &self.reported_segments(session_id, turn.turn),
+                    )
+                };
+                self.resolve_announced_reply(
+                    session_id,
+                    turn.announcement_message_id,
+                    turn.announce.as_ref(),
+                    turn.actor.as_ref(),
+                    outcome.clone(),
+                    turn.turn,
+                    segments,
+                )
+                .await
+            };
+            if resolved
+                && terminal
+                && let Some(store) = conversation_store
+                && let Err(error) = store.finalize_reply(turn.action_id, &outcome).await
+            {
+                tracing::error!(?error, %session_id, "failed to mark the conversation reply finalized");
+            }
         };
-        if resolved
-            && terminal
-            && let Some(store) = conversation_store
-            && let Err(error) = store.finalize_reply(turn.action_id, &outcome).await
-        {
-            tracing::error!(?error, %session_id, "failed to mark the conversation reply finalized");
+        if let Some(parent) = &admitted_parent {
+            if let Err(error) = self.announcer.with_write_admission(parent, resolve).await {
+                tracing::error!(?error, %session_id, "could not admit conversation reply reconciliation");
+            }
+        } else {
+            resolve.await;
         }
     }
 
