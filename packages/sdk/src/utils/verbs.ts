@@ -74,7 +74,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     deleted: 'deleteAgentSession',
     ran: `
       startFreshAgentConversation retryAgentConversationTurn refreshAgentSessionChanges
-      callConnectedAppTool controlAgentSession steerQueuedAction
+      callConnectedAppTool controlAgentSession steerQueuedAction openInApp
     `,
     linked: `
       linkAgentSessionPullRequest
@@ -109,7 +109,10 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     sent: 'sendReferralCode',
     invited: 'inviteToTeam',
     deleted: 'deleteTeamInviteHandler',
-    edited: 'putUserName putProfilePictureFile',
+    edited:
+      'putUserName putProfilePictureFile setTeamRuntimePresets clearTeamRuntimePresets',
+    disabled: 'disableTeamMember',
+    enabled: 'enableTeamMember',
     uploaded: 'createProfilePictureUpload',
   },
   calendar: {

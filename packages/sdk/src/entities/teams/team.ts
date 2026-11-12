@@ -1,4 +1,6 @@
 import type {
+  DisableMemberReport,
+  RuntimePreset,
   Team as TeamRecord,
   TeamRole,
   TeamWithMembers,
@@ -150,6 +152,69 @@ export class Team extends MacroEntity<TeamRecord> {
     return unwrap(
       await this.client.auth.getTeamInvites({ query: { team_id: this.id } }),
     ).invites.map((invite) => TeamInvite.from(this.client, invite));
+  }
+
+  /**
+   * Disable a member of the caller's current team and revoke the member's
+   * server-side harness registrations. The report names remote mailbox and
+   * laptop-file suspension gaps explicitly.
+   *
+   * @write
+   * @idempotent
+   */
+  async disableMember(member: User): Promise<DisableMemberReport> {
+    await this.requireCurrent('disableMember');
+    return unwrap(
+      await this.client.auth.disableTeamMember({
+        path: { member_user_id: member.id },
+      }),
+    );
+  }
+
+  /**
+   * Re-enable a previously disabled member of the caller's current team.
+   *
+   * @write
+   * @idempotent
+   */
+  async enableMember(member: User): Promise<void> {
+    await this.requireCurrent('enableMember');
+    unwrap(
+      await this.client.auth.enableTeamMember({
+        path: { member_user_id: member.id },
+      }),
+    );
+  }
+
+  /**
+   * Replace the exhaustive local runtime presets allowed for the caller's
+   * current team and return the saved list.
+   *
+   * @write
+   * @idempotent
+   */
+  async setRuntimePresets(
+    presets: readonly RuntimePreset[],
+  ): Promise<RuntimePreset[]> {
+    await this.requireCurrent('setRuntimePresets');
+    const result = unwrap(
+      await this.client.auth.setTeamRuntimePresets({
+        body: { preset_ids: [...presets] },
+      }),
+    );
+    return result.preset_ids;
+  }
+
+  /**
+   * Clear the current team's runtime allowlist, restoring the default local
+   * presets.
+   *
+   * @write
+   * @idempotent
+   */
+  async clearRuntimePresets(): Promise<void> {
+    await this.requireCurrent('clearRuntimePresets');
+    unwrap(await this.client.auth.clearTeamRuntimePresets());
   }
 
   /** The caller's current team record, rejecting when this is another team. */
