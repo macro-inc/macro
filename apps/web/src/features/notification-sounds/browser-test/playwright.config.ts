@@ -16,6 +16,7 @@ export default defineConfig({
     contextOptions: { reducedMotion: 'reduce' },
     launchOptions: {
       executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
+      args: ['--autoplay-policy=document-user-activation-required'],
     },
   },
   webServer: {
