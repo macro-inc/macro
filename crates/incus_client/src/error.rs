@@ -59,6 +59,10 @@ pub enum IncusError {
     #[error("unexpected Incus response: {0}")]
     MalformedResponse(String),
 
+    /// An exec stdio or control websocket could not be opened or broke.
+    #[error("Incus exec websocket failed: {0}")]
+    WebSocket(String),
+
     /// The server could not be reached, refused our certificate, or sent a body
     /// that does not decode.
     #[error("Incus request failed: {0}")]
