@@ -6,9 +6,24 @@ const mocks = vi.hoisted(() => ({
   blockSenderWithToast: vi.fn(async () => {}),
   filterAction: vi.fn(async () => {}),
   primaryLinkId: 'link-primary',
+  links: [{ id: 'link-primary', email_address: 'viewer@example.com' }] as
+    | { id: string; email_address: string }[]
+    | undefined,
+}));
+
+vi.mock('@core/context/user', () => ({
+  useEmail: () => () => 'login@example.com',
 }));
 
 vi.mock('@queries/email/link', () => ({
+  useEmailLinksQuery: () => ({
+    get isPending() {
+      return mocks.links === undefined;
+    },
+    get data() {
+      return mocks.links && { links: mocks.links };
+    },
+  }),
   // Mirrors the real hook: the primary inbox's link id maps to `undefined`
   // (the backend defaults to primary when the header is absent).
   useNonPrimaryEmailLinkIdHeader: () => (linkId: string | undefined | null) =>
@@ -32,6 +47,7 @@ const emailEntity = (over: Partial<EntityData> = {}) =>
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.links = [{ id: 'link-primary', email_address: 'viewer@example.com' }];
 });
 
 describe('makeSenderFilterAction', () => {
@@ -122,5 +138,30 @@ describe('makeBlockSenderAction', () => {
       'sender@example.com',
       undefined
     );
+  });
+
+  it("never offers to block the viewer's own addresses", () => {
+    createRoot((dispose) => {
+      const action = makeBlockSenderAction();
+      expect(action.canExecute(emailEntity())).toBe(true);
+      expect(
+        action.canExecute(emailEntity({ senderEmail: 'Viewer@example.com' }))
+      ).toBe(false);
+      expect(
+        action.canExecute(emailEntity({ senderEmail: 'login@example.com' }))
+      ).toBe(false);
+      expect(action.canExecute({ type: 'document' } as EntityData)).toBe(
+        false
+      );
+      dispose();
+    });
+  });
+
+  it('offers no sender until the inbox addresses load', () => {
+    mocks.links = undefined;
+    createRoot((dispose) => {
+      expect(makeBlockSenderAction().canExecute(emailEntity())).toBe(false);
+      dispose();
+    });
   });
 });
