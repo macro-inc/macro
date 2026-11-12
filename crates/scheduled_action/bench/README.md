@@ -24,8 +24,9 @@ It runs on a local stack against the live model, one draft at a time.
 **Time.** The `draft` arm is timed from the request to the answer; the `bare`
 arm from the message to the routine existing (its turn's end is kept too).
 Only drafts that came back with a routine or a step are timed; the share under
-15 s is out of every request, so a build can't look faster by failing fast or
-running out of time on its slowest drafts.
+15 s is out of every request, and `compare` counts a draft with no routine as
+slower than its pair's, so a build can't look faster by failing fast or by
+timing out on its slowest drafts.
 Each draft is sent with its own `traceparent` and its trace is read back from
 Tempo to split the time:
 
@@ -130,7 +131,8 @@ against the first:
 
 - **time**: the median of B's time over A's across pairs of the same case and
   round, with a 95% bootstrap interval; a win or loss only when the interval
-  leaves 1.
+  leaves 1. A side that got no routine counts as the slower; pairs where
+  neither did are left out.
 - **quality**: the share passing every check may not fall by more than
   `QUALITY_MARGIN` (`report.ts`), what main against main moves by at this size;
   a bigger fall is a loss whatever the time.

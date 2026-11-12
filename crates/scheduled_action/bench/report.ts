@@ -59,10 +59,11 @@ export const passedAll = (attempt: Attempt) =>
 
 /**
  * It came back with a routine or a step: only these are timed. A draft that
- * failed, a bare turn that ended or ran out of time without a routine, and
- * the eval's own errors still count against quality (unless asking was
- * right) and as not under 15 s, so a build can't look faster by failing fast
- * or drop its slowest drafts by running out of time.
+ * failed or timed out, a bare turn that ended without a routine, and errors
+ * still count against quality (unless asking was right), as not under 15 s,
+ * and in the time verdict as slower than the other side's routine, so a
+ * build can't look faster by failing fast or by timing out on its slowest
+ * drafts.
  */
 export const delivered = (attempt: Attempt) =>
   attempt.error === undefined && (attempt.draft?.outcome === 'routine' || attempt.draft?.outcome === 'step');
@@ -183,7 +184,7 @@ export type Verdict = {
   verdict: 'win' | 'loss' | 'noise';
   why: string;
   pairs: number;
-  /** Pairs where both sides came back with a routine, which the time compares. */
+  /** Pairs where either side came back with a routine, which the time compares. */
   timedPairs: number;
   /** B's time over A's, per pair: median and 95% interval. */
   timeRatio: number;
@@ -195,18 +196,31 @@ export type Verdict = {
   margin: number;
 };
 
+/** How much slower a side with no routine counts than one with: more than any two drafts differ. */
+const NO_ROUTINE = Math.log(1000);
+
+/** log(B's time over A's) for a pair where either side came back with a routine. */
+const logRatio = (pair: Pair) =>
+  delivered(pair.a) && delivered(pair.b)
+    ? Math.log(pair.b.wallMs / pair.a.wallMs)
+    : delivered(pair.a)
+      ? NO_ROUTINE
+      : -NO_ROUTINE;
+
 /**
  * B against A. Time: the median of B's time over A's across pairs of the
- * same case and round, a win or loss only when its 95% interval leaves 1.
+ * same case and round, a win or loss only when its 95% interval leaves 1;
+ * a side that got no routine counts as the slower, and pairs where neither
+ * did are left out.
  * Quality: the share passing every check may not fall by more than `margin`.
  */
 export function verdict(a: Attempt[], b: Attempt[], margin = QUALITY_MARGIN): Verdict {
   const sample = pairs(a, b);
   if (sample.length < 5) throw new Error(`only ${sample.length} paired attempts; run both sides on the same rounds`);
-  // Time compares the pairs where both sides came back with a routine; quality counts every pair.
-  const timedPairs = sample.filter((pair) => delivered(pair.a) && delivered(pair.b));
-  if (timedPairs.length < 5) throw new Error(`only ${timedPairs.length} pairs where both sides came back with a routine`);
-  const ratio = (drawn: Pair[]) => Math.exp(median(drawn.map((pair) => Math.log(pair.b.wallMs / pair.a.wallMs))));
+  // Time compares the pairs where either side came back with a routine; quality counts every pair.
+  const timedPairs = sample.filter((pair) => delivered(pair.a) || delivered(pair.b));
+  if (timedPairs.length < 5) throw new Error(`only ${timedPairs.length} pairs where either side came back with a routine`);
+  const ratio = (drawn: Pair[]) => Math.exp(median(drawn.map(logRatio)));
   const share = (drawn: Pair[], side: 'a' | 'b') => drawn.filter((pair) => passedAll(pair[side])).length / drawn.length;
   const delta = (drawn: Pair[]) => share(drawn, 'b') - share(drawn, 'a');
   const timeRatio = ratio(timedPairs);
