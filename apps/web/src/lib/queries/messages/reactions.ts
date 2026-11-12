@@ -9,7 +9,11 @@ import {
 import { useMutation } from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import { createMutationNonce } from '../nonce';
-import { reconcileFailedChannelWrite } from './graphql/channel-sync';
+import {
+  channelWriteResponseApplies,
+  channelWriteStarted,
+  reconcileFailedChannelWrite,
+} from './graphql/channel-sync';
 import { MessageNonceKeys } from './keys';
 import {
   type MessageTarget,
@@ -235,6 +239,7 @@ export function useAddReactionMutation(
       {
         onMutate: async (vars) => {
           addReactionNonce.prepare(vars);
+          channelWriteStarted(vars.parent, vars);
           await queryClient.cancelQueries({
             queryKey: getMessageTimelineQueryKeyPrefix(vars.parent),
           });
@@ -247,8 +252,9 @@ export function useAddReactionMutation(
             threadId: vars.threadId,
           });
         },
-        onSuccess(data) {
-          applyMessage(data, 'reaction_changed');
+        onSuccess(data, vars) {
+          if (channelWriteResponseApplies(vars.parent, vars))
+            applyMessage(data, 'reaction_changed');
         },
         onError(error, vars, context) {
           console.error('failed to add reaction', error);
@@ -306,6 +312,7 @@ export function useRemoveReactionMutation(
       {
         onMutate: async (vars) => {
           removeReactionNonce.prepare(vars);
+          channelWriteStarted(vars.parent, vars);
           await queryClient.cancelQueries({
             queryKey: getMessageTimelineQueryKeyPrefix(vars.parent),
           });
@@ -318,8 +325,9 @@ export function useRemoveReactionMutation(
             threadId: vars.threadId,
           });
         },
-        onSuccess(data) {
-          applyMessage(data, 'reaction_changed');
+        onSuccess(data, vars) {
+          if (channelWriteResponseApplies(vars.parent, vars))
+            applyMessage(data, 'reaction_changed');
         },
         onError(error, vars, context) {
           console.error('failed to remove reaction', error);

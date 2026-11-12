@@ -51,6 +51,8 @@ import {
 } from '../../timeline';
 import {
   channelSyncSeq,
+  channelWriteResponseApplies,
+  channelWriteStarted,
   reconcileFailedChannelWrite,
   resetChannelSync,
 } from '../channel-sync';
@@ -199,6 +201,41 @@ describe('a pushed change on a channel that follows its sequence', () => {
     await openAt(7);
     reconcileFailedChannelWrite(CHANNEL);
     expect(testQueryClient.getQueryState(LATEST_KEY)?.isInvalidated).toBe(true);
+    // The rolled-back rows are in doubt until that read lands.
+    expect(channelSyncSeq(CHANNEL.id)).toBeUndefined();
+  });
+
+  it('asks for that read again when the next write cancelled it', async () => {
+    await openAt(7);
+    vi.useFakeTimers();
+    mocks.fetchLatestChannelPage.mockReturnValueOnce(new Promise(() => {}));
+    reconcileFailedChannelWrite(CHANNEL);
+    // What an optimistic write does before it edits the pages.
+    await testQueryClient.cancelQueries({ queryKey: LATEST_KEY });
+    testQueryClient.setQueryData<MessageTimelineData>(
+      LATEST_KEY,
+      (data) => data && { ...data }
+    );
+    expect(testQueryClient.getQueryState(LATEST_KEY)?.isInvalidated).toBe(
+      false
+    );
+    mocks.fetchLatestChannelPage.mockResolvedValue({
+      seq: 9,
+      userId: 'user',
+      page: page([messageEntry('m2', 2), messageEntry('m1', 1)]),
+    });
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(testQueryClient.getQueryState(LATEST_KEY)?.isInvalidated).toBe(true);
+  });
+
+  it('does not put a late response under a number that has moved', async () => {
+    await openAt(7);
+    const write = {};
+    channelWriteStarted(CHANNEL, write);
+    expect(channelWriteResponseApplies(CHANNEL, write)).toBe(true);
+    handleMessageEvent(event(8, posted(root('m3', 3))));
+    expect(channelSyncSeq(CHANNEL.id)).toBe(8);
+    expect(channelWriteResponseApplies(CHANNEL, write)).toBe(false);
   });
 
   it('reads the root from the server when a reply it does not hold is deleted', async () => {

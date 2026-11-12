@@ -81,6 +81,8 @@ type ChannelSyncState = {
   /** A catch-up was asked for while one ran. */
   rerun: boolean;
   persist: ReturnType<typeof debounce> | null;
+  /** Checks that a page read asked for by `readAgain` was not lost. */
+  recover: ReturnType<typeof debounce> | null;
 };
 
 const STATES = new Map<string, ChannelSyncState>();
@@ -111,6 +113,7 @@ function track(channelId: string, userId: string) {
     running: null,
     rerun: false,
     persist: null,
+    recover: null,
   };
   STATES.set(channelId, created);
   return created;
@@ -246,9 +249,34 @@ export function reconcileFailedChannelWrite(parent: MessageParent) {
   if (trackedHost(parent)) readAgain(parent);
 }
 
+const WRITE_STARTS = new WeakMap<object, number | undefined>();
+
+/** A write is starting: remember the number the timeline is at. */
+export function channelWriteStarted(parent: MessageParent, write: object) {
+  WRITE_STARTS.set(write, timelineSeq(parent));
+}
+
+/**
+ * Whether a write's response may still be put into the timeline. Once the
+ * number has moved, the timeline holds changes the response may predate: a
+ * response applied then would put an older row under a newer number, which
+ * no catch-up corrects. The write's own change has arrived by its number, or
+ * will.
+ */
+export function channelWriteResponseApplies(
+  parent: MessageParent,
+  write: object
+): boolean {
+  if (!WRITE_STARTS.has(write) || !trackedHost(parent)) return true;
+  return WRITE_STARTS.get(write) === timelineSeq(parent);
+}
+
 /** Forget every channel's position; the next open reads its page again. */
 export function resetChannelSync() {
-  for (const state of STATES.values()) state.persist?.clear();
+  for (const state of STATES.values()) {
+    state.persist?.clear();
+    state.recover?.clear();
+  }
   STATES.clear();
 }
 
@@ -526,12 +554,47 @@ function latestPageLoaded(parent: MessageParent): Promise<boolean> {
  */
 function readAgain(parent: MessageParent) {
   forgetTimelineSeq(parent);
+  invalidatePages(parent);
+  scheduleRecover(parent);
+}
+
+function invalidatePages(parent: MessageParent) {
   queryClient.invalidateQueries({
     queryKey: getMessageTimelineQueryKeyPrefix(parent),
   });
   queryClient.invalidateQueries({
     queryKey: getThreadRepliesQueryKeyPrefix(parent),
   });
+}
+
+/**
+ * An optimistic write cancels a page read in flight and clears the mark that
+ * would start another, which would leave the timeline without a number for
+ * good. Once the channel is quiet, ask for the read again if it never landed.
+ */
+function recoverLostRead(parent: MessageParent) {
+  const key = getMessageTimelineQueryKey(parent, null);
+  const data = queryClient.getQueryData<MessageTimelineData>(key);
+  if (!data || data.pageParams[0] != null) return;
+  if (data.pages[0]?.channel_seq !== undefined || !channelCacheHost()) return;
+  const fetchStatus = queryClient.getQueryState(key)?.fetchStatus;
+  // A paused read resumes by itself when the connection returns.
+  if (fetchStatus === 'paused') return;
+  if (fetchStatus === 'fetching' || hasPendingWrite(parent.id)) {
+    scheduleRecover(parent);
+    return;
+  }
+  invalidatePages(parent);
+}
+
+function scheduleRecover(parent: MessageParent) {
+  const state = STATES.get(parent.id);
+  if (!state) return;
+  state.recover ??= debounce(
+    (recoverParent: MessageParent) => recoverLostRead(recoverParent),
+    PERSIST_DELAY_MS
+  );
+  state.recover(parent);
 }
 
 /**
