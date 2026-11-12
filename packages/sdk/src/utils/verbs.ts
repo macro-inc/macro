@@ -133,7 +133,10 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     cancelled: 'discardCalendarReplacement',
   },
   cognition: {
-    listed: 'listSkills',
+    listed: 'listSkills listImportEntities',
+    added: 'trackImportEntity',
+    rejected: 'declineImportEntity',
+    imported: 'importNotionPage',
     read: `
       getUsageHandler getChatHistoryHandler getChat fetchWebPage
       getChatPermissions getUserActivity readExplicitMemory readMyActivity readSkill

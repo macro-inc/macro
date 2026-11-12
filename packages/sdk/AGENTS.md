@@ -134,6 +134,12 @@ enforced by the ordinary backend APIs.
   authenticated bot (`me`, `channels`) with bot auth. Code mode hides the
   bot-management tools in its favour; `IssueBotCredential` stays, because its
   chat card mints a token the model never reads.
+- `src/entities/imports/`: `macro.imports`, the import ledger (cognition
+  `/import/entities`, `/import/notion/pages`): `list`, `track`,
+  `recordImported`, `importNotionPage` and `ImportEntry.decline()`; code mode
+  hides the matching ledger tools. `ImportEntry.item()` maps the row's
+  `entity_type` (`md`, `task`, `channel`, `database`, `project`,
+  `initiative`) to a handle.
 - `src/entities/memory/`, `activity/`: `macro.memory.read()`/`edit()` (cognition
   `/memory/explicit`) and `macro.activity.mine()` (cognition `/activity`);
   `User.activity()` reads `/memory/activity` and `Initiative.activity()` DSS
@@ -234,7 +240,7 @@ the existing gateway prefixes.
   enum variant names. Validate new filter examples against the real local API.
 - Code-mode programs are untyped JavaScript, so a mistyped option key is
   dropped silently. Create-style methods call `rejectUnknownOptions`
-  (`src/utils/options.ts`) so it throws instead; the documents namespace does.
+  (`src/utils/options.ts`) so it throws instead; the documents and tasks namespaces do.
 - Async iterators are lazy; `limit` is page size. Preserve filters on every page
   and do not fetch another page after the caller breaks the loop.
 - Handles must serialize identity or loaded detail, never authenticated clients.
