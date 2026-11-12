@@ -217,7 +217,7 @@ export function holdQueuedChannelWrite(
   host: CacheHost,
   transactionId: string,
   write: QueuedChannelWrite,
-  options: { live: true; order: number }
+  options: { live: true; order: number; startedAtMs: number }
 ) {
   watchHost(host);
   watchPageReplacements();
@@ -227,7 +227,7 @@ export function holdQueuedChannelWrite(
     write,
     live: options.live,
     order: options.order,
-    enqueuedAtMs: Date.now(),
+    enqueuedAtMs: options.startedAtMs,
   });
   syncQueuedPosts();
 }

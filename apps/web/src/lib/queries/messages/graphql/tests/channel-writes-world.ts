@@ -92,6 +92,8 @@ type WorldCore = {
   rest: { method: string; parent: MessageParent; messageId: string }[];
   /** Whether pages find the device cache, which sends channels over GraphQL. */
   cacheEnabled: boolean;
+  /** How long the device cache takes to hold a write it is given. */
+  cacheDelayMs: number;
   activity(): void;
 };
 
@@ -132,7 +134,7 @@ type Page = Awaited<ReturnType<typeof boot>>;
  */
 function withStoredPages(
   host: CacheHost,
-  world: Pick<WorldCore, 'disk' | 'activity' | 'pageWrites'>,
+  world: Pick<WorldCore, 'disk' | 'activity' | 'pageWrites' | 'cacheDelayMs'>,
   page: { alive: boolean }
 ): CacheHost {
   const key = (args: { operationName?: string; variables?: unknown }) =>
@@ -147,6 +149,12 @@ function withStoredPages(
       return data === undefined
         ? { kind: 'miss' }
         : { kind: 'hit', data: structuredClone(data) };
+    },
+    async enqueueOptimisticMutation(...args) {
+      if (world.cacheDelayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, world.cacheDelayMs));
+      }
+      return await host.enqueueOptimisticMutation(...args);
     },
     async writeQuery(args) {
       const written = await host.writeQuery(args);
@@ -511,6 +519,7 @@ export async function createChannelWritesWorld() {
     pageWrites: 0,
     rest: [],
     cacheEnabled: true,
+    cacheDelayMs: 0,
     activity: active,
   };
 
@@ -569,6 +578,9 @@ export async function createChannelWritesWorld() {
     },
     set cacheEnabled(value: boolean) {
       core.cacheEnabled = value;
+    },
+    set cacheDelayMs(value: number) {
+      core.cacheDelayMs = value;
     },
     /** Lose or regain the network, as the browser reports it. */
     async setOffline(offline: boolean) {

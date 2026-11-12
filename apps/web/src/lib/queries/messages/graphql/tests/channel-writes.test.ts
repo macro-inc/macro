@@ -501,4 +501,17 @@ describe('a post the queue holds', () => {
     expect(notSent(hello.id)).toBe(false);
     expect(failures()).toEqual([]);
   });
+
+  it('counts the five seconds from the send, not from a slow cache', async () => {
+    await openChannel();
+    await world.setOffline(true);
+    world.cacheDelayMs = 3_000;
+    const hello = world.page.send('hello');
+    await world.advance(4_500);
+    expect(notSent(hello.id)).toBe(false);
+
+    await world.advance(1_000);
+    expect(notSent(hello.id)).toBe(true);
+    expect(failures()).toEqual([]);
+  });
 });

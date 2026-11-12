@@ -303,6 +303,8 @@ async function sendChannelWrite(
   context: TraceContext
 ): Promise<EntityMessage | undefined> {
   const order = ++writeOrder;
+  // When the person sent it: the cache can take a while to hold it.
+  const startedAtMs = Date.now();
   const uuid = channelWriteUuid(write);
   const settlements = listen(host);
   const forget = expectLiveChannelWrite(uuid);
@@ -311,7 +313,13 @@ async function sendChannelWrite(
     if (answer.kind === 'committed') return answer.message;
     if (answer.kind === 'failed') throw answer.error;
     return await context.run(() =>
-      waitForQueuedWrite(host, write, answer.transactionId, order, settlements)
+      waitForQueuedWrite(
+        host,
+        write,
+        answer.transactionId,
+        { order, startedAtMs },
+        settlements
+      )
     );
   } finally {
     settlements.stop();
@@ -323,7 +331,7 @@ function waitForQueuedWrite(
   host: CacheHost,
   write: QueuedChannelWrite,
   transactionId: string,
-  order: number,
+  started: { order: number; startedAtMs: number },
   settlements: ReturnType<typeof listen>
 ): Promise<EntityMessage | undefined> {
   const parent = channelWriteParent(write);
@@ -331,7 +339,10 @@ function waitForQueuedWrite(
     span.setAttr('channel.id', parent.id);
     span.setAttr('message.id', channelWriteMessageId(write));
     span.setAttr('channel.write.kind', write.kind);
-    holdQueuedChannelWrite(host, transactionId, write, { live: true, order });
+    holdQueuedChannelWrite(host, transactionId, write, {
+      live: true,
+      ...started,
+    });
     let settlement: MutationSettlement | 'reset';
     try {
       settlement = await settlements.settled(transactionId);

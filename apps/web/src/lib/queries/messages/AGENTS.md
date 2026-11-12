@@ -121,7 +121,7 @@ live events that keep them current.
   page and a catch-up that applies changes drop their changes, so they are
   applied again in queue order, each only where it is missing; a message
   the queue deletes later is not put back. `hasPendingWrite` is true while
-  one is held. A post held 5 s after the queue took it reads as not sent
+  one is held. A post still held 5 s after it was sent reads as not sent
   (`isChannelPostNotSent`, reactive per message id); edits, deletes and
   reactions never do.
 - The messages client sends a REST write again, twice a second apart, when
