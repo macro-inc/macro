@@ -6,6 +6,7 @@ use std::sync::{Arc, Mutex};
 
 mod call_retries;
 mod call_roots;
+mod client_writes;
 mod event_posts;
 mod guest_chat;
 mod initiative;
