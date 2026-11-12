@@ -12,8 +12,7 @@ use std::sync::Arc;
 
 use harness_id::HarnessId;
 use hosted_runtimes::domain::claude_sign_in::{
-    ClaudeSignIn, ClaudeSignInNotice, ClaudeSignInNotices, ClaudeSignInStage, ClaudeSignIns,
-    SignInExpiry,
+    ClaudeSignInNotice, ClaudeSignInNotices, ClaudeSignInStage, SignInExpiry,
 };
 use hosted_runtimes::domain::ids::ComputerId;
 use macro_user_id::cowlike::CowLike;
@@ -22,7 +21,6 @@ use model_entity::EntityType;
 use model_notifications::{AgentProvider, AgentSignInExpiryMetadata, AgentSignInExpiryStage};
 use notification::domain::models::SendNotificationRequestBuilder;
 use notification::domain::service::NotificationIngress;
-use sqlx::PgPool;
 use teams::domain::model::{TeamError, TeamRole};
 use teams::domain::team_repo::TeamRepository;
 use teams::outbound::team_repo::TeamRepositoryImpl;

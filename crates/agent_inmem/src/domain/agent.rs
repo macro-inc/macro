@@ -90,7 +90,7 @@ pub const AGENT_NAME: &str = "macro-inmem";
 
 /// The `_meta` namespace this agent writes its own keys under, mirroring
 /// Claude Code's `claudeCode` layout so the fold reads both the same way.
-pub const META_NAMESPACE: &str = "macro";
+pub const META_NAMESPACE: &str = agent_session::domain::model::META_NAMESPACE;
 
 /// The one tool in the Macro toolset that delegates to another agent.
 const SUBAGENT_TOOL: &str = "Subagent";

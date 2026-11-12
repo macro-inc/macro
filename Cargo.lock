@@ -524,6 +524,7 @@ dependencies = [
  "lexical_client",
  "macro_authorization",
  "macro_db_migrator",
+ "macro_env",
  "macro_env_var",
  "macro_event_broker",
  "macro_tower_layers",
@@ -550,6 +551,7 @@ dependencies = [
  "serde_json",
  "shared_entity_registry",
  "sqlx",
+ "strum 0.27.2",
  "thiserror 2.0.18",
  "tokio",
  "tokio-tungstenite 0.28.0",
@@ -623,7 +625,6 @@ dependencies = [
  "crm",
  "cursor_api_key",
  "cursor_cloud_agents",
- "dashmap",
  "database_env_vars",
  "databases",
  "databases_sql",
@@ -641,7 +642,6 @@ dependencies = [
  "frecency",
  "fusionauth",
  "futures",
- "genai_telemetry",
  "github",
  "github_pull_requests",
  "granola_sync",
@@ -8853,7 +8853,6 @@ version = "1.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fb130435a959a8d525e6bca66ff6c40981a300ee96d70e3ef56f046556d614a3"
 dependencies = [
- "generic-array 0.14.9",
  "rustversion",
  "typenum",
 ]
@@ -13018,6 +13017,7 @@ dependencies = [
  "base64 0.22.1",
  "futures",
  "macro_authorization",
+ "macro_env",
  "macro_env_var",
  "macro_user_id",
  "model-error-response",
@@ -17393,9 +17393,9 @@ dependencies = [
 
 [[package]]
 name = "russh"
-version = "0.63.3"
+version = "0.65.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "036204edbd199552a5b3832f63c60dcdf395dc44c7f06b4af1c0e8139cc11bce"
+checksum = "94be3d86c71b9ed220a675c405e35c7a02565a009bf8da2e9cc13a700320a5c5"
 dependencies = [
  "aes 0.9.3",
  "bitflags 2.11.1",
