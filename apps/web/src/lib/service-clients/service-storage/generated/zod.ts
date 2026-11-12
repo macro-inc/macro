@@ -36617,6 +36617,12 @@ export const externalChatsResponseItem = zod
     name: zod
       .string()
       .describe("Display name: the group's, or a direct chat's other person."),
+    pictureFileId: zod
+      .uuid()
+      .nullish()
+      .describe(
+        "The group's picture, or a direct chat's person's, as the owner's\naccount sees it: a static file id; `null` when hidden, unset or not\nfetched yet."
+      ),
     provider: zod
       .enum(['whatsapp'])
       .describe('The messaging service an external chat lives in.'),
@@ -36745,6 +36751,12 @@ export const externalChatResponse = zod
     name: zod
       .string()
       .describe("Display name: the group's, or a direct chat's other person."),
+    pictureFileId: zod
+      .uuid()
+      .nullish()
+      .describe(
+        "The group's picture, or a direct chat's person's, as the owner's\naccount sees it: a static file id; `null` when hidden, unset or not\nfetched yet."
+      ),
     provider: zod
       .enum(['whatsapp'])
       .describe('The messaging service an external chat lives in.'),
@@ -36848,6 +36860,12 @@ export const externalChatResponse = zod
                         .string()
                         .describe(
                           'What to call them: their provider name, else their phone number,\nelse a generic name.'
+                        ),
+                      pictureFileId: zod
+                        .uuid()
+                        .nullish()
+                        .describe(
+                          "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
                         ),
                     })
                     .describe(
@@ -37169,6 +37187,12 @@ export const externalChatMessagesResponse = zod
                     name: zod
                       .string()
                       .describe('Display name, never authentication evidence.'),
+                    pictureFileId: zod
+                      .uuid()
+                      .nullish()
+                      .describe(
+                        "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
+                      ),
                     userId: zod
                       .string()
                       .nullish()
@@ -37203,6 +37227,12 @@ export const externalChatMessagesResponse = zod
                               .string()
                               .describe(
                                 'Display name, never authentication evidence.'
+                              ),
+                            pictureFileId: zod
+                              .uuid()
+                              .nullish()
+                              .describe(
+                                "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
                               ),
                             userId: zod
                               .string()
@@ -37250,6 +37280,12 @@ export const externalChatMessagesResponse = zod
                                           .string()
                                           .describe(
                                             'Display name, never authentication evidence.'
+                                          ),
+                                        pictureFileId: zod
+                                          .uuid()
+                                          .nullish()
+                                          .describe(
+                                            "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
                                           ),
                                         userId: zod
                                           .string()
@@ -37409,6 +37445,12 @@ export const externalChatMessagesResponse = zod
                                   .describe(
                                     'Display name, never authentication evidence.'
                                   ),
+                                pictureFileId: zod
+                                  .uuid()
+                                  .nullish()
+                                  .describe(
+                                    "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
+                                  ),
                                 userId: zod
                                   .string()
                                   .nullish()
@@ -37455,6 +37497,12 @@ export const externalChatMessagesResponse = zod
                                   .describe(
                                     'Display name, never authentication evidence.'
                                   ),
+                                pictureFileId: zod
+                                  .uuid()
+                                  .nullish()
+                                  .describe(
+                                    "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
+                                  ),
                                 userId: zod
                                   .string()
                                   .nullish()
@@ -37493,6 +37541,12 @@ export const externalChatMessagesResponse = zod
                   .string()
                   .describe('Display name, never authentication evidence.'),
                 personId: zod.uuid().describe('External person identity.'),
+                pictureFileId: zod
+                  .uuid()
+                  .nullish()
+                  .describe(
+                    "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
+                  ),
                 userId: zod
                   .string()
                   .nullish()
@@ -37699,6 +37753,12 @@ export const externalChatMessageResponse = zod
             name: zod
               .string()
               .describe('Display name, never authentication evidence.'),
+            pictureFileId: zod
+              .uuid()
+              .nullish()
+              .describe(
+                "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
+              ),
             userId: zod
               .string()
               .nullish()
@@ -37732,6 +37792,12 @@ export const externalChatMessageResponse = zod
                     name: zod
                       .string()
                       .describe('Display name, never authentication evidence.'),
+                    pictureFileId: zod
+                      .uuid()
+                      .nullish()
+                      .describe(
+                        "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
+                      ),
                     userId: zod
                       .string()
                       .nullish()
@@ -37771,6 +37837,12 @@ export const externalChatMessageResponse = zod
                                   .string()
                                   .describe(
                                     'Display name, never authentication evidence.'
+                                  ),
+                                pictureFileId: zod
+                                  .uuid()
+                                  .nullish()
+                                  .describe(
+                                    "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
                                   ),
                                 userId: zod
                                   .string()
@@ -37908,6 +37980,12 @@ export const externalChatMessageResponse = zod
                           .describe(
                             'Display name, never authentication evidence.'
                           ),
+                        pictureFileId: zod
+                          .uuid()
+                          .nullish()
+                          .describe(
+                            "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
+                          ),
                         userId: zod
                           .string()
                           .nullish()
@@ -37949,6 +38027,12 @@ export const externalChatMessageResponse = zod
                           .describe(
                             'Display name, never authentication evidence.'
                           ),
+                        pictureFileId: zod
+                          .uuid()
+                          .nullish()
+                          .describe(
+                            "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
+                          ),
                         userId: zod
                           .string()
                           .nullish()
@@ -37985,6 +38069,12 @@ export const externalChatMessageResponse = zod
           .string()
           .describe('Display name, never authentication evidence.'),
         personId: zod.uuid().describe('External person identity.'),
+        pictureFileId: zod
+          .uuid()
+          .nullish()
+          .describe(
+            "Their profile picture as the chat owner's account sees it: a static\nfile id; `null` when hidden, unset or not fetched yet."
+          ),
         userId: zod
           .string()
           .nullish()
