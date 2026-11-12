@@ -7,6 +7,7 @@ mod config;
 mod external_chat;
 pub mod model;
 mod outbound;
+mod passwords_cleanup;
 mod server;
 mod service;
 
