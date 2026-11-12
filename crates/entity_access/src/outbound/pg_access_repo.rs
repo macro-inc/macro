@@ -318,10 +318,12 @@ impl AccessRepository for PgAccessRepository {
         let id = id
             .parse::<Uuid>()
             .map_err(|_| AccessError::BadRequest("Invalid pipeline ID"))?;
-        let sources = queries::get_user_source_ids(&self.pool, user_id)
-            .await
-            .map_err(anyhow_access_error)?;
-        Ok(queries::pipeline_access::get_pipeline_access(&self.pool, id, &sources).await?)
+        Ok(queries::pipeline_access::get_pipeline_access(
+            &self.pool,
+            id,
+            Viewer::from_user(user_id),
+        )
+        .await?)
     }
 
     #[tracing::instrument(err, skip(self, user_id))]
@@ -329,10 +331,7 @@ impl AccessRepository for PgAccessRepository {
         &self,
         user_id: &MacroUserId<Lowercase<'_>>,
     ) -> Result<Vec<(Uuid, AccessLevel)>, AccessError> {
-        let sources = queries::get_user_source_ids(&self.pool, Some(user_id))
-            .await
-            .map_err(anyhow_access_error)?;
-        Ok(queries::pipeline_access::list_pipeline_access(&self.pool, &sources).await?)
+        Ok(queries::pipeline_access::list_pipeline_access(&self.pool, user_id).await?)
     }
 
     #[tracing::instrument(err, skip(self, user_id))]
@@ -593,7 +592,7 @@ impl AccessRepository for PgAccessRepository {
                 .await
             }
             EntityType::CrmPipeline => {
-                queries::pipeline_access::get_pipeline_access(&self.pool, entity_uuid, &source_ids).await
+                queries::pipeline_access::get_pipeline_access(&self.pool, entity_uuid, viewer).await
             }
             EntityType::Database => {
                 queries::database_access::get_database_access(
