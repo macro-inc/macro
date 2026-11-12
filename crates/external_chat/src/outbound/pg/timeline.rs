@@ -19,6 +19,26 @@ fn backfill(state: Option<&str>, imported: i32) -> Option<Backfill> {
     })
 }
 
+/// One timeline row as the page queries read it.
+struct PageRow {
+    id: Uuid,
+    person_id: Uuid,
+    user_id: Option<String>,
+    body: String,
+    reply_to: Option<Uuid>,
+    source_at: chrono::DateTime<chrono::Utc>,
+    ingested_at: chrono::DateTime<chrono::Utc>,
+    revised_at: Option<chrono::DateTime<chrono::Utc>>,
+    deleted_at: Option<chrono::DateTime<chrono::Utc>>,
+    kind: String,
+    rich: Option<serde_json::Value>,
+    mentions: Vec<String>,
+    forwarded: bool,
+    view_once: bool,
+    thread_root: Option<Uuid>,
+    thread_broadcast: bool,
+}
+
 impl PgExternalChatRepository {
     /// A newest-first page of the timeline (thread replies only when also
     /// sent to the chat), of one thread's replies, or only the message `only`.
@@ -31,16 +51,28 @@ impl PgExternalChatRepository {
         only: Option<Uuid>,
         limit: i64,
     ) -> ExternalChatResult<StoredPage> {
-        let rows = sqlx::query!(r#"SELECT m.id,m.person_id,p.user_id,
-            m.body,m.reply_to,m.source_at,m.ingested_at,m.revised_at,m.deleted_at,m.kind,m.rich,m.mentions,m.forwarded,m.view_once,
-            m.thread_root,m.thread_broadcast
-            FROM external_chat_message m JOIN external_chat_person p ON p.id = m.person_id
-            WHERE m.chat_id = $1 AND m.message_id IS NOT NULL
-              AND ($2::uuid IS NULL OR (m.source_at,m.id) < (SELECT source_at,id FROM external_chat_message WHERE id = $2 AND chat_id = $1 AND message_id IS NOT NULL))
-              AND ($4::uuid IS NULL OR m.id = $4)
-              AND ($4::uuid IS NOT NULL OR m.thread_root = $5 OR ($5::uuid IS NULL AND (m.thread_root IS NULL OR m.thread_broadcast)))
-            ORDER BY m.source_at DESC,m.id DESC LIMIT $3"#,chat.id,before,limit+1,only,thread)
-            .fetch_all(&self.pool).await.map_err(failure)?;
+        // A thread page is its own statement, so no plan for it can walk the
+        // chat's whole timeline.
+        let rows = match (thread, only) {
+            (Some(root), None) => sqlx::query_as!(PageRow, r#"SELECT m.id,m.person_id,p.user_id,
+                m.body,m.reply_to,m.source_at,m.ingested_at,m.revised_at,m.deleted_at,m.kind,m.rich,m.mentions,m.forwarded,m.view_once,
+                m.thread_root,m.thread_broadcast
+                FROM external_chat_message m JOIN external_chat_person p ON p.id = m.person_id
+                WHERE m.chat_id = $1 AND m.thread_root = $2 AND m.message_id IS NOT NULL
+                  AND ($3::uuid IS NULL OR (m.source_at,m.id) < (SELECT source_at,id FROM external_chat_message WHERE id = $3 AND chat_id = $1 AND message_id IS NOT NULL))
+                ORDER BY m.source_at DESC,m.id DESC LIMIT $4"#,chat.id,root,before,limit+1)
+                .fetch_all(&self.pool).await.map_err(failure)?,
+            _ => sqlx::query_as!(PageRow, r#"SELECT m.id,m.person_id,p.user_id,
+                m.body,m.reply_to,m.source_at,m.ingested_at,m.revised_at,m.deleted_at,m.kind,m.rich,m.mentions,m.forwarded,m.view_once,
+                m.thread_root,m.thread_broadcast
+                FROM external_chat_message m JOIN external_chat_person p ON p.id = m.person_id
+                WHERE m.chat_id = $1 AND m.message_id IS NOT NULL
+                  AND ($2::uuid IS NULL OR (m.source_at,m.id) < (SELECT source_at,id FROM external_chat_message WHERE id = $2 AND chat_id = $1 AND message_id IS NOT NULL))
+                  AND ($4::uuid IS NULL OR m.id = $4)
+                  AND ($4::uuid IS NOT NULL OR m.thread_root IS NULL OR m.thread_broadcast)
+                ORDER BY m.source_at DESC,m.id DESC LIMIT $3"#,chat.id,before,limit+1,only)
+                .fetch_all(&self.pool).await.map_err(failure)?,
+        };
         let more = rows.len() > limit as usize;
         let ids: Vec<_> = rows.iter().take(limit as usize).map(|r| r.id).collect();
         let attachments = self.message_attachments(chat, &ids).await?;
