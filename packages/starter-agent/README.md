@@ -51,7 +51,9 @@ lists them.
 
 A hosted agent's credentials are its enrollment's `agent.env` (`KEY=value`
 lines, given as a systemd credential at `MUPPET_CREDENTIALS_FILE`): its Macro
-key and where Macro is (`MACRO_GATEWAY` and the `OVERRIDE_*` service URLs),
+key and where Macro is (`MACRO_GATEWAY`, the `OVERRIDE_*` service URLs and
+`MACRO_SPEECH_URL`, the speech gateway a call's relay opens `…/stt` and
+`…/tts` under),
 its repository's, and, in Macro-credits mode, `ANTHROPIC_BASE_URL`,
 `ANTHROPIC_AUTH_TOKEN` and `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`, the
 only ones Claude Code is given. They are read once, only read, used by name

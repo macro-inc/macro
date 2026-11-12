@@ -245,7 +245,7 @@ describe('addresses', () => {
       kind: 'configured',
       value: {
         presence: 'wss://connection.internal/cg',
-        egress: 'https://egress.internal',
+        speech: 'https://egress.internal/brain/inference',
         hosts: {
           storage: 'https://storage.internal/dss',
           properties: 'https://storage.internal/dss',
@@ -272,7 +272,8 @@ describe('addresses', () => {
       kind: 'configured',
       value: {
         presence: 'wss://gateway.macro.com/connection-gateway',
-        egress: 'https://gateway.macro.com/agent-harness-egress',
+        speech:
+          'https://gateway.macro.com/agent-harness-egress/brain/inference',
         hosts: {
           storage: 'https://gateway.macro.com/dss',
           connection: 'https://gateway.macro.com/connection-gateway',
@@ -280,6 +281,24 @@ describe('addresses', () => {
         },
       },
     });
+  });
+
+  test("a call's speech goes where enrollment says (MACRO_SPEECH_URL), not via the gateway", () => {
+    expect(
+      addresses({
+        MACRO_GATEWAY: 'http://proxy:21233',
+        MACRO_SPEECH_URL: 'http://agent-harness-service:8102/brain/inference/',
+      })
+    ).toMatchObject({
+      kind: 'configured',
+      value: { speech: 'http://agent-harness-service:8102/brain/inference' },
+    });
+    expect(
+      addresses({
+        MACRO_GATEWAY: 'https://g.example',
+        MACRO_SPEECH_URL: 'not a url',
+      })
+    ).toMatchObject({ kind: 'invalid' });
   });
 
   test('needs the gateway, and URLs that parse, naming the key and never a value', () => {

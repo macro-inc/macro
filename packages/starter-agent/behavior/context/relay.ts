@@ -185,19 +185,20 @@ export const relayHandler =
 
 /**
  * The only websockets the relay carries: a call's speech, which the agent
- * harness's egress proxies to LiveKit Inference with the agent's key. On the
- * relay a socket is `/speech/stt` or `/speech/tts`; each takes one model,
- * which the relay sets itself.
+ * harness's speech gateway (`Addresses.speech`) proxies to LiveKit Inference
+ * with the agent's key. On the relay a socket is `/speech/stt` or
+ * `/speech/tts`, and upstream `<speech>/stt` or `<speech>/tts`; each takes one
+ * model, which the relay sets itself.
  */
 export const socketRoutes = [
   {
     path: 'speech/stt',
-    upstream: 'brain/inference/stt',
+    upstream: 'stt',
     model: 'deepgram/nova-3',
   },
   {
     path: 'speech/tts',
-    upstream: 'brain/inference/tts',
+    upstream: 'tts',
     model: 'deepgram/aura-2',
   },
 ] as const;
@@ -217,19 +218,19 @@ const asSocket = (url: string): string =>
 /**
  * Whether a websocket upgrade may be relayed, and where: the capability
  * first, as for HTTP; then a GET to exactly one of `socketRoutes`, which
- * goes to the egress. Upstream it carries the agent's key
+ * goes to the speech gateway. Upstream it carries the agent's key
  * as a bearer token, which is how the speech gateway authenticates, and the
  * caller's trace context; nothing else of the caller's, and none of its query.
  */
 export const socketTarget =
   ({
-    egress,
+    speech,
     capability,
     apiKey,
     equal,
   }: {
-    /** The agent harness's egress listener. */
-    readonly egress: string;
+    /** The speech gateway (`Addresses.speech`). */
+    readonly speech: string;
     readonly capability: string;
     readonly apiKey: string;
     readonly equal: (given: string, expected: string) => boolean;
@@ -250,7 +251,7 @@ export const socketTarget =
       const value = request.headers.get(name);
       if (value !== null) headers[name] = value;
     }
-    const url = new URL(`${egress.replace(/\/+$/, '')}/${route.upstream}`);
+    const url = new URL(`${speech.replace(/\/+$/, '')}/${route.upstream}`);
     url.searchParams.set('model', route.model);
     return { url: asSocket(url.href), headers };
   };
@@ -287,13 +288,13 @@ const loopback = '127.0.0.1';
 /** Starts the relay on a random loopback port, with a fresh capability. */
 export const startRelay = ({
   targets,
-  egress,
+  speech,
   apiKey,
   anthropic,
 }: {
   readonly targets: Hosts;
-  /** The agent harness's egress listener, where a call's speech goes. */
-  readonly egress: string;
+  /** The speech gateway (`Addresses.speech`), where a call's speech goes. */
+  readonly speech: string;
   readonly apiKey: string;
   readonly anthropic?: { readonly url: string; readonly token: string };
 }): Relay => {
@@ -309,7 +310,7 @@ export const startRelay = ({
     equal: constantTimeEqual,
   });
   const socket = socketTarget({
-    egress,
+    speech,
     capability: token,
     apiKey,
     equal: constantTimeEqual,

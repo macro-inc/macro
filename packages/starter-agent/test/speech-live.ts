@@ -1,10 +1,10 @@
 /**
  * A live check of a call's speech, run by hand against a running harness:
- * the relay (`startRelay`) -> the harness's egress -> `/brain/inference/tts`
+ * the relay (`startRelay`) -> the speech gateway -> `/brain/inference/tts`
  * says a line in a catalog voice, then `/brain/inference/stt` hears that same
  * audio back. Exits 1 unless the line is heard.
  *
- *   EGRESS=http://localhost:<egress port> AGENT_KEY=<an agent teammate's mak_ key> \
+ *   SPEECH=http://localhost:<egress port>/brain/inference AGENT_KEY=<an agent teammate's mak_ key> \
  *     bun test/speech-live.ts
  *
  * The agent needs `enable-agent-teammates`, and the harness real LiveKit keys.
@@ -127,13 +127,13 @@ const hear = async (
   return finals.join(' ');
 };
 
-const egress = process.env.EGRESS;
+const speech = process.env.SPEECH;
 const apiKey = process.env.AGENT_KEY;
-if (!egress || !apiKey) {
-  console.error('set EGRESS and AGENT_KEY');
+if (!speech || !apiKey) {
+  console.error('set SPEECH and AGENT_KEY');
   process.exit(2);
 }
-const relay = startRelay({ targets: {}, egress, apiKey });
+const relay = startRelay({ targets: {}, speech, apiKey });
 try {
   const audio = await say(relay);
   console.log(`said: ${(audio.length / 2 / ttsRate).toFixed(2)}s of audio`);

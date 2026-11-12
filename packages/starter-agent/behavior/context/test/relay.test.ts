@@ -189,12 +189,12 @@ describe('startRelay', () => {
     });
     const first = startRelay({
       targets: { auth: macro.url.href },
-      egress: 'https://egress.example',
+      speech: 'https://egress.example/brain/inference',
       apiKey,
     });
     const second = startRelay({
       targets: {},
-      egress: 'https://egress.example',
+      speech: 'https://egress.example/brain/inference',
       apiKey,
     });
     try {
@@ -230,7 +230,7 @@ describe('startRelay', () => {
     });
     const relay = startRelay({
       targets: { storage: macro.url.href },
-      egress: 'https://egress.example',
+      speech: 'https://egress.example/brain/inference',
       apiKey,
     });
     try {
@@ -253,7 +253,7 @@ const upgrade = (path: string, headers: Record<string, string> = {}) =>
   });
 
 const target = socketTarget({
-  egress: 'https://gateway.example/agent-harness-egress/',
+  speech: 'https://gateway.example/agent-harness-egress/brain/inference/',
   capability,
   apiKey,
   equal: constantTimeEqual,
@@ -351,7 +351,7 @@ describe('startRelay sockets', () => {
     });
     const relay = startRelay({
       targets: {},
-      egress: harness.url.href,
+      speech: `${harness.url.href}brain/inference`,
       apiKey,
     });
     try {
@@ -398,7 +398,7 @@ describe('startRelay sockets', () => {
     });
     const relay = startRelay({
       targets: {},
-      egress: harness.url.href,
+      speech: `${harness.url.href}brain/inference`,
       apiKey,
     });
     try {
@@ -434,7 +434,7 @@ describe('startRelay sockets', () => {
     });
     const relay = startRelay({
       targets: {},
-      egress: harness.url.href,
+      speech: `${harness.url.href}brain/inference`,
       apiKey,
     });
     try {
@@ -467,7 +467,7 @@ describe('startRelay sockets', () => {
     });
     const relay = startRelay({
       targets: {},
-      egress: harness.url.href,
+      speech: `${harness.url.href}brain/inference`,
       apiKey,
     });
     try {

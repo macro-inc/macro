@@ -47,7 +47,7 @@ beforeAll(async () => {
   });
   relay = startRelay({
     targets: { auth: `${macro.url.origin}/auth` },
-    egress: `${macro.url.origin}/agent-harness-egress`,
+    speech: `${macro.url.origin}/agent-harness-egress/brain/inference`,
     apiKey: realKey,
   });
   // A workspace of this template's code, with settings of its own.
