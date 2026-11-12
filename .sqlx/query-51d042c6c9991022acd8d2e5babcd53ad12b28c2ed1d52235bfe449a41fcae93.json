@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE scheduled_action\n            SET name = $1,\n                schedule = $2,\n                kind = $3,\n                timezone = $4,\n                task = $5,\n                next_run_at = $6,\n                enabled = $7,\n                trigger_type = $8,\n                event_filters = $9,\n                configuration_revision = $10,\n                event_activated_at = $11,\n                trigger_config = $14,\n                run_visibility = $15,\n                description = $16,\n                updated_at = now()\n            WHERE id = $12\n              AND configuration_revision = $10::bigint - 1\n              AND (\n                  claimed IS NULL OR claimed < $13\n                  OR (\n                      NOT $7 AND name = $1 AND kind = $3 AND task = $5\n                      AND trigger_type = $8\n                      AND schedule IS NOT DISTINCT FROM $2\n                      AND timezone IS NOT DISTINCT FROM $4\n                      AND event_filters IS NOT DISTINCT FROM $9\n                      AND trigger_config IS NOT DISTINCT FROM $14\n                      AND run_visibility = $15\n                      AND description = $16\n                  )\n              )\n            RETURNING id, owner, name, schedule, kind, timezone, task, claimed, created_at,\n                      updated_at, next_run_at, enabled, trigger_type, event_filters,\n                      configuration_revision, event_activated_at, trigger_config, run_visibility, template_id, suggestion_id,\n                   description\n            ",
+  "query": "\n            SELECT id, owner, name, schedule, kind, timezone, task, claimed, created_at,\n                   updated_at, next_run_at, enabled, trigger_type, event_filters,\n                   configuration_revision, event_activated_at, trigger_config, run_visibility, template_id, suggestion_id,\n                   description, parent_id, created_by_run_id, child_key, paused_by_parent\n            FROM scheduled_action\n            WHERE enabled AND trigger_type IN ('cron', 'once', 'multiple') AND next_run_at IS NOT NULL\n              AND (claimed IS NULL OR claimed < $1)\n            ORDER BY next_run_at ASC, id ASC\n            LIMIT $2\n            ",
   "describe": {
     "columns": [
       {
@@ -107,26 +107,32 @@
         "ordinal": 20,
         "name": "description",
         "type_info": "Text"
+      },
+      {
+        "ordinal": 21,
+        "name": "parent_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 22,
+        "name": "created_by_run_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 23,
+        "name": "child_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 24,
+        "name": "paused_by_parent",
+        "type_info": "Bool"
       }
     ],
     "parameters": {
       "Left": [
-        "Text",
-        "Text",
-        "Text",
-        "Text",
-        "Jsonb",
         "Timestamptz",
-        "Bool",
-        "Text",
-        "Jsonb",
-        "Int8",
-        "Timestamptz",
-        "Uuid",
-        "Timestamptz",
-        "Jsonb",
-        "Text",
-        "Text"
+        "Int8"
       ]
     },
     "nullable": [
@@ -150,8 +156,12 @@
       false,
       true,
       true,
+      false,
+      true,
+      true,
+      true,
       false
     ]
   },
-  "hash": "310b6e4ddd5f5b79ae3131cdabf17b42fc4b8d8cf48b7e45c110c6327f283cb2"
+  "hash": "51d042c6c9991022acd8d2e5babcd53ad12b28c2ed1d52235bfe449a41fcae93"
 }
