@@ -20,7 +20,6 @@ const mocks = vi.hoisted(() => ({
   confirm: vi.fn(),
   toastFailure: vi.fn(),
   purchase: vi.fn(),
-  notify: vi.fn(),
   toastSuccess: vi.fn(),
 }));
 
@@ -43,11 +42,6 @@ vi.mock('@queries/computers/computers', () => ({
   usePurchaseComputerMutation: () => ({
     mutateAsync: mocks.purchase,
     isPending: false,
-  }),
-  useNotifyComputerSizeMutation: () => ({
-    mutateAsync: mocks.notify,
-    isPending: false,
-    variables: undefined,
   }),
   useSetComputerPowerMutation: () => ({ isPending: false }),
   useCancelComputerMutation: () => ({ isPending: false }),
@@ -166,7 +160,6 @@ beforeEach(() => {
         interval: 'month',
       },
       soldOut: false,
-      notifyRequested: false,
     },
     {
       size: 'large',
@@ -181,7 +174,6 @@ beforeEach(() => {
         interval: 'month',
       },
       soldOut: false,
-      notifyRequested: false,
     },
     {
       size: 'xl',
@@ -196,7 +188,6 @@ beforeEach(() => {
         interval: 'month',
       },
       soldOut: true,
-      notifyRequested: false,
     },
   ];
 });
@@ -212,7 +203,6 @@ it('buys the chosen size after confirming its price, and keeps sold-out sizes ou
       ])
     )
     .mockResolvedValueOnce({ computerId: 'computer-1', state: 'confirming' });
-  mocks.notify.mockResolvedValue({});
 
   render(() => <MacroComputers harnesses={[]} onSharingChange={() => {}} />);
 
@@ -223,8 +213,7 @@ it('buys the chosen size after confirming its price, and keeps sold-out sizes ou
     true
   );
 
-  fireEvent.click(screen.getByRole('button', { name: 'Notify me' }));
-  await waitFor(() => expect(mocks.notify).toHaveBeenCalledWith('xl'));
+  expect(screen.getByText('Sold out')).toBeTruthy();
 
   fireEvent.click(screen.getByRole('radio', { name: 'Large' }));
   const buyButton = screen.getByRole('button', { name: 'Buy · $80.00/month' });

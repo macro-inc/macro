@@ -108,10 +108,6 @@ where
             get(quote::<Repo, Bill, Time, Eas, Auth, Attachment, Policy>),
         )
         .route(
-            "/team/computers/notify",
-            post(notify_me::<Repo, Bill, Time, Eas, Auth, Attachment, Policy>),
-        )
-        .route(
             "/team/computers/{computer_id}",
             get(status::<Repo, Bill, Time, Eas, Auth, Attachment, Policy>),
         )
@@ -659,44 +655,6 @@ pub async fn release<
             .release_now(team_id, computer_id, &body.confirm_name)
             .await?,
     ))
-}
-
-/// Body of a notify-me request.
-#[derive(Debug, Deserialize, utoipa::ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct NotifyBody {
-    /// Purchased catalog size.
-    pub size: ComputerSize,
-}
-
-/// Ask to hear when a sold-out size is back.
-#[utoipa::path(
-    post,
-    path = "/team/computers/notify",
-    operation_id = "notify_team_computer_available",
-    request_body = NotifyBody,
-    responses((status = 204)),
-)]
-#[tracing::instrument(skip_all, err)]
-pub async fn notify_me<
-    Repo: ComputerRepo,
-    Bill: Billing,
-    Time: Clock,
-    Eas: EntityAccessService,
-    Auth: MacroAuthorizationService,
-    Attachment: FleetAttachmentSource,
-    Policy: CompPolicy,
->(
-    access: MacroUserTeamExtractorV2<AdminTeamRole, Eas, Auth>,
-    State(state): State<ComputerRouterState<Repo, Bill, Time, Eas, Auth, Attachment, Policy>>,
-    Json(body): Json<NotifyBody>,
-) -> Result<StatusCode, ComputersHttpError> {
-    let receipt = &access.entity_access_receipt;
-    state
-        .service
-        .notify_me(team_id(receipt)?, user_id(receipt)?, body.size)
-        .await?;
-    Ok(StatusCode::NO_CONTENT)
 }
 
 /// Query naming a team and size.

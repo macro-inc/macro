@@ -85,7 +85,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     removed: 'removeQueuedAction unregisterAgentSessionWork',
     submitted: 'answerAgentSessionToolApproval',
     approved: 'decideSessionReview',
-    shared: 'presentSessionView openInApp',
+    shared: 'presentSessionView',
     registered: 'registerAgentSessionWork',
   },
   'scheduled-action': {

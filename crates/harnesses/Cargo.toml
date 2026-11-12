@@ -11,11 +11,13 @@ inbound = [
   "dep:macro_authorization",
   "macro_authorization/axum",
   "dep:model-error-response",
-  "dep:utoipa",
   "ports",
+  "schema",
 ]
 outbound = ["dep:entity_access_db_utils", "dep:models_permissions", "dep:sqlx", "ports"]
 ports = ["dep:tokio"]
+# `ToSchema` for the domain types other crates put in their API, e.g. `AgentProvider`.
+schema = ["dep:utoipa"]
 test-utils = ["dep:mockall", "ports"]
 
 [dependencies]

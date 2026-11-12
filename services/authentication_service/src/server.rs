@@ -603,7 +603,6 @@ async fn run_server() -> anyhow::Result<()> {
             teams_repo_impl.clone(),
             hosted_runtimes::outbound::pg::PgComputerRepo::new(db.clone(), computer_policy),
             stripe_prices.seat_prices()?,
-            config.computer_prices()?,
         ),
     );
     let subscription_plan = Arc::new(crate::service::subscription_plan::PlanService::new(

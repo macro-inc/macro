@@ -2,7 +2,6 @@
 
 use bot_id::BotId;
 use harness_id::HarnessId;
-use macro_user_id::user_id::MacroUserIdStr;
 
 use chrono::{DateTime, Utc};
 use sqlx::PgPool;
@@ -1349,40 +1348,5 @@ impl ComputerRepo for PgComputerRepo {
             .filter(|entry| i64::from(entry.resources.units()) > i64::from(free))
             .map(|entry| entry.size)
             .collect())
-    }
-
-    async fn request_notify(
-        &self,
-        team_id: Uuid,
-        user_id: MacroUserIdStr<'static>,
-        size: ComputerSize,
-    ) -> Result<(), PgComputerError> {
-        sqlx::query!(
-            r#"
-            INSERT INTO hosted_runtime_waitlist (team_id, user_id, size)
-            VALUES ($1, $2, $3)
-            ON CONFLICT DO NOTHING
-            "#,
-            team_id,
-            user_id.as_ref(),
-            size as ComputerSize,
-        )
-        .execute(&self.pool)
-        .await?;
-        Ok(())
-    }
-
-    async fn notify_requests(
-        &self,
-        team_id: Uuid,
-        user_id: MacroUserIdStr<'static>,
-    ) -> Result<Vec<ComputerSize>, PgComputerError> {
-        Ok(sqlx::query_scalar!(
-            r#"SELECT size AS "size: ComputerSize" FROM hosted_runtime_waitlist WHERE team_id = $1 AND user_id = $2"#,
-            team_id,
-            user_id.as_ref(),
-        )
-        .fetch_all(&self.pool)
-        .await?)
     }
 }

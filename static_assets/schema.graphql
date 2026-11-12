@@ -1901,6 +1901,16 @@ type GraphqlActivityUnknownAction {
 }
 
 """
+The coding agent a Macro computer signs in to an account for.
+"""
+enum GraphqlAgentProvider {
+	"""
+	An Anthropic Claude account, for Claude Code.
+	"""
+	CLAUDE
+}
+
+"""
 Last synchronized state of a session's linked GitHub pull request.
 """
 enum GraphqlAgentPullRequestState {
@@ -2204,6 +2214,50 @@ type GraphqlAgentSessionWaitingForInputMetadata {
 	The question, as the agent phrased it.
 	"""
 	question: String!
+}
+
+"""
+Metadata for a Macro computer's agent sign-in running out.
+"""
+type GraphqlAgentSignInExpiryMetadata {
+	"""
+	The agent whose sign-in is running out.
+	"""
+	agent: GraphqlAgentProvider!
+	"""
+	The computer's harness id.
+	"""
+	harnessId: ID!
+	"""
+	The computer's name when the notice was sent.
+	"""
+	computerName: String!
+	"""
+	How close the sign-in is to no longer working.
+	"""
+	stage: GraphqlAgentSignInExpiryStage!
+	"""
+	When the sign-in expires or expired; absent when the agent rejected it.
+	"""
+	expiresAt: String
+}
+
+"""
+How close a Macro computer's agent sign-in is to no longer working.
+"""
+enum GraphqlAgentSignInExpiryStage {
+	"""
+	It expires within three days.
+	"""
+	EXPIRES_SOON
+	"""
+	It expires within a day.
+	"""
+	EXPIRES_TODAY
+	"""
+	It expired, or the agent rejected it.
+	"""
+	EXPIRED
 }
 
 """
@@ -3820,46 +3874,6 @@ enum GraphqlChatRole {
 	The assistant option.
 	"""
 	ASSISTANT
-}
-
-"""
-Metadata for a Macro computer's Claude sign-in running out.
-"""
-type GraphqlClaudeSignInExpiryMetadata {
-	"""
-	The computer's harness id.
-	"""
-	harnessId: ID!
-	"""
-	The computer's name when the notice was sent.
-	"""
-	computerName: String!
-	"""
-	How close the sign-in is to no longer working.
-	"""
-	stage: GraphqlClaudeSignInExpiryStage!
-	"""
-	When the sign-in expires or expired; absent when Claude rejected it.
-	"""
-	expiresAt: String
-}
-
-"""
-How close a Macro computer's Claude sign-in is to no longer working.
-"""
-enum GraphqlClaudeSignInExpiryStage {
-	"""
-	It expires within three days.
-	"""
-	EXPIRES_SOON
-	"""
-	It expires within a day.
-	"""
-	EXPIRES_TODAY
-	"""
-	It expired, or Claude rejected it.
-	"""
-	EXPIRED
 }
 
 """
@@ -6729,7 +6743,7 @@ type GraphqlNewNotification {
 """
 Typed GraphQL union containing every supported notification event payload.
 """
-union GraphqlNotifEvent = GraphqlExternalChatMessageMetadata | GraphqlEntityAccessGrantedMetadata | GraphqlEntityAccessRequestedMetadata | GraphqlChannelMentionMetadata | GraphqlDocumentMentionMetadata | GraphqlMentionedInDocumentCommentMetadata | GraphqlRepliedToDocumentCommentThreadMetadata | GraphqlCommentedOnDocumentMetadata | GraphqlInitiativeDiscussionMetadata | GraphqlCrmDiscussionMetadata | GraphqlChannelInviteMetadata | GraphqlChannelMessageSendMetadata | GraphqlChannelMessageReactionMetadata | GraphqlChannelReplyMetadata | GraphqlCallStartedMetadata | GraphqlNewEmailMetadata | GraphqlInboxReauthRequiredMetadata | GraphqlInviteToTeamMetadata | GraphqlTaskAssignedMetadata | GraphqlReminderMetadata | GraphqlCalendarEventReminderMetadata | GraphqlAiResponseMetadata | GraphqlGithubPrStatusChangedMetadata | GraphqlGithubPrCheckRunMetadata | GraphqlGithubReviewRequestedMetadata | GraphqlGithubPrCommentMetadata | GraphqlGithubPrMentionMetadata | GraphqlGithubPrReviewMetadata | GraphqlAgentSessionSettledMetadata | GraphqlAgentSessionWaitingForInputMetadata | GraphqlAgentSessionMentionedMetadata | GraphqlCalendarEventJoinRequestMetadata | GraphqlChannelAccessRequestedMetadata | GraphqlRoutineRunFinishedMetadata | GraphqlClaudeSignInExpiryMetadata | GraphqlWhatsappGroupMessageMetadata | GraphqlRuntimeAccessRemovedMetadata
+union GraphqlNotifEvent = GraphqlExternalChatMessageMetadata | GraphqlEntityAccessGrantedMetadata | GraphqlEntityAccessRequestedMetadata | GraphqlChannelMentionMetadata | GraphqlDocumentMentionMetadata | GraphqlMentionedInDocumentCommentMetadata | GraphqlRepliedToDocumentCommentThreadMetadata | GraphqlCommentedOnDocumentMetadata | GraphqlInitiativeDiscussionMetadata | GraphqlCrmDiscussionMetadata | GraphqlChannelInviteMetadata | GraphqlChannelMessageSendMetadata | GraphqlChannelMessageReactionMetadata | GraphqlChannelReplyMetadata | GraphqlCallStartedMetadata | GraphqlNewEmailMetadata | GraphqlInboxReauthRequiredMetadata | GraphqlInviteToTeamMetadata | GraphqlTaskAssignedMetadata | GraphqlReminderMetadata | GraphqlCalendarEventReminderMetadata | GraphqlAiResponseMetadata | GraphqlGithubPrStatusChangedMetadata | GraphqlGithubPrCheckRunMetadata | GraphqlGithubReviewRequestedMetadata | GraphqlGithubPrCommentMetadata | GraphqlGithubPrMentionMetadata | GraphqlGithubPrReviewMetadata | GraphqlAgentSessionSettledMetadata | GraphqlAgentSessionWaitingForInputMetadata | GraphqlAgentSessionMentionedMetadata | GraphqlCalendarEventJoinRequestMetadata | GraphqlChannelAccessRequestedMetadata | GraphqlRoutineRunFinishedMetadata | GraphqlAgentSignInExpiryMetadata | GraphqlWhatsappGroupMessageMetadata | GraphqlRuntimeAccessRemovedMetadata
 
 """
 A notification associated with a shared entity, including entities outside Soup.

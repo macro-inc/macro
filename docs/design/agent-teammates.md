@@ -125,6 +125,18 @@ The agent's account appears only as a hash.
   default coding agent, named "Agent" until its owner names it.
 - **Mail**: not in v1.
 
+## Limits
+
+- On a call, a shared screen shows the agent desktop and whatever its browser
+  is signed in to; a page on it can try to steer the call brain (for example
+  into opening signed-in mail on screen). No code guard: the authority rule
+  covers it (only the owner gives orders; text the agent reads is never an
+  order), and it is in both the charter and the call rules.
+- Any process on the computer's display can read the clipboard while a secret
+  is on it, and the agent's own scripts can reach the vault through its
+  relay. Secrets stay out of model context and logs by default; the vault's
+  grants, approvals and audit are the control against a misbehaving agent.
+
 ## Flags
 
 - `enable-agent-teammates`: every entry point (invite, the purchase default,

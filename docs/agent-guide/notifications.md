@@ -367,10 +367,11 @@ Desktop and mobile share this scale, with accessibility text scaling preserved.
 
 Desktop channel and AI composers use an `Attach files` paperclip that opens the file picker directly, without a plus menu. Comment composers open the image picker directly. Channels and DMs always open in message mode; create tasks through the task creation dialog. Shift+Enter, including an empty new line, expands channel and AI inputs so text starts above the toolbar at the left inset. Sent AI message bubbles use the ink fill with a contrasting foreground in each theme.
 
-### Macro computer Claude sign-ins
+### Macro computer agent sign-ins
 
-`claude_sign_in_expiry` notifications (inbox, browser, and phone push) warn the
-person who signed a team computer in to Claude, plus the team's owner and
+`agent_sign_in_expiry` notifications (inbox, browser, and phone push) carry the
+agent (`claude` for now) and warn the person who signed a team computer in to
+it, plus the team's owner and
 admins, that the sign-in expires soon (three days out), expires today (its last
 day), or expired (passed, or Claude rejected it). They name the computer and
 open **Settings → Runtimes**, where the computer's **Sign in with Claude** runs
