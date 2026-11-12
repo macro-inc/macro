@@ -12,6 +12,7 @@ import * as mobileSort from './utils/mobileSort';
 const mocks = vi.hoisted(() => ({
   crmEnabled: false,
   whatsappEnabled: false,
+  slackEnabled: false,
   whatsappUserIds: [] as string[],
   mobile: false,
   requestedBuckets: [] as string[],
@@ -77,12 +78,17 @@ vi.mock('@core/constant/featureFlags', () => {
   const disableCrmContactSearch = { name: 'disable-crm-contact-search' };
   const enableCrm = { name: 'crm' };
   const enableWhatsappLinked = { name: 'whatsapp' };
+  const enableSlackLinked = { name: 'slack' };
   return {
     disableCrmContactSearch,
     enableCrm,
-    enableWhatsappLinked,
+    externalChatProviderFlags: {
+      whatsapp: enableWhatsappLinked,
+      slack: enableSlackLinked,
+    },
     isFeatureEnabled: (flag: unknown) => {
       if (flag === enableWhatsappLinked) return mocks.whatsappEnabled;
+      if (flag === enableSlackLinked) return mocks.slackEnabled;
       return mocks.crmEnabled;
     },
     ENABLE_BEARER_TOKEN_AUTH: false,
@@ -103,6 +109,7 @@ vi.mock('@queries/external-chats', () => ({
     data: [
       {
         id: 'group-1',
+        provider: 'whatsapp',
         name: 'Design Crit',
         ownerId: 'macro|gab@macro.com',
         unreadCount: 0,
@@ -110,6 +117,7 @@ vi.mock('@queries/external-chats', () => ({
       },
       {
         id: 'group-2',
+        provider: 'whatsapp',
         name: 'Launch Room',
         ownerId: 'macro|gab@macro.com',
         unreadCount: 0,
@@ -118,10 +126,19 @@ vi.mock('@queries/external-chats', () => ({
       // Shared with the viewer: only its owner may share it on.
       {
         id: 'group-3',
+        provider: 'whatsapp',
         name: 'Design Review',
         ownerId: 'macro|ana@macro.com',
         unreadCount: 0,
         canSend: false,
+      },
+      {
+        id: 'slack-1',
+        provider: 'slack',
+        name: 'Design Partners',
+        ownerId: 'macro|gab@macro.com',
+        unreadCount: 0,
+        canSend: true,
       },
     ],
   }),
@@ -216,6 +233,7 @@ const manyUsers: IUser[] = Array.from({ length: 20 }, (_, i) => ({
 afterEach(() => {
   mocks.crmEnabled = false;
   mocks.whatsappEnabled = false;
+  mocks.slackEnabled = false;
   mocks.whatsappUserIds = [];
   mocks.mobile = false;
   mocks.requestedBuckets = [];
@@ -603,7 +621,7 @@ it('records mentions against the editing source outside a legacy block', () => {
   );
 });
 
-it("offers the viewer's own WhatsApp chats to share by mention, only in channel composers", () => {
+it("offers the viewer's own external chats to share by mention, only in channel composers", () => {
   mocks.whatsappEnabled = true;
   Element.prototype.scrollIntoView = vi.fn();
   vi.mocked(useEmailSearchMention).mockReturnValue({
@@ -625,10 +643,27 @@ it("offers the viewer's own WhatsApp chats to share by mention, only in channel 
       onPick={vi.fn()}
     />
   ));
-  expect(screen.getByText('WhatsApp chats')).toBeTruthy();
+  expect(screen.getByText('External chats')).toBeTruthy();
   expect(screen.getByText('Design Crit')).toBeTruthy();
   expect(screen.queryByText('Launch Room')).toBeNull();
   expect(screen.queryByText('Design Review')).toBeNull();
+  // Slack's flag is off: its chats stay out.
+  expect(screen.queryByText('Design Partners')).toBeNull();
+  cleanup();
+
+  mocks.whatsappEnabled = false;
+  mocks.slackEnabled = true;
+  render(() => (
+    <MentionsMenu
+      menu={menu}
+      users={() => []}
+      block="channel"
+      anchor={document.createElement('div')}
+      onPick={vi.fn()}
+    />
+  ));
+  expect(screen.getByText('Design Partners')).toBeTruthy();
+  expect(screen.queryByText('Design Crit')).toBeNull();
   cleanup();
 
   mocks.whatsappUserIds = [];
@@ -640,7 +675,7 @@ it("offers the viewer's own WhatsApp chats to share by mention, only in channel 
       onPick={vi.fn()}
     />
   ));
-  expect(screen.queryByText('WhatsApp chats')).toBeNull();
+  expect(screen.queryByText('External chats')).toBeNull();
   expect(mocks.whatsappUserIds.every((id) => id === '')).toBe(true);
 });
 
