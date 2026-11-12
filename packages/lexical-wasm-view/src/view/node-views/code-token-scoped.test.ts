@@ -44,7 +44,7 @@ const drain = (session: native.EditorSession, flags: number) => {
 
 test('a scoped Enter dispatch reaches the fenced provider only after its scope closes', () => {
   const dispatcher = NativeEnterDispatcher.forModule(native);
-  const calls: { scoped: boolean; inCallback: boolean; args: number }[] = [];
+  const calls: { scoped: boolean; inCallback: boolean; op: string }[] = [];
   let inCallback = false;
   const rejected: string[] = [];
   let ownerId = 0n;
@@ -55,7 +55,7 @@ test('a scoped Enter dispatch reaches the fenced provider only after its scope c
       calls.push({
         scoped: dispatcher.current(ownerId) !== undefined,
         inCallback,
-        args: args.length,
+        op: args[0],
       });
       try {
         session?.serializedState();
@@ -63,7 +63,7 @@ test('a scoped Enter dispatch reaches the fenced provider only after its scope c
         rejected.push(error instanceof Error ? error.message : String(error));
       }
     }
-    return JSON.stringify({ kind: 'notLoaded' });
+    return JSON.stringify({ kind: 'loaded', loaded: false });
   });
   session = native.EditorSession.createMacroWithNamespace(
     ABI_MAJOR,
@@ -176,7 +176,7 @@ test('a scoped Enter dispatch reaches the fenced provider only after its scope c
     );
     // Reachable, but transforms run at the outer commit: the provider runs after the callback
     // returned, with no issued scope, and receivers still reject through the provider fence.
-    expect(calls).toEqual([{ scoped: false, inCallback: false, args: 3 }]);
+    expect(calls).toEqual([{ scoped: false, inCallback: false, op: 'loaded' }]);
     expect(rejected).toEqual([
       'Native session receiver call during scoped callback or cleanup',
     ]);

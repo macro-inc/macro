@@ -81,6 +81,19 @@ interface OwnerListeners {
   collection?: Collection;
 }
 
+/** Source code-highlighting host calls: `isCodeLanguageLoaded`, then `$tokenize`. */
+export type NativeCodeTokenOp = 'loaded' | 'tokenize';
+/**
+ * Synchronous host code tokenizer. `loaded` replies `{"kind":"loaded","loaded":boolean}` (text is
+ * empty); `tokenize` replies `{"kind":"tokens","tokens":[...]}`.
+ */
+export type NativeCodeTokenProvider = (
+  op: NativeCodeTokenOp,
+  language: string,
+  text: string,
+  profile: string
+) => string;
+
 const modules = new WeakMap<object, NativeEnterDispatcher>();
 const failedModules = new WeakMap<object, { readonly error: unknown }>();
 const moduleFunctions: readonly (keyof NativeEnterModule)[] = [
@@ -228,14 +241,19 @@ export class NativeEnterDispatcher {
    * static factory and free() of this module's sessions rejects before wasm-bindgen.
    */
   fenceCodeTokenProvider(
-    provider: (language: string, text: string, profile: string) => string
-  ): (language: string, text: string, profile: string) => string {
+    provider: NativeCodeTokenProvider
+  ): NativeCodeTokenProvider {
     if (typeof provider !== 'function')
       throw new Error('Invalid code token provider');
-    return (language, text, profile) => {
+    return (op, language, text, profile) => {
       this.providerDepth++;
       try {
-        return Reflect.apply(provider, undefined, [language, text, profile]);
+        return Reflect.apply(provider, undefined, [
+          op,
+          language,
+          text,
+          profile,
+        ]);
       } finally {
         this.providerDepth--;
       }

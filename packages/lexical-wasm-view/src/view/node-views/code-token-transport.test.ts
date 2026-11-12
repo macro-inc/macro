@@ -43,17 +43,25 @@ const fixtureReply = (text: string) =>
       })),
   });
 
-function surfaceWith(provider: Provider) {
+const loadedReply = (loaded: boolean) =>
+  JSON.stringify({ kind: 'loaded', loaded });
+
+function surfaceWith(
+  provider: Provider,
+  loaded: (language: string) => string = () => loadedReply(true)
+) {
   // Native setState runs the code transform (Source setEditorState does not); keep setup untokenized.
   let armed = false;
   const fixture = nativeSurface(
     Access.Edit,
     {},
     {
-      provider: (language, text, profile) =>
-        armed
-          ? provider(language, text, profile)
-          : JSON.stringify({ kind: 'notLoaded' }),
+      provider: (op, language, text, profile) => {
+        if (!armed) return loadedReply(false);
+        return op === 'loaded'
+          ? loaded(language)
+          : provider(language, text, profile);
+      },
       profile: 'native-fixture',
     }
   );
@@ -157,6 +165,62 @@ test('typing inside a code block reaches the provider and retokenizes', () => {
   }
 });
 
+test('the language check runs before tokenizing and a not-loaded language never tokenizes', () => {
+  const tokenized: string[] = [];
+  const checked: string[] = [];
+  const { fixture, setLanguage, childTypes } = surfaceWith(
+    (_, text) => {
+      tokenized.push(text);
+      return fixtureReply(text);
+    },
+    (language) => {
+      checked.push(language);
+      return loadedReply(language !== 'cobol');
+    }
+  );
+  try {
+    setLanguage('cobol');
+    expect(checked).toContain('cobol');
+    expect(tokenized).toEqual([]);
+    expect(childTypes()).toEqual(['text']);
+  } finally {
+    fixture.close();
+  }
+});
+
+test.each([
+  [
+    'a throwing check',
+    () => {
+      throw new Error(SENTINEL);
+    },
+  ],
+  ['a non-boolean reply', () => JSON.stringify({ kind: 'loaded', loaded: 1 })],
+  ['a tokens reply', () => fixtureReply('let a')],
+])(
+  '%s fails the edit with a content-free host error before tokenizing',
+  (_, loaded) => {
+    const tokenized: string[] = [];
+    const { fixture, setLanguage, childTypes } = surfaceWith((_, text) => {
+      tokenized.push(text);
+      return fixtureReply(text);
+    }, loaded);
+    try {
+      try {
+        setLanguage('rust');
+      } catch {
+        // Asserted through the reported failure below.
+      }
+      expect(fixture.errors).toEqual([HOST]);
+      expect(JSON.stringify(fixture.errors)).not.toContain(SENTINEL);
+      expect(tokenized).toEqual([]);
+      expect(childTypes()).toEqual(['text']);
+    } finally {
+      fixture.close();
+    }
+  }
+);
+
 test('a throwing provider fails the edit with a content-free host error', () => {
   const errors: unknown[] = [];
   const { fixture, setLanguage, childTypes } = surfaceWith(() => {
@@ -181,9 +245,10 @@ test('a throwing provider fails the edit with a content-free host error', () => 
 });
 
 test.each([
-  ['non-string reply', () => ({ kind: 'notLoaded' })],
+  ['non-string reply', () => ({ kind: 'tokens', tokens: [] })],
   ['invalid JSON', () => '{'],
-  ['extra key', () => JSON.stringify({ kind: 'notLoaded', extra: 1 })],
+  ['extra key', () => JSON.stringify({ kind: 'tokens', tokens: [], extra: 1 })],
+  ['loaded reply', () => loadedReply(true)],
 ])('a %s leaves the block untokenized', (_, provider) => {
   const { fixture, setLanguage, childTypes } = surfaceWith(
     provider as unknown as Provider
@@ -296,7 +361,7 @@ test('a provider without a profile is rejected at construction', () => {
       Access.Edit,
       {},
       {
-        provider: () => JSON.stringify({ kind: 'notLoaded' }),
+        provider: () => JSON.stringify({ kind: 'loaded', loaded: false }),
         profile: undefined as unknown as string,
       }
     )

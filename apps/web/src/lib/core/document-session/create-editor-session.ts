@@ -26,7 +26,10 @@ import {
   type NodeViewRegistry,
   type ViewOptions,
 } from '@macro-inc/lexical-wasm-view';
-import { NativeEnterDispatcher } from '@macro-inc/lexical-wasm-view/view/native-enter';
+import {
+  type NativeCodeTokenProvider,
+  NativeEnterDispatcher,
+} from '@macro-inc/lexical-wasm-view/view/native-enter';
 import type { Span } from '@macro-inc/observability';
 
 import { sessionSocketUrl } from './session-socket-url';
@@ -132,7 +135,7 @@ export function createRustEditorSession(
     latestPublished?: readonly LatestPublishedObserver[];
     /** Dormant host code tokenizer; fenced by the module dispatcher before construction. */
     codeTokens?: {
-      provider: (language: string, text: string, profile: string) => string;
+      provider: NativeCodeTokenProvider;
       profile: string;
     };
   }

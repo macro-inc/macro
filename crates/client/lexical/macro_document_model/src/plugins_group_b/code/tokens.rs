@@ -8,10 +8,23 @@ use std::sync::Arc;
 #[cfg(test)]
 mod test;
 
-/// Pure, synchronous host tokenizer. It gets no editor or session access and must not reenter.
+/// Pure, synchronous host tokenizer, split like Source: `isCodeLanguageLoaded` runs on every
+/// transform pass, `$tokenize` only after the per-update dedupe admits the node. It gets no editor
+/// or session access and must not reenter.
 pub trait CodeTokenProvider: Send + Sync {
-    /// Tokenize `text` as `language`, or report that the grammar is not loaded.
-    fn tokenize(&self, request: &CodeTokenRequest<'_>) -> Result<CodeTokenResult, CodeTokenError>;
+    /// Source `isCodeLanguageLoaded(language)`.
+    fn is_loaded(&self, request: &CodeLanguageRequest<'_>) -> Result<bool, CodeTokenError>;
+    /// Source `tokenizer.$tokenize` for a loaded language.
+    fn tokenize(&self, request: &CodeTokenRequest<'_>) -> Result<Vec<CodeToken>, CodeTokenError>;
+}
+
+/// One language-availability check.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CodeLanguageRequest<'a> {
+    /// The code node's language after the Source default.
+    pub language: &'a str,
+    /// Immutable identity of the host tokenizer configuration.
+    pub profile: &'a str,
 }
 
 /// One tokenization request, read from the pending transaction.
@@ -23,15 +36,6 @@ pub struct CodeTokenRequest<'a> {
     pub text: &'a str,
     /// Immutable identity of the host tokenizer configuration.
     pub profile: &'a str,
-}
-
-/// Host tokenizer outcome.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum CodeTokenResult {
-    /// Source `isCodeLanguageLoaded` false: no tokenization, existing children stay.
-    NotLoaded,
-    /// Descriptors in document order.
-    Tokens(Vec<CodeToken>),
 }
 
 /// One `$mapTokensToLexicalStructure` output node.
@@ -89,30 +93,40 @@ impl Default for CodeTokens {
     }
 }
 
-/// Ask the host for tokens; `None` means Source would return before tokenizing.
-pub(super) fn request(
+/// Source `isCodeLanguageLoaded`; with no tokenizer every language is not loaded.
+pub(super) fn is_loaded(tx: &Transaction<'_>, language: &str) -> Result<bool, Error> {
+    let tokens = tx.extension::<CodeTokens>()?;
+    let Some(provider) = &tokens.provider else {
+        return Ok(false);
+    };
+    provider
+        .is_loaded(&CodeLanguageRequest {
+            language,
+            profile: &tokens.profile,
+        })
+        .map_err(|error| Error::Extension(Box::new(error)))
+}
+
+/// Source `$tokenize` for a loaded language, validated before any token node is created.
+pub(super) fn tokenize(
     tx: &Transaction<'_>,
     language: &str,
     text: &str,
-) -> Result<Option<Vec<CodeToken>>, Error> {
+) -> Result<Vec<CodeToken>, Error> {
     let tokens = tx.extension::<CodeTokens>()?;
-    let Some(provider) = &tokens.provider else {
-        return Ok(None);
-    };
-    let result = provider
+    let provider = tokens
+        .provider
+        .as_ref()
+        .ok_or(Error::Invariant("tokenize without a code tokenizer"))?;
+    let descriptors = provider
         .tokenize(&CodeTokenRequest {
             language,
             text,
             profile: &tokens.profile,
         })
         .map_err(|error| Error::Extension(Box::new(error)))?;
-    match result {
-        CodeTokenResult::NotLoaded => Ok(None),
-        CodeTokenResult::Tokens(tokens) => {
-            validate(text, &tokens).map_err(|error| Error::Extension(Box::new(error)))?;
-            Ok(Some(tokens))
-        }
-    }
+    validate(text, &descriptors).map_err(|error| Error::Extension(Box::new(error)))?;
+    Ok(descriptors)
 }
 
 /// The descriptors must reproduce `text` exactly before any token node is created.

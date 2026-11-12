@@ -11,7 +11,10 @@ import { emptyInput } from '@macro-inc/collaboration/session/input';
 import { decodeOutput } from '@macro-inc/collaboration/session/output';
 import * as nativeModule from '../../../../../apps/web/src/lib/core/document-session/wasm/document_session_wasm.js';
 import { EditorView } from '../editor-view';
-import { NativeEnterDispatcher } from '../native-enter';
+import {
+  type NativeCodeTokenProvider,
+  NativeEnterDispatcher,
+} from '../native-enter';
 import { createBuiltinRegistry } from '../node-views/builtins';
 import { registerMacroElementViews } from '../node-views/macro';
 import type { ViewSink } from '../port';
@@ -34,7 +37,7 @@ export function nativeSurface(
   access = Access.Edit,
   theme: EditorThemeClasses = {},
   codeTokens?: {
-    provider: (language: string, text: string, profile: string) => string;
+    provider: NativeCodeTokenProvider;
     profile: string;
   }
 ) {

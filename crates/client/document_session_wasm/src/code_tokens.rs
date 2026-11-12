@@ -8,7 +8,7 @@ compile_error!(
 );
 
 use macro_document_model::plugins_group_b::{
-    CodeToken, CodeTokenError, CodeTokenProvider, CodeTokenRequest, CodeTokenResult, CodeTokens,
+    CodeLanguageRequest, CodeToken, CodeTokenError, CodeTokenProvider, CodeTokenRequest, CodeTokens,
 };
 use serde_json::{Map, Value};
 use std::cell::{Cell, RefCell};
@@ -34,21 +34,38 @@ fn next_token(current: u64) -> Option<(u64, u64)> {
 struct WasmCodeTokens {
     token: u64,
 }
-impl CodeTokenProvider for WasmCodeTokens {
-    fn tokenize(&self, request: &CodeTokenRequest<'_>) -> Result<CodeTokenResult, CodeTokenError> {
-        // Clone the function out so no registry borrow is held across the call.
+impl WasmCodeTokens {
+    /// Call the session's fenced JS function as `(op, language, text, profile)` and return its
+    /// string reply. The registry borrow is released before the call.
+    fn call(
+        &self,
+        op: &str,
+        language: &str,
+        text: &str,
+        profile: &str,
+    ) -> Result<String, CodeTokenError> {
         let function = PROVIDERS
             .with(|map| map.borrow().get(&self.token).cloned())
             .ok_or(CodeTokenError::Host)?;
-        let reply = function
-            .call3(
+        function
+            .call4(
                 &JsValue::NULL,
-                &JsValue::from_str(request.language),
-                &JsValue::from_str(request.text),
-                &JsValue::from_str(request.profile),
+                &JsValue::from_str(op),
+                &JsValue::from_str(language),
+                &JsValue::from_str(text),
+                &JsValue::from_str(profile),
             )
-            .map_err(|_| CodeTokenError::Host)?;
-        decode(&reply.as_string().ok_or(CodeTokenError::Host)?)
+            .map_err(|_| CodeTokenError::Host)?
+            .as_string()
+            .ok_or(CodeTokenError::Host)
+    }
+}
+impl CodeTokenProvider for WasmCodeTokens {
+    fn is_loaded(&self, request: &CodeLanguageRequest<'_>) -> Result<bool, CodeTokenError> {
+        decode_loaded(&self.call("loaded", request.language, "", request.profile)?)
+    }
+    fn tokenize(&self, request: &CodeTokenRequest<'_>) -> Result<Vec<CodeToken>, CodeTokenError> {
+        decode_tokens(&self.call("tokenize", request.language, request.text, request.profile)?)
     }
 }
 
@@ -109,20 +126,33 @@ fn token(value: &Value) -> Option<CodeToken> {
     }
 }
 
-/// Strict reply decoding: validate every object and array before building typed tokens.
-fn decode(reply: &str) -> Result<CodeTokenResult, CodeTokenError> {
+/// Strict `loaded` reply: exactly `{"kind":"loaded","loaded":bool}`.
+fn decode_loaded(reply: &str) -> Result<bool, CodeTokenError> {
+    let value: Value = serde_json::from_str(reply).map_err(|_| CodeTokenError::Host)?;
+    let object = value.as_object().ok_or(CodeTokenError::Host)?;
+    match (
+        object.get("kind").and_then(Value::as_str),
+        object.get("loaded"),
+    ) {
+        (Some("loaded"), Some(Value::Bool(loaded))) if exact_keys(object, &["kind", "loaded"]) => {
+            Ok(*loaded)
+        }
+        _ => Err(CodeTokenError::Host),
+    }
+}
+
+/// Strict `tokenize` reply: validate every object and array before building typed tokens.
+fn decode_tokens(reply: &str) -> Result<Vec<CodeToken>, CodeTokenError> {
     let value: Value = serde_json::from_str(reply).map_err(|_| CodeTokenError::Host)?;
     let object = value.as_object().ok_or(CodeTokenError::Host)?;
     match object.get("kind").and_then(Value::as_str) {
-        Some("notLoaded") if exact_keys(object, &["kind"]) => Ok(CodeTokenResult::NotLoaded),
         Some("tokens") if exact_keys(object, &["kind", "tokens"]) => object
             .get("tokens")
             .and_then(Value::as_array)
             .ok_or(CodeTokenError::Host)?
             .iter()
             .map(|value| token(value).ok_or(CodeTokenError::Host))
-            .collect::<Result<_, _>>()
-            .map(CodeTokenResult::Tokens),
+            .collect(),
         _ => Err(CodeTokenError::Host),
     }
 }

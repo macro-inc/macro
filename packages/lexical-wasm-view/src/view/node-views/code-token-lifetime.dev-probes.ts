@@ -53,7 +53,7 @@ const config = SessionConfigMsg.encode({
   snapshotInterval: 0,
   observed: [],
 });
-const provider = () => JSON.stringify({ kind: 'notLoaded' });
+const provider = () => JSON.stringify({ kind: 'loaded', loaded: false });
 const create = (withProvider: boolean, abi = ABI_MAJOR) =>
   native.EditorSession.createMacroWithNamespace(
     abi,
@@ -119,7 +119,7 @@ test('a fenced provider that attempts free() mid-edit is rejected by the guard; 
         rejected.push(error instanceof Error ? error.message : String(error));
         throw error;
       }
-      return JSON.stringify({ kind: 'notLoaded' });
+      return JSON.stringify({ kind: 'loaded', loaded: false });
     }),
     'native-fixture'
   );

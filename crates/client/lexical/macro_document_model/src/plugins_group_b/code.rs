@@ -249,10 +249,10 @@ fn default_highlight_language(tx: &mut Transaction<'_>, code: Id<CodeNode>) -> R
             HIGHLIGHT_DEFAULT_LANGUAGE.to_owned()
         }
     };
-    let text = tx.text_content(code).into_owned();
-    if tx.is_attached(code)
-        && let Some(descriptors) = tokens::request(tx, &language, &text)?
-    {
+    // Source checks isCodeLanguageLoaded before anything else and returns when it is not.
+    if tx.is_attached(code) && tokens::is_loaded(tx, &language)? {
+        let text = tx.text_content(code).into_owned();
+        let descriptors = tokens::tokenize(tx, &language, &text)?;
         tokens::apply(tx, code.key(), &descriptors)?;
     }
     tx.emit(
@@ -270,7 +270,10 @@ fn default_highlight_language(tx: &mut Transaction<'_>, code: Id<CodeNode>) -> R
 /// parent (element transforms only run for intentionally dirtied elements, so typing reaches the
 /// tokenizer only through this); an orphaned code-highlight becomes plain text.
 fn code_leaf(tx: &mut Transaction<'_>, leaf: NodeKey) -> Result<(), Error> {
-    if let Some(code) = tx.parent(leaf).and_then(|parent| tx.view().cast::<CodeNode>(parent)) {
+    if let Some(code) = tx
+        .parent(leaf)
+        .and_then(|parent| tx.view().cast::<CodeNode>(parent))
+    {
         return default_highlight_language(tx, code);
     }
     if tx.is::<CodeHighlightNode>(leaf) {

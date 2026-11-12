@@ -1,5 +1,5 @@
 use super::*;
-use macro_document_model::plugins_group_b::{CodeToken, CodeTokenError, CodeTokenResult};
+use macro_document_model::plugins_group_b::{CodeToken, CodeTokenError};
 
 fn text(text: &str, highlight_type: Option<&str>) -> CodeToken {
     CodeToken::Text {
@@ -11,19 +11,23 @@ fn text(text: &str, highlight_type: Option<&str>) -> CodeToken {
 #[test]
 fn decodes_every_reply_shape() {
     assert_eq!(
-        decode(r#"{"kind":"notLoaded"}"#),
-        Ok(CodeTokenResult::NotLoaded)
+        decode_loaded(r#"{"kind":"loaded","loaded":true}"#),
+        Ok(true)
     );
     assert_eq!(
-        decode(
+        decode_loaded(r#"{"kind":"loaded","loaded":false}"#),
+        Ok(false)
+    );
+    assert_eq!(
+        decode_tokens(
             r#"{"kind":"tokens","tokens":[{"kind":"text","text":"let","highlightType":"keyword"},{"kind":"text","text":" ","highlightType":null},{"kind":"lineBreak"},{"kind":"tab"}]}"#
         ),
-        Ok(CodeTokenResult::Tokens(vec![
+        Ok(vec![
             text("let", Some("keyword")),
             text(" ", None),
             CodeToken::LineBreak,
             CodeToken::Tab,
-        ]))
+        ])
     );
 }
 
@@ -33,8 +37,20 @@ fn rejects_every_other_shape_as_a_content_free_host_error() {
         "",
         "not json",
         "[]",
-        r#"["notLoaded"]"#,
-        r#"{"kind":"notLoaded","extra":1}"#,
+        r#"{"kind":"loaded"}"#,
+        r#"{"kind":"loaded","loaded":1}"#,
+        r#"{"kind":"loaded","loaded":true,"extra":1}"#,
+        r#"{"kind":"tokens","tokens":[]}"#,
+        r#"{"kind":"notLoaded"}"#,
+    ] {
+        assert_eq!(decode_loaded(reply), Err(CodeTokenError::Host), "{reply}");
+    }
+    for reply in [
+        "",
+        "not json",
+        "[]",
+        r#"{"kind":"notLoaded"}"#,
+        r#"{"kind":"loaded","loaded":true}"#,
         r#"{"kind":"unknown"}"#,
         r#"{"kind":"tokens"}"#,
         r#"{"kind":"tokens","tokens":{}}"#,
@@ -46,7 +62,7 @@ fn rejects_every_other_shape_as_a_content_free_host_error() {
         r#"{"kind":"tokens","tokens":[{"kind":"lineBreak","text":"\n"}]}"#,
         r#"{"kind":"tokens","tokens":[1]}"#,
     ] {
-        assert_eq!(decode(reply), Err(CodeTokenError::Host), "{reply}");
+        assert_eq!(decode_tokens(reply), Err(CodeTokenError::Host), "{reply}");
     }
 }
 

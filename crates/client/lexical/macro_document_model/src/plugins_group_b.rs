@@ -88,7 +88,7 @@ pub(crate) fn register_checklist_controls(builder: EditorBuilder) -> EditorBuild
 }
 
 pub use code::tokens::{
-    CodeToken, CodeTokenError, CodeTokenProvider, CodeTokenRequest, CodeTokenResult, CodeTokens,
+    CodeLanguageRequest, CodeToken, CodeTokenError, CodeTokenProvider, CodeTokenRequest, CodeTokens,
 };
 
 /// Source code-highlighting model effects for editors that attach a view.

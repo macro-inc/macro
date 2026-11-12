@@ -7,11 +7,25 @@ use std::sync::Mutex;
 
 #[derive(Default)]
 struct Fixture {
+    /// `is_loaded` calls, in order.
+    loaded: Mutex<Vec<(String, String)>>,
+    /// `tokenize` calls, in order.
     requests: Mutex<Vec<(String, String, String)>>,
-    answer: Mutex<Option<Result<CodeTokenResult, CodeTokenError>>>,
+    loaded_answer: Mutex<Option<Result<bool, CodeTokenError>>>,
+    answer: Mutex<Option<Result<Vec<CodeToken>, CodeTokenError>>>,
 }
 impl CodeTokenProvider for Fixture {
-    fn tokenize(&self, request: &CodeTokenRequest<'_>) -> Result<CodeTokenResult, CodeTokenError> {
+    fn is_loaded(&self, request: &CodeLanguageRequest<'_>) -> Result<bool, CodeTokenError> {
+        self.loaded
+            .lock()
+            .expect("loaded")
+            .push((request.language.to_owned(), request.profile.to_owned()));
+        if let Some(answer) = self.loaded_answer.lock().expect("loaded answer").take() {
+            return answer;
+        }
+        Ok(request.language != "cobol")
+    }
+    fn tokenize(&self, request: &CodeTokenRequest<'_>) -> Result<Vec<CodeToken>, CodeTokenError> {
         self.requests.lock().expect("requests").push((
             request.language.to_owned(),
             request.text.to_owned(),
@@ -19,9 +33,6 @@ impl CodeTokenProvider for Fixture {
         ));
         if let Some(answer) = self.answer.lock().expect("answer").take() {
             return answer;
-        }
-        if request.language == "cobol" {
-            return Ok(CodeTokenResult::NotLoaded);
         }
         let mut tokens = Vec::new();
         let mut word = String::new();
@@ -66,7 +77,7 @@ impl CodeTokenProvider for Fixture {
             }
         }
         flush(&mut word, &mut tokens);
-        Ok(CodeTokenResult::Tokens(tokens))
+        Ok(tokens)
     }
 }
 
@@ -197,6 +208,32 @@ fn an_unloaded_grammar_keeps_the_existing_children() -> Result<(), Error> {
         shape(&tokens_of(&editor, code)),
         vec![("text:MOVE A TO B".into(), None)]
     );
+    // Source checks isCodeLanguageLoaded on every transform pass (code and leaf passes alike) and
+    // returns before tokenizing; the pass count is recorded, not deduped.
+    let loaded = fixture.loaded.lock().expect("loaded").clone();
+    assert!(!loaded.is_empty());
+    assert!(
+        loaded
+            .iter()
+            .all(|call| *call == ("cobol".to_owned(), "native-fixture".to_owned()))
+    );
+    assert!(fixture.requests.lock().expect("requests").is_empty());
+    Ok(())
+}
+
+#[test]
+fn a_failed_language_check_fails_the_update_before_tokenizing() -> Result<(), Error> {
+    let fixture = Arc::new(Fixture::default());
+    let mut editor = editor_with(&fixture, EditorMode::ViewAttached);
+    *fixture.loaded_answer.lock().expect("loaded answer") = Some(Err(CodeTokenError::Host));
+    let Err(Error::Extension(error)) = insert_code(&mut editor, "rust", "ab") else {
+        panic!("expected an extension failure");
+    };
+    assert_eq!(
+        error.downcast_ref::<CodeTokenError>(),
+        Some(&CodeTokenError::Host)
+    );
+    assert!(fixture.requests.lock().expect("requests").is_empty());
     Ok(())
 }
 
@@ -204,21 +241,21 @@ fn an_unloaded_grammar_keeps_the_existing_children() -> Result<(), Error> {
 fn malformed_or_failed_provider_results_fail_before_creating_tokens() -> Result<(), Error> {
     for (answer, expected) in [
         (
-            Ok(CodeTokenResult::Tokens(vec![CodeToken::Text {
+            Ok(vec![CodeToken::Text {
                 text: "different".into(),
                 highlight_type: None,
-            }])),
+            }]),
             CodeTokenError::Mismatch,
         ),
         (
-            Ok(CodeTokenResult::Tokens(vec![CodeToken::Text {
+            Ok(vec![CodeToken::Text {
                 text: "a\nb".into(),
                 highlight_type: None,
-            }])),
+            }]),
             CodeTokenError::Mismatch,
         ),
         (
-            Ok(CodeTokenResult::Tokens(vec![
+            Ok(vec![
                 CodeToken::Text {
                     text: String::new(),
                     highlight_type: None,
@@ -227,7 +264,7 @@ fn malformed_or_failed_provider_results_fail_before_creating_tokens() -> Result<
                     text: "ab".into(),
                     highlight_type: None,
                 },
-            ])),
+            ]),
             CodeTokenError::Mismatch,
         ),
         (Err(CodeTokenError::Host), CodeTokenError::Host),
@@ -267,6 +304,7 @@ fn detached_code_never_invokes_the_provider() -> Result<(), Error> {
         Ok(())
     })?;
     assert!(fixture.requests.lock().expect("requests").is_empty());
+    assert!(fixture.loaded.lock().expect("loaded").is_empty());
     Ok(())
 }
 
@@ -376,8 +414,8 @@ fn orphan_highlight(editor: &mut Editor) -> Result<NodeKey, Error> {
 }
 
 #[test]
-fn an_orphan_code_highlight_becomes_plain_text_where_highlighting_is_installed()
--> Result<(), Error> {
+fn an_orphan_code_highlight_becomes_plain_text_where_highlighting_is_installed() -> Result<(), Error>
+{
     let fixture = Arc::new(Fixture::default());
     let mut editor = editor_with(&fixture, EditorMode::ViewAttached);
     let paragraph = orphan_highlight(&mut editor)?;

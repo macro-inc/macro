@@ -48,10 +48,12 @@ impl EditorSession {
     }
     /// Construct the application editor with the host's actual instance namespace.
     ///
-    /// `code_token_provider` is supported only when wrapped by the lexical-wasm-view
-    /// `NativeEnterDispatcher.fenceCodeTokenProvider` (installed before construction). A raw
-    /// provider that reenters or frees a session corrupts wasm-bindgen state; that use is
-    /// unsupported.
+    /// `code_token_provider(op, language, text, profile)` returns a JSON string: for `op`
+    /// `"loaded"` (empty text) `{"kind":"loaded","loaded":bool}`, for `"tokenize"`
+    /// `{"kind":"tokens","tokens":[...]}`. It is supported only when wrapped by the
+    /// lexical-wasm-view `NativeEnterDispatcher.fenceCodeTokenProvider` (installed before
+    /// construction). A raw provider that reenters or frees a session corrupts wasm-bindgen
+    /// state; that use is unsupported.
     #[wasm_bindgen(js_name=createMacroWithNamespace)]
     #[expect(
         clippy::too_many_arguments,
