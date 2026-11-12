@@ -1,5 +1,7 @@
 //! Shared composition for the HTTP API and background workers.
 
+pub(crate) mod api;
+
 use crate::outbound::{
     email_api::{GmailApi, MicrosoftCredentialsClient},
     inbox_health::{PgInboxHealth, ProviderInboxHealth},

@@ -22,7 +22,8 @@ use serde_yaml::Value;
 use serde_yaml::value::{Tag, TaggedValue};
 use sha2::{Digest, Sha256};
 
-use super::build::{BinariesDir, RUNTIME_IMAGE_TAG};
+use super::build::{BinariesDir, runtime_image_tag};
+use super::computers::{Computers, Fleet};
 use super::instance::{Instance, Port};
 use super::inventory::{OPENBAO_IMAGE, RustService, services_for_mode};
 use super::{Mode, repo_root};
@@ -78,15 +79,17 @@ pub fn generate(
     binaries: &BinariesDir,
     static_frontend: bool,
     gmail_forwarder: bool,
+    computers: &Computers,
 ) -> Result<PathBuf> {
     super::tls::issue(instance)?;
     let mut services: IndexMap<String, Option<dct::Service>> = IndexMap::new();
     let mounts = binaries.compose_mounts();
+    let runtime_image = runtime_image_tag(super::arch::detect()?)?;
 
     // 1. Rust services → runtime image + mounted binaries.
     for svc in services_for_mode(mode) {
         let mut s = dct::Service {
-            image: Some(RUNTIME_IMAGE_TAG.to_string()),
+            image: Some(runtime_image.clone()),
             volumes: mounts.iter().cloned().map(dct::Volumes::Simple).collect(),
             environment: kv(&[("PORT", "8080")]),
             ..Default::default()
@@ -97,6 +100,7 @@ pub fn generate(
         }
         services.insert(svc.compose_name.to_string(), Some(s));
     }
+    add_computers(&mut services, computers)?;
 
     // The reverse proxy is the frontend's single origin in every mode, and
     // LocalStack runs in every mode (dev's `dev_personal` notification queue
@@ -124,7 +128,7 @@ pub fn generate(
         services.insert(
             "gmail_forwarder".to_string(),
             Some(dct::Service {
-                image: Some(RUNTIME_IMAGE_TAG.to_string()),
+                image: Some(runtime_image.clone()),
                 volumes: mounts.iter().cloned().map(dct::Volumes::Simple).collect(),
                 command: Some(dct::Command::Args(
                     [
@@ -199,6 +203,44 @@ fn published_ports(mode: Mode, instance: &Instance, service: &RustService) -> Ve
         ports.push(format!("{}:2222", instance.port(Port::PreviewSsh)));
     }
     ports
+}
+
+/// Wire the harness's computer control plane to its fleet (see
+/// [`computers`]).
+fn add_computers(
+    services: &mut IndexMap<String, Option<dct::Service>>,
+    computers: &Computers,
+) -> Result<()> {
+    match computers.fleet() {
+        Fleet::Off => {
+            let harness = services
+                .get_mut(EGRESS_SERVICE)
+                .and_then(Option::as_mut)
+                .context("the computer control plane runs in agent_harness_service")?;
+            let dct::Environment::KvPair(env) = &mut harness.environment else {
+                anyhow::bail!("harness environment must be a key-value map");
+            };
+            env.insert(
+                "COMPUTERS_FLEET".into(),
+                Some(dct::SingleValue::String("disabled".into())),
+            );
+        }
+        Fleet::Docker => {
+            // Same path on both sides: the harness writes enrollments here and
+            // hands the daemon bind sources below it.
+            let dir = computers.enrollment_dir();
+            std::fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
+            let harness = services
+                .get_mut(EGRESS_SERVICE)
+                .and_then(Option::as_mut)
+                .context("the computer control plane runs in agent_harness_service")?;
+            harness
+                .volumes
+                .push(dct::Volumes::Simple(format!("{0}:{0}", dir.display())));
+        }
+        Fleet::Incus => {}
+    }
+    Ok(())
 }
 
 fn add_sdk_webhook_relay(
@@ -318,6 +360,12 @@ fn add_proxy_service(
         )));
     }
     let mut ports = vec![format!("{proxy_port}:{proxy_port}")];
+    // Incus reverse tunnels dial the host loopback; Docker computers use the
+    // proxy's services-network name and need no host DNS or guest CA changes.
+    let computer_gateway_port = instance.port(Port::ComputerGateway);
+    ports.push(format!(
+        "127.0.0.1:{computer_gateway_port}:{computer_gateway_port}"
+    ));
     if previews {
         ports.push(format!("{}:8443", instance.port(Port::PreviewHttps)));
         volumes.push(dct::Volumes::Simple(format!(
@@ -331,6 +379,7 @@ fn add_proxy_service(
             image: Some(CADDY_IMAGE.to_string()),
             environment: kv(&[
                 ("PROXY_PORT", &proxy_port.to_string()),
+                ("COMPUTER_GATEWAY_PORT", &computer_gateway_port.to_string()),
                 ("VITE_PORT", &instance.port(Port::Frontend).to_string()),
             ]),
             extra_hosts: vec!["host.docker.internal:host-gateway".to_string()],
@@ -877,5 +926,8 @@ pub fn docker_compose(
     cmd.arg("--env-file").arg(generated_env);
     cmd.env("COMPOSE_PROJECT_NAME", instance.project_name());
     cmd.env("MACRO_ENV_FILE", generated_env);
+    // Compose gives the shell precedence over --env-file. This key is owned
+    // by the resolved run policy, so inherit it only from that generated file.
+    cmd.env_remove("SYNC_SERVICE_OTEL_EXPORTER_OTLP_ENDPOINT");
     cmd
 }

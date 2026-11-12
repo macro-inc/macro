@@ -897,6 +897,40 @@ export type MutationState =
  */
 export type FormId = string;
 /**
+ * The source of an entity's custom icon.
+ */
+export type AppearanceIcon =
+  | {
+      /**
+       * Catalog name without the SVG extension.
+       */
+      name: string;
+      kind: 'macro';
+    }
+  | {
+      /**
+       * Unicode emoji text, not markup or a URL.
+       */
+      value: string;
+      kind: 'emoji';
+    };
+/**
+ * Named tint keys from the shared tag color palette.
+ */
+export type AppearanceColor =
+  | 'gray'
+  | 'red'
+  | 'tomato'
+  | 'orange'
+  | 'amber'
+  | 'yellow'
+  | 'green'
+  | 'teal'
+  | 'blue'
+  | 'indigo'
+  | 'purple'
+  | 'pink';
+/**
  * Who may respond to a form.
  */
 export type Audience = 'members' | 'public';
@@ -7864,6 +7898,10 @@ export interface SavedForm {
  * A form: a view of one database table whose rows are its responses.
  */
 export interface Form {
+  /**
+   * Entity-owned icon and color overrides.
+   */
+  appearance?: EntityAppearance | null;
   id: FormId;
   /**
    * Its display name. A standalone form follows the database it created;
@@ -7939,6 +7977,19 @@ export interface Form {
    * listings, as for a channel poll.
    */
   isHiddenInDrive: boolean;
+}
+/**
+ * An entity's optional icon and tint overrides; absent values retain type defaults.
+ */
+export interface EntityAppearance {
+  /**
+   * A custom Macro glyph or a native emoji.
+   */
+  icon?: AppearanceIcon | null;
+  /**
+   * A shared tag-palette key. Native emoji retain their own colors.
+   */
+  color?: AppearanceColor | null;
 }
 /**
  * A form's logo, cover image and accent color, each unset by default.
@@ -14754,6 +14805,10 @@ export interface ReadMetadataResponse {
  */
 export interface ReadDocumentMetadata {
   /**
+   * Entity-owned presentation overrides; absent values use type defaults.
+   */
+  appearance?: EntityAppearance | null;
+  /**
    * The document id
    */
   documentId: string;
@@ -15502,13 +15557,15 @@ export interface SendConfirmedEmail {
    */
   subject: string;
   /**
-   * The address of the inbox to send from, when the user has more than one
-   * connected and this email belongs to a particular one. Use the exact
-   * `emailAddress` of a connected inbox — `ListInboxes` lists them, and
-   * `GetThread` reports the `inbox` a thread belongs to. Omit it unless
-   * you know which inbox is right: a reply then goes out from the inbox
-   * that received the message it answers, and a new email from the user's
-   * primary inbox. The user can change it in the composer either way.
+   * The address to send from, when the user has more than one and this
+   * email belongs to a particular one: the exact `emailAddress` of a
+   * connected inbox (`ListInboxes` lists them, and `GetThread` reports the
+   * `inbox` a thread belongs to), or a verified Gmail send-as alias of one,
+   * which then sends from that inbox under the alias's display name. Omit
+   * it unless you know which address is right: a reply then goes out from
+   * the inbox that received the message it answers, and a new email from
+   * the user's primary inbox. The user can change it in the composer
+   * either way.
    */
   from?: string | null;
   /**
@@ -15583,13 +15640,15 @@ export interface SendEmail {
    */
   subject: string;
   /**
-   * The address of the inbox to send from, when the user has more than one
-   * connected and this email belongs to a particular one. Use the exact
-   * `emailAddress` of a connected inbox — `ListInboxes` lists them, and
-   * `GetThread` reports the `inbox` a thread belongs to. Omit it unless
-   * you know which inbox is right: a reply then goes out from the inbox
-   * that received the message it answers, and a new email from the user's
-   * primary inbox. The user can change it in the composer either way.
+   * The address to send from, when the user has more than one and this
+   * email belongs to a particular one: the exact `emailAddress` of a
+   * connected inbox (`ListInboxes` lists them, and `GetThread` reports the
+   * `inbox` a thread belongs to), or a verified Gmail send-as alias of one,
+   * which then sends from that inbox under the alias's display name. Omit
+   * it unless you know which address is right: a reply then goes out from
+   * the inbox that received the message it answers, and a new email from
+   * the user's primary inbox. The user can change it in the composer
+   * either way.
    */
   from?: string | null;
   /**

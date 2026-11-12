@@ -24,8 +24,10 @@ they had. Background tabs are hidden, inert, and skip
 rendering; past five, the least recently used unmount and reload when next
 opened. Closing the active tab runs its unsaved-changes guards. A tab holding more than one split shows a
 split icon with the count. The strip's `+` button (and `Cmd+T`) opens a tab on
-Home; the `X` or a middle click closes one (the last tab cannot close;
-`Shift+Cmd+W` closes the active tab); `Ctrl+Tab` / `Ctrl+Shift+Tab` cycle, as do
+Home; the `X` or a middle click closes one (the last tab cannot close).
+`Cmd+W` (File > Close Tab) closes the active tab, or the window when it is
+the only tab, as in a browser; `Shift+Cmd+W` also closes the active tab but
+never the window. `Ctrl+Tab` / `Ctrl+Shift+Tab` cycle, as do
 `Shift+Cmd+→` / `Shift+Cmd+←` outside text fields (where they select text);
 `Cmd+1`–`Cmd+8` jump to that tab and `Cmd+9` to the last. The AI and PSD editors
 keep their own `Cmd+1` and `Cmd+7` while they have focus.
@@ -730,8 +732,8 @@ undelivered notifications` errors, and the sidebar should switch between docked
 and overlay as the split crosses the breakpoint. Drive and other `virtua` lists
 can still report it from the virtualizer's own observer.
 
-Email, Tasks, and Agents use the same sidebar rows, including favorites, tags,
-inboxes, and recent agent chats: 32px high on desktop and 44px on touch devices,
+Email, Tasks, and Agents use the same sidebar rows for inboxes, favorites,
+and recent agent chats: 32px high on desktop and 44px on touch devices,
 with regular-weight labels and consistent icon spacing.
 
 Entity rows and navigation use Phosphor icons. Entity icons share one mapping

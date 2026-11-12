@@ -1,12 +1,10 @@
 import { t } from '@app/lib/i18n';
-import { UserIcon } from '@core/component/UserIcon';
-import { useUserId } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
 import { getNativeMobilePlatform } from '@core/util/platform';
 import SpeakerIcon from '@icon/system/regular/speaker-high.svg';
 import SpeakerSlash from '@icon/system/regular/speaker-slash.svg';
 import { Popover } from '@kobalte/core/popover';
-import { Avatar, Button, Slider, Tooltip } from '@ui';
+import { Button, Slider } from '@ui';
 import type { RemoteParticipant } from 'livekit-client';
 import { Show } from 'solid-js';
 import {
@@ -32,7 +30,6 @@ export function CallParticipantVolume(props: {
   name: string;
 }) {
   const supported = supportsParticipantVolume();
-  const viewerId = useUserId();
   const localLabel = () => t('calls.volumeForYou', { name: props.name });
   const volumes = useCallVolumeOptional() ?? createCallVolumeState();
   const volume = () => Math.round(volumes.level(props.participant) * 100);
@@ -79,25 +76,6 @@ export function CallParticipantVolume(props: {
             >
               <Slider.Label class="sr-only">{localLabel()}</Slider.Label>
               <div class="flex flex-col items-center gap-3">
-                <Tooltip label={localLabel()} tabIndex={0}>
-                  <Show
-                    when={viewerId()}
-                    fallback={
-                      <Avatar size="sm">
-                        <Avatar.Fallback>?</Avatar.Fallback>
-                      </Avatar>
-                    }
-                  >
-                    {(id) => (
-                      <UserIcon
-                        id={id()}
-                        size="sm"
-                        suppressClick
-                        showTooltip={false}
-                      />
-                    )}
-                  </Show>
-                </Tooltip>
                 <div class="h-32">
                   <Slider.Track data-call-volume-track>
                     <Slider.Fill />

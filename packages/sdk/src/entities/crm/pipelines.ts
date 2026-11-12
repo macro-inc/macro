@@ -1,5 +1,5 @@
 import type {
-  CreatePipeline,
+  CreatePipelineRequest,
   PipelineEntries,
 } from '../../../generated/storage/types.gen';
 import { unwrap } from '../../utils';
@@ -51,14 +51,30 @@ export class PipelineNamespace {
   }
 
   /**
-   * Create a pipeline and its backing storage.
+   * Create a pipeline. A company or contact pipeline starts with its record,
+   * Stage, Owner and Revenue fields; a generic one (no `recordType`) with
+   * only Name. `stages` (first to last) replaces the team's default stages,
+   * or adds a Stage field to a generic pipeline; `fields` are added after the
+   * standard ones. Private unless `sharing` is `team`.
+   *
+   * @example
+   * await macro.crm.pipelines.create({
+   *   name: 'Hiring',
+   *   recordType: 'contact',
+   *   stages: ['Sourced', 'Interview', 'Offer', 'Hired'],
+   *   fields: [{ name: 'Role', type: 'select', options: ['Engineer', 'Designer'] }],
+   * });
    *
    * @write
    */
-  async create(options: CreatePipeline): Promise<CrmPipeline> {
+  async create(options: CreatePipelineRequest): Promise<CrmPipeline> {
     return CrmPipeline.from(
       this.client,
-      unwrap(await this.client.storage.createCrmPipeline({ body: options })),
+      unwrap(
+        await this.client.storage.createCrmPipelineWithFields({
+          body: options,
+        }),
+      ),
     );
   }
 
