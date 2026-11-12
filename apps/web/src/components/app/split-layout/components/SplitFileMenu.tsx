@@ -152,6 +152,7 @@ type SplitFileMenuRenderProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   triggerClass?: string;
+  triggerLabel?: string;
   groups: SplitFileMenuActionGroups;
 };
 
@@ -201,6 +202,7 @@ function DesktopRender(props: SplitFileMenuRenderProps) {
     <Dropdown open={props.open} onOpenChange={props.onOpenChange}>
       <Dropdown.Trigger
         class={cn(props.triggerClass)}
+        aria-label={props.triggerLabel ?? t('splitMenu.fileActions')}
         size="icon-sm"
         variant="ghost"
       >
@@ -414,6 +416,7 @@ export type SplitFileMenuProps = {
    */
   entity?: EntityData;
   buttonClass?: string;
+  triggerLabel?: string;
   entityKind: BlockName | BlockAlias;
   permissions: Permissions;
   onDuplicate?: (id: string) => void;
@@ -821,6 +824,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
             open={open()}
             onOpenChange={setOpen}
             triggerClass={props.buttonClass}
+            triggerLabel={props.triggerLabel}
             groups={actionGroups()}
           />
         }

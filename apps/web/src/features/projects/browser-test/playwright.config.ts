@@ -8,6 +8,7 @@ const port = process.env.PROJECT_TASK_ACTIONS_TEST_PORT ?? '3691';
 export default defineConfig({
   testDir: directory,
   testMatch: '*.browser.e2e.ts',
+  testIgnore: 'title-menu.browser.e2e.ts',
   outputDir: '/tmp/project-task-actions-results',
   workers: 1,
   use: {

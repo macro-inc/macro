@@ -41,7 +41,7 @@ it('preserves phone navigation when no replacement title is supplied', () => {
   expect(screen.getByRole('button', { name: 'Project menu' })).toBeTruthy();
 });
 
-it('renders one phone title instead of separate navigation controls', () => {
+it('keeps existing phone tabs outside the replacement title menu', () => {
   const title = vi.fn(() => <button>Project title</button>);
   render(() => (
     <EntityDetailTopBar
@@ -50,7 +50,7 @@ it('renders one phone title instead of separate navigation controls', () => {
     />
   ));
   expect(screen.getByRole('button', { name: 'Project title' })).toBeTruthy();
-  expect(screen.queryByRole('button', { name: 'Project tasks' })).toBeNull();
+  expect(screen.getByRole('button', { name: 'Project tasks' })).toBeTruthy();
   expect(title).toHaveBeenCalledTimes(1);
 });
 

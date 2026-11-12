@@ -37,7 +37,7 @@ export function EntityDetailTopBar(
       ref={setTopBar}
       class={cn(
         'touch:flex touch:h-auto touch:min-h-12 touch:pt-[calc(var(--mobile-content-inset-top,var(--safe-top,0px))+0.75rem)]',
-        props.navigation && 'gap-3'
+        props.navigation && 'gap-3 mobile:flex-wrap'
       )}
     >
       <Show
@@ -53,10 +53,12 @@ export function EntityDetailTopBar(
       >
         {props.mobileTitle?.()}
       </Show>
-      <Show when={!replacesPhoneNavigation()}>
-        <Show when={props.navigation}>
-          {(navigation) => <div class="shrink-0">{navigation()(compact)}</div>}
-        </Show>
+      <Show when={props.navigation}>
+        {(navigation) => (
+          <div class="shrink-0 mobile:order-last mobile:basis-full">
+            {navigation()(compact)}
+          </div>
+        )}
       </Show>
       <div class="ml-auto flex shrink-0 items-center gap-2 touch:gap-1">
         <SidePanel.HeaderActionsOutlet />
