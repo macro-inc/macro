@@ -11,9 +11,15 @@ import { Show, useContext } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import type { DecoratorSelectionHostProp } from '../../decorator-host/selection-host';
 
-export function ThemeMention(
-  props: ThemeMentionDecoratorProps & DecoratorSelectionHostProp
-) {
+/**
+ * Source `importJSON` keeps a stored null or omitted theme data; the theme
+ * guards reject it, so only the name renders and a click does nothing.
+ */
+export type ThemeMentionUIProps = Omit<ThemeMentionDecoratorProps, 'data'> & {
+  data?: ThemeMentionDecoratorProps['data'] | null;
+} & DecoratorSelectionHostProp;
+
+export function ThemeMention(props: ThemeMentionUIProps) {
   const { openSettings } = useSettingsState();
   const lexicalWrapper = useContext(LexicalWrapperContext);
   const selection = () => lexicalWrapper?.selection;

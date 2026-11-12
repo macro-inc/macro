@@ -2,7 +2,6 @@ import {
   type ConnectAppDecoratorProps,
   ConnectAppNode,
   GroupMentionNode,
-  type ThemeMentionDecoratorProps,
   ThemeMentionNode,
   UnknownMentionNode,
 } from '@macro-inc/lexical-core';
@@ -12,6 +11,7 @@ import type {
   JsonValue,
 } from '@macro-inc/lexical-wasm-view/view/types';
 import type { GroupMentionUIProps } from '../component/decorator/GroupMention';
+import type { ThemeMentionUIProps } from '../component/decorator/ThemeMention';
 import type { UnknownMentionUIProps } from '../component/decorator/UnknownMention';
 import type { DecoratorHostCapabilities } from '../context/DecoratorHostContext';
 import {
@@ -72,20 +72,25 @@ export function createNativeFastSelectionDecoratorViews<
         };
       }
     ),
-    'theme-mention': bind<
-      ThemeMentionDecoratorProps & DecoratorSelectionHostProp
-    >(ThemeMentionNode, (node, context) => {
-      const value = node.props();
-      if (typeof value.name !== 'string' || !isObject(value.data))
-        throw new Error('Invalid theme mention payload');
-      return {
-        name: value.name,
-        data: value.data,
-        key: String(node.key),
-        theme: context.theme,
-        host: context.host,
-      };
-    }),
+    'theme-mention': bind<ThemeMentionUIProps>(
+      ThemeMentionNode,
+      (node, context) => {
+        const { name, data } = node.props();
+        // Source keeps a stored null or omitted data and renders only the name.
+        if (
+          typeof name !== 'string' ||
+          (data !== undefined && data !== null && !isObject(data))
+        )
+          throw new Error('Invalid theme mention payload');
+        return {
+          name,
+          data,
+          key: String(node.key),
+          theme: context.theme,
+          host: context.host,
+        };
+      }
+    ),
     'connect-app': bind<ConnectAppDecoratorProps & DecoratorSelectionHostProp>(
       ConnectAppNode,
       (node, context) => {

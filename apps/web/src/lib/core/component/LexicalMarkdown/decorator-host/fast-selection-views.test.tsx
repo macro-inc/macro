@@ -18,6 +18,7 @@ import {
 import type { Klass, LexicalNode } from 'lexical';
 import { afterEach, beforeAll, expect, test } from 'vitest';
 import type { GroupMentionUIProps } from '../component/decorator/GroupMention';
+import type { ThemeMentionUIProps } from '../component/decorator/ThemeMention';
 import type { UnknownMentionUIProps } from '../component/decorator/UnknownMention';
 import { theme } from '../theme';
 import { createNativeFastSelectionDecoratorViews } from './fast-selection-views';
@@ -143,5 +144,45 @@ test('projector hands a stored null or missing unknown mention name to the regis
 test('stored model refuses a wrong unknown mention name type before any projection', () => {
   expect(() =>
     mount('unknown-mention', UnknownMentionNode, [{ name: 5 }]).close()
+  ).toThrow('JSON error: invalid type');
+});
+
+test('projector hands a stored null or missing theme data to the registered component unchanged', () => {
+  const data = { id: 'probe-theme', name: 'Probe theme', version: 3 };
+  const mounted = mount<ThemeMentionUIProps>(
+    'theme-mention',
+    ThemeMentionNode,
+    [
+      { name: 'With data', data },
+      { name: 'Null data', data: null },
+      { name: 'Missing data' },
+    ]
+  );
+  try {
+    expect(mounted.received.map(({ name, data }) => ({ name, data }))).toEqual([
+      { name: 'With data', data },
+      { name: 'Null data', data: null },
+      { name: 'Missing data', data: undefined },
+    ]);
+    expect(
+      mounted.fixture.root.querySelectorAll('[data-recorded-decorator]')
+    ).toHaveLength(3);
+    expect(mounted.fixture.root.textContent).toContain('sibling stays');
+  } finally {
+    mounted.close();
+  }
+});
+
+test('projector rejects a null theme name and the stored model refuses non-map data', () => {
+  // Source getTextContent returns the name, so only text is admitted.
+  expect(() =>
+    mount('theme-mention', ThemeMentionNode, [
+      { name: null, data: { id: 'probe-theme' } },
+    ]).close()
+  ).toThrow('Invalid theme mention payload');
+  expect(() =>
+    mount('theme-mention', ThemeMentionNode, [
+      { name: 'Text data', data: 'not a theme' },
+    ]).close()
   ).toThrow('JSON error: invalid type');
 });
