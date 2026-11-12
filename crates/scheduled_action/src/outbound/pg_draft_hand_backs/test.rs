@@ -216,8 +216,14 @@ async fn the_blocking_sweep_skips_background_drafts(pool: PgPool) {
 
 mod jobs {
     use super::*;
+    use std::sync::Arc;
+
+    use tokio::sync::Barrier;
+    use tokio::task::JoinSet;
+
     use crate::domain::drafts::jobs::{
-        CancelledJob, DraftAsked, DraftJobState, DraftKind, Finished, InterruptedJob, NewDraftJob,
+        Begun, CancelledJob, DraftAsked, DraftJobState, DraftKind, Finished, InterruptedJob,
+        NewDraftJob,
     };
     use crate::domain::drafts::progress::DraftStage;
 
@@ -232,36 +238,156 @@ mod jobs {
 
     async fn begin(drafts: &PgDraftHandBacks, owner: &MacroUserIdStr<'static>) -> Uuid {
         let session = macro_uuid::generate_uuid_v7();
-        assert!(
+        assert_eq!(
             begin_as(drafts, owner, session, macro_uuid::generate_uuid_v7()).await,
+            Begun::Started,
             "a new client id starts a job"
         );
         session
     }
 
-    /// Start job `session` for the start with `client_id`. Whether it began.
+    fn new_job(owner: &MacroUserIdStr<'static>, session: Uuid, client_id: Uuid) -> NewDraftJob {
+        NewDraftJob {
+            session,
+            owner: owner.clone(),
+            client_id,
+            agent: bot_id::BotId::TEST_A,
+            request: DraftAsked {
+                kind: DraftKind::Routine,
+                description: "label invoices".into(),
+            },
+            progress: started(DraftStage::Started),
+            created_at: Utc::now(),
+            traceparent: Some(TRACEPARENT.into()),
+        }
+    }
+
+    /// Start job `session` for the start with `client_id`, with no limit.
     async fn begin_as(
         drafts: &PgDraftHandBacks,
         owner: &MacroUserIdStr<'static>,
         session: Uuid,
         client_id: Uuid,
-    ) -> bool {
+    ) -> Begun {
         drafts
-            .begin_job(&NewDraftJob {
-                session,
-                owner: owner.clone(),
-                client_id,
-                agent: bot_id::BotId::TEST_A,
-                request: DraftAsked {
-                    kind: DraftKind::Routine,
-                    description: "label invoices".into(),
-                },
-                progress: started(DraftStage::Started),
-                created_at: Utc::now(),
-                traceparent: Some(TRACEPARENT.into()),
-            })
+            .begin_job(
+                &new_job(owner, session, client_id),
+                u32::MAX,
+                DateTime::UNIX_EPOCH,
+            )
             .await
             .unwrap()
+    }
+
+    /// Jobs drafting at once, in the limit tests.
+    const LIMIT: u32 = 3;
+
+    /// Start a job for a new start, at most [`LIMIT`] drafting since an hour ago.
+    async fn begin_limited(drafts: &PgDraftHandBacks, owner: &MacroUserIdStr<'static>) -> Begun {
+        let job = new_job(
+            owner,
+            macro_uuid::generate_uuid_v7(),
+            macro_uuid::generate_uuid_v7(),
+        );
+        drafts
+            .begin_job(&job, LIMIT, Utc::now() - chrono::Duration::hours(1))
+            .await
+            .unwrap()
+    }
+
+    async fn drafting(pool: &PgPool, owner: &MacroUserIdStr<'static>) -> i64 {
+        sqlx::query_scalar!(
+            r#"SELECT count(*) AS "count!" FROM scheduled_action_draft WHERE owner_id = $1 AND state = 'drafting'"#,
+            owner.as_ref(),
+        )
+        .fetch_one(pool)
+        .await
+        .unwrap()
+    }
+
+    /// Starts sent together, each a new start, never pass the limit
+    /// together: each round sends more than the limit at once, for a new
+    /// person each time.
+    #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+    async fn starts_sent_together_never_pass_the_limit(pool: PgPool) {
+        const ROUNDS: u8 = 10;
+        const AT_ONCE: usize = 5;
+        let drafts = Arc::new(PgDraftHandBacks::new(pool.clone()));
+        for round in 0..ROUNDS {
+            let owner =
+                MacroUserIdStr::try_from_email(&format!("owner-{round}@example.com")).unwrap();
+            let together = Arc::new(Barrier::new(AT_ONCE));
+            let mut starts = JoinSet::new();
+            for _ in 0..AT_ONCE {
+                let (drafts, owner, together) =
+                    (Arc::clone(&drafts), owner.clone(), Arc::clone(&together));
+                starts.spawn(async move {
+                    together.wait().await;
+                    begin_limited(&drafts, &owner).await
+                });
+            }
+            let mut begun = starts.join_all().await;
+            begun.sort_by_key(|begun| *begun != Begun::Started);
+
+            assert_eq!(
+                begun,
+                [
+                    Begun::Started,
+                    Begun::Started,
+                    Begun::Started,
+                    Begun::TooMany,
+                    Begun::TooMany
+                ],
+                "round {round}"
+            );
+            assert_eq!(
+                drafting(&pool, &owner).await,
+                i64::from(LIMIT),
+                "round {round}"
+            );
+        }
+    }
+
+    /// At the limit, a start sent again still finds its job; a job that
+    /// started before `since` doesn't count, nor one that finished.
+    #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+    async fn the_limit_counts_jobs_drafting_since_and_lets_repeats_through(pool: PgPool) {
+        let drafts = PgDraftHandBacks::new(pool.clone());
+        let client_id = macro_uuid::generate_uuid_v7();
+        let first = macro_uuid::generate_uuid_v7();
+        assert_eq!(
+            begin_as(&drafts, &owner(), first, client_id).await,
+            Begun::Started
+        );
+        for _ in 1..LIMIT {
+            assert_eq!(begin_limited(&drafts, &owner()).await, Begun::Started);
+        }
+        assert_eq!(begin_limited(&drafts, &owner()).await, Begun::TooMany);
+        let again = new_job(&owner(), macro_uuid::generate_uuid_v7(), client_id);
+        assert_eq!(
+            drafts
+                .begin_job(&again, LIMIT, Utc::now() - chrono::Duration::hours(1))
+                .await
+                .unwrap(),
+            Begun::Repeated
+        );
+
+        // Lost to a stopped drafter, it no longer counts.
+        age(&pool, first, "2 hours", None).await;
+        assert_eq!(begin_limited(&drafts, &owner()).await, Begun::Started);
+        assert_eq!(begin_limited(&drafts, &owner()).await, Begun::TooMany);
+        let owner = owner();
+        let newest: Uuid = sqlx::query_scalar!(
+            "SELECT session_id FROM scheduled_action_draft WHERE owner_id = $1 ORDER BY created_at DESC LIMIT 1",
+            owner.as_ref(),
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        drafts.finish_job(newest, &failed("no")).await.unwrap();
+        assert_eq!(begin_limited(&drafts, &owner).await, Begun::Started);
+        // Someone else has their own limit.
+        assert_eq!(begin_limited(&drafts, &stranger()).await, Begun::Started);
     }
 
     fn failed(message: &str) -> Draft {
@@ -293,7 +419,6 @@ mod jobs {
         let session = begin(&drafts, &owner()).await;
         let other = begin(&drafts, &stranger()).await;
 
-        assert_eq!(drafts.drafting(&owner()).await.unwrap(), 1);
         assert!(
             drafts
                 .progress(session, &started(DraftStage::Writing))
@@ -325,7 +450,6 @@ mod jobs {
             drafts.finish_job(session, &failed("again")).await.unwrap(),
             Finished::Gone
         );
-        assert_eq!(drafts.drafting(&owner()).await.unwrap(), 0);
         let finished = drafts.job(&owner(), session).await.unwrap().unwrap();
         assert!(
             matches!(&finished.state, DraftJobState::Failed { message, .. } if message == "no"),
@@ -383,7 +507,10 @@ mod jobs {
         let drafts = PgDraftHandBacks::new(pool.clone());
         let client_id = macro_uuid::generate_uuid_v7();
         let first = macro_uuid::generate_uuid_v7();
-        assert!(begin_as(&drafts, &owner(), first, client_id).await);
+        assert_eq!(
+            begin_as(&drafts, &owner(), first, client_id).await,
+            Begun::Started
+        );
         assert_eq!(
             drafts
                 .started(&owner(), client_id)
@@ -395,7 +522,10 @@ mod jobs {
         );
 
         let again = macro_uuid::generate_uuid_v7();
-        assert!(!begin_as(&drafts, &owner(), again, client_id).await);
+        assert_eq!(
+            begin_as(&drafts, &owner(), again, client_id).await,
+            Begun::Repeated
+        );
         let rows =
             sqlx::query_scalar!(r#"SELECT count(*) AS "count!" FROM scheduled_action_draft"#)
                 .fetch_one(&pool)
@@ -404,7 +534,10 @@ mod jobs {
         assert_eq!(rows, 1);
         // Finished, it is still the start's job.
         drafts.finish_job(first, &failed("no")).await.unwrap();
-        assert!(!begin_as(&drafts, &owner(), again, client_id).await);
+        assert_eq!(
+            begin_as(&drafts, &owner(), again, client_id).await,
+            Begun::Repeated
+        );
         assert_eq!(
             drafts
                 .started(&owner(), client_id)
@@ -416,11 +549,17 @@ mod jobs {
         );
         // The same id from someone else is theirs.
         assert_eq!(drafts.started(&stranger(), client_id).await.unwrap(), None);
-        assert!(begin_as(&drafts, &stranger(), again, client_id).await);
+        assert_eq!(
+            begin_as(&drafts, &stranger(), again, client_id).await,
+            Begun::Started
+        );
         // Cancelled, the id starts afresh.
         drafts.cancel_job(&owner(), first).await.unwrap();
         assert_eq!(drafts.started(&owner(), client_id).await.unwrap(), None);
-        assert!(begin_as(&drafts, &owner(), macro_uuid::generate_uuid_v7(), client_id).await);
+        assert_eq!(
+            begin_as(&drafts, &owner(), macro_uuid::generate_uuid_v7(), client_id).await,
+            Begun::Started
+        );
     }
 
     #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

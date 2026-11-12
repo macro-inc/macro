@@ -18,9 +18,17 @@ use crate::domain::ports::{DraftHandBacks, StaleDraft};
 
 #[async_trait::async_trait]
 impl DraftJobStore for Rows {
-    async fn begin_job(&self, job: &NewDraftJob) -> Result<bool> {
+    async fn begin_job(
+        &self,
+        job: &NewDraftJob,
+        limit: u32,
+        since: DateTime<Utc>,
+    ) -> Result<Begun> {
         if self.live(&job.owner, job.client_id).is_some() {
-            return Ok(false);
+            return Ok(Begun::Repeated);
+        }
+        if self.drafting(&job.owner, since) >= limit {
+            return Ok(Begun::TooMany);
         }
         self.drafts.lock().unwrap().insert(
             job.session,
@@ -44,7 +52,7 @@ impl DraftJobStore for Rows {
             },
         );
         self.beginning.pass().await;
-        Ok(true)
+        Ok(Begun::Started)
     }
 
     async fn started(
@@ -55,20 +63,6 @@ impl DraftJobStore for Rows {
         Ok(self
             .live(owner, client_id)
             .and_then(|session| self.read(session)))
-    }
-
-    async fn drafting(&self, owner: &MacroUserIdStr<'static>) -> Result<u32> {
-        let drafts = self.drafts.lock().unwrap();
-        Ok(self
-            .jobs
-            .lock()
-            .unwrap()
-            .iter()
-            .filter(|(session, job)| {
-                job.phase == DraftJobPhase::Drafting
-                    && drafts.get(session).is_some_and(|draft| draft.0 == *owner)
-            })
-            .count() as u32)
     }
 
     async fn progress(&self, session: Uuid, progress: &DraftJobProgress) -> Result<bool> {
@@ -198,6 +192,22 @@ impl DraftJobStore for Rows {
 
 impl Rows {
     /// `owner`'s live job the start with `client_id` began.
+    /// How many of `owner`'s jobs started after `since` are drafting.
+    fn drafting(&self, owner: &MacroUserIdStr<'static>, since: DateTime<Utc>) -> u32 {
+        let drafts = self.drafts.lock().unwrap();
+        self.jobs
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(session, job)| {
+                job.phase == DraftJobPhase::Drafting
+                    && drafts
+                        .get(*session)
+                        .is_some_and(|(by, _, _, created)| by == owner && *created > since)
+            })
+            .count() as u32
+    }
+
     fn live(&self, owner: &MacroUserIdStr<'static>, client_id: Uuid) -> Option<Uuid> {
         let drafts = self.drafts.lock().unwrap();
         self.jobs

@@ -71,6 +71,18 @@ pub enum DraftJobError {
     TooMany,
 }
 
+/// What starting a job's row found.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Begun {
+    /// The job started, drafting.
+    Started,
+    /// Its owner has a live job with its client id: the same start, sent
+    /// again, began first.
+    Repeated,
+    /// Its owner has as many jobs drafting as it may.
+    TooMany,
+}
+
 /// What kind of draft was asked for.
 #[derive(
     Debug,
@@ -696,14 +708,6 @@ impl<Code: RoutineCode, Sessions: RoutineSessions, Updates: RoutineDraftUpdates>
         traceparent: Option<String>,
     ) -> Result<DraftJob> {
         let started = tracing::Span::current();
-        // A start sent again, as a client does when its connection drops,
-        // answers with the job the first one started.
-        if let Some(job) = self.store.started(&owner, client_id).await? {
-            return Ok(repeated(&started, job));
-        }
-        if self.store.drafting(&owner).await? >= MAX_DRAFTING {
-            anyhow::bail!(DraftJobError::TooMany);
-        }
         let session = AgentSessionId::new();
         let id = session.as_uuid();
         let job = NewDraftJob {
@@ -716,14 +720,22 @@ impl<Code: RoutineCode, Sessions: RoutineSessions, Updates: RoutineDraftUpdates>
             created_at: Utc::now(),
             traceparent,
         };
-        if !self.store.begin_job(&job).await? {
-            // The same start, sent again, began first.
-            let job = self
-                .store
-                .started(&owner, client_id)
-                .await?
-                .ok_or(DraftJobError::NotFound)?;
-            return Ok(repeated(&started, job));
+        // Jobs drafting longer than this have lost their drafter, and
+        // don't count against the limit.
+        let since = job.created_at - chrono::Duration::from_std(INTERRUPTED_AFTER)?;
+        match self.store.begin_job(&job, MAX_DRAFTING, since).await? {
+            Begun::Started => {}
+            Begun::Repeated => {
+                // A start sent again, as a client does when its connection
+                // drops, answers with the job the first one started.
+                let job = self
+                    .store
+                    .started(&owner, client_id)
+                    .await?
+                    .ok_or(DraftJobError::NotFound)?;
+                return Ok(repeated(&started, job));
+            }
+            Begun::TooMany => anyhow::bail!(DraftJobError::TooMany),
         }
         started.record("routine.draft.id", id.to_string());
         started.record("routine.draft.repeated", false);

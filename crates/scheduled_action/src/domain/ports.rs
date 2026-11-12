@@ -439,8 +439,15 @@ pub trait DraftHandBacks: Send + Sync + 'static {
 #[async_trait::async_trait]
 pub trait DraftJobStore: Send + Sync + 'static {
     /// Start `job`, drafting, unless its owner has a live job (drafting,
-    /// ready or failed) with its client id. Whether it started.
-    async fn begin_job(&self, job: &super::drafts::jobs::NewDraftJob) -> Result<bool>;
+    /// ready or failed) with its client id, or `limit` jobs drafting that
+    /// started after `since`. One owner's starts are serialized, so starts
+    /// sent together never pass the limit together.
+    async fn begin_job(
+        &self,
+        job: &super::drafts::jobs::NewDraftJob,
+        limit: u32,
+        since: DateTime<Utc>,
+    ) -> Result<super::drafts::jobs::Begun>;
 
     /// `owner`'s live job that the start with `client_id` began.
     async fn started(
@@ -448,9 +455,6 @@ pub trait DraftJobStore: Send + Sync + 'static {
         owner: &MacroUserIdStr<'static>,
         client_id: Uuid,
     ) -> Result<Option<super::drafts::jobs::DraftJob>>;
-
-    /// How many of `owner`'s jobs are drafting.
-    async fn drafting(&self, owner: &MacroUserIdStr<'static>) -> Result<u32>;
 
     /// Keep `progress` on a job still drafting. Whether it was.
     async fn progress(

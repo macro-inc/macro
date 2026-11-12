@@ -10,7 +10,7 @@ use sqlx::PgPool;
 
 use crate::domain::drafts::Draft;
 use crate::domain::drafts::jobs::{
-    CancelledJob, DraftJob, DraftJobPhase, Finished, InterruptedJob, NewDraftJob,
+    Begun, CancelledJob, DraftJob, DraftJobPhase, Finished, InterruptedJob, NewDraftJob,
 };
 use crate::domain::drafts::progress::DraftJobProgress;
 use crate::domain::models::{CreatedItem, RoutineCheck};
@@ -182,9 +182,64 @@ fn read_progress(progress: Option<serde_json::Value>) -> DraftJobProgress {
 
 #[async_trait::async_trait]
 impl DraftJobStore for PgDraftHandBacks {
-    async fn begin_job(&self, job: &NewDraftJob) -> Result<bool> {
+    async fn begin_job(
+        &self,
+        job: &NewDraftJob,
+        limit: u32,
+        since: DateTime<Utc>,
+    ) -> Result<Begun> {
         let request = serde_json::to_value(&job.request).context("encode a draft's request")?;
         let progress = serde_json::to_value(&job.progress).context("encode a draft's progress")?;
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .context("start a background routine draft")?;
+        // The lock waits behind a start that holds it; neither it nor the
+        // lookups below may hold a connection for long.
+        sqlx::query!("SET LOCAL statement_timeout = '5s'")
+            .execute(&mut *tx)
+            .await
+            .context("bound a routine draft's start")?;
+        // One person's starts queue here, so the count and the insert below
+        // are one step: starts sent together never pass the limit together.
+        let key = format!("routine-draft-jobs:{}", job.owner);
+        sqlx::query!("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", key)
+            .execute(&mut *tx)
+            .await
+            .context("queue a routine draft's start")?;
+        // Repeats first: a start sent again answers with its job, whatever
+        // else is drafting. Each lookup reads its own partial index: the
+        // live (owner, client id) key, and the owner's jobs since `since`.
+        // The count's `state IS NOT NULL` is that index's predicate, which
+        // keeps it off the every-owner index of unfinished drafts.
+        let live = sqlx::query!(
+            r#"
+            SELECT
+                EXISTS (
+                    SELECT FROM scheduled_action_draft
+                    WHERE owner_id = $1 AND client_id = $2
+                      AND state IN ('drafting', 'ready', 'failed')
+                ) AS "repeated!",
+                (
+                    SELECT count(*) FILTER (WHERE state = 'drafting')
+                    FROM scheduled_action_draft
+                    WHERE owner_id = $1 AND state IS NOT NULL AND created_at > $3
+                ) AS "drafting!"
+            "#,
+            job.owner.as_ref(),
+            job.client_id,
+            since,
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .context("count a person's routine drafts")?;
+        if live.repeated {
+            return Ok(Begun::Repeated);
+        }
+        if live.drafting >= i64::from(limit) {
+            return Ok(Begun::TooMany);
+        }
         let began = sqlx::query!(
             r#"
             INSERT INTO scheduled_action_draft
@@ -204,10 +259,17 @@ impl DraftJobStore for PgDraftHandBacks {
             job.traceparent.as_deref(),
             job.client_id,
         )
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await
         .context("start a background routine draft")?;
-        Ok(began.rows_affected() > 0)
+        tx.commit()
+            .await
+            .context("start a background routine draft")?;
+        Ok(if began.rows_affected() > 0 {
+            Begun::Started
+        } else {
+            Begun::Repeated
+        })
     }
 
     async fn started(
@@ -238,20 +300,6 @@ impl DraftJobStore for PgDraftHandBacks {
                 row.finished_at,
             )
         }))
-    }
-
-    async fn drafting(&self, owner: &MacroUserIdStr<'static>) -> Result<u32> {
-        let drafting = sqlx::query_scalar!(
-            r#"
-            SELECT count(*) AS "drafting!" FROM scheduled_action_draft
-            WHERE owner_id = $1 AND state = 'drafting'
-            "#,
-            owner.as_ref(),
-        )
-        .fetch_one(&self.pool)
-        .await
-        .context("count a person's routine drafts")?;
-        Ok(u32::try_from(drafting).unwrap_or(u32::MAX))
     }
 
     async fn progress(&self, session: Uuid, progress: &DraftJobProgress) -> Result<bool> {
