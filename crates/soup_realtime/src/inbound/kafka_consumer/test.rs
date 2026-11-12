@@ -67,6 +67,7 @@ fn user() -> MacroUserIdStr<'static> {
 
 fn updated_event() -> Event<DocumentTopicEvent> {
     Event::new(DocumentTopicEvent::Updated(DocumentUpdatedMetadata {
+        appearance_change: None,
         document_id: DOCUMENT_ID.to_string(),
         owner: Owner::User(user()),
         actor_user_id: None,
@@ -165,6 +166,7 @@ fn document_lifecycle_events_map_to_updated_and_deleted_patches() {
 fn moving_a_document_out_of_a_project_updates_the_previous_project() {
     let previous_project_id = Uuid::now_v7().to_string();
     let event = DocumentTopicEvent::Updated(DocumentUpdatedMetadata {
+        appearance_change: None,
         document_id: DOCUMENT_ID.to_string(),
         owner: Owner::User(user()),
         actor_user_id: None,

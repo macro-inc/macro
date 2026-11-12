@@ -46,8 +46,8 @@ async fn a_failure_after_partial_output_is_still_forwarded_to_the_consumer() {
 /// A stand-in for the toolset prompt, short enough to assert on positionally.
 const TOOLS: &str = "TOOLS";
 
-#[path = "test/tool_mode.rs"]
-mod tool_mode;
+#[path = "test/code_tools.rs"]
+mod code_tools;
 
 #[test]
 fn cached_definitions_keep_client_capabilities_and_reviewable_tools() {
@@ -76,7 +76,7 @@ fn cached_definitions_keep_client_capabilities_and_reviewable_tools() {
 
 #[test]
 fn reduced_definitions_keep_user_input_and_user_tool_review() {
-    let tools = NativeTools::from_factory(ai_tools::tools_for_agent_code_mode, true);
+    let tools = NativeTools::new();
     assert!(tools.for_turn(true).tools.contains_key("AskUser"));
     assert!(!tools.for_turn(false).tools.contains_key("AskUser"));
     for supports_input in [true, false] {
