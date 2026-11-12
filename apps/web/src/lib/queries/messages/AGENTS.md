@@ -10,13 +10,19 @@ live events that keep them current.
 
 - `timeline.ts`: the infinite timeline query and every operation on its pages.
 - `sync.ts`: live `message_update` events applied to loaded pages.
-- `mutations.ts`, `reactions.ts`: optimistic writes (REST).
-- `graphql/`: how a channel's timeline reads through the device cache.
+- `mutations.ts`, `reactions.ts`: optimistic writes, over REST or, for a
+  channel read through the device cache, its mutation queue.
+- `graphql/`: how a channel's timeline reads and writes through the device cache.
   - `source.ts`: the GraphQL reads and the cached latest page.
+  - `writes.ts`: channel message writes sent through the queue and waited on.
+  - `queued-writes.ts`: the queued writes the timeline keeps showing, restored
+    after a reload and applied again after reads.
   - `channel-sync.ts`: opening from the cache, catch-up, writing the page back.
   - `apply.ts`: changes applied to loaded pages; `convert.ts`: GraphQL ↔ timeline shapes.
   - `prewarm.ts`: warming the pages of channels not open yet, and evicting
     the pages of channels not opened for 30 days.
+  - `tests/channel-writes-world.ts`: pages sharing one simulated device cache,
+    queue and channel server, for tests of queued writes across reloads.
 
 ## Scope
 
@@ -57,8 +63,11 @@ live events that keep them current.
   a pushed change,
   never as part of the read that shows it, and only when
   the first loaded page is the live edge, the cache is still the session's,
-  and no message write for the channel is pending, so an optimistic row is
-  never stored.
+  no message write for the channel is pending or held queued, and the queue
+  holds no write to it (`queueHoldsChannelWrite`, which sees other tabs and
+  earlier pages), so an optimistic row is never stored and a write's older
+  response never lands on a page under a newer number. Prewarm skips such a
+  channel (`write_queued`) and tries again on its next run.
 - A timeline already loaded is never replaced from the cache: a refetch reads
   the server.
 - The open waits on the cache alone (for 2 s) only for a channel it is known
@@ -77,9 +86,32 @@ live events that keep them current.
   and treats a changes read with no answer in 15 s as failed. A reply for a
   thread whose first read is in flight makes that thread read once more
   when the read lands; the reply itself may be older than what it returns.
-- The messages client sends a write again, twice a second apart, when the
-  server answers 503 (its write guard); the id and nonce stay the same, so
-  the retry cannot post twice. A refused edit, delete, reaction or thread
+- A channel read through the device cache (`channelWriteHost`) posts, edits,
+  deletes and reacts through the queue (`writes.ts`); every other parent, a
+  channel read from REST, anchored posts and thread changes use REST. The
+  write starts in `onMutate` (`startChannelWrite`): TanStack holds
+  `mutationFn` until it thinks the device is online, and a write held there
+  is lost with the page. `mutationFn` returns the started write.
+- A queued write's hook stays pending until it settles: committed catches the
+  channel up (`refreshAfterChannelWrite`) and resolves with nothing, replaced
+  by a newer edit resolves with nothing, failed or lost with the cache's
+  storage rejects, so the hook's rollback and toast run. Callers that need
+  the stored message only post to parents that never queue (`storedMessage`).
+- Queue keys: a post's is its message id, so a resend is the same write;
+  every edit of a message shares one (uuid v5 of the id), so a newer unsent
+  edit replaces the older; deletes and reactions get their own. The queue
+  keeps no optimistic data: only the timeline holds the rows. `BUSY` is
+  retried without spending the queue's failure budget.
+- `queued-writes.ts` holds the channel's queued writes, from hooks on this
+  page and, read once per cache host with `inspectMutations`, from before
+  the page loaded (settling those itself). A server read that replaces a
+  page and a catch-up that applies changes drop their changes, so they are
+  applied again in queue order, each only where it is missing; a message
+  the queue deletes later is not put back. `hasPendingWrite` is true while
+  one is held.
+- The messages client sends a REST write again, twice a second apart, when
+  the server answers 503 (its write guard); the id and nonce stay the same,
+  so the retry cannot post twice. A refused edit, delete, reaction or thread
   change is not sent again once a later write to the same message has
   started: it fails as refused instead of landing after the later one.
   Reads are not retried.
