@@ -75,7 +75,10 @@ tools — hexagonal, heavily feature-gated.
   address: `resolve_sending_inbox` (AI tools) picks the inbox that owns it, and
   `resolve_sender` (drafts, REST `from`) checks it against the chosen inbox.
   Both read `EmailSenderProvider`, so a host that skips `with_sender_provider`
-  refuses every alias. Outlook inboxes have no aliases here.
+  refuses every alias. Outlook inboxes have no aliases here. The alias's
+  display name is stored on the draft row (`from_name`), not only on the
+  shared sender contact, which keeps an existing name and drops names for
+  role addresses such as `support@`.
 - The send route refuses an agent's program (`refuse_program_send`, 403), and
   the schedule route admits one only with a quoted `user_confirmation`: a
   program sends through a session review, the harness's confirmed send
