@@ -116,7 +116,7 @@ Assert direct child types when testing rich insertion into code, since nested bl
 
 - Isolate Vite and Playwright in a private user/network namespace with loopback
   enabled when host route churn causes ERR_NETWORK_CHANGED; keep checks strict.
-- Build document_session_wasm before session browser tests, with TMPDIR=/home/wolf/tmp and -j2.
+- Build document_session_wasm before session browser tests, with TMPDIR=/home/wolf/tmp and -j2; derive served-WASM hash assertions from that generated artifact.
 - `just check`, `just pr-privacy`
 
 ## Related

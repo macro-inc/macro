@@ -1,5 +1,17 @@
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
+
+const nativeWasmSHA256 = createHash('sha256')
+  .update(
+    readFileSync(
+      new URL(
+        '../../../apps/web/src/lib/core/document-session/wasm/document_session_wasm_bg.wasm',
+        import.meta.url
+      )
+    )
+  )
+  .digest('hex');
 
 for (const [platform, userAgent] of [
   ['MacIntel', 'Mozilla/5.0 (Windows NT 10.0)'],
@@ -62,9 +74,7 @@ for (const [platform, userAgent] of [
         assets
           .filter((asset) => asset.url.endsWith('.wasm'))
           .map((asset) => asset.sha256)
-      ).toEqual([
-        '1424d8634496b8309b763eeacb3283c9c772b6cfeb65be9d3e8ca6cf11ab8def',
-      ]);
+      ).toEqual([nativeWasmSHA256]);
       await info.attach('checklist-platform', {
         body: JSON.stringify({
           platform,
