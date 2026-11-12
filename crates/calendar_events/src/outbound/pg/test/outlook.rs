@@ -884,13 +884,10 @@ async fn replaced_generations_reset_each_work_row_exactly_once(pool: PgPool) {
     assert_eq!(scans(&pool, lease.account_id).await, settled);
 
     // A newer link generation sorts above the work's, an older one below it.
-    sqlx::query!(
-        "UPDATE email_links SET sync_generation=2 WHERE id=$1",
-        link
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+    sqlx::query!("UPDATE email_links SET sync_generation=2 WHERE id=$1", link)
+        .execute(&pool)
+        .await
+        .unwrap();
     sqlx::query!(
         "UPDATE calendar_outlook_work SET grant_generation=5 WHERE id=$1",
         lease.id
@@ -956,10 +953,7 @@ async fn unclaimable_accounts_never_starve_claimable_work(pool: PgPool) {
     ];
     while claim(&repo).await.is_some() {}
     let deleted = repo
-        .upsert_calendar_fixture(
-            lease.account_id,
-            discovered_calendar("deleted").calendar,
-        )
+        .upsert_calendar_fixture(lease.account_id, discovered_calendar("deleted").calendar)
         .await
         .unwrap();
     sqlx::query!(
@@ -976,9 +970,27 @@ async fn unclaimable_accounts_never_starve_claimable_work(pool: PgPool) {
         .execute(&pool)
         .await
         .unwrap();
-    sqlx::query!("UPDATE calendar_accounts SET sync_status='reauth_required' WHERE email_link_id=$1",reauth).execute(&pool).await.unwrap();
-    sqlx::query!("DELETE FROM email_link_microsoft_scopes WHERE link_id=$1",revoked).execute(&pool).await.unwrap();
-    sqlx::query!("UPDATE email_links SET is_sync_active=false WHERE id=$1",inactive).execute(&pool).await.unwrap();
+    sqlx::query!(
+        "UPDATE calendar_accounts SET sync_status='reauth_required' WHERE email_link_id=$1",
+        reauth
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "DELETE FROM email_link_microsoft_scopes WHERE link_id=$1",
+        revoked
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE email_links SET is_sync_active=false WHERE id=$1",
+        inactive
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
     // Every unclaimable row is due long before the one claimable row.
     sqlx::query!(
         "UPDATE calendar_outlook_work SET lease_id=NULL,lease_until=NULL,
