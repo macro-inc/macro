@@ -24,8 +24,9 @@ if (stack !== 'dev') {
 const region = aws.config.requireRegion();
 
 const BASE_NAME = pulumi.getProject();
-// Upstream 2.7.2 (the local stack's version), pinned by digest; Quay avoids
-// Docker Hub pull limits. No custom image: config arrives as BAO_LOCAL_CONFIG.
+// Upstream 2.7.2 (the local stack's version), pinned by digest and pulled
+// from Quay rather than Docker Hub. No custom image: config arrives as
+// BAO_LOCAL_CONFIG.
 const IMAGE =
   'quay.io/openbao/openbao:2.7.2@sha256:5046911075e137e154ce49ab051502f4ec7cf367d484ae4a4dce665d9b90561f';
 // The `openbao` user in that image.
@@ -399,7 +400,8 @@ const targetGroup = new aws.lb.TargetGroup(`${BASE_NAME}-tg`, {
   targetType: 'ip',
   protocol: 'HTTP',
   port: API_PORT,
-  // One task: a new one starts only after the old one stops.
+  // Below the shared 15 s default: the old task drains before the new one
+  // starts (stop-then-start), so every second here is outage.
   deregistrationDelay: 5,
   healthCheck: {
     ...DEFAULT_TARGET_GROUP_HEALTH_CHECK,
@@ -407,7 +409,6 @@ const targetGroup = new aws.lb.TargetGroup(`${BASE_NAME}-tg`, {
     // `operator init`) answers 200 instead of 501. Sealed (503) stays
     // unhealthy, so ECS replaces the task.
     path: '/v1/sys/health?uninitcode=200',
-    unhealthyThreshold: 3,
     matcher: '200',
   },
   tags,
@@ -569,4 +570,6 @@ export const address = API_ADDRESS;
 export const serviceName = service.service.name;
 export const sealKeyArn = sealKey.arn;
 export const fileSystemId = fileSystem.id;
+export const fileSystemArn = fileSystem.arn;
+export const backupRoleArn = backupRole.arn;
 export const backupVaultName = backupVault.name;

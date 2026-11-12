@@ -24,8 +24,8 @@ From `infra/`: `bun run check`, `bunx biome check stacks/openbao`;
 - The seal key policy is the only grant on that key; don't add IAM policies for
   it. Losing the key makes every backup unreadable, so it stays `protect` +
   `retainOnDelete`.
-- The health check accepts 501 (uninitialized) so the first deploy can settle;
-  a sealed vault (503) must stay unhealthy.
+- The health check asks for `uninitcode=200` so the first deploy settles before
+  init (ALB matchers stop at 499); a sealed vault (503) must stay unhealthy.
 - The `openbao` Doppler project has a dev config only and is created by hand.
   Don't add it to `doppler-projects`, which would also create `prd`.
 - The stack is not in `services-config.json`; deploys are manual.

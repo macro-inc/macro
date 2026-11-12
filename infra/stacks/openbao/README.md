@@ -15,9 +15,8 @@ hosted dev vault that QA uses.
 | Audit | Declared device `passwords`, `file_path = stdout`, `log_raw = false`; FireLens ships it to Datadog as `service:openbao` (and to Grafana in dev) |
 | Alarms | ECS deployment failure; no healthy target for 5 minutes |
 
-Server limits match local: `default_max_request_duration = "90s"`, and no JWT
-leeway, so DSS and the vault must keep synchronized clocks (Fargate uses Amazon
-Time Sync).
+The server's `default_max_request_duration` (90 s) matches local; the ALB idle
+timeout (95 s) is longer.
 
 ## First deploy and init (once)
 
@@ -67,7 +66,8 @@ Time Sync).
 Hosted provisioning of team namespaces, mounts, JWT roles, and the lifecycle
 role is a follow-up that lands after Passwords. Until it does, no team can use
 the vault. It will reuse the local bootstrap's policy and role logic and accept
-only this exact HTTPS origin.
+only this exact HTTPS origin. Its JWT roles allow no clock leeway, so DSS and
+the vault must keep synchronized clocks (Fargate uses Amazon Time Sync).
 
 At provisioning time, the document storage service's dev Doppler config gets
 `OPENBAO_ADDRESS`, `PASSWORDS_JWT_ISSUER`, and `PASSWORDS_JWT_SIGNING_KEY`
@@ -84,7 +84,8 @@ up:
 ```sh
 aws ecs update-service --cluster "$cluster" --service openbao --desired-count 0
 aws backup start-backup-job --backup-vault-name openbao-dev \
-  --resource-arn <file system ARN> --iam-role-arn <openbao-backup-role-dev ARN>
+  --resource-arn "$(pulumi stack output fileSystemArn --stack macro-inc/dev)" \
+  --iam-role-arn "$(pulumi stack output backupRoleArn --stack macro-inc/dev)"
 # wait for the job to finish (aws backup describe-backup-job), then:
 aws ecs update-service --cluster "$cluster" --service openbao --desired-count 1
 ```
