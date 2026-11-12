@@ -252,3 +252,4 @@ without spending those retries.
   pass to its streams and the first pass to the second.
 - Attributes are counts, durations and fixed classes; lane errors and failure
   messages are not recorded.
+- A failure to record never fails the sync: the stream runs untraced.

@@ -36,9 +36,11 @@ type RecordedSpan = {
   ended: boolean;
 };
 const spans = vi.hoisted((): RecordedSpan[] => []);
+const telemetry = vi.hoisted(() => ({ broken: false }));
 vi.mock('@macro-inc/observability', () => ({
   Telemetry: {
     span: (name: string) => {
+      if (telemetry.broken) throw new Error('telemetry is down');
       const span: RecordedSpan = {
         name,
         attributes: {},
@@ -120,6 +122,7 @@ beforeEach(() => {
   vi.setSystemTime('2026-11-02T12:00:00.000Z');
   runSyncPass.mockReset();
   spans.length = 0;
+  telemetry.broken = false;
   consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
 });
 
@@ -389,6 +392,19 @@ describe('runStreamedSync', () => {
     );
     expect(new Set(sent.map((headers) => headers.traceparent)).size).toBe(3);
     expect(streams.every((span) => span.ended)).toBe(true);
+  });
+
+  it('syncs untraced when telemetry fails', async () => {
+    telemetry.broken = true;
+    runSyncPass.mockResolvedValue(complete);
+    await settle(Effect.runPromise(runStreamedSync(asHost(fakeHost()))));
+    expect(
+      runSyncPass.mock.calls.map(([, pass, , headers]) => [pass, headers])
+    ).toEqual([
+      ['first', {}],
+      ['second', {}],
+    ]);
+    expect(spans).toEqual([]);
   });
 
   it('records a pass with what its streams did, busy answers apart from failures', async () => {

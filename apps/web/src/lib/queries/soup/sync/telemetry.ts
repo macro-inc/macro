@@ -10,7 +10,8 @@
  * links a pass to its streams.
  *
  * Attributes are counts, durations and fixed classes. Lane errors and failure
- * messages never leave this module.
+ * messages never leave this module. A failure to record never reaches the
+ * sync: a stream then runs untraced.
  */
 import type { SyncFailure, SyncRunOutcome } from '@graphql-cache/sync-protocol';
 import { type Span, Telemetry } from '@macro-inc/observability';
@@ -67,57 +68,78 @@ export function traceSyncPass(session: string, pass: SyncPass): SyncPassTrace {
 
   return {
     async stream(run) {
-      const span = Telemetry.span('graphql_cache.sync.stream', {
-        kind: 'client',
-      });
-      span.setAttr('cache.sync_session', session);
-      span.setAttr('cache.sync_pass', pass);
-      span.setAttr('cache.sync_stream', totals.streams);
+      const index = totals.streams;
       totals.streams += 1;
       const traceHeaders: Record<string, string> = {};
-      span.injectTraceHeaders(traceHeaders);
+      const span = untraced(() => {
+        const span = Telemetry.span('graphql_cache.sync.stream', {
+          kind: 'client',
+        });
+        span.setAttr('cache.sync_session', session);
+        span.setAttr('cache.sync_pass', pass);
+        span.setAttr('cache.sync_stream', index);
+        span.injectTraceHeaders(traceHeaders);
+        return span;
+      });
 
       let outcome: SyncRunOutcome | undefined;
       try {
         outcome = await run(traceHeaders);
         return outcome;
       } finally {
-        recordStream(span, totals, outcome);
-        span.end();
+        untraced(() => recordStream(span, totals, outcome));
+        untraced(() => span?.end());
       }
     },
 
     end(outcome) {
-      const span = Telemetry.span('graphql_cache.sync.pass', {
-        startTime: startedAt,
+      untraced(() => {
+        const span = Telemetry.span('graphql_cache.sync.pass', {
+          startTime: startedAt,
+        });
+        span.setAttr('cache.sync_session', session);
+        span.setAttr('cache.sync_pass', pass);
+        span.setAttr('cache.sync_outcome', outcome);
+        span.setAttr('cache.sync_streams', totals.streams);
+        span.setAttr('cache.sync_busy_streams', totals.busyStreams);
+        span.setAttr('cache.sync_failed_streams', totals.failedStreams);
+        span.setAttr('cache.sync_bytes', totals.bytes);
+        span.setAttr('cache.sync_pages', totals.pages);
+        span.setAttr('cache.sync_items', totals.items);
+        span.setAttr('cache.sync_write_ms', totals.writeMs);
+        span.setAttr('cache.sync_failed_lanes', totals.laneFailures);
+        if (!PASS_ENDED_NORMALLY.includes(outcome)) span.error(outcome);
+        span.end();
       });
-      span.setAttr('cache.sync_session', session);
-      span.setAttr('cache.sync_pass', pass);
-      span.setAttr('cache.sync_outcome', outcome);
-      span.setAttr('cache.sync_streams', totals.streams);
-      span.setAttr('cache.sync_busy_streams', totals.busyStreams);
-      span.setAttr('cache.sync_failed_streams', totals.failedStreams);
-      span.setAttr('cache.sync_bytes', totals.bytes);
-      span.setAttr('cache.sync_pages', totals.pages);
-      span.setAttr('cache.sync_items', totals.items);
-      span.setAttr('cache.sync_write_ms', totals.writeMs);
-      span.setAttr('cache.sync_failed_lanes', totals.laneFailures);
-      if (!PASS_ENDED_NORMALLY.includes(outcome)) span.error(outcome);
-      span.end();
     },
   };
 }
 
-/** `outcome` is `undefined` when the stream threw before it had one. */
+/**
+ * Runs `record` and drops whatever it throws: observability must never
+ * affect cache sync.
+ */
+function untraced<T>(record: () => T): T | undefined {
+  try {
+    return record();
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * `span` is `undefined` when the stream runs untraced, `outcome` when the
+ * stream threw before it had one. The pass totals count either way.
+ */
 function recordStream(
-  span: Span,
+  span: Span | undefined,
   totals: PassTotals,
   outcome: SyncRunOutcome | undefined
 ): void {
   if (outcome === undefined) {
     totals.failedStreams += 1;
-    span.setAttr('cache.sync_outcome', 'stream');
-    span.error('stream');
+    span?.setAttr('cache.sync_outcome', 'stream');
+    span?.error('stream');
     return;
   }
 
@@ -129,13 +151,13 @@ function recordStream(
     const failedLanes = result.lanes.filter(
       (lane) => lane.error !== undefined
     ).length;
-    span.setAttr('cache.duration_ms', result.durationMs);
-    span.setAttr('cache.sync_bytes', result.bytes);
-    span.setAttr('cache.sync_lanes', result.lanes.length);
-    span.setAttr('cache.sync_pages', pages);
-    span.setAttr('cache.sync_items', items);
-    span.setAttr('cache.sync_write_ms', writeMs);
-    span.setAttr('cache.sync_failed_lanes', failedLanes);
+    span?.setAttr('cache.duration_ms', result.durationMs);
+    span?.setAttr('cache.sync_bytes', result.bytes);
+    span?.setAttr('cache.sync_lanes', result.lanes.length);
+    span?.setAttr('cache.sync_pages', pages);
+    span?.setAttr('cache.sync_items', items);
+    span?.setAttr('cache.sync_write_ms', writeMs);
+    span?.setAttr('cache.sync_failed_lanes', failedLanes);
     totals.bytes += result.bytes;
     totals.pages += pages;
     totals.items += items;
@@ -144,14 +166,14 @@ function recordStream(
   }
 
   if (outcome.ok) {
-    span.setAttr('cache.sync_outcome', outcome.result.reason);
+    span?.setAttr('cache.sync_outcome', outcome.result.reason);
     return;
   }
 
   const { failure } = outcome;
-  span.setAttr('cache.sync_outcome', failure.kind);
+  span?.setAttr('cache.sync_outcome', failure.kind);
   if (failure.kind === 'http') {
-    span.setAttr('http.response.status_code', failure.status);
+    span?.setAttr('http.response.status_code', failure.status);
   }
   if (isServerBusy(failure)) {
     totals.busyStreams += 1;
@@ -160,5 +182,5 @@ function recordStream(
   // The app stopped the stream itself (a time-boxed second-pass stream).
   if (failure.kind === 'aborted') return;
   totals.failedStreams += 1;
-  span.error(failure.kind);
+  span?.error(failure.kind);
 }
