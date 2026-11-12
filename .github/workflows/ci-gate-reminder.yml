@@ -34,6 +34,15 @@ jobs:
         //   fork-request  the label goes on a fork PR: what start does with a write
         //                 token, from a trusted run of `main`'s workflow
         //   fork    after a fork PR's run, whose read-only token could not set the status
+        //   sweep   on a schedule: close every request nothing else will, so the status
+        //           never stays pending on a run that isn't coming
+        //
+        // A request is the label, then a `Running on` status. The other steps close it
+        // only if GitHub starts and finishes their run. It doesn't always: a label can
+        // start nothing (GitHub dropped the event, or the PR began to conflict after
+        // the label check looked), and a cancelled run skips its gate job. Sweep fails
+        // those commits with the command to run again. `CI_GATE_DRY_RUN=true` logs
+        // what it would do instead.
         //
         // Statuses go on the PR head commit, so a later push starts without one.
         //
@@ -61,9 +70,32 @@ jobs:
         export const FORK_CHANGES_CI =
           'fork changes CI workflows: a maintainer must review and run CI from a branch';
 
+        export const NOT_STARTED = 'PR CI did not start.';
+        /// Start removes the label within seconds, so one still on after this started
+        /// nothing.
+        const STALE_LABEL_MS = 10 * 60_000;
+        /// A finished run's gate job has already reported; allow for a re-run starting.
+        const ENDED_RUN_GRACE_MS = 5 * 60_000;
+        /// Far longer than any run takes.
+        const LOST_REQUEST_MS = 3 * 60 * 60_000;
+
         type State = 'pending' | 'success' | 'failure' | 'error';
         export type Needs = Record<string, { result: string }>;
         export type RunJob = { name: string; conclusion: string | null };
+        export type GateStatus = {
+          state: string;
+          description: string;
+          targetUrl?: string | null;
+          createdAt?: string;
+        };
+        export type SweptRun = { status: string; conclusion: string | null; updatedAt: string };
+        /// A PR as sweep sees it. `labelledAt` is undefined without the label, and null
+        /// when the label is on but was added too long ago to find.
+        export type Swept = {
+          labelledAt: string | null | undefined;
+          status: GateStatus | undefined;
+          run: SweptRun | null;
+        };
         type Outcome = { state: State; description: string } | null;
         /// Git tree SHA of each CI source at a commit; null where the path is missing.
         export type CiTrees = Record<string, string | null>;
@@ -115,6 +147,7 @@ jobs:
           return response.status === 204 ? null : response.json();
         }
 
+        const dryRun = () => process.env.CI_GATE_DRY_RUN === 'true';
         const repo = () => env('GITHUB_REPOSITORY');
         const context = () => env('CI_GATE_CONTEXT');
         const label = () => env('CI_GATE_LABEL');
@@ -204,6 +237,10 @@ jobs:
         }
 
         async function setStatus(sha: string, state: State, description: string, targetUrl: string) {
+          if (dryRun()) {
+            console.log(`would set ${context()} on ${sha.slice(0, 10)}: ${state}: ${description}`);
+            return;
+          }
           await github('POST', `/repos/${repo()}/statuses/${sha}`, {
             state,
             context: context(),
@@ -227,6 +264,48 @@ jobs:
         /// closed yet.
         export function isOpenRequest(status: { state: string; description: string } | undefined): boolean {
           return status?.state === 'pending' && status.description.startsWith(RUNNING);
+        }
+
+        /// Whether the label has been on too long for start to still take it.
+        export function labelIsStale(labelledAt: string | null, now: number): boolean {
+          return labelledAt === null || now - Date.parse(labelledAt) >= STALE_LABEL_MS;
+        }
+
+        /// The run a status links to; a fork's request links to the PR checks instead.
+        export function runIdOf(targetUrl: string | null | undefined): string | null {
+          return targetUrl?.match(/\/actions\/runs\/(\d+)/)?.[1] ?? null;
+        }
+
+        /// Why an open request will get no result, or null while it still may.
+        export function lostRun(status: GateStatus | undefined, run: SweptRun | null, now: number): string | null {
+          if (!status || !isOpenRequest(status)) {
+            return null;
+          }
+          if (run?.status === 'completed' && now - Date.parse(run.updatedAt) >= ENDED_RUN_GRACE_MS) {
+            return `PR CI ended (${run.conclusion}) without a result.`;
+          }
+          if (status.createdAt && now - Date.parse(status.createdAt) >= LOST_REQUEST_MS) {
+            return 'PR CI gave no result in 3 hours.';
+          }
+          return null;
+        }
+
+        /// What sweep does to a PR head, or null to leave it. A stale label comes off
+        /// so adding it again fires a new event; it fails the commit unless the commit
+        /// holds a verdict that still stands or a run that will report.
+        export function sweepAction(
+          pr: Swept,
+          now: number,
+        ): { removeLabel: boolean; failure: string | null } | null {
+          if (pr.labelledAt !== undefined) {
+            if (!labelIsStale(pr.labelledAt, now)) {
+              return null;
+            }
+            const keep = pr.status?.state === 'success' || isOpenRequest(pr.status);
+            return { removeLabel: true, failure: keep ? null : NOT_STARTED };
+          }
+          const lost = lostRun(pr.status, pr.run, now);
+          return lost ? { removeLabel: false, failure: lost } : null;
         }
 
         /// The tree SHA at `path` in a commit, walking one directory at a time.
@@ -265,6 +344,10 @@ jobs:
         }
 
         async function removeLabel(pr: string) {
+          if (dryRun()) {
+            console.log(`would remove ${label()} from #${pr}`);
+            return;
+          }
           await github('DELETE', `/repos/${repo()}/issues/${pr}/labels/${encodeURIComponent(label())}`);
         }
 
@@ -278,6 +361,7 @@ jobs:
           }
           const merge: string | null = pull.merge_commit_sha;
           const hasPrCi = merge !== null && (await exists(PR_CI_PATH, merge));
+          console.log(`#${pr}: mergeable ${pull.mergeable}, merge commit ${merge}, holds PR CI: ${hasPrCi}`);
           return labelBlocker(pull.mergeable, hasPrCi);
         }
 
@@ -430,6 +514,114 @@ jobs:
           }
         }
 
+        type SweptPull = {
+          number: number;
+          headRefOid: string;
+          labels: { nodes: { name: string }[] };
+          timelineItems: { nodes: { createdAt: string; label: { name: string } }[] };
+          commits: {
+            nodes: {
+              commit: {
+                status: {
+                  context: { state: string; description: string | null; targetUrl: string | null; createdAt: string } | null;
+                } | null;
+              };
+            }[];
+          };
+        };
+
+        const SWEEP_QUERY = `
+          query ($owner: String!, $name: String!, $context: String!, $cursor: String) {
+            repository(owner: $owner, name: $name) {
+              pullRequests(states: OPEN, baseRefName: "main", first: 50, after: $cursor) {
+                pageInfo { hasNextPage endCursor }
+                nodes {
+                  number
+                  headRefOid
+                  labels(first: 100) { nodes { name } }
+                  timelineItems(itemTypes: [LABELED_EVENT], last: 30) {
+                    nodes { ... on LabeledEvent { createdAt label { name } } }
+                  }
+                  commits(last: 1) {
+                    nodes { commit { status { context(name: $context) { state description targetUrl createdAt } } } }
+                  }
+                }
+              }
+            }
+          }`;
+
+        async function openPulls(): Promise<SweptPull[]> {
+          const [owner, name] = repo().split('/');
+          const pulls: SweptPull[] = [];
+          for (let cursor: string | null = null; ; ) {
+            const response = await github('POST', '/graphql', {
+              query: SWEEP_QUERY,
+              variables: { owner, name, context: context(), cursor },
+            });
+            if (response.errors) {
+              throw new Error(`GraphQL: ${JSON.stringify(response.errors)}`);
+            }
+            const page = response.data.repository.pullRequests;
+            pulls.push(...page.nodes);
+            if (!page.pageInfo.hasNextPage) {
+              return pulls;
+            }
+            cursor = page.pageInfo.endCursor;
+          }
+        }
+
+        async function sweepPull(pull: SweptPull, now: number) {
+          const pr = String(pull.number);
+          const head = pull.headRefOid;
+          const gate = pull.commits.nodes[0]?.commit.status?.context;
+          const status = gate
+            ? { ...gate, state: gate.state.toLowerCase(), description: gate.description ?? '' }
+            : undefined;
+          const labelled = pull.labels.nodes.some((each) => each.name === label());
+          const labelledAt = labelled
+            ? (pull.timelineItems.nodes.findLast((each) => each.label.name === label())?.createdAt ?? null)
+            : undefined;
+
+          const runId = !labelled && isOpenRequest(status) ? runIdOf(status?.targetUrl) : null;
+          let run: SweptRun | null = null;
+          if (runId) {
+            const found = await github('GET', `/repos/${repo()}/actions/runs/${runId}`);
+            run = { status: found.status, conclusion: found.conclusion, updatedAt: found.updated_at };
+          }
+
+          const action = sweepAction({ labelledAt, status, run }, now);
+          if (!action) {
+            return;
+          }
+
+          let description =
+            action.failure && `${action.failure} Run again: ${runCommand(repo(), pr, label())}`;
+          if (action.removeLabel) {
+            // Say why nothing started when GitHub still shows it.
+            description = description && ((await labelProblem(pr)) ?? description);
+            await removeLabel(pr);
+          }
+          if (description) {
+            await setStatus(head, 'failure', description, env('CI_GATE_DOCS_URL'));
+          }
+        }
+
+        async function sweep() {
+          const now = Date.now();
+          let failed = 0;
+          for (const pull of await openPulls()) {
+            try {
+              await sweepPull(pull, now);
+            } catch (error) {
+              failed++;
+              console.error(`#${pull.number}: ${error}`);
+            }
+          }
+          if (failed > 0) {
+            throw new Error(`could not sweep ${failed} pull request(s)`);
+          }
+        }
+
         export async function main() {
           const modes: Record<string, () => Promise<void>> = {
             remind,
@@ -438,6 +630,7 @@ jobs:
             finish,
             'fork-request': forkRequest,
             fork,
+            sweep,
           };
           const mode = modes[env('CI_GATE_MODE')];
           if (!mode) {

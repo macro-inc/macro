@@ -14,6 +14,10 @@ If the label starts nothing and `CI gate` says `PR CI can't start`, the PR
 conflicts with `main` or was last pushed before `PR CI` existed: merge `main`
 in, push, and add the label again.
 
+Once the label is on, `CI gate` always ends in pass or fail: `CI Gate Sweep`
+fails a request whose run never started or ended without a result, and says to
+add the label again. Only a commit nobody ran CI on stays pending.
+
 The [`run-ci` skill](../../.agents/skills/run-ci/SKILL.md) has the commands,
 what each `CI gate` state means, re-runs, and fork PRs. The workflows are
 generated from Rust; see the

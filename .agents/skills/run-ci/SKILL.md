@@ -62,6 +62,8 @@ To read the state once, look at the `CI gate` row of `gh pr checks <pr>`:
 | pass, `Passed on <sha>` | Every check passed or was path-skipped | Done |
 | fail, `Failed: <jobs>` | Those called workflows failed | Open the linked run, fix, push, run again |
 | fail, `The PR moved on ...` or `The merge commit did not include ...` | Labelled too soon after a push | Add the label again |
+| fail, `PR CI did not start. Run again: ...` | The label started no run | Add the label again |
+| fail, `PR CI ended (...) without a result` or `gave no result in 3 hours` | The run was cancelled or lost | Add the label again |
 | fail, `PR CI can't start: ...` | The PR conflicts with `main`, or was last pushed before `PR CI` existed | Merge `main` in, push, add the label again |
 | missing | A fork PR before its first run, or a PR that conflicts with `main` | A maintainer adds the label; or merge `main` in and push |
 
@@ -69,6 +71,11 @@ GitHub takes `PR CI` from the PR's merge commit with `main`, which it rebuilds
 on a push but not when `main` moves, and runs nothing on a conflicting PR. So on
 such a PR the label alone starts nothing; `CI Gate Label Check` then removes it
 and says why in `CI gate`.
+
+A request never stays open: every ten minutes `CI Gate Sweep` removes a label
+that has started nothing and fails a `Running on` status whose run has ended,
+each with the command to run again. It never touches `Not run on this commit`:
+that commit waits for someone to add the label.
 
 ## Fix a failure
 

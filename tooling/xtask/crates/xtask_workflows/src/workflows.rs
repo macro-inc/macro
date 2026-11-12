@@ -30,6 +30,7 @@ mod check_tauri_lockfiles;
 mod ci_gate_fork;
 mod ci_gate_label;
 mod ci_gate_reminder;
+mod ci_gate_sweep;
 mod cla;
 mod cleanup_preview;
 mod code_check_cloud_storage;
@@ -346,6 +347,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "ci_gate_fork",
         file_name: "ci-gate-fork.yml",
         render_yaml: || render_gh_workflow(ci_gate_fork::ci_gate_fork)(),
+    },
+    WorkflowFile {
+        slug: "ci_gate_sweep",
+        file_name: "ci-gate-sweep.yml",
+        render_yaml: || render_gh_workflow(ci_gate_sweep::ci_gate_sweep)(),
     },
     WorkflowFile {
         slug: "pr_privacy_check",

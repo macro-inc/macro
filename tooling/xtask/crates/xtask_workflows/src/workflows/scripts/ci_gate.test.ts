@@ -13,6 +13,12 @@ import {
   GATE_JOB,
   gateOutcome,
   isOpenRequest,
+  labelIsStale,
+  lostRun,
+  NOT_STARTED,
+  runCommand,
+  runIdOf,
+  sweepAction,
   PR_CI_PATH,
   START_JOB,
 } from './ci_gate.ts';
@@ -205,5 +211,136 @@ describe('labelBlocker', () => {
   test('both explanations fit a commit status', () => {
     assert.ok(STALE_MERGE.length <= 140);
     assert.ok(CONFLICTS.length <= 140);
+  });
+});
+
+describe('labelIsStale', () => {
+  const now = Date.parse('2026-11-11T21:00:00Z');
+
+  test('a label start has had no time to take yet is left alone', () => {
+    assert.equal(labelIsStale('2026-11-11T20:55:00Z', now), false);
+  });
+
+  test('a label still on the PR long after it was added started nothing', () => {
+    assert.equal(labelIsStale('2026-11-11T20:33:18Z', now), true);
+  });
+
+  test('a label with no recent labelling event is old', () => {
+    assert.equal(labelIsStale(null, now), true);
+  });
+});
+
+describe('lostRun', () => {
+  const now = Date.parse('2026-11-11T21:00:00Z');
+  const running = { state: 'pending', description: 'Running on 0123456', createdAt: '2026-11-11T20:40:00Z' };
+
+  test('a run still going is left alone', () => {
+    assert.equal(lostRun(running, { status: 'in_progress', conclusion: null, updatedAt: '2026-11-11T20:59:00Z' }, now), null);
+    assert.equal(lostRun(running, null, now), null);
+  });
+
+  test('a run that ended without closing its request lost its result', () => {
+    assert.equal(
+      lostRun(running, { status: 'completed', conclusion: 'cancelled', updatedAt: '2026-11-11T20:50:00Z' }, now),
+      'PR CI ended (cancelled) without a result.',
+    );
+  });
+
+  test('a run that only just ended may be re-running or about to report', () => {
+    assert.equal(
+      lostRun(running, { status: 'completed', conclusion: 'cancelled', updatedAt: '2026-11-11T20:59:30Z' }, now),
+      null,
+    );
+  });
+
+  test('a request nothing has closed for hours is given up on, run or no run', () => {
+    const old = { ...running, createdAt: '2026-11-11T17:00:00Z' };
+
+    assert.equal(lostRun(old, null, now), 'PR CI gave no result in 3 hours.');
+    assert.equal(
+      lostRun(old, { status: 'queued', conclusion: null, updatedAt: '2026-11-11T17:00:00Z' }, now),
+      'PR CI gave no result in 3 hours.',
+    );
+  });
+
+  test('only an open request can lose its run', () => {
+    const passed = { state: 'success', description: 'Passed on 0123456', createdAt: '2026-11-11T17:00:00Z' };
+    const notRun = { state: 'pending', description: 'Not run on this commit.', createdAt: '2026-11-11T17:00:00Z' };
+    const ended = { status: 'completed', conclusion: 'success', updatedAt: '2026-11-11T17:10:00Z' };
+
+    assert.equal(lostRun(passed, ended, now), null);
+    assert.equal(lostRun(notRun, ended, now), null);
+    assert.equal(lostRun(undefined, null, now), null);
+  });
+});
+
+describe('sweepAction', () => {
+  const now = Date.parse('2026-11-11T21:00:00Z');
+  const notRun = { state: 'pending', description: 'Not run on this commit.', createdAt: '2026-11-11T20:33:04Z' };
+
+  test('a commit nobody asked to run CI on stays as it is', () => {
+    assert.equal(sweepAction({ labelledAt: undefined, status: notRun, run: null }, now), null);
+    assert.equal(sweepAction({ labelledAt: undefined, status: undefined, run: null }, now), null);
+  });
+
+  test('a stale label comes off and the commit says the run never started', () => {
+    assert.deepEqual(sweepAction({ labelledAt: '2026-11-11T20:33:18Z', status: notRun, run: null }, now), {
+      removeLabel: true,
+      failure: NOT_STARTED,
+    });
+    assert.deepEqual(sweepAction({ labelledAt: '2026-11-11T20:33:18Z', status: undefined, run: null }, now), {
+      removeLabel: true,
+      failure: NOT_STARTED,
+    });
+  });
+
+  test('a stale label never overwrites a verdict or a run that is going', () => {
+    const passed = { state: 'success', description: 'Passed on 0123456', createdAt: '2026-11-11T20:00:00Z' };
+    const running = { state: 'pending', description: 'Running on 0123456', createdAt: '2026-11-11T20:50:00Z' };
+
+    assert.deepEqual(sweepAction({ labelledAt: '2026-11-11T20:33:18Z', status: passed, run: null }, now), {
+      removeLabel: true,
+      failure: null,
+    });
+    assert.deepEqual(sweepAction({ labelledAt: '2026-11-11T20:33:18Z', status: running, run: null }, now), {
+      removeLabel: true,
+      failure: null,
+    });
+  });
+
+  test('a fresh label is a request start is about to take', () => {
+    assert.equal(sweepAction({ labelledAt: '2026-11-11T20:58:00Z', status: notRun, run: null }, now), null);
+  });
+
+  test('a lost run fails the commit', () => {
+    const running = { state: 'pending', description: 'Running on 0123456', createdAt: '2026-11-11T20:40:00Z' };
+    const cancelled = { status: 'completed', conclusion: 'cancelled', updatedAt: '2026-11-11T20:50:00Z' };
+
+    assert.deepEqual(sweepAction({ labelledAt: undefined, status: running, run: cancelled }, now), {
+      removeLabel: false,
+      failure: 'PR CI ended (cancelled) without a result.',
+    });
+  });
+
+  test('every explanation fits a commit status with the command to run again', () => {
+    const command = runCommand('macro-inc/macro', '123456', 'run-ci');
+    for (const reason of [
+      NOT_STARTED,
+      'PR CI ended (action_required) without a result.',
+      'PR CI gave no result in 3 hours.',
+    ]) {
+      assert.ok(`${reason} Run again: ${command}`.length <= 140);
+    }
+  });
+});
+
+describe('runIdOf', () => {
+  test('reads the run a status links to', () => {
+    assert.equal(runIdOf('https://github.com/macro-inc/macro/actions/runs/43127343042'), '43127343042');
+  });
+
+  test('a fork request links to the PR checks, not a run', () => {
+    assert.equal(runIdOf('https://github.com/macro-inc/macro/pull/1/checks'), null);
+    assert.equal(runIdOf(null), null);
   });
 });
