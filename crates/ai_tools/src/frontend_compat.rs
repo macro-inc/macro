@@ -63,29 +63,35 @@ impl ToolSchemaGenerator for LegacyConversationSchemas {
     }
 }
 
-/// Chat runs the user-scoped `ExecuteCode`, whose arguments and receipt differ
-/// from an agent session's under the same tool name, so the frontend's
-/// `ExecuteCode` types accept either. Merged after the session code tools.
-pub(super) struct UserCodeModeSchemas;
+/// The code tools' frontend schemas. Chat runs the user-scoped `ExecuteCode`,
+/// whose arguments and receipt differ from an agent session's under the same
+/// tool name, so the frontend's `ExecuteCode` tool types accept either. The
+/// session's own `ExecuteCode` and `ExecutionReceipt` definitions stay as they
+/// are, since agent-session views parse receipts with them.
+pub(super) struct CodeModeSchemas;
 
-impl ToolSchemaGenerator for UserCodeModeSchemas {
+impl ToolSchemaGenerator for CodeModeSchemas {
     fn register_schemas(&self, generator: &mut SchemaGenerator) -> Vec<FrontendToolEntry> {
+        let mut entries = agent_code_mode::inbound::toolset::toolset().register_schemas(generator);
         let user_input: serde_json::Value = generator
             .subschema_for::<agent_code_mode::inbound::toolset::UserExecuteCode>()
             .into();
         let user_output: serde_json::Value = generator
             .subschema_for::<agent_code_mode::domain::UserExecutionReceipt>()
             .into();
+        let entry = entries
+            .iter_mut()
+            .find(|entry| entry.name == "ExecuteCode")
+            .expect("the session code tools include ExecuteCode");
         let definitions = generator.definitions_mut();
-        for (name, user) in [
-            ("ExecuteCode", user_input),
-            ("ExecutionReceipt", user_output),
+        for (side, name, user) in [
+            (&mut entry.input, "ExecuteCodeCall", user_input),
+            (&mut entry.output, "ExecuteCodeReceipt", user_output),
         ] {
-            let session = definitions
-                .remove(name)
-                .expect("the session code tools are merged first");
+            let session = json!({ "$ref": format!("#/$defs/{side}") });
             definitions.insert(name.into(), json!({ "anyOf": [session, user] }));
+            *side = name.into();
         }
-        Vec::new()
+        entries
     }
 }

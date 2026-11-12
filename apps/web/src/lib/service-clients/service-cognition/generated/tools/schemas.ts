@@ -20923,7 +20923,7 @@ export const CodeToolsDescription = z.object({
   ),
 });
 
-export const ExecuteCode = z.union([
+export const ExecuteCodeCall = z.union([
   z
     .object({
       execution_id: z.string(),
@@ -20958,7 +20958,7 @@ export const ExecuteCode = z.union([
     .strict(),
 ]);
 
-export const ExecutionReceipt = z.union([
+export const ExecuteCodeReceipt = z.union([
   z.object({
     executionId: z.string(),
     status: z.any().superRefine((x, ctx) => {
