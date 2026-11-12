@@ -86,7 +86,7 @@ export function RouteDocuments() {
           description="Agents edit the document live, at the same time as you and your team, as opposed to editing the markdown file and giving you a diff. If you go offline and come back on, your changes sync to your peers and conflict resolution happens automatically."
         >
           <DemoInteractionBoundary
-            class="feature-page-visual"
+            class="feature-page-visual doc-story-page-fade"
             label="Live document collaboration"
             render={() => <DocumentProjectDemo teamEditing />}
           />
