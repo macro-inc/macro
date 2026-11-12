@@ -170,6 +170,29 @@ fn code_without_observed_requests_reads_as_workspace_work() {
 }
 
 #[test]
+fn code_through_the_public_server_reads_as_workspace_work() {
+    let part = MessagePart::ToolUse {
+        id: ToolUseId("code-4".into()),
+        name: ToolName::Mcp {
+            server: "macro".into(),
+            tool: "ExecuteCode".into(),
+        },
+        status: ToolStatus::Completed,
+        detail: ToolDetail::Other {
+            kind: "other".into(),
+            input: Some(serde_json::json!({"source": "export async function main() {}"})),
+            result: Some(serde_json::json!({"status": "succeeded"})),
+            output: None,
+            error: None,
+        },
+    };
+    assert_eq!(
+        segments(&[part], true)[0].rows[0].label,
+        "Worked in your workspace"
+    );
+}
+
+#[test]
 fn code_mode_lookups_are_not_steps() {
     let lookup = |id: &str, name: ToolName| MessagePart::ToolUse {
         id: ToolUseId(id.into()),
