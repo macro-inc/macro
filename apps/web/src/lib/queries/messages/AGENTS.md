@@ -76,5 +76,8 @@ live events that keep them current.
   when the read lands; the reply itself may be older than what it returns.
 - The messages client sends a write again, twice a second apart, when the
   server answers 503 (its write guard); the id and nonce stay the same, so
-  the retry cannot post twice. Reads are not retried.
+  the retry cannot post twice. A refused edit, delete, reaction or thread
+  change is not sent again once a later write to the same message has
+  started: it fails as refused instead of landing after the later one.
+  Reads are not retried.
 - Threads, `messagesByIds` and message resolution still read REST.

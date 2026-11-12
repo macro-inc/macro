@@ -46,6 +46,45 @@ describe('a message write the server is too busy to take', () => {
     expect(mocks.dssFetch).toHaveBeenCalledTimes(3);
   });
 
+  it('is not sent again once a later write to the same message has started', async () => {
+    mocks.dssFetch
+      .mockResolvedValueOnce(busy())
+      .mockResolvedValueOnce(ok({ id: 'm1', content: 'second' }));
+    const first = entityMessagesClient
+      .patch(CHANNEL, 'm1', { content: 'first', mentions: [] })
+      .catch((error: unknown) => error);
+    await vi.advanceTimersByTimeAsync(500);
+    const second = entityMessagesClient.patch(CHANNEL, 'm1', {
+      content: 'second',
+      mentions: [],
+    });
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(await second).toEqual({ id: 'm1', content: 'second' });
+    // The refused edit fails as refused; sent again it would land last.
+    expect(await first).toBeInstanceOf(ThrownResultError);
+    expect(mocks.dssFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('is sent again beside a later write to another message', async () => {
+    mocks.dssFetch
+      .mockResolvedValueOnce(busy())
+      .mockResolvedValueOnce(ok({ id: 'm2' }))
+      .mockResolvedValueOnce(ok({ id: 'm1' }));
+    const first = entityMessagesClient.patch(CHANNEL, 'm1', {
+      content: 'first',
+      mentions: [],
+    });
+    await vi.advanceTimersByTimeAsync(500);
+    const other = entityMessagesClient.patch(CHANNEL, 'm2', {
+      content: 'other',
+      mentions: [],
+    });
+    await vi.advanceTimersByTimeAsync(500);
+    expect(await other).toEqual({ id: 'm2' });
+    expect(await first).toEqual({ id: 'm1' });
+    expect(mocks.dssFetch).toHaveBeenCalledTimes(3);
+  });
+
   it('does not repeat a write that failed another way', async () => {
     mocks.dssFetch.mockResolvedValue(err([statusError(500)]));
     const sent = entityMessagesClient

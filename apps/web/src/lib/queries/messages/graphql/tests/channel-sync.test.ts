@@ -265,7 +265,8 @@ describe('opening a channel', () => {
         entries: [entryToGraphql(messageEntry('m1', 1, { content: 'older' }))],
       })
     );
-    await Promise.resolve();
+    // A macrotask later the catch-up has finished with the answer it got.
+    await new Promise((resolve) => setTimeout(resolve));
     const entry =
       testQueryClient.getQueryData<MessageTimelineData>(LATEST_KEY)?.pages[0]
         .entries[0];
