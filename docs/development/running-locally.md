@@ -314,8 +314,8 @@ across instances) debugging containers:
   `.cursor/mcp.json` points at it). Watch what an agent is doing live at
   http://localhost:6080/vnc.html.
 
-Repeated full `run_local` starts can recreate the shared LGTM collector and drop
-other stacks' network attachments. For a static frontend refresh, reuse the
+Older local-tool builds can recreate the shared LGTM collector and drop other
+stacks' network attachments. For a static frontend refresh, reuse the
 complete recorded binary set with `just stack update --frontend --binaries-dir
 <recorded-dir> --instance <name>` to avoid backend builds and collector startup.
 `--traces off` also skips collector startup, but omits automatic backend OTLP
