@@ -96,6 +96,10 @@ const MAX_REQUEST_BYTES: usize = 32 * 1024 * 1024;
 /// Upper bound on a buffered non-streaming response.
 const MAX_RESPONSE_BYTES: usize = 32 * 1024 * 1024;
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+/// How long a stream is still read, for its usage, after the caller hangs up.
+const DRAIN_TIMEOUT: Duration = Duration::from_secs(10 * 60);
+/// Chunks buffered between Anthropic and a slow caller.
+const STREAM_BUFFER_CHUNKS: usize = 16;
 
 /// Caller headers forwarded upstream. Everything else, including the
 /// caller's credentials, is dropped.
@@ -397,24 +401,14 @@ async fn forward<Sessions: AgentSessionRepo>(
     }
 
     let body = if streaming {
-        let mut metering = meter.map(|meter| (meter, SseUsage::default()));
-        let chunks = upstream.bytes_stream().map(move |chunk| {
-            if let Some((meter, parser)) = metering.as_mut() {
-                match &chunk {
-                    Ok(bytes) => {
-                        parser.observe(bytes);
-                        meter.usage = parser.usage();
-                    }
-                    Err(error) => {
-                        tracing::warn!(parent: &meter.span, error = ?error, "anthropic stream broke");
-                        meter.span.record("anthropic_gateway.outcome", "stream_error");
-                        meter.span.record("otel.status_code", "ERROR");
-                    }
-                }
-            }
-            chunk
-        });
-        Body::from_stream(chunks)
+        let (caller, mut chunks) = tokio::sync::mpsc::channel(STREAM_BUFFER_CHUNKS);
+        let metering = meter.map(|meter| (meter, SseUsage::default()));
+        tokio::spawn(
+            pump(Box::pin(upstream.bytes_stream()), metering, caller).instrument(span.clone()),
+        );
+        Body::from_stream(futures::stream::poll_fn(move |context| {
+            chunks.poll_recv(context)
+        }))
     } else {
         let bytes = read_limited(upstream).await?;
         if let Some(mut meter) = meter
@@ -429,6 +423,59 @@ async fn forward<Sessions: AgentSessionRepo>(
     *response.status_mut() = status;
     *response.headers_mut() = headers;
     Ok(response)
+}
+
+type UpstreamChunks =
+    Pin<Box<dyn futures::Stream<Item = reqwest::Result<axum::body::Bytes>> + Send>>;
+
+/// Streams `upstream` to the caller while metering it. When the caller hangs
+/// up, keeps reading (for at most [`DRAIN_TIMEOUT`]) so the final usage is
+/// still recorded: an abort must not skip output billing.
+async fn pump(
+    mut upstream: UpstreamChunks,
+    mut metering: Option<(UsageMeter, SseUsage)>,
+    caller: tokio::sync::mpsc::Sender<Result<axum::body::Bytes, std::io::Error>>,
+) {
+    while let Some(chunk) = upstream.next().await {
+        observe(&mut metering, &chunk);
+        if caller
+            .send(chunk.map_err(std::io::Error::other))
+            .await
+            .is_err()
+        {
+            let drain = async {
+                while let Some(chunk) = upstream.next().await {
+                    observe(&mut metering, &chunk);
+                }
+            };
+            if tokio::time::timeout(DRAIN_TIMEOUT, drain).await.is_err() {
+                tracing::warn!("anthropic stream outlived its drain after the caller hung up");
+            }
+            return;
+        }
+    }
+}
+
+fn observe(
+    metering: &mut Option<(UsageMeter, SseUsage)>,
+    chunk: &reqwest::Result<axum::body::Bytes>,
+) {
+    let Some((meter, parser)) = metering.as_mut() else {
+        return;
+    };
+    match chunk {
+        Ok(bytes) => {
+            parser.observe(bytes);
+            meter.usage = parser.usage();
+        }
+        Err(error) => {
+            tracing::warn!(parent: &meter.span, error = ?error, "anthropic stream broke");
+            meter
+                .span
+                .record("anthropic_gateway.outcome", "stream_error");
+            meter.span.record("otel.status_code", "ERROR");
+        }
+    }
 }
 
 async fn authenticate<Sessions: AgentSessionRepo>(
