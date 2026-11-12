@@ -76,8 +76,8 @@ ssh "${iap[@]}" root@runtime-dev-1 'wg show; incus config get core.https_address
 Switch-to-configuration runs in a transient unit, so it finishes if the IAP
 session drops. `incus.service` restarts leave instances running
 (`softDaemonRestart`); `incus-preseed` re-applies on change and only merges
-keys, so it never removes profile or network config. dhcpcd runs with
-`--persistent`, so its restart keeps eth0's lease.
+keys, so it never removes profile or network config. A switch never restarts
+dhcpcd (stopping it drops eth0's address); dhcpcd changes apply at the next boot.
 
 Fresh installation is destructive and needs separate approval. For
 `nixos-anywhere`, prepare a temporary extra-files tree with

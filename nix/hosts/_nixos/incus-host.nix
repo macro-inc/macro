@@ -71,11 +71,28 @@ in
   };
 
   config = {
-    assertions = lib.optional (tunnel != null) {
-      assertion =
-        lib.hasPrefix "/" tunnel.privateKeyFile && !(lib.hasPrefix "/nix/store/" tunnel.privateKeyFile);
-      message = "The WireGuard private key must be a host-local absolute path outside /nix/store.";
-    };
+    assertions = [
+      {
+        assertion =
+          !(builtins.elem computers.apiAddress [
+            "0.0.0.0"
+            "::"
+            ""
+          ]);
+        message = "The Incus API address must not be a wildcard.";
+      }
+    ]
+    ++ lib.optionals (tunnel != null) [
+      {
+        assertion =
+          lib.hasPrefix "/" tunnel.privateKeyFile && !(lib.hasPrefix "/nix/store/" tunnel.privateKeyFile);
+        message = "The WireGuard private key must be a host-local absolute path outside /nix/store.";
+      }
+      {
+        assertion = computers.apiAddress != "127.0.0.1";
+        message = "With a tunnel, the Incus API must listen on an address the tunnel routes to.";
+      }
+    ];
 
     boot.supportedFilesystems = [ "zfs" ];
     boot.zfs.extraPools = [ "tank" ];

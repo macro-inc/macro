@@ -57,9 +57,13 @@
 
   # GCE assigns the internal address over DHCP (a /32 with a gateway route).
   networking.usePredictableInterfaceNames = false;
+  networking.useDHCP = false;
+  networking.interfaces.eth0.useDHCP = true;
   networking.interfaces.eth0.mtu = 1460;
-  # Keep eth0's lease when dhcpcd restarts, so a switch does not drop IAP SSH.
+  # A restart, even with --persistent, stops the running daemon, which drops
+  # eth0's address and IAP SSH; dhcpcd config changes apply at the next boot.
   networking.dhcpcd.persistent = true;
+  systemd.services.dhcpcd.restartIfChanged = false;
   networking.hosts."169.254.169.254" = [
     "metadata.google.internal"
     "metadata"
@@ -92,6 +96,9 @@
     "${pkgs.google-guest-configs}/etc/modprobe.d/gce-blacklist.conf";
   environment.etc."sysctl.d/60-gce-network-security.conf".source =
     "${pkgs.google-guest-configs}/etc/sysctl.d/60-gce-network-security.conf";
+  # That file disables forwarding; Incus NAT for the boxes needs it, and a
+  # systemd-sysctl rerun on switch would otherwise cut box egress.
+  boot.kernel.sysctl."net.ipv4.ip_forward" = 1;
   environment.etc."default/instance_configs.cfg".text = ''
     [Accounts]
     useradd_cmd = useradd -m -s /run/current-system/sw/bin/bash -p * {user}
