@@ -13,7 +13,6 @@ mod transaction;
 use crate::outbound::email_api::GmailApi;
 use crate::outbound::message_labels::gmail_ops::PgGmailOps;
 use crate::outbound::persistence_error::InboxPersistenceError;
-use crate::pubsub::context::PubSubContext;
 use email::domain::mailbox::inbox_sync::*;
 use email_api_client::domain::models::EmailApiError;
 use futures::future::BoxFuture;
@@ -35,7 +34,28 @@ pub(crate) struct GmailInboxSync(pub GmailApi);
 pub(crate) struct InboxSyncSqs(pub sqs_client::SQS);
 #[derive(Clone)]
 pub(crate) struct InboxSyncEffects {
-    pub worker: PubSubContext,
+    pub gmail_history: email::domain::mailbox::gmail_history::GmailHistoryService<
+        email::outbound::mailbox_pg::PgMailboxSync,
+    >,
+    pub invitation_extractor: crate::composition::workers::EmailInvitationExtractor,
+    pub db: PgPool,
+    pub contacts_ingress: std::sync::Arc<
+        contacts::domain::service::SqsContactsIngress<
+            contacts::outbound::ingress::SqsContactsQueue,
+        >,
+    >,
+    pub email_api: GmailApi,
+    pub notification_ingress_service:
+        std::sync::Arc<crate::composition::workers::NotificationIngressType>,
+    pub sfs_client: static_file_service_client::StaticFileServiceClient,
+    pub connection_gateway_client: connection_gateway_client::client::ConnectionGatewayClient,
+    pub dss_client: document_storage_service_client::DocumentStorageServiceClient,
+    pub system_properties_service: std::sync::Arc<
+        system_properties::SystemPropertiesServiceImpl<
+            system_properties::PgSystemPropertiesRepository,
+        >,
+    >,
+    pub macro_event_broker: crate::composition::workers::PubSubEventBroker,
 }
 
 impl InboxSyncGmail for GmailInboxSync {
@@ -81,7 +101,7 @@ impl MacroEventBroker for InboxSyncEffects {
         &self,
         event: &E,
     ) -> Result<tokio::task::JoinHandle<Result<(), EventBrokerError>>, EventBrokerError> {
-        self.worker.macro_event_broker.send_event(event)
+        self.macro_event_broker.send_event(event)
     }
 }
 
@@ -96,8 +116,7 @@ impl InboxSyncRefresher for InboxSyncEffects {
             }
             InboxSyncRefresh::UpdateLabels(link_id) => RefreshEmailEvent::UpdateLabels { link_id },
         };
-        crate::pubsub::util::cg_refresh_email(&self.worker.connection_gateway_client, owner, event)
-            .await;
+        crate::pubsub::util::cg_refresh_email(&self.connection_gateway_client, owner, event).await;
     }
 }
 

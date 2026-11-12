@@ -15,7 +15,7 @@ use models_email::service::{
 impl InboxSyncHistory for InboxSyncEffects {
     type Jobs = PgBackfillJobs;
     fn recovery_jobs(&self) -> Self::Jobs {
-        PgBackfillJobs(self.worker.db.clone())
+        PgBackfillJobs(self.db.clone())
     }
     fn accept_history<'a>(
         &'a self,
@@ -23,7 +23,7 @@ impl InboxSyncHistory for InboxSyncEffects {
         expected: &'a str,
         batch: ChangeBatch,
     ) -> BoxFuture<'a, Result<(), email::domain::mailbox::MailboxError>> {
-        Box::pin(self.worker.gmail_history.accept(link, expected, batch))
+        Box::pin(self.gmail_history.accept(link, expected, batch))
     }
 }
 impl InboxSyncPreparation for InboxSyncEffects {
@@ -44,8 +44,8 @@ impl InboxSyncPreparation for InboxSyncEffects {
         message: Uuid,
         parts: &'a [CalendarPart],
     ) -> BoxFuture<'a, ()> {
-        Box::pin(crate::pubsub::invitation_extraction::save_discovered(
-            &self.worker,
+        Box::pin(crate::outbound::invitation_extraction::save_discovered(
+            &self.invitation_extractor,
             link,
             provider,
             message,
@@ -64,7 +64,7 @@ impl InboxSyncUploads for InboxSyncEffects {
         args: AttachmentUploadArgs,
     ) -> BoxFuture<'a, Result<String, InboxSyncUploadError>> {
         Box::pin(async move {
-            let ctx = &self.worker;
+            let ctx = self;
             let ctx_upload = UploadAttachmentContext {
                 db: &ctx.db,
                 email_api: &ctx.email_api,
@@ -98,8 +98,7 @@ impl InboxSyncContacts for InboxSyncEffects {
                 .into_iter()
                 .map(|contact| ContactConnection::new(owner.clone(), contact))
                 .collect();
-            self.worker
-                .contacts_ingress
+            self.contacts_ingress
                 .enqueue_contact_connections(connections)
                 .await
                 .map_err(|e| anyhow::anyhow!("{e:?}"))

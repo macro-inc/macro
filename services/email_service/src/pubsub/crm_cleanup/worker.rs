@@ -1,7 +1,7 @@
+use crate::composition::workers::CrmServiceType;
 use crate::outbound::crm_cleanup::{
     CrmCleanupClock, CrmCleanupContacts, CrmCleanupQueue, PgCrmCleanup,
 };
-use crate::pubsub::context::CrmServiceType;
 use crate::pubsub::crm_cleanup::process;
 use crate::pubsub::worker_lifecycle::run_until_cancelled;
 use email::domain::crm_cleanup::CrmCleanupService;

@@ -333,13 +333,13 @@ scenario!(
         let sim = &mut Sim::new(&mut world, 1);
         sim.act(Action::Archive(T1, true), false).await.unwrap();
         sim.deliver_all(Queue::Ops, Reply::RateLimited).await;
-        let ctx = sim.world.sync.backfill_context();
-        let link = email_db_client::links::get::fetch_link_by_id(&ctx.db, sim.world.link_id)
+        let backfill = sim.world.backfill.clone();
+        let link = email_db_client::links::get::fetch_link_by_id(&sim.world.db, sim.world.link_id)
             .await
             .unwrap()
             .unwrap();
         let job = email_db_client::backfill::job::insert::create_backfill_job(
-            &ctx.db,
+            &sim.world.db,
             link.id,
             &link.fusionauth_user_id,
             None,
@@ -363,22 +363,6 @@ scenario!(
             .gmail
             .pause_next(Kind::ReadFull, Some("m1a"), PauseAt::AfterApply);
         let mut backfill = tokio::spawn(async move {
-            let backfill = crate::pubsub::backfill::worker::context(
-                ctx.db,
-                &ctx.sqs_worker,
-                ctx.sqs_client,
-                ctx.contacts_ingress,
-                ctx.email_api,
-                ctx.redis_client,
-                ctx.notification_ingress_service,
-                ctx.sfs_client,
-                ctx.connection_gateway_client,
-                ctx.dss_client,
-                ctx.system_properties_service,
-                ctx.crm_service,
-                ctx.macro_event_broker,
-                ctx.notifications_enabled,
-            );
             let _ = backfill
                 .service
                 .process(&BackfillPubsubMessage {

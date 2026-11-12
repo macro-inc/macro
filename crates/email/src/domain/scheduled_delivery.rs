@@ -18,6 +18,28 @@ pub mod recovery;
 #[cfg(feature = "mailbox")]
 pub mod state;
 
+/// Scheduled delivery composed once with its persistence and provider capabilities.
+pub struct ScheduledDeliveryService<A> {
+    adapter: A,
+}
+
+impl<A> ScheduledDeliveryService<A> {
+    /// Retain the already-constructed adapter for all deliveries.
+    pub fn new(adapter: A) -> Self {
+        Self { adapter }
+    }
+}
+
+impl<A> ScheduledDeliveryService<A>
+where
+    A: ScheduledDeliveryRepo + ScheduledMessageSender<A::Claim, A::Sent>,
+{
+    /// Execute the existing fenced delivery workflow.
+    pub async fn deliver(&self, link_id: Uuid, message_id: Uuid) -> anyhow::Result<()> {
+        deliver_scheduled(&self.adapter, &self.adapter, link_id, message_id).await
+    }
+}
+
 /// A worker must renew ownership before crossing the provider boundary.
 pub const DELIVERY_LEASE_SECONDS: i32 = 300;
 /// Failed lookups and negative searches may be retried without resending mail.

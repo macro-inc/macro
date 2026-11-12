@@ -2,11 +2,11 @@
 use anyhow::Context;
 use document_storage_service_client::DocumentStorageServiceClient;
 use email_api_client::GmailApiClientRepository;
+use email_service::composition::workers::CrmMetadataResolver;
 use email_service::config::Config;
 use email_service::outbound::email_api::{
     EmailServiceTokenSource, GmailApi, RateBudget, RedisGmailRequestGate,
 };
-use email_service::pubsub::CrmMetadataResolver;
 use email_service::util::redis::RedisClient;
 use macro_entrypoint::{MacroEntrypoint, shutdown_signal};
 use macro_env::Environment;

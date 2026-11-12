@@ -20,11 +20,10 @@ use std::collections::HashSet;
 impl BackfillEffects for BackfillWorkerEffects {
     type Permit = crate::util::redis::backfill_write_slots::BackfillWriteSlot;
     async fn delete_job_progress(&self, job: Uuid) {
-        let _ = self.0.redis_client.delete_backfill_job_progress(job).await;
+        let _ = self.redis_client.delete_backfill_job_progress(job).await;
     }
     async fn delete_thread_progress(&self, job: Uuid, thread: &str) {
         let _ = self
-            .0
             .redis_client
             .delete_backfill_thread_progress(job, thread)
             .await;
@@ -34,7 +33,7 @@ impl BackfillEffects for BackfillWorkerEffects {
         link: &Link,
         p: &BackfillAttachmentPayload,
     ) -> Result<(), BackfillUploadError> {
-        let ctx = &self.0;
+        let ctx = self;
         let ctx_upload = UploadAttachmentContext {
             db: &ctx.db,
             email_api: &ctx.email_api,
@@ -60,18 +59,17 @@ impl BackfillEffects for BackfillWorkerEffects {
         &self,
         users: HashSet<MacroUserIdStr<'static>>,
     ) -> Result<(), rootcause::Report> {
-        self.0.contacts_ingress.enqueue_contacts(users).await
+        self.contacts_ingress.enqueue_contacts(users).await
     }
     async fn acquire_crm(&self, team: Uuid) -> anyhow::Result<Option<Self::Permit>> {
-        self.0
-            .redis_client
+        self.redis_client
             .acquire_crm_population_slot(team)
             .await
             .map_err(anyhow::Error::new)
     }
     async fn notify_failed(&self, link: &Link) {
         crate::pubsub::util::cg_refresh_email(
-            &self.0.connection_gateway_client,
+            &self.connection_gateway_client,
             link.macro_id.as_ref(),
             RefreshEmailEvent::Backfill {
                 link_id: link.id,
@@ -96,7 +94,7 @@ impl MacroEventBroker for BackfillWorkerEffects {
         &self,
         event: &E,
     ) -> Result<tokio::task::JoinHandle<Result<(), EventBrokerError>>, EventBrokerError> {
-        self.0.macro_event_broker.send_event(event)
+        self.macro_event_broker.send_event(event)
     }
 }
 
@@ -167,22 +165,25 @@ impl email::domain::mailbox::inbox_sync::InboxSyncPreparation for BackfillWorker
         message: Uuid,
         parts: &'a [email_api_client::domain::models::CalendarPart],
     ) -> BoxFuture<'a, ()> {
-        Box::pin(crate::pubsub::invitation_extraction::save_discovered(
-            &self.0, link, provider, message, parts,
+        Box::pin(crate::outbound::invitation_extraction::save_discovered(
+            &self.invitation_extractor,
+            link,
+            provider,
+            message,
+            parts,
         ))
     }
 }
 impl BackfillImportEffects for BackfillWorkerEffects {
     type WritePermit = crate::util::redis::backfill_write_slots::BackfillWriteSlot;
     async fn add_total_threads(&self, job: Uuid, count: i32) -> anyhow::Result<()> {
-        self.0.redis_client.add_to_total_threads(job, count).await
+        self.redis_client.add_to_total_threads(job, count).await
     }
     async fn delete_listing_progress(&self, job: Uuid) -> anyhow::Result<()> {
-        self.0.redis_client.delete_backfill_job_progress(job).await
+        self.redis_client.delete_backfill_job_progress(job).await
     }
     async fn acquire_write(&self) -> anyhow::Result<Option<Self::WritePermit>> {
-        self.0
-            .redis_client
+        self.redis_client
             .acquire_backfill_write_slot()
             .await
             .map_err(anyhow::Error::new)
@@ -193,28 +194,27 @@ impl BackfillLifecycleEffects for BackfillWorkerEffects {
     async fn sync_contacts(&self, link: &Link) -> anyhow::Result<()> {
         Box::pin(crate::util::sync_contacts::sync_contacts(
             link,
-            &self.0.db,
-            &self.0.email_api,
-            &self.0.sqs_client,
-            &self.0.macro_event_broker,
-            &*self.0.contacts_ingress,
+            &self.db,
+            &self.email_api,
+            &self.sqs_client,
+            &self.macro_event_broker,
+            &*self.contacts_ingress,
         ))
         .await
     }
     async fn colleague_dms(&self, link: &Link) {
-        crate::util::contact_dms::ensure_colleague_dms(&self.0.db, link).await;
+        crate::util::contact_dms::ensure_colleague_dms(&self.db, link).await;
     }
     async fn top_contact_dms(&self, link: &Link) {
-        crate::util::contact_dms::ensure_top_contact_dms(&self.0.db, link).await;
+        crate::util::contact_dms::ensure_top_contact_dms(&self.db, link).await;
     }
     async fn init_progress(&self, job: Uuid, total: i32) -> anyhow::Result<()> {
-        self.0
-            .redis_client
+        self.redis_client
             .init_backfill_job_progress(job, total)
             .await
     }
     async fn increment_threads(&self, job: Uuid) -> anyhow::Result<BackfillProgress> {
-        let progress = self.0.redis_client.incr_completed_threads(job).await?;
+        let progress = self.redis_client.incr_completed_threads(job).await?;
         Ok(BackfillProgress {
             completed_threads: progress.completed_threads,
             total_threads: progress.total_threads,
@@ -222,10 +222,7 @@ impl BackfillLifecycleEffects for BackfillWorkerEffects {
         })
     }
     async fn increment_messages(&self, job: Uuid, thread: &str) -> anyhow::Result<bool> {
-        self.0
-            .redis_client
-            .incr_completed_messages(job, thread)
-            .await
+        self.redis_client.incr_completed_messages(job, thread).await
     }
     async fn refresh_progress(
         &self,
@@ -234,7 +231,7 @@ impl BackfillLifecycleEffects for BackfillWorkerEffects {
         progress: BackfillProgress,
     ) {
         crate::pubsub::util::cg_refresh_email(
-            &self.0.connection_gateway_client,
+            &self.connection_gateway_client,
             owner.as_ref(),
             RefreshEmailEvent::BackfillProgress {
                 link_id,
@@ -254,8 +251,7 @@ impl BackfillLifecycleEffects for BackfillWorkerEffects {
         owner: &MacroUserIdStr<'static>,
         contacts: Vec<MacroUserIdStr<'static>>,
     ) -> Result<(), rootcause::Report> {
-        self.0
-            .contacts_ingress
+        self.contacts_ingress
             .enqueue_contact_connections(
                 contacts
                     .into_iter()
