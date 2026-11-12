@@ -5,21 +5,32 @@
 use super::{media::Files, *};
 use crate::domain::pictures::PictureImports;
 
-/// WhatsApp answered the owner's check of `jid` with a picture.
-async fn picture_seen(session: &SessionService, alice: SessionScope, jid: &str, id: &str) {
-    session.claim_picture_checks(alice, 10).await.unwrap();
-    session
-        .complete_picture_check(
-            alice,
-            jid,
-            &PictureAnswer::Picture {
-                id: id.to_owned(),
-                bytes: id.as_bytes().to_vec(),
-                mime: "image/jpeg".to_owned(),
-            },
-        )
-        .await
-        .unwrap();
+/// Claims the owner's due checks and gives WhatsApp's answer for each jid.
+async fn answer_checks(
+    session: &SessionService,
+    alice: SessionScope,
+    answers: &[(&str, PictureAnswer)],
+) {
+    let checks = session.claim_picture_checks(alice, 10).await.unwrap();
+    for (jid, answer) in answers {
+        let check = checks
+            .iter()
+            .find(|check| check.jid == *jid)
+            .expect("claimed");
+        session
+            .complete_picture_check(alice, check, answer)
+            .await
+            .unwrap();
+    }
+}
+
+/// WhatsApp's answer for a picture whose bytes are its id.
+fn picture(id: &str) -> PictureAnswer {
+    PictureAnswer::Picture {
+        id: id.to_owned(),
+        bytes: id.as_bytes().to_vec(),
+        mime: "image/jpeg".to_owned(),
+    }
 }
 
 /// The static file DSS stored for the picture with these bytes.
@@ -45,8 +56,15 @@ async fn everyone_sees_the_pictures_the_owner_sees_and_initials_once_hidden(pool
         .ingest_event(bob, &text(2, BOB_JID, "3EB0BBBB", "Hi"))
         .await
         .unwrap();
-    picture_seen(&session, alice, CUSTOMER_JID, "1700000001").await;
-    picture_seen(&session, alice, GROUP, "1700000002").await;
+    answer_checks(
+        &session,
+        alice,
+        &[
+            (CUSTOMER_JID, picture("1700000001")),
+            (GROUP, picture("1700000002")),
+        ],
+    )
+    .await;
 
     let files = Arc::new(Files::default());
     let imports = PictureImports::new(repository.clone(), files.clone());
@@ -112,11 +130,7 @@ async fn everyone_sees_the_pictures_the_owner_sees_and_initials_once_hidden(pool
         .picture_changed(alice, &[CUSTOMER_JID.to_owned()], Some("1700000003"))
         .await
         .unwrap();
-    session.claim_picture_checks(alice, 10).await.unwrap();
-    session
-        .complete_picture_check(alice, CUSTOMER_JID, &PictureAnswer::Hidden)
-        .await
-        .unwrap();
+    answer_checks(&session, alice, &[(CUSTOMER_JID, PictureAnswer::Hidden)]).await;
     assert_eq!(senders(ALICE).await, vec![None, None]);
 }
 
@@ -156,7 +170,7 @@ async fn a_direct_chat_and_its_person_show_the_chats_picture_and_never_the_owner
         )
         .await
         .unwrap();
-    picture_seen(&session, alice, CUSTOMER_JID, "1700000001").await;
+    answer_checks(&session, alice, &[(CUSTOMER_JID, picture("1700000001"))]).await;
     let files = Arc::new(Files::default());
     PictureImports::new(repository, files.clone())
         .import_staged()
