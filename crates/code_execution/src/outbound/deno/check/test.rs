@@ -165,3 +165,64 @@ async fn file_names_are_plain_typescript_modules() {
         ));
     }
 }
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn bundles_a_client_with_its_generated_programs_module() {
+    let (_root, checker) = checker().await;
+    let files = [
+        SourceFile {
+            name: "client.ts".to_owned(),
+            source: "import { tasks } from 'macro:programs';\n\
+                     document.title = (await tasks({ query: 'launch' })).join(',');\n"
+                .to_owned(),
+        },
+        SourceFile {
+            name: "programs.ts".to_owned(),
+            source: "import { run } from 'macro:client';\n\
+                     export const tasks = (args: { query: string }) => run<string[]>('tasks', args);\n"
+                .to_owned(),
+        },
+        SourceFile {
+            name: "macro_client.ts".to_owned(),
+            source: "export const run = <T,>(program: string, args: unknown) =>\n\
+                     (globalThis as unknown as { macro: { run(p: string, a: unknown): Promise<T> } }).macro.run(program, args);\n"
+                .to_owned(),
+        },
+    ];
+    let Bundle::Code(code) = checker
+        .bundle(&files, "client.ts", BundleTarget::Browser)
+        .await
+        .unwrap()
+    else {
+        panic!("the client should bundle");
+    };
+    assert!(!code.contains("import "), "{code}");
+    assert!(code.contains("\"tasks\""), "{code}");
+    assert!(code.contains("document.title"), "{code}");
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn rejects_a_bundle_whose_import_is_missing_without_host_paths() {
+    let (root, checker) = checker().await;
+    let files = [SourceFile {
+        name: "entry.ts".to_owned(),
+        source: "import { gone } from './gone.ts';\nexport default gone;\n".to_owned(),
+    }];
+    let Bundle::Rejected(diagnostics) = checker
+        .bundle(&files, "entry.ts", BundleTarget::Deno)
+        .await
+        .unwrap()
+    else {
+        panic!("a missing import should be rejected");
+    };
+    assert!(!diagnostics.is_empty());
+    let host = root.path().to_string_lossy();
+    assert!(
+        diagnostics
+            .iter()
+            .all(|d| !d.message.contains(host.as_ref())),
+        "{diagnostics:?}"
+    );
+}

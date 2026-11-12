@@ -13,7 +13,11 @@ service. Session authentication, token issuance and execution storage belong to
 - `src/outbound/deno.rs`: process lifecycle and restricted permissions.
 - `src/outbound/deno/bootstrap.mjs`: program loading, unattended dry runs
   and final JSON protocol.
-- `src/outbound/deno/check.rs`: type-checking TypeScript against the SDK.
+- `src/outbound/deno/check.rs`: type-checking TypeScript against the SDK, and
+  `ProgramBundler` (`deno bundle`) on the same confined workspace: no remote
+  modules, no npm, reads limited by the import map. That map also resolves
+  `macro:programs` and `macro:client` to a check's own `programs.ts` and
+  `macro_client.ts`, which document builds generate.
 - `src/domain/operations.rs`: the generated operation catalog (labels, routes,
   read or write) and the SDK fingerprint.
 
@@ -47,8 +51,9 @@ the SSE reconnect delay, so a reconnecting event stream fails the same way.
 
 The bootstrap replaces a result's `data` larger than `Limits::max_result_bytes`
 with an outline and preview, keeping `reviews`; the frame limit stays the backstop.
-An unattended result is never summarized: later routine steps read it whole, so
-one over the limit fails the run with a message saying so.
+An unattended result is never summarized: later routine steps, or the page
+that called a document program, read it whole, so one over the limit fails the
+run with a message naming the reader (`Unattended::output`).
 
 ## Checks
 
