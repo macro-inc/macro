@@ -1,4 +1,4 @@
-/** DSS's `/slack` routes: Slack web-client sessions linked per workspace. */
+/** DSS's `/slack-linked` routes (`/slack` is the export importer's): Slack web-client sessions linked per workspace. */
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchWithToken } from '@core/util/fetchWithToken';
 import type { ObjectLike } from '@core/util/result';
@@ -7,6 +7,7 @@ import { type SlackErrorCode, slackErrorResponse } from './slack-errors';
 import type {
   SlackAccount,
   SlackAccountDisconnectRequest,
+  SlackAccountList,
   SlackChatAdd,
   SlackConversationList,
   SlackHistoryImport,
@@ -15,7 +16,7 @@ import type {
 } from './slack-linked-wire';
 
 const host = SERVER_HOSTS['document-storage-service'];
-const root = `${host}/slack`;
+const root = `${host}/slack-linked`;
 const login = (id: string) => `${root}/login/${encodeURIComponent(id)}`;
 
 function send<T extends ObjectLike>(
@@ -56,7 +57,7 @@ export const slackLinkedClient = {
     send<SlackLogin>(`${login(id)}/two-factor`, 'POST', { code }),
   cancelLogin: (id: string) => send<SlackLogin>(login(id), 'DELETE'),
   accounts: () =>
-    fetchWithToken<SlackAccount[], SlackErrorCode>(`${root}/accounts`, {
+    fetchWithToken<SlackAccountList, SlackErrorCode>(`${root}/accounts`, {
       errorResponseHandler: slackErrorResponse,
     }),
   disconnect: (accountId: string, request: SlackAccountDisconnectRequest) =>

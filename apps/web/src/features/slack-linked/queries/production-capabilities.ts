@@ -117,7 +117,7 @@ export function createSlackLinkedCapabilities(host: {
   const disconnect = useDisconnectSlackMutation();
   const add = useAddSlackChatMutation();
   const accounts = sourceRead(useSlackAccountsQuery(currentUser), (list) =>
-    list.map(decodeAccount)
+    list.accounts.map(decodeAccount)
   );
   const [catalogueRead, setCatalogueRead] =
     createSignal<SourceRead<SlackCatalogue>>();

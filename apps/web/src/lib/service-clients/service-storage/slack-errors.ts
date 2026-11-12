@@ -3,7 +3,7 @@ import { type BaseFetchErrorCode, statusError } from '@core/util/safeFetch';
 import { z } from 'zod';
 
 /**
- * The `ApiError` codes DSS's `/slack` routes and Slack adds answer with
+ * The `ApiError` codes DSS's `/slack-linked` routes and Slack adds answer with
  * (`docs/architecture/slack-linked.md`); DSS answers `{ code, message }`.
  */
 export const slackErrorCodes = [

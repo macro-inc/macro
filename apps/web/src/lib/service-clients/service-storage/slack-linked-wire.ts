@@ -1,5 +1,5 @@
 /**
- * DSS's `/slack` wire types, hand-typed from
+ * DSS's `/slack-linked` wire types, hand-typed from
  * `docs/architecture/slack-linked.md` until `crates/slack_linked` is in the
  * generated schemas. Replace each with its `./generated/schemas` export then,
  * and delete this file.
@@ -56,6 +56,9 @@ export type SlackAccount = {
   authorizationGeneration: number;
   lastConnectedAt: string | null;
 };
+
+/** `GET /slack/accounts`: oldest first. */
+export type SlackAccountList = { accounts: SlackAccount[] };
 
 export type SlackLoginStep =
   | { kind: 'working' }

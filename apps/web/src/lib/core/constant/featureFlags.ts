@@ -1136,7 +1136,7 @@ export const enableWhatsappLinked = defineFlag({
 /**
  * Slack linked sessions: the Slack page in External (sign-in, Slack Connect
  * conversations, adding them to Macro). The only rollout gate; the backend
- * always serves `/slack`. Follows PostHog everywhere, like WhatsApp, because
+ * always serves `/slack-linked`. Follows PostHog everywhere, like WhatsApp, because
  * the Slack session service isn't deployed to dev yet; override locally with
  * VITE_ENABLE_SLACK_LINKED=true.
  */

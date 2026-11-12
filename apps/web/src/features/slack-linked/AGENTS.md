@@ -21,7 +21,7 @@ Behind the `enable-slack-linked` flag. Architecture:
   Email and Slack's emailed code first (web, desktop, phones); Slack's own page
   in a Macro desktop window for SSO workspaces (`finish_on_desktop`) and
   Slack's captcha; "Paste token and cookie" under Advanced. Server steps come
-  from DSS's `SlackLogin` (`GET /slack/login/{id}`, polled only while
+  from DSS's `SlackLogin` (`GET /slack-linked/login/{id}`, polled only while
   `working`); each answer returns the next step.
 - `queries/desktop.ts`: the desktop commands `slack_desktop_sign_in` and
   `slack_desktop_captcha` (`apps/web/tauri/src-tauri/src/slack_desktop.rs`),
