@@ -5,10 +5,15 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ControlRequestAllOfActionId } from './controlRequestAllOfActionId';
+import type { ControlRequestAllOfClientId } from './controlRequestAllOfClientId';
 import type { ControlRequestAllOfContext } from './controlRequestAllOfContext';
 
 export type ControlRequestAllOf = {
   actionId?: ControlRequestAllOfActionId;
+  /** The app tab the person typed this in (a UUID the tab keeps for its
+lifetime), so what the turn opens in the app reaches that tab only.
+Only a person's own request may send it; a runtime's is refused. */
+  clientId?: ControlRequestAllOfClientId;
   /** Why the agent is being asked. Only a runtime forwarding a triggered
 prompt may send it; a user's request carrying it is refused. */
   context?: ControlRequestAllOfContext;

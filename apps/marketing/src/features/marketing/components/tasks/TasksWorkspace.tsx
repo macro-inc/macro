@@ -1,9 +1,9 @@
-import Calendar from '@phosphor/calendar-blank.svg';
-import Caret from '@phosphor/caret-right.svg';
-import Check from '@phosphor/check.svg';
-import ListChecks from '@phosphor/list-checks.svg';
-import Stack from '@phosphor/stack.svg';
-import X from '@phosphor/x.svg';
+import Calendar from '@icon/system/regular/calendar-blank.svg';
+import Caret from '@icon/system/regular/caret-right.svg';
+import Check from '@icon/system/regular/check.svg';
+import ListChecks from '@icon/system/regular/list-checks.svg';
+import Stack from '@icon/system/regular/stack.svg';
+import X from '@icon/system/regular/x.svg';
 import { Button, Dialog, Dropdown } from '@ui';
 import { TabsInset } from '@ui/components/TabsInset';
 import { createEffect, createSignal, For, Show } from 'solid-js';

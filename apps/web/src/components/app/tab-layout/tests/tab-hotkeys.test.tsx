@@ -64,7 +64,12 @@ async function setupThreeTabs() {
     return (
       <DesktopTabsController
         router={router}
-        manager={host as Parameters<typeof DesktopTabsController>[0]['manager']}
+        manager={
+          {
+            ...host,
+            getOrchestrator: () => ({ setBlockScope: () => {} }),
+          } as unknown as Parameters<typeof DesktopTabsController>[0]['manager']
+        }
       />
     );
   });

@@ -390,7 +390,7 @@ async fn session_activity_requires_view_access_and_valid_pagination_before_readi
             SelfBotAuthorizer,
             NoUserApiKeyAuthorizer,
         );
-        // Nested the way the harness mounts every session router.
+        // Nested exactly as the service mounts it, so the served path is tested.
         let router = axum::Router::new().nest(
             "/agent-sessions",
             super::super::activity::router(super::super::activity::AgentActivityState::new(

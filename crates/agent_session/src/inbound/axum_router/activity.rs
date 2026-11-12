@@ -80,7 +80,8 @@ pub struct AgentActivityQuery {
     pub limit: Option<NonZeroU32>,
 }
 
-/// Mount under `/agent-sessions`, beside the other session routers.
+/// Nest under `/agent-sessions` with the other session routers; paths here are
+/// relative to that prefix, as the OpenAPI path below states in full.
 pub fn router<
     R: AgentActivityReads,
     Access: EntityAccessService,
