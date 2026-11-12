@@ -33,7 +33,8 @@ pub trait ToolSet<Context>: Send + Sync {
     /// records the arguments, the result and any failure (see
     /// [`crate::telemetry::ToolCallSpan`]) - unless the request opted out
     /// ([`RequestContext::genai_telemetry`]) because another layer reports its
-    /// tool calls.
+    /// tool calls. The request's [`RequestContext::origin`] is recorded on the
+    /// span either way.
     fn try_tool_call<'a>(
         &'a self,
         context: Context,
@@ -46,11 +47,13 @@ pub trait ToolSet<Context>: Send + Sync {
     {
         Box::pin(async move {
             if !request_context.genai_telemetry {
+                request_context.origin.record_on_current_tool_span();
                 return self
                     .dispatch_tool_call(context, request_context, tool_name, json)
                     .await;
             }
             let telemetry = ToolCallSpan::begin(tool_name, json);
+            request_context.origin.record(telemetry.span());
             let result = self
                 .dispatch_tool_call(context, request_context, tool_name, json)
                 .instrument(telemetry.span().clone())

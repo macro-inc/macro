@@ -6,7 +6,7 @@ use crate::public_mcp::tool_response::tool_result_with_media;
 use agent_code_mode::{domain::UserCodeMode, inbound::toolset::UserCodeModeToolContext};
 use agent_inmem::domain::tool_mode::ToolMode;
 use ai_toolset::ToolCaller;
-use ai_toolset::{AsyncToolCollection, RequestContext, ToolSet};
+use ai_toolset::{AsyncToolCollection, RequestContext, ToolCallOrigin, ToolSet};
 use cognition::domain::Cognition;
 use macro_user_id::user_id::MacroUserIdStr;
 use rmcp::{
@@ -18,6 +18,9 @@ use rmcp::{
     },
 };
 use std::{sync::Arc, time::Instant};
+
+/// The host public MCP tool calls are recorded under.
+const PUBLIC_MCP_HOST: &str = "public_mcp";
 
 /// Maps our protocol-agnostic annotations onto the MCP wire representation.
 ///
@@ -355,6 +358,12 @@ where
                 Err(rmcp::ErrorData::invalid_params("No params provided", None)),
             );
         };
+        request_context = request_context.with_origin(
+            ToolCallOrigin::default()
+                .with_host(PUBLIC_MCP_HOST)
+                .with_tool_mode(self.tool_mode(&context.extensions))
+                .with_caller(caller.clone()),
+        );
 
         if let Some(code_mode) = &self.code_mode
             && code_mode.tools.tools.contains_key(request.name.as_ref())

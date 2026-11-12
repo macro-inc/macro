@@ -26,7 +26,7 @@ use std::sync::Arc;
 use agent::{AgentError, AgentLoop, ReadToolResult, StreamPart, SystemPrompt, ToolResultLimit};
 use ai_tools::user_tool_review::{ReviewError, UserToolAuthorizer, authorized_user_tool_finisher};
 use ai_tools::{AiHost, DeferredToolSet, ToolServiceContext, tools_for};
-use ai_toolset::{AsyncToolCollection, ToolSet as AiToolSet};
+use ai_toolset::{AsyncToolCollection, ToolCallOrigin, ToolSet as AiToolSet};
 use axum::extract::FromRef;
 use futures::{FutureExt as _, StreamExt as _};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -303,6 +303,14 @@ impl NativeTools {
         Self::from_factory(|| tools_for(AiHost::AgentSession), false)
     }
 
+    fn tool_mode(&self) -> ToolMode {
+        if self.code_mode {
+            ToolMode::Code
+        } else {
+            ToolMode::Standard
+        }
+    }
+
     fn from_factory(build: impl Fn() -> ai_tools::ToolSetWithPrompt, code_mode: bool) -> Self {
         let tools = build();
         let base_tools = Arc::into_inner(tools.toolset)
@@ -486,26 +494,54 @@ fn select_skills<'a>(
     ))
 }
 
+/// Why a turn runs with the direct tools instead of code mode.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, strum::IntoStaticStr)]
+#[strum(serialize_all = "snake_case")]
+enum StandardModeReason {
+    /// A summary turn, which advertises no tools anyway.
+    Summary,
+    /// The session's owner is a bot or a team, not a user.
+    NonUserOwner,
+    /// The turn has no MCP tool set to run code through.
+    NoMcpTools,
+    /// The MCP tool set lacks a code-mode tool.
+    MissingCodeTool,
+}
+
 // Every conversation turn of a user's session runs code mode. A failed or
 // missing code-mode MCP connection must never leave a turn with only the small
 // direct set, and summaries advertise no tools.
 fn tool_mode(request: &TurnRequest) -> ToolMode {
-    if request.purpose != crate::domain::engine::TurnPurpose::Conversation {
-        return ToolMode::Standard;
+    match standard_mode_reason(request) {
+        None => ToolMode::Code,
+        Some(StandardModeReason::Summary) => ToolMode::Standard,
+        Some(reason) => {
+            tracing::warn!(
+                reason = <&str>::from(reason),
+                owner_type = %request.owner.owner_type(),
+                agent.session.id = %request.session_id,
+                "code-mode tools unavailable; running the turn with direct tools"
+            );
+            ToolMode::Standard
+        }
     }
-    let (Owner::User(_), Some(mcp)) = (&request.owner, &request.mcp_tools) else {
-        return ToolMode::Standard;
+}
+
+fn standard_mode_reason(request: &TurnRequest) -> Option<StandardModeReason> {
+    if request.purpose != crate::domain::engine::TurnPurpose::Conversation {
+        return Some(StandardModeReason::Summary);
+    }
+    let Owner::User(_) = &request.owner else {
+        return Some(StandardModeReason::NonUserOwner);
+    };
+    let Some(mcp) = &request.mcp_tools else {
+        return Some(StandardModeReason::NoMcpTools);
     };
     let catalog = mcp.searchable_catalog();
-    if CODE_MODE_MCP_TOOLS
+    let complete = CODE_MODE_MCP_TOOLS
         .iter()
-        .all(|name| catalog.iter().any(|tool| tool.name == *name))
-    {
-        ToolMode::Code
-    } else {
-        tracing::warn!("code-mode tools unavailable; running the turn with direct tools");
-        ToolMode::Standard
-    }
+        .all(|name| catalog.iter().any(|tool| tool.name == *name));
+    (!complete).then_some(StandardModeReason::MissingCodeTool)
 }
 
 async fn drive_turn(
@@ -731,6 +767,11 @@ async fn drive_turn(
         .with_reasoning_effort(reasoning_effort)
         .with_speed(speed)?
         .with_genai_telemetry(false)
+        .with_tool_origin(
+            ToolCallOrigin::default()
+                .with_tool_mode(native_tools.tool_mode())
+                .with_turn_purpose(purpose.into()),
+        )
         .with_streamed_tool_calls()
         .with_tool_result_limit(tool_results.clone());
     // Only the loop's own model calls run on the agent's key, so only they are

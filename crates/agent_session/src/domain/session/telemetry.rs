@@ -729,6 +729,10 @@ impl GenAiProjector {
             ),
         };
         span.set_str(attr::MACRO_TOOL_KIND, tool_kind_name(call.kind));
+        // The harness is the host here: the actor sees every harness's calls.
+        if self.harness != Harness::Unknown {
+            span.set_str(attr::MACRO_TOOL_HOST, harness_name(self.harness));
+        }
         if !call.title.is_empty() {
             span.set_str(attr::MACRO_TOOL_TITLE, call.title.clone());
         }

@@ -158,6 +158,10 @@ impl ToolsetToolAdapter {
                             let telemetry = req_ctx
                                 .genai_telemetry
                                 .then(|| ToolCallSpan::begin(&tool_name, &args));
+                            match &telemetry {
+                                Some(telemetry) => req_ctx.origin.record(telemetry.span()),
+                                None => req_ctx.origin.record_on_current_tool_span(),
+                            }
                             let span = telemetry.as_ref().map_or_else(tracing::Span::none, |t| {
                                 t.span().clone()
                             });

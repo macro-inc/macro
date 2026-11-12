@@ -90,7 +90,8 @@ pub struct TurnRequest {
 }
 
 /// Whether a model call answers the user or condenses their conversation.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::IntoStaticStr)]
+#[strum(serialize_all = "snake_case")]
 pub enum TurnPurpose {
     /// A turn of the conversation, with the agent's tools.
     Conversation,

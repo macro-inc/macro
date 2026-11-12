@@ -367,3 +367,105 @@ async fn a_request_that_opted_out_records_no_tool_span() {
     let spans = finished(&exporter, &provider);
     assert!(tool_spans(&spans).is_empty(), "{spans:#?}");
 }
+
+#[tokio::test]
+async fn try_tool_call_records_the_origin_on_the_span_it_opens() {
+    let (exporter, provider, _guard) = otel_test_pipeline();
+    let long_name = "c".repeat(100);
+    let request = request_context().with_origin(
+        crate::ToolCallOrigin::default()
+            .with_host("public_mcp")
+            .with_tool_mode(crate::ToolMode::Code)
+            .with_caller(crate::ToolCaller::McpClient {
+                name: Some(long_name),
+            }),
+    );
+
+    toolset()
+        .try_tool_call((), request, "echo_tool", &json!({ "value": "a" }))
+        .await
+        .expect("dispatch")
+        .expect("tool success");
+
+    let spans = finished(&exporter, &provider);
+    let span = tool_spans(&spans)[0];
+    assert_eq!(
+        string_attribute(span, attr::MACRO_TOOL_HOST).as_deref(),
+        Some("public_mcp")
+    );
+    assert_eq!(
+        string_attribute(span, attr::MACRO_TOOL_MODE).as_deref(),
+        Some("code")
+    );
+    assert_eq!(
+        string_attribute(span, attr::MACRO_MCP_CALLER).as_deref(),
+        Some("mcp_client")
+    );
+    assert_eq!(
+        string_attribute(span, attr::MACRO_MCP_CLIENT_NAME).map(|name| name.chars().count()),
+        Some(64),
+        "the self-reported client name is bounded"
+    );
+    assert_eq!(string_attribute(span, attr::MACRO_TURN_PURPOSE), None);
+}
+
+#[tokio::test]
+async fn the_origin_is_recorded_on_the_runtime_span_even_with_genai_telemetry_off() {
+    let (exporter, provider, _guard) = otel_test_pipeline();
+    let request = request_context().with_genai_telemetry(false).with_origin(
+        crate::ToolCallOrigin::default()
+            .with_host("agent_session")
+            .with_tool_mode(crate::ToolMode::Standard)
+            .with_turn_purpose("conversation"),
+    );
+
+    toolset()
+        .try_tool_call((), request, "echo_tool", &json!({ "value": "b" }))
+        .instrument(tracing::info_span!("execute_tool"))
+        .await
+        .expect("dispatch")
+        .expect("tool success");
+
+    let spans = finished(&exporter, &provider);
+    let span = tool_spans(&spans)[0];
+    assert_eq!(
+        string_attribute(span, attr::MACRO_TOOL_HOST).as_deref(),
+        Some("agent_session")
+    );
+    assert_eq!(
+        string_attribute(span, attr::MACRO_TOOL_MODE).as_deref(),
+        Some("standard")
+    );
+    assert_eq!(
+        string_attribute(span, attr::MACRO_TURN_PURPOSE).as_deref(),
+        Some("conversation")
+    );
+    assert_eq!(
+        string_attribute(span, attr::TOOL_CALL_ARGUMENTS),
+        None,
+        "content stays off"
+    );
+}
+
+#[tokio::test]
+async fn the_origin_is_not_recorded_on_a_span_that_is_not_a_tool_span() {
+    let (exporter, provider, _guard) = otel_test_pipeline();
+    let request = request_context()
+        .with_genai_telemetry(false)
+        .with_origin(crate::ToolCallOrigin::default().with_host("memory"));
+
+    toolset()
+        .try_tool_call((), request, "echo_tool", &json!({ "value": "c" }))
+        .instrument(tracing::info_span!("invoke_agent"))
+        .await
+        .expect("dispatch")
+        .expect("tool success");
+
+    let spans = finished(&exporter, &provider);
+    assert!(
+        spans
+            .iter()
+            .all(|span| string_attribute(span, attr::MACRO_TOOL_HOST).is_none()),
+        "got {spans:#?}"
+    );
+}

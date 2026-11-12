@@ -241,6 +241,11 @@ with outcome fields (`edit.mode`, `edit.ops_total`, `edit.blocked`,
 `edit.interpret`, `edit.supervise.turn`, `edit.dispatch`, `edit.run_code`,
 `edit.flush`. On the agent side, `crates/agent_session/src/domain/session/telemetry.rs`
 emits `invoke_agent` and `execute_tool` and propagates into the ACP agent.
+Every `execute_tool` span says who called it: `macro.genai.tool.host` (the
+agent loop's name, the session's harness, or `public_mcp`),
+`macro.genai.tool.mode` (`code`/`standard`), `macro.genai.turn.purpose`, and
+for public MCP `macro.genai.mcp.caller` and `macro.genai.mcp.client.name`
+(`ai_toolset::ToolCallOrigin`).
 
 **GraphQL mutation queue (web → DSS `graphql.execute` → resolver).**
 `apps/web/src/lib/graphql-cache/exchange/mutation-queue-telemetry.ts` opens a

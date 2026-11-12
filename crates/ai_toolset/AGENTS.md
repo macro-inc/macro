@@ -24,6 +24,9 @@ deliberately stable and widely depended on.
 - `src/actor.rs`: session-only `acting_as` schema injection, required selection, and trusted owner/requester resolution; public tool inputs remain unchanged.
 - `src/context.rs`: `RequestContext`/`ServiceContext` and the `FromRef`
   extraction pattern.
+- `src/origin.rs`: `ToolCallOrigin` (host, `ToolMode`, turn purpose, public
+  MCP caller), set on `RequestContext` and recorded on every `execute_tool`
+  span by `try_tool_call`, even with GenAI telemetry off.
 
 ## Scope
 
@@ -52,6 +55,9 @@ deliberately stable and widely depended on.
 
 ## Gotchas
 
+- A new host that dispatches tools sets `RequestContext::with_origin` (or
+  `AgentLoop::with_tool_origin`); agent loops default the host to their agent
+  name. Origin fields are labels, never content or personal data.
 - Every tool must declare MCP annotations; a tool without them fails to
   compile/register (see `src/annotations.rs`).
 - Keep tool input roots free of `oneOf`, `anyOf`, and `allOf`; put tagged variants
