@@ -518,6 +518,23 @@ await routine.update({
 });
 ```
 
+A webhook trigger runs the routine with whatever text someone POSTs to its
+secret URL. `routine.createWebhook()` makes the URL (shown only then; any
+earlier one stops working), `routine.webhook()` reads its prefix and date, and
+`routine.deleteWebhook()` turns it off. `match` tests a JSON body:
+
+```ts
+await routine.update({
+  ...options,
+  trigger: {
+    type: 'events',
+    filters: [{ events: ['webhook'], match: [{ path: ['status'], equals: 'failed' }] }],
+  },
+});
+const { url } = await routine.createWebhook();
+await fetch(url, { method: 'POST', body: JSON.stringify({ status: 'failed' }) });
+```
+
 ### Agents, conversations and hosts
 
 `macro.agents.list/create/byId` manage agent configuration; listed agents read

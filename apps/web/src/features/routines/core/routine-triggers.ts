@@ -75,13 +75,14 @@ export const routineTriggerSchema = z.discriminatedUnion('kind', [
           'call.started',
           'call.ended',
           'github',
+          'webhook',
         ])
       )
       .min(1),
     ids: z.array(z.string().uuid()).optional(),
     /** Only for `github`. */
     github: githubSelectorSchema.optional(),
-    /** Only for `github`: payload tests that must all pass. */
+    /** Only for `github` and `webhook`: payload tests that must all pass. */
     match: z.array(payloadTestSchema).optional(),
     /** Only for task property change events. */
     property: propertySelectorSchema.optional(),
@@ -100,6 +101,7 @@ export const routineEventGroups = [
   'Email',
   'Calls',
   'GitHub',
+  'Webhooks',
 ] as const;
 export type RoutineEventGroup = (typeof routineEventGroups)[number];
 type TriggerPreset = Pick<EventTriggerDraft, 'github' | 'match' | 'property'>;
@@ -329,6 +331,13 @@ export const routineEvents: {
       'Any event Macro’s GitHub app receives, narrowed by the event names, actions, and payload tests you choose.',
     preset: github([]),
   },
+  {
+    value: 'webhook',
+    label: 'Webhook received',
+    group: 'Webhooks',
+    description:
+      'Another app or script POSTs text to this routine’s secret URL. The routine gets the text as sent.',
+  },
 ];
 
 // Preserve saved selectors while keeping the creation menu focused on the
@@ -432,10 +441,12 @@ export type EventScopeKind =
   | 'THREAD'
   | 'CALL_RECORD'
   | 'CHANNEL'
-  | 'GITHUB';
+  | 'GITHUB'
+  | 'WEBHOOK';
 
 export function eventScopeKind(trigger: EventTriggerDraft): EventScopeKind {
   if (trigger.events.includes('github')) return 'GITHUB';
+  if (trigger.events.includes('webhook')) return 'WEBHOOK';
   if (trigger.events.every((event) => event.startsWith('task.'))) return 'TASK';
   if (trigger.events.every((event) => event.startsWith('document.')))
     return 'DOCUMENT';
@@ -456,6 +467,7 @@ export function conditionPlaceholder(trigger: EventTriggerDraft) {
     .with('CHANNEL', () => 'Is someone asking for help?')
     .with('CALL_RECORD', () => 'Was this a call with a customer?')
     .with('GITHUB', () => 'Does this failure look like a flaky test?')
+    .with('WEBHOOK', () => 'Is this alert about production?')
     .exhaustive();
 }
 
@@ -466,7 +478,8 @@ export function isGlobalEvent(events: readonly RoutineEventName[]) {
       event === 'email.message_received' ||
       event === 'call.started' ||
       event === 'call.ended' ||
-      event === 'github'
+      event === 'github' ||
+      event === 'webhook'
   );
 }
 
@@ -833,7 +846,8 @@ export type TriggerKind =
   | 'document'
   | 'channel'
   | 'call'
-  | 'github';
+  | 'github'
+  | 'webhook';
 
 export function triggerKind(trigger: RoutineTriggerDraft): TriggerKind {
   if (trigger.kind === 'schedule') return 'schedule';
@@ -845,6 +859,7 @@ export function triggerKind(trigger: RoutineTriggerDraft): TriggerKind {
     .with('CALL_RECORD', () => 'call')
     .with('CHANNEL', () => 'channel')
     .with('GITHUB', () => 'github')
+    .with('WEBHOOK', () => 'webhook')
     .exhaustive();
 }
 

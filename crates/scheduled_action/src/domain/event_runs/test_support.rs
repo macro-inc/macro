@@ -64,6 +64,12 @@ pub fn capability(owner: MacroUserIdStr<'static>, event: &EventReference) -> Eve
                 installation_id: delivery.installation_id,
             };
         }
+        EventSource::Webhook(delivery) => {
+            return EventAccessCapability::Webhook {
+                owner,
+                routine_id: delivery.routine_id,
+            };
+        }
         EventSource::Entity { .. } => {}
     }
     let entity = Entity {
@@ -73,7 +79,7 @@ pub fn capability(owner: MacroUserIdStr<'static>, event: &EventReference) -> Eve
             EventEntityType::Channel => EntityType::Channel,
             EventEntityType::EmailThread => EntityType::EmailThread,
             EventEntityType::Call => EntityType::Call,
-            EventEntityType::GithubInstallation => {
+            EventEntityType::GithubInstallation | EventEntityType::Webhook => {
                 unreachable!("external events returned above")
             }
         },
@@ -117,7 +123,7 @@ pub fn capability(owner: MacroUserIdStr<'static>, event: &EventReference) -> Eve
             )
             .unwrap(),
         ),
-        EventEntityType::GithubInstallation => {
+        EventEntityType::GithubInstallation | EventEntityType::Webhook => {
             unreachable!("external events returned above")
         }
     }

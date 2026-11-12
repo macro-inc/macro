@@ -1,7 +1,8 @@
 //! Translate the owning entity-access service's typed receipts, not permission
 //! tables or event actors, into the routine domain's narrow capability port.
 //! GitHub deliveries are the owner's when they hold a claim to the delivering
-//! installation, as the GitHub domain decides it.
+//! installation, as the GitHub domain decides it. A webhook delivery is its
+//! routine owner's: they gave out the URL that sent it.
 
 use entity_access::domain::{
     models::{AccessError, EntityType, ViewAccessLevel, ViewOnly},
@@ -64,6 +65,12 @@ impl<S: EntityAccessService, G: GithubInstallationClaims> CurrentOwnerAccess
                     installation_id: delivery.installation_id,
                 }));
             }
+            EventSource::Webhook(delivery) => {
+                return Ok(Some(EventAccessCapability::Webhook {
+                    owner: owner.clone(),
+                    routine_id: delivery.routine_id,
+                }));
+            }
         };
         let id = &entity_id;
         let result = match event.entity_type() {
@@ -102,7 +109,7 @@ impl<S: EntityAccessService, G: GithubInstallationClaims> CurrentOwnerAccess
                 )
                 .await
                 .map(EventAccessCapability::Call),
-            EventEntityType::GithubInstallation => {
+            EventEntityType::GithubInstallation | EventEntityType::Webhook => {
                 return Err(rootcause::report!(
                     "an entity event named an external source"
                 ));

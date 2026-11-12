@@ -15,3 +15,4 @@ pub mod suggestions;
 pub mod target_runner;
 pub mod target_validation;
 pub mod templates;
+pub mod webhooks;

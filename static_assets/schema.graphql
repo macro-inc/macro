@@ -7727,7 +7727,7 @@ type GraphqlScheduledActionEventFilter {
 	"""
 	github: GraphqlScheduledActionGithubSelector
 	"""
-	Exact payload tests a GitHub delivery must pass, as a reader would state them.
+	Exact payload tests a GitHub delivery or JSON webhook body must pass, as a reader would state them.
 	"""
 	payloadMatch: [String!]!
 	"""
@@ -7808,6 +7808,10 @@ enum GraphqlScheduledActionEventName {
 	Macro's GitHub App received a delivery.
 	"""
 	GITHUB
+	"""
+	Someone POSTed to the routine's webhook URL.
+	"""
+	WEBHOOK
 }
 
 """

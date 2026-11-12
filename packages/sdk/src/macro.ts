@@ -530,8 +530,10 @@ export { type MessageParent, MessageThread } from './entities/messages/thread';
 export type { EntityReference } from './entities/reference';
 export type { ReferralLink } from './entities/referrals/namespace';
 export type {
+  CreatedRoutineWebhook,
   RoutineEventFilter,
   RoutineTriggerOptions,
+  RoutineWebhook,
   SingleRoutineTrigger,
 } from './entities/routines/routine';
 export {

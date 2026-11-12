@@ -431,6 +431,66 @@ export class Routine extends MacroEntity<ScheduledActionResponse> {
       c.scheduledAction.deleteScheduledAction({ path: { id: this.id } }),
     );
   }
+
+  /**
+   * The routine's webhook URL, without its secret, or `undefined` when it
+   * has none. The full URL is returned only by {@link createWebhook}.
+   */
+  async webhook(): Promise<RoutineWebhook | undefined> {
+    const result = await this.client.scheduledAction.getRoutineWebhook({
+      path: { id: this.id },
+    });
+    if (result.response?.status === 404) return undefined;
+    const webhook = unwrap(result);
+    return {
+      tokenPrefix: webhook.tokenPrefix,
+      createdAt: webhook.createdAt,
+    };
+  }
+
+  /**
+   * Give the routine a secret webhook URL. Anyone who POSTs UTF-8 text (at
+   * most 64 KiB) to it starts a run that receives the text as its event:
+   * `trigger.item.webhook.body` in code steps. It runs only while the routine
+   * is enabled and has a `webhook` event trigger, such as
+   * `{ type: 'events', filters: [{ events: ['webhook'] }] }`. Any URL the
+   * routine had stops working. The URL is shown only here.
+   */
+  async createWebhook(): Promise<CreatedRoutineWebhook> {
+    const created = unwrap(
+      await this.client.scheduledAction.createRoutineWebhook({
+        path: { id: this.id },
+      }),
+    );
+    return {
+      url: `${this.client.hosts['scheduled-action']}/scheduled-actions/webhooks/${created.token}`,
+      tokenPrefix: created.webhook.tokenPrefix,
+      createdAt: created.webhook.createdAt,
+    };
+  }
+
+  /** Stop the routine's webhook URL working. A routine without one is left as it is. */
+  async deleteWebhook(): Promise<void> {
+    unwrap(
+      await this.client.scheduledAction.deleteRoutineWebhook({
+        path: { id: this.id },
+      }),
+    );
+  }
+}
+
+/** A routine's webhook URL, as it can be read after it is made. */
+export interface RoutineWebhook {
+  /** The secret's first characters, to tell URLs apart. */
+  tokenPrefix: string;
+  /** When it was made (RFC 3339). */
+  createdAt: string;
+}
+
+/** A routine's new webhook URL, whose secret is shown only once. */
+export interface CreatedRoutineWebhook extends RoutineWebhook {
+  /** POST text here to run the routine; the URL is the whole credential. */
+  url: string;
 }
 
 /**

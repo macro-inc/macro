@@ -289,6 +289,112 @@ async fn github_deliveries_need_a_claim_to_the_installation() {
     );
 }
 
+fn webhook_configuration(filters: serde_json::Value) -> EventActionConfiguration {
+    EventActionConfiguration {
+        filters: serde_json::from_value(filters).unwrap(),
+        ..configuration()
+    }
+}
+
+fn webhook(routine_id: Uuid, body: &str) -> EventReference {
+    EventReference::webhook(
+        crate::domain::event_trigger::WebhookDelivery::new(routine_id, body.as_bytes(), None)
+            .unwrap(),
+    )
+}
+
+#[tokio::test]
+async fn a_webhook_delivery_is_admitted_to_its_routine_alone() {
+    let repo = Arc::new(Repo::default());
+    let addressed = webhook_configuration(json!([{ "events": ["webhook"] }]));
+    let other = webhook_configuration(json!([{ "events": ["webhook"] }]));
+    repo.0.lock().unwrap().configurations = vec![addressed.clone(), other];
+    let service = EventAdmissionService::new(
+        repo.clone(),
+        Arc::new(Access::default()),
+        10.try_into().unwrap(),
+    );
+
+    let event = webhook(addressed.action_id, "Deploy finished");
+    assert!(service.admit_webhook(&event).await.unwrap());
+
+    let state = repo.0.lock().unwrap();
+    assert_eq!(state.pending.len(), 1);
+    assert_eq!(state.pending[0].action_id, addressed.action_id);
+    assert_eq!(state.pending[0].event, event);
+    // Nothing scanned for other routines.
+    assert!(state.pages.is_empty());
+}
+
+#[tokio::test]
+async fn a_webhook_delivery_is_refused_by_a_routine_not_taking_it() {
+    let paused = EventActionConfiguration {
+        enabled: false,
+        ..webhook_configuration(json!([{ "events": ["webhook"] }]))
+    };
+    let not_watching = webhook_configuration(json!([{ "events": ["document.updated"] }]));
+    let tested = webhook_configuration(json!([{
+        "events": ["webhook"],
+        "match": [{ "path": ["status"], "equals": "failed" }],
+    }]));
+    let repo = Arc::new(Repo::default());
+    repo.0.lock().unwrap().configurations =
+        vec![paused.clone(), not_watching.clone(), tested.clone()];
+    let service = EventAdmissionService::new(
+        repo.clone(),
+        Arc::new(Access::default()),
+        10.try_into().unwrap(),
+    );
+
+    for routine in [&paused, &not_watching] {
+        assert!(
+            !service
+                .admit_webhook(&webhook(routine.action_id, "{}"))
+                .await
+                .unwrap()
+        );
+    }
+    // A routine that was deleted has no configuration.
+    assert!(
+        !service
+            .admit_webhook(&webhook(generate_uuid_v7(), "{}"))
+            .await
+            .unwrap()
+    );
+    // Payload tests read a JSON body; text never passes them.
+    for body in [r#"{"status":"passed"}"#, "status: failed"] {
+        assert!(
+            !service
+                .admit_webhook(&webhook(tested.action_id, body))
+                .await
+                .unwrap()
+        );
+    }
+    assert!(
+        service
+            .admit_webhook(&webhook(tested.action_id, r#"{"status":"failed"}"#))
+            .await
+            .unwrap()
+    );
+    assert_eq!(repo.0.lock().unwrap().pending.len(), 1);
+}
+
+#[tokio::test]
+async fn only_webhook_deliveries_are_admitted_by_address() {
+    let service = EventAdmissionService::new(
+        Arc::new(Repo::default()),
+        Arc::new(Access::default()),
+        10.try_into().unwrap(),
+    );
+
+    assert!(
+        service
+            .admit_webhook(&incoming().normalize().unwrap())
+            .await
+            .is_err()
+    );
+}
+
 #[tokio::test]
 async fn subscribed_github_events_admit_once_and_keep_the_payload_for_the_agent() {
     let registration: serde_json::Value =

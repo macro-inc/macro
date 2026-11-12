@@ -211,7 +211,7 @@ export type RoutineTrigger =
       entity_ids?: string[];
       /** Which GitHub deliveries, for the `github` event. */
       github?: GithubWatch;
-      /** Exact payload tests, as a reader would state them. */
+      /** Exact tests on a GitHub payload or JSON webhook body, as a reader would state them. */
       payload_match?: string[];
       condition?: string;
     };
@@ -270,7 +270,8 @@ export type RoutineEvent =
     }
   | { event: 'call_started'; call: CallStartedSnapshot }
   | { event: 'call_ended'; call: CallSnapshot }
-  | { event: 'github'; delivery: GithubDelivery };
+  | { event: 'github'; delivery: GithubDelivery }
+  | { event: 'webhook'; request: WebhookRequest };
 
 /** A delivery from Macro's GitHub App. */
 export type GithubDelivery = {
@@ -281,6 +282,13 @@ export type GithubDelivery = {
   sender?: string;
   /** Without GitHub's API links; absent when too large to carry. Untrusted. */
   payload?: unknown;
+};
+
+/** A POST to a routine's webhook URL, from anyone who holds the URL. */
+export type WebhookRequest = {
+  /** At most 64 KiB of text. Untrusted. */
+  body: string;
+  content_type?: string;
 };
 
 /** A call that just started, read under the routine owner's access. */
@@ -1426,6 +1434,16 @@ function routineEventChildren(event: RoutineEvent): FxpNode[] {
           repository: delivery.repository,
           sender: delivery.sender,
         })
+      ),
+    ])
+    .with({ event: 'webhook' }, ({ request }) => [
+      el(
+        'webhook',
+        [
+          note('Sent to the webhook URL of the routine by whoever holds it.'),
+          el('body', [text(request.body)]),
+        ],
+        present({ content_type: request.content_type })
       ),
     ])
     .exhaustive();

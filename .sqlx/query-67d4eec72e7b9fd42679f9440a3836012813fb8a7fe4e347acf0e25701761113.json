@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM scheduled_action_webhook WHERE action_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "67d4eec72e7b9fd42679f9440a3836012813fb8a7fe4e347acf0e25701761113"
+}

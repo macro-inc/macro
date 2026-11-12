@@ -110,6 +110,11 @@ const TRIGGER_TYPES: TriggerType[] = [
     icon: TRIGGER_GROUP_ICONS.GitHub,
     choices: eventChoices('GitHub'),
   },
+  {
+    label: 'Webhooks',
+    icon: TRIGGER_GROUP_ICONS.Webhooks,
+    choices: eventChoices('Webhooks'),
+  },
 ];
 
 /**

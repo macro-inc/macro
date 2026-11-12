@@ -4,3 +4,4 @@ pub mod event_run_worker;
 pub mod kafka_consumer;
 pub mod suggestion_router;
 pub mod template_router;
+pub mod webhook_router;

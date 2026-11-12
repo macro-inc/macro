@@ -552,6 +552,12 @@ border on the cell. Virtual rows are transformed, so each is its own stacking
 context: a row carrying labels rises above the header only while its top edge
 is in view.
 
+Routine webhook triggers have a backend-free desktop/phone regression over the
+real trigger list, menu and webhook URL panel: adding **Webhook received** from
+its own group, making its URL (shown once with a `curl` example) and the JSON
+body tests:
+`bunx playwright test --config src/features/routines/browser-test/playwright.config.ts`.
+
 Column renames have a backend-free desktop/phone regression using the real
 schema query and mutation adapter with delayed service responses:
 `bunx playwright test --config src/features/block-database/browser-test/playwright.config.ts rename.browser.e2e.ts`.
