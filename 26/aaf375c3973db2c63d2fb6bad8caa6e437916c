@@ -1,0 +1,19 @@
+bun.lock
+  s_60bbe192a6a060::t_1fb0321a2ee6c6 1189,3573
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "26aaf375c3973db2c63d2fb6bad8caa6e437916c",
+  "prompts": {},
+  "sessions": {
+    "s_60bbe192a6a060": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "46f7c65c-e6e3-42b5-a7ea-a9973c9087d3",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
