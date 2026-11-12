@@ -14,6 +14,7 @@ mod error;
 mod ids;
 mod method;
 pub mod models;
+pub mod realtime;
 mod pacing;
 
 pub use client::{DownloadedFile, SlackClient};
