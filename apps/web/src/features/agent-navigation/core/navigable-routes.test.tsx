@@ -81,6 +81,7 @@ describe('agent route table', () => {
       '/component/settings',
       '/pipedream-connect.html',
       '/routines/new',
+      '/passwords',
     ]) {
       expect(navigable(path), path).toBe(false);
     }
