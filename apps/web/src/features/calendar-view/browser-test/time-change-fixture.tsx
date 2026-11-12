@@ -52,6 +52,7 @@ function Fixture() {
   const controller = createEventTimeChange({
     active: () => true,
     refreshStatus: () => refreshStatus,
+    eventsById,
     save: async ({ parentSpan: _span, onWriteAccepted, ...args }) => {
       setRequest(JSON.stringify(args));
       if (PARAMS.has('failure')) throw new Error('Fixture save failed');

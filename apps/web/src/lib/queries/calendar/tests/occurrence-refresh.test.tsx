@@ -123,3 +123,21 @@ it('identifies a replacement read when an in-flight refresh is cancelled', async
   await first;
   expect(phases).toEqual(['started', 'started', 'completed']);
 });
+
+it('does not confirm a partial cache read as a refreshed viewport', async () => {
+  const phases: string[] = [];
+  mount(phases);
+  const queryKey = calendarKeys.occurrences('viewer', RANGE).queryKey;
+  await client.fetchQuery({
+    queryKey,
+    staleTime: 0,
+    queryFn: async () => ({ ...DATA, partial: true }),
+  });
+  expect(phases).toEqual(['started']);
+  await client.fetchQuery({
+    queryKey,
+    staleTime: 0,
+    queryFn: async () => DATA,
+  });
+  expect(phases).toEqual(['started', 'started', 'completed']);
+});

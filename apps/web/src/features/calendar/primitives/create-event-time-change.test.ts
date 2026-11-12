@@ -1,7 +1,7 @@
 import { Calendar } from '@fullcalendar/core';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import type { UpdateCalendarEventArgs } from '@queries/calendar/mutations';
-import { createRoot } from 'solid-js';
+import { createRoot, createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { describe, expect, it, vi } from 'vitest';
 import { RECURRING_EVENT } from '../tests/fixtures';
@@ -13,7 +13,8 @@ function setup(
   save: (args: UpdateCalendarEventArgs) => Promise<unknown> = vi.fn(
     async () => {}
   ),
-  refreshStatus?: () => { started: number; completed: number }
+  refreshStatus?: () => { started: number; completed: number },
+  eventsById?: () => ReadonlyMap<string, CalendarEvent>
 ) {
   return createRoot((dispose) => {
     const calendar = new Calendar(document.createElement('div'), {
@@ -32,6 +33,7 @@ function setup(
       save,
       onError,
       refreshStatus,
+      eventsById,
     });
     return {
       controller,
@@ -115,6 +117,35 @@ describe('grid time changes', () => {
       setRefresh({ started: 3, completed: 3 });
       expect(s.controller.pending()).toBe(false);
       expect(s.revert).not.toHaveBeenCalled();
+    } finally {
+      s.dispose();
+    }
+  });
+
+  it('retains the preview when a completed cache read still contains the old range', async () => {
+    const [refresh, setRefresh] = createStore({ started: 0, completed: 0 });
+    const [events, setEvents] = createSignal([RECURRING_EVENT]);
+    const s = setup(
+      RECURRING_EVENT,
+      vi.fn(async (args) => {
+        args.onWriteAccepted?.();
+      }),
+      () => refresh,
+      () => new Map(events().map((event) => [event.id, event]))
+    );
+    try {
+      await s.controller.handle(s.change, s.event);
+      await s.controller.confirm();
+      setRefresh({ started: 1, completed: 1 });
+      expect(s.controller.pending()).toBe(true);
+      setEvents([
+        {
+          ...RECURRING_EVENT,
+          start: '2026-11-09T16:00:00Z',
+          end: '2026-11-09T17:00:00Z',
+        },
+      ]);
+      expect(s.controller.pending()).toBe(false);
     } finally {
       s.dispose();
     }

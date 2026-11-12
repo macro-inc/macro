@@ -344,10 +344,15 @@ async function readViewportItems(
   occurrenceKeys: readonly string[],
   fetchPage: FetchCalendarOccurrencePage,
   signal?: AbortSignal
-): Promise<CalendarOccurrencesData['items'] | 'unsupported'> {
+): Promise<Pick<CalendarOccurrencesData, 'items' | 'partial'> | 'unsupported'> {
   const read = await readOccurrenceItems(host, occurrenceKeys);
   const unreadable = claimUnreadable(host, read.unreadable);
-  if (unreadable.length === 0) return read.items;
+  if (unreadable.length === 0) {
+    return {
+      items: read.items,
+      ...(read.unreadable.length > 0 ? { partial: true } : {}),
+    };
+  }
   return Telemetry.span(
     'calendar.refetch_unreadable_occurrences',
     async (span) => {
@@ -362,7 +367,7 @@ async function readViewportItems(
         if (signal?.aborted) throw fetched.error;
         span.setAttr('calendar.cache.refetch_outcome', 'failed');
         span.error('Refetching unreadable calendar occurrences failed');
-        return read.items;
+        return { items: read.items, partial: true };
       }
       const result = await host.calendarRange(args);
       if (result.kind === 'unsupported') return 'unsupported';
@@ -372,7 +377,10 @@ async function readViewportItems(
         'calendar.cache.still_unreadable_count',
         reread.unreadable.length
       );
-      return reread.items;
+      return {
+        items: reread.items,
+        ...(reread.unreadable.length > 0 ? { partial: true } : {}),
+      };
     }
   );
 }
@@ -447,13 +455,13 @@ export async function readCalendarRange(
     result = await host.calendarRange(args);
     if (result.kind === 'unsupported') return { kind: 'unsupported' };
   }
-  const items = await readViewportItems(
+  const viewport = await readViewportItems(
     host,
     args,
     result.occurrenceKeys,
     fetchPage,
     options.signal
   );
-  if (items === 'unsupported') return { kind: 'unsupported' };
-  return { kind: 'range', data: { items, syncStatus: latestSyncStatus } };
+  if (viewport === 'unsupported') return { kind: 'unsupported' };
+  return { kind: 'range', data: { ...viewport, syncStatus: latestSyncStatus } };
 }

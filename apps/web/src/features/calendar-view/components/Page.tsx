@@ -44,6 +44,7 @@ import {
 import {
   type CalendarOccurrenceQueryRange,
   createCalendarOccurrenceQueryRange,
+  syncCalendarOccurrences,
 } from '@queries/calendar/occurrences';
 import { Button } from '@ui';
 import {
@@ -141,6 +142,7 @@ function CalendarPageDataStatus(props: {
   data: CalendarOccurrenceData;
   changingView: boolean;
   grid: CalendarGridHandle;
+  holdingTimeChange: boolean;
   onLoadingBlockingChange: (blocking: boolean) => void;
 }) {
   const isRangeUnavailable = createMemo(() => {
@@ -148,9 +150,21 @@ function CalendarPageDataStatus(props: {
     return range !== undefined && !isCalendarRangeSupported(range);
   });
 
+  const retry = () =>
+    fireAndForget(
+      props.holdingTimeChange
+        ? syncCalendarOccurrences()
+        : props.data.occurrencesQuery.refetch(),
+      'calendar-view'
+    );
+  const hasLoadError = () =>
+    props.data.occurrencesQuery.isError ||
+    (props.holdingTimeChange &&
+      props.data.occurrencesQuery.isSuccess &&
+      props.data.occurrencesQuery.data?.partial === true);
   const showLoading = () =>
     !isRangeUnavailable() &&
-    !props.data.occurrencesQuery.isError &&
+    !hasLoadError() &&
     (props.changingView || props.data.isLoading());
 
   return (
@@ -159,10 +173,28 @@ function CalendarPageDataStatus(props: {
         element={props.grid.element()}
         dateInfo={props.grid.dateInfo()}
         loading={showLoading()}
-        disabled={isRangeUnavailable() || props.data.occurrencesQuery.isError}
+        disabled={isRangeUnavailable() || hasLoadError()}
         onBlockingChange={props.onLoadingBlockingChange}
       />
-      <Show when={!isRangeUnavailable() && props.data.occurrencesQuery.isError}>
+      <Show when={props.holdingTimeChange && !hasLoadError()}>
+        <div
+          role="status"
+          class="absolute bottom-3 right-3 z-20 flex items-center gap-3 rounded-xl border border-edge-muted bg-surface p-3 shadow-sm"
+        >
+          <span class="text-sm text-ink-muted">
+            Event saved. Refreshing calendar…
+          </span>
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={props.data.occurrencesQuery.isFetching}
+            onClick={retry}
+          >
+            Retry
+          </Button>
+        </div>
+      </Show>
+      <Show when={!isRangeUnavailable() && hasLoadError()}>
         <div
           class="absolute inset-0 z-20 flex items-center justify-center rounded-xl bg-surface/90 p-6 text-center"
           aria-live="polite"
@@ -179,12 +211,7 @@ function CalendarPageDataStatus(props: {
               tooltip="Retry loading calendar"
               variant="primary"
               size="sm"
-              onClick={() =>
-                fireAndForget(
-                  props.data.occurrencesQuery.refetch(),
-                  'calendar-view'
-                )
-              }
+              onClick={retry}
             >
               Retry
             </Button>
@@ -269,6 +296,7 @@ export function Page(props: {
   const timeChange = createEventTimeChange({
     active: isActive,
     refreshStatus: () => occurrenceRefresh,
+    eventsById,
     save: (args) => updateEventTime.mutateAsync(args),
     onError: (error) => {
       if (isGuestEditRefused(error)) {
@@ -373,6 +401,7 @@ export function Page(props: {
             eventsById={eventsById}
             grid={grid}
             onLoadingBlockingChange={setLoadingDecorationBlocking}
+            holdingTimeChange={timeChange.refreshing()}
           />
         )}
       </CalendarGrid>
@@ -410,6 +439,7 @@ function CalendarPageHost(props: {
   eventsById: Accessor<Map<string, CalendarEvent>>;
   grid: CalendarGridHandle;
   onLoadingBlockingChange: (blocking: boolean) => void;
+  holdingTimeChange: boolean;
 }) {
   const pager = useCalendarPager();
   const calendarView = useCalendarView();
@@ -505,6 +535,7 @@ function CalendarPageHost(props: {
         changingView={isActive() && pager.isChangingView()}
         grid={props.grid}
         onLoadingBlockingChange={props.onLoadingBlockingChange}
+        holdingTimeChange={props.holdingTimeChange}
       />
     </>
   );

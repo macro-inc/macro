@@ -49,6 +49,8 @@ type CalendarOccurrencesQueryKey =
 export interface CalendarOccurrencesData {
   items: CalendarOccurrenceItem[];
   syncStatus: CalendarOccurrenceResponse['syncStatus'];
+  /** Some cache records remain unreadable; this is not a complete refresh. */
+  partial?: boolean;
 }
 
 const formatLocalDate = (date: Date) =>
@@ -206,16 +208,18 @@ export function useCalendarOccurrencesQuery(
     if (!onRefresh) return;
     const { userId, range } = input();
     const keys = calendarKeys.occurrences(userId ?? '', range);
-    const queryHash = hashKey(
-      cacheHost() ? keys._ctx.graphql.queryKey : keys.queryKey
-    );
+    const queryKey = cacheHost() ? keys._ctx.graphql.queryKey : keys.queryKey;
+    const queryHash = hashKey(queryKey);
     onCleanup(
       activeQueryClient.getQueryCache().subscribe((event) => {
         if (event.type !== 'updated' || event.query.queryHash !== queryHash)
           return;
         if (event.action.type === 'fetch') onRefresh('started');
-        if (event.action.type === 'success' && !event.action.manual)
-          onRefresh('completed');
+        if (event.action.type === 'success' && !event.action.manual) {
+          const data =
+            activeQueryClient.getQueryData<CalendarOccurrencesData>(queryKey);
+          if (data && !data.partial) onRefresh('completed');
+        }
       })
     );
   });

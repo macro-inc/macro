@@ -26,6 +26,7 @@ export function createEventTimeChange(options: {
   save: (args: UpdateCalendarEventArgs) => Promise<unknown>;
   onError: (error: unknown) => void;
   refreshStatus?: Accessor<{ started: number; completed: number }>;
+  eventsById?: Accessor<ReadonlyMap<string, CalendarEvent>>;
 }) {
   const [state, setState] = createStore<{
     phase: 'idle' | 'choosing' | 'saving' | 'refreshing';
@@ -128,13 +129,26 @@ export function createEventTimeChange(options: {
   // not proof that the occurrence data has caught up.
   createEffect(
     on(
-      () => options.refreshStatus?.().completed,
-      (completed) => {
+      () =>
+        [options.refreshStatus?.().completed, options.eventsById?.()] as const,
+      ([completed, events]) => {
         if (
           state.phase === 'refreshing' &&
           completed !== undefined &&
           completed > state.refreshStarted
         ) {
+          const change = state.change;
+          const current = change && events?.get(change.event.id);
+          if (change && current) {
+            const time = change.time;
+            const matches =
+              time.kind === 'timed'
+                ? Date.parse(current.start) === Date.parse(time.startsAt) &&
+                  Date.parse(current.end) === Date.parse(time.endsAt)
+                : current.start === time.startDate &&
+                  current.end === time.endDate;
+            if (!matches) return;
+          }
           finish('success');
         }
       }
@@ -163,6 +177,7 @@ export function createEventTimeChange(options: {
   return {
     allEventsUnavailableReason,
     pending: () => state.phase !== 'idle',
+    refreshing: () => state.phase === 'refreshing',
     choosing: () => state.phase === 'choosing',
     scope: () => state.scope,
     setScope: (scope: CalendarUpdateScope) => setState('scope', scope),

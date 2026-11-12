@@ -257,10 +257,14 @@ describe('readCalendarRange', () => {
       .mockRejectedValueOnce(new Error('offline'))
       .mockResolvedValueOnce(page());
 
-    expect((await readData(host, week, { fetchPage })).items).toEqual([]);
+    const partial = await readData(host, week, { fetchPage });
+    expect(partial.items).toEqual([]);
+    expect(partial.partial).toBe(true);
     expect(host.calendarCommit).not.toHaveBeenCalled();
 
-    expect((await readData(host, week, { fetchPage })).items).toHaveLength(1);
+    const refreshed = await readData(host, week, { fetchPage });
+    expect(refreshed.items).toHaveLength(1);
+    expect(refreshed.partial).toBeUndefined();
     expect(fetchPage).toHaveBeenCalledTimes(2);
     expect(host.calendarCommit).toHaveBeenCalledTimes(1);
   });
