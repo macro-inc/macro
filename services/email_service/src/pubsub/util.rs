@@ -8,9 +8,6 @@ use models_email::api::refresh::RefreshEmailEvent;
 mod test;
 use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 
-// Retained for link_manager until its worker moves behind the domain.
-pub use email::domain::mailbox::inbox_sync::build_notification_recipients;
-
 #[tracing::instrument(skip(tx, result), level = "debug")]
 pub async fn complete_transaction_with_processing_error<T>(
     tx: sqlx::Transaction<'_, sqlx::Postgres>,

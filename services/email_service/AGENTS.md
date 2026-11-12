@@ -45,6 +45,10 @@ the gateway `/email` prefix.
   policy, with adapters in `outbound/backfill_jobs/worker/`. Inbox sync's history and upsert
   orchestration also live in the domain; these adapters retain the existing
   journal, invitation, upload, notification and persistence implementations.
+  Link manager composes `email::domain::mailbox::link_manager` for delivery
+  disposition, probes, reconnect notifications and physical deletion; its
+  context holds only the service and receiver. `outbound/link_manager/deletion.rs`
+  implements the cleanup capabilities without owning deletion policy.
   Both workers reuse the domain's catalog, contact, notification and pending-label
   rules; their adapters retain the existing atomic writes and savepoints.
 - `src/backfill_outbox.rs`: cancellation-aware polling facade for the domain's
@@ -221,7 +225,7 @@ the gateway `/email` prefix.
 - The `link_manager` worker receives one message at a time and renews its
   visibility while processing. Don't raise its receive batch: messages queued
   behind a long mailbox purge would be redelivered and purged twice.
-  `PurgePacing` (`email_db_client::links::delete`) sets the purge's write rate.
+  `PurgePacing` (`email::domain::mailbox::link_manager::purge`) sets the purge's write rate.
   Refresh and HealthCheck probes are capped at 240 s so a stalled probe is
   redelivered instead of held in flight. A probe returns an error, and so is
   redelivered toward the DLQ, only for transient failures. An `AuthRequired`

@@ -28,6 +28,8 @@ pub mod health;
 pub mod inbox_sync;
 pub mod initialization;
 pub mod lifecycle;
+/// Link-maintenance queue decisions and reconnect notification selection.
+pub mod link_manager;
 pub mod progress;
 pub mod projection;
 pub mod settings;

@@ -1,4 +1,4 @@
-use super::build_notification_recipients;
+use email::domain::mailbox::inbox_sync::build_notification_recipients;
 use macro_user_id::user_id::MacroUserIdStr;
 
 fn id(s: &str) -> MacroUserIdStr<'static> {

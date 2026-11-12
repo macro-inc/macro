@@ -34,6 +34,13 @@ tools — hexagonal, heavily feature-gated.
   initialization, completion and consent publication through transaction ports.
   Backfill and inbox sync share catalog reconciliation, contact parsing,
   notification selection, CRM normalization and pending-label snapshot rules.
+- `src/domain/mailbox/link_manager.rs` (feature `mailbox`): link-maintenance
+  delivery disposition, probe timeout, and reconnect notification recipients. It
+  reuses the mailbox health and lifecycle services. Its `deletion` service owns
+  provider teardown and retries, CRM cleanup, physical deletion, completion
+  events and promoted-mailbox cleanup through capability ports. Its `purge`
+  service owns incremental deletion order, cursors, batching, pacing and counters;
+  `outbound/mailbox_pg/purge.rs` holds its transaction adapter.
 - `src/domain/mailbox/inbox_sync.rs` (feature `mailbox`): Gmail delivery admission,
   disposition, provider-error routing, message deletion, and label reconciliation.
   It also owns history/catalog reconciliation, recovery backfills, provider-message

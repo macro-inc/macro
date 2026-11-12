@@ -7505,7 +7505,6 @@ dependencies = [
  "sqlx",
  "tokio",
  "tracing",
- "tracing-subscriber",
  "workspace-hack",
 ]
 
