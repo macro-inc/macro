@@ -1051,6 +1051,14 @@ pub trait AgentSessionRealtime {
         async { Ok(()) }
     }
 
+    /// Publish a running session's newest activity summary to its viewers.
+    fn publish_activity_summarized(
+        &self,
+        _event: AgentSessionActivitySummarized,
+    ) -> impl Future<Output = Result<(), rootcause::Report>> + Send {
+        async { Ok(()) }
+    }
+
     /// Publish a session's changed queue - the whole queue, every time - to
     /// its viewers.
     fn publish_queue_changed(
@@ -1492,4 +1500,16 @@ impl SessionViewAccess for NoInheritedSessionAccess {
     ) -> Pin<Box<dyn Future<Output = Result<bool>> + Send + 'a>> {
         Box::pin(async { Ok(false) })
     }
+}
+
+/// Trusted runtime reconciliation reads, separate from user-authorized session reads.
+pub trait RuntimeSessionLookup: Send + Sync {
+    /// Resolve reported ACP sessions restricted to the supplied agents.
+    fn sessions_for_bots(
+        &self,
+        bots: &[BotId],
+        sessions: &[SessionId],
+    ) -> impl Future<Output = std::result::Result<Vec<AgentSessionId>, Self::Err>> + Send;
+    /// Persistence failure.
+    type Err: std::error::Error + Send + Sync + 'static;
 }

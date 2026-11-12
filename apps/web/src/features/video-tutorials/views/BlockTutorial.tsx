@@ -1,3 +1,4 @@
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { Match, Show, Switch } from 'solid-js';
 import { TUTORIALS, type Tutorial } from '../catalog';
 import {
@@ -100,12 +101,23 @@ function Entry(props: {
 }
 
 /**
+ * The block's tutorial, if it has one and this isn't a touch device. Phones,
+ * tablets and the native apps never show tutorials, so on them no entry,
+ * dialog or video mounts.
+ */
+function availableTutorial(id: TutorialId): Tutorial | undefined {
+  if (isTouchDevice()) return undefined;
+  return TUTORIALS[id];
+}
+
+/**
  * A block's "Learn how to use" row, pinned at the top of its main list. Renders
- * nothing until the block's video exists in the catalog, or once dismissed.
+ * nothing until the block's video exists in the catalog, on touch devices, or once
+ * dismissed.
  */
 export function TutorialRow(props: { tutorial: TutorialId }) {
   return (
-    <Show when={TUTORIALS[props.tutorial]}>
+    <Show when={availableTutorial(props.tutorial)}>
       {(tutorial) => <Entry tutorial={tutorial()} variant="row" />}
     </Show>
   );
@@ -114,7 +126,7 @@ export function TutorialRow(props: { tutorial: TutorialId }) {
 /** The entry as a button, centered in a block's empty state. */
 export function TutorialPill(props: { tutorial: TutorialId; class?: string }) {
   return (
-    <Show when={TUTORIALS[props.tutorial]}>
+    <Show when={availableTutorial(props.tutorial)}>
       {(tutorial) => (
         <Entry tutorial={tutorial()} variant="pill" class={props.class} />
       )}
@@ -131,13 +143,10 @@ export function TutorialSidebarItem(props: {
   named?: boolean;
 }) {
   return (
-    <Show when={TUTORIALS[props.tutorial]}>
+    <Show when={availableTutorial(props.tutorial)}>
       {(tutorial) => (
         <Entry tutorial={tutorial()} variant="sidebar" named={props.named} />
       )}
     </Show>
   );
 }
-
-/** Whether a block has a tutorial video yet (for layouts that reserve space). */
-export const hasTutorial = (id: TutorialId) => TUTORIALS[id] !== undefined;

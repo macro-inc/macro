@@ -236,6 +236,9 @@ where
                 }
             };
             if !in_memory {
+                // The worker retires here, so nothing else would forget the
+                // queue copy.
+                self.forget_queue(session_id);
                 return (IdleRelease::OtherRuntime, false);
             }
             match self.sessions.release_session(session_id).await {
@@ -257,8 +260,7 @@ where
         }
         // The next command reloads the durable queue, which another replica
         // may have changed meanwhile.
-        self.queues.drop_session(session_id);
-        self.hydrated.remove(&session_id);
+        self.forget_queue(session_id);
         (IdleRelease::Released, closed_actor)
     }
 }
