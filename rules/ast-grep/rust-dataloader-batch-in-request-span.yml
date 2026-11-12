@@ -13,7 +13,12 @@ files:
   - services/**
 rule:
   any:
-    - pattern: DataLoader::new($LOADER, tokio::spawn)
-    - pattern: DataLoader::with_cache($LOADER, tokio::spawn, $CACHE)
-    - pattern: async_graphql::dataloader::DataLoader::new($LOADER, tokio::spawn)
-    - pattern: async_graphql::dataloader::DataLoader::with_cache($LOADER, tokio::spawn, $CACHE)
+    - pattern: DataLoader::new($LOADER, $SPAWN)
+    - pattern: DataLoader::with_cache($LOADER, $SPAWN, $CACHE)
+    - pattern: async_graphql::dataloader::DataLoader::new($LOADER, $SPAWN)
+    - pattern: async_graphql::dataloader::DataLoader::with_cache($LOADER, $SPAWN, $CACHE)
+constraints:
+  # `tokio::spawn` or `tokio::task::spawn`, passed as is or wrapped in a closure
+  # that forwards the batch unchanged.
+  SPAWN:
+    regex: '^(\|\s*\w+\s*\|\s*)?(::)?tokio::(task::)?spawn(\(\s*\w+\s*\))?$'

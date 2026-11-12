@@ -76,7 +76,7 @@ impl InitiativeRepo for PgInitiativeRepo {
             .transpose()
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, user_id))]
     async fn list_accessible(
         &self,
         user_id: &MacroUserIdStr<'static>,
@@ -94,7 +94,7 @@ impl InitiativeRepo for PgInitiativeRepo {
         share::get_team_share_facts(&self.pool, id).await
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, user_id))]
     async fn get_team_default_link_share(
         &self,
         user_id: &MacroUserIdStr<'static>,

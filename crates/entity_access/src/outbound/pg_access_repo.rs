@@ -8,7 +8,7 @@ pub use queries::{SourceIds, get_team_scope_source_ids, get_user_source_ids};
 #[cfg(test)]
 mod test;
 
-use crate::domain::telemetry::record_source_ids;
+use crate::domain::telemetry::{record_source_ids, span_count};
 use crate::domain::{
     models::{
         AccessError, AccessLevel, AgentSessionParent, BotId, CallChannelInfo, ChannelRoleResult,
@@ -424,6 +424,7 @@ impl AccessRepository for PgAccessRepository {
         .await?)
     }
 
+    #[tracing::instrument(err, skip(self, user_id), fields(source_id_count = tracing::field::Empty))]
     async fn get_external_chat_access(
         &self,
         group_id: &str,
@@ -459,7 +460,7 @@ impl AccessRepository for PgAccessRepository {
         .await?)
     }
 
-    #[tracing::instrument(err, skip_all, fields(source_id_count = tracing::field::Empty, row_count = row_ids.len()))]
+    #[tracing::instrument(err, skip_all, fields(source_id_count = tracing::field::Empty, row_count = span_count(row_ids.len())))]
     async fn get_database_rows_access(
         &self,
         row_ids: &[Uuid],
