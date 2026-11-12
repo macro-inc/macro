@@ -176,6 +176,8 @@ impl MailboxSyncRepository for PgMailboxSync {
             r#"
             UPDATE email_sync_streams s SET position = $4,
                 initial_complete = s.initial_complete OR $5,
+                -- A round's first page records the reader revision it started at.
+                reader_revision = CASE WHEN s.position IS NULL THEN $7 ELSE s.reader_revision END,
                 last_completed_at = CASE WHEN $5 THEN now() ELSE last_completed_at END,
                 next_run_at = CASE WHEN $5 AND (s.notified_at IS NULL OR s.notified_at <= s.lease_started_at)
                     THEN now() + interval '2 minutes' ELSE now() END,
@@ -192,7 +194,8 @@ impl MailboxSyncRepository for PgMailboxSync {
             lease.fence,
             position.expose(),
             complete,
-            lease.mailbox.grant_generation
+            lease.mailbox.grant_generation,
+            page.reader_revision
         )
         .execute(&mut *tx)
         .await
