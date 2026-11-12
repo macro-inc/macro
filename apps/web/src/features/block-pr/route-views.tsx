@@ -1,11 +1,8 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useParams } from '@app/lib/split-router';
 import { withAuth } from '@components/app/split-layout/split-router/app-route-shell';
-import { lazy, onMount } from 'solid-js';
-
-const StandalonePrDetail = lazy(async () => ({
-  default: (await import('./views/PrDetail')).StandalonePrDetail,
-}));
+import { onMount } from 'solid-js';
+import { StandalonePrDetail } from './views/PrDetail';
 
 export const PrDetailRouteView = withAuth(() => {
   const params = useParams<{ foreignEntityId: string }>();
