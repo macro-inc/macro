@@ -66,10 +66,24 @@ describe('a channel message write', () => {
     await world.reload();
     const document = { type: 'document' as const, id: 'document-1' };
     const comment = world.page.send('on the document', document);
-    await world.settle(comment.done);
-    await world.settle(world.page.edit(comment.id, 'edited', document).done);
-    await world.settle(world.page.react(comment.id, '👍', document).done);
-    await world.settle(world.page.remove(comment.id, document).done);
+    // Each hook answers with the message REST returned, as it always has:
+    // only a queued channel write answers with nothing.
+    const posted = await world.settle(comment.done);
+    const edited = await world.settle(
+      world.page.edit(comment.id, 'edited', document).done
+    );
+    const reacted = await world.settle(
+      world.page.react(comment.id, '👍', document).done
+    );
+    const removed = await world.settle(
+      world.page.remove(comment.id, document).done
+    );
+    expect([posted?.id, edited?.id, reacted?.id, removed?.id]).toEqual([
+      comment.id,
+      comment.id,
+      comment.id,
+      comment.id,
+    ]);
 
     expect(world.rest).toEqual([
       { method: 'post', parent: CHANNEL, messageId: channel.id },
