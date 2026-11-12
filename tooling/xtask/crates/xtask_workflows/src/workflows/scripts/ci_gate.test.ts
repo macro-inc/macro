@@ -15,9 +15,12 @@ import {
   isOpenRequest,
   labelIsStale,
   lostRun,
+  NO_RESULT,
   NOT_STARTED,
   runCommand,
   runIdOf,
+  runMayReport,
+  sameStatus,
   sweepAction,
   PR_CI_PATH,
   START_JOB,
@@ -232,7 +235,12 @@ describe('labelIsStale', () => {
 
 describe('lostRun', () => {
   const now = Date.parse('2026-11-11T21:00:00Z');
-  const running = { state: 'pending', description: 'Running on 0123456', createdAt: '2026-11-11T20:40:00Z' };
+  const running = {
+    state: 'pending',
+    description: 'Running on 0123456',
+    targetUrl: 'https://github.com/macro-inc/macro/actions/runs/1',
+    createdAt: '2026-11-11T20:40:00Z',
+  };
 
   test('a run still going is left alone', () => {
     assert.equal(lostRun(running, { status: 'in_progress', conclusion: null, updatedAt: '2026-11-11T20:59:00Z' }, now), null);
@@ -256,11 +264,18 @@ describe('lostRun', () => {
   test('a request nothing has closed for hours is given up on, run or no run', () => {
     const old = { ...running, createdAt: '2026-11-11T17:00:00Z' };
 
-    assert.equal(lostRun(old, null, now), 'PR CI gave no result in 3 hours.');
+    assert.equal(lostRun(old, null, now), NO_RESULT);
     assert.equal(
       lostRun(old, { status: 'queued', conclusion: null, updatedAt: '2026-11-11T17:00:00Z' }, now),
-      'PR CI gave no result in 3 hours.',
+      NO_RESULT,
     );
+  });
+
+  test('a fork request links to no run and may wait on approval, so it gets a day', () => {
+    const fork = { ...running, targetUrl: 'https://github.com/macro-inc/macro/pull/1/checks' };
+
+    assert.equal(lostRun({ ...fork, createdAt: '2026-11-11T17:00:00Z' }, null, now), null);
+    assert.equal(lostRun({ ...fork, createdAt: '2026-11-10T20:00:00Z' }, null, now), NO_RESULT);
   });
 
   test('only an open request can lose its run', () => {
@@ -325,12 +340,44 @@ describe('sweepAction', () => {
   test('every explanation fits a commit status with the command to run again', () => {
     const command = runCommand('macro-inc/macro', '123456', 'run-ci');
     for (const reason of [
-      NOT_STARTED,
+      NO_RESULT,
+  NOT_STARTED,
       'PR CI ended (action_required) without a result.',
-      'PR CI gave no result in 3 hours.',
+      NO_RESULT,
     ]) {
       assert.ok(`${reason} Run again: ${command}`.length <= 140);
     }
+  });
+});
+
+describe('runMayReport', () => {
+  const now = Date.parse('2026-11-11T21:00:00Z');
+
+  test('a run waiting for a runner or going will still report', () => {
+    assert.equal(runMayReport({ status: 'queued', createdAt: '2026-11-11T20:45:00Z' }, now), true);
+    assert.equal(runMayReport({ status: 'in_progress', createdAt: '2026-11-11T20:45:00Z' }, now), true);
+  });
+
+  test('a finished run has said all it will', () => {
+    assert.equal(runMayReport({ status: 'completed', createdAt: '2026-11-11T20:45:00Z' }, now), false);
+  });
+
+  test('a run GitHub left queued for hours is not coming', () => {
+    assert.equal(runMayReport({ status: 'queued', createdAt: '2026-11-11T17:00:00Z' }, now), false);
+  });
+});
+
+describe('sameStatus', () => {
+  const notRun = { state: 'pending', description: 'Not run on this commit.' };
+
+  test('a status start set since the sweep read the PR is a change', () => {
+    assert.equal(sameStatus(notRun, { state: 'pending', description: 'Running on 0123456' }), false);
+    assert.equal(sameStatus(undefined, notRun), false);
+  });
+
+  test('an untouched commit is the same', () => {
+    assert.equal(sameStatus(notRun, { ...notRun }), true);
+    assert.equal(sameStatus(undefined, undefined), true);
   });
 });
 

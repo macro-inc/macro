@@ -77,6 +77,7 @@ jobs:
           'fork changes CI workflows: a maintainer must review and run CI from a branch';
 
         export const NOT_STARTED = 'PR CI did not start.';
+        export const NO_RESULT = 'PR CI gave no result in time.';
         /// Start removes the label within seconds, so one still on after this started
         /// nothing.
         const STALE_LABEL_MS = 10 * 60_000;
@@ -84,6 +85,10 @@ jobs:
         const ENDED_RUN_GRACE_MS = 5 * 60_000;
         /// Far longer than any run takes.
         const LOST_REQUEST_MS = 3 * 60 * 60_000;
+        /// A fork's request links to no run to watch, and its run may wait on approval.
+        const LOST_FORK_REQUEST_MS = 24 * 60 * 60_000;
+        /// A run still without a result after this is one GitHub lost.
+        const LOST_RUN_MS = 60 * 60_000;
 
         type State = 'pending' | 'success' | 'failure' | 'error';
         export type Needs = Record<string, { result: string }>;
@@ -290,10 +295,25 @@ jobs:
           if (run?.status === 'completed' && now - Date.parse(run.updatedAt) >= ENDED_RUN_GRACE_MS) {
             return `PR CI ended (${run.conclusion}) without a result.`;
           }
-          if (status.createdAt && now - Date.parse(status.createdAt) >= LOST_REQUEST_MS) {
-            return 'PR CI gave no result in 3 hours.';
+          const limit = runIdOf(status.targetUrl) ? LOST_REQUEST_MS : LOST_FORK_REQUEST_MS;
+          if (status.createdAt && now - Date.parse(status.createdAt) >= limit) {
+            return NO_RESULT;
           }
           return null;
+        }
+
+        /// Whether a PR CI run on the head may still take the label or set a status,
+        /// such as one waiting for a runner.
+        export function runMayReport(run: { status: string; createdAt: string }, now: number): boolean {
+          return run.status !== 'completed' && now - Date.parse(run.createdAt) < LOST_RUN_MS;
+        }
+
+        /// Whether the gate status is still the one sweep decided on.
+        export function sameStatus(
+          before: { state: string; description: string } | undefined,
+          after: { state: string; description: string } | undefined,
+        ): boolean {
+          return before?.state === after?.state && before?.description === after?.description;
         }
 
         /// What sweep does to a PR head, or null to leave it. A stale label comes off
@@ -528,6 +548,7 @@ jobs:
           commits: {
             nodes: {
               commit: {
+                oid: string;
                 status: {
                   context: { state: string; description: string | null; targetUrl: string | null; createdAt: string } | null;
                 } | null;
@@ -549,7 +570,7 @@ jobs:
                     nodes { ... on LabeledEvent { createdAt label { name } } }
                   }
                   commits(last: 1) {
-                    nodes { commit { status { context(name: $context) { state description targetUrl createdAt } } } }
+                    nodes { commit { oid status { context(name: $context) { state description targetUrl createdAt } } } }
                   }
                 }
               }
@@ -579,7 +600,12 @@ jobs:
         async function sweepPull(pull: SweptPull, now: number) {
           const pr = String(pull.number);
           const head = pull.headRefOid;
-          const gate = pull.commits.nodes[0]?.commit.status?.context;
+          const commit = pull.commits.nodes[0]?.commit;
+          if (commit?.oid !== head) {
+            console.log(`#${pr}: could not read the status of head ${head.slice(0, 10)}`);
+            return;
+          }
+          const gate = commit.status?.context;
           const status = gate
             ? { ...gate, state: gate.state.toLowerCase(), description: gate.description ?? '' }
             : undefined;
@@ -591,12 +617,28 @@ jobs:
           const runId = !labelled && isOpenRequest(status) ? runIdOf(status?.targetUrl) : null;
           let run: SweptRun | null = null;
           if (runId) {
-            const found = await github('GET', `/repos/${repo()}/actions/runs/${runId}`);
-            run = { status: found.status, conclusion: found.conclusion, updatedAt: found.updated_at };
+            try {
+              const found = await github('GET', `/repos/${repo()}/actions/runs/${runId}`);
+              run = { status: found.status, conclusion: found.conclusion, updatedAt: found.updated_at };
+            } catch (error) {
+              // A deleted run; the request then ages out.
+              console.log(`#${pr}: run ${runId}: ${error}`);
+            }
           }
 
           const action = sweepAction({ labelledAt, status, run }, now);
           if (!action) {
+            return;
+          }
+
+          // A run waiting for a runner hasn't taken the label or reported yet.
+          const { workflow_runs: runs }: { workflow_runs: { status: string; created_at: string }[] } =
+            await github(
+              'GET',
+              `/repos/${repo()}/actions/workflows/${PR_CI_PATH.split('/').pop()}/runs?event=pull_request&head_sha=${head}&per_page=100`,
+            );
+          if (runs.some((each) => runMayReport({ status: each.status, createdAt: each.created_at }, now))) {
+            console.log(`#${pr}: a PR CI run on ${head.slice(0, 10)} may still report`);
             return;
           }
 
@@ -605,6 +647,17 @@ jobs:
           if (action.removeLabel) {
             // Say why nothing started when GitHub still shows it.
             description = description && ((await labelProblem(pr)) ?? description);
+          }
+
+          // The PR was read a while ago; a run may have taken the request since.
+          const pullNow = await github('GET', `/repos/${repo()}/pulls/${pr}`);
+          const labelledNow = pullNow.labels.some((each: { name: string }) => each.name === label());
+          if (pullNow.head.sha !== head || labelledNow !== labelled || !sameStatus(status, await gateStatus(head))) {
+            console.log(`#${pr}: changed during the sweep; left for the next one`);
+            return;
+          }
+
+          if (action.removeLabel) {
             await removeLabel(pr);
           }
           if (description) {
@@ -721,6 +774,7 @@ jobs:
           'fork changes CI workflows: a maintainer must review and run CI from a branch';
 
         export const NOT_STARTED = 'PR CI did not start.';
+        export const NO_RESULT = 'PR CI gave no result in time.';
         /// Start removes the label within seconds, so one still on after this started
         /// nothing.
         const STALE_LABEL_MS = 10 * 60_000;
@@ -728,6 +782,10 @@ jobs:
         const ENDED_RUN_GRACE_MS = 5 * 60_000;
         /// Far longer than any run takes.
         const LOST_REQUEST_MS = 3 * 60 * 60_000;
+        /// A fork's request links to no run to watch, and its run may wait on approval.
+        const LOST_FORK_REQUEST_MS = 24 * 60 * 60_000;
+        /// A run still without a result after this is one GitHub lost.
+        const LOST_RUN_MS = 60 * 60_000;
 
         type State = 'pending' | 'success' | 'failure' | 'error';
         export type Needs = Record<string, { result: string }>;
@@ -934,10 +992,25 @@ jobs:
           if (run?.status === 'completed' && now - Date.parse(run.updatedAt) >= ENDED_RUN_GRACE_MS) {
             return `PR CI ended (${run.conclusion}) without a result.`;
           }
-          if (status.createdAt && now - Date.parse(status.createdAt) >= LOST_REQUEST_MS) {
-            return 'PR CI gave no result in 3 hours.';
+          const limit = runIdOf(status.targetUrl) ? LOST_REQUEST_MS : LOST_FORK_REQUEST_MS;
+          if (status.createdAt && now - Date.parse(status.createdAt) >= limit) {
+            return NO_RESULT;
           }
           return null;
+        }
+
+        /// Whether a PR CI run on the head may still take the label or set a status,
+        /// such as one waiting for a runner.
+        export function runMayReport(run: { status: string; createdAt: string }, now: number): boolean {
+          return run.status !== 'completed' && now - Date.parse(run.createdAt) < LOST_RUN_MS;
+        }
+
+        /// Whether the gate status is still the one sweep decided on.
+        export function sameStatus(
+          before: { state: string; description: string } | undefined,
+          after: { state: string; description: string } | undefined,
+        ): boolean {
+          return before?.state === after?.state && before?.description === after?.description;
         }
 
         /// What sweep does to a PR head, or null to leave it. A stale label comes off
@@ -1172,6 +1245,7 @@ jobs:
           commits: {
             nodes: {
               commit: {
+                oid: string;
                 status: {
                   context: { state: string; description: string | null; targetUrl: string | null; createdAt: string } | null;
                 } | null;
@@ -1193,7 +1267,7 @@ jobs:
                     nodes { ... on LabeledEvent { createdAt label { name } } }
                   }
                   commits(last: 1) {
-                    nodes { commit { status { context(name: $context) { state description targetUrl createdAt } } } }
+                    nodes { commit { oid status { context(name: $context) { state description targetUrl createdAt } } } }
                   }
                 }
               }
@@ -1223,7 +1297,12 @@ jobs:
         async function sweepPull(pull: SweptPull, now: number) {
           const pr = String(pull.number);
           const head = pull.headRefOid;
-          const gate = pull.commits.nodes[0]?.commit.status?.context;
+          const commit = pull.commits.nodes[0]?.commit;
+          if (commit?.oid !== head) {
+            console.log(`#${pr}: could not read the status of head ${head.slice(0, 10)}`);
+            return;
+          }
+          const gate = commit.status?.context;
           const status = gate
             ? { ...gate, state: gate.state.toLowerCase(), description: gate.description ?? '' }
             : undefined;
@@ -1235,12 +1314,28 @@ jobs:
           const runId = !labelled && isOpenRequest(status) ? runIdOf(status?.targetUrl) : null;
           let run: SweptRun | null = null;
           if (runId) {
-            const found = await github('GET', `/repos/${repo()}/actions/runs/${runId}`);
-            run = { status: found.status, conclusion: found.conclusion, updatedAt: found.updated_at };
+            try {
+              const found = await github('GET', `/repos/${repo()}/actions/runs/${runId}`);
+              run = { status: found.status, conclusion: found.conclusion, updatedAt: found.updated_at };
+            } catch (error) {
+              // A deleted run; the request then ages out.
+              console.log(`#${pr}: run ${runId}: ${error}`);
+            }
           }
 
           const action = sweepAction({ labelledAt, status, run }, now);
           if (!action) {
+            return;
+          }
+
+          // A run waiting for a runner hasn't taken the label or reported yet.
+          const { workflow_runs: runs }: { workflow_runs: { status: string; created_at: string }[] } =
+            await github(
+              'GET',
+              `/repos/${repo()}/actions/workflows/${PR_CI_PATH.split('/').pop()}/runs?event=pull_request&head_sha=${head}&per_page=100`,
+            );
+          if (runs.some((each) => runMayReport({ status: each.status, createdAt: each.created_at }, now))) {
+            console.log(`#${pr}: a PR CI run on ${head.slice(0, 10)} may still report`);
             return;
           }
 
@@ -1249,6 +1344,17 @@ jobs:
           if (action.removeLabel) {
             // Say why nothing started when GitHub still shows it.
             description = description && ((await labelProblem(pr)) ?? description);
+          }
+
+          // The PR was read a while ago; a run may have taken the request since.
+          const pullNow = await github('GET', `/repos/${repo()}/pulls/${pr}`);
+          const labelledNow = pullNow.labels.some((each: { name: string }) => each.name === label());
+          if (pullNow.head.sha !== head || labelledNow !== labelled || !sameStatus(status, await gateStatus(head))) {
+            console.log(`#${pr}: changed during the sweep; left for the next one`);
+            return;
+          }
+
+          if (action.removeLabel) {
             await removeLabel(pr);
           }
           if (description) {
