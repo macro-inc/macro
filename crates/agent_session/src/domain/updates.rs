@@ -118,6 +118,8 @@ pub struct AgentUpdates {
 }
 
 /// Read the owner's recent blocked or stalled sessions and fold only blocked logs.
+// `owner_count` is constant, never recorded again.
+// ast-grep-ignore: rust-span-field-recorded-once
 #[tracing::instrument(
     name = "agent_session.list_updates",
     skip(repo, owner),
