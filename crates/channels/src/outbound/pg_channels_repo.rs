@@ -2975,8 +2975,22 @@ impl ChannelRepo for PgChannelsRepo {
         .context("failed to check team administration")
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self), fields(notifications_deleted))]
     async fn delete_channel(&self, channel_id: Uuid) -> Result<(), Self::Err> {
+        let event_item_id = channel_id.to_string();
+        let mut tx = self.pool.begin().await?;
+
+        // Waits for in-flight notification inserts about this channel, and
+        // holds later ones until the tombstone below is visible to them
+        // (`channel_notification_guard`).
+        sqlx::query!(
+            "SELECT pg_advisory_xact_lock(hashtextextended('channel_notifications:' || $1, 0))",
+            event_item_id,
+        )
+        .execute(tx.as_mut())
+        .await
+        .context("failed to lock channel notifications")?;
+
         let result = sqlx::query!(
             r#"
             DELETE FROM comms_channels
@@ -2984,13 +2998,38 @@ impl ChannelRepo for PgChannelsRepo {
             "#,
             channel_id,
         )
-        .execute(&self.pool)
+        .execute(tx.as_mut())
         .await
         .context("failed to delete channel")?;
 
         if result.rows_affected() == 0 {
             anyhow::bail!("channel not deleted because it does not exist");
         }
+
+        sqlx::query!(
+            "INSERT INTO channel_notification_tombstone (channel_id) VALUES ($1) ON CONFLICT DO NOTHING",
+            event_item_id,
+        )
+        .execute(tx.as_mut())
+        .await
+        .context("failed to record channel notification tombstone")?;
+
+        // Deleting, rather than marking, reaches open clients through
+        // `trg_notify_user_notification_deletes`.
+        let notifications = sqlx::query!(
+            r#"
+            DELETE FROM notification
+            WHERE event_item_type = 'channel'
+              AND event_item_id = $1
+            "#,
+            event_item_id,
+        )
+        .execute(tx.as_mut())
+        .await
+        .context("failed to delete channel notifications")?;
+        tracing::Span::current().record("notifications_deleted", notifications.rows_affected());
+
+        tx.commit().await?;
         Ok(())
     }
 

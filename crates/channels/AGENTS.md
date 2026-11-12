@@ -64,6 +64,10 @@ DMs, and the shared message store other domains discuss things on.
   channel whose `team_id` matches their membership. Membership in a channel or
   the channel creator's team never grants deletion authority on its own. Both
   REST deletion and permanent entity deletion call this policy.
+- `PgChannelsRepo::delete_channel` deletes the channel's notifications in the
+  same transaction and leaves a `channel_notification_tombstone`, so queued
+  notifications for the channel are skipped on insert. Keep the advisory lock
+  key `channel_notifications:<id>` in step with `channel_notification_guard`.
 
 - Human DM messages to nonusers use immediate email, including mentions and replies; empty DM creation, bot messages, and silent/mentions-only policies do not trigger this path. Keep registered recipients on their normal notification routes.
 - Channel access requests are separate from `crates/access_requests`: access is

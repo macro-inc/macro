@@ -92,6 +92,9 @@ through the same service.
   the skipped insert as nothing to deliver, so keep that `rows_affected` check.
   The triggers read `requestId` from the stored metadata, so renaming that field
   needs a migration.
+- A `channel` notification insert is skipped by `channel_notification_guard`
+  once its channel has a `channel_notification_tombstone` (written by channel
+  deletion); `create_notification` reads it as nothing to deliver.
 - Crates on `macrod`'s dependency path (`teams`, `model_notifications`,
   `invite_email`) take this crate with `default-features = false`, which keeps
   librdkafka out of the self-hosted daemon; keep it that way.
