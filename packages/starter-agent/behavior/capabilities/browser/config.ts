@@ -1,17 +1,11 @@
 /**
- * The agent's browser's settings: where it answers, and where screenshots go.
- * Nothing else in the area names a port or a path.
+ * The agent's browser's settings: where it answers (from startup), and where
+ * screenshots go. Nothing else in the area names a path.
  */
 import type { State } from '../../context/state.ts';
 
 /** The owner of the browser's state directories. */
 export const owner = 'browser';
-
-/**
- * The DevTools port of the computer's Chromium (the image's
- * `macro-agent-browser` service), on loopback only.
- */
-export const browserPort = 9223;
 
 export type BrowserConfig = {
   /** Where its DevTools answer. */
@@ -22,16 +16,16 @@ export type BrowserConfig = {
 
 const screenshotsDirectory = 'screenshots';
 
-/** Where a browser's DevTools answer. Loopback only. */
-export const cdpAddress = (port: number): string => `http://127.0.0.1:${port}`;
-
 export const browserConfig = ({
+  browserEndpoint,
   state,
   join,
 }: {
+  /** Its DevTools endpoint, from startup (`MUPPET_BROWSER_CDP_URL`). */
+  readonly browserEndpoint: string;
   readonly state: Pick<State, 'private'>;
   readonly join: (...parts: readonly string[]) => string;
 }): BrowserConfig => ({
-  endpoint: cdpAddress(browserPort),
+  endpoint: browserEndpoint,
   screenshots: join(state.private(owner), screenshotsDirectory),
 });

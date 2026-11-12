@@ -6,7 +6,7 @@ import { behavior } from '@macro-inc/muppet/core/behavior';
 import { module } from '@macro-inc/muppet/core/capability';
 import type { Target } from '@macro-inc/muppet/utilities/browser';
 import { type Stepped, step } from './browse.ts';
-import { browserPort, cdpAddress } from './config.ts';
+import { defaultBrowser, variables } from '../../context/startup.ts';
 import type { BrowserContext } from './context.ts';
 
 type Needs = Pick<BrowserContext, 'browser' | 'trace' | 'join' | 'clock'>;
@@ -90,7 +90,7 @@ export const browserModule = module({
   docs: `These cover most of what you'll do. For anything else, drive the same browser from a script with Playwright:
 
 import { chromium } from "playwright-core";
-const browser = await chromium.connectOverCDP("${cdpAddress(browserPort)}");
+const browser = await chromium.connectOverCDP(process.env.${variables.browser} ?? "${defaultBrowser}");
 const page = browser.contexts()[0].pages().at(-1);
 // ... then browser.close(), which only disconnects.
 

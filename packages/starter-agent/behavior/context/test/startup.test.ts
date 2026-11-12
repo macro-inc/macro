@@ -25,7 +25,37 @@ describe('startup', () => {
         },
         mcpServers: {},
         sandbox: [],
+        browserEndpoint: 'http://127.0.0.1:9223',
       },
+    });
+  });
+
+  test("drives the browser the image names, or the computer's default", () => {
+    expect(
+      startup(
+        {
+          AGENT_WORKSPACE: '/w',
+          MUPPET_CREDENTIALS_FILE: '/c',
+          MUPPET_BROWSER_CDP_URL: 'http://127.0.0.1:9333',
+        },
+        reserved
+      )
+    ).toMatchObject({
+      kind: 'configured',
+      value: { browserEndpoint: 'http://127.0.0.1:9333' },
+    });
+    expect(
+      startup(
+        {
+          AGENT_WORKSPACE: '/w',
+          MUPPET_CREDENTIALS_FILE: '/c',
+          MUPPET_BROWSER_CDP_URL: '9333',
+        },
+        reserved
+      )
+    ).toEqual({
+      kind: 'invalid',
+      message: 'MUPPET_BROWSER_CDP_URL is not an http(s) URL',
     });
   });
 

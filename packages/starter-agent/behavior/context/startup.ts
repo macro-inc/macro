@@ -41,7 +41,15 @@ export const variables = {
   relayUrl: 'MUPPET_RELAY_URL',
   relayToken: 'MUPPET_RELAY_TOKEN',
   credentialNames: 'MUPPET_CREDENTIAL_NAMES',
+  /** The computer's Chromium's DevTools, which the browser capability drives. */
+  browser: 'MUPPET_BROWSER_CDP_URL',
 } as const;
+
+/**
+ * Where the browser answers when the launcher names none: the image's
+ * `macro-agent-browser` service, on loopback.
+ */
+export const defaultBrowser = 'http://127.0.0.1:9223';
 
 export type CredentialSource =
   | { readonly kind: 'file'; readonly file: string }
@@ -72,6 +80,8 @@ export type Startup = {
    * only this process can read the enrollment's secrets; nothing elsewhere.
    */
   readonly sandbox: readonly string[];
+  /** The DevTools endpoint of the agent's browser. */
+  readonly browserEndpoint: string;
 };
 
 /** Set by systemd when the unit loads credentials (`LoadCredential=`). */
@@ -116,6 +126,15 @@ const McpServers = z.record(
 );
 
 const sops = 'sops';
+
+const isHttpUrl = (text: string): boolean => {
+  try {
+    const { protocol } = new URL(text);
+    return protocol === 'http:' || protocol === 'https:';
+  } catch {
+    return false;
+  }
+};
 const nameSeparator = ',';
 
 const invalid = (message: string): { kind: 'invalid'; message: string } => ({
@@ -225,6 +244,9 @@ export const startup = (
   const harnessd = given(environment, harnessdStateDirectory);
   if (hidden !== undefined && harnessd === undefined)
     return notSet(harnessdStateDirectory);
+  const browser = given(environment, variables.browser) ?? defaultBrowser;
+  if (!isHttpUrl(browser))
+    return invalid(`${variables.browser} is not an http(s) URL`);
   return {
     kind: 'configured',
     value: {
@@ -235,6 +257,7 @@ export const startup = (
         hidden === undefined || harnessd === undefined
           ? []
           : hiding(hidden, harnessd),
+      browserEndpoint: browser,
     },
   };
 };
