@@ -108,7 +108,7 @@ impl OpsSink for FakeSink {
                     table: *table,
                     table_version: TableVersion(8),
                     change: match change {
-                        RowsChange::Insert { rows } => RowsResult::Inserted {
+                        RowsChange::Insert { rows, .. } => RowsResult::Inserted {
                             rows: self.inserted[..rows.len()].to_vec(),
                         },
                         RowsChange::Update {
@@ -602,7 +602,8 @@ fn an_insert_is_one_op_holding_every_row() {
                             column: ColumnId::from_uuid(NAME),
                             value: CellValue::Text("Hooli".into()),
                         }],
-                    ]
+                    ],
+                    ids: None,
                 },
             }],
         )]
@@ -1070,7 +1071,7 @@ fn a_date_range_is_written_as_an_interval_or_one_day() {
     .unwrap();
     let applied = sink.applied.lock().unwrap();
     let DatabaseOp::Rows {
-        change: RowsChange::Insert { rows },
+        change: RowsChange::Insert { rows, ids: None },
         ..
     } = &applied[0].1[0]
     else {
