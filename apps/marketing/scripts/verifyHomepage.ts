@@ -89,6 +89,20 @@ export async function verifyHomepage(directory: string): Promise<void> {
           'rgb(0, 0, 0)'
         );
 
+        // Lower sections are prerendered too: their lazy chunk's CSS must be
+        // available before scripts run, or the GitHub SVG fills the page.
+        const githubMark = page.locator('.homepage-github-mark');
+        await expect(githubMark).toHaveCSS(
+          'background-color',
+          'rgb(30, 30, 30)'
+        );
+        const markBounds = await githubMark.boundingBox();
+        const iconBounds = await githubMark.locator('svg').boundingBox();
+        expect(markBounds?.width).toBeGreaterThan(100);
+        expect(markBounds?.width).toBeLessThanOrEqual(152);
+        expect(iconBounds?.width).toBeGreaterThan(50);
+        expect(iconBounds?.width).toBeLessThanOrEqual(76);
+
         releaseScripts();
         await page.waitForLoadState('load');
         if (errors.length)
