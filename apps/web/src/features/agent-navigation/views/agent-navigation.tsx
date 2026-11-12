@@ -30,7 +30,7 @@ import {
   type FromWebsocketMessage,
   parseWebsocketPayload,
 } from '@service-connection/websocket';
-import { createEffect, type ParentProps } from 'solid-js';
+import { createEffect, on, type ParentProps } from 'solid-js';
 import {
   type AgentArrivals,
   AgentArrivalsProvider,
@@ -210,8 +210,9 @@ async function apply(
  * the panes an agent opened until the person touches them.
  */
 export function AgentNavigationProvider(props: ParentProps) {
-  // Reruns when a window leaves the phone layout, which takes the id then.
-  createEffect(startUiClientId);
+  // Takes this tab's id as the app starts, or once a window leaves the phone
+  // layout; never on mobile.
+  createEffect(on(agentNavigationRunsHere, startUiClientId));
   const arrivals = createAgentArrivals();
   const router = useOptionalSplitRouter();
   const userId = useUserId();

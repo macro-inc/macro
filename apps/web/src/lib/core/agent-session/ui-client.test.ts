@@ -189,6 +189,10 @@ describe('uiClientId', () => {
 });
 
 describe('startUiClientId', () => {
+  // The page's own listeners stay off the shared window.
+  beforeEach(() => {
+    vi.spyOn(window, 'addEventListener').mockImplementation(() => {});
+  });
   afterEach(() => {
     device.nativeApp = false;
     device.phoneBrowser = false;
