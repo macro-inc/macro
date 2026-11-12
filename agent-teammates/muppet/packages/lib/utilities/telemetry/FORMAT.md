@@ -2,7 +2,7 @@
 
 Every muppet system that opts in records each agent invocation (a "wake") as
 the same record, defined in `record.ts`. A sink writes it somewhere:
-`jsonlSink` as it is (one JSON object a line), `otlpSink` as OpenTelemetry.
+`jsonlSink` as it is (one JSON object a line), `macroTelemetry` as OpenTelemetry.
 The record is the source of truth; everything else is a copy of it.
 
 A wake is recorded up to three times, each time with all that is known so
@@ -81,22 +81,27 @@ issue filed, a label added, a job's exit code). When the wake ends:
 `status` is how the wake ended and never changes the outcome. `reported`
 always keeps what the agent said.
 
-## As OpenTelemetry
+## As OpenTelemetry, through Macro's telemetry framework
 
-`otlpSink` hands each record to OpenTelemetry's own SDK
-(`@opentelemetry/sdk-logs`, `@opentelemetry/sdk-trace`), which batches them
-and sends them with its OTLP/HTTP exporters: every record as a log record
-(`/v1/logs`), and each ended wake as one span (`/v1/traces`) carrying the
-trace and span ids the record already has. The sink never throws and is
-never waited on; for a collector that is down the SDK keeps up to 500
-records while it retries, then drops them.
+muppet has no exporter of its own. `macroTelemetry` (`macro.ts`) records
+wakes through `Telemetry` of `@macro-inc/observability`
+(`packages/observability` in the Macro repository), which the agent sets up
+once at its entrypoint, with `createNodeTracingProvider` from its `./node`
+entry, and hands in. The framework does the encoding, batching and sending
+(OTLP/HTTP), and nothing here waits on a collector or throws.
 
-Resource: `service.name` = the system, `service.namespace` = `muppet`. Scope:
-`muppet.telemetry`. Log records: event name `muppet.wake.start|session|end`,
-severity INFO, or ERROR for a failed or timed-out wake (WARN if cancelled),
-the trace and span ids of the wake. Span: `invoke_agent {system}`, kind
-INTERNAL, from `startedAt` to `endedAt`, status ERROR unless the wake was ok,
-under `parentSpanId` when the wake has a parent.
+- A wake is one span, `invoke_agent {system}` (`invoke_workflow {system}`
+  for work without a model), opened when the wake begins. The record takes
+  its trace and span ids from that span, and `wake.env()` hands them on, so
+  what a wake starts is a child of it. When the wake ends the span gets every
+  attribute below, an error if the wake was not ok, and the record's end time.
+- Every record is one log, written inside the span so that it carries its
+  trace: info, or error for a failed or timed-out wake (warn if cancelled).
+  Its body is one line a person reads, its attributes the ones below.
+- Resource: `service.name` is the framework's `serviceName`, which must be
+  the system; pass `resourceAttributes: { "service.namespace": "muppet" }`.
+  The framework adds `deployment.environment`. The instrumentation scope is
+  the framework's, `@macro-inc/observability`.
 
 GenAI semantic conventions (open-telemetry/semantic-conventions-genai as of
 2026-11-06, all in Development; this is their "invoke agent internal" span):

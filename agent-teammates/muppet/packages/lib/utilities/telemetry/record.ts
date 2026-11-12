@@ -4,7 +4,7 @@
  * session is known, and last when it ends; each carries everything known so
  * far, so the last one read for a wake is the whole truth about it. Sinks
  * write it somewhere: `jsonlSink` as it is, one JSON object a line, and
- * `otlpSink` as OpenTelemetry (see `otlp.ts` for the attribute names).
+ * `macroTelemetry` as OpenTelemetry (see `attributes.ts` for the attribute names).
  */
 import { z } from "zod";
 

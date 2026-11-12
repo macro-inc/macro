@@ -35,8 +35,10 @@ fails isn't run.
 
 ## Boundaries
 
-- Depends on: `@macro-inc/sdk`, the Claude Agent SDK, TypeScript, and the
-  OpenTelemetry SDK (only for `utilities/telemetry`).
+- Depends on: `@macro-inc/sdk`, the Claude Agent SDK, TypeScript.
+- `utilities/telemetry` emits through `@macro-inc/observability`
+  (`packages/observability`), which the agent passes in: the library does
+  not import it.
 - Used by: agents built from `../starter-agent`, which link `packages/lib`.
 - Not in the root workspace: it has its own `package.json`, `bun.lock` and
   `flake.nix`, and the root checks don't cover it.

@@ -1,8 +1,8 @@
 /**
  * Wake telemetry: for every time a system wakes its agent, a record of what
  * triggered it and what came of it, in one format whatever the system (see
- * `record.ts`), sent wherever the system says: an OpenTelemetry collector
- * (`otlpSink`), a JSON Lines file (`jsonlSink`), or a sink of its own.
+ * `record.ts`), sent wherever the system says: Macro's telemetry framework
+ * (`macroTelemetry`), a JSON Lines file (`jsonlSink`), or a sink of its own.
  *
  * It is opt-in. A system that wants it builds one `wakeTelemetry` with its
  * name and its closed set of outcomes, wraps its agent with
@@ -60,13 +60,12 @@ export {
 	type Outcomes,
 	unclassified,
 } from "./outcome.ts";
+export { attributes, line, namespace } from "./attributes.ts";
 export {
-	attributes,
-	type Exporters,
-	otlpExporters,
-	otlpSink,
-	type Resource,
-} from "./otlp.ts";
+	type MacroSpan,
+	type MacroTelemetry,
+	macroTelemetry,
+} from "./macro.ts";
 export {
 	type Classified,
 	type Effect,
@@ -86,6 +85,21 @@ export type OutcomeOf<Declared> =
 
 /** Where records go. A sink that throws or rejects is ignored. */
 export type Sink = (record: WakeRecord) => Promise<void>;
+
+/**
+ * Opens a span for a wake that is beginning, in whatever traces the system,
+ * and returns its W3C `traceparent`, which the wake's record takes its trace
+ * and span ids from. Undefined, or anything else, leaves the record to make
+ * ids of its own. `macroTelemetry` provides one.
+ */
+export type Spans = (wake: {
+	readonly wake: string;
+	/** The span's name: the operation, then the system. */
+	readonly name: string;
+	/** Unix time in milliseconds. */
+	readonly startedAtMs: number;
+	readonly parent?: Parent;
+}) => string | undefined;
 
 /** The wake, system and trace a wake was started from. */
 export type Parent = {
@@ -202,6 +216,18 @@ const providers: Readonly<Record<string, string>> = {
 	codex: "openai",
 };
 
+/** What `spans` says the wake's span is, or undefined if there is none or it threw. */
+const opened = (
+	spans: Spans | undefined,
+	wake: Parameters<Spans>[0],
+): string | undefined => {
+	try {
+		return spans?.(wake);
+	} catch {
+		return undefined;
+	}
+};
+
 const traceBytes = 16;
 const spanBytes = 8;
 
@@ -215,6 +241,7 @@ export const wakeTelemetry = <Outcome extends string, Kind extends string>({
 	clock,
 	id,
 	hex,
+	spans,
 	terminal: ownTerminal,
 	parent: ownParent,
 	instructions: instruct = defaultInstructions,
@@ -226,8 +253,10 @@ export const wakeTelemetry = <Outcome extends string, Kind extends string>({
 	readonly clock: Pick<Clock, "now">;
 	/** A fresh id for a wake. */
 	readonly id: () => string;
-	/** This many random bytes as lower-case hex, for trace and span ids. */
+	/** This many random bytes as lower-case hex, for trace and span ids when `spans` gives none. */
 	readonly hex: (bytes: number) => string;
+	/** Opens each wake's span, which then gives the record its trace and span ids. */
+	readonly spans?: Spans;
 	/** The Herdr terminal the system itself runs in, which a wake is in unless it says otherwise. */
 	readonly terminal?: string;
 	/** What the system itself was started under, which a wake is under unless it says otherwise. */
@@ -286,10 +315,22 @@ export const wakeTelemetry = <Outcome extends string, Kind extends string>({
 		const parent = options.parent ?? ownParent;
 		const wake = id();
 		const startedAt = clock.now();
+		const operation =
+			options.model === false ? "invoke_workflow" : "invoke_agent";
+		const [, openedTrace, openedSpan] =
+			traceparent.exec(
+				opened(spans, {
+					wake,
+					name: `${operation} ${system}`,
+					startedAtMs: startedAt.epochMilliseconds,
+					...(parent === undefined ? {} : { parent }),
+				}) ?? "",
+			) ?? [];
+		const traceId = openedTrace ?? parent?.traceId ?? hex(traceBytes);
 		const trace = {
-			traceId: parent?.traceId ?? hex(traceBytes),
-			spanId: hex(spanBytes),
-			...(parent?.traceId === undefined || parent.spanId === undefined
+			traceId,
+			spanId: openedSpan ?? hex(spanBytes),
+			...(parent?.traceId !== traceId || parent.spanId === undefined
 				? {}
 				: { parentSpanId: parent.spanId }),
 		};
