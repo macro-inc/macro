@@ -288,6 +288,7 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDraftService
     // code or the names the agent looked up.
     #[tracing::instrument(name = "routine.draft", skip_all, fields(
         routine.draft.kind = request.kind_name(),
+        routine.draft.model = context.agent_model.as_str(),
         routine.draft.requested_step = tracing::field::Empty,
         routine.draft.code_available = tracing::field::Empty,
         agent.session.id = tracing::field::Empty,

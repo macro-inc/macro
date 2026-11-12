@@ -119,6 +119,8 @@ struct Sessions {
     refuses: Option<RoutineSessionError>,
     prepared: Mutex<Vec<PrepareRoutineSession>>,
     prompts: Mutex<Vec<String>>,
+    /// The reasoning effort each prompt asked for.
+    efforts: Mutex<Vec<Option<String>>>,
     cancelled: Mutex<Vec<AgentSessionId>>,
     deleted: Mutex<Vec<AgentSessionId>>,
     /// Signalled on each delete.
@@ -136,6 +138,7 @@ impl Sessions {
             refuses: None,
             prepared: Mutex::new(Vec::new()),
             prompts: Mutex::new(Vec::new()),
+            efforts: Mutex::new(Vec::new()),
             cancelled: Mutex::new(Vec::new()),
             deleted: Mutex::new(Vec::new()),
             deletes: tokio::sync::Notify::new(),
@@ -168,6 +171,10 @@ impl RoutineSessions for Sessions {
         command: PromptRoutineSession,
     ) -> Result<RoutinePromptAccepted, RoutineSessionError> {
         self.prompts.lock().unwrap().push(command.prompt.clone());
+        self.efforts
+            .lock()
+            .unwrap()
+            .push(command.reasoning_effort.clone());
         for (routine, created) in (self.turn)(&command.prompt) {
             let check = checked(self.code.as_ref(), routine).await;
             self.rows
@@ -597,6 +604,17 @@ async fn a_draft_that_runs_out_of_time_says_so_and_cleans_up() {
     assert_eq!(*sessions.cancelled.lock().unwrap(), [session]);
     assert_eq!(*sessions.deleted.lock().unwrap(), [session]);
     assert!(rows.drafts.lock().unwrap().is_empty());
+}
+
+/// A draft asks its one prompt to run without thinking, where its model can.
+#[tokio::test(start_paused = true)]
+async fn a_draft_asks_for_no_thinking() {
+    let rows = Arc::new(Rows::default());
+    let sessions = Arc::new(Sessions::new(&rows, Box::new(|_| Vec::new())));
+
+    draft(&drafts(&rows, &sessions), routine("label mail")).await;
+
+    assert_eq!(*sessions.efforts.lock().unwrap(), [Some("none".to_owned())]);
 }
 
 /// The first check that passes is the draft: the session is stopped there,

@@ -70,7 +70,7 @@ each run.
   `compose-routine.ts`);
   `RoutineDrafts::sweep` (every minute in the harness) cleans up drafts
   older than `STALE_DRAFT`, from the rows alone. Saving checks every id
-  again. The `routine.draft` span records the session id, checks, items
+  again. The `routine.draft` span records the model, the session id, checks, items
   created, the session's tool calls and turns, status reads and outcome
   (`timeout` included), never the words; `routine.check` records
   whether a check passed and kept a draft's answer. `DraftContext` still
