@@ -1,8 +1,9 @@
 //! Agent session leg of the PostgreSQL Soup repository.
 //!
 //! Agent sessions live in MacroDB and are authorized through `entity_access`
-//! like chats, but they are **opt-in**: a query that says nothing about them
-//! (no `agent_session_filter` in its AST) gets none.
+//! grants like chats; a session named by id is also readable through its
+//! thread's parent and its link share. They are **opt-in**: a query that says
+//! nothing about them (no `agent_session_filter` in its AST) gets none.
 
 use chrono::{DateTime, Utc};
 use filter_ast::Expr;
