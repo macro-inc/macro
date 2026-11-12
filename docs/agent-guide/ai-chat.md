@@ -431,7 +431,7 @@ you can follow up there. Reloading the chat restores the same session card.
 Failed dispatches do not show a successful session card. If no coding agents are
 available, configure one in Agents before retrying.
 
-Code-mode sessions do not get these two tools. They do the coding work themselves
+Code-mode sessions do not get these two tools, nor `CreateAgentSession`. They do the coding work themselves
 first and, when asked to hand a task off, run `ExecuteCode`: pick a coding
 persona from `macro.agents.coding()` (the same list `ListCodingAgents` returns,
 Cursor included once connected) or one of your agents from `macro.agents.list()`,
@@ -1284,9 +1284,8 @@ When the harness has its local Deno runtime configured, the session's `macro_int
 server exposes `DescribeCodeTools`, `ReadCodeDocs` and `ExecuteCode`. The in-process agent sees
 all three schemas on its first model call, without `SearchTools` or `LoadTools`.
 For Macro's in-process agent, every conversation turn of a user's session runs
-code mode whenever those three tools are listed (otherwise the turn falls back
-to the direct tools and logs a warning; for owners with the
-`ai-session-code-mode-only` flag the turn fails instead). Code mode has a smaller direct toolset:
+code mode, and needs those three tools: a turn without them fails, with no
+direct-tools fallback. Code mode has a smaller direct toolset:
 SDK-supported searches, reads, listing, and data operations run through the SDK
 (`macro.search`, `macro.workspace`), including AI document and task edits
 (`document.edit(instructions)`; `EditDocument` is hidden in code mode) and
@@ -1421,8 +1420,7 @@ again. Production builds do not print these console entries. Never log or return
 the execution's token.
 
 For local verification, run the harness with a configured Deno runner; without
-one, turns fall back to the direct tools, or fail for owners with the
-`ai-session-code-mode-only` flag. Supported
+one, a user's conversation turns fail. Supported
 operations should move to code while unsupported creation, skill discovery,
 editing and interactive tools remain direct. Ask for a document lookup without
 mentioning tools; inspect its source and result, reload, and verify persistence.
@@ -2693,8 +2691,10 @@ on desktop and mobile. Legacy chat tools are absent from agent context; saved
 legacy tool calls still render in historical conversations.
 
 Use `ListEntities` with `includeTypes: ["agent_session"]`, `NameSearch`, or
-`ContentSearch` to find sessions. `ListAgents` (`macro.agents.list()` in code
-mode) identifies available agents and `CreateAgentSession` starts a conversation with the chosen agent. Use
+`ContentSearch` to find sessions. `ListAgents` identifies available agents and
+`CreateAgentSession` starts a conversation with the chosen agent; code mode uses
+`macro.agents.list()` and `macro.agentSessions.createManaged` instead, which
+also prompt an agent that runs on its operator's machine. Use
 `ManageAgentSession` to rename, archive/unarchive, delete, prompt, or stop one.
 Rename, archive, and delete require ownership; prompt and stop require edit
 access. Prompt acceptance reports sent or queued, not completion. An uncertain

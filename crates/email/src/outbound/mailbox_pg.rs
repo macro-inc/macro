@@ -305,7 +305,7 @@ impl MailboxSyncRepository for PgMailboxSync {
 
     async fn folders(&self, mailbox: MailboxKey) -> Result<Vec<MailFolder>, MailboxError> {
         let rows = sqlx::query!(r#"
-            SELECT f.provider_id,f.parent_id,f.display_name,f.role FROM email_mailbox_folders f
+            SELECT f.provider_id,f.parent_id,f.display_name,f.role,f.total_item_count FROM email_mailbox_folders f
             JOIN email_links l ON l.id = f.link_id
             WHERE f.link_id = $1 AND l.sync_generation = $2 AND l.is_sync_active AND f.deleted_at IS NULL
         "#,mailbox.link_id,mailbox.sync_generation).fetch_all(&self.db).await.map_err(db_error)?;
@@ -318,6 +318,11 @@ impl MailboxSyncRepository for PgMailboxSync {
                     role: serde_json::from_value(serde_json::Value::String(row.role))
                         .map_err(|_| MailboxError::Persistence)?,
                     has_children: false,
+                    total_items: row
+                        .total_item_count
+                        .map(u32::try_from)
+                        .transpose()
+                        .map_err(|_| MailboxError::Persistence)?,
                 })
             })
             .collect()

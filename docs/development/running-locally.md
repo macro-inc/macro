@@ -444,6 +444,11 @@ allocator or with `--port-base`. Other commands find the window themselves, so
 repeat only `--instance`. Startup prints the window; `just status_local` and
 `just stack status --json` print the endpoints.
 
+Local signup and onboarding screens provide **Bypass** for any account. Before
+signup it skips the opening slides, not authentication; after sign-in it records
+both onboarding and tutorial completion. See the
+[onboarding guide](../agent-guide/onboarding.md#onboarding-bypass--apponboarding).
+
 If a program outside this tooling takes a port during the build, the start moves
 to another window instead of failing at `docker compose up`.
 
