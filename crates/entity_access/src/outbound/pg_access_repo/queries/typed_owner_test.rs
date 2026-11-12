@@ -171,7 +171,7 @@ async fn typed_owner_team_links_allow_only_the_resolved_audience(
                 "project {suffix}"
             );
             assert_eq!(
-                chat_access::get_chat_access(&pool, &id, &sources).await?,
+                chat_access::get_chat_access(&pool, &id, viewer).await?,
                 expected,
                 "chat {suffix}"
             );

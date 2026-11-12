@@ -94,10 +94,12 @@ impl AccessRepository for PgAccessRepository {
         let chat_uuid = chat_id
             .parse::<Uuid>()
             .map_err(|_| AccessError::BadRequest("Invalid chat ID format"))?;
-        let source_ids = queries::get_user_source_ids(&self.pool, user_id)
-            .await
-            .map_err(anyhow_access_error)?;
-        Ok(queries::chat_access::get_chat_access(&self.pool, &chat_uuid, &source_ids).await?)
+        Ok(queries::chat_access::get_chat_access(
+            &self.pool,
+            &chat_uuid,
+            Viewer::from_user(user_id),
+        )
+        .await?)
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -572,7 +574,7 @@ impl AccessRepository for PgAccessRepository {
                     .await
             }
             EntityType::Chat => {
-                queries::chat_access::get_chat_access(&self.pool, &entity_uuid, &source_ids).await
+                queries::chat_access::get_chat_access(&self.pool, &entity_uuid, viewer).await
             }
             EntityType::Project => {
                 queries::project_access::get_project_access(&self.pool, &entity_uuid, &source_ids)
