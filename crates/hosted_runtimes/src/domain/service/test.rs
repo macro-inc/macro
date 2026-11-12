@@ -652,7 +652,10 @@ async fn sold_out_size_is_not_billed() {
 
     let result = service.purchase(standard_purchase("buy-dialog-1")).await;
 
-    assert!(matches!(result, Err(ComputerError::SoldOut)));
+    assert!(matches!(
+        result,
+        Err(ComputerError::SoldOut(ComputerSize::Standard))
+    ));
     assert!(service.billing.adds.lock().unwrap().is_empty());
 }
 

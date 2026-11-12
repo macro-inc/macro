@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT COUNT(*) as \"count!\"\n        FROM \"Document\" d\n        WHERE d.owner = $1 AND d.\"deletedAt\" IS NULL\n            AND ($2::text IS NULL OR d.\"fileType\" = $2)\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "0b48d79fabc83ad749d7d11252aa96ea6fecd6b9855bc59b50d98a9e19453370"
+}

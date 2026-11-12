@@ -456,6 +456,7 @@ fn soup_document_with_is_completed(
     is_completed: Option<bool>,
 ) -> SoupDocument {
     SoupDocument {
+        appearance: None,
         id,
         document_version_id: 1,
         owner_id: Owner::from_principal_str("macro|test@example.com").unwrap(),

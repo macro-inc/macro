@@ -95,7 +95,8 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     read: 'getScheduledAction getScheduledActionTemplate',
     created: 'createScheduledAction',
     deleted: 'deleteScheduledAction',
-    edited: 'updateScheduledAction detachScheduledAction',
+    edited:
+      'updateScheduledAction setScheduledActionAppearance detachScheduledAction',
     enabled: 'setScheduledActionEnabled activateScheduledActionTemplate',
     ran: 'executeScheduledActionNow',
     unshared: 'unshareScheduledActionTemplate',
@@ -277,6 +278,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       updateForm putFormLayout updateFormPermissions editMyFormResponse patchHarness
       updateInitiative entityMessageEdit entityMessagePatchThread editThreadV2 editProjectV2
       patchWebhook
+      setDatabaseAppearance setDocumentAppearance setFormAppearance setInitiativeAppearance
       applyCanvasEdits editCanvasWithAi editCrmPipeline editPresentation editSpreadsheet editSpreadsheetWithAi editWordDocument patchAgent setCrmContactEmail updateCrmPipelineEntries updateSavedViewDefinition writeDocumentMarkdown
     `,
     renamed: 'renameChannelLabel renameCrmPipeline',

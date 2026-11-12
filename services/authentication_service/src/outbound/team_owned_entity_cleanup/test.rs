@@ -100,9 +100,11 @@ async fn empty_team_skips_disabled_vault_rpc_but_existing_state_requires_acknowl
             "internal-key".into(),
             server.uri(),
         )),
-        "internal-key".into(),
-        server.uri(),
-        server.uri(),
+        TeamOwnedEntityCleanupConfig {
+            internal_key: "internal-key".into(),
+            harness_url: server.uri(),
+            scheduled_action_url: server.uri(),
+        },
         Arc::new(NoComputers),
     )
     .unwrap();
@@ -154,9 +156,11 @@ async fn empty_deletion_proof_keeps_first_create_lease_admission_closed_until_de
             "internal-key".into(),
             server.uri(),
         )),
-        "internal-key".into(),
-        server.uri(),
-        server.uri(),
+        TeamOwnedEntityCleanupConfig {
+            internal_key: "internal-key".into(),
+            harness_url: server.uri(),
+            scheduled_action_url: server.uri(),
+        },
         Arc::new(NoComputers),
     )
     .unwrap();
