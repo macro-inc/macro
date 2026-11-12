@@ -23,7 +23,7 @@ import {
 } from './land.ts';
 import { tickRequest } from './prompt.ts';
 import { prune, type Rule } from './prune.ts';
-import { githubRepo, type Repository } from './repository.ts';
+import { gitCommand, githubRepo, type Repository } from './repository.ts';
 import { type Misplaced, misplaced } from './state.ts';
 import { type Beat, Cursor, mentionedIds } from './tick.ts';
 
@@ -63,7 +63,7 @@ export const repositoryOf = (context: Needs): Repository => {
   // name and email come from its settings. The remote authenticates through
   // the credential helper its supervisor set up, never a token here.
   const git: Repository['git'] = async (args, { cwd } = {}) =>
-    context.shell.run([settings.git, '-C', cwd ?? config.root, ...args], {
+    context.shell.run(gitCommand(settings.git, cwd ?? config.root, args), {
       env: {
         ...(await context.environment()),
         GIT_AUTHOR_NAME: config.identity.name,
