@@ -44,7 +44,7 @@ use crate::domain::engine::{AgentIdentity, ReplyDelivery, TurnEngine, TurnReques
 use crate::domain::entity_routing::{EntityRoutingPolicy, NoEntityRouting};
 use crate::domain::skill_routing::{NoSkillRouting, SessionSkills, SkillRoutingPolicy};
 use crate::domain::tool_gate::{NativeToolGate, NativeToolVerdict, UngatedNativeTools};
-use crate::domain::tool_mode::ToolMode;
+use crate::domain::tool_mode::{CodeModeOnlyPolicy, DirectFallback, ToolMode};
 use crate::inbound::ask_user::{AskUser, AskUserContext};
 
 #[path = "outbound/rig_engine/opener.rs"]
@@ -86,6 +86,7 @@ pub struct RigTurnEngine {
     skill_routing: Arc<dyn SkillRoutingPolicy>,
     session_skills: Arc<SessionSkills>,
     entity_routing: Arc<dyn EntityRoutingPolicy>,
+    code_mode_only: Arc<dyn CodeModeOnlyPolicy>,
     tool_context: ToolServiceContext,
     gate: Arc<dyn NativeToolGate>,
 }
@@ -113,6 +114,7 @@ impl RigTurnEngine {
             skill_routing: Arc::new(NoSkillRouting),
             session_skills: Arc::new(SessionSkills::default()),
             entity_routing: Arc::new(NoEntityRouting),
+            code_mode_only: Arc::new(DirectFallback),
             tool_context,
             gate: Arc::new(UngatedNativeTools),
         }
@@ -136,6 +138,14 @@ impl RigTurnEngine {
     #[must_use]
     pub fn with_entity_routing(mut self, policy: Arc<dyn EntityRoutingPolicy>) -> Self {
         self.entity_routing = policy;
+        self
+    }
+
+    /// Decide per turn whether the owner's turns may fall back to the direct
+    /// tools.
+    #[must_use]
+    pub fn with_code_mode_only(mut self, policy: Arc<dyn CodeModeOnlyPolicy>) -> Self {
+        self.code_mode_only = policy;
         self
     }
 }
@@ -388,6 +398,7 @@ impl TurnEngine for RigTurnEngine {
         let skill_routing = Arc::clone(&self.skill_routing);
         let session_skills = Arc::clone(&self.session_skills);
         let entity_routing = Arc::clone(&self.entity_routing);
+        let code_mode_only = Arc::clone(&self.code_mode_only);
         let tool_context = self.tool_context.clone();
         let gate = Arc::clone(&self.gate);
         let metering = agent::MeteringContext::current();
@@ -398,11 +409,18 @@ impl TurnEngine for RigTurnEngine {
                     return;
                 };
                 request.model = model;
-                let (routes, entities_routed) = tokio::join!(
+                let (routes, entities_routed, only_code) = tokio::join!(
                     routes_skills(skill_routing.as_ref(), &request),
                     routes_entities(entity_routing.as_ref(), &request),
+                    requires_code_mode(code_mode_only.as_ref(), &request),
                 );
-                let selected = tool_mode(&request);
+                let selected = match tool_mode(&request, only_code) {
+                    Ok(selected) => selected,
+                    Err(error) => {
+                        let _ = parts.send(Err(error)).await;
+                        return;
+                    }
+                };
                 let native_tools = match selected {
                     ToolMode::Standard => native_tools,
                     ToolMode::Code => code_mode_tools,
@@ -523,25 +541,45 @@ fn select_skills<'a>(
     ))
 }
 
-// Every conversation turn of a user's session runs code mode. A failed or
-// missing code-mode MCP connection must never leave a turn with only the small
-// direct set, and summaries advertise no tools.
-fn tool_mode(request: &TurnRequest) -> ToolMode {
-    if request.purpose != crate::domain::engine::TurnPurpose::Conversation {
-        return ToolMode::Standard;
-    }
-    let (Owner::User(_), Some(mcp)) = (&request.owner, &request.mcp_tools) else {
-        return ToolMode::Standard;
+// Only a user's turns read the flag; other owners' turns are refused anyway.
+async fn requires_code_mode(policy: &dyn CodeModeOnlyPolicy, request: &TurnRequest) -> bool {
+    let Owner::User(owner) = &request.owner else {
+        return false;
     };
-    let catalog = mcp.searchable_catalog();
-    if CODE_MODE_MCP_TOOLS
-        .iter()
-        .all(|name| catalog.iter().any(|tool| tool.name == *name))
-    {
-        ToolMode::Code
+    policy.requires(owner).await
+}
+
+// Every conversation turn of a user's session runs code mode, and summaries
+// advertise no tools. Unless `only_code`, a turn that cannot run code falls
+// back to the direct tools; with it, a turn whose code runner is missing fails
+// instead.
+fn tool_mode(request: &TurnRequest, only_code: bool) -> Result<ToolMode, AgentError> {
+    let Owner::User(_) = &request.owner else {
+        return Ok(ToolMode::Standard);
+    };
+    if request.purpose != crate::domain::engine::TurnPurpose::Conversation {
+        return Ok(if only_code {
+            ToolMode::Code
+        } else {
+            ToolMode::Standard
+        });
+    }
+    let listed = request.mcp_tools.as_ref().is_some_and(|mcp| {
+        let catalog = mcp.searchable_catalog();
+        CODE_MODE_MCP_TOOLS
+            .iter()
+            .all(|name| catalog.iter().any(|tool| tool.name == *name))
+    });
+    if listed {
+        Ok(ToolMode::Code)
+    } else if only_code {
+        tracing::error!("code-mode tools unavailable; refusing the turn");
+        Err(AgentError::Other(anyhow::anyhow!(
+            "The code runner is unavailable, so this turn could not run. Please retry this message."
+        )))
     } else {
         tracing::warn!("code-mode tools unavailable; running the turn with direct tools");
-        ToolMode::Standard
+        Ok(ToolMode::Standard)
     }
 }
 
