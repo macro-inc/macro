@@ -43,6 +43,9 @@ pub mod project_access;
 pub mod scheduled_action_access;
 pub mod team_access;
 pub mod thread_access;
+mod viewer;
+
+pub(crate) use viewer::{Viewer, team_bot_viewer};
 
 #[cfg(test)]
 mod test;

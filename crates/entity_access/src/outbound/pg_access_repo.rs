@@ -17,6 +17,7 @@ use crate::domain::{
 };
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr};
+use queries::Viewer;
 use sqlx::PgPool;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -68,23 +69,18 @@ impl AccessRepository for PgAccessRepository {
         document_id: &str,
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> Result<Option<AccessLevel>, AccessError> {
-        let source_ids = queries::get_user_source_ids(&self.pool, user_id)
-            .await
-            .map_err(anyhow_access_error)?;
         let Ok(document_uuid) = document_id.parse::<Uuid>() else {
             return Ok(queries::document_access::get_legacy_document_access(
                 &self.pool,
                 document_id,
-                &source_ids,
-                user_id,
+                user_id.map(AsRef::as_ref),
             )
             .await?);
         };
         Ok(queries::document_access::get_document_access(
             &self.pool,
             &document_uuid,
-            &source_ids,
-            user_id,
+            Viewer::from_user(user_id),
         )
         .await?)
     }
@@ -565,19 +561,15 @@ impl AccessRepository for PgAccessRepository {
             .parse::<Uuid>()
             .map_err(|_| AccessError::BadRequest("Invalid entity ID format"))?;
         let bot_principal = bot_id.into_storage_id();
+        let viewer = queries::team_bot_viewer(&self.pool, &bot_principal, team_id).await?;
         let source_ids = queries::get_team_scope_source_ids(&self.pool, &bot_principal, &team_id)
             .await
             .map_err(anyhow_access_error)?;
 
         let access = match entity_type {
             EntityType::Document => {
-                queries::document_access::get_document_access(
-                    &self.pool,
-                    &entity_uuid,
-                    &source_ids,
-                    None,
-                )
-                .await
+                queries::document_access::get_document_access(&self.pool, &entity_uuid, viewer)
+                    .await
             }
             EntityType::Chat => {
                 queries::chat_access::get_chat_access(&self.pool, &entity_uuid, &source_ids).await
