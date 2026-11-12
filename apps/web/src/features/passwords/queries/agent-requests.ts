@@ -6,8 +6,10 @@ import type { PasswordAgentAccessRequestState } from '@service-storage/generated
 import type { PasswordAgentItemAccess } from '@service-storage/generated/schemas/passwordAgentItemAccess';
 import type { PasswordAgentResolveRequest } from '@service-storage/generated/schemas/passwordAgentResolveRequest';
 import type { PasswordAgentRevokeBody } from '@service-storage/generated/schemas/passwordAgentRevokeBody';
+import { queryOptions } from '@tanstack/solid-query';
 import { err, ok, type Result } from 'neverthrow';
 import { match } from 'ts-pattern';
+import { passwordKeys } from './keys';
 import type { PasswordSourceScope } from './source';
 
 /**
@@ -38,6 +40,24 @@ export type AgentRequestSource = {
     body: PasswordAgentRevokeBody
   ): AgentRequestResult<PasswordAgentItemAccess>;
 };
+
+/** Cached callbacks capture only the resolved scope, source and item. */
+export function agentRequestsQueryOptions(
+  scopeKey: string,
+  source: AgentRequestSource,
+  itemId: string
+) {
+  return queryOptions({
+    queryKey: passwordKeys.agentRequests(scopeKey, itemId).queryKey,
+    queryFn: async () => {
+      const result = await source.forItem(itemId);
+      // Off, gone or not reviewable: nothing to show.
+      if (result.isErr())
+        return result.error === 'failed' ? Promise.reject(result.error) : [];
+      return result.value;
+    },
+  });
+}
 
 const PAGE_LIMIT = 100;
 /** One item has a handful of agents; this only bounds a misbehaving cursor. */

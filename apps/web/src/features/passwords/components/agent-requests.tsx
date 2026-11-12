@@ -8,9 +8,10 @@ import { useQuery, useQueryClient } from '@tanstack/solid-query';
 import { Button, Dropdown } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { usePasswords } from '../context/passwords-context';
-import type {
-  AgentRequestFailure,
-  AgentRequestSource,
+import {
+  type AgentRequestFailure,
+  type AgentRequestSource,
+  agentRequestsQueryOptions,
 } from '../queries/agent-requests';
 import { passwordKeys } from '../queries/keys';
 
@@ -27,16 +28,9 @@ export function AgentRequests(props: {
   const queryClient = useQueryClient();
   const key = () =>
     passwordKeys.agentRequests(scope.key, props.itemId).queryKey;
-  const states = useQuery(() => ({
-    queryKey: key(),
-    queryFn: async () => {
-      const result = await props.source.forItem(props.itemId);
-      // Off, gone or not reviewable: nothing to show.
-      if (result.isErr())
-        return result.error === 'failed' ? Promise.reject(result.error) : [];
-      return result.value;
-    },
-  }));
+  const states = useQuery(() =>
+    agentRequestsQueryOptions(scope.key, props.source, props.itemId)
+  );
   const [busy, setBusy] = createSignal(false);
   const [stale, setStale] = createSignal(false);
   const shown = () =>
