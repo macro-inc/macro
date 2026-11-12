@@ -276,4 +276,26 @@ describe('routine navigation', () => {
       });
     }
   );
+  it.each([
+    ['view-agents', '/connections'],
+    ['view-routines', '/routines'],
+  ])(
+    'restores a persisted Connections page with %s metadata',
+    (routeId, expected) => {
+      const location = resolveContentLocation(routes, {
+        type: 'component',
+        id: 'agents',
+        params: { agentPage: 'connections' },
+        entryMetadata: {
+          route: {
+            matches: [
+              { id: 'app', params: {} },
+              { id: routeId, params: {} },
+            ],
+          },
+        },
+      });
+      expect(formatPanePath(routes, location.route)).toBe(expected);
+    }
+  );
 });
