@@ -82,19 +82,16 @@ async function patchOccurrenceCaches(
   };
 }
 
-/**
- * Refreshes what a settled write can change without holding the mutation
- * open: the write is done once the provider answers, while a delta sync can
- * queue behind other cache work for many seconds.
- */
-function refreshAfterWrite(eventId: string) {
+/** Refreshes what a settled write can change; grid edits retain their preview until it settles. */
+function refreshAfterWrite(eventId: string, waitForOccurrences = false) {
   fireAndForget(invalidateCalendarInvitations(), 'calendar-mutations');
   invalidateCalendarEventPreviews(eventId);
   const revision = occurrenceWriteRevision;
-  fireAndForget(
-    invalidateCalendarOccurrences(() => revision === occurrenceWriteRevision),
-    'calendar-mutations'
+  const refresh = invalidateCalendarOccurrences(
+    () => revision === occurrenceWriteRevision
   );
+  if (waitForOccurrences) return refresh;
+  fireAndForget(refresh, 'calendar-mutations');
 }
 
 function patchEventItems(
@@ -698,6 +695,8 @@ export interface UpdateCalendarEventArgs {
   occurrenceKey?: string;
   /** UI-owned move span; never serialized into the request. */
   parentSpan?: Span;
+  /** Keep a grid preview until the existing occurrence revalidation settles. */
+  waitForOccurrenceRefresh?: boolean;
   patch: Omit<
     UpdateCalendarEventRequest,
     'calendarId' | 'scope' | 'recurrenceId'
@@ -738,9 +737,9 @@ function applyCopyPatch<
  * Applies the field patch to a cached item. Per-copy fields land on the
  * addressed copy — the named calendar's, else the canonical (first) one —
  * and on the entity when that copy is canonical, mirroring how the server
- * records them. Times are only patched through to standalone occurrences —
- * recurring expansion is the provider's job, so recurring series keep their
- * cached instances until the refetch lands.
+ * records them. Single-occurrence times leave the series master untouched.
+ * Series-wide times update the master only: recurring expansion is the
+ * provider's job, so its cached instances stay until the refetch lands.
  */
 function applyEventPatch(
   item: CalendarOccurrenceItem,
@@ -769,8 +768,10 @@ function applyEventPatch(
       item.occurrence.recurrenceId === null);
   let occurrence = item.occurrence;
   if (time) {
-    event.time = time as EventTime;
-    if (isStandalone) {
+    // An exception changes its occurrence, never the series master used to
+    // calculate the next relative series edit.
+    if (args.scope !== 'this_event') event.time = time as EventTime;
+    if (isStandalone || args.scope === 'this_event') {
       occurrence = { ...occurrence, time: time as EventTime };
     }
   }
@@ -823,19 +824,23 @@ export function useUpdateCalendarEventMutation(callbacks?: UpdateCallbacks) {
     >(
       {
         onMutate: (args) => {
-          const patchesOneOccurrence =
-            args.scope === 'this_event' && args.occurrenceKey !== undefined;
+          const patchesOneOccurrence = args.scope === 'this_event';
+          const occurrenceKey = args.occurrenceKey ?? args.recurrenceId;
           return patchOccurrenceCaches(
             patchEventItems(args.eventId, (item) =>
               patchesOneOccurrence &&
-              item.occurrence.occurrenceKey !== args.occurrenceKey
+              item.occurrence.occurrenceKey !== occurrenceKey
                 ? item
                 : applyEventPatch(item, args)
             )
           );
         },
         onError: (_error, _args, context) => context?.rollback(),
-        onSettled: (_data, _error, args) => refreshAfterWrite(args.eventId),
+        onSettled: (_data, error, args) =>
+          refreshAfterWrite(
+            args.eventId,
+            !error && args.waitForOccurrenceRefresh
+          ),
       },
       callbacks
     ),

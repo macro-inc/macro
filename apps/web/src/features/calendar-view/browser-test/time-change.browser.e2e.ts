@@ -48,6 +48,34 @@ test.describe('recurring grid changes', () => {
     );
   });
   for (const view of ['week', 'day']) {
+    test(`${view}: retains a saved drop while occurrences refresh`, async ({
+      page,
+    }) => {
+      await page.goto(`/time-change.html?view=${view}&deferRefresh=1`);
+      const { event, before, delta } = await changeTime(page, 'move');
+      await page.getByText('All events', { exact: true }).click();
+      await page.getByRole('button', { name: 'Save', exact: true }).click();
+      await expect(page.getByTestId('request')).not.toBeEmpty();
+      await expect(page.getByRole('dialog')).toHaveCount(0);
+      await page.evaluate(() =>
+        window.dispatchEvent(new Event('calendar-fixture-refresh'))
+      );
+      await expect(page.getByRole('main')).toHaveAttribute(
+        'data-pending',
+        'true'
+      );
+      expect((await event.boundingBox())?.y).toBeCloseTo(before.y + delta, 0);
+      await expect(event).toContainText('12:00');
+      await page.evaluate(() =>
+        window.dispatchEvent(new Event('calendar-fixture-complete-refresh'))
+      );
+      await expect(page.getByRole('main')).toHaveAttribute(
+        'data-pending',
+        'false'
+      );
+      expect((await event.boundingBox())?.y).toBeCloseTo(before.y + delta, 0);
+    });
+
     for (const kind of ['move', 'resize'] as const) {
       for (const scope of ['This event', 'All events', 'Cancel']) {
         test(`${view}: ${kind}, ${scope}`, async ({ page }) => {

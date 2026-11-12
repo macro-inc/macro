@@ -59,7 +59,11 @@ export function createEventTimeChange(options: {
     change.span.setAttr('calendar.update.scope', scope);
     try {
       const args = calendarEventTimeUpdate(change.event, change.time, scope);
-      await options.save({ ...args, parentSpan: change.span });
+      await options.save({
+        ...args,
+        parentSpan: change.span,
+        waitForOccurrenceRefresh: true,
+      });
       finish('success');
     } catch (error) {
       change.span.error('Calendar time change failed');

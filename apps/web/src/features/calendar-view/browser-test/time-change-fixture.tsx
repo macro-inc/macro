@@ -40,11 +40,20 @@ function Fixture() {
   );
   const [request, setRequest] = createSignal('');
   const [error, setError] = createSignal('');
+  let finishRefresh: () => void = () => {};
+  const refreshDone = new Promise<void>((resolve) => {
+    finishRefresh = resolve;
+  });
   const controller = createEventTimeChange({
     active: () => true,
-    save: async ({ parentSpan: _span, ...args }) => {
+    save: async ({
+      parentSpan: _span,
+      waitForOccurrenceRefresh: _wait,
+      ...args
+    }) => {
       setRequest(JSON.stringify(args));
       if (PARAMS.has('failure')) throw new Error('Fixture save failed');
+      if (PARAMS.has('deferRefresh')) await refreshDone;
       const time = args.patch.time;
       if (time?.kind !== 'timed')
         throw new Error('Expected timed fixture update');
@@ -67,14 +76,24 @@ function Fixture() {
   });
   const refresh = () =>
     setEvents((current) => current.map((event) => ({ ...event })));
+  const completeRefresh = () => finishRefresh();
   window.addEventListener('calendar-fixture-refresh', refresh);
-  onCleanup(() =>
-    window.removeEventListener('calendar-fixture-refresh', refresh)
-  );
+  window.addEventListener('calendar-fixture-complete-refresh', completeRefresh);
+  onCleanup(() => {
+    window.removeEventListener('calendar-fixture-refresh', refresh);
+    window.removeEventListener(
+      'calendar-fixture-complete-refresh',
+      completeRefresh
+    );
+    finishRefresh();
+  });
   const view: CalendarPeriodView =
     PARAMS.get('view') === 'day' ? 'timeGridDay' : 'timeGridWeek';
   return (
-    <main class="portal-scope h-screen bg-page text-ink p-4 flex flex-col gap-2">
+    <main
+      data-pending={controller.pending()}
+      class="portal-scope h-screen bg-page text-ink p-4 flex flex-col gap-2"
+    >
       <h1>Calendar time-change fixture</h1>
       <div class="flex-1 min-h-0">
         <CalendarGrid

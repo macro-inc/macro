@@ -669,6 +669,84 @@ describe('useDeleteCalendarEventMutation', () => {
 });
 
 describe('useUpdateCalendarEventMutation', () => {
+  it('updates only the addressed occurrence time without changing its cached series master', async () => {
+    updateCalendarEventMock.mockResolvedValue(ok({ id: 'event-2' }));
+    const original = recurringItem();
+    const other = {
+      ...original,
+      occurrence: {
+        ...original.occurrence,
+        occurrenceKey: '2026-08-06T09:00:00Z',
+        recurrenceId: '2026-08-06T09:00:00Z',
+      },
+    };
+    for (const range of [viewportA, viewportB]) {
+      testQueryClient.setQueryData(
+        calendarKeys.occurrences('user', range).queryKey,
+        { items: [original, other], syncStatus: 'ready' }
+      );
+    }
+    const update = renderHook(() => useUpdateCalendarEventMutation());
+    const time = {
+      kind: 'timed' as const,
+      startsAt: '2026-08-05T09:00:00Z',
+      endsAt: '2026-08-05T10:00:00Z',
+    };
+    await update.mutateAsync({
+      eventId: 'event-2',
+      scope: 'this_event',
+      recurrenceId: original.occurrence.occurrenceKey,
+      occurrenceKey: original.occurrence.occurrenceKey,
+      patch: { time },
+    });
+    for (const range of [viewportA, viewportB]) {
+      const items = viewportData(range)?.items;
+      expect(items?.[0].event.time).toEqual(original.event.time);
+      expect(items?.[0].occurrence.time).toEqual(time);
+      expect(items?.[1]).toEqual(other);
+    }
+  });
+
+  it('keeps a grid update pending until the existing occurrence refetch settles', async () => {
+    updateCalendarEventMock.mockResolvedValue(ok({ id: 'event-2' }));
+    const started = Promise.withResolvers<void>();
+    const refreshed = Promise.withResolvers<CalendarOccurrencesData>();
+    const read = vi.fn(() => {
+      started.resolve();
+      return refreshed.promise;
+    });
+    const unsubscribe = new QueryObserver(testQueryClient, {
+      queryKey: calendarKeys.occurrences('user', viewportA).queryKey,
+      queryFn: read,
+      staleTime: Number.POSITIVE_INFINITY,
+    }).subscribe(() => {});
+    const update = renderHook(() => useUpdateCalendarEventMutation());
+    const saved = update.mutateAsync({
+      eventId: 'event-2',
+      waitForOccurrenceRefresh: true,
+      patch: { title: 'Updated' },
+    });
+    try {
+      await started.promise;
+      expect(update.isPending).toBe(true);
+      expect(updateCalendarEventMock).toHaveBeenCalledWith('event-2', {
+        title: 'Updated',
+        calendarId: undefined,
+        scope: undefined,
+        recurrenceId: undefined,
+      });
+      const item = recurringItem();
+      item.event.title = 'Refreshed';
+      refreshed.resolve({ items: [item], syncStatus: 'ready' });
+      await saved;
+      expect(update.isSuccess).toBe(true);
+      expect(viewportData(viewportA)?.items[0].event.title).toBe('Refreshed');
+      expect(read).toHaveBeenCalledOnce();
+    } finally {
+      refreshed.resolve({ items: [], syncStatus: 'ready' });
+      unsubscribe();
+    }
+  });
   it('patches fields and only rewrites standalone occurrence times', async () => {
     updateCalendarEventMock.mockResolvedValue(ok({ id: 'event-1' }));
     const update = renderHook(() => useUpdateCalendarEventMutation());

@@ -73,6 +73,7 @@ describe('grid time changes', () => {
             calendarId: 'calendar',
             scope,
             parentSpan: expect.anything(),
+            waitForOccurrenceRefresh: true,
             recurrenceId:
               scope === 'this_event' ? s.event.occurrenceKey : undefined,
           })
