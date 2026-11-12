@@ -59,6 +59,7 @@ pub struct MacroNavigationPlugin {
     app_link_hosts: &'static [&'static str],
     embedded_documents: Arc<[Url]>,
     allowed_file_prefix: Option<PathBuf>,
+    unmanaged_webviews: &'static [&'static str],
 }
 
 #[derive(Debug, Deserialize)]
@@ -85,7 +86,15 @@ impl MacroNavigationPlugin {
             app_link_hosts: &[],
             embedded_documents: Arc::new([]),
             allowed_file_prefix: None,
+            unmanaged_webviews: &[],
         })
+    }
+
+    /// Labels of webviews this plugin leaves alone. Each must install its own
+    /// navigation policy (`on_navigation`), which runs before this plugin's.
+    pub fn with_unmanaged_webviews(mut self, labels: &'static [&'static str]) -> Self {
+        self.unmanaged_webviews = labels;
+        self
     }
 
     /// hosts whose `/app` urls are routed through the SPA router
@@ -331,6 +340,9 @@ impl<R: Runtime> Plugin<R> for MacroNavigationPlugin {
     }
 
     fn on_navigation(&mut self, webview: &tauri::Webview<R>, url: &tauri::Url) -> bool {
+        if self.unmanaged_webviews.contains(&webview.label()) {
+            return true;
+        }
         self.dispatch(webview.app_handle(), self.get_destination(url))
     }
 }

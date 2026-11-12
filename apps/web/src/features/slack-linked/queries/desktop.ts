@@ -31,6 +31,10 @@ function desktopFailure(error: unknown): DesktopFailure {
         message:
           "Macro couldn't read your Slack session from that window. Try again, or paste a token and cookie.",
       }))
+      .with('captcha_unavailable', () => ({
+        kind: 'failed',
+        message: "Slack's verification couldn't load. Try again.",
+      }))
       .with('invalid_url', () => ({
         kind: 'failed',
         message: "Slack's sign-in link wasn't one Macro can open. Start again.",

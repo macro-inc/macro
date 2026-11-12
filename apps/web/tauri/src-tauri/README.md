@@ -43,6 +43,34 @@ the old cache file, so the first launch after this native update requires
 sign-in again. Cookie expiry, refresh, and write behavior are unchanged. This
 requires a native app release; an OTA frontend bundle cannot relocate the jar.
 
+## Slack sign-in window
+
+`slack_desktop_sign_in({ signInUrl? })` and `slack_desktop_captcha({ siteKey,
+pageUrl })` (`src/slack_desktop.rs`) open slack.com in a separate window labelled
+`slack-sign-in`; only one runs at a time (`busy`). Sign-in starts at `signInUrl`
+(https on `slack.com` or a subdomain) or `https://app.slack.com/signin`, waits
+for `https://app.slack.com/client`, then returns the HttpOnly `d` cookie, `d-s`,
+and every workspace's `xoxc-` token from `localConfig_v2` to the calling webview
+only. Captcha renders reCAPTCHA over `pageUrl` and returns the solved token,
+polled with `eval_with_callback`. Errors are `unsupported` (mobile),
+`invalid_url`, `busy`, `cancelled`, `timed_out`, `no_session`,
+`captcha_unavailable` (reCAPTCHA failed to load), `window_failed`.
+
+- The window is incognito (an in-memory Chromium profile); the command clears
+  its browsing data and destroys it on every exit path.
+- `MacroNavigationPlugin` skips it (`with_unmanaged_webviews`); its own
+  `on_navigation` loads any http(s) page in place so SSO can reach the identity
+  provider, and refuses other schemes instead of handing them to the OS.
+  `window.open` popups open as CEF popups in the same profile, keeping
+  `window.opener` for SSO. Google may still refuse sign-in in an embedded
+  browser; the user agent is not spoofed.
+- It has no IPC: it is a remote origin and every capability names only `main`.
+  Keep it out of capabilities, and never emit its result as an event or log
+  the values (`SlackSecret` redacts `Debug`).
+- Built for macOS (CEF), whose cookie reads include HttpOnly cookies. Linux
+  and Windows compile the same code on wry; whether their cookie reads include
+  HttpOnly cookies is unverified.
+
 ## OTA bundle storage
 
 On iOS, the bundle updater stores downloads and their persistence markers in
