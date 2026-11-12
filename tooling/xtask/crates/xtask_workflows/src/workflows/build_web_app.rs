@@ -86,8 +86,10 @@ pub fn checkout() -> Step<Use> {
         .add_with(("ref", "${{ github.sha }}"))
 }
 
-/// Saved entries are named by the set of package keys they hold
-/// (`scripts/deploy_build_wasm.sh`); the newest one in scope is restored.
+/// Saved entries are named by the set of package keys they hold plus the run
+/// that saved them (`scripts/deploy_build_wasm.sh`), and the newest one in
+/// scope is restored. A run name keeps a set that comes back, say after a
+/// revert, saveable again: Actions cache entries cannot be overwritten.
 const WASM_PACKAGES_KEY_PREFIX: &str = "deploy-wasm-pkgs-v1-";
 
 /// actions/cache v5.0.5.
@@ -106,21 +108,25 @@ fn restore_wasm_packages() -> Step<Use> {
         .add_with(("restore-keys", WASM_PACKAGES_KEY_PREFIX))
 }
 
-/// Its own step, saved before the app build, so a run cancelled by a newer
-/// push still leaves its packages for that push.
+/// Its own step, saved before the app build, so a run whose app build fails
+/// still keeps its packages. It names the set to save, or nothing when the
+/// restored entry already holds it.
 fn build_wasm_packages() -> Step<Run> {
     Step::new("Build wasm packages")
         .run(include_str!("scripts/deploy_build_wasm.sh"))
         .id("wasm")
         .working_directory(xtask_paths::repo_dir!("apps/web"))
+        .add_env(("KEY_PREFIX", WASM_PACKAGES_KEY_PREFIX))
+        .add_env((
+            "RESTORED_KEY",
+            "${{ steps.restore-wasm.outputs.cache-matched-key }}",
+        ))
 }
 
 fn save_wasm_packages() -> Step<Use> {
     Step::new("Save wasm packages")
         .uses("actions/cache", "save", ACTIONS_CACHE_SHA)
-        .if_condition(Expression::new(
-            "steps.wasm.outputs.key != steps.restore-wasm.outputs.cache-matched-key",
-        ))
+        .if_condition(Expression::new("steps.wasm.outputs.key != ''"))
         .continue_on_error(true)
         .add_with(("path", vars::DEPLOY_WASM_PKG_CACHE_DIR))
         .add_with(("key", "${{ steps.wasm.outputs.key }}"))

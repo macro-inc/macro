@@ -130,9 +130,10 @@ local-email: ensure-cache-wasm
 #
 # The two wasm-pack crates do not share artifacts. Build them in parallel
 # with distinct CARGO_TARGET_DIR values so they do not serialize on the
-# workspace cargo lock. CI still always rebuilds (schema/engine changes can
-# alter wasm without a version bump); Namespace `web-ci` sccache makes the
-# rustc invocations cheap across deploys.
+# workspace cargo lock. CI reuses a package only when nothing it is built from
+# changed (scripts/cached-wasm-build.sh keys on its sources, not on a version
+# bump); Namespace `web-ci` sccache makes the rustc invocations cheaper when it
+# does rebuild.
 #
 # Vite's chunk-rendering can exceed 6GB as the app grows. Leave headroom
 # above that peak; CI builds use the same mid-size runner as preview deploys.
@@ -516,8 +517,8 @@ gen-database-sql-types:
 
 # Dev fast path: build the wasm pkg only when missing or its version drifts
 # from client/cache-wasm/Cargo.toml (bump that version to push a rebuild to
-# dev machines). CI app builds always rebuild (`build-cache-wasm`), so deploys
-# never depend on that bump. Runs no cargo, so it doesn't wait on a service
+# dev machines). CI app builds run `build-cache-wasm`, whose cache keys on the
+# sources, so deploys never depend on that bump. Runs no cargo, so it doesn't wait on a service
 # build holding the workspace target dir.
 ensure-cache-wasm:
     #!/usr/bin/env bash

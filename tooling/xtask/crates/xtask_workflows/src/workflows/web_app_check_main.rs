@@ -702,7 +702,8 @@ fn collaboration_cycles_import_check() -> Step<Run> {
 /// Whole-program LTO costs the fig, psd and ai engines about 40 s each and only
 /// makes them faster to run, which a PR's tests and preview don't need. Deploys
 /// keep it. The wasm package key includes them (`wasm-cache-key.ts`), so a PR
-/// build never reuses a deploy's package or the reverse.
+/// build of these three never reuses a deploy's or the reverse; deploys keep
+/// their packages in a cache of their own anyway (`build_web_app`).
 const PR_WASM_ENV: [(&str, &str); 6] = [
     ("CARGO_PROFILE_FIG_ENGINE_WASM_LTO", "off"),
     ("CARGO_PROFILE_FIG_ENGINE_WASM_CODEGEN_UNITS", "16"),
