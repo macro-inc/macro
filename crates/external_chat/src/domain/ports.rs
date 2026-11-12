@@ -192,6 +192,8 @@ pub trait ChatProvider: Send + Sync + 'static {
 pub struct ChatProviders {
     /// WhatsApp linked devices.
     pub whatsapp: Arc<dyn ChatProvider>,
+    /// Slack linked sessions.
+    pub slack: Arc<dyn ChatProvider>,
 }
 
 impl ChatProviders {
@@ -199,6 +201,7 @@ impl ChatProviders {
     pub fn get(&self, provider: ExternalChatProvider) -> &dyn ChatProvider {
         match provider {
             ExternalChatProvider::WhatsApp => self.whatsapp.as_ref(),
+            ExternalChatProvider::Slack => self.slack.as_ref(),
         }
     }
 }

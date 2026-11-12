@@ -59,6 +59,13 @@ impl AccountRepository for PgSlackRepository {
         .collect()
     }
 
+    async fn account_owner(&self, account: Uuid) -> ExternalChatResult<Option<String>> {
+        sqlx::query_scalar!("SELECT user_id FROM slack_account WHERE id = $1", account)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(failure)
+    }
+
     async fn disconnect(
         &self,
         user: &MacroUserIdStr<'_>,

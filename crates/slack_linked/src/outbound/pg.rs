@@ -140,7 +140,7 @@ pub(crate) async fn end_consent_in(
         .await
         .map_err(failure)?;
     notify(tx, signals::ACCOUNT_CHANGED, account).await?;
-    notify_change(tx, Change::Chats { account_id: account }).await
+    notify_change(tx, Change::Chats { provider: ExternalChatProvider::Slack, account_id: account }).await
 }
 
 /// The stored secret in its four columns, when present.

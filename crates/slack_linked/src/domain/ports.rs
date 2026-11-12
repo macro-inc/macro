@@ -93,6 +93,8 @@ pub trait LoginRepository: Send + Sync {
 pub trait AccountRepository: Send + Sync {
     /// The person's accounts, oldest first.
     async fn accounts(&self, user: &MacroUserIdStr<'_>) -> ExternalChatResult<Vec<Account>>;
+    /// The Macro user who signed this account in.
+    async fn account_owner(&self, account: Uuid) -> ExternalChatResult<Option<String>>;
     /// End consent at exactly this generation: state `disconnected`,
     /// generation + 1, credentials wiped unless `sign_out` asks the replica
     /// to sign out first, memberships end, undispatched sends fail. Returns

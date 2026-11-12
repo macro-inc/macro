@@ -88,6 +88,10 @@ impl ChatProvider for SlackProvider {
         }))
     }
 
+    async fn account_owner(&self, account: Uuid) -> ExternalChatResult<Option<String>> {
+        self.accounts.account_owner(account).await
+    }
+
     async fn sending_facts(
         &self,
         account: &AccountRef,

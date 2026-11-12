@@ -13,7 +13,7 @@ use external_chat::domain::models::{
     AddChat, ChatRef, ExternalChatKind, ExternalChatProvider, ReplyContent, SendAuthority,
     SendReply,
 };
-use external_chat::domain::ports::{ChatProviders, ExternalChatResult};
+use external_chat::domain::ports::{ChatProvider, ChatProviders, ExternalChatResult};
 use external_chat::domain::service::ExternalChatService;
 use external_chat::outbound::pg::PgExternalChatRepository;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
@@ -88,8 +88,13 @@ impl World {
         let repository = Arc::new(PgWhatsAppRepository::new(pool.clone()));
         let linked = WhatsAppService::new(repository.clone());
         let external = ExternalChatService::new(
-            ChatProviders {
-                whatsapp: Arc::new(WhatsAppProvider::new(repository)),
+            {
+                let whatsapp: Arc<dyn ChatProvider> = Arc::new(WhatsAppProvider::new(repository));
+                // Only WhatsApp chats exist in these tests.
+                ChatProviders {
+                    whatsapp: whatsapp.clone(),
+                    slack: whatsapp,
+                }
             },
             Arc::new(PgExternalChatRepository::new(pool.clone())),
             Arc::new(Allow),

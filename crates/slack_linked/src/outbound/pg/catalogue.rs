@@ -7,6 +7,9 @@ use external_chat::domain::timeline::{ExternalChatPersonRef, view::People};
 use macro_user_id::user_id::MacroUserIdStr;
 use std::collections::HashMap;
 
+/// What someone Slack never named is called.
+const UNKNOWN_PERSON: &str = "Slack user";
+
 /// A person's name as Slack shows it: display name, else real name.
 fn person_name(display_name: Option<String>, real_name: Option<String>) -> Option<String> {
     display_name
@@ -227,7 +230,7 @@ impl CatalogueRepository for PgSlackRepository {
         ids: &[String],
         persons: &[Uuid],
     ) -> ExternalChatResult<People> {
-        let mut people = People::new(|_| None);
+        let mut people = People::new(|_| None, UNKNOWN_PERSON);
         let stored = sqlx::query!(
             r#"SELECT p.id, p.user_id, p.display_name, a.slack_user_id AS "slack_user_id?"
             FROM external_chat_person p LEFT JOIN slack_user_alias a ON a.person_id = p.id AND a.chat_id = p.chat_id

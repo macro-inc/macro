@@ -11,7 +11,7 @@ use entity_access::domain::models::{
     Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
 };
 use external_chat::domain::{
-    ports::{ChatEffect, ChatProviders, ChatPublisher, EffectsRepository, Origin, SendRateLimiter},
+    ports::{ChatEffect, ChatProvider, ChatProviders, ChatPublisher, EffectsRepository, Origin, SendRateLimiter},
     service::ExternalChatService,
     timeline::TimelineRepository,
 };
@@ -60,8 +60,13 @@ fn services(pool: &PgPool) -> (Linked, SessionService, Arc<PgWhatsAppRepository>
         Linked {
             whatsapp: WhatsAppService::new(repository.clone()),
             chats: ExternalChatService::new(
-                ChatProviders {
-                    whatsapp: Arc::new(WhatsAppProvider::new(repository.clone())),
+                {
+                    let whatsapp: Arc<dyn ChatProvider> = Arc::new(WhatsAppProvider::new(repository.clone()));
+                    // Only WhatsApp chats exist in these tests.
+                    ChatProviders {
+                        whatsapp: whatsapp.clone(),
+                        slack: whatsapp,
+                    }
                 },
                 store.clone(),
                 Arc::new(Allow),
@@ -1112,8 +1117,13 @@ async fn rate_limited_send_never_creates_a_dispatchable_intent(pool: PgPool) {
 
     let (linked, session, repository, binding, alice, _) = adopted(&pool).await;
     let chats = ExternalChatService::new(
-        ChatProviders {
-            whatsapp: Arc::new(WhatsAppProvider::new(repository)),
+        {
+            let whatsapp: Arc<dyn ChatProvider> = Arc::new(WhatsAppProvider::new(repository));
+            // Only WhatsApp chats exist in these tests.
+            ChatProviders {
+                whatsapp: whatsapp.clone(),
+                slack: whatsapp,
+            }
         },
         linked.store,
         Arc::new(Denied),

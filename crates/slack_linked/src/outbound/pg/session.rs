@@ -111,7 +111,7 @@ impl SessionRepository for PgSlackRepository {
         .execute(&mut *tx)
         .await
         .map_err(failure)?;
-        notify_change(&mut tx, Change::Chats { account_id: account.id }).await?;
+        notify_change(&mut tx, Change::Chats { provider: ExternalChatProvider::Slack, account_id: account.id }).await?;
         tx.commit().await.map_err(failure)
     }
 
@@ -223,7 +223,7 @@ impl SessionRepository for PgSlackRepository {
             .await
             .map_err(failure)?;
         }
-        notify_change(&mut tx, Change::Chats { account_id: account.id }).await?;
+        notify_change(&mut tx, Change::Chats { provider: ExternalChatProvider::Slack, account_id: account.id }).await?;
         tx.commit().await.map_err(failure)
     }
 
