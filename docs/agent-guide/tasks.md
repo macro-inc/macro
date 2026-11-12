@@ -103,6 +103,13 @@ layout, so enabling the flag restores Gantt. The local override is
 On a focused group header, **H** collapses only that group; pressing it again
 does nothing. Typing H in a text field remains ordinary input.
 
+In the Assignees property picker on a row, detail view, or composer, keep focus
+in the search field: Down/Up moves the highlighted person and Enter toggles that
+person. Typing filters the list; Escape dismisses even when there are no matches.
+Check both the dropdown and touch-sheet hosts. The desktop Assignee filter
+submenu also navigates with arrows; its Enter selects and closes. Phone filter
+drawers keep their existing searchable checkbox sections.
+
 New accounts are seeded with three sample tasks (`Intro to tasks`, `Advanced task features`,
 `How we use tasks at Macro`).
 

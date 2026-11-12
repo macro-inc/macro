@@ -10,7 +10,7 @@ use macro_uuid::Uuid;
 use routine_program::Surface;
 use serde::Serialize;
 
-use ideas::domain::model::GenerationTrigger;
+use suggestions::domain::model::GenerationTrigger;
 
 use super::model::{
     CheckedSuggestion, GenerationStatus, RetireSuggestion, RoutineGenerationReport,

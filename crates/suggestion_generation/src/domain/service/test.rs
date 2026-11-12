@@ -7,12 +7,13 @@ use agent_session::domain::routines::{
 use chrono::DateTime;
 use feature_flags::outbound::fake::FakeFeatureFlags;
 use feature_flags::{FlagSnapshot, FlagValue};
-use ideas::domain::model::{
-    IdeaError, IdeaReview, IdeaWriteOutcome, Ideas, RetireIdea, RewriteIdea, SuggestIdea,
-};
 use model_owner::CreationPrincipal;
 use scheduled_action::domain::suggestions::model::{
     RetireSuggestion, RoutineSuggestions, SuggestOutcome, SuggestRequest, SuggestionReview,
+};
+use suggestions::domain::model::{
+    NewSuggestion, RetireSuggestionRequest, RewriteSuggestion, SuggestionError, SuggestionFeed,
+    SuggestionWriteOutcome, SuggestionsReview,
 };
 
 use super::*;
@@ -182,19 +183,23 @@ impl RoutineSuggestionApi for FakeRoutines {
     }
 }
 
-/// Ideas: a brief naming its trigger, and what was changed.
-struct FakeIdeas(Arc<Kept>);
+/// Suggestions: a brief naming its trigger, and what was changed.
+struct FakeSuggestions(Arc<Kept>);
 
-impl IdeaApi for FakeIdeas {
-    async fn feed(&self, _: &MacroUserIdStr<'static>, _: Option<Tz>) -> Result<Ideas, IdeaError> {
+impl SuggestionApi for FakeSuggestions {
+    async fn feed(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: Option<Tz>,
+    ) -> Result<SuggestionFeed, SuggestionError> {
         unreachable!()
     }
 
-    async fn accept(&self, _: &MacroUserIdStr<'static>, _: Uuid) -> Result<(), IdeaError> {
+    async fn accept(&self, _: &MacroUserIdStr<'static>, _: Uuid) -> Result<(), SuggestionError> {
         unreachable!()
     }
 
-    async fn dismiss(&self, _: &MacroUserIdStr<'static>, _: Uuid) -> Result<(), IdeaError> {
+    async fn dismiss(&self, _: &MacroUserIdStr<'static>, _: Uuid) -> Result<(), SuggestionError> {
         unreachable!()
     }
 
@@ -202,7 +207,7 @@ impl IdeaApi for FakeIdeas {
         format!("suggestions {}", trigger.as_ref())
     }
 
-    async fn kept(&self, _: Uuid, session: Uuid) -> Result<u32, IdeaError> {
+    async fn kept(&self, _: Uuid, session: Uuid) -> Result<u32, SuggestionError> {
         Ok(self.0.of(session))
     }
 
@@ -210,7 +215,7 @@ impl IdeaApi for FakeIdeas {
         &self,
         _: &CreationPrincipal,
         _: Option<Uuid>,
-    ) -> Result<IdeaReview, IdeaError> {
+    ) -> Result<SuggestionsReview, SuggestionError> {
         unreachable!()
     }
 
@@ -218,8 +223,8 @@ impl IdeaApi for FakeIdeas {
         &self,
         _: &CreationPrincipal,
         _: Option<Uuid>,
-        _: SuggestIdea,
-    ) -> Result<IdeaWriteOutcome, IdeaError> {
+        _: NewSuggestion,
+    ) -> Result<SuggestionWriteOutcome, SuggestionError> {
         unreachable!()
     }
 
@@ -228,8 +233,8 @@ impl IdeaApi for FakeIdeas {
         _: &CreationPrincipal,
         _: Option<Uuid>,
         _: Uuid,
-        _: RewriteIdea,
-    ) -> Result<IdeaWriteOutcome, IdeaError> {
+        _: RewriteSuggestion,
+    ) -> Result<SuggestionWriteOutcome, SuggestionError> {
         unreachable!()
     }
 
@@ -238,8 +243,8 @@ impl IdeaApi for FakeIdeas {
         _: &CreationPrincipal,
         _: Option<Uuid>,
         _: Uuid,
-        _: RetireIdea,
-    ) -> Result<IdeaWriteOutcome, IdeaError> {
+        _: RetireSuggestionRequest,
+    ) -> Result<SuggestionWriteOutcome, SuggestionError> {
         unreachable!()
     }
 }
@@ -433,7 +438,8 @@ impl GenerationRepo for FakeRepo {
     }
 }
 
-type Service = GenerationService<FakeRepo, FakeSessions, FakeRoutines, FakeIdeas, FakeFeatureFlags>;
+type Service =
+    GenerationService<FakeRepo, FakeSessions, FakeRoutines, FakeSuggestions, FakeFeatureFlags>;
 
 /// Plans the test sets: everyone paid or nobody.
 struct FakePlans(std::sync::atomic::AtomicBool);
@@ -453,12 +459,12 @@ struct Harness {
     reports: Arc<Mutex<Vec<RoutineGenerationReport>>>,
 }
 
-fn harness(ideas: bool, routines: bool, turn: Turn, undelivered: bool) -> Harness {
+fn harness(suggestions: bool, routines: bool, turn: Turn, undelivered: bool) -> Harness {
     let mut flags = FakeFeatureFlags::default();
     flags.set(
         user(),
         Ok(FlagSnapshot::new([
-            (IDEAS_FLAG.to_owned(), FlagValue::Boolean(ideas)),
+            (SUGGESTIONS_FLAG.to_owned(), FlagValue::Boolean(suggestions)),
             (
                 ROUTINE_SUGGESTIONS_FLAG.to_owned(),
                 FlagValue::Boolean(routines),
@@ -480,7 +486,7 @@ fn harness(ideas: bool, routines: bool, turn: Turn, undelivered: bool) -> Harnes
         Arc::clone(&repo),
         Arc::clone(&sessions),
         Arc::new(FakeRoutines(Arc::clone(&kept), Arc::clone(&reports))),
-        Arc::new(FakeIdeas(kept)),
+        Arc::new(FakeSuggestions(kept)),
         Some(flags),
         GenerationAgent {
             bot: bot_id::MACRO_NEW_BOT_ID,
@@ -523,12 +529,12 @@ impl Harness {
 }
 
 #[tokio::test]
-async fn onboarding_runs_one_ideas_session_and_a_routines_session_per_group_once() {
+async fn onboarding_runs_one_suggestions_session_and_a_routines_session_per_group_once() {
     let h = harness(true, true, |_, _| 1, false);
     assert!(h.onboard().await.unwrap());
     let groups = SessionLayout::default().sessions().len();
-    let mut expected = vec![SessionKind::Ideas];
-    expected.extend(std::iter::repeat_n(SessionKind::Routines, groups));
+    let mut expected: Vec<_> = std::iter::repeat_n(SessionKind::Routines, groups).collect();
+    expected.push(SessionKind::Suggestions);
     assert_eq!(h.kinds(), expected);
     // Hidden background sessions of the person's, never billed.
     let prepared = h.sessions.prepared.lock().unwrap().clone();
@@ -598,7 +604,7 @@ async fn onboarding_runs_one_ideas_session_and_a_routines_session_per_group_once
 async fn only_the_kinds_on_for_the_person_run() {
     let h = harness(true, false, |_, _| 1, false);
     assert!(h.onboard().await.unwrap());
-    assert_eq!(h.kinds(), [SessionKind::Ideas]);
+    assert_eq!(h.kinds(), [SessionKind::Suggestions]);
 
     let h = harness(false, false, |_, _| 1, false);
     assert!(matches!(h.onboard().await, Err(GenerationError::NotFound)));
@@ -607,7 +613,7 @@ async fn only_the_kinds_on_for_the_person_run() {
 
 #[tokio::test]
 async fn an_onboarding_routines_session_that_kept_nothing_is_retried_once_a_nightly_one_never() {
-    // Routines sessions keep something only on their second try; the ideas
+    // Routines sessions keep something only on their second try; the suggestions
     // session keeps nothing and is never retried.
     let second_try =
         |brief: &str, attempt: usize| u32::from(brief.starts_with("routines") && attempt == 2);
@@ -698,7 +704,7 @@ async fn the_sweep_deletes_sessions_a_stopped_process_left_open() {
             Uuid::now_v7(),
             &user(),
             bot_id::MACRO_NEW_BOT_ID,
-            SessionKind::Ideas,
+            SessionKind::Suggestions,
             &[],
             Utc::now(),
         )
@@ -744,19 +750,19 @@ impl Harness {
 }
 
 /// A nightly run suggests routines once a week; other nights only the
-/// ideas session runs.
+/// suggestions session runs.
 #[tokio::test]
 async fn a_nightly_run_suggests_routines_once_a_week() {
     let h = harness(true, true, |_, _| 1, false);
     assert_eq!(
         h.nightly_kinds().await,
-        [SessionKind::Ideas, SessionKind::Routines]
+        [SessionKind::Routines, SessionKind::Suggestions]
     );
     h.repo
         .routines_this_week
         .store(true, std::sync::atomic::Ordering::SeqCst);
-    assert_eq!(h.nightly_kinds().await, [SessionKind::Ideas]);
-    // With ideas off, a night without routines runs nothing.
+    assert_eq!(h.nightly_kinds().await, [SessionKind::Suggestions]);
+    // With suggestions off, a night without routines runs nothing.
     let h = harness(false, true, |_, _| 1, false);
     h.repo
         .routines_this_week
@@ -780,10 +786,10 @@ async fn only_paid_plans_get_nightly_runs() {
     );
 }
 
-/// Loading the app counts a person as active only with ideas on and a paid
+/// Loading the app counts a person as active only with suggestions on and a paid
 /// plan.
 #[tokio::test]
-async fn loading_the_app_counts_paid_people_with_ideas_on() {
+async fn loading_the_app_counts_paid_people_with_suggestions_on() {
     let h = harness(true, false, |_, _| 1, false);
     h.service
         .seen(&user(), chrono_tz::Asia::Tokyo)

@@ -5,15 +5,15 @@ export const meetingEmail = {
   ...demoEmails[0],
   subject: 'Thursday demo',
   snippet: 'Thursday at 9 works. Could you send the setup plan?',
-  body: 'Hi Jacob,\n\nThursday at 9 works for me. Could you send the setup plan before we meet?\n\nThanks,\nValentina',
+  body: 'Hi Jacob,\n\nThursday at 9 works for me. Could you send the setup plan before we meet?\n\nThanks,\nAustin Barron',
 };
 export const meetingReply =
   'Could you also send a short setup guide? I’ll read it before Thursday.';
 export const meetingDraft = {
   subject: 'Re: Thursday demo',
-  to: 'Valentina <valentina@coparse.com>',
+  to: 'Austin Barron <austin@example.com>',
   cc: 'Julia <julia@macro.com>',
-  body: 'Hi Valentina,\n\nThursday at 9 works. Here’s the setup plan and Macro overview. I’ve copied Julia, who can help with setup.\n\nSee you Thursday,\nJacob',
+  body: 'Hi Austin Barron,\n\nThursday at 9 works. Here’s the setup plan and Macro overview. I’ve copied Julia, who can help with setup.\n\nSee you Thursday,\nJacob',
 };
 
 /** Three populated, fictional inboxes, isolated to the Mail page. */
@@ -114,7 +114,7 @@ export const emailPageInbox: readonly (DemoEmail & { body?: string })[] = [
   },
   {
     id: 'pilot-feedback',
-    sender: 'Valentina',
+    sender: 'Austin Barron',
     subject: 'First-week feedback',
     snippet: 'Here are a few things we noticed this week.',
     time: 'Yesterday',
@@ -210,7 +210,7 @@ export const emailPageInbox: readonly (DemoEmail & { body?: string })[] = [
     id: 'product-digest',
     sender: 'Product Brief',
     subject: 'Your weekly product roundup',
-    snippet: 'New releases and ideas from teams building collaboration tools.',
+    snippet: 'New releases and suggestions from teams building collaboration tools.',
     time: 'Yesterday',
     account: 'work',
     yesterday: true,
@@ -238,7 +238,7 @@ export const emailPageInbox: readonly (DemoEmail & { body?: string })[] = [
   },
   {
     id: 'feedback-followup',
-    sender: 'Valentina',
+    sender: 'Austin Barron',
     subject: 'Re: Shared email permissions',
     snippet: 'That answers our question. Thanks for walking us through it.',
     time: 'Yesterday',

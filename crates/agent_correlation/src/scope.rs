@@ -8,7 +8,7 @@ mod test;
 /// A narrower scope than the person's own access.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SessionScope {
-    /// A hidden suggestion generation session: it reads, writes ideas and
+    /// A hidden suggestion generation session: it reads, writes suggestions and
     /// routine suggestions through its own tools, and drafts email; nothing
     /// else.
     Generation,

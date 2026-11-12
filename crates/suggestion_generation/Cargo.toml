@@ -15,7 +15,7 @@ chrono = { workspace = true }
 chrono-tz = { workspace = true }
 feature_flags = { path = "../feature_flags" }
 futures = { workspace = true }
-ideas = { path = "../ideas" }
+suggestions = { path = "../suggestions" }
 macro_authorization = { path = "../macro_authorization", features = ["postgres"] }
 macro_user_id = { path = "../macro_user_id" }
 macro_tower_layers = { path = "../macro_tower_layers" }

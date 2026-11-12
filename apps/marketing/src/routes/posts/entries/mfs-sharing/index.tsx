@@ -1,5 +1,5 @@
+import { PostProductGraphic } from '../../PostProductGraphic';
 import './MfsSharing.css';
-import forgotToShare from '../../../../assets/posts/mfs-sharing/forgot-to-share.png';
 import { Diagram, DiagramArrow, DiagramBox } from '../../PostDiagram';
 import type { PostMeta } from '../../registry';
 
@@ -146,7 +146,7 @@ export default function MfsSharingPost() {
           made it purely user based: one row per user per item they could reach.
           Sharing a project with your organization meant writing a row for every
           member, so adding or removing someone from the org meant fanning that
-          change out across every shared item. That was not ideal, but shared
+          change out across every shared item. That was not suggestionl, but shared
           item counts were small and membership rarely changed, so it held up
           fine early on. (We have since dropped organizations entirely in favor
           of a new team system.)
@@ -192,26 +192,17 @@ export default function MfsSharingPost() {
           frequently found ourselves sending docs to one another through a
           channel only to be hit with "I don't have access to this".
         </p>
-        <figure class="mfs-shot">
-          <div class="mfs-shot-frame">
-            <img
-              src={forgotToShare}
-              alt="A Macro chat where Jacob shares a doc called Email Roadmap and Hutch replies: I think you forgot to share it with me"
-              loading="lazy"
-              width={928}
-              height={402}
-              style={{
-                width: '100%',
-                height: 'auto',
-                'aspect-ratio': '928 / 402',
-              }}
-            />
-          </div>
-          <figcaption class="mfs-figcaption">
-            The moment that started it: a doc sent in chat that the recipient
-            could not open.
+        <figure class="post-history-quote">
+          <blockquote>“I think you forgot to share it with me.”</blockquote>
+          <figcaption>
+            Hutch, after Jacob sent the Email Roadmap in chat. This was the
+            problem we needed to fix.
           </figcaption>
         </figure>
+        <PostProductGraphic kind="doc-sharing" />
+        <p class="mfs-figcaption">
+          Sharing a document with a channel today gives its members access.
+        </p>
         <p>
           This is nothing unique to Macro. It happens half the time someone
           pastes a Google Docs link in Slack, or a Figma in a Notion. So we
@@ -235,7 +226,7 @@ export default function MfsSharingPost() {
           it.
         </p>
         <p>
-          At first the idea was a webhook that would auto-share things with the
+          At first the suggestion was a webhook that would auto-share things with the
           members of a channel using the share system we already had. Sharing an
           item in a channel would grab every user in that channel and insert{' '}
           <code>UserItemAccess</code> rows for them. That bought us the behavior
@@ -246,7 +237,7 @@ export default function MfsSharingPost() {
 
         <h2>The problem: it was slow</h2>
         <p>
-          Copying Google Drive seemed fine. The webhook idea seemed fine. But it
+          Copying Google Drive seemed fine. The webhook suggestion seemed fine. But it
           was slow.
         </p>
         <p>

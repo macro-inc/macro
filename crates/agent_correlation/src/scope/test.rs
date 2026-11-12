@@ -33,7 +33,7 @@ fn a_generation_session_reads_and_writes_only_its_own_tools() {
         ("PATCH", "/documents/01a1"),
         ("PUT", "/suggestions/01a1"),
         ("POST", "/notes/search-and-delete"),
-        ("POST", "/ideasx"),
+        ("POST", "/suggestionsx"),
         ("POST", "/web/search"),
     ] {
         assert!(!scope.allows(method, path), "{method} {path}");
@@ -51,9 +51,9 @@ fn a_template_matches_the_whole_path_under_at_most_one_service_prefix() {
     assert!(!matches("/web/search", "/search"));
     assert!(!matches("/cognition/web/search", "/search"));
     assert!(!matches("/suggestions//retire", "/suggestions/{id}/retire"));
-    assert!(!matches("/myideas", "/suggestions"));
-    assert!(!matches("/a/b/ideas", "/suggestions"));
-    assert!(!matches("/scheduled-actionx/ideas", "/suggestions"));
+    assert!(!matches("/mysuggestions", "/suggestions"));
+    assert!(!matches("/a/b/suggestions", "/suggestions"));
+    assert!(!matches("/scheduled-actionx/suggestions", "/suggestions"));
 }
 
 #[test]

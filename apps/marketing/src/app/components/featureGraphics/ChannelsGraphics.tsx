@@ -1,3 +1,16 @@
+import IconChannels from '@icon/system/regular/chats-circle.svg';
+import IconEmail from '@icon/system/regular/envelope.svg';
+import IconFileMacro from '@icon/system/regular/file.svg';
+import IconFolder from '@icon/system/regular/folder-simple.svg';
+import IconChannelMacro from '@icon/system/regular/hash-straight.svg';
+import IconHome from '@icon/system/regular/house.svg';
+import IconTasks from '@icon/system/regular/list-checks.svg';
+import IconTaskMacro from '@icon/system/regular/list-checks.svg';
+import IconSearch from '@icon/system/regular/magnifying-glass.svg';
+import IconCall from '@icon/system/regular/phone-call.svg';
+import IconPlus from '@icon/system/regular/plus.svg';
+import IconAi from '@icon/system/regular/sparkle.svg';
+import IconInbox from '@icon/system/regular/tray.svg';
 import {
   type Component,
   createSignal,
@@ -7,20 +20,7 @@ import {
   onMount,
   Show,
 } from 'solid-js';
-import IconAi from '../../../assets/icons/icon-ai.svg';
-import IconCall from '../../../assets/icons/icon-call.svg';
-import IconChannels from '../../../assets/icons/icon-channels.svg';
-import IconEmail from '../../../assets/icons/icon-email.svg';
-import IconFolder from '../../../assets/icons/icon-folder.svg';
 import IconGithub from '../../../assets/icons/icon-github.svg';
-import IconHome from '../../../assets/icons/icon-home.svg';
-import IconInbox from '../../../assets/icons/icon-inbox.svg';
-import IconPlus from '../../../assets/icons/icon-plus.svg';
-import IconSearch from '../../../assets/icons/icon-search.svg';
-import IconTasks from '../../../assets/icons/icon-tasks.svg';
-import IconChannelMacro from '../../../assets/icons/wide-channel.svg';
-import IconFileMacro from '../../../assets/icons/wide-file-md.svg';
-import IconTaskMacro from '../../../assets/icons/wide-task.svg';
 import avatarGabriel from '../../../assets/people/gabriel.webp';
 import avatarJacob from '../../../assets/people/jacob.webp';
 import avatarJulia from '../../../assets/people/julia.webp';
@@ -761,7 +761,7 @@ export function HeroChannelWindow() {
       meta: 'Gabriel Birman · Jun 12 · 2.4 MB',
     },
     { name: 'posthog-flags.png', meta: 'Rahul · 4:38 PM · 184 KB' },
-    { name: 'deploy-logs.txt', meta: 'Valentina · 4:41 PM · 12 KB' },
+    { name: 'deploy-logs.txt', meta: 'Austin Barron · 4:41 PM · 12 KB' },
   ];
   const participants: {
     name: string;
@@ -776,11 +776,11 @@ export function HeroChannelWindow() {
       initials: 'GB',
       color: 'var(--b3)',
     },
-    { name: 'Rahul', role: 'Member', initials: 'R', color: 'var(--b4)' },
+    { name: 'Rahul Batra', role: 'Member', initials: 'R', color: 'var(--b4)' },
     {
-      name: 'Valentina',
+      name: 'Austin Barron',
       role: 'Member',
-      initials: 'V',
+      initials: 'AB',
       color: 'var(--b3)',
     },
     {
@@ -978,7 +978,7 @@ export function HeroChannelWindow() {
                         gap: '8px',
                       }}
                     >
-                      <span style={nameStyle}>Rahul</span>
+                      <span style={nameStyle}>Rahul Batra</span>
                       <span style={timeStyle}>4:20 PM</span>
                     </div>
                     <p style={msgText}>which ones</p>
@@ -1152,7 +1152,7 @@ export function HeroChannelWindow() {
                     gap: '8px',
                   }}
                 >
-                  <span style={nameStyle}>Rahul</span>
+                  <span style={nameStyle}>Rahul Batra</span>
                   <span style={timeStyle}>4:38 PM</span>
                 </div>
                 <p style={msgText}>
@@ -1187,7 +1187,7 @@ export function HeroChannelWindow() {
                     gap: '8px',
                   }}
                 >
-                  <span style={nameStyle}>Valentina</span>
+                  <span style={nameStyle}>Austin Barron</span>
                   <span style={timeStyle}>4:41 PM</span>
                 </div>
                 <p style={msgText}>
@@ -1764,7 +1764,7 @@ function ChatHeroEmailCard(props: { compact: boolean }) {
               'white-space': 'nowrap',
             }}
           >
-            Email thread · Valentina · 6 messages
+            Email thread · Austin Barron · 6 messages
           </span>
         </div>
       </div>
@@ -2418,7 +2418,7 @@ export function InlineThreadsGraphic() {
     'margin-left': 'auto',
   };
   const replies = [
-    { who: 'Rahul', initials: 'R', time: '4:20 PM', text: 'which ones' },
+    { who: 'Rahul Batra', initials: 'R', time: '4:20 PM', text: 'which ones' },
     {
       who: 'Gabriel Birman',
       initials: 'GB',
@@ -3654,7 +3654,7 @@ export function ChannelCohesionGraphic() {
   const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x);
   const prog = (a: number, b: number) => clamp01((t() - a) / (b - a));
   const ease = (x: number) =>
-    x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+    x < 0.5 ? 4 * x * x * x : 1 - (-2 * x + 2) ** 3 / 2;
 
   onMount(() => {
     const reduce =
