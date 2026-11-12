@@ -954,6 +954,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Refresh the channel list's bounded unread edge when opening a conversation,
   including an empty unread result after a read on another device. Include
   off-page favorites in unread presence without adding them to section counts.
+- With `enable-graphql-soup` and a cache host that serves channel timelines, channel pages, threads and message lookups read through `queries/messages/local` (device index first, GraphQL on a miss, REST on any failure or an older native build); the TanStack timeline stays the view model and its REST page shape and cursors are unchanged. Pushes still patch the open views directly; the device takes the same changes from `channelChanges` by sequence (`catch-up.ts`), which is also what a revisit, reconnect and the idle prewarm (`use-channel-cache.ts`: unread plus twenty recent channels, thirty-day eviction) run. Never refetch a timeline because a push arrived, and never write a push payload into the cache without its `sortKey`. Run `bunx vitest run src/lib/queries/messages` after changing either path.
 - Decide channel detail access from completed server results; bound confirmations of contradictory cache membership, preserve known unavailable state during retries, and keep unavailable routes registered for notification/reconnect refresh.
 - Read folders for picking or moving through `createFolderList`
   (`queries/storage/folder-list`): it matches the Drive sidebar's source, so a
