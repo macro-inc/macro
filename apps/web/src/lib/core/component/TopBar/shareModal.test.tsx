@@ -38,6 +38,9 @@ vi.mock('@app/lib/i18n/use-interface-language-sync', () => ({
 vi.mock('@app/lib/queries/calendar/graphql/use-calendar-cache', () => ({
   useCalendarCache: () => {},
 }));
+vi.mock('@app/lib/queries/messages/local/use-channel-cache', () => ({
+  useChannelCache: vi.fn(),
+}));
 vi.mock('@app/lib/queries/invalidate-on-reconnect', () => ({
   useInvalidateQueriesOnReconnect: () => {},
 }));
