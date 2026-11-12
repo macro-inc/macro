@@ -67,9 +67,14 @@ function BackToExternal(props: { chatId: string }) {
     () => userId() ?? '',
     () => props.chatId
   );
+  const provider = () => chat.data?.provider;
+  const backState = () => {
+    const known = provider();
+    return known ? { provider: known } : undefined;
+  };
   const label = () => {
-    const provider = chat.data?.provider;
-    return provider ? `Back to ${providerIdentity(provider).label}` : 'Back';
+    const known = provider();
+    return known ? `Back to ${providerIdentity(known).label}` : 'Back';
   };
   return (
     <Button
@@ -80,7 +85,11 @@ function BackToExternal(props: { chatId: string }) {
       class="shrink-0"
       onClick={() =>
         fireAndForget(
-          navigate({ route: externalRoute, params: {} }),
+          navigate(
+            { route: externalRoute, params: {} },
+            // Back to the chat's provider page.
+            { state: backState() }
+          ),
           'external-view'
         )
       }

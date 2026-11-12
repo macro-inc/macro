@@ -22,6 +22,7 @@ import { providerIdentity } from '../external-chat/providers/identity';
 import { externalChatApi } from '../external-chat/queries/production-api';
 import { createOpenSections } from '../whatsapp-linked/primitives/open-sections';
 import { InMacroChats, UnreadCount } from './components/in-macro-section';
+import { selectedProvider } from './core/selection';
 import { useEnabledProviders } from './provider-flags';
 import { PROVIDER_PAGES } from './provider-pages';
 
@@ -36,13 +37,10 @@ export function ExternalView() {
   useSplitDisplayName(() => 'External');
   const enabled = useEnabledProviders();
   const providers = () => enabled().providers;
-  // A link (an account notification) can name the provider to show.
+  // The route names the provider to show (a sidebar click, Back from a
+  // chat, an account notification); the latest navigation wins.
   const routed = useRouteState(externalRoute);
-  const [picked, setPicked] = createSignal<ExternalChatProvider>();
-  const selected = () => {
-    const choice = picked() ?? routed()?.provider;
-    return choice && providers().includes(choice) ? choice : providers()[0];
-  };
+  const selected = () => selectedProvider(routed()?.provider, providers());
 
   useExternalChatListsSync();
   const userId = useUserId();
@@ -70,13 +68,11 @@ export function ExternalView() {
       navigate({ route: externalChatRoute, params: { chatId } }),
       'external-view'
     );
-  const openProvider = (provider: ExternalChatProvider) => {
-    setPicked(provider);
+  const openProvider = (provider: ExternalChatProvider) =>
     fireAndForget(
-      navigate({ route: externalRoute, params: {} }),
+      navigate({ route: externalRoute, params: {} }, { state: { provider } }),
       'external-view'
     );
-  };
   const [folded, setFolded] = createSignal<ExternalChatProvider[]>([]);
   const toggleFolded = (provider: ExternalChatProvider) =>
     setFolded((current) =>
