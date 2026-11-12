@@ -143,6 +143,7 @@ path = "{workspace}"
     configure(
         &path,
         &ServiceOptions {
+            ignore_stdin_eof: false,
             config: None,
             agent: Some("custom".to_owned()),
             workspace: Some(workspace.clone()),
@@ -157,6 +158,7 @@ path = "{workspace}"
         Some(HarnessCredentials {
             harness_id: HarnessId::TEST_A,
             token: "mhns_test_secret".to_owned(),
+            pairing_id: None,
         })
     );
     assert_eq!(config.workspace.path, workspace);
