@@ -210,6 +210,37 @@ async fn viewed_updated_keeps_newer_unopened_threads_above_older_views(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("email_inbox_viewed_sort"))
 )]
+async fn an_inbox_that_archives_what_it_reads_pages_like_the_whole_inbox_sort(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    // The third inbox's newest views are all archived, so its first page comes
+    // from its inbox threads; later pages come from what is left of its history.
+    let archiving_inbox = [Uuid::parse_str("a4278000-0000-0000-0000-00000000000c")?];
+    let every_inbox = [
+        viewed_sort_links()?[0],
+        viewed_sort_links()?[1],
+        archiving_inbox[0],
+    ];
+
+    for sort in [SimpleSortMethod::ViewedAt, SimpleSortMethod::ViewedUpdated] {
+        let expected = whole_inbox_sorted(&pool, &archiving_inbox, sort).await?;
+        assert_eq!(expected.len(), 20, "{sort}");
+        for limit in [7, 64] {
+            let paged = all_pages(&pool, &archiving_inbox, sort, limit).await?;
+            assert_eq!(paged, expected, "{sort}, limit {limit}");
+        }
+
+        let expected = whole_inbox_sorted(&pool, &every_inbox, sort).await?;
+        let paged = all_pages(&pool, &every_inbox, sort, 7).await?;
+        assert_eq!(paged, expected, "{sort}, every inbox");
+    }
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_inbox_viewed_sort"))
+)]
 async fn viewed_sorts_read_a_page_of_threads_not_the_inbox(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {

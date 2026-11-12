@@ -1,36 +1,105 @@
--- Viewed sorts, threads the caller has opened: each link walks its history,
--- newest view first, and stops at LIMIT. The history index orders by view time
--- alone, so each link also returns the threads tied with its last row and the
--- sort below breaks ties by id. Keep thread_id out of that index: with it the
--- planner answers every per-thread history lookup by scanning the link's
--- history.
+-- Viewed sorts, threads the caller has opened, a page per link. The history
+-- index orders by view time alone, so a page also holds the threads tied with
+-- its last row and the sort below breaks ties by id. Keep thread_id out of
+-- that index: with it the planner answers every per-thread history lookup by
+-- scanning the link's history.
+--
+-- A link is read one of two ways. Normally its newest views (four pages'
+-- worth, at least 200) are checked against the inbox, newest first, until the
+-- page is full. A link that opens mail and archives it can have far more
+-- views than inbox threads, and that walk would cross its whole history; when
+-- those views neither fill the page nor end the history, the link's inbox
+-- threads are read instead and sorted by their view time, which costs one
+-- inbox.
 WITH viewed AS MATERIALIZED (
     SELECT per_link.*
     FROM unnest($1::uuid[]) AS links(link_id)
     CROSS JOIN LATERAL (
-        SELECT
-            t.id,
-            t.provider_id,
-            t.link_id,
-            t.is_read,
-            t.is_signal,
-            t.project_id,
-            COALESCE(t.latest_inbound_message_ts, t.latest_outbound_message_ts, t.created_at) AS created_at,
-            GREATEST(t.latest_inbound_message_ts, t.reminder_returned_at) AS updated_at,
-            uh.updated_at AS effective_ts
-        FROM email_user_history uh
-        JOIN email_threads t ON t.id = uh.thread_id AND t.link_id = uh.link_id
-        WHERE
-            uh.link_id = links.link_id
-          AND t.inbox_visible = TRUE
-          AND GREATEST(t.latest_inbound_message_ts, t.reminder_returned_at) IS NOT NULL
-          AND uh.updated_at <= COALESCE($3::timestamptz, 'infinity')
-          AND (uh.updated_at, uh.thread_id) < (
-              COALESCE($3::timestamptz, 'infinity'),
-              COALESCE($4::uuid, 'ffffffff-ffff-ffff-ffff-ffffffffffff')
-          )
-        ORDER BY uh.updated_at DESC
-        FETCH FIRST ($2) ROWS WITH TIES
+        WITH recent_views AS MATERIALIZED (
+            SELECT uh.thread_id, uh.updated_at
+            FROM email_user_history uh
+            WHERE
+                uh.link_id = links.link_id
+              AND uh.updated_at <= COALESCE($3::timestamptz, 'infinity')
+              AND (uh.updated_at, uh.thread_id) < (
+                  COALESCE($3::timestamptz, 'infinity'),
+                  COALESCE($4::uuid, 'ffffffff-ffff-ffff-ffff-ffffffffffff')
+              )
+            ORDER BY uh.updated_at DESC
+            FETCH FIRST (GREATEST(4 * $2::bigint, 200)) ROWS WITH TIES
+        ),
+        -- OFFSET 0 keeps the inbox check one index probe per view.
+        from_recent_views AS MATERIALIZED (
+            SELECT t.*, recent_views.updated_at AS effective_ts
+            FROM recent_views
+            CROSS JOIN LATERAL (
+                SELECT
+                    t.id,
+                    t.provider_id,
+                    t.link_id,
+                    t.is_read,
+                    t.is_signal,
+                    t.project_id,
+                    COALESCE(t.latest_inbound_message_ts, t.latest_outbound_message_ts, t.created_at) AS created_at,
+                    GREATEST(t.latest_inbound_message_ts, t.reminder_returned_at) AS updated_at
+                FROM email_threads t
+                WHERE
+                    t.id = recent_views.thread_id
+                  AND t.link_id = links.link_id
+                  AND t.inbox_visible = TRUE
+                  AND GREATEST(t.latest_inbound_message_ts, t.reminder_returned_at) IS NOT NULL
+                OFFSET 0
+            ) AS t
+            ORDER BY recent_views.updated_at DESC
+            FETCH FIRST ($2) ROWS WITH TIES
+        ),
+        recent_views_suffice AS (
+            SELECT
+                (SELECT count(*) FROM from_recent_views) >= $2
+                OR (SELECT count(*) FROM recent_views) < GREATEST(4 * $2::bigint, 200) AS suffice
+        )
+        SELECT from_recent_views.*
+        FROM from_recent_views
+        WHERE (SELECT suffice FROM recent_views_suffice)
+
+        UNION ALL
+
+        -- Both OFFSET 0 fences keep this driven by the inbox: left to itself the
+        -- planner walks the history in view order again.
+        SELECT from_inbox.*
+        FROM (
+            SELECT t.*, uh.updated_at AS effective_ts
+            FROM (
+                SELECT
+                    t.id,
+                    t.provider_id,
+                    t.link_id,
+                    t.is_read,
+                    t.is_signal,
+                    t.project_id,
+                    COALESCE(t.latest_inbound_message_ts, t.latest_outbound_message_ts, t.created_at) AS created_at,
+                    GREATEST(t.latest_inbound_message_ts, t.reminder_returned_at) AS updated_at
+                FROM email_threads t
+                WHERE
+                    t.link_id = links.link_id
+                  AND t.inbox_visible = TRUE
+                  AND GREATEST(t.latest_inbound_message_ts, t.reminder_returned_at) IS NOT NULL
+                OFFSET 0
+            ) AS t
+            CROSS JOIN LATERAL (
+                SELECT uh.updated_at
+                FROM email_user_history uh
+                WHERE uh.link_id = t.link_id AND uh.thread_id = t.id
+                OFFSET 0
+            ) AS uh
+            WHERE (uh.updated_at, t.id) < (
+                COALESCE($3::timestamptz, 'infinity'),
+                COALESCE($4::uuid, 'ffffffff-ffff-ffff-ffff-ffffffffffff')
+            )
+            ORDER BY uh.updated_at DESC
+            FETCH FIRST ($2) ROWS WITH TIES
+        ) AS from_inbox
+        WHERE NOT (SELECT suffice FROM recent_views_suffice)
     ) AS per_link
     WHERE $5 IN ('viewed_at', 'viewed_updated')
 ),

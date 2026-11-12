@@ -48,3 +48,29 @@ CROSS JOIN LATERAL (
     SELECT '2024-06-01 00:00:00+00'::timestamptz + (n % 7) * interval '1 day' AS at
 ) AS viewed
 WHERE n % links.opened_every = 0;
+
+-- A third inbox that archives what it reads: 320 opened threads, and only the
+-- 20 opened longest ago are still in the inbox, so its newest views never fill
+-- a page. View times repeat in pairs.
+INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider)
+VALUES ('a4278000-0000-0000-0000-00000000000c', 'macro|archiver@example.com', 'archiver-user', 'archiver@example.com', 'GMAIL');
+
+INSERT INTO email_threads (id, link_id, inbox_visible, latest_inbound_message_ts)
+SELECT
+    md5('archiver' || n)::uuid,
+    'a4278000-0000-0000-0000-00000000000c',
+    n <= 20,
+    '2024-03-01 00:00:00+00'::timestamptz - n * interval '1 hour'
+FROM generate_series(1, 320) AS n;
+
+INSERT INTO email_messages (id, thread_id, link_id, internal_date_ts, subject, snippet)
+SELECT md5(t.id::text || 'message')::uuid, t.id, t.link_id, '2024-03-01 00:00:00+00', 'Subject', 'Snippet'
+FROM email_threads t
+WHERE t.link_id = 'a4278000-0000-0000-0000-00000000000c';
+
+INSERT INTO email_user_history (link_id, thread_id, created_at, updated_at)
+SELECT 'a4278000-0000-0000-0000-00000000000c', md5('archiver' || n)::uuid, viewed.at, viewed.at
+FROM generate_series(1, 320) AS n
+CROSS JOIN LATERAL (
+    SELECT '2024-06-10 00:00:00+00'::timestamptz + (n / 2) * interval '1 minute' AS at
+) AS viewed;
