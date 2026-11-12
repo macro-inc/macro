@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import { URL } from 'node:url';
 import vm from 'node:vm';
 import { describe, expect, it } from 'vitest';
-import { compactEdgeRedirects } from '../seo/edge-redirects';
+import { compactEdgeRedirects } from '../../../infra/stacks/website/edge-redirects';
 import redirects from '../seo/page-redirects.json';
 
 const source = fs

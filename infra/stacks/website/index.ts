@@ -3,8 +3,8 @@ import * as command from '@pulumi/command';
 import * as pulumi from '@pulumi/pulumi';
 import * as fs from 'fs';
 import * as path from 'path';
-import { compactEdgeRedirects } from '../../../apps/marketing/seo/edge-redirects';
 import { hasItems } from '../../packages/utils';
+import { compactEdgeRedirects } from './edge-redirects';
 
 const config = new pulumi.Config();
 const BASE_NAME = pulumi.getProject();
