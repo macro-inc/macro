@@ -61,7 +61,9 @@ function contextCount(
   fallback: number,
   max: number,
 ): number {
-  return Math.min(Math.max(Math.trunc(value ?? fallback), 0), max);
+  const count =
+    value !== undefined && Number.isFinite(value) ? value : fallback;
+  return Math.min(Math.max(Math.trunc(count), 0), max);
 }
 
 /**

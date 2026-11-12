@@ -79,4 +79,15 @@ describe('Message.context', () => {
     expect(context.after.map((m) => m.id)).toEqual(['root-4', 'root-5']);
     expect(context.thread).toBeUndefined();
   });
+
+  test('options that are not finite numbers fall back to the defaults', async () => {
+    const { client, selections } = contextClient(record('root-3'));
+
+    await Message.byId(client, 'channel-1', 'root-3').context({
+      channelBefore: Number.NaN,
+      channelAfter: Number.POSITIVE_INFINITY,
+    });
+
+    expect(selections).toEqual([{ around: 'root-3', limit: 7 }]);
+  });
 });
