@@ -144,6 +144,10 @@ fn selected_effort_is_mapped_to_each_provider_request_shape() {
         "adaptive",
         "Opus 5.5 always thinks"
     );
+    assert!(
+        !ReasoningEffort::supported("anthropic/claude-opus-5-5").contains(&ReasoningEffort::None),
+        "Opus 5.5 doesn't offer no thinking"
+    );
 
     let RoutedModel::OpenAiResponses(openai) = router.route("openai/gpt-5.5").unwrap() else {
         panic!("GPT-5.5 should use OpenAI Responses");

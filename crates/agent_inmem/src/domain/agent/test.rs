@@ -728,6 +728,54 @@ async fn changing_reasoning_effort_applies_to_the_next_turn() {
     );
 }
 
+/// A routine draft asks for no thinking whatever the session's model:
+/// Sonnet 5.5 runs without it, and a model that doesn't offer it refuses
+/// the change and runs the next prompt at its default.
+#[tokio::test]
+async fn no_thinking_runs_where_offered_and_is_refused_elsewhere() {
+    for (model, expected) in [
+        (
+            "anthropic/claude-sonnet-5-5",
+            Some(agent::ReasoningEffort::None),
+        ),
+        ("other-model", None),
+    ] {
+        let engine = Arc::new(ScriptedEngine::new(vec![]));
+        with_agent(Arc::clone(&engine), async |connection, session| {
+            connection
+                .send_request(SetSessionConfigOptionRequest::new(
+                    session.clone(),
+                    MODEL_CONFIG_ID,
+                    model,
+                ))
+                .block_task()
+                .await
+                .expect("the model should be accepted");
+            let accepted = connection
+                .send_request(SetSessionConfigOptionRequest::new(
+                    session.clone(),
+                    REASONING_EFFORT_CONFIG_ID,
+                    "none",
+                ))
+                .block_task()
+                .await
+                .is_ok();
+            assert_eq!(accepted, expected.is_some(), "{model}");
+            connection
+                .send_request(text_prompt(&session, "draft a routine"))
+                .block_task()
+                .await
+                .expect("the prompt should still run");
+        })
+        .await;
+        assert_eq!(
+            engine.requests()[0].reasoning_effort,
+            expected.unwrap_or(agent::ReasoningEffort::Default),
+            "{model}"
+        );
+    }
+}
+
 #[tokio::test]
 async fn new_session_advertises_its_slash_commands() {
     let (notifications, _config_options, ()) = with_agent(
