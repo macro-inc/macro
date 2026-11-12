@@ -31,9 +31,9 @@ impl ReasoningEffort {
     pub fn supported(model: &str) -> &'static [Self] {
         use ReasoningEffort::*;
         match model {
-            "anthropic/claude-sonnet-5-5" | "anthropic/claude-opus-5-5" => {
-                &[Default, Low, Medium, High, XHigh, Max]
-            }
+            // Sonnet 5.5 can run without thinking; Opus 5.5 always thinks.
+            "anthropic/claude-sonnet-5-5" => &[Default, None, Low, Medium, High, XHigh, Max],
+            "anthropic/claude-opus-5-5" => &[Default, Low, Medium, High, XHigh, Max],
             "openai/gpt-5.5" => &[Default, None, Low, Medium, High, XHigh],
             "openai/gpt-5-mini" => &[Default, Minimal, Low, Medium, High],
             "openai/gpt-5.4-mini" => &[Default, None, Low, Medium, High, XHigh],

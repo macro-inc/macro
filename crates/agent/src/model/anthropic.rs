@@ -100,6 +100,8 @@ impl<'a, H: HttpClientExt + Clone + Default + 'static> AnthropicModel<'a, H> {
     /// - Opus / Fable / Mythos / Sonnet: `adaptive` (the model chooses when to
     ///   think; avoids the `budget_tokens < max_tokens` constraint).
     /// - Haiku: no adaptive support, so `enabled` + `budget_tokens`.
+    /// - An explicit effort goes in `output_config`, except `None` (Sonnet 5.5
+    ///   only), which turns thinking off instead.
     ///
     /// `temperature` is never set: it is rejected on Opus 4.7+ and constrained
     /// to 1 with extended thinking elsewhere, so we let the API default apply.
@@ -125,10 +127,16 @@ impl<'a, H: HttpClientExt + Clone + Default + 'static> AnthropicModel<'a, H> {
             serde_json::json!({})
         };
 
-        if let Some(effort) =
-            reasoning_effort.and_then(|effort| effort.explicit_for(&self.model.to_string()))
-        {
-            params["output_config"] = serde_json::json!({ "effort": effort.as_str() });
+        match reasoning_effort.and_then(|effort| effort.explicit_for(&self.model.to_string())) {
+            // Sonnet 5.5 turns thinking off with `between_tools` (`disabled`
+            // is a 400 there), alone in `thinking` and at its default effort.
+            Some(ReasoningEffort::None) => {
+                params = serde_json::json!({ "thinking": { "type": "between_tools" } });
+            }
+            Some(effort) => {
+                params["output_config"] = serde_json::json!({ "effort": effort.as_str() });
+            }
+            None => {}
         }
 
         params

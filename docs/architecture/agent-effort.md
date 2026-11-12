@@ -24,15 +24,18 @@ provider serialization tests when adding support.
 
 | Routed model | Explicit effort values |
 | --- | --- |
-| anthropic/claude-sonnet-5-5, anthropic/claude-opus-5-5 | low, medium, high, xhigh, max |
+| anthropic/claude-sonnet-5-5 | none, low, medium, high, xhigh, max |
+| anthropic/claude-opus-5-5 | low, medium, high, xhigh, max |
 | openai/gpt-5.5 | none, low, medium, high, xhigh |
 | openai/gpt-5-mini | minimal, low, medium, high |
 | Haiku 4.5, retired Claude ids (Sonnet 5, Opus 5), and unknown models | No effort control |
 
 Every supported profile also offers **Default**, meaning no session override.
 It preserves Macro's existing adapter defaults (including low for GPT-5 mini).
-It is distinct from OpenAI's explicit `none` and is never sent as a provider
-value. Anthropic receives `output_config.effort`; OpenAI Responses receives
+It is distinct from an explicit `none` and is never sent as a provider
+value. Anthropic receives `output_config.effort`, except Sonnet 5.5's `none`,
+which turns thinking off (`thinking: {type: "between_tools"}`, at the model's
+default effort; Opus 5.5 always thinks); OpenAI Responses receives
 `reasoning.effort`. A compatible Chat Completions endpoint does not inherit
 native OpenAI capabilities merely because its model name resembles GPT.
 Thinking token budgets are not exposed as effort levels.

@@ -127,6 +127,24 @@ fn selected_effort_is_mapped_to_each_provider_request_shape() {
     assert_eq!(params["thinking"]["type"], "adaptive");
     assert_eq!(params["output_config"]["effort"], "low");
 
+    // No thinking is its own thinking type on Sonnet 5.5, with nothing beside
+    // it: `display` or an effort above high is a 400 with it.
+    let params = anthropic
+        .thinking_params(Some(ReasoningEffort::None))
+        .expect("sonnet can run without thinking");
+    assert_eq!(
+        params,
+        serde_json::json!({ "thinking": { "type": "between_tools" } })
+    );
+    let RoutedModel::Anthropic(opus) = router.route("anthropic/claude-opus-5-5").unwrap() else {
+        panic!("opus should use the native Anthropic client");
+    };
+    assert_eq!(
+        opus.thinking_params(Some(ReasoningEffort::None)).unwrap()["thinking"]["type"],
+        "adaptive",
+        "Opus 5.5 always thinks"
+    );
+
     let RoutedModel::OpenAiResponses(openai) = router.route("openai/gpt-5.5").unwrap() else {
         panic!("GPT-5.5 should use OpenAI Responses");
     };
@@ -185,7 +203,10 @@ fn native_effort_profiles_preserve_defaults_and_provider_boundaries() {
                 }
                 _ => panic!("native model"),
             };
-            if *effort != ReasoningEffort::Default {
+            if *effort == ReasoningEffort::None && model.starts_with("anthropic/") {
+                assert_eq!(params["thinking"]["type"], "between_tools", "{model}");
+                assert!(params.get("output_config").is_none(), "{model}");
+            } else if *effort != ReasoningEffort::Default {
                 let actual = if model.starts_with("anthropic/") {
                     &params["output_config"]["effort"]
                 } else {

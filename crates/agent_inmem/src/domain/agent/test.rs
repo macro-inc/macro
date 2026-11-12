@@ -696,7 +696,7 @@ async fn new_session_advertises_the_engine_supported_models() {
             .iter()
             .map(|option| option.value.to_string())
             .collect::<Vec<_>>(),
-        ["default", "low", "medium", "high", "xhigh", "max"]
+        ["default", "none", "low", "medium", "high", "xhigh", "max"]
     );
 }
 
