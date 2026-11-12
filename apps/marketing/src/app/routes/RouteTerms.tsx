@@ -1,5 +1,4 @@
 import type { Component } from 'solid-js';
-import { SectionMoreFeatures } from '../components/sections/SectionMoreFeatures';
 import { UtilPlainText } from '../components/utils/UtilPlainText';
 import { setPageSeo } from '../utils/utilSeo';
 import './RouteLegal.css';
@@ -32,11 +31,11 @@ You may only use the Services if you are old enough to consent (by yourself and 
 
 ### 3.2. Use Restrictions
 
-Except as otherwise expressly authorized in these Terms, you will not, and will ensure your employees, contractors, and other persons associated with your Macro account ("Authorized Users") do not, and will not encourage or assist third parties to: (i) reverse engineer, decompile, disassemble, or otherwise attempt to discover the source code, object code, or underlying structure, ideas, know-how, or algorithms relevant to the Services (except to the extent that such a restriction is impermissible under applicable law); (ii) provide, sell, resell, transfer, sublicense, lend, distribute, rent, or otherwise allow others to access or use the Services; and (iii) copy, modify, create derivative works of, or remove proprietary notices from the Services.
+Except as otherwise expressly authorized in these Terms, you will not, and will ensure your employees, contractors, and other persons associated with your Macro account ("Authorized Users") do not, and will not encourage or assist third parties to: (i) reverse engineer, decompile, disassemble, or otherwise attempt to discover the source code, object code, or underlying structure, suggestions, know-how, or algorithms relevant to the Services (except to the extent that such a restriction is impermissible under applicable law); (ii) provide, sell, resell, transfer, sublicense, lend, distribute, rent, or otherwise allow others to access or use the Services; and (iii) copy, modify, create derivative works of, or remove proprietary notices from the Services.
 
 ### 3.3. Acceptable Use Policy
 
-You will comply with, and will ensure your Authorized Users comply with, all local laws and regulations while using Macro, do not damage or circumvent any aspect of the Services, interfere with other's use of the Services, use the Services to compete with Macro or copy the ideas, functions or graphics of the Services, or use the Services in a manner intended to avoid incurring fees owed to Macro.
+You will comply with, and will ensure your Authorized Users comply with, all local laws and regulations while using Macro, do not damage or circumvent any aspect of the Services, interfere with other's use of the Services, use the Services to compete with Macro or copy the suggestions, functions or graphics of the Services, or use the Services in a manner intended to avoid incurring fees owed to Macro.
 
 ### 3.4. Authorized Users; Accounts
 
@@ -235,9 +234,6 @@ export const RouteTerms: Component = () => {
   return (
     <>
       <UtilPlainText content={content} />
-      <div class="legal-doc-footer">
-        <SectionMoreFeatures currentPath="/terms" footerOnly />
-      </div>
     </>
   );
 };

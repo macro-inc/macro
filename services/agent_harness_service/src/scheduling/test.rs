@@ -183,26 +183,26 @@ async fn health_is_served_at_gateway_prefix() {
     }
 }
 
-/// The ideas brief names the SDK symbols a session reads in its one
+/// The suggestions brief names the SDK symbols a session reads in its one
 /// documentation call; a renamed symbol would leave the session guessing.
 #[test]
-fn the_ideas_brief_names_only_real_sdk_symbols() {
-    let missing: Vec<_> = ideas::domain::prompt::SYMBOLS
+fn the_suggestions_brief_names_only_real_sdk_symbols() {
+    let missing: Vec<_> = suggestions::domain::prompt::SYMBOLS
         .iter()
         .filter(|symbol| agent_code_mode::domain::symbol_reference(symbol).is_none())
         .collect();
     assert!(missing.is_empty(), "unknown SDK symbols: {missing:?}");
     let reference = agent_code_mode::domain::index_digest(
-        ideas::domain::prompt::SYMBOLS,
-        ideas::domain::prompt::FIELDS_OF,
+        suggestions::domain::prompt::SYMBOLS,
+        suggestions::domain::prompt::FIELDS_OF,
     );
-    for symbol in ideas::domain::prompt::SYMBOLS {
+    for symbol in suggestions::domain::prompt::SYMBOLS {
         assert!(
             reference.contains(&format!("- `{symbol}`:")),
             "{symbol} isn't in the reference"
         );
     }
-    for class in ideas::domain::prompt::FIELDS_OF {
+    for class in suggestions::domain::prompt::FIELDS_OF {
         assert!(
             reference.contains(&format!("### {class}\nFields:")),
             "{class}'s fields aren't in the reference"

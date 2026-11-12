@@ -31,14 +31,19 @@ Home; the `X` or a middle click closes one (the last tab cannot close;
 keep their own `Cmd+1` and `Cmd+7` while they have focus.
 Labels truncate at about 288px.
 Cmd+click (Ctrl elsewhere) on anything that navigates opens the destination in
-a background tab; adding Shift also switches to it. Tabs are not draggable.
+a background tab; adding Shift also switches to it. Every menu that offers
+**Open in new split** (sidebar and favorite rows, list row actions, Chat rail,
+project rows, Reviews) also offers **Open in new tab**, which opens the item in
+a new tab and switches to it; in Cmd+K, `Cmd+Enter` does the same for the
+selected item. Tabs are not draggable.
 Tabs persist per user and restore on launch. In the browser and on other
 platforms the strip does not render.
 
 The same entity can be open in several tabs. Selecting or opening something a
 background tab shows opens it in the current tab, with no toast and no switch,
 and each tab keeps its own instance, scroll, and history. Within one tab an
-entity still has one split: opening it again focuses that split.
+entity still has one split: opening it again focuses that split, while
+Cmd+click or **Open in new tab** on it opens another instance in a new tab.
 
 Reference captures (browser fixture with the desktop gates forced):
 [a three-split tab beside a second tab](media/desktop-tabs/three-split-tab.png)
@@ -1839,8 +1844,12 @@ from the email itself (falling back to the view's tab); when neither says, as
 for some Search rows or an email opened directly, both are offered, with
 **Block Sender**. **Mark Done** (and `e`) works in Home, the triaged
 Email tabs, and Search, where a marked row stays listed as done. On Home,
-right-click **Mark Done** moves the preview to the next item, like the `e` key. A detail view's "…" menu also offers
-**Snooze notifications…** beside Mute.
+right-click **Mark Done** moves the preview to the next item, like the `e` key.
+List and detail menus share **Mute notifications**, with permanent mute,
+timed presets, and **Custom…** for the existing snooze picker. Preset deadlines
+align at the right edge. Muted items offer **Unmute notifications** instead;
+there is no separate Snooze notifications menu row. Mobile menus drill into
+the same choices with a Back row.
 
 ## Entity action dialogs
 
@@ -1860,6 +1869,43 @@ Partial deletes keep the dialog open, report confirmed successes, and leave only
 failed items selected for retry.
 Cancel and Escape dismiss the dialog. Use Cancel when
 reviewing dialogs against hosted data; confirmation performs real mutations.
+
+With two or more rows selected, Share in the row context menu (long-press on
+touch), `Share items` in the selection toolbar's `Actions` menu, or `Share
+items` in the command menu opens `Share N items`. Touch devices have no command
+menu, so there `Actions` does nothing; use the long-press menu. One item still
+opens the full Share dialog. `Share N items` takes the Share dialog's place,
+size, and form: an 800px card near the top of the window with the selected
+items under its title, then the To row, the optional message, and Cancel and
+Share. On phones (touch, under 640px wide) it is the Share drawer instead.
+Phone-width rows have no select control, so to see the drawer, select and open
+the share at tablet width and then narrow the window. In the drawer, the title
+row ends in Share, the selected items sit under it, and the To box wraps its
+chips, followed by `Send As Group Message`, an `Access:` row, and the message.
+Focus starts in `To: Email or group`, which lists people and channels with more
+than two members. With two or more people and no channel,
+`Send As Group Message` is on and sends one group message; turned off, each
+person gets their own message. The access selector at the end of the To row
+(the `Access:` row on phones) sets the access level for items you own. It
+starts at the lowest default among them: Edit for markdown documents, Comment
+for PDFs, and View for anything else. A selection that includes a form or an
+email thread offers no Comment level. Each recipient gets a message with the optional
+text above the item chips, and the items also appear under the channel's
+Attachments tab. Sharing sends real messages.
+
+The first Share locks the form. If a message fails, the dialog stays open and
+names what each recipient missed, such as `jacob did not get Q3 launch plan and
+Pricing notes`. `Retry` (Cmd/Ctrl+Enter) repeats only what failed and reuses
+the same message IDs, so no recipient gets a duplicate. `Close` after a partial
+share also clears the selection, because someone already has the items. A share
+to one channel ends with a `Shared with <channel>` toast and `View in channel`;
+several recipients get `Shared with N recipients`. Finishing clears the
+selection and returns focus to the row. `Cancel` keeps the selection. Before
+the first Share, Escape cancels too, but not while focus is in the To field or
+the message, as in the Share dialog; press Tab in the To field first. The phone
+drawer has no Cancel or Close: dismissing it cancels, or finishes after a
+partial share. Its title-row button reads Retry while something can be retried
+and Done once nothing can.
 
 Email snoozing uses a command menu with quick or typed times, **If no reply** /
 **Regardless**, and **Remove reminder**. Saving waits for confirmation and shows

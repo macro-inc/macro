@@ -1,16 +1,16 @@
 //! PostgreSQL store for generations, their sessions and the nightly
-//! audience. It also answers the ideas and routine suggestions crates'
+//! audience. It also answers the suggestions and routine suggestions crates'
 //! questions about a generation session and a person's latest generation.
 
 use bot_id::BotId;
 use chrono::{DateTime, Utc};
-use ideas::domain::model::{GenerationSession, GenerationTrigger, SessionKind};
-use ideas::domain::ports::GenerationSessions;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use scheduled_action::domain::suggestions::model::GenerationStatus;
 use scheduled_action::domain::suggestions::ports::GenerationStatuses;
 use sqlx::PgPool;
+use suggestions::domain::model::{GenerationSession, GenerationTrigger, SessionKind};
+use suggestions::domain::ports::GenerationSessions;
 
 use crate::domain::model::{AudienceMember, StaleSession};
 use crate::domain::ports::GenerationRepo;
