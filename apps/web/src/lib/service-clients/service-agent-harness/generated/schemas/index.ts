@@ -161,6 +161,7 @@ export * from './classifyInputResponse';
 export * from './claudeAccountStatus';
 export * from './claudeAccountStatusExpiresAt';
 export * from './claudeAccountStatusSignedInBy';
+export * from './claudeMode';
 export * from './claudeModeResponse';
 export * from './claudeModeResponseAccount';
 export * from './claudeSignedIn';

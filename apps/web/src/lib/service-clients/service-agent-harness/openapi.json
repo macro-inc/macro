@@ -5745,6 +5745,11 @@
           }
         }
       },
+      "ClaudeMode": {
+        "type": "string",
+        "description": "How Claude Code on a Macro computer is paid for: its own Claude account\nwhen it has an active Claude login, otherwise Macro credits.",
+        "enum": ["macro_credits", "own_account"]
+      },
       "ClaudeModeResponse": {
         "type": "object",
         "description": "How Claude Code on a computer is paid for, and its Claude sign-in when it\nuses its own.",
@@ -5762,9 +5767,8 @@
             ]
           },
           "mode": {
-            "type": "string",
-            "description": "`macro_credits` or `own_account`.",
-            "example": "macro_credits"
+            "$ref": "#/components/schemas/ClaudeMode",
+            "description": "How Claude Code is paid for."
           }
         }
       },
