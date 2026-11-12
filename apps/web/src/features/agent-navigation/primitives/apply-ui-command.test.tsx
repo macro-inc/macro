@@ -11,6 +11,8 @@ import {
   createMemoryPaneStore,
   createSplitRouter,
   type Entry,
+  PANE_LEVEL,
+  type PaneId,
   type SplitRoutes,
 } from '@app/lib/split-router';
 import { paneRoute } from '@app/routes/app-route';
@@ -80,6 +82,10 @@ const disposers: (() => void)[] = [];
 afterEach(() => {
   for (const dispose of disposers.splice(0)) dispose();
   vi.restoreAllMocks();
+  document.body.replaceChildren();
+  // jsdom has no Web Animations API; `watchPanes` lends one.
+  Reflect.deleteProperty(Element.prototype, 'animate');
+  Reflect.deleteProperty(Element.prototype, 'getAnimations');
 });
 
 /** A layout showing the agent's conversation, as when its prompt was typed. */
@@ -127,6 +133,67 @@ function command(
   if (decision.kind !== 'open') throw new Error('expected an open');
 
   return decision;
+}
+
+type PlayedAnimation = {
+  keyframes: Keyframe[];
+  options: KeyframeAnimationOptions;
+  /** Still applied: neither cancelled nor played back to its start. */
+  held: boolean;
+  finish: () => void;
+};
+
+/**
+ * A watched window whose panes render in `[data-split-pane]` elements, with
+ * a stand-in for the Web Animations API (jsdom has none) that records what
+ * plays. Animations finish when `finish` is called, or at once with
+ * `instant`.
+ */
+function watchPanes(panes: readonly PaneId[], instant = true) {
+  vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+  for (const pane of panes) {
+    const element = document.createElement('div');
+    element.dataset.splitPane = pane;
+    document.body.append(element);
+  }
+
+  const played: PlayedAnimation[] = [];
+  Object.assign(Element.prototype, {
+    getAnimations: () => [],
+    animate(keyframes: Keyframe[], options: KeyframeAnimationOptions) {
+      let finish = () => {};
+      const finished = new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+      const record: PlayedAnimation = {
+        keyframes,
+        options,
+        held: true,
+        finish,
+      };
+      played.push(record);
+      if (instant) finish();
+
+      return {
+        finished,
+        cancel: () => {
+          record.held = false;
+        },
+        reverse: () => {
+          record.held = false;
+        },
+      };
+    },
+  });
+
+  return {
+    played,
+    /** Departures still holding a pane out of sight. */
+    departuresHeld: () =>
+      played.filter(
+        (animation) => animation.options.fill === 'forwards' && animation.held
+      ),
+  };
 }
 
 describe('applyOpen', () => {
@@ -193,6 +260,78 @@ describe('applyOpen', () => {
     expect(router.entry(agentPane!)?.location.route.matches.at(-1)?.id).toBe(
       'view-tasks'
     );
+  });
+
+  it('Undo keeps the read hold on the pane until it is gone', async () => {
+    const { manager, router, arrivals } = layoutWithAgentPane();
+    await router.settled();
+    const { frame, location } = command(router);
+    const outcome = await applyOpen(
+      { router, manager, arrivals, stacked: false },
+      frame,
+      location
+    );
+    if (outcome.kind !== 'opened') throw new Error('expected an open');
+    const heldAsItLeft: boolean[] = [];
+    router.registerGuard(outcome.pane, PANE_LEVEL, ({ pane, from }) => {
+      heldAsItLeft.push(arrivals.holds(pane, from));
+      return true;
+    });
+
+    await outcome.undo();
+
+    expect(heldAsItLeft).toEqual([true]);
+    expect(router.panes()).not.toContain(outcome.pane);
+  });
+
+  it('Undo leaves the pane on screen when a leave guard keeps it, and can be tried again', async () => {
+    const { manager, router, arrivals } = layoutWithAgentPane();
+    await router.settled();
+    const { frame, location } = command(router);
+    const outcome = await applyOpen(
+      { router, manager, arrivals, stacked: false },
+      frame,
+      location
+    );
+    if (outcome.kind !== 'opened') throw new Error('expected an open');
+    const motion = watchPanes(router.panes());
+    const keepEdits = router.registerGuard(
+      outcome.pane,
+      PANE_LEVEL,
+      () => false
+    );
+
+    const undone = await outcome.undo();
+
+    expect(undone).toBe(false);
+    expect(router.panes()).toContain(outcome.pane);
+    expect(motion.departuresHeld()).toEqual([]);
+    expect(arrivals.holds(outcome.pane, router.entry(outcome.pane))).toBe(true);
+
+    keepEdits();
+    expect(await outcome.undo()).toBe(true);
+    expect(router.panes()).not.toContain(outcome.pane);
+  });
+
+  it('Undo still takes away only its pane when the agent opens another during the departure', async () => {
+    const { manager, router, arrivals } = layoutWithAgentPane();
+    await router.settled();
+    const deps = { router, manager, arrivals, stacked: false };
+    const first = command(router);
+    const outcome = await applyOpen(deps, first.frame, first.location);
+    if (outcome.kind !== 'opened') throw new Error('expected an open');
+    const motion = watchPanes(router.panes(), false);
+
+    const undoing = outcome.undo();
+    await vi.waitFor(() => expect(motion.departuresHeld()).toHaveLength(1));
+    const second = command(router, '/md/doc-2');
+    const next = await applyOpen(deps, second.frame, second.location);
+    if (next.kind !== 'opened') throw new Error('expected an open');
+    motion.departuresHeld()[0]?.finish();
+
+    expect(await undoing).toBe(true);
+    expect(router.panes()).not.toContain(outcome.pane);
+    expect(router.panes()).toContain(next.pane);
   });
 
   it('leaves a view no claim covers as it is when a pane already shows it', async () => {

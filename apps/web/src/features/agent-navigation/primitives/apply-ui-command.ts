@@ -34,8 +34,12 @@ export type ApplyDeps = {
 };
 
 export type ApplyOutcome =
-  /** A new pane shows it; `undo` takes it away again. */
-  | { kind: 'opened'; pane: PaneId; undo: () => Promise<void> }
+  /**
+   * A new pane shows it; `undo` takes it away again and resolves whether it
+   * did. A leave guard can keep the pane (unsaved edits); `undo` can then be
+   * tried again.
+   */
+  | { kind: 'opened'; pane: PaneId; undo: () => Promise<boolean> }
   /** Already on screen; left as it is, nothing to undo. */
   | { kind: 'shown' }
   /** No room for another pane, and the agent never replaces one. */
@@ -127,26 +131,39 @@ function target(
   return { source: agentPane, split: { pane: agentPane, side: 'right' } };
 }
 
+/**
+ * Takes the agent's pane away, as Undo. The read hold stays until the pane
+ * is gone: the person hasn't touched it, and a read marker mounting during
+ * the departure would mark it read. Resolves whether the pane went; when a
+ * leave guard kept it (unsaved edits) or a newer navigation won, it comes
+ * back into view.
+ */
 async function undo(
   deps: ApplyDeps,
   pane: PaneId,
   snapshot: LayoutSnapshot,
   opened: LayoutSnapshot
-) {
-  deps.arrivals.release(pane);
-  const others = deps.router.panes().filter((open) => open !== pane);
+): Promise<boolean> {
+  const { router } = deps;
+  const others = router.panes().filter((open) => open !== pane);
   const rects = capturePaneRects(others);
-  if (!deps.stacked) await playDeparture(pane);
+  const departure = deps.stacked ? undefined : playDeparture(pane);
+  await departure?.finished;
 
   // Restore the layout as it was when nothing else changed since (panes,
   // sizes, order, where each pane is); otherwise take away only the agent's
-  // pane and keep the person's changes.
-  const untouched = deepEqual(deps.router.layoutSnapshot(), opened);
-  await (untouched
-    ? deps.router.restoreLayout(snapshot)
-    : deps.router.remove(pane));
+  // pane and keep the person's changes. Decided after the departure, so an
+  // open landing during it counts as a change.
+  const untouched = deepEqual(router.layoutSnapshot(), opened);
+  await (untouched ? router.restoreLayout(snapshot) : router.remove(pane));
+
+  if (router.panes().includes(pane)) {
+    departure?.revert();
+    return false;
+  }
 
   if (!deps.stacked) requestAnimationFrame(() => playSettle(rects));
+  return true;
 }
 
 /** Open `location` for the agent, as described in the module comment. */
