@@ -3,8 +3,13 @@ use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
 const USER: &str = "macro|message-test@example.com";
 
+mod baseline;
+mod benchmark;
 mod initiative;
 mod schema_drop;
+mod sequences;
+mod sql_trace;
+mod write_hydration;
 
 async fn setup(pool: &PgPool) {
     let user_id = macro_uuid::generate_uuid_v7();
@@ -83,7 +88,7 @@ async fn shared_reads_preserve_system_and_deleted_bot_profiles(pool: PgPool) {
         input.actor = channel_sender::ChannelSender::new_from_bot(bot_id);
         input.triggered_by = Some(USER.to_owned());
         input.triggered_via = Some("Claude Code".to_owned());
-        let message = repo.create(input).await.unwrap();
+        let message = repo.create(input).await.unwrap().0;
         let read = repo
             .get(&message.parent, message.id)
             .await
@@ -111,11 +116,13 @@ async fn thread_identity_tombstones_and_parent_isolation(pool: PgPool) {
     let root = repo
         .create(command("message-doc-a", None, "root"))
         .await
-        .unwrap();
+        .unwrap()
+        .0;
     let reply = repo
         .create(command("message-doc-a", Some(root.id), "reply"))
         .await
-        .unwrap();
+        .unwrap()
+        .0;
     assert_eq!(reply.thread_id, Some(root.id));
     assert!(
         repo.create(command("message-doc-b", Some(root.id), "cross-parent"))
@@ -127,7 +134,7 @@ async fn thread_identity_tombstones_and_parent_isolation(pool: PgPool) {
             .await
             .is_err()
     );
-    let deleted = repo.delete(&parent, root.id).await.unwrap();
+    let deleted = repo.delete(&parent, root.id).await.unwrap().0;
     assert!(deleted.deleted_at.is_some());
     let page = repo
         .timeline(
@@ -149,8 +156,9 @@ async fn thread_identity_tombstones_and_parent_isolation(pool: PgPool) {
         "reply to tombstone",
     ))
     .await
-    .unwrap();
-    repo.delete_thread(&parent, root.id).await.unwrap();
+    .unwrap()
+    .0;
+    repo.delete_thread(&parent, root.id).await.unwrap().0;
     assert!(
         repo.timeline(
             &parent,
@@ -184,11 +192,13 @@ async fn a_deleted_discussion_reads_back_as_a_root_tombstone_without_replies(poo
     let root = repo
         .create(command("message-doc-a", None, "root"))
         .await
-        .unwrap();
+        .unwrap()
+        .0;
     repo.create(command("message-doc-a", Some(root.id), "reply"))
         .await
-        .unwrap();
-    repo.delete_thread(&parent, root.id).await.unwrap();
+        .unwrap()
+        .0;
+    repo.delete_thread(&parent, root.id).await.unwrap().0;
     // Deleting a root reads the message back after the teardown to answer the
     // caller; that read is the tombstone, not the live root it started from.
     let tombstone = repo.get(&parent, root.id).await.unwrap().unwrap();
@@ -207,11 +217,12 @@ async fn deleted_markdown_threads_keep_paged_cleanup_identity(pool: PgPool) {
         mark_id,
         marked_text: None,
     });
-    let deleted = repo.create(create).await.unwrap();
+    let deleted = repo.create(create).await.unwrap().0;
     let state = repo
         .delete_thread(&deleted.parent, deleted.id)
         .await
-        .unwrap();
+        .unwrap()
+        .0;
     assert!(state.deleted_at.is_some());
     assert!(
         matches!(state.anchor, Some(ThreadAnchor::Markdown { mark_id: id, .. }) if id == mark_id)
@@ -219,7 +230,8 @@ async fn deleted_markdown_threads_keep_paged_cleanup_identity(pool: PgPool) {
     let live = repo
         .create(command("message-doc-a", None, "live discussion"))
         .await
-        .unwrap();
+        .unwrap()
+        .0;
 
     // A new reader must recover deletion without a live event or old root cache.
     let repo = PgMessageRepository::new(pool);
@@ -287,7 +299,7 @@ async fn a_markdown_anchor_stores_the_marked_text_beside_its_mark(pool: PgPool) 
         mark_id,
         marked_text: Some("  the marked phrase  ".to_owned()),
     });
-    let root = repo.create(create).await.unwrap();
+    let root = repo.create(create).await.unwrap().0;
     let state = repo.thread(&root.parent, root.id).await.unwrap().unwrap();
     assert_eq!(
         state.anchor,
@@ -313,7 +325,7 @@ async fn reactions_attachments_and_resolution_use_shared_message_data(pool: PgPo
         width: None,
         height: None,
     });
-    let root = repo.create(create).await.unwrap();
+    let root = repo.create(create).await.unwrap().0;
     assert_eq!(root.attachments.len(), 1);
     let added = repo
         .react(&root.parent, root.id, USER, "👍", true)
@@ -350,6 +362,7 @@ async fn reactions_attachments_and_resolution_use_shared_message_data(pool: PgPo
         )
         .await
         .unwrap()
+        .0
         .resolved
     );
     let edit = EditMessage {
@@ -359,7 +372,7 @@ async fn reactions_attachments_and_resolution_use_shared_message_data(pool: PgPo
         attachments: Some(vec![]),
         nonce: None,
     };
-    let edited = repo.edit(&root.parent, root.id, edit).await.unwrap();
+    let edited = repo.edit(&root.parent, root.id, edit).await.unwrap().0;
     assert_eq!(edited.content, "edited");
     assert!(edited.attachments.is_empty());
     assert!(edited.edited_at.is_some());
@@ -377,11 +390,12 @@ async fn detaching_a_mark_retains_the_complete_thread_and_makes_it_unanchored(po
         mark_id: Uuid::from_u128(101),
         marked_text: None,
     });
-    let root = repo.create(create).await.unwrap();
+    let root = repo.create(create).await.unwrap().0;
     let reply = repo
         .create(command("message-doc-a", Some(root.id), "retained reply"))
         .await
-        .unwrap();
+        .unwrap()
+        .0;
     let state = repo
         .patch_thread(
             &root.parent,
@@ -392,7 +406,8 @@ async fn detaching_a_mark_retains_the_complete_thread_and_makes_it_unanchored(po
             },
         )
         .await
-        .unwrap();
+        .unwrap()
+        .0;
     assert!(state.anchor.is_none());
     assert!(state.deleted_at.is_none());
     let reloaded = PgMessageRepository::new(pool);
@@ -423,6 +438,7 @@ async fn detaching_a_mark_retains_the_complete_thread_and_makes_it_unanchored(po
             )
             .await
             .unwrap()
+            .0
             .anchor
             .is_none()
     );
@@ -435,10 +451,12 @@ async fn soft_deleted_parents_disappear_and_cursor_does_not_repeat_roots(pool: P
     let root = repo
         .create(command("message-doc-a", None, "first"))
         .await
-        .unwrap();
+        .unwrap()
+        .0;
     repo.create(command("message-doc-a", None, "second"))
         .await
-        .unwrap();
+        .unwrap()
+        .0;
     let first = repo
         .timeline(
             &root.parent,
@@ -487,7 +505,7 @@ async fn pdf_root_tombstone_keeps_anchor_and_thread_deletion_removes_placeable(p
         width_pct: 0.05,
         height_pct: 0.05,
     });
-    let root = repo.create(create).await.unwrap();
+    let root = repo.create(create).await.unwrap().0;
     let saved = sqlx::query!(
         r#"SELECT root_id, "xPct" AS x FROM "PdfPlaceableCommentAnchor" WHERE uuid = $1"#,
         anchor_id
@@ -497,7 +515,7 @@ async fn pdf_root_tombstone_keeps_anchor_and_thread_deletion_removes_placeable(p
     .unwrap();
     assert_eq!(saved.root_id, root.id);
     assert_eq!(saved.x, 0.2);
-    repo.delete(&root.parent, root.id).await.unwrap();
+    repo.delete(&root.parent, root.id).await.unwrap().0;
     assert_eq!(
         repo.thread(&root.parent, root.id)
             .await
@@ -506,7 +524,7 @@ async fn pdf_root_tombstone_keeps_anchor_and_thread_deletion_removes_placeable(p
             .anchor,
         Some(ThreadAnchor::PdfPlaceable { anchor_id })
     );
-    repo.delete_thread(&root.parent, root.id).await.unwrap();
+    repo.delete_thread(&root.parent, root.id).await.unwrap().0;
     assert!(!sqlx::query_scalar!(r#"SELECT EXISTS(SELECT 1 FROM "PdfPlaceableCommentAnchor" WHERE uuid = $1) AS "exists!""#, anchor_id)
         .fetch_one(&pool).await.unwrap());
 }
@@ -540,10 +558,10 @@ async fn highlight_attachment_is_scoped_and_explicit_thread_deletion_preserves_h
         .is_empty()
     );
     create.parent = MessageParent::parse("document", "message-doc-a").unwrap();
-    let root = repo.create(create.clone()).await.unwrap();
+    let root = repo.create(create.clone()).await.unwrap().0;
     // The root identity alone prevents a second discussion from stealing a highlight.
     assert!(repo.create(create.clone()).await.is_err());
-    repo.delete_thread(&root.parent, root.id).await.unwrap();
+    repo.delete_thread(&root.parent, root.id).await.unwrap().0;
     let remaining = sqlx::query!(
         r#"SELECT root_id, text FROM "PdfHighlightAnchor" WHERE uuid = $1"#,
         anchor_id
@@ -554,7 +572,7 @@ async fn highlight_attachment_is_scoped_and_explicit_thread_deletion_preserves_h
     assert!(remaining.root_id.is_none());
     assert_eq!(remaining.text, "selected text");
     // Deleting a discussion releases its highlight for a new discussion.
-    let replacement = repo.create(create).await.unwrap();
+    let replacement = repo.create(create).await.unwrap().0;
     assert_ne!(replacement.id, root.id);
 }
 
@@ -575,7 +593,7 @@ async fn placeable_anchor_creation_is_atomic_with_its_root(pool: PgPool) {
         });
         create
     };
-    let root = repo.create(placeable("first")).await.unwrap();
+    let root = repo.create(placeable("first")).await.unwrap().0;
     let anchored = sqlx::query!(
         r#"SELECT root_id FROM "PdfPlaceableCommentAnchor" WHERE uuid = $1"#,
         anchor_id
@@ -619,7 +637,7 @@ async fn roots_get_thread_rows_without_the_bookkeeping_trigger(pool: PgPool) {
         mark_id: Uuid::from_u128(202),
         marked_text: None,
     });
-    let root = repo.create(create).await.unwrap();
+    let root = repo.create(create).await.unwrap().0;
     let state = repo.thread(&root.parent, root.id).await.unwrap().unwrap();
     assert_eq!(state.user_id, USER);
     assert!(
@@ -628,7 +646,8 @@ async fn roots_get_thread_rows_without_the_bookkeeping_trigger(pool: PgPool) {
     let reply = repo
         .create(command("message-doc-a", Some(root.id), "reply"))
         .await
-        .unwrap();
+        .unwrap()
+        .0;
     assert_eq!(reply.thread_id, Some(root.id));
 }
 
@@ -654,10 +673,10 @@ async fn channel_and_document_attachments_use_message_parent_identity(pool: PgPo
     let mut channel_post = command("message-doc-a", None, "channel");
     channel_post.parent = MessageParent::Channel(channel);
     channel_post.input.attachments.push(attachment.clone());
-    let channel_message = repo.create(channel_post).await.unwrap();
+    let channel_message = repo.create(channel_post).await.unwrap().0;
     let mut document_post = command("message-doc-a", None, "document");
     document_post.input.attachments.push(attachment);
-    let document_message = repo.create(document_post).await.unwrap();
+    let document_message = repo.create(document_post).await.unwrap().0;
     let columns = sqlx::query!(
         r#"SELECT m.id, m.parent_entity_type, m.parent_entity_id, a.entity_id
            FROM comms_messages m JOIN comms_attachments a ON a.message_id = m.id
@@ -686,7 +705,8 @@ async fn discussion_delivery_context_reads_document_assignees_and_thread_authors
     let root = repo
         .create(command("message-doc-a", None, "task discussion"))
         .await
-        .unwrap();
+        .unwrap()
+        .0;
     sqlx::query!(
         "INSERT INTO document_sub_type(document_id, sub_type) VALUES ('message-doc-a', 'task')"
     )
@@ -727,10 +747,10 @@ async fn a_mark_identifies_one_live_discussion_per_document(pool: PgPool) {
         });
         request
     };
-    let first = repo.create(marked("message-doc-a")).await.unwrap();
+    let first = repo.create(marked("message-doc-a")).await.unwrap().0;
     assert!(repo.create(marked("message-doc-a")).await.is_err());
     // Copying text to another document retains mark IDs without sharing its thread.
-    let other = repo.create(marked("message-doc-b")).await.unwrap();
+    let other = repo.create(marked("message-doc-b")).await.unwrap().0;
     assert_ne!(other.id, first.id);
 }
 
@@ -741,25 +761,31 @@ async fn agent_context_stays_in_the_document_thread_and_omits_tombstones(pool: P
     let root = repo
         .create(command("message-doc-a", None, "this thread"))
         .await
-        .unwrap();
+        .unwrap()
+        .0;
     let deleted = repo
         .create(command("message-doc-a", Some(root.id), "removed"))
         .await
-        .unwrap();
-    repo.delete(&root.parent, deleted.id).await.unwrap();
+        .unwrap()
+        .0;
+    repo.delete(&root.parent, deleted.id).await.unwrap().0;
     repo.create(command("message-doc-a", None, "unrelated discussion"))
         .await
-        .unwrap();
+        .unwrap()
+        .0;
     repo.create(command("message-doc-b", None, "other document"))
         .await
-        .unwrap();
+        .unwrap()
+        .0;
     let reply = repo
         .create(command("message-doc-a", Some(root.id), "@agent explain"))
         .await
-        .unwrap();
+        .unwrap()
+        .0;
     repo.create(command("message-doc-a", Some(root.id), "later response"))
         .await
-        .unwrap();
+        .unwrap()
+        .0;
     let history = repo.preceding(&root.parent, reply.id, 10).await.unwrap();
     assert_eq!(
         history
@@ -778,7 +804,7 @@ async fn agent_context_stays_in_the_document_thread_and_omits_tombstones(pool: P
         .unwrap()
         .is_empty()
     );
-    repo.delete_thread(&root.parent, root.id).await.unwrap();
+    repo.delete_thread(&root.parent, root.id).await.unwrap().0;
     assert!(
         repo.preceding(&root.parent, reply.id, 10)
             .await
@@ -799,7 +825,7 @@ async fn replacement_attachments_preserve_retained_ids_and_remove_only_missing_i
     };
     let mut create = command("message-doc-a", None, "with attachment");
     create.input.attachments.push(attachment.clone());
-    let message = repo.create(create).await.unwrap();
+    let message = repo.create(create).await.unwrap().0;
     let edited = repo
         .edit(
             &message.parent,
@@ -813,7 +839,8 @@ async fn replacement_attachments_preserve_retained_ids_and_remove_only_missing_i
             },
         )
         .await
-        .unwrap();
+        .unwrap()
+        .0;
     assert_eq!(edited.attachments[0].id, message.attachments[0].id);
     assert_eq!(edited.attachments[0].width, Some(100));
     let removed = repo
@@ -829,7 +856,8 @@ async fn replacement_attachments_preserve_retained_ids_and_remove_only_missing_i
             },
         )
         .await
-        .unwrap();
+        .unwrap()
+        .0;
     assert!(removed.attachments.is_empty());
 }
 
@@ -850,7 +878,7 @@ async fn attachments_read_back_in_the_order_they_were_sent(pool: PgPool) {
             height: None,
         })
         .collect();
-    let message = repo.create(create).await.unwrap();
+    let message = repo.create(create).await.unwrap().0;
     let read = repo
         .get(&message.parent, message.id)
         .await
@@ -885,13 +913,13 @@ async fn both_parents_use_bounded_previews_and_bidirectional_windows(pool: PgPoo
         for index in 0..7 {
             let mut input = command("message-doc-a", None, &format!("root {index}"));
             input.parent = parent.clone();
-            roots.push(repo.create(input).await.unwrap());
+            roots.push(repo.create(input).await.unwrap().0);
         }
         let root = roots[3].id;
         for index in 0..12 {
             let mut input = command("message-doc-a", Some(root), &format!("reply {index}"));
             input.parent = parent.clone();
-            repo.create(input).await.unwrap();
+            repo.create(input).await.unwrap().0;
         }
         let latest = repo
             .timeline(
@@ -1035,7 +1063,7 @@ async fn both_parents_use_bounded_previews_and_bidirectional_windows(pool: PgPoo
                 expected
             );
         }
-        repo.delete(&parent, roots[0].id).await.unwrap();
+        repo.delete(&parent, roots[0].id).await.unwrap().0;
         let empty_root = repo
             .timeline(
                 &parent,
@@ -1067,7 +1095,7 @@ async fn both_parents_use_bounded_previews_and_bidirectional_windows(pool: PgPoo
             assert_eq!(page.items[0].message.id, roots[0].id);
             assert!(page.items[0].message.deleted_at.is_some());
         }
-        repo.delete(&parent, root).await.unwrap();
+        repo.delete(&parent, root).await.unwrap().0;
         let page = repo
             .timeline(
                 &parent,
@@ -1096,7 +1124,7 @@ async fn both_parents_use_bounded_previews_and_bidirectional_windows(pool: PgPoo
             assert!(centered_deleted_root.items[0].message.deleted_at.is_some());
             assert_eq!(centered_deleted_root.items[0].thread.reply_count, 12);
         }
-        repo.delete_thread(&parent, root).await.unwrap();
+        repo.delete_thread(&parent, root).await.unwrap().0;
         for target in [root, reply] {
             assert!(matches!(
                 repo.timeline(
@@ -1134,11 +1162,13 @@ async fn legacy_ids_resolve_through_the_import_mapping_tables(pool: PgPool) {
     let root = repo
         .create(command("message-doc-a", None, "imported root"))
         .await
-        .unwrap();
+        .unwrap()
+        .0;
     let reply = repo
         .create(command("message-doc-a", Some(root.id), "imported reply"))
         .await
-        .unwrap();
+        .unwrap()
+        .0;
     sqlx::query!(
         "INSERT INTO migrated_comment_thread_id (thread_id, root_id, document_id) VALUES (1, $1, 'message-doc-a')",
         root.id
@@ -1199,7 +1229,7 @@ async fn client_supplied_ids_are_kept_and_never_reused(pool: PgPool) {
     let id = macro_uuid::generate_uuid_v7();
     let mut first = command("message-doc-a", None, "first");
     first.input.id = Some(id);
-    assert_eq!(repo.create(first).await.unwrap().id, id);
+    assert_eq!(repo.create(first).await.unwrap().0.id, id);
 
     // A reused id conflicts even on another parent, and never overwrites.
     let mut second = command("message-doc-b", None, "second");
@@ -1238,8 +1268,8 @@ async fn highlight_threads_read_the_text_the_highlight_covers(pool: PgPool) {
     };
     let covered = highlight("  the highlighted words \n").await;
     let blank = highlight("   ").await;
-    let root = repo.create(thread_on(covered, "on words")).await.unwrap();
-    let blank_root = repo.create(thread_on(blank, "on nothing")).await.unwrap();
+    let root = repo.create(thread_on(covered, "on words")).await.unwrap().0;
+    let blank_root = repo.create(thread_on(blank, "on nothing")).await.unwrap().0;
     let anchor = |anchor_id, text: Option<&str>| {
         Some(ThreadAnchor::PdfHighlight {
             anchor_id,
@@ -1311,7 +1341,8 @@ async fn highlight_threads_read_the_text_the_highlight_covers(pool: PgPool) {
             },
         )
         .await
-        .unwrap();
+        .unwrap()
+        .0;
     assert_eq!(patched.anchor, anchor(covered, Some("edited words")));
 }
 
@@ -1323,17 +1354,19 @@ async fn parent_of_names_only_a_live_message_parent(pool: PgPool) {
     let root = repo
         .create(command("message-doc-a", None, "root"))
         .await
-        .unwrap();
+        .unwrap()
+        .0;
     let reply = repo
         .create(command("message-doc-a", Some(root.id), "reply"))
         .await
-        .unwrap();
+        .unwrap()
+        .0;
 
     assert_eq!(
         repo.parent_of(reply.id).await.unwrap(),
         Some(parent.clone())
     );
-    repo.delete(&parent, reply.id).await.unwrap();
+    repo.delete(&parent, reply.id).await.unwrap().0;
     assert_eq!(repo.parent_of(reply.id).await.unwrap(), None);
     assert_eq!(repo.parent_of(Uuid::now_v7()).await.unwrap(), None);
 }
@@ -1360,12 +1393,13 @@ async fn spreadsheet_threads_round_trip_resolve_and_delete(pool: PgPool) {
         range: "B4:C9".into(),
     });
     let expected = create.input.anchor.as_ref().unwrap().reference();
-    let root = repo.create(create).await.unwrap();
+    let root = repo.create(create).await.unwrap().0;
     let state = repo.thread(&root.parent, root.id).await.unwrap().unwrap();
     assert_eq!(state.anchor, Some(expected.clone()));
     repo.create(command("message-doc-a", Some(root.id), "Looks good"))
         .await
-        .unwrap();
+        .unwrap()
+        .0;
     let page = repo
         .timeline(
             &root.parent,
@@ -1389,10 +1423,11 @@ async fn spreadsheet_threads_round_trip_resolve_and_delete(pool: PgPool) {
             },
         )
         .await
-        .unwrap();
+        .unwrap()
+        .0;
     assert!(state.resolved);
     assert_eq!(state.anchor, Some(expected));
-    let state = repo.delete_thread(&root.parent, root.id).await.unwrap();
+    let state = repo.delete_thread(&root.parent, root.id).await.unwrap().0;
     assert!(state.deleted_at.is_some());
     assert!(
         repo.timeline(&root.parent, MessageTimelineQuery::default())
@@ -1422,7 +1457,7 @@ async fn fig_threads_round_trip_on_layers_and_the_canvas(pool: PgPool) {
             y,
         });
         let anchor = create.input.anchor.as_ref().unwrap().reference();
-        let root = repo.create(create).await.unwrap();
+        let root = repo.create(create).await.unwrap().0;
         let state = repo.thread(&root.parent, root.id).await.unwrap().unwrap();
         assert_eq!(state.anchor.as_ref(), Some(&anchor));
         threads.push((root, anchor));
@@ -1444,7 +1479,8 @@ async fn fig_threads_round_trip_on_layers_and_the_canvas(pool: PgPool) {
     let (root, anchor) = &threads[0];
     repo.create(command("message-doc-a", Some(root.id), "Fixed"))
         .await
-        .unwrap();
+        .unwrap()
+        .0;
     let page = repo
         .timeline(
             &root.parent,
@@ -1473,10 +1509,11 @@ async fn fig_threads_round_trip_on_layers_and_the_canvas(pool: PgPool) {
             },
         )
         .await
-        .unwrap();
+        .unwrap()
+        .0;
     assert!(state.resolved);
     assert_eq!(state.anchor.as_ref(), Some(anchor));
-    let state = repo.delete_thread(&root.parent, root.id).await.unwrap();
+    let state = repo.delete_thread(&root.parent, root.id).await.unwrap().0;
     assert!(state.deleted_at.is_some());
     let remaining = repo
         .timeline(&root.parent, MessageTimelineQuery::default())
@@ -1537,8 +1574,8 @@ async fn concurrent_first_call_messages_share_one_thread(pool: PgPool) {
         repo.create(call_message(call_id, "First participant")),
         repo.create(call_message(call_id, "Second participant")),
     );
-    let first = first.unwrap();
-    let second = second.unwrap();
+    let first = first.unwrap().0;
+    let second = second.unwrap().0;
     assert_eq!(first.root_id(), call_id);
     assert_eq!(second.root_id(), call_id);
     assert_ne!(first.id, second.id);
@@ -1559,11 +1596,12 @@ async fn concurrent_first_call_messages_share_one_thread(pool: PgPool) {
             .unwrap()
             .is_none()
     );
-    repo.delete(&parent, call_id).await.unwrap();
+    repo.delete(&parent, call_id).await.unwrap().0;
     let after_delete = repo
         .create(call_message(call_id, "After the first message was deleted"))
         .await
-        .unwrap();
+        .unwrap()
+        .0;
     assert_eq!(after_delete.thread_id, Some(call_id));
     assert!(
         repo.thread(&parent, call_id)
@@ -1583,11 +1621,12 @@ async fn guests_and_members_share_the_persisted_call_discussion(pool: PgPool) {
     let sender = ChannelSender::new_from_guest(Uuid::now_v7());
     guest.actor = sender.clone();
     guest.guest_name = Some("Visitor".into());
-    let root = repo.create(guest).await.unwrap();
+    let root = repo.create(guest).await.unwrap().0;
     let reply = repo
         .create(call_message(call_id, "Hello from the member"))
         .await
-        .unwrap();
+        .unwrap()
+        .0;
     assert_eq!(root.id, call_id);
     assert_eq!(reply.thread_id, Some(call_id));
     let stored = repo
@@ -1652,7 +1691,7 @@ async fn verify_call_chat_archive(pool: PgPool, call_id: Uuid) {
         entity_type: "user".into(),
         entity_id: USER.into(),
     });
-    repo.create(input).await.unwrap();
+    repo.create(input).await.unwrap().0;
     let parent = MessageParent::Call(call_id);
     let mut tx = pool.begin().await.unwrap();
     sqlx::query!(r#"INSERT INTO call_records (id, channel_id, room_name, created_by, started_at, duration_ms, share_permission_id, meeting_id)
@@ -1670,7 +1709,8 @@ async fn verify_call_chat_archive(pool: PgPool, call_id: Uuid) {
     );
     repo.create(call_message(call_id, "Archived reply"))
         .await
-        .unwrap();
+        .unwrap()
+        .0;
     sqlx::query!("DELETE FROM call_records WHERE id = $1", call_id)
         .execute(&pool)
         .await
@@ -1698,7 +1738,7 @@ async fn retrying_first_call_message_cannot_append_it_twice(pool: PgPool) {
     let client_message_id = input.input.id.unwrap();
     let actor = input.actor.clone();
     let parent = input.parent.clone();
-    let first = repo.create(input.clone()).await.unwrap();
+    let first = repo.create(input.clone()).await.unwrap().0;
     assert_eq!(first.id, call_id);
     assert!(matches!(
         repo.create(input).await,
@@ -1734,7 +1774,7 @@ async fn retrying_first_call_message_cannot_append_it_twice(pool: PgPool) {
                 .is_none()
         );
     }
-    repo.delete(&parent, call_id).await.unwrap();
+    repo.delete(&parent, call_id).await.unwrap().0;
     let deleted = repo
         .get_by_client_message_id(&parent, &actor, client_message_id)
         .await
@@ -1770,10 +1810,12 @@ async fn imported_call_discussion_needs_no_native_session(pool: PgPool) {
     assert!(repo.parent_exists(&parent).await.unwrap());
     repo.create(call_message(call_id, "Notes from an external call"))
         .await
-        .unwrap();
+        .unwrap()
+        .0;
     repo.create(call_message(call_id, "Follow-up discussion"))
         .await
-        .unwrap();
+        .unwrap()
+        .0;
     assert_eq!(repo.replies(&parent, call_id).await.unwrap().len(), 1);
     sqlx::query!("DELETE FROM call_entities WHERE id = $1", call_id)
         .execute(&pool)

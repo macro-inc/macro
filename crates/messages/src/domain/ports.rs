@@ -273,6 +273,9 @@ pub struct MessagePatch {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct MessageEvent {
+    /// Committed channel change position; absent for other parents and typing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub seq: Option<i64>,
     /// Changed parent, used for subscriptions and cache invalidation.
     pub parent: MessageParent,
     /// User or bot who initiated the operation.
@@ -405,6 +408,8 @@ impl MessageEvent {
 
 /// Persisted reaction state and whether this operation changed membership.
 pub struct ReactionResult {
+    /// Committed channel position, absent for unchanged reactions or other parents.
+    pub seq: Option<i64>,
     /// Current message, including its reactions.
     pub message: Message,
     /// False for an idempotent add or remove that changed no rows.
@@ -478,20 +483,20 @@ pub trait MessageRepository: Send + Sync + 'static {
     fn create(
         &self,
         command: CreateMessage,
-    ) -> impl Future<Output = Result<Message, MessageError>> + Send;
+    ) -> impl Future<Output = Result<(Message, Option<i64>), MessageError>> + Send;
     /// Replace content and references atomically.
     fn edit(
         &self,
         parent: &MessageParent,
         id: Uuid,
         command: EditMessage,
-    ) -> impl Future<Output = Result<Message, MessageError>> + Send;
+    ) -> impl Future<Output = Result<(Message, Option<i64>), MessageError>> + Send;
     /// Tombstone a single message, preserving its replies and anchor.
     fn delete(
         &self,
         parent: &MessageParent,
         id: Uuid,
-    ) -> impl Future<Output = Result<Message, MessageError>> + Send;
+    ) -> impl Future<Output = Result<(Message, Option<i64>), MessageError>> + Send;
     /// Add or remove the caller's reaction and report whether membership changed.
     fn react(
         &self,
@@ -507,13 +512,13 @@ pub trait MessageRepository: Send + Sync + 'static {
         parent: &MessageParent,
         root_id: Uuid,
         patch: ThreadPatch,
-    ) -> impl Future<Output = Result<ThreadState, MessageError>> + Send;
+    ) -> impl Future<Output = Result<(ThreadState, Option<i64>), MessageError>> + Send;
     /// Delete a discussion and clean up comment-only anchors, preserving standalone highlights.
     fn delete_thread(
         &self,
         parent: &MessageParent,
         root_id: Uuid,
-    ) -> impl Future<Output = Result<ThreadState, MessageError>> + Send;
+    ) -> impl Future<Output = Result<(ThreadState, Option<i64>), MessageError>> + Send;
     /// Resolve an immutable old comment or thread id within its authorized parent.
     fn resolve_legacy(
         &self,

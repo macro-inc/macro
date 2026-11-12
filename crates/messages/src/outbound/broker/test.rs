@@ -66,6 +66,7 @@ fn reply(parent: MessageParent, attachments: Vec<MessageAttachment>) -> Message 
 
 fn event(parent: MessageParent, change: MessageChange) -> MessageEvent {
     MessageEvent {
+        seq: None,
         parent,
         actor: SENDER.into(),
         nonce: None,

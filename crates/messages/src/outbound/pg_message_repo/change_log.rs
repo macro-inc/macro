@@ -1,0 +1,44 @@
+//! Append a channel's change only after all message work has completed.
+
+use super::{PgMessageRepository, database_error};
+use crate::domain::{changes::ChannelChangeKind, models::MessageParent, ports::MessageError};
+use sqlx::{Postgres, Transaction};
+use uuid::Uuid;
+
+impl PgMessageRepository {
+    /// Append one committed change to its channel's sequence. The caller must
+    /// run this after all other database work, immediately before committing.
+    /// The counter's row lock makes sequence order equal commit order.
+    pub async fn append_channel_change_in(
+        tx: &mut Transaction<'_, Postgres>,
+        channel_id: Uuid,
+        change: ChannelChangeKind,
+    ) -> Result<i64, MessageError> {
+        let change = match change {
+            ChannelChangeKind::Message(id) => channel_change_db_utils::Change::Message(id),
+            ChannelChangeKind::Activity(id) => channel_change_db_utils::Change::Activity(id),
+            ChannelChangeKind::Reset => channel_change_db_utils::Change::Reset,
+        };
+        channel_change_db_utils::append_in(tx, channel_id, change)
+            .await
+            .map_err(database_error)
+    }
+
+    pub(super) async fn append_message_change_in(
+        tx: &mut Transaction<'_, Postgres>,
+        parent: &MessageParent,
+        message_id: Uuid,
+    ) -> Result<Option<i64>, MessageError> {
+        // Other parents retain exactly their existing statements.
+        match parent {
+            MessageParent::Channel(channel_id) => Self::append_channel_change_in(
+                tx,
+                *channel_id,
+                ChannelChangeKind::Message(message_id),
+            )
+            .await
+            .map(Some),
+            _ => Ok(None),
+        }
+    }
+}
