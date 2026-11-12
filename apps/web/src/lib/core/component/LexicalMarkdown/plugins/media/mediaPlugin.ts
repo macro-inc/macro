@@ -45,7 +45,7 @@ import {
   registerListItemImages,
 } from './listItemImages';
 
-export { getMediaUrl } from './io';
+export { getMediaUrl, resolveStoredMediaUrl } from './io';
 
 type DSSMedia = {
   type: 'dss';

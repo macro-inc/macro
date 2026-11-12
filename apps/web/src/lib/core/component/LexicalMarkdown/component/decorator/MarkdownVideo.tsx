@@ -16,7 +16,7 @@ import {
   Show,
 } from 'solid-js';
 import { useVideoHost, type VideoHost } from '../../decorator-host/video-host';
-import { getMediaUrl } from '../../plugins/media';
+import { resolveStoredMediaUrl } from '../../plugins/media';
 import { MediaButtons } from './MediaButtons';
 import {
   MediaLoadingPlaceholder,
@@ -46,8 +46,11 @@ function Spinner() {
  * Source `MediaNode.updateFromJSON` sets the stored source type, id and
  * dimensions unchanged, so null or omitted values reach this component. Its
  * reads tolerate them: dimensions fall back with `|| 0`, and the source type
- * and id only select a `getMediaUrl` branch or interpolate into its request.
- * The url stays text: its signal and file-name helper are typed as text.
+ * and id only select a media url branch or interpolate into its request.
+ * The url is kept as stored too: a local or public url, null or omitted, goes
+ * into the video src signal, where Solid drops a null or undefined src alike,
+ * and the file-name helper converts it with String() as the URL constructor
+ * does. Static-file and document-service sources always resolve to text.
  */
 export type MarkdownVideoProps = Omit<
   VideoDecoratorProps,
@@ -100,8 +103,9 @@ export function MarkdownVideo(props: MarkdownVideoProps) {
       setVideoUrl(props.url);
       return;
     }
+    // Local and public sources returned above, so the rest resolve to text.
     fireAndForget(
-      getMediaUrl({
+      resolveStoredMediaUrl({
         type: props.srcType,
         id: props.id,
         url: props.url,
@@ -309,8 +313,10 @@ export function MarkdownVideo(props: MarkdownVideoProps) {
             newTab={
               state() === 'ok'
                 ? () => {
-                    // The ok state needs a loaded src, so the url is text here.
-                    window.open(videoSrc(), '_blank');
+                    // window.open converts a null url to "null" and treats an
+                    // omitted one as its default, as Source passes the url.
+                    const url = videoUrl();
+                    window.open(url === null ? String(url) : url, '_blank');
                   }
                 : undefined
             }

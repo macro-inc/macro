@@ -37,6 +37,19 @@ export async function getMediaUrl<Url extends string | null | undefined>(src: {
   Result<string | Url, ResultError<FetchError | 'INVALID_DOCUMENT'>[]>
 > {
   if (src.type === 'local' || src.type === 'url') return ok(src.url);
+  return resolveStoredMediaUrl(src);
+}
+
+/**
+ * Resolve a static-file or document-service media source to its url, which is
+ * always text. Any other source type resolves to an empty url after the same
+ * warning, which logs the stored source as it is.
+ */
+export async function resolveStoredMediaUrl(src: {
+  type: string | null | undefined;
+  id: string | null | undefined;
+  url: string | null | undefined;
+}): Promise<Result<string, ResultError<FetchError | 'INVALID_DOCUMENT'>[]>> {
   if (src.type === 'sfs') {
     const url = staticFileIdEndpoint(`${src.id}`);
     return ok(url);
