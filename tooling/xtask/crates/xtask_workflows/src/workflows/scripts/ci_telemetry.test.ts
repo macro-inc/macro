@@ -1,7 +1,7 @@
 // Scenarios for the CI telemetry collector and sender. Run by xtask_workflows' tests.
 
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -18,6 +18,7 @@ import {
   type Job,
   jobEvents,
   MAX_EVENT_AGE_SECONDS,
+  main,
   type PullRequest,
   pushEvent,
   type Run,
@@ -461,7 +462,7 @@ describe('Github budget', () => {
 });
 
 /** Run the preflight as actions/github-script does, with a fake client and core. */
-async function preflight(remaining: number, jobs: Job[]) {
+async function preflight(remaining: number, jobs: Job[], runOverrides: Partial<Run> = {}) {
   const directory = mkdtempSync(join(tmpdir(), 'ci-telemetry-'));
   const file = join(directory, 'jobs.json');
   const calls: string[] = [];
@@ -484,7 +485,7 @@ async function preflight(remaining: number, jobs: Job[]) {
   };
   const context = {
     repo: { owner: 'acme', repo: 'repo' },
-    payload: { workflow_run: run() },
+    payload: { workflow_run: run(runOverrides) },
   };
   const core = {
     setOutput: (name: string, value: unknown) => {
@@ -541,6 +542,89 @@ describe('preflight', () => {
     assert.match(String(error), /incomplete/);
     assert.equal(listing.jobs.length, 1);
     assert.equal(listing.trace, false);
+  });
+
+  // The pinned exporter retries a failed assertion up to 240 times, two calls a try.
+  test('a run without its conclusion gets no trace', async () => {
+    const { error, outputs, listing } = await preflight(4000, [ranJob()], { conclusion: null });
+    assert.match(String(error), /conclusion/);
+    assert.equal(outputs.export, undefined);
+    assert.equal(listing.jobs.length, 1);
+  });
+
+  test('a job without its workflow name gets no trace', async () => {
+    const { error, outputs } = await preflight(4000, [{ ...ranJob(), workflow_name: null }]);
+    assert.match(String(error), /incomplete/);
+    assert.equal(outputs.export, undefined);
+  });
+});
+
+/** Run the collector step with the workflow's environment and files; it may not call GitHub. */
+async function collectorStep(listing: object | null, workflowRun: Run) {
+  const directory = mkdtempSync(join(tmpdir(), 'ci-telemetry-'));
+  const env: Record<string, string> = {
+    GITHUB_REPOSITORY: REPO,
+    GITHUB_TOKEN: 'token',
+    GITHUB_EVENT_PATH: join(directory, 'event.json'),
+    CI_TELEMETRY_JOBS: join(directory, 'jobs.json'),
+    CI_TELEMETRY_EVENTS: join(directory, 'events.json'),
+  };
+  writeFileSync(env.GITHUB_EVENT_PATH, JSON.stringify({ workflow_run: workflowRun }));
+  if (listing) writeFileSync(env.CI_TELEMETRY_JOBS, JSON.stringify(listing));
+  const saved = Object.fromEntries(Object.keys(env).map((key) => [key, process.env[key]]));
+  Object.assign(process.env, env);
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (async () => {
+    throw new Error('unexpected request');
+  }) as typeof fetch;
+  try {
+    await main();
+  } finally {
+    globalThis.fetch = realFetch;
+    for (const [key, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+  const document = JSON.parse(readFileSync(env.CI_TELEMETRY_EVENTS, 'utf8'));
+  rmSync(directory, { recursive: true });
+  const records = document.resourceLogs[0].scopeLogs[0].logRecords;
+  const attributes: Record<string, unknown> = Object.fromEntries(
+    records
+      .at(-1)
+      .attributes.map(({ key, value }: { key: string; value: object }) => [
+        key,
+        Object.values(value)[0],
+      ])
+  );
+  return { records, attributes };
+}
+
+describe('collector step', () => {
+  const pushRun = run({ event: 'push', pull_requests: [] });
+
+  test('without a listing it calls nothing and says why', async () => {
+    const { records, attributes } = await collectorStep(null, pushRun);
+    assert.equal(records.length, 1);
+    assert.equal(attributes.skipped, 'no_listing');
+    assert.equal(attributes.api_calls, '0');
+  });
+
+  test('a low budget exports only the export line', async () => {
+    const listing = { limit: 5000, remaining: 1999, reserve: 2000, calls: 0, trace: false };
+    const { records, attributes } = await collectorStep({ ...listing, jobs: null }, pushRun);
+    assert.equal(records.length, 1);
+    assert.equal(attributes.skipped, 'budget');
+    assert.equal(attributes.rate_remaining, '1999');
+  });
+
+  test("counts the preflight's, its own and the trace's calls", async () => {
+    const listing = { limit: 5000, remaining: 3999, reserve: 2000, calls: 1, trace: true };
+    const jobs = [ranJob()];
+    const { records, attributes } = await collectorStep({ ...listing, jobs }, pushRun);
+    assert.ok(records.length > 1);
+    assert.equal(attributes.skipped, undefined);
+    assert.equal(attributes.api_calls, '3');
   });
 });
 

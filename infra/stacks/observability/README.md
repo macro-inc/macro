@@ -25,17 +25,22 @@ for the repository, and PR CI fails to start without its own calls. Exporting
 every completion of about 50 workflows, most of them PR bookkeeping, once used
 nearly all of it. So:
 
-- PR bookkeeping workflows (labels, statuses, comments, text checks; the
-  `UNOBSERVED_PR_WORKFLOWS` list) are not observed. They finish in seconds and
-  never finished last on a push that ran PR CI. A test makes every new PR
-  workflow pick a list.
+- PR bookkeeping that runs on most PR events (labels, statuses, comments, text
+  checks, preview cleanup; the `UNOBSERVED_PR_WORKFLOWS` list) is not observed.
+  It has no `job` or `step` lines or traces, so CI hours and the queue tables
+  leave out its runs, most of the tiny runner's work among them. It seldom
+  finishes last on a push that ran PR CI (2 of about 640 in a week). A test makes
+  every new PR workflow pick a list.
 - A run whose jobs were all skipped doesn't start the exporter.
 - The preflight reads the budget first, which GitHub doesn't count. Below 40% of
   the limit it skips the export and makes no calls; the collector stops at the
   same line. Otherwise it lists the run's jobs once, for both the collector and
   its own checks of the upstream action's limits.
 - The trace step runs only when a job ran: a trace of skipped jobs costs two
-  calls and shows nothing.
+  calls and shows nothing. The preflight also checks every field the pinned
+  trace action asserts, since that action retries a failed assertion, and an API
+  error, up to 240 times at two calls a try. An API error during the trace can
+  still start that loop.
 
 An exporter run costs one call to list jobs, two for the trace, and, on a PR
 event, one to list the head's runs. The run that completes a push adds one call
@@ -55,7 +60,7 @@ without a parser; each line's `trace_id` links to the run's trace.
 | `push` | `pr_type`, `wall_seconds`, `wall_start`, `start_lag_seconds`, `conclusion`, `last_workflow`, `last_job`, `slowest_job`, `queue_max_seconds`, `cold_volumes`, `files_changed`, `rust_crates_changed`, `experiment`, `rerun`, `pr_draft` |
 | `job` | `workflow`, `job`, `conclusion`, `run_seconds`, `queue_seconds`, `runner_profile`, `volume_state`, `dev_shell_seconds` |
 | `step` | `workflow`, `job`, `step`, `conclusion`, `run_seconds` |
-| `export` | The exporter's own cost: `collect_seconds`, `api_calls` (every GitHub call of the run, the trace step's included), `rate_remaining`, `rate_limit`, and `skipped` (`budget`, `no_listing`) when it made no calls |
+| `export` | The exporter's own cost: `collect_seconds`, `api_calls` (the run's GitHub calls: the preflight's, the collector's, and two for a trace the preflight passed, not counting the trace action's retries), `rate_remaining`, `rate_limit`, and `skipped` (`budget`, `no_listing`) when it made no calls |
 
 `pr_type` is `web`, `rust-small`, `rust-medium`, `rust-large`, `mixed`, `infra`,
 `other` or `unknown`. Rust size counts changed crates: up to 2, up to 9, then large,
@@ -63,9 +68,9 @@ or any root manifest change. `wall_seconds` runs from the push, or from opening 
 PR when that came later, to the last job. If neither fits, such as a reopen or
 leaving draft, it runs from the first workflow run and `wall_start` says
 `first_run`. A push counts as finished when every workflow it started has finished,
-and only an observed workflow's completion can notice that, so PR bookkeeping that
-can't finish last is all that goes unobserved. A push where only bookkeeping ran,
-or only one workflow, didn't run CI and has no `push` line. A run
+and only an observed workflow's completion can notice that, so a push whose last
+workflow is unobserved PR bookkeeping has no `push` line. Neither does a push
+where only bookkeeping ran, or only one workflow. A run
 that starts after everything on its head has finished came from something else, such
 as a PR edit, a label or leaving draft. It forms its own line with `rerun=true`,
 which also leaves a commit's first full run after draft out of the real PR numbers.
@@ -165,7 +170,8 @@ Grafana's OAuth credentials. The provider is account-wide and protected; import 
 into Pulumi if another stack creates it before this rollout.
 
 Deploy the host (see [Deploying](#deploying)) to provision the dashboard. The workflow starts observing after
-merge to `main`; add new workflow names to its list when they are introduced.
+merge to `main`; a test fails until a new PR workflow is in `OBSERVED_WORKFLOWS`
+or `UNOBSERVED_PR_WORKFLOWS`. Add other new workflows to `OBSERVED_WORKFLOWS`.
 GitHub's three-level `workflow_run` chaining limit still applies. Keep
 `trace-artifacts-glob` unset so the exporter never downloads PR-produced artifacts.
 

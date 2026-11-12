@@ -72,7 +72,7 @@ fn workflow_names(pull_request_only: bool) -> Vec<String> {
 
 /// A push counts as finished once every check has, and only a listed workflow's
 /// completion triggers the exporter, so an unlisted one that finishes last loses the
-/// push. A new PR workflow must choose: observed, or bookkeeping that never finishes last.
+/// push. A new PR workflow must choose: observed, or bookkeeping that seldom finishes last.
 #[test]
 fn every_pull_request_workflow_is_observed_or_bookkeeping() {
     let missing: Vec<_> = workflow_names(true)

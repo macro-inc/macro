@@ -16,6 +16,7 @@ mod test;
 // listed or in `UNOBSERVED_PR_WORKFLOWS`.
 const OBSERVED_WORKFLOWS: &[&str] = &[
     "Android Play Release",
+    "Android Release Drift",
     "Build Agent Daemon on Tag",
     "Build CEF with codecs",
     "Build AppImage",
@@ -23,6 +24,7 @@ const OBSERVED_WORKFLOWS: &[&str] = &[
     "Build Rust CI Image",
     "Build Web App",
     "Build macOS DMG",
+    "CI Gate for Forks",
     "Cancel Stuck Cloud Storage Deploys",
     "Deploy AI Editing Worker",
     "Deploy All Services",
@@ -40,12 +42,14 @@ const OBSERVED_WORKFLOWS: &[&str] = &[
     "Ensure Daytona Snapshot",
     "Export Datadog observability definitions",
     "Migrate Macro Database",
+    "Native Check Label",
     "PR CI",
     "Publish Android to Google Play",
     "Publish SDK",
     "Pulumi Preview on PR",
     "Push local stack binaries",
     "Release SDK",
+    "Release Label Check",
     "Reusable Deploy Service",
     "Reusable Preview Service",
     "SDK Check",
@@ -62,27 +66,24 @@ const OBSERVED_WORKFLOWS: &[&str] = &[
     "iOS App Store Publish",
     "iOS App Store Release",
     "iOS Preview",
+    "iOS Release Drift",
     "infra code check",
 ];
-// PR bookkeeping: labels, statuses, comments and text checks that finish in seconds.
-// Each PR event starts several of them, and exporting every one used most of the
-// repository's shared hourly API budget, so PR CI couldn't start. None finished
-// last on a push that ran PR CI. A push where only these ran didn't run CI and gets
-// no push line. A test checks every PR workflow is in one of the two lists.
+// PR bookkeeping that runs on most PR events: labels, statuses, comments and text
+// checks that take seconds, and preview cleanup when a PR closes. Exporting all of it
+// used most of the repository's shared hourly API budget, so PR CI couldn't start.
+// They seldom finish last on a push that ran PR CI (2 of about 640 in a week); such a
+// push, and one where only these ran, gets no push line. A test checks every PR
+// workflow is in one of the two lists.
 #[cfg(test)]
 const UNOBSERVED_PR_WORKFLOWS: &[&str] = &[
-    "Android Release Drift",
     "Auto Label PRs",
     "CI Gate Label Check",
     "CI Gate Reminder",
-    "CI Gate for Forks",
     "CLA",
     "Cleanup Preview",
-    "Native Check Label",
     "PR Privacy Check",
     "Pull Request",
-    "Release Label Check",
-    "iOS Release Drift",
 ];
 const EXPORT_TRACE: &str = "steps.preflight.outputs.export == 'true'";
 const EVENTS_FILE: &str = "${{ runner.temp }}/ci-telemetry-events.json";

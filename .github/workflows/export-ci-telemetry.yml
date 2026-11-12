@@ -7,6 +7,7 @@ name: Export CI telemetry
     - completed
     workflows:
     - Android Play Release
+    - Android Release Drift
     - Build Agent Daemon on Tag
     - Build CEF with codecs
     - Build AppImage
@@ -14,6 +15,7 @@ name: Export CI telemetry
     - Build Rust CI Image
     - Build Web App
     - Build macOS DMG
+    - CI Gate for Forks
     - Cancel Stuck Cloud Storage Deploys
     - Deploy AI Editing Worker
     - Deploy All Services
@@ -31,12 +33,14 @@ name: Export CI telemetry
     - Ensure Daytona Snapshot
     - Export Datadog observability definitions
     - Migrate Macro Database
+    - Native Check Label
     - PR CI
     - Publish Android to Google Play
     - Publish SDK
     - Pulumi Preview on PR
     - Push local stack binaries
     - Release SDK
+    - Release Label Check
     - Reusable Deploy Service
     - Reusable Preview Service
     - SDK Check
@@ -53,6 +57,7 @@ name: Export CI telemetry
     - iOS App Store Publish
     - iOS App Store Release
     - iOS Preview
+    - iOS Release Drift
     - infra code check
 permissions:
   actions: read
