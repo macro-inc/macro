@@ -1,10 +1,13 @@
 //! GraphQL reads of channel messages: timeline pages and the changes after
-//! a sequence number.
+//! a sequence number; and the writes a client's durable queue sends, which
+//! report the sequence number each took.
 
+mod mutations;
 mod objects;
 mod reads;
 #[cfg(test)]
 mod test;
+mod writes;
 
 use async_graphql::{Context, Enum, ErrorExtensions, ID, InputObject, Object};
 use chrono::{DateTime, Utc};
@@ -19,6 +22,13 @@ use uuid::Uuid;
 
 use self::reads::Reader;
 pub use self::{
+    mutations::{
+        ChannelMessageMutationRoot, GraphqlChannelAttachmentChangeInput,
+        GraphqlChannelAttachmentDeltaInput, GraphqlChannelAttachmentInput,
+        GraphqlChannelDeleteMessageInput, GraphqlChannelEditMessageInput,
+        GraphqlChannelMentionInput, GraphqlChannelMessageWrite, GraphqlChannelPostMessageInput,
+        GraphqlChannelReactInput,
+    },
     objects::{
         GraphqlChannelBotProfile, GraphqlChannelCallState, GraphqlChannelCallStatus,
         GraphqlChannelChanges, GraphqlChannelImportedAuthor, GraphqlChannelMessage,
@@ -170,6 +180,16 @@ fn bad_input(message: &'static str) -> async_graphql::Error {
     coded(message, "BAD_USER_INPUT")
 }
 
+/// A write's id argument, or `BAD_USER_INPUT` naming the field, so a client
+/// queue takes the refusal as final.
+fn input_id(id: ID, field: &str) -> async_graphql::Result<Uuid> {
+    parse_id(id, field).map_err(|error| {
+        error.extend_with(|_, extensions| {
+            extensions.set("code", "BAD_USER_INPUT");
+        })
+    })
+}
+
 /// An error carrying a machine-readable code.
 fn coded(message: &'static str, code: &'static str) -> async_graphql::Error {
     async_graphql::Error::new(message).extend_with(|_, extensions| {
@@ -177,16 +197,18 @@ fn coded(message: &'static str, code: &'static str) -> async_graphql::Error {
     })
 }
 
-/// The GraphQL error for a failed read, with the REST route's meanings.
-fn read_error(error: MessageError) -> async_graphql::Error {
+/// The GraphQL error for a failed read or write, with the REST routes'
+/// meanings. `BUSY` alone means nothing was written and the same request may
+/// be sent again; a client takes every other code as a final answer.
+fn message_error(error: MessageError) -> async_graphql::Error {
     match error {
         MessageError::NotFound => coded("channel or message not found", "NOT_FOUND"),
         MessageError::Forbidden => coded("forbidden", "FORBIDDEN"),
         MessageError::Invalid(message) => bad_input(message),
         MessageError::Conflict => coded("message id already exists", "CONFLICT"),
-        MessageError::Busy => coded("too many writes at once; retry", "UNAVAILABLE"),
+        MessageError::Busy => coded("too many writes at once; retry", "BUSY"),
         MessageError::Repository(error) => {
-            tracing::error!(error = ?error, "channel message read failed");
+            tracing::error!(error = ?error, "channel message request failed");
             coded("channel messages are unavailable", "INTERNAL_SERVER_ERROR")
         }
     }
@@ -266,7 +288,7 @@ impl GraphqlChannelMessages {
             .reads
             .timeline(self.reader(context), self.channel_id, query)
             .await
-            .map_err(read_error)?;
+            .map_err(message_error)?;
         Ok(GraphqlChannelTimelinePage {
             seq: read.seq,
             entries: read.page.entries.into_iter().map(Into::into).collect(),
@@ -296,7 +318,7 @@ impl GraphqlChannelMessages {
             .reads
             .thread(self.reader(context), self.channel_id, root, query)
             .await
-            .map_err(read_error)?;
+            .map_err(message_error)?;
         let root_entry = read.root.map(GraphqlChannelTimelineEntry::from);
         Ok(GraphqlChannelThreadPage {
             seq: read.seq,
@@ -330,7 +352,7 @@ impl GraphqlChannelMessages {
             .reads
             .changes(self.reader(context), self.channel_id, since)
             .await
-            .map_err(read_error)?;
+            .map_err(message_error)?;
         Ok(changes.into())
     }
 }

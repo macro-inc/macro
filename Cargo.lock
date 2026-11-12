@@ -9245,6 +9245,7 @@ dependencies = [
  "chrono",
  "entity_access",
  "graphql_common",
+ "macro_authorization",
  "macro_user_id",
  "messages",
  "models_pagination",

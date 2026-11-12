@@ -24,6 +24,8 @@ use super::{
     reads::{ChannelMessageReads, ReadFuture, Reader, SequencedThreadPage, SequencedTimelinePage},
 };
 
+mod writes;
+
 const USER: &str = "macro|reader@example.com";
 const CHANNEL: Uuid = Uuid::from_u128(20);
 
@@ -217,8 +219,13 @@ async fn run(reads: Arc<FakeReads>, query: &str) -> async_graphql::Response {
     )
     .finish()
     .execute(
-        Request::new(query)
-            .data(ChannelMessagesGraphqlContext::from_reads(reads).for_organization(Some(7))),
+        Request::new(query).data(
+            ChannelMessagesGraphqlContext::from_ports(
+                reads,
+                Arc::new(writes::FakeWrites::default()),
+            )
+            .for_organization(Some(7)),
+        ),
     )
     .await
 }
