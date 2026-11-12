@@ -981,6 +981,9 @@ impl IncomingEvent {
                         (EventName::DocumentDeleted, &data.document_id)
                     }
                     DocumentTopicEvent::Updated(data) => {
+                        if data.appearance_change.is_some() {
+                            return Err(EventRejection::UnsupportedEvent);
+                        }
                         document_actor(
                             data.actor.as_ref(),
                             data.actor_user_id.as_ref(),

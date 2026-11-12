@@ -100,7 +100,9 @@ use crate::{
     microsoft_token_cipher::{
         EnvelopeMicrosoftTokenCipher, KmsDataKeyProvider, MicrosoftTokenCipher,
     },
-    outbound::team_owned_entity_cleanup::TeamOwnedEntityCleanupAdapter,
+    outbound::team_owned_entity_cleanup::{
+        TeamOwnedEntityCleanupAdapter, TeamOwnedEntityCleanupConfig,
+    },
 };
 use std::{sync::Arc, time::Duration};
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
@@ -686,9 +688,11 @@ async fn run_server() -> anyhow::Result<()> {
         PgBotsRepo::new(db.clone()),
         EntityRegistryServiceImpl::new(PgEntityRegistryRepository::new(db.clone())),
         document_storage_service_client.clone(),
-        internal_key.clone(),
-        harness_url.clone(),
-        scheduled_action_url.clone(),
+        TeamOwnedEntityCleanupConfig {
+            internal_key: internal_key.clone(),
+            harness_url: harness_url.clone(),
+            scheduled_action_url: scheduled_action_url.clone(),
+        },
         // Needs only the repository: the billing-backed computer service is
         // built after the team service it bills through.
         Arc::new(hosted_runtimes::domain::service::TeamComputerRelease::new(

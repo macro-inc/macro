@@ -2,7 +2,7 @@
 
 - Use `bun` as the package manager and script runner (`bun run build`, `bunx tsc`).
 - `bun run test`: run tests 
-- `bun run check`: check typescript changes
+- `bun run check`: check generated entity catalogs, cache contracts, TypeScript, and Biome; `bun run check-entity-icons` runs the catalog guard and generator regression tests.
 - Forward `CacheHost.people` through the app's retiring host, resolving the current host on each call even for captured methods; retired reads return unsupported and context writes reject rather than acknowledge discarded publication.
 - `CacheHost.people` contracts come from cache-core models: `bun run gen-cache-people-schema --rust` regenerates Rust JSON plus Zod/types; `--check --rust` verifies both. `bun run check` verifies JSON-to-frontend generation, while cache-core tests verify Rust-to-JSON drift. Missing native person commands mean unsupported, never permission to issue an unscoped write.
 - `bun run lint`: lint with biome 
@@ -206,6 +206,7 @@ modules through the test's own routes, which limits how many tests can run at
 once. A fixture that depends on dev-only behavior won't work there. CI sets
 `FUNCTIONAL_TEST_WORKERS` and retries a failed test once; locally it defaults to
 one worker and no retries.
+Call `initializeLexical()` before mounting isolated editor fixtures so decorator nodes use the app's renderer registry.
 
 ID-only user mention rendering, name lookup failure, and composer save/reopen
 are covered on desktop/tablet/phone by `user-mentions.browser.e2e.ts` in the
@@ -479,6 +480,8 @@ native round trip. Route iOS photo picks through `pickPhotoLibraryMediaOrFiles`.
 Its phone formatting regression opens the ribbon from the add drawer in the
 production message editor, removes selected strikethrough, and saves; keep
 the ribbon horizontally scrollable and preserve editor focus on its controls.
+The desktop app's channel picker carries no `accept` filter
+(`channelFilePickerAccept`): in the macOS app a filtered picker attached nothing.
 
 Shared GraphQL query metadata has a backend-free desktop and iPhone WebKit regression:
 `bunx playwright test --config src/lib/urql-solid/browser-test/playwright.config.ts`.
@@ -544,6 +547,9 @@ new MutationObserver(() => {
 ```
 
 Then trigger the interaction and read `window.__inst.log`. `'1,2,3' → '' → '1,2,3'` (the same ids coming back) is a `<Suspense>` detach and re-attach. Fresh ids are a true remount. Nothing at all means the subtree never moved and the cause is elsewhere. Re-running the same interaction a second time is the cheapest way to prove a cold-cache cause: a once-per-session query settles after the first attempt, so the second attempt stays clean.
+
+Keep each imperative dialog inside its own Suspense boundary in `ImperativeDialog`;
+lazy popup code and popup queries must never detach the surrounding app.
 
 Remote database selections have a backend-free desktop/phone regression that
 measures every row and cell while collaborators move, share a cell, or select a
@@ -1504,7 +1510,7 @@ Keep entity-picker navigation on its search input, before the enclosing menu han
 
 ### Sidebar tag dragging
 
-Email and Calls sidebar tags can be dragged onto taggable desktop list rows.
+The shared sidebar-tag fixture covers dragging tags onto taggable desktop rows.
 Keep existing tags and apply to the selected rows when the drop row is selected.
 Use the shared scoped drag helpers and overlayIcon for the tag chip.
 The backend-free browser regression is
@@ -1612,6 +1618,8 @@ sign-in session and team: a scope change remounts it and aborts its requests,
 so drafts and late responses never cross viewers. Load and copy usernames
 through their field-scoped endpoints, and derive sharing counts from metadata.
 Compose the view from `ViewShell`, `ViewSidebar` and Drive's `FolderTree`
-rather than feature-local chrome. The responsive vault fixture is exercised with
+rather than feature-local chrome. Register its desktop composable split layout
+and wrap every route state in `SplitPanel.Root` / `SplitPanel.Body` so the
+legacy header does not reserve an empty band. The responsive vault fixture is exercised with
 `bunx playwright test --config src/features/passwords/browser-test/playwright.config.ts`.
 See the [Passwords walkthrough](../../docs/agent-guide/passwords.md).

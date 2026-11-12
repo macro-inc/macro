@@ -198,6 +198,9 @@ export function computerFailureMessage(
     .with('PAYMENT_FAILED', () => t('computers.errorPaymentFailed'))
     .with('NOT_PURCHASABLE', () => t('computers.errorNotPurchasable'))
     .with('SALES_UNAVAILABLE', () => t('computers.errorSalesUnavailable'))
+    .with('COMPUTERS_UNAVAILABLE', () =>
+      t('computers.errorComputersUnavailable')
+    )
     .with('NOT_RESTORABLE', () => t('computers.errorNotRestorable'))
     .with('NAME_MISMATCH', () => t('computers.errorNameMismatch'))
     .otherwise(() => fallback);

@@ -5,6 +5,7 @@ import {
   makeCopyLinkAction,
 } from '@app/features/next-soup/actions';
 import type { ComposeTaskProps } from '@app/features/task-composer/core/types';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { useNavigate } from '@app/lib/split-router';
 import { usePending } from '@app/observability/flow';
@@ -19,17 +20,18 @@ import {
   useSplitDisplayName,
   useSplitPanelOrThrow,
 } from '@components/app/split-layout/layoutUtils';
-import { getIconConfig } from '@core/component/EntityIcon';
+import { EntityIcon, getIconConfig } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
+import { enableEntityAppearance } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
-import ProjectIcon from '@icon/system/regular/cube.svg';
 import SquaresFourIcon from '@icon/system/regular/squares-four.svg';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { Property } from '@property/types';
 import { Tabs } from '@ui';
 import { createSignal, Match, Show, Suspense, Switch } from 'solid-js';
+import { useChangeEntityIcon } from '../entity-appearance/entity-appearance';
 import type { TaskCreateOptions } from '../tasks-view/types';
 import { DeleteProjectsDialog } from './components/delete-projects-dialog';
 import { ProjectMenuDropdown } from './components/project-row-menu';
@@ -76,15 +78,21 @@ function ProjectBreadcrumbContent(props: ProjectBreadcrumbProps) {
       order={props.order}
     >
       {(item) => (
-        <ViewBreadcrumbs.Button
-          class="gap-1.5"
-          isActive={item.isActive()}
-          onClick={item.onSelect}
-          tooltip={name()}
-        >
-          <ProjectIcon class="size-3 shrink-0" />
-          <span class="truncate">{name()}</span>
-        </ViewBreadcrumbs.Button>
+        <div class="flex min-w-0 items-center">
+          <ViewBreadcrumbs.Button
+            class="gap-1.5"
+            isActive={item.isActive()}
+            onClick={item.onSelect}
+            tooltip={name()}
+          >
+            <EntityIcon
+              targetType="initiative"
+              appearance={source.project()?.appearance}
+              size="xs"
+            />
+            <span class="truncate">{name()}</span>
+          </ViewBreadcrumbs.Button>
+        </div>
       )}
     </ViewBreadcrumbs.Item>
   );
@@ -118,6 +126,8 @@ function ProjectTitleMenu(props: {
   const layout = useSplitLayout();
   const copyLink = makeCopyLinkAction();
   const copyId = makeCopyEntityIdAction();
+  const changeIcon = useChangeEntityIcon();
+  const appearanceFlag = useFeatureFlag(enableEntityAppearance);
   const [renaming, setRenaming] = createSignal(false);
   const [deleting, setDeleting] = createSignal(false);
   const [error, setError] = createSignal<string>();
@@ -170,6 +180,18 @@ function ProjectTitleMenu(props: {
           })
         }
         onRename={() => setRenaming(true)}
+        onChangeIcon={
+          appearanceFlag().enabled
+            ? (row) =>
+                changeIcon({
+                  type: 'initiative',
+                  id: row.project.id,
+                  name: row.project.name,
+                  ownerId: props.project.ownerId,
+                  appearance: row.project.appearance,
+                })
+            : undefined
+        }
         onSetOption={(_, property, optionId) =>
           fireAndForget(setOption(property, optionId), 'projects')
         }

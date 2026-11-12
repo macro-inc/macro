@@ -295,8 +295,10 @@ subscription reconciliation still use them. Prices have no fallback. See [requir
 
 ## Team vault cleanup
 
-- Supply the Passwords metadata port to the existing owned-entity cleanup adapter:
-  authoritative empty teams skip vault RPC; retained data requires acknowledged DSS
+- Supply the Passwords metadata and team-computer release ports to the existing
+  owned-entity cleanup adapter; group internal HTTP endpoints and the fleet-wide
+  key in `TeamOwnedEntityCleanupConfig`. Authoritative empty teams skip vault RPC;
+  retained data requires acknowledged DSS
   namespace purge before `clear_team` lists or purges ordinary entities. Recheck
   emptiness under the existing team lease and retain its guard in `ClearedTeam`
   through team deletion; drop it before DSS RPC if data appeared.

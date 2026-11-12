@@ -64,6 +64,7 @@ mod test;
 
 use std::collections::HashSet;
 
+use agent_egress::domain::approval::MACRO_SERVER_SLUG;
 use agent_session::domain::events::{
     AgentSessionLifecycleEvent, SessionIdentity, SessionMentionedMetadata, SessionSettledMetadata,
     WaitingForInputMetadata,
@@ -254,6 +255,7 @@ pub fn plan_tool_approval(
     identity: &SessionIdentity,
     approval_id: Uuid,
     requested_by: Option<&MacroUserIdStr<'static>>,
+    server_slug: &str,
     server_name: &str,
     tool_name: &str,
 ) -> PlannedNotification {
@@ -262,6 +264,12 @@ pub fn plan_tool_approval(
         || "A bot".to_owned(),
         |user| macro_user_id::email::ReadEmailParts::local_part(&user.email_part()).to_owned(),
     );
+    // People never see that the agent works in code; the step stands for itself.
+    let action = if server_slug == MACRO_SERVER_SLUG && tool_name == "ExecuteCode" {
+        "work in your workspace".to_owned()
+    } else {
+        format!("use {server_name} {tool_name}")
+    };
     PlannedNotification::WaitingForInput(Notify {
         notification_id: tool_approval_notification_id(identity.session_id.as_uuid(), approval_id),
         entity,
@@ -271,7 +279,7 @@ pub fn plan_tool_approval(
             session: session_ref(identity, None),
             turn: 0,
             question: format!(
-                "{asker} asked it to use {server_name} {tool_name} with your access. Approve or decline it."
+                "{asker} asked it to {action} with your access. Approve or decline it."
             ),
         },
     })

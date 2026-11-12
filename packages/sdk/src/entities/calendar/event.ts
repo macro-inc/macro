@@ -18,6 +18,7 @@ import type {
 import { MacroError, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import type { Channel } from '../channels/channel';
+import { shareWithChannel } from '../channels/share';
 import { MacroEntity } from '../entity';
 import { Calendar } from './calendar';
 import { CalendarReplacement } from './replacement';
@@ -379,12 +380,7 @@ export class CalendarEvent extends MacroEntity<CalendarEventRecord> {
    * @idempotent
    */
   async shareWithChannel(channel: Channel): Promise<void> {
-    unwrap(
-      await this.client.storage.shareWithChannel({
-        path: { channel_id: channel.id },
-        body: { entityType: 'calendar_event', entityId: this.id },
-      }),
-    );
+    await shareWithChannel(this.client, channel, 'calendar_event', this.id);
   }
 
   /** The event as an iCalendar (`.ics`) document: its series, title,
