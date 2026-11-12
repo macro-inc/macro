@@ -255,7 +255,10 @@ impl<'state> StateRef<'state> {
     pub fn children_keys(self, key: impl Into<NodeKey>) -> Result<Vec<NodeKey>, Error> {
         let key = key.into();
         self.element(key).ok_or(Error::NotAnElement(key))?;
-        Ok(self.children(key).collect())
+        let children: Vec<NodeKey> = self.children(key).collect();
+        #[cfg(test)]
+        crate::test_work::record_children_keys(key, children.len());
+        Ok(children)
     }
     /// Next siblings.
     pub fn next_siblings(self, key: impl Into<NodeKey>) -> Siblings<'state> {

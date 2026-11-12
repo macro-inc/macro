@@ -361,6 +361,8 @@ impl Commit {
     /// Build a patch across preceding, main and follow-up commits.
     /// s2: LST-01, LST-09
     pub fn diff(&self, options: &DiffOptions) -> Result<Diff, Error> {
+        #[cfg(test)]
+        let _count_scope = crate::test_work::enter(crate::test_work::Phase::Diff);
         let last = self.chain().last().unwrap_or(self);
         let mut diff = Diff {
             generation: last.next.max_key().generation(),

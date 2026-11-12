@@ -1,11 +1,28 @@
-//! Test-only work counts scoped to actual cache reconciliation.
+//! Test-only work counts scoped to actual cache reconciliation, diffs and splices.
 use std::cell::Cell;
 use std::marker::PhantomData;
 use std::rc::Rc;
 
+use crate::NodeKey;
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Phase {
     ModelCaches,
+    Diff,
+    Splice,
+}
+
+/// Child-order work in one phase, split between root and non-root parents.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct ChildWork {
+    /// Keys collected into child lists of the root.
+    pub(crate) root_keys: usize,
+    /// Keys collected into child lists of other parents.
+    pub(crate) other_keys: usize,
+    /// Sibling links followed for the root (walks and lazy order compares).
+    pub(crate) root_steps: usize,
+    /// Sibling links followed for other parents.
+    pub(crate) other_steps: usize,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -13,6 +30,10 @@ struct Counts {
     generation: u64,
     phase: Option<Phase>,
     text_visits: usize,
+    diff: ChildWork,
+    splice: ChildWork,
+    /// Child work outside the diff and splice phases.
+    unscoped: ChildWork,
 }
 
 thread_local! {
@@ -44,6 +65,18 @@ impl Measurement {
 
     pub(crate) fn text_visits(&self) -> usize {
         COUNTS.with(|counts| counts.get().expect("active measurement").text_visits)
+    }
+
+    /// Child work in `phase` (`Diff` or `Splice`), or outside both for `None`.
+    pub(crate) fn children(&self, phase: Option<Phase>) -> ChildWork {
+        COUNTS.with(|counts| {
+            let counts = counts.get().expect("active measurement");
+            match phase {
+                Some(Phase::Diff) => counts.diff,
+                Some(Phase::Splice) => counts.splice,
+                Some(Phase::ModelCaches) | None => counts.unscoped,
+            }
+        })
     }
 }
 
@@ -114,6 +147,59 @@ pub(crate) fn record_text_visit() {
             counts.set(Some(value));
         }
     });
+}
+
+fn record_child_work(parent: NodeKey, keys: usize, steps: usize) {
+    COUNTS.with(|counts| {
+        if let Some(mut value) = counts.get() {
+            let work = match value.phase {
+                Some(Phase::Diff) => &mut value.diff,
+                Some(Phase::Splice) => &mut value.splice,
+                Some(Phase::ModelCaches) | None => &mut value.unscoped,
+            };
+            let (key_count, step_count) = if parent == NodeKey::ROOT {
+                (&mut work.root_keys, &mut work.root_steps)
+            } else {
+                (&mut work.other_keys, &mut work.other_steps)
+            };
+            *key_count = key_count.checked_add(keys).expect("work count overflow");
+            *step_count = step_count.checked_add(steps).expect("work count overflow");
+            counts.set(Some(value));
+        }
+    });
+}
+
+/// Keys collected into one child list of `parent`, attributed to the innermost phase.
+pub(crate) fn record_children_keys(parent: NodeKey, len: usize) {
+    record_child_work(parent, len, 0);
+}
+
+/// One sibling link followed for `parent`, attributed to the innermost phase.
+pub(crate) fn record_link_step(parent: NodeKey) {
+    record_child_work(parent, 0, 1);
+}
+
+thread_local! {
+    static FORCE_GENERAL_SPLICE: Cell<bool> = const { Cell::new(false) };
+}
+
+/// While alive, `splice_children` takes its general path, as a differential control.
+pub(crate) struct GeneralSplice {
+    previous: bool,
+    _thread: PhantomData<Rc<()>>,
+}
+
+pub(crate) fn force_general_splice() -> GeneralSplice {
+    GeneralSplice {
+        previous: FORCE_GENERAL_SPLICE.with(|force| force.replace(true)),
+        _thread: PhantomData,
+    }
+}
+
+impl Drop for GeneralSplice {
+    fn drop(&mut self) {
+        FORCE_GENERAL_SPLICE.with(|force| force.set(self.previous));
+    }
 }
 
 mod test;

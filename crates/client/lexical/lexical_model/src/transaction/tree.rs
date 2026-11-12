@@ -188,6 +188,8 @@ impl Transaction<'_> {
         nodes: &[NodeKey],
         restore_selection: bool,
     ) -> Result<(), Error> {
+        #[cfg(test)]
+        let _count_scope = crate::test_work::enter(crate::test_work::Phase::Splice);
         self.guard_write()?;
         let element = self
             .view()

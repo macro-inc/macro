@@ -145,7 +145,7 @@ Preserve empty-splice dirty ordering and selection points when optimizing detach
 - Test pipeline order, rollback, JSON bytes and boundary cases locally; replay the admitted Tier A core subset with `cargo test -p lexical_conformance --test replay -j4`.
 
 The sibling test modules cover values, reads, node dispatch, tree edits and NodeState.
-Share deterministic test-only traversal counters in `src/test_work.rs`; scope each measurement to its actual phase and restore thread-local state on unwind.
+Share deterministic test-only traversal counters in `src/test_work.rs` (model-cache text visits; diff and splice child lists and sibling steps, split root/other); scope each measurement to its actual phase and restore thread-local state on unwind. `force_general_splice` runs the general splice path as a differential control.
 `pipeline/test.rs` covers ordering and transaction boundaries; `json/test.rs` checks
 literal exported bytes. `selection/*/test.rs` and `selection/test.rs` port explicit
 upstream selection examples, including the §18.5 `remove_text` fixture, detached-slot
