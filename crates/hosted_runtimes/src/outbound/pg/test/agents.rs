@@ -27,7 +27,7 @@ async fn insert_agent(pool: &PgPool) -> MacroUserIdStr<'static> {
 async fn a_purchase_for_an_agent_links_it_while_confirming_and_after(pool: PgPool) {
     insert_team(&pool).await;
     let agent = insert_agent(&pool).await;
-    let repo = PgComputerRepo::new(pool, policy());
+    let repo = PgComputerRepo::new(pool.clone(), policy());
     host(&repo, "runtime-dev-1", 31, 7, 3).await;
     let id = ComputerId::new_from_uuid(Uuid::from_u128(1));
 
@@ -42,6 +42,8 @@ async fn a_purchase_for_an_agent_links_it_while_confirming_and_after(pool: PgPoo
         repo.computer_for_agent(TEAM, &agent).await.unwrap(),
         Some(id)
     );
+    // A purchase still confirming is not a computer yet.
+    assert!(!repo.has_live_computer(TEAM, &agent).await.unwrap());
 
     repo.convert_reservation(reservation.id, active(1), now())
         .await
@@ -66,6 +68,27 @@ async fn a_purchase_for_an_agent_links_it_while_confirming_and_after(pool: PgPoo
             .unwrap(),
         None
     );
+    assert!(repo.has_live_computer(TEAM, &agent).await.unwrap());
+    assert!(
+        !repo
+            .has_live_computer(Uuid::from_u128(0xbad), &agent)
+            .await
+            .unwrap()
+    );
+
+    // Released: still linked, no longer live.
+    sqlx::query!(
+        r#"UPDATE hosted_runtime SET state = jsonb_set(state, '{phase}', '{"phase": "destroying"}') WHERE id = $1"#,
+        id.as_uuid(),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        repo.computer_for_agent(TEAM, &agent).await.unwrap(),
+        Some(id)
+    );
+    assert!(!repo.has_live_computer(TEAM, &agent).await.unwrap());
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

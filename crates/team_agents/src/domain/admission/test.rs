@@ -1,11 +1,10 @@
 use std::sync::{Arc, Mutex};
 
 use super::*;
-use crate::domain::models::{ComputerId, ComputerPurchase, TeamAgentError};
+use hosted_runtimes::domain::ids::ComputerId;
 
 const TEAM: Uuid = Uuid::from_u128(0x0193_a1b2_0000_7000_8000_0000_0000_00aa);
 const OTHER_TEAM: Uuid = Uuid::from_u128(0x0193_a1b2_0000_7000_8000_0000_0000_00bb);
-const COMPUTER: Uuid = Uuid::from_u128(0x0193_a1b2_0000_7000_8000_0000_0000_00c1);
 
 fn user(id: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::parse_from_str(id).unwrap().into_owned()
@@ -55,46 +54,32 @@ impl AgentAccounts for FakeAccounts {
 
 #[derive(Clone, Default)]
 struct FakeComputers {
-    computer: Option<ComputerState>,
-    lookup_down: bool,
-    state_down: bool,
-    calls: Arc<Mutex<Vec<&'static str>>>,
+    live: bool,
+    down: bool,
+    calls: Arc<Mutex<u32>>,
 }
 
-impl Computers for FakeComputers {
-    async fn purchase(&self, _: ComputerPurchase) -> Result<ComputerId, TeamAgentError> {
-        unreachable!("admission never buys")
+impl ComputerAgents for FakeComputers {
+    type Error = Down;
+
+    async fn agent_of(&self, _: ComputerId) -> Result<Option<MacroUserIdStr<'static>>, Down> {
+        unreachable!("admission looks computers up by agent")
     }
 
     async fn computer_for_agent(
         &self,
         _: Uuid,
         _: &MacroUserIdStr<'_>,
-    ) -> Result<Option<ComputerId>, TeamAgentError> {
-        self.calls.lock().unwrap().push("computer_for_agent");
-        if self.lookup_down {
-            return Err(TeamAgentError::internal(Down));
+    ) -> Result<Option<ComputerId>, Down> {
+        unreachable!("admission asks only whether one is live")
+    }
+
+    async fn has_live_computer(&self, _: Uuid, _: &MacroUserIdStr<'_>) -> Result<bool, Down> {
+        *self.calls.lock().unwrap() += 1;
+        if self.down {
+            return Err(Down);
         }
-        Ok(self.computer.map(|_| ComputerId::new_from_uuid(COMPUTER)))
-    }
-
-    async fn agent_of(
-        &self,
-        _: ComputerId,
-    ) -> Result<Option<MacroUserIdStr<'static>>, TeamAgentError> {
-        unreachable!("admission looks computers up by agent")
-    }
-
-    async fn state(&self, _: Uuid, _: ComputerId) -> Result<ComputerState, TeamAgentError> {
-        self.calls.lock().unwrap().push("state");
-        if self.state_down {
-            return Err(TeamAgentError::internal(Down));
-        }
-        Ok(self.computer.expect("state of a computer that exists"))
-    }
-
-    async fn release(&self, _: Uuid, _: ComputerId) -> Result<(), TeamAgentError> {
-        unreachable!("admission never releases")
+        Ok(self.live)
     }
 }
 
@@ -107,7 +92,7 @@ fn admission(
 
 fn running() -> FakeComputers {
     FakeComputers {
-        computer: Some(ComputerState::Ready),
+        live: true,
         ..FakeComputers::default()
     }
 }
@@ -137,10 +122,9 @@ async fn an_agent_of_the_team_with_a_running_computer_is_admitted_with_its_creat
 
 #[test]
 fn each_missing_fact_is_its_own_refusal() {
-    let decided = |account: Option<AgentAccountFacts>, computer: Option<ComputerState>| {
-        decide(&agent(), TEAM, account, computer)
-    };
-    let ready = Some(ComputerState::Ready);
+    let decided =
+        |account: Option<AgentAccountFacts>, live: bool| decide(&agent(), TEAM, account, live);
+    let ready = true;
     let cases = [
         (None, ready, NotAdmitted::NotAnAgent),
         (
@@ -183,32 +167,10 @@ fn each_missing_fact_is_its_own_refusal() {
             ready,
             NotAdmitted::NoResponsibleHuman,
         ),
-        (Some(facts()), None, NotAdmitted::NoComputer),
-        (
-            Some(facts()),
-            Some(ComputerState::Purchasing),
-            NotAdmitted::NoComputer,
-        ),
-        (
-            Some(facts()),
-            Some(ComputerState::Released),
-            NotAdmitted::ComputerReleased,
-        ),
+        (Some(facts()), false, NotAdmitted::NoLiveComputer),
     ];
     for (account, computer, refused) in cases {
         assert_eq!(decided(account, computer), Err(refused));
-    }
-}
-
-#[test]
-fn a_computer_that_is_not_released_counts_whatever_it_is_doing() {
-    for state in [
-        ComputerState::SettingUp,
-        ComputerState::Ready,
-        ComputerState::Paused,
-        ComputerState::Failed,
-    ] {
-        assert!(decide(&agent(), TEAM, Some(facts()), Some(state)).is_ok());
     }
 }
 
@@ -232,7 +194,7 @@ async fn an_account_that_is_not_admitted_is_refused_before_any_computer_lookup()
         refused,
         Err(AdmissionError::NotAdmitted(NotAdmitted::OtherTeam))
     ));
-    assert!(computers.calls.lock().unwrap().is_empty());
+    assert_eq!(*computers.calls.lock().unwrap(), 0);
 }
 
 #[tokio::test]
@@ -250,16 +212,9 @@ async fn any_dependency_failing_is_unavailable_never_admitted() {
             running(),
         ),
         (
-            up.clone(),
-            FakeComputers {
-                lookup_down: true,
-                ..running()
-            },
-        ),
-        (
             up,
             FakeComputers {
-                state_down: true,
+                down: true,
                 ..running()
             },
         ),

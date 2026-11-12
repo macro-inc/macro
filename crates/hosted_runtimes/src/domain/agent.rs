@@ -175,4 +175,12 @@ pub trait ComputerAgents: Send + Sync + 'static {
         team_id: uuid::Uuid,
         agent: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Option<ComputerId>, Self::Error>> + Send;
+
+    /// Whether a computer runs this agent for the team: bought (not a
+    /// purchase still confirming) and not released.
+    fn has_live_computer(
+        &self,
+        team_id: uuid::Uuid,
+        agent: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<bool, Self::Error>> + Send;
 }

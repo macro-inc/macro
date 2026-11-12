@@ -35,10 +35,11 @@ admins behind the same flag; agent_harness_service implements its
 account is an agent the vault may admit, from current facts each call: its
 `team_agents` row is for that team, `"User"."isAgent"` is set, it is still a
 `team_user` member, its `created_by` is a human, and a computer that isn't
-released runs it (`Computers::computer_for_agent` + `state`; a purchase still
-confirming doesn't count). It returns the responsible human, a typed
-`NotAdmitted` reason, or `Unavailable` when any dependency fails (fail
-closed). The vault's `AgentDirectory` adapter is a thin impl over it.
+released runs it (`ComputerAgents::has_live_computer`, one read on the pool; a
+purchase still confirming doesn't count). It returns the responsible human, a
+typed `NotAdmitted` reason, or `Unavailable` when any dependency fails (fail
+closed). `resolve(agent)` admits an account to its own team, for the vault's
+`AgentDirectory`, whose adapter lives in document_storage_service's outbound.
 
 An agent's status comes from its computer (`provisioning`, `running`,
 `paused`, `failed`, `released`); nothing about it is stored here.
