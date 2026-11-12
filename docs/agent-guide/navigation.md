@@ -1720,9 +1720,12 @@ Background history or channel refetches alone must not blank a settled empty
 category back to its loading state,
 including when the active category does not use that source. Cache-update bursts
 must let in-flight history, channel, and menu-search reads publish their results,
-then catch up with one coalesced refresh. Verify with cache reads slower than the
-250 ms update throttle, starting from an empty cache: entities appear without
-waiting for background updates to stop. Changing the query/category or closing
+then catch up with one coalesced refresh. A change after a quiet interval
+refreshes at once, and refreshes never start closer together than that
+interval: 2 s for the channel index and menu searches (rebuilt for the whole
+account), 250 ms for history. Verify
+with cache reads slower than that throttle, starting from an empty cache:
+entities appear without waiting for background updates to stop. Changing the query/category or closing
 the menu still discards obsolete search results. A failed background
 refresh retains available history/channel items and recently-viewed ordering.
 Placeholder results also remain usable while replacement data loads. A normal
