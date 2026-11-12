@@ -211,12 +211,19 @@ export function createProjectedList<T extends { id: string }>(options: {
   // Nothing else replays a refused first answer: cache-change refreshes only
   // follow a write, and the menu would list no documents until one happened.
   const stopWatchingEngine = options.host.onCacheGenerationChanged?.(() => {
-    const request = current;
-    if (!request?.awaitingEngine) return;
+    // The host reports the replacement before it starts reinitializing, so
+    // read after the notification returns.
+    queueMicrotask(() => {
+      const request = current;
+      if (!request?.awaitingEngine) return;
 
-    if (request.busy) request.refreshPending = true;
-    else
-      fireAndForget(fetchPages(request, request.pages, false), 'quick-access');
+      if (request.busy) request.refreshPending = true;
+      else
+        fireAndForget(
+          fetchPages(request, request.pages, false),
+          'quick-access'
+        );
+    });
   });
   onCleanup(() => stopWatchingEngine?.());
 

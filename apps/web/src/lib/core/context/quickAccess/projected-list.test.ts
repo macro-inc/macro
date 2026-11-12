@@ -218,6 +218,7 @@ describe('Quick Access local projection', () => {
     expect(list.error()).toBeUndefined();
 
     engineReplaced();
+    await Promise.resolve();
     expect(search).toHaveBeenCalledTimes(2);
   });
 
@@ -245,6 +246,7 @@ describe('Quick Access local projection', () => {
     await vi.waitFor(() => expect(list.error()).toBeDefined());
     expect(list.isSearching()).toBe(false);
     engineReplaced();
+    await Promise.resolve();
     expect(search).toHaveBeenCalledTimes(1);
   });
 
