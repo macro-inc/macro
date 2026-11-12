@@ -611,7 +611,7 @@ service_url! {
         pub McpChatgptServiceUrl {
             local: "http://localhost:8103",
             dev: "https://mcp-chatgpt-worker-dev.macroverse.workers.dev",
-            prod: "https://mcp-chatgpt.macro.com",
+            prod: "https://mcp-chatgpt-worker.macroverse.workers.dev",
         },
         /// Public integration callback base, preserving registered OAuth redirect URIs.
         pub CognitionPublicUrl {
