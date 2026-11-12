@@ -37,7 +37,7 @@ function observeRootMutations(root: HTMLElement, onMutation: () => void) {
 }
 
 type NativeCodeAccessoryOptions = {
-  /** Source mounts accessories for initially loaded blocks before the editor is editable. */
+  /** Native initial accessories may mount before the editor is ready/editable. */
   ready: () => boolean;
 };
 
@@ -96,11 +96,19 @@ export function createNativeCodeAccessories(
     const element = view.getElementByKey(key);
     if (!element) return;
     element.classList.add('__decorator-mount-ref');
-    if (!editableAtMount.has(key))
-      editableAtMount.set(key, options.ready() && view.isEditable);
+    // A loaded block may mount before the editor is ready. Source opens an
+    // editable document with editable headers (observed), so a false value is
+    // read again on the next mount; a true value stays, as Source's host keeps
+    // its editableAtMount.
+    const wasEditable = editableAtMount.get(key) ?? false;
+    const editable = wasEditable || (options.ready() && view.isEditable);
+    editableAtMount.set(key, editable);
     const current = elements.get(key);
     if (current) current[1](element);
     else elements.set(key, createSignal<HTMLElement | undefined>(element));
+    // A new host only renders through a fresh store entry (Source
+    // FORCE_REFRESH_ACCESSORIES_COMMAND).
+    if (editable !== wasEditable) setStore(String(key), undefined!);
     setStore(String(key), {
       key: String(key),
       mountRef: element,
@@ -128,6 +136,10 @@ export function createNativeCodeAccessories(
 
   return {
     store,
+    /** Remount the blocks mounted while the editor was not ready and editable. */
+    refreshEditable() {
+      for (const [key, editable] of editableAtMount) if (!editable) mount(key);
+    },
     dispose() {
       release();
       refreshers.clear();

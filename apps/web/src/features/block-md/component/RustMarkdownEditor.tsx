@@ -295,7 +295,10 @@ export default function RustMarkdownEditor(props: {
       if (current) fireAndForget(current.close(), 'rust-editor.close');
     }
   });
-  createEffect(() => runtime()?.view.setEditable(canEdit()));
+  createEffect(() => {
+    runtime()?.view.setEditable(canEdit());
+    codeAccessories()?.refreshEditable();
+  });
 
   // Source MarkdownEditor's persistent-location and node-ID navigation.
   const [highlightNodeId, setHighlightNodeId] = createSignal<string>();
@@ -620,6 +623,7 @@ export default function RustMarkdownEditor(props: {
               if (abort.signal.aborted) return;
               if (lastError) throw lastError;
               setReady(true);
+              accessories.refreshEditable();
               if (abort.signal.aborted) return;
               if (lastError) throw lastError;
               checklist.ready(mounted.view);
