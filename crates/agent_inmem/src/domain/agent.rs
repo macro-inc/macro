@@ -90,7 +90,7 @@ pub const AGENT_NAME: &str = "macro-inmem";
 
 /// The `_meta` namespace this agent writes its own keys under, mirroring
 /// Claude Code's `claudeCode` layout so the fold reads both the same way.
-pub const META_NAMESPACE: &str = "macro";
+pub const META_NAMESPACE: &str = agent_session::domain::model::META_NAMESPACE;
 
 /// Slash command that asks the user a question through `elicitation/create`
 /// instead of running the model: `/ask <question>` for free text, or

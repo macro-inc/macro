@@ -1,0 +1,68 @@
+.notion-import-graphic {
+  width: 100%;
+  padding: 16px 0;
+  color: var(--color-ink);
+  font-size: 15px;
+  font-weight: 370;
+  line-height: 1.5;
+}
+
+.notion-import-panel {
+  width: min(100%, 480px);
+  margin: 0 auto;
+  padding: 24px;
+  border: 1px solid color-mix(in srgb, var(--color-ink) 12%, transparent);
+  border-radius: 24px;
+  background: color-mix(in srgb, var(--color-page, var(--b0)) 96%, var(--color-ink));
+}
+
+.notion-import-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 20px;
+}
+
+.notion-import-title svg { width: 18px; height: 18px; }
+
+.notion-import-description {
+  margin: 12px 0 20px;
+  color: var(--color-ink-muted);
+  font-size: 14px;
+}
+
+.notion-import-selection { margin-bottom: 10px; font-size: 12px; }
+.notion-import-items {
+  padding: 4px 12px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--color-ink) 3%, transparent);
+}
+
+.notion-import-item { display: flex; align-items: center; gap: 12px; padding: 12px 0; }
+.notion-import-checkbox {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  background: var(--color-ink);
+  color: var(--color-page, var(--b0));
+}
+.notion-import-checkbox svg { width: 12px; height: 12px; }
+.notion-import-security {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 16px 0 24px;
+  color: var(--color-ink-muted);
+  font-size: 12px;
+}
+.notion-import-security svg { width: 13px; height: 13px; flex-shrink: 0; }
+.notion-import-footer { display: flex; align-items: center; justify-content: flex-end; gap: 12px; font-size: 14px; }
+.notion-import-search, .notion-import-submit { padding: 9px 14px; border-radius: 10px; }
+.notion-import-submit { background: var(--color-ink); color: var(--color-page, var(--b0)); }
+
+@media (max-width: 480px) {
+  .notion-import-panel { padding: 20px; }
+  .notion-import-title { font-size: 18px; }
+}
