@@ -159,9 +159,9 @@ function favoriteSoupEffects(
     skill: undefined,
     scheduled_action: undefined,
     initiative: 'GraphqlSoupInitiative',
+    // Databases and forms are favoritable but have no Soup entity.
     database: undefined,
     database_row: undefined,
-    // Forms are not favoritable; the service refuses them.
     form: undefined,
     // Standalone groups have no Soup entity.
     external_chat: undefined,

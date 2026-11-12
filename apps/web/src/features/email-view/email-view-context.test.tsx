@@ -229,10 +229,11 @@ describe('tag view title', () => {
     },
   ];
 
-  it('names the view after the tag chosen in the sidebar', () => {
+  it('names All after its selected tag filter', () => {
     mocks.tagSets = userTags;
     const { view } = mount();
-    view.showTags([qaTag]);
+    view.setTab('all');
+    view.setFilters({ facets: { tags: [qaTag] } });
     expect(view.tagViewTitle()).toBe('QA test tag');
   });
 

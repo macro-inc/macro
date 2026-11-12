@@ -1,9 +1,9 @@
-import ArrowLeft from '@phosphor/arrow-left.svg';
-import Envelope from '@phosphor/envelope.svg';
-import FileText from '@phosphor/file-text.svg';
-import Folder from '@phosphor/folder.svg';
-import ListChecks from '@phosphor/list-checks.svg';
-import X from '@phosphor/x.svg';
+import ArrowLeft from '@icon/system/regular/arrow-left.svg';
+import Envelope from '@icon/system/regular/envelope.svg';
+import FileText from '@icon/system/regular/file-text.svg';
+import Folder from '@icon/system/regular/folder.svg';
+import ListChecks from '@icon/system/regular/list-checks.svg';
+import X from '@icon/system/regular/x.svg';
 import { Button } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { createProductWalkthrough } from '../../primitives/createProductWalkthrough';

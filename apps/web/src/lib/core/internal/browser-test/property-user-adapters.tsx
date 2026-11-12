@@ -6,6 +6,7 @@ export function createEmailsInfiniteQuery() {
 export function useSearchSoupQuery() {
   return { status: 'success', data: [] };
 }
+export const validateSearchServiceText = (text: string) => text.length >= 3;
 export const Entity = {
   Icon: () => {
     throw new Error('Unexpected non-user entity');

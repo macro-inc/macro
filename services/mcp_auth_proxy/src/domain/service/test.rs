@@ -82,6 +82,63 @@ async fn registration_rejects_an_empty_redirect_uri_list() {
     assert!(matches!(error, RegisterClientError::RedirectUrisRequired));
 }
 
+#[tokio::test]
+async fn registration_refuses_a_name_claiming_to_be_macro() {
+    let harness = Harness::new();
+
+    let error = harness
+        .service
+        .register_client(ClientRegistrationRequest {
+            client_name: Some("Macro Security".to_owned()),
+            redirect_uris: vec![LOOPBACK_REDIRECT_URI.to_owned()],
+        })
+        .await
+        .expect_err("a reserved name must be refused");
+
+    assert!(matches!(error, RegisterClientError::ReservedClientName));
+}
+
+#[tokio::test]
+async fn registration_stores_the_normalized_name() {
+    let harness = Harness::new();
+
+    let registration = harness
+        .service
+        .register_client(ClientRegistrationRequest {
+            client_name: Some(" Claude\u{202e}\n Code <@here> ".to_owned()),
+            redirect_uris: vec![LOOPBACK_REDIRECT_URI.to_owned()],
+        })
+        .await
+        .expect("registration should succeed");
+    let stored = harness
+        .registry
+        .find_client(&registration.client_id)
+        .await
+        .expect("lookup should succeed")
+        .expect("client should be persisted");
+
+    assert_eq!(registration.client_name, "Claude Code here");
+    assert_eq!(stored.client_name, "Claude Code here");
+}
+
+#[tokio::test]
+async fn registration_without_a_usable_name_is_an_unnamed_client() {
+    let harness = Harness::new();
+
+    for client_name in [None, Some("\u{200b}🤖".to_owned())] {
+        let registration = harness
+            .service
+            .register_client(ClientRegistrationRequest {
+                client_name,
+                redirect_uris: vec![LOOPBACK_REDIRECT_URI.to_owned()],
+            })
+            .await
+            .expect("registration should succeed");
+
+        assert_eq!(registration.client_name, "MCP client");
+    }
+}
+
 // --- Authorization ------------------------------------------------------
 
 #[tokio::test]
@@ -405,7 +462,7 @@ async fn consent_prompt_strips_formatting_tricks_from_the_client_name() {
     let AuthorizationStart::ConsentRequired(prompt) = start else {
         panic!("an unlisted host must ask for consent");
     };
-    let expected_name = format!("Claudemoc.elgoog{}\u{2026}", "x".repeat(48));
+    let expected_name = format!("Claudemoc.elgoog {}", "x".repeat(47));
     assert_eq!(prompt.client_name, expected_name);
     assert_eq!(prompt.redirect_host, "xn--claud-7ra.example:8443");
 }

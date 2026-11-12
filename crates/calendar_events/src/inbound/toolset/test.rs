@@ -165,11 +165,48 @@ struct MockMutations {
     created: Mutex<Vec<RecordedCreate>>,
     create_error: Mutex<Option<CalendarMutationError>>,
     updated: Mutex<Vec<(Uuid, CalendarEventPatch, CalendarUpdateScope)>>,
+    switched_to_macro_call: Mutex<Vec<(Uuid, CalendarEventPatch, CalendarUpdateScope)>>,
+    macro_call_error: Mutex<Option<MacroCallEventError>>,
     deleted: Mutex<Vec<(Uuid, CalendarDeletionScope)>>,
     answered: Mutex<Vec<(Uuid, AttendeeResponseStatus, CalendarRsvpScope)>>,
     calendars: Mutex<Vec<VisibleCalendar>>,
     copied: Mutex<Vec<(Uuid, Option<Uuid>)>>,
     copy_error: Mutex<Option<CalendarMutationError>>,
+}
+
+impl CalendarMacroCallService for MockMutations {
+    async fn create_event_with_macro_call(
+        &self,
+        _requester_id: &str,
+        _email_link_id: Option<Uuid>,
+        _calendar_id: Option<Uuid>,
+        _draft: CalendarEventDraft,
+    ) -> Result<crate::domain::models::CalendarEvent, MacroCallEventError> {
+        unreachable!("the create tool mints its call through the meeting link port")
+    }
+
+    async fn update_event_with_macro_call(
+        &self,
+        _requester_id: &str,
+        event_id: Uuid,
+        _calendar_id: Option<Uuid>,
+        patch: CalendarEventPatch,
+        scope: CalendarUpdateScope,
+    ) -> Result<crate::domain::models::CalendarEvent, MacroCallEventError> {
+        if let Some(error) = self.macro_call_error.lock().unwrap().take() {
+            return Err(error);
+        }
+        self.switched_to_macro_call
+            .lock()
+            .unwrap()
+            .push((event_id, patch, scope));
+        Ok(crate::domain::models::CalendarEvent {
+            description: Some(format!(
+                "<p>Join Macro call: <a href=\"{MEETING_URL}\">{MEETING_URL}</a></p>"
+            )),
+            ..sample_event(Vec::new())
+        })
+    }
 }
 
 impl CalendarMutationService for MockMutations {
@@ -351,7 +388,7 @@ impl CalendarOccurrenceService for MockOccurrences {
         &self,
         _requester_id: &str,
     ) -> Result<Option<String>, rootcause::Report> {
-        unreachable!("no calendar tool resolves the primary time zone")
+        Ok(Some("America/New_York".to_string()))
     }
 
     async fn meeting_copies(
@@ -934,11 +971,55 @@ async fn create_with_a_macro_call_explains_an_unwired_host() {
 }
 
 #[tokio::test]
+async fn update_can_switch_the_event_to_a_macro_call() {
+    let (mutations, context) = context(MockMutations::default(), empty_occurrences());
+    let event_id = Uuid::from_u128(11);
+
+    let tool: UpdateCalendarEvent = serde_json::from_value(serde_json::json!({
+        "eventId": event_id,
+        "scope": "all",
+        "title": "Renamed",
+        "addMacroCall": true,
+    }))
+    .unwrap();
+    let response = tool.call(context, request_context()).await.unwrap();
+
+    assert_eq!(response.macro_call_url.as_deref(), Some(MEETING_URL));
+    assert!(mutations.updated.lock().unwrap().is_empty());
+    let switched = mutations.switched_to_macro_call.lock().unwrap();
+    let (switched_id, patch, _) = switched.first().expect("one switch");
+    assert_eq!(*switched_id, event_id);
+    assert_eq!(patch.title.as_deref(), Some("Renamed"));
+}
+
+#[tokio::test]
+async fn update_refuses_both_a_macro_call_and_a_conference() {
+    let (mutations, context) = context(MockMutations::default(), empty_occurrences());
+
+    let tool: UpdateCalendarEvent = serde_json::from_value(serde_json::json!({
+        "eventId": Uuid::from_u128(11),
+        "scope": "all",
+        "conference": "google_meet",
+        "addMacroCall": true,
+    }))
+    .unwrap();
+    let error = tool.call(context, request_context()).await.unwrap_err();
+
+    assert!(
+        error.description.contains("mutually exclusive"),
+        "unexpected description: {}",
+        error.description
+    );
+    assert!(mutations.switched_to_macro_call.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
 async fn update_converts_input_into_a_domain_patch() {
     let (mutations, context) = context(MockMutations::default(), empty_occurrences());
     let event_id = Uuid::from_u128(11);
 
     let tool = UpdateCalendarEvent {
+        add_macro_call: false,
         event_id,
         calendar_id: None,
         inbox: None,
@@ -982,6 +1063,7 @@ async fn update_maps_out_of_office_settings_into_the_patch() {
     let event_id = Uuid::from_u128(11);
 
     let tool = UpdateCalendarEvent {
+        add_macro_call: false,
         event_id,
         calendar_id: None,
         inbox: None,
@@ -1022,6 +1104,7 @@ async fn update_passes_the_selected_occurrence_scope() {
     let event_id = Uuid::from_u128(11);
 
     let tool = UpdateCalendarEvent {
+        add_macro_call: false,
         event_id,
         calendar_id: None,
         inbox: None,
@@ -1060,6 +1143,7 @@ async fn scoped_update_requires_a_recurrence_id() {
     let (mutations, context) = context(MockMutations::default(), empty_occurrences());
 
     let tool = UpdateCalendarEvent {
+        add_macro_call: false,
         event_id: Uuid::from_u128(11),
         calendar_id: None,
         inbox: None,
@@ -1090,6 +1174,7 @@ async fn series_update_rejects_a_stray_recurrence_id() {
     let (mutations, context) = context(MockMutations::default(), empty_occurrences());
 
     let tool = UpdateCalendarEvent {
+        add_macro_call: false,
         event_id: Uuid::from_u128(11),
         calendar_id: None,
         inbox: None,
@@ -1117,6 +1202,7 @@ async fn update_carries_reminders_into_the_patch() {
     let (mutations, context) = context(MockMutations::default(), empty_occurrences());
 
     let tool = UpdateCalendarEvent {
+        add_macro_call: false,
         event_id: Uuid::from_u128(11),
         calendar_id: None,
         inbox: None,
@@ -1164,6 +1250,7 @@ async fn rsvp_alone_answers_without_patching() {
     let event_id = Uuid::from_u128(11);
 
     let tool = UpdateCalendarEvent {
+        add_macro_call: false,
         event_id,
         calendar_id: None,
         inbox: None,
@@ -1200,6 +1287,7 @@ async fn rsvp_follows_the_occurrence_scope_of_the_call() {
     let (mutations, context) = context(MockMutations::default(), empty_occurrences());
 
     let tool = UpdateCalendarEvent {
+        add_macro_call: false,
         event_id: Uuid::from_u128(11),
         calendar_id: None,
         inbox: None,
@@ -1237,6 +1325,7 @@ async fn update_answers_after_applying_the_patch() {
     let (mutations, context) = context(MockMutations::default(), empty_occurrences());
 
     let tool = UpdateCalendarEvent {
+        add_macro_call: false,
         event_id: Uuid::from_u128(11),
         calendar_id: None,
         inbox: None,
@@ -1268,6 +1357,7 @@ async fn update_without_a_change_or_an_rsvp_is_rejected() {
     let (mutations, context) = context(MockMutations::default(), empty_occurrences());
 
     let tool = UpdateCalendarEvent {
+        add_macro_call: false,
         event_id: Uuid::from_u128(11),
         calendar_id: None,
         inbox: None,
@@ -1361,9 +1451,61 @@ async fn list_events_maps_occurrences_and_skips_cancelled_ones() {
     assert_eq!(item.my_response.as_deref(), Some("accepted"));
     assert_eq!(item.attendee_count, 2);
     assert!(!item.is_all_day);
+    assert!(item.start_local.ends_with(" America/New_York"));
     assert_eq!(response.sync_status, "syncing");
     assert!(response.summary.contains("still syncing"));
     assert!(!response.truncated);
+}
+
+#[test]
+fn local_times_prefer_the_users_zone_then_the_events_then_utc() {
+    let time = EventTime::Timed {
+        starts_at: Utc.with_ymd_and_hms(2026, 11, 10, 3, 0, 0).unwrap(),
+        ends_at: Utc.with_ymd_and_hms(2026, 11, 10, 5, 0, 0).unwrap(),
+        time_zone: Some("Asia/Tokyo".to_string()),
+    };
+
+    assert_eq!(
+        local_time_fields(&time, Some("America/New_York")),
+        (
+            "Monday, November 9, 2026, 10:00 PM America/New_York".to_string(),
+            "Tuesday, November 10, 2026, 12:00 AM America/New_York".to_string(),
+        )
+    );
+    assert_eq!(
+        local_time_fields(&time, Some("Not/AZone")).0,
+        "Tuesday, November 10, 2026, 12:00 PM Asia/Tokyo"
+    );
+    assert_eq!(
+        local_time_fields(&time, None).0,
+        "Tuesday, November 10, 2026, 12:00 PM Asia/Tokyo"
+    );
+
+    let time_without_zone = EventTime::Timed {
+        starts_at: Utc.with_ymd_and_hms(2026, 11, 10, 3, 0, 0).unwrap(),
+        ends_at: Utc.with_ymd_and_hms(2026, 11, 10, 5, 0, 0).unwrap(),
+        time_zone: None,
+    };
+    assert_eq!(
+        local_time_fields(&time_without_zone, None).0,
+        "Tuesday, November 10, 2026, 3:00 AM UTC"
+    );
+}
+
+#[test]
+fn all_day_local_times_keep_their_dates_in_any_zone() {
+    let time = EventTime::AllDay {
+        start_date: NaiveDate::from_ymd_opt(2026, 11, 5).unwrap(),
+        end_date: NaiveDate::from_ymd_opt(2026, 11, 10).unwrap(),
+    };
+
+    assert_eq!(
+        local_time_fields(&time, Some("Pacific/Auckland")),
+        (
+            "Thursday, November 5, 2026".to_string(),
+            "Tuesday, November 10, 2026".to_string(),
+        )
+    );
 }
 
 #[tokio::test]
@@ -1885,6 +2027,7 @@ async fn update_result_names_the_copy_it_changed() {
     let (_, context) = context(mutations, empty_occurrences());
 
     let tool = UpdateCalendarEvent {
+        add_macro_call: false,
         event_id: Uuid::from_u128(7),
         calendar_id: None,
         inbox: None,

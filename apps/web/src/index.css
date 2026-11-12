@@ -316,6 +316,8 @@ body.tauri-ios {
   --color-write:       var(--color-blue);
   --color-code:        var(--color-lime);
   --color-chat:        var(--color-cyan);
+  /* Brand marks of partner agents. */
+  --color-brand-claude: #D97757;
   --color-html:        var(--color-orange);
   --color-note:        var(--color-violet);
   --color-task:        var(--color-green);
@@ -522,6 +524,8 @@ body.tauri-ios {
   --color-write:       var(--color-blue);
   --color-code:        var(--color-lime);
   --color-chat:        var(--color-cyan);
+  /* Brand marks of partner agents. */
+  --color-brand-claude: #D97757;
   --color-html:        var(--color-orange);
   --color-note:        var(--color-violet);
   --color-task:        var(--color-green);
@@ -659,6 +663,10 @@ body.tauri-ios {
    Root-only and device conditions retain their existing scope. */
 :root,
 [data-theme-light] {
+  --selection-thumb-fill: white;
+  --selection-thumb-edge: var(--color-border-secondary);
+  --selection-thumb-size-sm: 1rem;
+  --selection-thumb-shadow: none;
   --color-priority-urgent: var(--color-orange);
   --color-task-status-not-started: var(--color-content-1);
   --color-task-status-in-progress: color-mix(in srgb, var(--color-amber) 80%, var(--color-content-0));

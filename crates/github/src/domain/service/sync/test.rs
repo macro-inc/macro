@@ -114,6 +114,7 @@ impl StubDocumentService {
 
     fn task_metadata(document_id: &str) -> DocumentMetadata {
         DocumentMetadata {
+            appearance: None,
             document_id: document_id.to_string(),
             document_version_id: 1,
             owner: "macro|test@example.com".to_string().try_into().unwrap(),
@@ -136,6 +137,17 @@ impl StubDocumentService {
 }
 
 impl DocumentService for StubDocumentService {
+    async fn set_appearance(
+        &self,
+        _receipt: entity_access::domain::models::EntityAccessReceipt<
+            models_permissions::share_permission::access_level::EditAccessLevel,
+        >,
+        appearance: model_entity::EntityAppearance,
+    ) -> Result<model_entity::EntityAppearance, DocumentError> {
+        appearance.validate().map_err(DocumentError::BadRequest)?;
+        Ok(appearance)
+    }
+
     async fn internal_get_basic_document(
         &self,
         _document_id: &str,
@@ -6206,45 +6218,4 @@ async fn realtime_delivery_failure_keeps_the_saved_mapping() {
     assert_eq!(service.foreign_entity_service.foreign_entities().len(), 1);
 }
 
-struct RecordingPublisher(Arc<Mutex<Vec<crate::domain::models::GithubWebhookReceived>>>);
-
-impl crate::domain::ports::GithubWebhookPublisher for RecordingPublisher {
-    fn publish_received(
-        &self,
-        delivery: crate::domain::models::GithubWebhookReceived,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), GithubError>> + Send + '_>>
-    {
-        self.0.lock().unwrap().push(delivery);
-        Box::pin(async { Ok(()) })
-    }
-}
-
-#[tokio::test]
-async fn every_installation_delivery_is_published_even_events_sync_ignores() {
-    let TestGithubSyncService { service, .. } = make_sync_service();
-    let published = Arc::new(Mutex::new(Vec::new()));
-    let service = service.with_webhook_publisher(RecordingPublisher(Arc::clone(&published)));
-
-    let workflow_run = ValidatedGithubWebhookEvent::new(
-        "workflow_run".to_string(),
-        serde_json::json!({
-            "action": "completed",
-            "installation": { "id": 12345 },
-            "workflow_run": { "name": "CI", "conclusion": "failure" },
-        }),
-    )
-    .with_delivery_id(Some("delivery-1".to_string()));
-    let app_level = ValidatedGithubWebhookEvent::new(
-        "github_app_authorization".to_string(),
-        serde_json::json!({ "action": "revoked" }),
-    );
-
-    service.process_webhook_event(&workflow_run).await.unwrap();
-    service.process_webhook_event(&app_level).await.unwrap();
-
-    let published = published.lock().unwrap();
-    assert_eq!(published.len(), 1);
-    assert_eq!(published[0].event, "workflow_run");
-    assert_eq!(published[0].delivery_id.as_deref(), Some("delivery-1"));
-    assert_eq!(published[0].installation_id, 12345);
-}
+mod webhooks;

@@ -368,16 +368,27 @@ pub(super) fn apply_in_world(
             Write::InsertRows {
                 table_id,
                 rows,
+                ids: minted,
                 restored,
                 derivation,
             } => {
                 let mut ids = Vec::new();
                 for (row, cells) in rows.iter().enumerate() {
+                    if let Some(id) = minted.get(row)
+                        && world.rows.values().flatten().any(|stored| stored.id == *id)
+                    {
+                        return Ok(WritesOutcome::IdTaken {
+                            write: index,
+                            id: TakenId::Row(*id),
+                        });
+                    }
                     let table_rows = world.rows.entry(*table_id).or_default();
-                    let (id, position) = match restored.get(row) {
-                        Some(restored) => (restored.id, restored.position.clone()),
-                        None => (
-                            RowId::from_uuid(Uuid::now_v7()),
+                    let (id, position) = match (restored.get(row), minted.get(row)) {
+                        (Some(restored), _) => (restored.id, restored.position.clone()),
+                        (None, minted) => (
+                            minted
+                                .copied()
+                                .unwrap_or_else(|| RowId::from_uuid(Uuid::now_v7())),
                             key_between(table_rows.last().map(|last| &last.position), None)
                                 .unwrap(),
                         ),

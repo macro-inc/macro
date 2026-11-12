@@ -154,6 +154,13 @@ export const PROD_MODE_ENV = import.meta.env.MODE === 'production';
 
 const onInDev = DEV_MODE_ENV || undefined;
 
+/** Controls appearance editing only; saved icons and colors remain visible. */
+export const enableEntityAppearance = defineFlag({
+  key: 'enable-entity-appearance',
+  env: 'ENABLE_ENTITY_APPEARANCE',
+  default: onInDev,
+});
+
 /**
  * Connect apps Macro Connect serves through it instead of Pipedream. The
  * backend reads the same PostHog key and decides per app; this side only
@@ -172,6 +179,16 @@ export const enableCanvasArtifacts = defineFlag({
   default: onInDev,
 });
 
+/**
+ * Agents open items for the person who prompted them, in the tab they typed
+ * in (`macro.ui.open`). The harness reads the same PostHog key.
+ */
+export const enableAgentNavigation = defineFlag({
+  key: 'enable-agent-navigation',
+  env: 'ENABLE_AGENT_NAVIGATION',
+  default: onInDev,
+});
+
 /** Browser-style tabs in the macOS desktop title bar; each tab holds a split layout. */
 export const enableDesktopTabs = defineFlag({
   key: 'enable-desktop-tabs',
@@ -184,6 +201,16 @@ export const enableSlackArchiveImport = defineFlag({
   key: 'enable-slack-archive-import',
   env: 'ENABLE_SLACK_ARCHIVE_IMPORT',
   default: onInDev,
+});
+
+/**
+ * Macro computers: the whole computer UI (Settings → Machines, Billing,
+ * Agents). Off hides it; existing computers keep running and billing.
+ * No dev default: dev follows PostHog like the backend, which fails closed.
+ */
+export const enableMacroComputers = defineFlag({
+  key: 'enable-macro-computers',
+  env: 'ENABLE_MACRO_COMPUTERS',
 });
 
 /** Sidebar prompt cards: imports, calendars, repositories, and Home setup. */
@@ -830,12 +857,19 @@ export const enableTagTeamSharing = defineFlag({
   default: onInDev,
 });
 
-// Redesigned Chat sidebar sections. On in development;
+// Redesigned desktop Chat sections and phone section tabs. On in development;
 // deployed environments defer to PostHog. Override with VITE_ENABLE_CHAT_SIDEBAR_SECTIONS.
 export const enableChatSidebarSections = defineFlag({
   key: 'enable-chat-sidebar-sections',
   env: 'ENABLE_CHAT_SIDEBAR_SECTIONS',
   default: onInDev,
+});
+
+// Opt-in vertical resizing for desktop Chat sections. Keep it off in development
+// too so sections use their natural height unless PostHog or a local override enables it.
+export const enableChatSidebarSectionResize = defineFlag({
+  key: 'enable-chat-sidebar-section-resize',
+  env: 'ENABLE_CHAT_SIDEBAR_SECTION_RESIZE',
 });
 
 // Manual and smart channel labels, including their queries and drag/drop UI.
@@ -862,6 +896,16 @@ export const enableChannelThreadsPreview = defineFlag({
 export const enableEntityActivitySection = defineFlag({
   key: 'enable-entity-activity-section',
   env: 'ENABLE_ENTITY_ACTIVITY_SECTION',
+  default: onInDev,
+});
+
+// The agent session side panel's live list of what the agent did, read from
+// the activity log. Off means the section never mounts and no activity query
+// is issued. PostHog-gated with a dev-mode default; override with
+// VITE_ENABLE_AGENT_SESSION_ACTIVITY.
+export const enableAgentSessionActivity = defineFlag({
+  key: 'enable-agent-session-activity',
+  env: 'ENABLE_AGENT_SESSION_ACTIVITY',
   default: onInDev,
 });
 
@@ -988,6 +1032,14 @@ export const enableRoutineSharing = defineFlag({
   env: 'ENABLE_ROUTINE_SHARING',
 });
 
+// Event triggers (Macro and GitHub events). The server checks the same key per
+// routine owner, on save and before each run, so follow PostHog even in
+// development.
+export const enableEventRoutines = defineFlag({
+  key: 'enable-event-routines',
+  env: 'ENABLE_EVENT_ROUTINES',
+});
+
 // The Recent view: the touched-by-me feed (everything the viewer mutated,
 // newest own-touch first). Gates the view (the route redirects to the inbox
 // when off) and its sidebar entry. PostHog-gated with a dev-mode default;
@@ -1094,4 +1146,16 @@ export const enableInAppTours = defineFlag({
 export const enableWhatsappLinked = defineFlag({
   key: 'enable-whatsapp-linked',
   env: 'ENABLE_WHATSAPP_LINKED',
+});
+
+/**
+ * Passwords v1: the `/passwords` route and its rail and dock entries (which
+ * also need a team). The backend evaluates the same key. On only for local
+ * stacks; hosted dev and production follow the remote PostHog flag. Override
+ * locally with VITE_ENABLE_PASSWORDS=true.
+ */
+export const enablePasswords = defineFlag({
+  key: 'enable-passwords-v1',
+  env: 'ENABLE_PASSWORDS',
+  default: LOCAL_ONLY || undefined,
 });
