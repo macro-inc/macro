@@ -178,3 +178,48 @@ async fn rebuild_replaces_the_root_disk_from_the_alias_and_waits() {
         .await
         .unwrap();
 }
+
+#[tokio::test]
+async fn creating_an_existing_volume_is_a_conflict() {
+    let server = MockServer::start().await;
+    // incusd's storagePoolVolumesPost answers a duplicate name this way.
+    Mock::given(method("POST"))
+        .and(path("/1.0/storage-pools/default/volumes/custom"))
+        .respond_with(ResponseTemplate::new(409).set_body_json(json!({
+            "type": "error",
+            "status": "",
+            "status_code": 0,
+            "operation": "",
+            "error_code": 409,
+            "error": "Volume by that name already exists",
+            "metadata": null
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let client = IncusClient::with_http_client(
+        &server.uri(),
+        reqwest::Client::new(),
+        IncusTimeouts {
+            request: Duration::from_secs(90),
+            connect: Duration::from_secs(10),
+            operation_wait_secs: 60,
+            operation_waits: 15,
+            state_change_secs: 60,
+        },
+    );
+
+    let error = client
+        .create_block_volume(
+            &crate::StoragePoolName::try_new("default").unwrap(),
+            &crate::StorageVolumeName::try_new("mc-01900000000070008000000000000001-data").unwrap(),
+            "20GiB",
+        )
+        .await
+        .unwrap_err();
+
+    assert!(
+        matches!(&error, IncusError::Rejected { status: 409, message } if message == "Volume by that name already exists"),
+        "{error:?}"
+    );
+}
