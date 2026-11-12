@@ -70,7 +70,7 @@ export const demoEmails: readonly DemoEmail[] = [
     id: 'design',
     sender: 'Design Weekly',
     subject: 'This week in design',
-    snippet: 'A collection of new tools, projects, and suggestions.',
+    snippet: 'A collection of new tools, projects, and ideas.',
     time: '8:40 AM',
     account: 'personal',
     noise: true,
