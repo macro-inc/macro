@@ -155,7 +155,7 @@ export function EntityPropertyEditor(props: {
     if (!isCompanyOwner() && !isAssignees()) return undefined;
     const pool = [...agents(), ...team.users()];
     if (!isAssignees()) return pool;
-    return scopedUserOptions(pool, people(), localSelectedIds());
+    return scopedUserOptions(pool, people(), orderedSelectedIds());
   });
   const { entities } = useEntitiesForProperty(
     () => props.property,
