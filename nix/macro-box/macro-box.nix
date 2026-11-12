@@ -135,6 +135,21 @@ in
           inherit (self'.packages) macrod harnessd;
         };
         macro-box-claude-wrapper = import ./_claude-wrapper-test.nix { inherit pkgs; };
+        # start-agent's boot (lock adoption, rollback) and agent-stopped's
+        # failure count, against local git repositories.
+        macro-box-boot =
+          pkgs.runCommand "macro-box-boot"
+            {
+              nativeBuildInputs = [
+                pkgs.bash
+                pkgs.git
+                pkgs.diffutils
+                pkgs.gnused
+                pkgs.coreutils
+                pkgs.gnugrep
+              ];
+            }
+            "bash ${./files}/test-start-agent.sh && touch $out";
       };
     };
 }

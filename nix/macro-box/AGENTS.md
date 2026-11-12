@@ -98,19 +98,25 @@ PID 1 (for the dev-only DockerFleet).
 - `macro-agent.service` is a system unit running as `macro`, the user
   harnessd keeps Claude's sign-in for. It binds that sign-in
   (`macro.box.harnessd.stateDirectory` + `/claude`) read-only and names it
-  in `HARNESSD_STATE_DIRECTORY`; the image's `claude` wrapper reads it. It is sandboxed: `ProtectHome=tmpfs` with only
-  `/home/macro/agent` (its `HOME`) and `/run/user/1000` bound, no capabilities,
-  `NoNewPrivileges`, `ProtectSystem=strict`,
-  `PrivateTmp` with the X socket directory bound read-only, `PrivateDevices`
-  and `MemoryMax`. It keeps user namespaces (Chromium's sandbox) and W+X
-  memory (JITs). `KillMode=process`: calls outlive a restart.
+  in `HARNESSD_STATE_DIRECTORY`; the image's `claude` wrapper reads it.
+  `KillMode=process`: calls outlive a restart.
+- The agent and every unit of its desktop share one sandbox, in
+  `macro-agent.slice`: user `macro` with group `macro-agent`,
+  `ProtectHome=tmpfs` with only `/home/macro/agent` (its `HOME`) bound,
+  nothing of `/run/user/1000` (macro's user manager and session bus would
+  run anything outside it), no capabilities, `NoNewPrivileges`,
+  `ProtectSystem=strict` with `/run/macro-agent` writable, and one private
+  `/tmp` (`JoinsNamespaceOf` the display), which holds only `:1`'s socket.
+  They keep user namespaces (Chromium's sandbox) and W+X memory (JITs). The
+  firewall rejects group `macro-agent` on 127.0.0.1:5900 and :9222 (macro's
+  own VNC and DevTools), and neither Xvnc listens on an abstract socket.
 - agent.env is a systemd credential (`LoadCredential`), never process
   environment: the runtime reads `MUPPET_CREDENTIALS_FILE`
   (`/run/credentials/macro-agent.service/agent.env`). The runtime contract
   (env, exit codes, last-good) is in `packages/muppet`'s docs; the unit sets
   `AGENT_WORKSPACE=/home/macro/agent/workspace`, `MUPPET_LAST_GOOD_FILE`,
   `MUPPET_RESTART_FILE`, `MUPPET_MCP_SERVERS_JSON` (computer-use-linux on the
-  agent's display), `MUPPET_BROWSER_CDP_URL`, `DISPLAY`, the user bus,
+  agent's display), `MUPPET_BROWSER_CDP_URL`, `DISPLAY`, the agent's bus,
   `PULSE_SERVER`, LiveKit's ffmpeg and the libstdc++ path. A call shares `:1`
   (`ffmpeg-x11grab`) and records the default sink's monitor (`parec`).
 - `start-agent run` reads `MACRO_REPO_URL` (HTTP(S), no credentials),
@@ -119,24 +125,28 @@ PID 1 (for the dev-only DockerFleet).
   clones into a staging sibling on first start, points `origin` at the
   current URL, sets git's identity and the exact-repo credential helper
   (`git-credential-agent <credential file>`, never the token), links the
-  image's `node_modules` (a `bun.lock` that differs from the image's fails
-  the boot: new packages need a new image), then execs
-  `bun cli.ts run`. Exit 0 (stop), 75 (restart after a land) and 78
-  (configuration) are not failures; `agent-stopped` (`ExecStopPost`) counts
+  image's `node_modules` (a `bun.lock` that differs from the image's is
+  adopted and committed, unless the agent changed `package.json` from the
+  template's first commit; then the boot fails: new packages need a new
+  image), then execs `bun cli.ts run`. Exit 0 (stop) and 75 (restart after a
+  land) are not failures; 78 counts unless the boot was on last-good.
+  `agent-stopped` (`ExecStopPost`) counts
   any other exit before the runtime wrote `~/agent/state/last-good` for that
   boot's HEAD, and after 3 the next start
-  resets the workspace to last-good. It pushes nothing.
-- The agent's desktop is three user services for `macro`:
-  `macro-agent-display` (Xvnc `:1`, VNC 127.0.0.1:5901), `macro-agent-openbox`
-  and `macro-agent-browser` (Chromium with forced accessibility, profile
-  `~macro/agent/browser`, DevTools on 127.0.0.1:9223 as
-  `MUPPET_BROWSER_CDP_URL`). AT-SPI runs on macro's session bus; macro's user
-  manager and computer-use-linux get `GSETTINGS_SCHEMA_DIR` with GNOME's
-  `toolkit-accessibility` on by default (there is no dconf), which
-  computer-use-linux needs before it reads a tree. `xclip` is on the unit's
-  PATH for the clipboard. macro's
-  PulseAudio (started on demand, `PULSE_SERVER`) has the default null sink
-  `agent`, whose monitor is what a call records.
+  rolls back with a commit of last-good's tree on top of the broken head,
+  which the runtime's next sync pushes, so a pull can't undo it.
+- The agent's desktop is five system units in that sandbox, none in
+  macro's session: `macro-agent-display` (Xvnc `:1`, VNC 127.0.0.1:5901),
+  `macro-agent-openbox` (what its menu starts stays in the sandbox),
+  `macro-agent-bus` (a session bus at `/run/macro-agent/bus` that activates
+  only AT-SPI), `macro-agent-sound` (PulseAudio at
+  `/run/macro-agent/pulse/native` with the default null sink `agent`, whose
+  monitor a call records) and `macro-agent-browser` (Chromium with forced
+  accessibility, profile `~macro/agent/browser`, DevTools on 127.0.0.1:9223
+  as `MUPPET_BROWSER_CDP_URL`). They and computer-use-linux get
+  `GSETTINGS_SCHEMA_DIR` with GNOME's `toolkit-accessibility` on by default
+  (there is no dconf), which computer-use-linux needs before it reads a tree.
+  `xclip` is on the unit's PATH for the clipboard.
 - `harnessd.service` runs `harnessd serve` as `macro` (socket
   `/run/harnessd/harnessd.sock`, RuntimeDirectory 0700; restarts always) with
   the unwrapped pinned Claude Code. The control plane execs `harnessd` (the
@@ -248,6 +258,9 @@ The control plane, per computer:
   contacting the repo; a rewritten file restarts it, and it clones from an
   in-VM git server, links the image's packages and runs, without its
   credentials in its environment or the rest of macro's home in its view;
+  neither the agent's unit nor Openbox can reach `systemd-run --user`,
+  macro's session bus, its files, `:0`, 5900 or 9222, and the agent's
+  browser can't open macro's files or DevTools;
   `claude` in its unit keeps the gateway environment without a sign-in and
   gets `CLAUDE_CODE_OAUTH_TOKEN` from a (fake) `credential.json`, which it
   cannot write;
@@ -261,6 +274,9 @@ The control plane, per computer:
 - `nix build .#checks.x86_64-linux.macro-box-claude-wrapper` runs
   `files/claude-wrapper` against a fake claude: no credential, a credential,
   an unreadable one and one without a token.
+- `nix build .#checks.x86_64-linux.macro-box-boot` runs
+  `files/test-start-agent.sh`: start-agent's lock adoption and rollback, and
+  agent-stopped's failure count, against local git repositories.
 - `nix build .#checks.x86_64-linux.macro-box-claude-agent-acp` runs ACP
   `initialize` against the adapter. Evaluation fails when its version differs
   from macrod's pin in `crates/coding_agent_worker/src/tui/agent_catalog/claude_code.rs`;
