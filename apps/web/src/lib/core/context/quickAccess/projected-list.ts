@@ -44,6 +44,7 @@ type Request = {
   cursor?: SearchCursor;
   busy: boolean;
   refreshPending: boolean;
+  answered: boolean;
 };
 
 /** A paginated, cache-only search. Refreshes replay the loaded browse window
@@ -126,7 +127,7 @@ export function createProjectedList<T extends { id: string }>(options: {
     span.setAttr('search.buckets', request.buckets.join(','));
     span.setAttr('search.query_length', request.query.length);
     span.setAttr('search.append', append);
-    span.setAttr('search.refresh', !append && !untrack(searching));
+    span.setAttr('search.refresh', !append && request.answered);
     try {
       for (const [key, value] of Object.entries(
         untrack(() => options.sourceAttributes?.() ?? {})
@@ -178,6 +179,7 @@ export function createProjectedList<T extends { id: string }>(options: {
       span.setAttr('search.materialized_count', merged.size);
       request.cursor = cursor;
       request.pages = pages;
+      request.answered = true;
       setError(undefined);
       setItems([...merged.values()]);
       setHasMore(cursor !== undefined);
@@ -246,6 +248,7 @@ export function createProjectedList<T extends { id: string }>(options: {
       pages: 1,
       busy: false,
       refreshPending: false,
+      answered: false,
     };
     current = request;
     fireAndForget(fetchPages(request, request.pages, false), 'quick-access');
