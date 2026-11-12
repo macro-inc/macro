@@ -688,9 +688,13 @@ async fn accelerated_and_long_context_prices_remain_distinct(pool: PgPool) {
     for (model, input, output, cache_read, cache_write) in [
         ("gpt-6.1-sol", 2.0, 10.0, 0.1, 2.5),
         ("gpt-6.1-sol:long", 4.0, 15.0, 0.2, 5.0),
+        ("gpt-6.1-sol:priority", 4.0, 20.0, 0.2, 5.0),
+        ("gpt-6.1-sol:priority:long", 8.0, 30.0, 0.4, 10.0),
         ("gpt-6.1-sol:ultrafast", 12.0, 60.0, 0.6, 15.0),
         ("gpt-6.1-sol:ultrafast:long", 24.0, 90.0, 1.2, 30.0),
         ("gpt-6-astra:long", 20.0, 75.0, 2.0, 25.0),
+        ("gpt-6-astra:priority", 20.0, 100.0, 2.0, 25.0),
+        ("gpt-6-astra:priority:long", 40.0, 150.0, 4.0, 50.0),
         ("gpt-6-astra:ultrafast", 60.0, 300.0, 6.0, 75.0),
         ("gpt-6-astra:ultrafast:long", 120.0, 450.0, 12.0, 150.0),
         ("claude-opus-5-5:fast", 8.0, 40.0, 0.4, 10.0),
