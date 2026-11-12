@@ -352,7 +352,11 @@ async fn serve_once<Executor: crate::trigger::WorkExecutor>(
                         tracing::info!("bound-agent set changed; reconnecting the event stream");
                         return ServeOutcome::Idle;
                     }
-                    Err(error) => return ServeOutcome::Ended(error),
+                    // The stream itself is fine: keep reading it and look again
+                    // on the next refresh.
+                    Err(error) => {
+                        tracing::warn!(error = ?error, "could not re-read the bound agents; keeping the event stream");
+                    }
                 }
             }
             next = stream.next_event() => {

@@ -24,6 +24,7 @@ mod handoff;
 mod harness;
 #[cfg(unix)]
 mod herdr;
+mod log_file;
 mod outbound;
 mod repository;
 mod runtime;
@@ -248,6 +249,7 @@ async fn main() -> ExitCode {
     // The TUI owns the terminal, so its logs go to a ring buffer it renders.
     // Installed first so the config move and load below log into it.
     let logs = tui::LogBuffer::install();
+    log_panics();
     let config_path = match args.config {
         Some(path) => path,
         None => match default_tui_config() {
@@ -276,9 +278,23 @@ async fn main() -> ExitCode {
         version: update::VERSION.to_owned(),
         from_handoff: inherited.is_some(),
     });
+    // Saved from here: the lock makes this process the log's one writer.
+    logs.save_to(tui::LogBuffer::path_for(&config_path));
+    tracing::info!(
+        version = update::VERSION,
+        pid = std::process::id(),
+        config = %config_path.display(),
+        from_handoff = inherited.is_some(),
+        "macrod started"
+    );
+    #[cfg(unix)]
+    log_terminating_signals();
     loop {
         match tui::run(&config_path, logs.clone(), inherited.take()).await {
-            Ok(None) => return ExitCode::SUCCESS,
+            Ok(None) => {
+                tracing::info!("macrod exited");
+                return ExitCode::SUCCESS;
+            }
             #[cfg(unix)]
             Ok(Some(restart)) => {
                 // Only returns when the new binary could not be started; the
@@ -289,11 +305,48 @@ async fn main() -> ExitCode {
             #[cfg(not(unix))]
             Ok(Some(never)) => match never {},
             Err(error) => {
-                // The ring buffer dies with the process and the terminal is
-                // restored by now, so the exit error goes straight to stderr.
+                tracing::error!(error = ?error, "macrod exited with an error");
+                // The terminal is restored by now, so the error shows there too.
                 eprintln!("macrod exited with an error: {error:?}");
                 return ExitCode::FAILURE;
             }
         }
+    }
+}
+
+/// Log each panic before the default report, so the saved log says why a task
+/// or the panel died.
+fn log_panics() {
+    let report = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |panic| {
+        tracing::error!(panic = %panic, "macrod panicked");
+        report(panic);
+    }));
+}
+
+/// Log SIGHUP (the terminal went away) or SIGTERM, then exit with the status a
+/// shell reports for it, so the saved log says why macrod stopped.
+#[cfg(unix)]
+fn log_terminating_signals() {
+    use tokio::signal::unix::{SignalKind, signal};
+
+    for (kind, name) in [
+        (SignalKind::hangup(), "SIGHUP"),
+        (SignalKind::terminate(), "SIGTERM"),
+    ] {
+        // A signal whose handler is not in place keeps its default action.
+        let mut received = match signal(kind) {
+            Ok(received) => received,
+            Err(error) => {
+                tracing::warn!(error = %error, signal = name, "could not watch for a signal");
+                continue;
+            }
+        };
+        tokio::spawn(async move {
+            if received.recv().await.is_some() {
+                tracing::warn!(signal = name, "macrod stopping on a signal");
+                std::process::exit(128 + kind.as_raw_value());
+            }
+        });
     }
 }

@@ -135,10 +135,72 @@ async fn bound_bot_ids_are_sorted_and_unique() {
     );
 }
 
+#[tokio::test(start_paused = true)]
+async fn lookups_give_up_on_a_service_that_never_answers() {
+    let (url, _) = serve_then_stall(vec![]).await;
+    let client = test_client(&url);
+
+    let started = tokio::time::Instant::now();
+    let error = client.bound_bot_ids().await.expect_err("bound agents");
+    assert!(
+        format!("{error:?}").contains("list this harness's agents"),
+        "{error:?}"
+    );
+    assert_eq!(started.elapsed(), ANSWER_TIMEOUT);
+
+    let started = tokio::time::Instant::now();
+    let error = client
+        .connect::<Envelope>(&[])
+        .await
+        .err()
+        .expect("owner lookup");
+    assert!(
+        format!("{error:?}").contains("read this harness's owner"),
+        "{error:?}"
+    );
+    assert_eq!(started.elapsed(), ANSWER_TIMEOUT);
+
+    let started = tokio::time::Instant::now();
+    client
+        .service_reports_connected()
+        .await
+        .expect_err("presence check");
+    assert_eq!(started.elapsed(), ANSWER_TIMEOUT);
+}
+
+#[tokio::test(start_paused = true)]
+async fn connect_gives_up_on_a_stream_that_never_starts() {
+    let (url, requests) = serve_then_stall(vec![TEAM_HARNESS]).await;
+    let client = test_client(&url);
+
+    let started = tokio::time::Instant::now();
+    let error = client
+        .connect::<Envelope>(&[])
+        .await
+        .err()
+        .expect("stream open");
+
+    assert!(format!("{error:?}").contains("in time"), "{error:?}");
+    assert_eq!(started.elapsed(), ANSWER_TIMEOUT);
+    assert!(
+        requests.lock().unwrap()[0].starts_with("GET /harnesses/me "),
+        "the owner lookup was answered first"
+    );
+}
+
 /// Answer one connection per response, in order, recording each request line.
-async fn serve(
-    responses: Vec<&'static str>,
-) -> (String, std::sync::Arc<std::sync::Mutex<Vec<String>>>) {
+async fn serve(responses: Vec<&'static str>) -> (String, Requests) {
+    serve_with(responses, false).await
+}
+
+/// Like [`serve`], then accept every later connection and never answer it.
+async fn serve_then_stall(responses: Vec<&'static str>) -> (String, Requests) {
+    serve_with(responses, true).await
+}
+
+type Requests = std::sync::Arc<std::sync::Mutex<Vec<String>>>;
+
+async fn serve_with(responses: Vec<&'static str>, then_stall: bool) -> (String, Requests) {
     use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
@@ -159,6 +221,13 @@ async fn serve(
                 .push(request.lines().next().unwrap_or_default().to_owned());
             let _ = socket.write_all(response.as_bytes()).await;
             let _ = socket.shutdown().await;
+        }
+        if !then_stall {
+            return;
+        }
+        let mut held = Vec::new();
+        while let Ok((socket, _)) = listener.accept().await {
+            held.push(socket);
         }
     });
     (format!("http://{addr}"), requests)

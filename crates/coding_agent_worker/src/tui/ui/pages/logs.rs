@@ -33,11 +33,20 @@ pub(super) fn render(frame: &mut Frame, app: &App, area: Rect) {
         lines
     };
     let mut block = card("Daemon logs");
-    if let Some(path) = &app.update_log {
+    if let Some(path) = app.logs.saved_to() {
         block = block.title_bottom(Line::styled(
-            format!(" Update history: {} ", path.display()),
+            format!(" Saved to {} ", path.display()),
             Style::new().fg(DIM),
         ));
+    }
+    if let Some(path) = &app.update_log {
+        block = block.title_bottom(
+            Line::styled(
+                format!(" Update history: {} ", path.display()),
+                Style::new().fg(DIM),
+            )
+            .right_aligned(),
+        );
     }
     frame.render_widget(Paragraph::new(body).block(block), area);
 }

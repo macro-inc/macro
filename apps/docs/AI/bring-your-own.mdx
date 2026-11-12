@@ -144,7 +144,7 @@ or start `macrod` with `MACROD_NO_UPDATE=1` set. `macrod` then only changes when
 
 - **Your agent is missing from Quickstart:** check that it is installed and its command is available in the terminal where you launch `macrod`. For a different ACP agent, use **Custom command**.
 - **Your code is invalid or expired:** start a new pairing from the terminal and enter the new code. The code in the screenshot is only an example.
-- **Your machine is offline:** check that your computer is awake, `macrod` is running, and it can reach Macro. Check the terminal's **Logs** tab for errors.
+- **Your machine is offline:** check that your computer is awake, `macrod` is running, and it can reach Macro. Check the terminal's **Logs** tab for errors. The same logs are saved to `~/.macrod/logs/macrod.log` (`%USERPROFILE%\.macrod\logs\macrod.log` on Windows), so they are still there after `macrod` stops or restarts. Each run starts with a `macrod started` line and, unless the process was killed, ends with why it stopped. At about 10 MB the log moves to `macrod.log.1`.
 - **`macrod` says your config sets `[identity]` or a `scope` in `[credentials]`:** delete those lines from `~/.macrod/macrod.toml`. The machine's name, access, and permission bypass are set in **Settings → Machines**.
 - **`macrod` asks you to pair again after an update:** it reads only `~/.macrod/macrod.toml`. If you started an older `macrod` from a project folder, move the `macrod.toml` from that folder to `~/.macrod/`.
 
