@@ -5,6 +5,7 @@
 mod test;
 
 use databases::domain::models::{DatabaseError, Viewer};
+use databases::domain::ports::CreatorAccess;
 use entity_access::domain::models::{
     EditAccessLevel, EntityAccessReceipt, EntityType, RequiredPermission,
 };
@@ -17,9 +18,7 @@ use crate::domain::models::{
     CreatedWebhook, DatabaseWebhook, DatabaseWebhookError, Delivery, NewWebhook, PayloadProblem,
     WebhookId,
 };
-use crate::domain::ports::{
-    CreatorAccess, DatabaseWebhooksRepo, DatabaseWebhooksService, WebhookTables,
-};
+use crate::domain::ports::{DatabaseWebhooksRepo, DatabaseWebhooksService, WebhookTables};
 use crate::domain::token;
 
 /// The webhooks service over its ports.

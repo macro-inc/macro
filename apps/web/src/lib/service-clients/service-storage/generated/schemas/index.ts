@@ -3024,6 +3024,8 @@ export * from './takenIdOneOf';
 export * from './takenIdOneOfFive';
 export * from './takenIdOneOfFiveKind';
 export * from './takenIdOneOfKind';
+export * from './takenIdOneOfNine';
+export * from './takenIdOneOfNineKind';
 export * from './takenIdOneOfSeven';
 export * from './takenIdOneOfSevenKind';
 export * from './takenIdOneOfThree';

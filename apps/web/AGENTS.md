@@ -232,7 +232,9 @@ It exercises the real resize solver, scroll container, and Lexical layout primit
 
 Stacked splits have a backend-free browser regression over the real split
 router and tiled layout: splitting keeps the pane mounted, stacked gutters drag
-and nudge to the minimum height, and closing hands the column back:
+and nudge to the minimum height, closing hands the column back, and a document
+keeps its reading position as the splits beside it close (WebKit has no CSS
+scroll anchoring; see `keepScrollAnchorOnResize`):
 `bunx playwright test --config src/components/app/split-layout/browser-test/playwright.config.ts`.
 Keep panes in one keyed list positioned by the layout tree; nesting a
 `Resize.Zone` per split remounts a pane whenever its split changes.
@@ -248,6 +250,10 @@ retained detail is claimed by another pane or preview. Keep this check in view
 restoration and preserve entity deduplication and native dock stack restoration;
 `split-layout/tests/view-restoration.test.tsx` covers Chat and Tasks lists in
 either pane, keeping the other pane's detail and history independent.
+
+Links in database text and URL cells open without editing the cell, on desktop
+and touch, while the rest of the cell still edits:
+`bunx playwright test --config src/features/block-database/browser-test/playwright.config.ts links.browser.e2e.ts`.
 
 Database document-reference cells have a backend-free desktop/touch regression:
 `bunx playwright test --config src/features/block-database/browser-test/playwright.config.ts references.browser.e2e.ts`.
@@ -345,6 +351,12 @@ and Unicode contact names at the server's character limit:
 `bunx playwright test --config src/features/crm/browser-test/creation/playwright.config.ts`.
 Nested picker selection must keep its containing drawer open when the option
 unmounts during the tap; drawer dismissal checks the original event path.
+
+Collapsible document sections (the real heading-folds plugin and its gutter
+controls) have a backend-free desktop/tablet/phone regression: placement in
+the 24px phone gutter, hover and touch visibility, nested folds, reload, and
+Mod+Enter:
+`bunx playwright test --config src/lib/core/component/LexicalMarkdown/component/misc/browser-test/playwright.config.ts`.
 
 Composer typeahead menus choosing the side with room for their full list
 (`floatWithSelection`'s `fullHeight`), above a composer at the bottom of a
@@ -569,6 +581,15 @@ Canvas **Ask Macro**, including the Drive detail header, attaches the current ca
 on desktop and mobile. Tool results render through
 `lib/core/component/AI/component/tool/Canvas.tsx`; edits arrive through live sync.
 The shared plain-text Lexical codec is `packages/lexical-core/canvas-text.ts`.
+
+## Group chats in the notifications inbox
+
+A group chat's message row shows the chat (its picture or the channel kind)
+and its name, with the sender in the body, never whoever wrote last as the
+row's author; unnamed group chats shorten to two names and a count
+(`features/channel/group-chat-name.ts`). The backend-free desktop/phone
+regression is
+`bunx playwright test --config src/features/notifications-inbox/browser-test/playwright.config.ts`.
 
 ## Message notification reads
 
@@ -831,7 +852,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Key mobile name-result history ordering and scroll anchors by the other participant for one-to-one DMs, preserving a person's position when their conversation is created; keep group DMs keyed by channel.
 - Keep mobile Search history lightweight: save query/category/mode, account-scoped item anchors, and at most 200 ordering IDs per mode; never save row objects or virtualizer caches. Restore from current sources with at most three additional pages, fall back when an anchor disappears, and stop restoration on user interaction or scope changes. Dock navigation starts a fresh search session; cached rows belong to the source, not history.
 - Release per-history-entry state when its router entry is replaced, pruned, or closed; retain only the latest per-view session snapshot and the latest split event outside reachable Back/Forward history.
-- Cmd+K, mobile name search, and the desktop Search page find routines by name from the Quick Access `routine` bucket (the scheduled-action list); keep them out of `entityPool`, which Home, Drive, and Tasks searches share, and use `routinePool` for workspace Search only.
+- Cmd+K, mobile name search, and the desktop Search page find routines by name from the Quick Access `routine` bucket (the scheduled-action list, which holds top-level routines only: sub-routines, which another routine's run created, are reached from their creator); keep them out of `entityPool`, which Home, Drive, and Tasks searches share, and use `routinePool` for workspace Search only.
 - Keep Quick Access cache availability reactive to the GraphQL rollout flag; it can arrive after the provider mounts, and email has no legacy source fallback.
 - Browser storage schema 12 enables covering-index search through a fresh versioned cache; native upgrades reset incompatible caches, including queued writes. Preserve the historical unversioned tuple and existing old-queue cleanup safeguards; see `../../crates/client/README.md#streaming-text-search`.
 - Contact backfill shares Soup's authenticated tab leadership and account/session ownership. Capture contact admission before each fetch, hydrate with `contactFence`, then verify cached IDs in 500-record keyset windows through the existing exact lookup. Checkpoint v2 completes only after verification; persist cursors after acknowledged writes and generation checks. Never delete from scan omissions or failed/foreign evidence, and never downgrade unsupported fencing. Keep the 15-minute coalescing floor and hourly name refresh. Deploy canonical-ID lookup fixes before client removal checks; see `../../docs/design/disk-backed-contacts.md`.
