@@ -4,9 +4,12 @@ import type { ManagedDialogProps } from '@ui';
 import { createSignal, Match, Show, Switch } from 'solid-js';
 import { DeleteProjectsDialog } from '../components/delete-projects-dialog';
 import { RenameProjectDialog } from '../components/rename-project-dialog';
-import { useProjectsContext } from '../context/projects-context';
+import {
+  ProjectsProvider,
+  useProjectsContext,
+} from '../context/projects-context';
 import { ProjectShareLauncher } from '../project-share';
-import { Projects } from '../projects';
+import { createProjectsContext } from '../projects';
 
 /** A project action chosen from a list row's menu outside the Projects view. */
 export type ProjectEntityAction =
@@ -27,12 +30,14 @@ export function ProjectEntityActionDialog(
 ) {
   return (
     <Show when={props.open}>
-      <Projects>
+      {/* Not the view's <Projects>: its inline fallbacks would land in the
+          page, outside any dialog. The menu already checked the flag. */}
+      <ProjectsProvider context={createProjectsContext()}>
         <ProjectEntityActionContent
           action={props.action}
           onClose={() => props.onOpenChange(false)}
         />
-      </Projects>
+      </ProjectsProvider>
     </Show>
   );
 }

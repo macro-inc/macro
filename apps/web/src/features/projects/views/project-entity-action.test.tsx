@@ -12,6 +12,13 @@ import {
 
 const toast = vi.hoisted(() => ({ success: vi.fn(), failure: vi.fn() }));
 vi.mock('@core/component/Toast/Toast', () => ({ toast }));
+vi.mock('../project-share', () => ({
+  ProjectShareLauncher: (props: { projectId: string; onClose(): void }) => (
+    <button type="button" onClick={() => props.onClose()}>
+      Share {props.projectId}
+    </button>
+  ),
+}));
 
 afterEach(() => {
   cleanup();
@@ -97,4 +104,38 @@ it('keeps only the projects that failed to delete for a retry', async () => {
   await vi.waitFor(() => expect(view.shown()).toBe(false));
   expect(deleteMany.mock.calls).toEqual([[['a', 'b']], [['b']]]);
   expect(toast.success).toHaveBeenCalledOnce();
+});
+
+it('opens the project Share menu and closes with it', async () => {
+  const view = open({ kind: 'share', id: 'launch' }, {});
+
+  fireEvent.click(await screen.findByRole('button', { name: 'Share launch' }));
+
+  expect(view.shown()).toBe(false);
+});
+
+it.each([
+  ['reports', async () => ['a', 'b']],
+  [
+    'rejects',
+    async (): Promise<string[]> => {
+      throw new Error('offline');
+    },
+  ],
+])('keeps every project for a retry when the delete %s', async (_, run) => {
+  const deleteMany = vi.fn(run);
+  const view = open({ kind: 'delete', ids: ['a', 'b'] }, { deleteMany });
+
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Delete 2 projects' })
+  );
+
+  expect(
+    await screen.findByText('Could not delete. Please try again.')
+  ).toBeTruthy();
+  expect(view.shown()).toBe(true);
+  expect(
+    screen.getByRole('button', { name: 'Delete 2 projects' })
+  ).toBeTruthy();
+  expect(toast.success).not.toHaveBeenCalled();
 });

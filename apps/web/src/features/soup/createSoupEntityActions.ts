@@ -195,9 +195,11 @@ export function createSoupEntityActions(
 
     // Projects act through the Projects view's dialogs. Rows carry no access
     // level, so rename and delete wait for ownership, which allows both.
-    const projectIds = canExecuteAll((entity) => entity.type === 'initiative')
-      ? entities.map((entity) => entity.id)
-      : [];
+    const projectIds =
+      projectsFlag().enabled &&
+      canExecuteAll((entity) => entity.type === 'initiative')
+        ? entities.map((entity) => entity.id)
+        : [];
     const ownsProjects =
       projectIds.length > 0 &&
       entities.every((entity) => entity.ownerId === userId());
