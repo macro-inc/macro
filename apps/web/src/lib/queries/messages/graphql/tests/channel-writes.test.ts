@@ -419,10 +419,34 @@ describe('a queued post the server refuses for good', () => {
     expect(world.server.applied()).toEqual([]);
     expect(world.queue.entries).toEqual([]);
     expect(contents()).toEqual(['earlier']);
+    // One notice, which offers the text for copying.
     expect(world.events.filter((event) => event.kind === 'toast')).toEqual([
-      { kind: 'toast', message: 'Failed to send message' },
+      { kind: 'toast', message: 'Your message was not sent' },
     ]);
     expect(draft()).toBe('typed on friday');
+  });
+
+  it('leaves its text in the channel draft when no channel is opened after a reload', async () => {
+    localStorage.clear();
+    await openChannel();
+    await world.setOffline(true);
+    world.page.send('typed on friday');
+    await world.advance(1_000);
+
+    // The app starts on another view: the shell reads the queue, no channel
+    // timeline does.
+    await world.reload();
+    await world.page.queuedWrites.restoreQueuedChannelWrites(world.page.host);
+    world.server.state.refusePosts = 'FORBIDDEN';
+    await world.setOffline(false);
+    await world.advance(60_000, 1_000);
+
+    expect(world.server.applied()).toEqual([]);
+    expect(world.queue.entries).toEqual([]);
+    expect(draft()).toBe('typed on friday');
+    expect(world.events.filter((event) => event.kind === 'toast')).toEqual([
+      { kind: 'toast', message: 'Your message was not sent' },
+    ]);
   });
 
   it('leaves its text in the channel draft on the page that sent it', async () => {

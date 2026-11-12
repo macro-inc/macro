@@ -39,13 +39,17 @@ live events that keep them current.
 ## Gotchas
 
 - The text of a refused channel post is never dropped
-  (`keepUnsentPostText`, `features/channel/Input/utils/unsent-text.ts`):
-  the send hook calls it a task after its `onError`, so the composer that
-  sent it restores the full draft first; a post restored from the queue
-  after a reload has no hook and calls it when it settles as failed. It
-  fills an empty mounted composer, else the stored draft, else offers the
-  text for copying. A new composer with a `persistenceKey` is registered by
-  `ChannelInput`; a new way to fail a channel post calls it too.
+  (`keepUnsentPostText`, `features/channel/Input/utils/unsent-text.ts`).
+  A channel composer creates the send hook with `keepRefusedText`, and the
+  hook calls it a task after its `onError`, so the composer that sent it
+  restores the full draft first; other callers of the hook keep their own
+  text. A post restored from the queue after a reload has no hook and calls
+  it when it settles as failed; `useChannelCachePrewarm` reads the queue at
+  mount so that holds with no channel open. It fills an empty mounted
+  composer (text only, attachments stay), else offers the text for copying;
+  with no composer mounted it also writes the stored draft. A new composer
+  with a `persistenceKey` is registered by `ChannelInput`; a new way to fail
+  a channel post calls it too.
 - The TanStack timeline is the working state for every parent. For a channel
   with the device cache on (`channelCacheHost()`), only its source changes;
   optimistic writes and live events still edit the same pages. Tests of the

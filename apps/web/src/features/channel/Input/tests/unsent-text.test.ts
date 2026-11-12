@@ -37,7 +37,8 @@ describe('the text of a refused channel post', () => {
     keepUnsentPostText({ channelId: CHANNEL, content: 'typed on friday' });
 
     expect(stored()).toBe('typed on friday');
-    expect(failure).not.toHaveBeenCalled();
+    // The channel may be one the person can no longer open.
+    expect(failure).toHaveBeenCalledOnce();
   });
 
   it('follows a stored draft after a blank line, once', () => {
@@ -103,5 +104,42 @@ describe('the text of a refused channel post', () => {
       content: 'another reply',
     });
     expect(stored()).toBe('another reply');
+  });
+  it('does not take a short post for part of a newer draft', () => {
+    const open = composer('look at this');
+    const close = registerDraftComposer(key, open);
+    keepUnsentPostText({ channelId: CHANNEL, content: 'ok' });
+    close();
+
+    expect(open.value()).toBe('look at this');
+    expect(failure).toHaveBeenCalledOnce();
+  });
+
+  it('hands two posts refused together to the composer and to a copy', () => {
+    // The composer's own value lags the text it was handed.
+    const restoreText = vi.fn();
+    const close = registerDraftComposer(key, { value: () => '', restoreText });
+    keepUnsentPostText({ channelId: CHANNEL, content: 'first' });
+    keepUnsentPostText({ channelId: CHANNEL, content: 'second' });
+    close();
+
+    expect(restoreText.mock.calls).toEqual([['first']]);
+    expect(failure).toHaveBeenCalledOnce();
+  });
+
+  it('uses the empty one of two composers on the same channel', () => {
+    const busy = composer('a newer draft');
+    const empty = composer('');
+    const closeBusy = registerDraftComposer(key, busy);
+    const closeEmpty = registerDraftComposer(key, empty);
+    keepUnsentPostText({ channelId: CHANNEL, content: 'typed on friday' });
+    closeEmpty();
+    // The first stays registered after the second leaves.
+    keepUnsentPostText({ channelId: CHANNEL, content: 'another' });
+    closeBusy();
+
+    expect(empty.value()).toBe('typed on friday');
+    expect(busy.value()).toBe('a newer draft');
+    expect(failure).toHaveBeenCalledOnce();
   });
 });

@@ -1000,9 +1000,9 @@ go online: both arrive once, in order, with the edit, the markers go, and
 neither row appears twice at any point. A post the server refuses for good
 is removed with a failure notice, and its text is kept: an empty composer for
 that channel or thread takes it back; with none open it becomes the channel's
-stored draft (after a blank line when one is there) and shows when the
-channel next opens; a composer holding a newer draft keeps that, and a notice
-offers **Copy message**.
+stored draft (after a blank line when one is there), shows when the channel
+next opens, and a notice offers **Copy message**; a composer holding a newer
+draft keeps that, and the notice offers the copy.
 
 Reopening a cached channel, reconnecting its live subscription, or returning
 from an absence past the presence window revalidates its timeline with

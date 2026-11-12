@@ -306,6 +306,8 @@ export function ChannelInput(props: ChannelInputProps) {
         options?: RestoreSnapshotOptions;
       }
     | undefined;
+  // A refused post's text handed over before the editor connected.
+  let pendingText: (() => void) | undefined;
   let pendingFocus: (() => boolean) | undefined;
   // Caret placement requested by a `cursor: 'trailing-paragraph'` restore.
   // Applied on the next programmatic focus rather than at restore time.
@@ -334,16 +336,27 @@ export function ChannelInput(props: ChannelInputProps) {
     onCleanup(
       registerDraftComposer(props.persistenceKey, {
         value: () => inputState.view().value ?? '',
+        // Text only: the composer's attachments stay, and its mentions are
+        // tracked again from the nodes the text creates.
         restoreText: (value) => {
-          const snapshot = { value, mentions: [], attachments: [] };
-          if (isEditorConnected) applySnapshot(snapshot, { focus: false });
-          else pendingRestore = { snapshot, options: { focus: false } };
+          const setText = () => {
+            acceptTyping = false;
+            markdownEditor.controls.setMarkdown(value);
+            queueMicrotask(() => {
+              acceptTyping = true;
+            });
+          };
+          if (isEditorConnected) setText();
+          else pendingText = setText;
         },
       })
     );
   }
 
   const flushPendingRestore = () => {
+    const setText = pendingText;
+    pendingText = undefined;
+    if (setText) queueMicrotask(setText);
     const restore = pendingRestore;
     pendingRestore = undefined;
     if (!restore) return;

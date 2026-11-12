@@ -120,9 +120,9 @@ function failureText(write: QueuedChannelWrite): string {
  * A refused post restored after a reload has no hook to hand its text back
  * to; it goes to the channel's draft so what was typed is not lost.
  */
-function keepUnsentText(write: QueuedChannelWrite) {
-  if (write.kind !== 'post') return;
-  keepUnsentPostText({
+function keepUnsentText(write: QueuedChannelWrite): boolean {
+  if (write.kind !== 'post') return false;
+  return keepUnsentPostText({
     channelId: String(write.input.channelId),
     threadId:
       write.input.threadId == null ? null : String(write.input.threadId),
@@ -147,7 +147,7 @@ const liveUuids = new Map<string, number>();
 const watchedHosts = new WeakMap<CacheHost, () => void>();
 const restores = new WeakMap<CacheHost, Promise<void>>();
 /** Settlements announced while a restore read the queue. */
-let settledDuringRestore: Set<string> | undefined;
+let settledDuringRestore: Map<string, MutationSettlement['status']> | undefined;
 let reapplyCache: ReturnType<typeof queryClient.getQueryCache> | undefined;
 let stopReapply: (() => void) | undefined;
 
@@ -281,7 +281,7 @@ function watchHost(host: CacheHost) {
 }
 
 function onSettled(host: CacheHost, settlement: MutationSettlement) {
-  settledDuringRestore?.add(settlement.transactionId);
+  settledDuringRestore?.set(settlement.transactionId, settlement.status);
   const entry = held.get(settlement.transactionId);
   if (!entry || entry.live) return;
   held.delete(settlement.transactionId);
@@ -290,8 +290,7 @@ function onSettled(host: CacheHost, settlement: MutationSettlement) {
   if (settlement.status === 'committed') {
     refreshAfterChannelWrite(parent);
   } else if (settlement.status === 'permanently-failed') {
-    toast.failure(failureText(entry.write));
-    keepUnsentText(entry.write);
+    if (!keepUnsentText(entry.write)) toast.failure(failureText(entry.write));
     rereadAfterFailedWrite(parent);
   } else if (!held.has(settlement.replacementTransactionId)) {
     // A newer write under the same key replaced it; read the queue for it.
@@ -307,12 +306,11 @@ function onStorageReset(host: CacheHost) {
   syncQueuedPosts();
   restores.delete(host);
   const failures = new Set(
-    lost.filter((entry) => !entry.live).map((entry) => failureText(entry.write))
+    lost
+      .filter((entry) => !entry.live && !keepUnsentText(entry.write))
+      .map((entry) => failureText(entry.write))
   );
   for (const text of failures) toast.failure(text);
-  for (const entry of lost) {
-    if (!entry.live) keepUnsentText(entry.write);
-  }
   for (const channelId of channelsOf(lost)) {
     rereadAfterFailedWrite({ type: 'channel', id: channelId });
   }
@@ -379,7 +377,7 @@ export function restoreQueuedChannelWrites(host: CacheHost): Promise<void> {
 async function readQueue(host: CacheHost) {
   if (!host.inspectMutations) return;
   watchHost(host);
-  const settled = new Set<string>();
+  const settled = new Map<string, MutationSettlement['status']>();
   settledDuringRestore = settled;
   let queue: MutationInspection[];
   try {
@@ -395,12 +393,18 @@ async function readQueue(host: CacheHost) {
     if (
       inspection.superseded ||
       held.has(inspection.transactionId) ||
-      settled.has(inspection.transactionId) ||
       liveUuids.has(inspection.uuid)
     )
       continue;
     const write = writeFromInspection(inspection);
     if (!write) continue;
+    const outcome = settled.get(inspection.transactionId);
+    if (outcome) {
+      // Refused while the queue was being read: nothing held it yet.
+      if (outcome === 'permanently-failed' && !keepUnsentText(write))
+        toast.failure(failureText(write));
+      continue;
+    }
     const entry: HeldWrite = {
       write,
       live: false,

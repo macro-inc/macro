@@ -58,7 +58,9 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
   });
 
   const userId = useUserId();
-  const sendMessageMutation = useSendMessageMutation();
+  const sendMessageMutation = useSendMessageMutation(undefined, {
+    keepRefusedText: true,
+  });
   const typingMutation = usePostTypingUpdateMutation();
   const channelBotMentionUsers = useMessageBotMentionUsers(() => props.parent);
 

@@ -10,18 +10,40 @@ type DraftComposer = {
   restoreText: (text: string) => void;
 };
 
-const composers = new Map<string, DraftComposer>();
+/** A channel open in two splits mounts two composers on one draft. */
+const composers = new Map<string, Set<DraftComposer>>();
+
+/**
+ * Text handed to a composer whose own value has not caught up yet, so a
+ * second refused post in the same turn does not replace the first.
+ */
+const handed = new WeakMap<DraftComposer, string>();
 
 /** Register a mounted composer by the key its draft is stored under. */
 export function registerDraftComposer(
   persistenceKey: string,
   composer: DraftComposer
 ): () => void {
-  composers.set(persistenceKey, composer);
+  const mounted = composers.get(persistenceKey) ?? new Set();
+  mounted.add(composer);
+  composers.set(persistenceKey, mounted);
   return () => {
-    if (composers.get(persistenceKey) === composer)
+    mounted.delete(composer);
+    if (mounted.size === 0 && composers.get(persistenceKey) === mounted)
       composers.delete(persistenceKey);
   };
+}
+
+function composerText(composer: DraftComposer): string {
+  const value = composer.value();
+  return value.trim().length > 0 ? value : (handed.get(composer) ?? '');
+}
+
+/** Whether a draft already holds the text, alone or as its last paragraph. */
+function holds(draft: string, text: string): boolean {
+  const kept = draft.trim();
+  const wanted = text.trim();
+  return kept === wanted || kept.endsWith(`\n\n${wanted}`);
 }
 
 /** The draft `makePersisted` stored under the key, as the composer reads it. */
@@ -64,17 +86,20 @@ function offerCopy(text: string) {
  *   left alone, and one holding a newer draft keeps that and the text is
  *   offered for copying;
  * - with no composer mounted, it is written to the stored draft, after a
- *   blank line when one is there, and shows when the channel next opens.
+ *   blank line when one is there, and shows when the channel next opens. It
+ *   is offered for copying too, since a refusal can mean the person can no
+ *   longer open that channel.
  *
  * Only the text is kept: mentions come back as written, attachments do not.
+ * Answers whether the person was told, with the text offered for copying.
  */
 export function keepUnsentPostText(post: {
   channelId: string;
   threadId?: string | null;
   content: string;
-}) {
+}): boolean {
   const text = post.content;
-  if (text.trim().length === 0) return;
+  if (text.trim().length === 0) return false;
   const threadKey = post.threadId
     ? makeInputValuePersistenceKey({
         channelId: `channel:${post.channelId}`,
@@ -86,19 +111,25 @@ export function keepUnsentPostText(post: {
       ? threadKey
       : makeInputValuePersistenceKey({ channelId: post.channelId });
 
-  const composer = composers.get(key);
-  if (composer) {
-    const current = composer.value();
-    if (current.includes(text)) return;
-    if (current.trim().length === 0) composer.restoreText(text);
-    else offerCopy(text);
-    return;
+  const mounted = [...(composers.get(key) ?? [])];
+  if (mounted.length > 0) {
+    if (mounted.some((composer) => holds(composerText(composer), text)))
+      return false;
+    const empty = mounted.find(
+      (composer) => composerText(composer).trim().length === 0
+    );
+    if (!empty) {
+      offerCopy(text);
+      return true;
+    }
+    handed.set(empty, text);
+    setTimeout(() => handed.delete(empty), 0);
+    empty.restoreText(text);
+    return false;
   }
   const stored = storedDraft(key);
-  if (stored.includes(text)) return;
-  const kept = storeDraft(
-    key,
-    stored.trim().length === 0 ? text : `${stored}\n\n${text}`
-  );
-  if (!kept) offerCopy(text);
+  if (holds(stored, text)) return false;
+  storeDraft(key, stored.trim().length === 0 ? text : `${stored}\n\n${text}`);
+  offerCopy(text);
+  return true;
 }

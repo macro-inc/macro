@@ -16,7 +16,10 @@ import { getMessageTimelineQueryKeyPrefix } from '../timeline';
 import { applyChangesToLatestPage, trimLatestPage } from './apply';
 import { CURSOR_PAGE_LIMIT, noteCachedPage } from './channel-sync';
 import { activityFromGraphql, entryFromGraphql } from './convert';
-import { queueHoldsChannelWrite } from './queued-writes';
+import {
+  queueHoldsChannelWrite,
+  restoreQueuedChannelWrites,
+} from './queued-writes';
 import {
   channelCacheHost,
   fetchChannelChanges,
@@ -590,6 +593,10 @@ export function useChannelCachePrewarm(
   recentChannelIds: Accessor<readonly string[]>
 ) {
   const { channels, activity } = useChannelsContext();
+  // The queue sends without a channel being open; a post it holds from before
+  // a reload needs someone on this page to take its text if it is refused.
+  const host = channelCacheHost();
+  if (host) fireAndForget(restoreQueuedChannelWrites(host), SURFACE);
   const schedule = debounce(() => {
     if (document.visibilityState !== 'visible') return;
     fireAndForget(

@@ -562,7 +562,7 @@ describe('when nothing runs', () => {
       return dispose;
     });
     await vi.advanceTimersByTimeAsync(10_000);
-    expect(mocks.channelCacheHost).not.toHaveBeenCalled();
+    expect(mocks.readCachedLatestPage).not.toHaveBeenCalled();
     setVisibility('visible');
     await vi.advanceTimersByTimeAsync(10_000);
     expect(mocks.readCachedLatestPage).toHaveBeenCalledWith(
