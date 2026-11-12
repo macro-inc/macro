@@ -72,7 +72,7 @@ export function ProjectTasksList(props: ProjectTasksListProps) {
 }
 
 function ProjectTasksListBody(props: ProjectTasksListProps) {
-  const { state, setState, source } = useTasksView();
+  const { state, setState } = useTasksView();
   return (
     <div class="flex size-full min-h-0 flex-col">
       <div class="flex h-12 min-w-0 shrink-0 items-center gap-3 overflow-x-auto scrollbar-hidden px-4 py-2">
@@ -93,32 +93,16 @@ function ProjectTasksListBody(props: ProjectTasksListProps) {
           </Show>
         </div>
       </div>
+      {/* The authorized project detail owns task membership. A filtered or
+          disabled layout query cannot decide whether the project is empty. */}
       <Show
-        when={
-          state.layout !== 'list' &&
-          props.project.taskIds.length === 0 &&
-          !source.isLoading() &&
-          !source.error()
-        }
-        fallback={
-          <TasksContent
-            emptyContent={
-              props.project.taskIds.length === 0 ? (
-                <ProjectTasksEmptyState
-                  project={props.project}
-                  onCreateTask={props.onCreateTask}
-                />
-              ) : undefined
-            }
-          />
-        }
+        when={props.project.taskIds.length === 0}
+        fallback={<TasksContent />}
       >
-        <div class="flex min-h-0 flex-1 items-center justify-center px-4">
-          <ProjectTasksEmptyState
-            project={props.project}
-            onCreateTask={props.onCreateTask}
-          />
-        </div>
+        <ProjectTasksEmptyState
+          project={props.project}
+          onCreateTask={props.onCreateTask}
+        />
       </Show>
     </div>
   );

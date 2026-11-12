@@ -1,15 +1,28 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import type { JSX } from 'solid-js';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { ProjectDetail } from '../core/project';
 import { ProjectTasksList } from './project-tasks-list';
+
+const source = vi.hoisted(() => ({
+  loading: false,
+  layout: 'list',
+  search: '',
+}));
 
 vi.mock('@app/features/tasks-view/tasks-view-context', () => ({
   TasksViewProvider: (props: { children: JSX.Element }) => props.children,
   useTasksView: () => ({
-    state: { search: '', layout: 'list' },
+    state: {
+      get search() {
+        return source.search;
+      },
+      get layout() {
+        return source.layout;
+      },
+    },
     setState: vi.fn(),
-    source: { isLoading: () => false, error: () => undefined },
+    source: { isLoading: () => source.loading, error: () => undefined },
   }),
 }));
 vi.mock('@app/features/tasks-view/components/TasksControls', () => ({
@@ -17,7 +30,11 @@ vi.mock('@app/features/tasks-view/components/TasksControls', () => ({
 }));
 vi.mock('@app/features/tasks-view/tasks-content', () => ({
   TasksContent: (props: { emptyContent?: JSX.Element }) =>
-    props.emptyContent ?? <div>Tasks list</div>,
+    source.layout === 'list' && props.emptyContent ? (
+      props.emptyContent
+    ) : (
+      <div>No tasks in this view.</div>
+    ),
 }));
 vi.mock('../components/project-task-search', () => ({
   ProjectTaskSearch: () => null,
@@ -41,6 +58,9 @@ vi.mock('./project-task-actions', () => ({
   ),
 }));
 
+beforeEach(() =>
+  Object.assign(source, { loading: false, layout: 'list', search: '' })
+);
 afterEach(cleanup);
 const project: ProjectDetail = {
   id: 'project',
@@ -80,7 +100,7 @@ it('does not show the project empty state for filtered results or read-only acce
     />
   ));
   expect(screen.queryByTestId('empty-project')).toBeNull();
-  expect(screen.getByText('Tasks list')).toBeTruthy();
+  expect(screen.getByText('No tasks in this view.')).toBeTruthy();
   cleanup();
   render(() => (
     <ProjectTasksList
@@ -91,4 +111,36 @@ it('does not show the project empty state for filtered results or read-only acce
   ));
   expect(screen.getByTestId('empty-project')).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'New task' })).toBeNull();
+});
+
+it.each(['list', 'board', 'gantt'])(
+  'uses unfiltered membership before the %s query settles',
+  (layout) => {
+    source.layout = layout;
+    source.loading = true;
+    source.search = 'no matching tasks';
+    render(() => (
+      <ProjectTasksList
+        project={project}
+        projectId="project"
+        onOpenTask={() => true}
+      />
+    ));
+    expect(screen.getByTestId('empty-project')).toBeTruthy();
+    expect(screen.queryByText('No tasks in this view.')).toBeNull();
+  }
+);
+
+it('keeps the filtered-empty message when linked tasks exist', () => {
+  source.layout = 'board';
+  source.search = 'no matching tasks';
+  render(() => (
+    <ProjectTasksList
+      project={{ ...project, taskIds: ['completed-task'] }}
+      projectId="project"
+      onOpenTask={() => true}
+    />
+  ));
+  expect(screen.queryByTestId('empty-project')).toBeNull();
+  expect(screen.getByText('No tasks in this view.')).toBeTruthy();
 });
