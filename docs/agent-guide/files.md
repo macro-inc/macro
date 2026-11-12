@@ -309,7 +309,9 @@ Upload a folder with **Upload folders** in Cmd+K, Drive's **New** menu
 (**Upload folder**), or by dropping it on Drive or a folder. A folder may hold up
 to 10,000 files and 3 GB; past either limit a toast names the folder and the limit
 before anything is read. The app zips the folder without compression, streaming
-the picked files from disk, so memory stays flat however large the folder is.
+the picked files from disk, so in a browser memory stays flat however large the
+folder is. The desktop and mobile apps still send the zip through the native
+HTTP client, which holds it in memory while it uploads.
 
 The upload indicator above the toasts follows one folder through every stage:
 
