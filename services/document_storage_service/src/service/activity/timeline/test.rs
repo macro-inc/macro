@@ -41,12 +41,40 @@ async fn queue_groups_one_channels_facts_and_ignores_non_timeline_activity() {
     let (parent, activities) = receiver.try_recv().unwrap();
     assert_eq!(parent, MessageParent::Channel(CHANNEL));
     assert_eq!(
-        activities.iter().map(|a| a.id).collect::<Vec<_>>(),
+        activities.iter().map(|a| a.activity.id).collect::<Vec<_>>(),
         [first.id, second.id]
     );
-    assert_eq!(activities[0].action, "picture_changed");
-    assert_eq!(activities[0].actor_id, "macro|test@example.com");
+    assert_eq!(activities[0].activity.action, "picture_changed");
+    assert_eq!(activities[0].activity.actor_id, "macro|test@example.com");
     assert!(receiver.try_recv().is_err());
+}
+
+#[tokio::test]
+async fn timeline_push_carries_each_activitys_committed_sequence() {
+    let (sender, mut receiver) = mpsc::channel(QUEUE_CAPACITY);
+    let publisher = TimelinePublisher(sender);
+    let first = picture(CHANNEL, 0);
+    let second = picture(CHANNEL, 1);
+    publisher
+        .publish_recorded_with_receipts(
+            &[first.clone(), second.clone()],
+            &[
+                activity::domain::ports::ActivityReceipt {
+                    activity_id: first.id,
+                    seq: Some(18),
+                },
+                activity::domain::ports::ActivityReceipt {
+                    activity_id: second.id,
+                    seq: Some(19),
+                },
+            ],
+        )
+        .await;
+    let (_, activities) = receiver.try_recv().unwrap();
+    let payload = serde_json::to_value(activities).unwrap();
+    assert_eq!(payload[0]["seq"], 18);
+    assert_eq!(payload[1]["seq"], 19);
+    assert_eq!(payload[0]["id"], first.id.to_string());
 }
 
 #[tokio::test]
