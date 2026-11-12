@@ -303,3 +303,21 @@ pub enum CheckError {
     #[error("type checking failed to run")]
     Internal,
 }
+
+/// Where a bundle runs, which decides the platform it is built for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BundleTarget {
+    /// A page in the browser, minified.
+    Browser,
+    /// A program run by the Deno executor.
+    Deno,
+}
+
+/// A bundler's verdict on a set of modules.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Bundle {
+    /// One ES module holding the entry and everything it imports.
+    Code(String),
+    /// The modules could not be bundled, for these reasons.
+    Rejected(Vec<Diagnostic>),
+}
