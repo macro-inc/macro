@@ -4,24 +4,26 @@
 mod test;
 
 #[cfg(feature = "explain_binary")]
+use crate::outbound::pg_access_repo::queries::SourceIds;
+#[cfg(feature = "explain_binary")]
 use crate::{
     domain::models::AccessGrant, outbound::pg_access_repo::queries::list_entity_access_grants,
 };
-use crate::{domain::models::AccessLevel, outbound::pg_access_repo::queries::SourceIds};
+use crate::{domain::models::AccessLevel, outbound::pg_access_repo::queries::Viewer};
 #[cfg(feature = "explain_binary")]
 use model_entity::EntityType;
 use sqlx::PgPool;
 use std::str::FromStr;
 
-/// Get the highest access level a user has for a call.
-#[tracing::instrument(err, skip(pool, source_ids))]
-pub async fn get_call_access(
+/// Get the highest access level a viewer has for a call.
+#[tracing::instrument(err, skip(pool, viewer))]
+pub(crate) async fn get_call_access(
     pool: &PgPool,
     call_id: &uuid::Uuid,
-    source_ids: &SourceIds,
+    viewer: Viewer<'_>,
 ) -> Result<Option<AccessLevel>, sqlx::Error> {
     // Check share permission access only
-    if source_ids.0.is_empty() {
+    if viewer.is_anonymous() {
         let access_level = sqlx::query_scalar!(
             r#"
             SELECT
@@ -49,7 +51,7 @@ pub async fn get_call_access(
                 access_level::text FROM entity_access
             WHERE entity_id = $1
             AND entity_type = 'call'
-            AND source_id = ANY($2)
+            AND EXISTS (SELECT FROM entity_access_source_matches(source_id, $2, $3))
 
             UNION ALL
             -- Source 2: call link share permission
@@ -68,14 +70,15 @@ pub async fn get_call_access(
                           SELECT 1
                           FROM team_user owner_team
                           WHERE owner_team.user_id = call_item.created_by
-                            AND owner_team.team_id::text = ANY($2)
+                            AND EXISTS (SELECT FROM entity_access_source_matches(owner_team.team_id::text, $2, $3))
                       )
                   )
               )
         ) AS combined_access
         "#,
         call_id,
-        &source_ids.0,
+        viewer.id(),
+        viewer.scope_team(),
     )
     .fetch_all(pool)
     .await?;

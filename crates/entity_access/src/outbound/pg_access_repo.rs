@@ -226,10 +226,12 @@ impl AccessRepository for PgAccessRepository {
         let call_uuid = call_id
             .parse::<Uuid>()
             .map_err(|_| AccessError::BadRequest("Invalid call ID format"))?;
-        let source_ids = queries::get_user_source_ids(&self.pool, user_id)
-            .await
-            .map_err(anyhow_access_error)?;
-        Ok(queries::call_access::get_call_access(&self.pool, &call_uuid, &source_ids).await?)
+        Ok(queries::call_access::get_call_access(
+            &self.pool,
+            &call_uuid,
+            Viewer::from_user(user_id),
+        )
+        .await?)
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -588,7 +590,7 @@ impl AccessRepository for PgAccessRepository {
                 .await
             }
             EntityType::Call => {
-                queries::call_access::get_call_access(&self.pool, &entity_uuid, &source_ids).await
+                queries::call_access::get_call_access(&self.pool, &entity_uuid, viewer).await
             }
             EntityType::AgentSession => {
                 queries::agent_session_access::get_agent_session_access(
