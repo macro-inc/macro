@@ -31,15 +31,28 @@ function updateCodeGutter(
 }
 
 /**
- * Source code-highlighting DOM for native code blocks. `data-gutter` follows the
- * Source CodeNode mutation listener. `data-highlight-language` is present exactly
+ * Source `updateCodeGutter` DOM for native code blocks: `data-gutter` follows the
+ * Source CodeNode mutation listener, which Source registers with every view.
+ */
+function installNativeCodeGutter(view: EditorView) {
+  const cachedChildren = new WeakMap<HTMLElement, number>();
+  for (const node of view.mirror.values())
+    if (node.type === CODE_TYPE)
+      updateCodeGutter(view, node.key, cachedChildren);
+  return view.onMutations(CODE_TYPE, (mutations) => {
+    for (const [key, mutation] of mutations)
+      if (mutation !== 'destroyed') updateCodeGutter(view, key, cachedChildren);
+  });
+}
+
+/**
+ * Source code-highlighting DOM for native code blocks. `data-highlight-language` is present exactly
  * while the last highlighter transform run found the block's language loaded:
  * the model reports each run (group-b.code-highlight), a replaced element gets
  * the retained state back, and the grammar check loads off the startup path.
  */
-export function installNativeCodeHighlightDOM(view: EditorView) {
+function installNativeCodeHighlightDOM(view: EditorView) {
   const reported = new Map<number, string | null>();
-  const cachedChildren = new WeakMap<HTMLElement, number>();
   let isLoaded: IsCodeLanguageLoaded | undefined;
   let disposed = false;
   let loading = false;
@@ -73,17 +86,10 @@ export function installNativeCodeHighlightDOM(view: EditorView) {
     reported.set(report.key, report.language);
     apply(report.key);
   });
-  for (const node of view.mirror.values())
-    if (node.type === CODE_TYPE)
-      updateCodeGutter(view, node.key, cachedChildren);
   const releaseMutations = view.onMutations(CODE_TYPE, (mutations) => {
     for (const [key, mutation] of mutations) {
-      if (mutation === 'destroyed') {
-        reported.delete(key);
-        continue;
-      }
-      updateCodeGutter(view, key, cachedChildren);
-      if (reported.has(key)) apply(key);
+      if (mutation === 'destroyed') reported.delete(key);
+      else if (reported.has(key)) apply(key);
     }
   });
   return () => {
@@ -91,5 +97,33 @@ export function installNativeCodeHighlightDOM(view: EditorView) {
     releaseReports();
     releaseMutations();
     reported.clear();
+  };
+}
+
+/**
+ * Native code-block chrome for a mounted editor: the gutter always, as Source;
+ * code highlighting stays dormant until the session carries a host code tokenizer.
+ */
+export function installNativeCodeChrome(
+  view: EditorView,
+  options: { codeHighlighting: boolean }
+) {
+  const releaseGutter = installNativeCodeGutter(view);
+  if (!options.codeHighlighting) return releaseGutter;
+  let releaseHighlight: () => void;
+  try {
+    releaseHighlight = installNativeCodeHighlightDOM(view);
+  } catch (cause) {
+    try {
+      releaseGutter();
+    } catch {
+      // The caller only owns a returned disposer; a failed gutter release must
+      // not replace the install failure.
+    }
+    throw cause;
+  }
+  return () => {
+    releaseHighlight();
+    releaseGutter();
   };
 }

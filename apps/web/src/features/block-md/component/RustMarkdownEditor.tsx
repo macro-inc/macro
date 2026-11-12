@@ -70,7 +70,7 @@ import {
   createNativeCodeAccessories,
   type NativeCodeAccessories,
 } from '@core/component/LexicalMarkdown/plugins/code/native-accessory';
-import { installNativeCodeHighlightDOM } from '@core/component/LexicalMarkdown/plugins/code/native-code-highlight-dom';
+import { installNativeCodeChrome } from '@core/component/LexicalMarkdown/plugins/code/native-code-highlight-dom';
 import {
   type PersistentLocation,
   parsePersistentLocation,
@@ -525,9 +525,11 @@ export default function RustMarkdownEditor(props: {
               accessories.dispose();
             });
             setCodeAccessories(accessories);
-            // Gutters and highlight languages stay dormant until code highlighting activates.
-            if (mounted.codeHighlighting)
-              overlayLifecycle.add(installNativeCodeHighlightDOM(mounted.view));
+            overlayLifecycle.add(
+              installNativeCodeChrome(mounted.view, {
+                codeHighlighting: mounted.codeHighlighting,
+              })
+            );
             releaseScrollTelemetry = startEditorScrollTelemetry(
               mounted.view,
               documentId()
