@@ -1,6 +1,7 @@
 import { createFreshSearch, NAME_MATCH_RANKING } from '@core/util/freshSort';
 import { preservePersonOrder } from '@core/util/ordered-window';
 import uFuzzy from '@leeoniya/ufuzzy';
+import deepEqual from 'fast-deep-equal';
 import { match } from 'ts-pattern';
 import type { CommandMenuItem } from './useCommandItems';
 
@@ -57,6 +58,26 @@ function prioritizeInternalPeople<T extends CommandMenuItem>(items: T[]): T[] {
 
 function isMacroPerson(item: CommandMenuItem) {
   return item.bucket === 'dm' || item.bucket === 'person';
+}
+
+/**
+ * Sources republish their lists on cache refreshes and page reads, often with
+ * new objects that hold the same data. Rows that are the same object or hold
+ * equal data rank the same, so such a list needs no new ranking. Commands
+ * carry handlers and are compared by identity only.
+ */
+export function sameRankInput(
+  previous: readonly CommandMenuItem[],
+  next: readonly CommandMenuItem[]
+): boolean {
+  if (previous.length !== next.length) return false;
+
+  return previous.every((item, index) => {
+    const other = next[index];
+    if (item === other) return true;
+    if (item.kind === 'command' || other.kind === 'command') return false;
+    return deepEqual(item, other);
+  });
 }
 
 /** Rank cached and local candidates together using the command menu's rules. */
