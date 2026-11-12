@@ -15,6 +15,7 @@ under one `agent.runtime.reattach` span per dial:
 | Sessions per dial | `@agent.runtime.reattach_sessions`; `.reattach_eager`, `.reattach_lazy`, `.reattach_skipped`, `.reattach_failures` |
 | Connects and disconnects | Logs: `@telemetry_event:(harness_runtime_connected OR harness_runtime_disconnected)` `@harness:<id>` |
 | Starvation | Logs: `service:agent-harness-service "tokio runtime starvation detected"`, by `host`; `@delay_ms` |
+| Task memory | Metrics: `ecs.fargate.mem.rss` / `ecs.fargate.mem.limit`, `short_image:agent-harness-service-prod,container_name:service`, by `task_arn` |
 
 ## Reattaching in a loop
 
@@ -49,3 +50,17 @@ leases stall.
 - Group the warnings by `host` to find the replica, and look for a reattach
   storm or a slow blocking call on it at the same time.
 - `@delay_ms` above 1,000 means ticks ran over a second late.
+
+## Task memory near its limit
+
+One agent-harness-service task's resident memory passed 75% of its limit.
+ECS kills the task at 100%, and every session it serves drops and resumes on
+the other replica.
+
+- Compare the per-process gauges (`ahs.harness.workers`,
+  `ahs.agent_session.active`, `ahs.inmem.*`, from
+  `services/agent_harness_service/src/runtime_gauges.rs`) on that task with
+  its memory: one that climbs with it is the holder. Flat gauges under a
+  climbing memory point at the allocator.
+- Lever: replace the task (a deploy, or stopping it so ECS starts a new one).
+  Sessions resume from Postgres on their next prompt.

@@ -25,6 +25,8 @@ const BulkEditEntityModalContent = (props: {
   onCancel: () => void;
   onError?: (error: unknown) => void;
   onPartialDelete?: PartialDeleteHandler;
+  /** What else the deletion removes, under its description. */
+  note?: string;
 }) => {
   const handleMoved = (folder: MovedFolder) => {
     const { onMoved } = props;
@@ -60,6 +62,7 @@ const BulkEditEntityModalContent = (props: {
                 </Show>
                 <Show when={props.view === 'delete'}>
                   <BulkDeleteView
+                    note={props.note}
                     onPartialDelete={props.onPartialDelete}
                     entities={props.entities}
                     onFinish={props.onFinish}
@@ -102,6 +105,8 @@ type BulkEditSession = {
   onCancel?: () => void;
   onError?: (error: unknown) => void;
   onPartialDelete?: PartialDeleteHandler;
+  /** What else the deletion removes, under its description. */
+  note?: string;
 };
 
 const [globalSession, setGlobalSession] = createSignal<BulkEditSession>();
@@ -133,6 +138,7 @@ export const GlobalBulkEditEntityModal = () => (
           onCancel={() => close(session.onCancel)}
           onError={session.onError}
           onPartialDelete={session.onPartialDelete}
+          note={session.note}
         />
       );
     }}

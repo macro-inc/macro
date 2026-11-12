@@ -380,7 +380,7 @@ not offered because those APIs do not support sessions. Runtime controls remain
 session-specific.
 
 A session transcript shows each tool call as a collapsible row (consecutive calls
-fold into a `Called N tools` group; click it to see the rows). A tool reached over
+fold into a `Used N tools` group; click it to see the rows). A tool reached over
 an MCP server - Macro's own (`ReadContent`) from a Cursor, Claude, or
 Codex session, or a third-party server (`ask_question`) - is titled by
 the tool's own name, without a server or workspace label, never by the harness's dispatcher
@@ -1078,7 +1078,7 @@ in place until the result arrives.
 
 ## Chat navigation rail
 
-With no conversation open, the desktop **Select a conversation** pane shows the Chat `TutorialPill` (from `features/video-tutorials`) once that video is in its catalog; touch layouts, which have no detail pane, show it in the empty conversation list.
+With no conversation open, the desktop **Select a conversation** pane shows the Chat `TutorialPill` (from `features/video-tutorials`) once that video is in its catalog; touch devices show no tutorials.
 
 Following a channel mention or browser notification for the conversation already
 shown in Chat activates that workspace and jumps to the targeted message or reply.

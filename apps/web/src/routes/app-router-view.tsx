@@ -61,6 +61,7 @@ import {
   NotFound,
   NotificationsCalendarRouteView,
   NotificationsRouteView,
+  PasswordsRouteView,
   PrDetailRouteView,
   ProjectDetailRouteView,
   ProjectTaskRouteView,
@@ -154,6 +155,7 @@ import {
   notificationsCalendarRoute,
   notificationsRoute,
   onboardingRoute,
+  passwordsRoute,
   prDetailRoute,
   projectDetailRoute,
   projectTaskRoute,
@@ -381,6 +383,7 @@ export function appRouteElements(): JSX.Element {
         </Route>
         <Route definition={recentRoute} component={RecentRouteView} />
         <Route definition={activityRoute} component={ActivityRouteView} />
+        <Route definition={passwordsRoute} component={PasswordsRouteView} />
         <Route
           definition={notificationsRoute}
           component={NotificationsRouteView}

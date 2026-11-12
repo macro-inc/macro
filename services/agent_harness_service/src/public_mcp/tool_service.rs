@@ -119,8 +119,8 @@ impl<Context> AuthenticatedToolService<Context> {
         definitions(&self.toolset).collect()
     }
 
-    /// Tools listed for a mode. Code mode lists only `ExecuteCode` and
-    /// `DescribeCodeTools`. Native tools stay callable if a client already
+    /// Tools listed for a mode. Code mode lists `ExecuteCode`,
+    /// `DescribeCodeTools` and `ReadCodeDocs`. Native tools stay callable if a client already
     /// knows their names.
     fn tool_definitions_for(&self, mode: ToolMode) -> Vec<Tool> {
         match (mode, &self.code_mode) {
@@ -172,12 +172,11 @@ fn caller(extensions: &rmcp::model::Extensions) -> Result<ToolCaller, rmcp::Erro
 
 /// Tools ChatGPT is never offered. Each one runs code or hands an open-ended
 /// task to an agent, and the plugin directory refuses generic executors.
-const HIDDEN_FROM_CHATGPT: [&str; 6] = [
+const HIDDEN_FROM_CHATGPT: [&str; 5] = [
     "BashCodeExecution",
     "CreateAgentSession",
     "DispatchCodingAgent",
     "ManageAgentSession",
-    "Subagent",
     "TextEditorCodeExecution",
 ];
 

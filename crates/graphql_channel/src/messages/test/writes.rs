@@ -8,7 +8,7 @@ use messages::domain::{
 use super::*;
 use crate::messages::{
     ChannelMessageMutationRoot,
-    writes::{ChannelMessageWrites, Reaction, WriteFuture, WrittenMessage},
+    writes::{ChannelMessageWrites, Reaction, WriteFuture},
 };
 
 /// A write the resolvers asked for, with the caller it acts for.
@@ -23,12 +23,12 @@ enum Call {
 #[derive(Default)]
 pub(super) struct FakeWrites {
     /// What the next write answers; a written reply with seq 5 when unset.
-    answer: Mutex<Option<Result<Sequenced<WrittenMessage>, MessageError>>>,
+    answer: Mutex<Option<Result<Sequenced<Message>, MessageError>>>,
     calls: Mutex<Vec<(String, Call)>>,
 }
 
 impl FakeWrites {
-    fn answering(answer: Result<Sequenced<WrittenMessage>, MessageError>) -> Arc<Self> {
+    fn answering(answer: Result<Sequenced<Message>, MessageError>) -> Arc<Self> {
         Arc::new(Self {
             answer: Mutex::new(Some(answer)),
             ..Self::default()
@@ -39,7 +39,7 @@ impl FakeWrites {
         &self,
         caller: MacroAuthorization,
         call: Call,
-    ) -> WriteFuture<'_, Sequenced<WrittenMessage>> {
+    ) -> WriteFuture<'_, Sequenced<Message>> {
         let caller = caller
             .acting_user()
             .map(|user| user.macro_user_id.as_ref().to_owned())
@@ -47,7 +47,7 @@ impl FakeWrites {
         self.calls.lock().unwrap().push((caller, call));
         let answer = self.answer.lock().unwrap().take().unwrap_or_else(|| {
             Ok(Sequenced {
-                value: WrittenMessage::Bare(Box::new(message(101, Some(1)))),
+                value: message(101, Some(1)),
                 seq: Some(5),
             })
         });
@@ -61,7 +61,7 @@ impl ChannelMessageWrites for FakeWrites {
         caller: MacroAuthorization,
         channel_id: Uuid,
         input: PostMessage,
-    ) -> WriteFuture<'_, Sequenced<WrittenMessage>> {
+    ) -> WriteFuture<'_, Sequenced<Message>> {
         self.record(caller, Call::Post(channel_id, input))
     }
 
@@ -71,7 +71,7 @@ impl ChannelMessageWrites for FakeWrites {
         channel_id: Uuid,
         message_id: Uuid,
         patch: MessagePatch,
-    ) -> WriteFuture<'_, Sequenced<WrittenMessage>> {
+    ) -> WriteFuture<'_, Sequenced<Message>> {
         self.record(caller, Call::Edit(channel_id, message_id, patch))
     }
 
@@ -81,7 +81,7 @@ impl ChannelMessageWrites for FakeWrites {
         channel_id: Uuid,
         message_id: Uuid,
         nonce: Option<String>,
-    ) -> WriteFuture<'_, Sequenced<WrittenMessage>> {
+    ) -> WriteFuture<'_, Sequenced<Message>> {
         self.record(caller, Call::Delete(channel_id, message_id, nonce))
     }
 
@@ -91,7 +91,7 @@ impl ChannelMessageWrites for FakeWrites {
         channel_id: Uuid,
         message_id: Uuid,
         reaction: Reaction,
-    ) -> WriteFuture<'_, Sequenced<WrittenMessage>> {
+    ) -> WriteFuture<'_, Sequenced<Message>> {
         self.record(caller, Call::React(channel_id, message_id, reaction))
     }
 }
@@ -216,10 +216,7 @@ async fn a_post_reaches_the_writes_as_the_rest_route_takes_it_and_returns_its_se
 
 #[tokio::test]
 async fn a_replayed_post_returns_the_stored_root_with_a_null_seq() {
-    let writes = FakeWrites::answering(Ok(Sequenced::unlogged(WrittenMessage::Root {
-        item: Box::new(root(1)),
-        call: None,
-    })));
+    let writes = FakeWrites::answering(Ok(Sequenced::unlogged(message(1, None))));
     let response = write(
         writes,
         Some(caller()),
@@ -229,10 +226,8 @@ async fn a_replayed_post_returns_the_stored_root_with_a_null_seq() {
     .await;
     let post = written(response, "postChannelMessage");
     assert_eq!(post["seq"], Value::Null);
-    // A root comes back as the timeline shows it, with its thread.
     assert_eq!(post["message"]["id"], json!(Uuid::from_u128(1)));
-    assert_eq!(post["message"]["thread"], json!({ "replyCount": 7 }));
-    assert_eq!(post["message"]["call"], Value::Null);
+    assert_eq!(post["message"]["threadId"], Value::Null);
 }
 
 #[tokio::test]
@@ -287,9 +282,7 @@ async fn a_delete_and_a_reaction_reach_the_writes_with_their_message() {
     let mut tombstone = message(101, Some(1));
     tombstone.deleted_at = Some(at(9));
     tombstone.content.clear();
-    let writes = FakeWrites::answering(Ok(Sequenced::unlogged(WrittenMessage::Bare(Box::new(
-        tombstone,
-    )))));
+    let writes = FakeWrites::answering(Ok(Sequenced::unlogged(tombstone)));
     let message_id = Uuid::from_u128(101);
     let response = write(
         writes.clone(),
@@ -326,14 +319,11 @@ async fn a_delete_and_a_reaction_reach_the_writes_with_their_message() {
 }
 
 #[tokio::test]
-async fn a_written_call_root_carries_its_call() {
-    let mut call = root(3);
-    call.message.kind = MessageKind::CallRoot;
+async fn a_written_root_comes_without_its_thread_or_its_call() {
+    let mut call = message(3, None);
+    call.kind = MessageKind::CallRoot;
     let writes = FakeWrites::answering(Ok(Sequenced {
-        value: WrittenMessage::Root {
-            item: Box::new(call),
-            call: Some(CallEntryStatus::Live),
-        },
+        value: call,
         seq: Some(9),
     }));
     let response = write(
@@ -345,7 +335,11 @@ async fn a_written_call_root_carries_its_call() {
     .await;
     let reacted = written(response, "reactToChannelMessage");
     assert_eq!(reacted["seq"], 9);
-    assert_eq!(reacted["message"]["call"], json!({ "state": "LIVE" }));
+    // The write's own message is returned, never read again: a root's thread
+    // and call come from the reads.
+    assert_eq!(reacted["message"]["id"], json!(Uuid::from_u128(3)));
+    assert_eq!(reacted["message"]["thread"], Value::Null);
+    assert_eq!(reacted["message"]["call"], Value::Null);
 }
 
 #[tokio::test]
