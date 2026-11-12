@@ -10,7 +10,9 @@ mod test;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use hosted_runtimes::domain::claude_sign_in::{ClaudeSignInNotices, ClaudeSignInStage, SignInExpiry};
+use hosted_runtimes::domain::claude_sign_in::{
+    ClaudeSignInNotices, ClaudeSignInStage, SignInExpiry,
+};
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;

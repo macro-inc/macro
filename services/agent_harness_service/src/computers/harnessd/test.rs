@@ -292,11 +292,8 @@ async fn lock_pool() -> sqlx::PgPool {
 
 #[tokio::test]
 async fn a_lock_held_elsewhere_is_busy_at_once() {
-    let locks = PgComputerLocks::with_limits(
-        &lock_pool().await,
-        2,
-        std::time::Duration::from_secs(5),
-    );
+    let locks =
+        PgComputerLocks::with_limits(&lock_pool().await, 2, std::time::Duration::from_secs(5));
     let id = ComputerId::new_from_uuid(uuid::Uuid::new_v4());
 
     let _held = locks.lock(id).await.unwrap();
@@ -339,11 +336,8 @@ async fn locks_past_the_dedicated_pool_are_busy_after_the_acquire_timeout() {
 
 #[tokio::test]
 async fn a_dropped_lock_frees_its_connection_and_the_lock() {
-    let locks = PgComputerLocks::with_limits(
-        &lock_pool().await,
-        1,
-        std::time::Duration::from_secs(5),
-    );
+    let locks =
+        PgComputerLocks::with_limits(&lock_pool().await, 1, std::time::Duration::from_secs(5));
     let id = ComputerId::new_from_uuid(uuid::Uuid::new_v4());
 
     drop(locks.lock(id).await.unwrap());

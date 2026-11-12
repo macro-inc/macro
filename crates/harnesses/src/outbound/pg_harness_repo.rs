@@ -50,10 +50,7 @@ impl PgHarnessRepo {
 
     /// The Macro computer behind the live harness `bot` runs on, if any: a
     /// bot on a paired machine, on a deleted harness or on none has none.
-    pub async fn computer_for_bot(
-        &self,
-        bot: bot_id::BotId,
-    ) -> sqlx::Result<Option<ComputerId>> {
+    pub async fn computer_for_bot(&self, bot: bot_id::BotId) -> sqlx::Result<Option<ComputerId>> {
         let computer = sqlx::query_scalar!(
             r#"
             SELECT h.computer_id
