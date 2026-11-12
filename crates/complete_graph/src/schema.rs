@@ -116,6 +116,7 @@ pub struct CompleteMutationRoot<
     WorkFeedMutationRoot<E>,
     NotificationInboxMutationRoot<E>,
     SavedViewMutationRoot,
+    graphql_channel::messages::ChannelMessageMutationRoot,
 );
 
 impl<
@@ -144,6 +145,7 @@ impl<
             WorkFeedMutationRoot::<E>::default(),
             NotificationInboxMutationRoot::<E>::default(),
             SavedViewMutationRoot,
+            graphql_channel::messages::ChannelMessageMutationRoot,
         )
     }
 }

@@ -4901,6 +4901,7 @@ dependencies = [
  "macro_authorization",
  "macro_db_migrator",
  "macro_user_id",
+ "messages",
  "model-entity",
  "model_notifications",
  "model_owner",

@@ -1062,3 +1062,52 @@ fn channel_message_reads_hang_off_the_authenticated_user() {
         assert_eq!(object.fields.contains_key("id"), has_id, "{name}");
     }
 }
+
+#[test]
+fn channel_message_writes_return_the_read_shape_and_a_sequence_number() {
+    use apollo_compiler::schema::ExtendedType;
+
+    let sdl = crate::build_schema().sdl();
+    for expected in [
+        "postChannelMessage(input: GraphqlChannelPostMessageInput!): GraphqlChannelMessageWrite!",
+        "editChannelMessage(input: GraphqlChannelEditMessageInput!): GraphqlChannelMessageWrite!",
+        "deleteChannelMessage(input: GraphqlChannelDeleteMessageInput!): GraphqlChannelMessageWrite!",
+        "reactToChannelMessage(input: GraphqlChannelReactInput!): GraphqlChannelMessageWrite!",
+        "message: GraphqlChannelMessage!",
+        "input GraphqlChannelAttachmentChangeInput @oneOf {",
+    ] {
+        assert_sdl_line(&sdl, expected);
+    }
+
+    let schema = apollo_compiler::Schema::parse_and_validate(sdl.as_str(), "schema.graphql")
+        .expect("generated SDL is valid");
+    let ExtendedType::Object(write) = schema
+        .types
+        .get("GraphqlChannelMessageWrite")
+        .expect("write payload")
+    else {
+        panic!("the write payload must be an object");
+    };
+    // Null when the call wrote nothing; the payload is not an entity.
+    assert_eq!(write.fields["seq"].ty.to_string(), "Int");
+    assert!(!write.fields.contains_key("id"));
+    // The writes act for the request's caller, never for an argument.
+    for input in [
+        "GraphqlChannelPostMessageInput",
+        "GraphqlChannelEditMessageInput",
+        "GraphqlChannelDeleteMessageInput",
+        "GraphqlChannelReactInput",
+    ] {
+        let ExtendedType::InputObject(object) = schema.types.get(input).expect(input) else {
+            panic!("{input} must be an input object");
+        };
+        assert!(object.fields.contains_key("channelId"), "{input}");
+        for name in object.fields.keys() {
+            let name = name.as_str();
+            assert!(
+                !name.contains("user") && !name.contains("sender") && !name.contains("actor"),
+                "{input}.{name} names a principal"
+            );
+        }
+    }
+}
