@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE harness_account_logins SET signed_out_at = now()\n            WHERE harness_id = $1 AND provider = $2 AND signed_out_at IS NULL\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        {
+          "Custom": {
+            "name": "agent_provider",
+            "kind": {
+              "Enum": [
+                "claude"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4022bcd020bf38cd5ddd42ad352840470ce3e239ec6997bd0cb1afda9ec2d682"
+}

@@ -22,7 +22,7 @@ let
   dashboard = {
     uid = "macro-run-local";
     title = "Macro run_local";
-    description = "Where `just run_local` time goes, from the opt-in local telemetry events in Loki (service_name=local-telemetry, kept 30 days). Set the range to a day or more for percentiles. A run's trace_id opens its step waterfall in Tempo, kept 7 days.";
+    description = "Where `just run_local` time goes, from the local telemetry events (on by default) in Loki (service_name=local-telemetry, kept 30 days). Set the range to a day or more for percentiles. A run's trace_id opens its step waterfall in Tempo, kept 7 days.";
     schemaVersion = 39;
     version = 1;
     editable = false;
