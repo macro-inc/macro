@@ -5,12 +5,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { usePatchHarnessMutation } from '@queries/harnesses/harnesses';
 import type { Harness as RegisteredHarness } from '@service-storage/client';
-import {
-  Button,
-  Dropdown,
-  type OpenDialogOptions,
-  ToggleSwitch,
-} from '@ui';
+import { Button, Dropdown, type OpenDialogOptions, ToggleSwitch } from '@ui';
 import { createSignal, getOwner, Show } from 'solid-js';
 import { confirmPermissionBypass } from '../confirm-permission-bypass';
 
