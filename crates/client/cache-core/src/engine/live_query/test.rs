@@ -726,7 +726,7 @@ fn evicted_continuations_require_registration_again() {
 }
 
 #[test]
-fn one_more_subscriber_than_a_pane_registers_keeps_receiving_deltas() {
+fn rotating_subscribers_beyond_one_pane_keep_receiving_deltas() {
     block_on(async {
         let mut engine = Engine::new(InMemoryStorage::new());
         seed(&mut engine, "a", 1).await;

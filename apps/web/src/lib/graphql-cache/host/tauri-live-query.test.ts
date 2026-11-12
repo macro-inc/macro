@@ -12,7 +12,7 @@ import {
   type LiveQueryUpdate,
   parseCacheRevision,
 } from '../protocol';
-import { createTauriCacheHost } from './tauri-host';
+import { createTauriCacheHost, LIVE_QUERY_CAPACITY } from './tauri-host';
 
 const args: EntityFilterCacheArgs = {
   filters: {},
@@ -126,7 +126,7 @@ describe('native retained view transport', () => {
   it('bounds retained descriptors and clears them after reset', async () => {
     const host = createTauriCacheHost({ scope: 'scope-1' });
     await host.entityFilter(args);
-    for (let id = 0; id < 32; id++) {
+    for (let id = 0; id < LIVE_QUERY_CAPACITY; id++) {
       await host.entityFilter({
         ...args,
         liveQuery: { ...args.liveQuery!, id: String(id) },
