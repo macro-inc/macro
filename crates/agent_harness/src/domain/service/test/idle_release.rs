@@ -621,3 +621,81 @@ async fn a_kill_switch_aimed_at_dev_leaves_prod_retrying_for_the_same_owner() {
             .await
     );
 }
+
+/// A session another runtime runs has nothing for this process to release,
+/// so its worker retires at the idle timeout and forgets its queue copy: the
+/// next command reloads the durable queue.
+#[tokio::test]
+async fn an_idle_session_of_another_runtime_forgets_its_queue_copy() {
+    let (service, repo, containers, _announcer, _runtimes) = harness();
+    let id = AgentSessionId::new();
+    let _container = live_sandboxed_coder_session(&service, &containers, id).await;
+    // Any command after `Open` loads the durable queue first.
+    let removed = service
+        .execute(
+            id,
+            HarnessCommand::RemoveQueued {
+                action_id: AgentActionId::mint(),
+                actor: Some(staff_sender()),
+            },
+        )
+        .await;
+    assert!(removed.is_err(), "there was nothing queued to remove");
+    assert_eq!(service.hydrated_sessions(), 1);
+    assert_eq!(service.command_workers(), 1);
+
+    tokio::time::pause();
+    tokio::time::timeout(
+        WORKER_IDLE_TIMEOUT * 2,
+        containers.wait_for_lossless_checks(id, 1),
+    )
+    .await
+    .expect("the worker tries the release at its idle timeout");
+    // On the paused clock this returns only once every task is idle, the
+    // worker included.
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    tokio::time::resume();
+
+    assert_eq!(service.command_workers(), 0, "the worker retires");
+    assert!(
+        containers.released().is_empty(),
+        "another runtime's state is left to its provider"
+    );
+    assert!(
+        service.inner.sessions.attached_mcp_servers(id).is_some(),
+        "its actor stays"
+    );
+    assert_eq!(
+        service.hydrated_sessions(),
+        0,
+        "its queue copy is forgotten"
+    );
+
+    // Another replica queues for it meanwhile; the next command here sees it.
+    let waiting_id = AgentActionId::mint();
+    repo.replace_queued_actions(
+        id,
+        &[StoredQueuedAction {
+            action_id: waiting_id,
+            action: AgentAction::prompt("queued elsewhere"),
+            actor: Some(staff_sender()),
+            created_at: chrono::Utc::now(),
+            announce: None,
+            announced_message_id: None,
+            context: None,
+            client: None,
+        }],
+    )
+    .await
+    .expect("persist a waiting prompt");
+    service
+        .execute(
+            id,
+            HarnessCommand::RemoveQueued {
+                action_id: waiting_id,
+                actor: Some(staff_sender()),
+            },
+        )
+        .await
+        .expect("the reloaded queue holds the entry to remove");
+}
